@@ -170,7 +170,7 @@ CREATE TABLE invoices (
     FOREIGN KEY (created_by) REFERENCES user_accounts(user_id),
     FOREIGN KEY (updated_by) REFERENCES user_accounts(user_id),
     CONSTRAINT chk_invoice_amounts CHECK (
-        subtotal >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND 
+        subtotal >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND
         shipping_amount >= 0 AND total_amount >= 0 AND paid_amount >= 0
     ),
     CONSTRAINT chk_invoice_dates CHECK (due_date >= invoice_date)
@@ -197,8 +197,8 @@ CREATE TABLE invoice_items (
     FOREIGN KEY (item_id) REFERENCES items(item_id),
     FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(tax_rate_id),
     CONSTRAINT chk_invoice_item_amounts CHECK (
-        quantity > 0 AND unit_price >= 0 AND discount_percentage >= 0 AND 
-        discount_percentage <= 100 AND discount_amount >= 0 AND 
+        quantity > 0 AND unit_price >= 0 AND discount_percentage >= 0 AND
+        discount_percentage <= 100 AND discount_amount >= 0 AND
         tax_amount >= 0 AND line_total >= 0
     )
 );
@@ -242,7 +242,7 @@ CREATE TABLE bills (
     FOREIGN KEY (created_by) REFERENCES user_accounts(user_id),
     FOREIGN KEY (updated_by) REFERENCES user_accounts(user_id),
     CONSTRAINT chk_bill_amounts CHECK (
-        subtotal >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND 
+        subtotal >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND
         total_amount >= 0 AND paid_amount >= 0
     ),
     CONSTRAINT chk_bill_dates CHECK (due_date >= bill_date),
@@ -270,8 +270,8 @@ CREATE TABLE bill_items (
     FOREIGN KEY (item_id) REFERENCES items(item_id),
     FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(tax_rate_id),
     CONSTRAINT chk_bill_item_amounts CHECK (
-        quantity > 0 AND unit_price >= 0 AND discount_percentage >= 0 AND 
-        discount_percentage <= 100 AND discount_amount >= 0 AND 
+        quantity > 0 AND unit_price >= 0 AND discount_percentage >= 0 AND
+        discount_percentage <= 100 AND discount_amount >= 0 AND
         tax_amount >= 0 AND line_total >= 0
     )
 );
@@ -324,7 +324,7 @@ CREATE TABLE journal_entries (
     FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id) ON DELETE CASCADE,
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id),
     CONSTRAINT chk_entry_amounts CHECK (
-        debit_amount >= 0 AND credit_amount >= 0 AND 
+        debit_amount >= 0 AND credit_amount >= 0 AND
         (debit_amount > 0 OR credit_amount > 0) AND
         NOT (debit_amount > 0 AND credit_amount > 0)
     )
@@ -1644,7 +1644,7 @@ CREATE TABLE payroll (
     FOREIGN KEY (created_by) REFERENCES user_accounts(user_id),
     FOREIGN KEY (updated_by) REFERENCES user_accounts(user_id),
     CONSTRAINT chk_payroll_amounts CHECK (
-        regular_hours >= 0 AND overtime_hours >= 0 AND gross_pay >= 0 AND 
+        regular_hours >= 0 AND overtime_hours >= 0 AND gross_pay >= 0 AND
         net_pay >= 0 AND total_taxes >= 0 AND total_deductions >= 0
     ),
     UNIQUE (payroll_period_id, employee_id)
@@ -1951,7 +1951,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_user_sessions_expires ON user_sessio
 
 -- Customer Balance Summary
 CREATE MATERIALIZED VIEW customer_balances AS
-SELECT 
+SELECT
     c.company_id,
     c.customer_id,
     c.customer_number,
@@ -1964,16 +1964,475 @@ SELECT
     COUNT(i.invoice_id) as invoice_count,
     MAX(i.invoice_date) as last_invoice_date,
     c.credit_limit,
-    CASE 
-        WHEN c.credit_limit > 0 AND COALESCE(SUM(i.balance_due), 0) > c.credit_limit 
-        THEN TRUE ELSE FALSE 
+    CASE
+        WHEN c.credit_limit > 0 AND COALESCE(SUM(i.balance_due), 0) > c.credit_limit
+        THEN TRUE ELSE FALSE
     END as over_credit_limit
 FROM customers c
 LEFT JOIN currencies curr ON c.currency_id = curr.currency_id
 LEFT JOIN invoices i ON c.customer_id = i.customer_id AND i.deleted_at IS NULL
 WHERE c.deleted_at IS NULL AND c.is_active = TRUE
-GROUP BY c.company_id, c.customer_id, c.customer_number, c.display_name, 
+GROUP BY c.company_id, c.customer_id, c.customer_number, c.display_name,
          c.currency_id, curr.code, c.credit_limit;
 
 -- Create indexes on materialized view
 CREATE UNIQUE INDEX idx_customer_balances_pk ON customer_balances(customer_id);
+
+
+-- ===============================================
+-- schema-v2-patch.sql
+-- Delta patch to upgrade schema-v2 for a strong SME accounting foundation
+-- Focus: the first 12 upgrades previously outlined
+-- Target: PostgreSQL
+-- ===============================================
+
+SET search_path = public;
+SET timezone = 'UTC';
+
+-- =====================================================
+-- 1) MULTI-TENANCY GUARDS: composite uniques and indexes
+-- =====================================================
+
+-- Customers, Vendors, Items, Invoices, Bills already have company_id.
+-- Ensure tenant-scoped uniqueness for human-facing numbers and codes.
+ALTER TABLE IF EXISTS customers
+    DROP CONSTRAINT IF EXISTS customers_customer_number_key,
+    ADD CONSTRAINT uq_customers_company_number UNIQUE (company_id, customer_number);
+
+ALTER TABLE IF EXISTS vendors
+    DROP CONSTRAINT IF EXISTS vendors_vendor_number_key,
+    ADD CONSTRAINT uq_vendors_company_number UNIQUE (company_id, vendor_number);
+
+ALTER TABLE IF EXISTS items
+    DROP CONSTRAINT IF EXISTS items_company_id_item_code_key,
+    ADD CONSTRAINT uq_items_company_item_code UNIQUE (company_id, item_code);
+
+ALTER TABLE IF EXISTS invoices
+    DROP CONSTRAINT IF EXISTS invoices_invoice_number_key,
+    ADD CONSTRAINT uq_invoices_company_number UNIQUE (company_id, invoice_number);
+
+ALTER TABLE IF EXISTS bills
+    DROP CONSTRAINT IF EXISTS bills_company_id_bill_number_key,
+    ADD CONSTRAINT uq_bills_company_number UNIQUE (company_id, bill_number);
+
+ALTER TABLE IF EXISTS chart_of_accounts
+    DROP CONSTRAINT IF EXISTS chart_of_accounts_company_id_account_code_key,
+    ADD CONSTRAINT uq_accounts_company_code UNIQUE (company_id, account_code);
+
+
+-- =====================================================
+-- 2) LEDGER IMMUTABILITY + PERIOD LOCK
+-- =====================================================
+
+-- Prevent UPDATE/DELETE on posted transactions and their entries.
+CREATE OR REPLACE FUNCTION gl_block_mutation_when_posted()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+BEGIN
+  IF (TG_TABLE_NAME = 'transactions') THEN
+     IF (TG_OP IN ('UPDATE','DELETE')) THEN
+        IF (OLD.status = 'posted' OR OLD.status = 'reversed') THEN
+           RAISE EXCEPTION 'Cannot % % once posted or reversed', TG_OP, TG_TABLE_NAME;
+        END IF;
+     END IF;
+  ELSIF (TG_TABLE_NAME = 'journal_entries') THEN
+     IF (TG_OP IN ('UPDATE','DELETE')) THEN
+        PERFORM 1 FROM transactions t WHERE t.transaction_id = OLD.transaction_id AND (t.status IN ('posted','reversed'));
+        IF FOUND THEN
+           RAISE EXCEPTION 'Cannot % % for posted/reversed transactions', TG_OP, TG_TABLE_NAME;
+        END IF;
+     END IF;
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_transactions_block_mutation ON transactions;
+CREATE TRIGGER trg_transactions_block_mutation
+BEFORE UPDATE OR DELETE ON transactions
+FOR EACH ROW EXECUTE FUNCTION gl_block_mutation_when_posted();
+
+DROP TRIGGER IF EXISTS trg_journal_entries_block_mutation ON journal_entries;
+CREATE TRIGGER trg_journal_entries_block_mutation
+BEFORE UPDATE OR DELETE ON journal_entries
+FOR EACH ROW EXECUTE FUNCTION gl_block_mutation_when_posted();
+
+
+-- Disallow posting into closed accounting periods.
+CREATE OR REPLACE FUNCTION gl_block_post_in_closed_period()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+DECLARE v_closed BOOLEAN;
+BEGIN
+  SELECT ap.is_closed INTO v_closed FROM accounting_periods ap WHERE ap.period_id = NEW.period_id;
+  IF v_closed IS TRUE THEN
+     RAISE EXCEPTION 'Cannot post into a closed accounting period (period_id=%)', NEW.period_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_transactions_period_lock ON transactions;
+CREATE TRIGGER trg_transactions_period_lock
+BEFORE INSERT OR UPDATE OF period_id ON transactions
+FOR EACH ROW EXECUTE FUNCTION gl_block_post_in_closed_period();
+
+
+-- Ensure transaction is balanced at row-level totals and frozen at insert.
+ALTER TABLE IF EXISTS transactions
+  DROP CONSTRAINT IF EXISTS chk_balanced_transaction,
+  ADD CONSTRAINT chk_balanced_transaction CHECK (total_debit = total_credit);
+
+
+-- ======================================
+-- 3) CURRENCIES AND FX ON GL LINE LEVEL
+-- ======================================
+
+-- Add explicit transactional and base/reporting amounts to journal_entries.
+DO $$ BEGIN
+  IF NOT EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name='journal_entries' AND column_name='currency_id'
+  ) THEN
+     ALTER TABLE journal_entries
+        ADD COLUMN currency_id BIGINT,
+        ADD COLUMN amount_txn NUMERIC(15,2) DEFAULT 0,
+        ADD COLUMN amount_base NUMERIC(15,2) DEFAULT 0,
+        ADD COLUMN amount_reporting NUMERIC(15,2) DEFAULT 0,
+        ADD COLUMN fx_txn_to_base NUMERIC(20,10) DEFAULT 1,
+        ADD COLUMN fx_base_to_reporting NUMERIC(20,10) DEFAULT 1;
+     ALTER TABLE journal_entries
+        ADD CONSTRAINT fk_je_currency FOREIGN KEY (currency_id) REFERENCES currencies(currency_id);
+  END IF;
+END $$;
+
+
+-- =======================
+-- 4) TAXES: line-level M:N
+-- =======================
+
+-- Support multiple taxes per invoice/bill line.
+CREATE TABLE IF NOT EXISTS invoice_item_taxes (
+    invoice_item_tax_id BIGSERIAL PRIMARY KEY,
+    invoice_item_id BIGINT NOT NULL,
+    tax_rate_id BIGINT NOT NULL,
+    tax_base NUMERIC(15,2) NOT NULL DEFAULT 0,
+    tax_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    tax_inclusive BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(invoice_item_id) ON DELETE CASCADE,
+    FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(tax_rate_id)
+);
+
+CREATE TABLE IF NOT EXISTS bill_item_taxes (
+    bill_item_tax_id BIGSERIAL PRIMARY KEY,
+    bill_item_id BIGINT NOT NULL,
+    tax_rate_id BIGINT NOT NULL,
+    tax_base NUMERIC(15,2) NOT NULL DEFAULT 0,
+    tax_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    tax_inclusive BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bill_item_id) REFERENCES bill_items(bill_item_id) ON DELETE CASCADE,
+    FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(tax_rate_id)
+);
+
+
+-- =====================
+-- 5) AR/AP ALLOCATIONS
+-- =====================
+
+-- Prevent over-allocation against invoices/bills.
+CREATE OR REPLACE FUNCTION ap_ar_prevent_over_allocation()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+DECLARE v_due NUMERIC(15,2);
+DECLARE v_alloc NUMERIC(15,2);
+BEGIN
+  IF NEW.reference_type = 'invoice' THEN
+     SELECT balance_due INTO v_due FROM invoices WHERE invoice_id = NEW.reference_id;
+     SELECT COALESCE(SUM(allocated_amount),0) INTO v_alloc
+       FROM payment_allocations
+       WHERE reference_type='invoice' AND reference_id=NEW.reference_id
+         AND allocation_id <> COALESCE(NEW.allocation_id,0);
+  ELSIF NEW.reference_type = 'bill' THEN
+     SELECT balance_due INTO v_due FROM bills WHERE bill_id = NEW.reference_id;
+     SELECT COALESCE(SUM(allocated_amount),0) INTO v_alloc
+       FROM payment_allocations
+       WHERE reference_type='bill' AND reference_id=NEW.reference_id
+         AND allocation_id <> COALESCE(NEW.allocation_id,0);
+  ELSE
+     RAISE EXCEPTION 'Unknown reference_type %', NEW.reference_type;
+  END IF;
+
+  IF (v_alloc + NEW.allocated_amount) > v_due THEN
+     RAISE EXCEPTION 'Allocation exceeds outstanding balance. Outstanding=%, NewTotalAllocation=%', v_due, (v_alloc + NEW.allocated_amount);
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_payment_allocations_block_over ON payment_allocations;
+CREATE TRIGGER trg_payment_allocations_block_over
+BEFORE INSERT OR UPDATE ON payment_allocations
+FOR EACH ROW EXECUTE FUNCTION ap_ar_prevent_over_allocation();
+
+
+-- ==================================
+-- 6) INVENTORY VALUATION: Cost Layers
+-- ==================================
+
+CREATE TABLE IF NOT EXISTS inventory_layers (
+    layer_id BIGSERIAL PRIMARY KEY,
+    company_id BIGINT NOT NULL,
+    item_id BIGINT NOT NULL,
+    source_type VARCHAR(50) NOT NULL,          -- bill, adjustment, opening
+    source_id BIGINT,
+    received_date DATE NOT NULL,
+    quantity NUMERIC(12,3) NOT NULL,
+    remaining_qty NUMERIC(12,3) NOT NULL,
+    unit_cost NUMERIC(15,4) NOT NULL,
+    currency_id BIGINT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(company_id),
+    FOREIGN KEY (item_id) REFERENCES items(item_id),
+    FOREIGN KEY (currency_id) REFERENCES currencies(currency_id),
+    CHECK (quantity >= 0 AND remaining_qty >= 0 AND unit_cost >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_layers_item ON inventory_layers(item_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_layers_company_item ON inventory_layers(company_id, item_id);
+
+CREATE TABLE IF NOT EXISTS cogs_entries (
+    cogs_entry_id BIGSERIAL PRIMARY KEY,
+    company_id BIGINT NOT NULL,
+    item_id BIGINT NOT NULL,
+    invoice_id BIGINT,
+    invoice_item_id BIGINT,
+    quantity_issued NUMERIC(12,3) NOT NULL,
+    total_cost NUMERIC(15,4) NOT NULL,
+    unit_cost NUMERIC(15,4) NOT NULL,
+    valuation_method VARCHAR(20) DEFAULT 'FIFO', -- FIFO, WAVCO
+    issued_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(company_id),
+    FOREIGN KEY (item_id) REFERENCES items(item_id),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
+    FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(invoice_item_id)
+);
+
+
+-- =======================================
+-- 7) CHART OF ACCOUNTS GOVERNANCE RULES
+-- =======================================
+
+-- Block posting to parent accounts.
+CREATE OR REPLACE FUNCTION accounts_block_parent_posting()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+DECLARE has_children BOOLEAN;
+BEGIN
+  SELECT EXISTS(SELECT 1 FROM chart_of_accounts c WHERE c.parent_account_id = NEW.account_id)
+    INTO has_children;
+  IF has_children THEN
+     RAISE EXCEPTION 'Posting to parent account (%) is not allowed', NEW.account_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Enforce debit/credit discipline by account balance_type.
+CREATE OR REPLACE FUNCTION accounts_enforce_balance_side()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+DECLARE v_balance_type TEXT;
+BEGIN
+  SELECT balance_type INTO v_balance_type FROM chart_of_accounts WHERE account_id = NEW.account_id;
+  IF NEW.debit_amount > 0 AND v_balance_type = 'credit' THEN
+     -- allow but warn? In DB enforce neutrality: still allowed since totals must balance.
+     RETURN NEW;
+  ELSIF NEW.credit_amount > 0 AND v_balance_type = 'debit' THEN
+     RETURN NEW;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- These are advisory; not attached by default to avoid breaking existing inserts.
+-- Example of how to attach if desired:
+-- CREATE TRIGGER trg_journal_entries_parent_block BEFORE INSERT ON journal_entries
+-- FOR EACH ROW EXECUTE FUNCTION accounts_block_parent_posting();
+-- CREATE TRIGGER trg_journal_entries_balance_side BEFORE INSERT ON journal_entries
+-- FOR EACH ROW EXECUTE FUNCTION accounts_enforce_balance_side();
+
+
+-- ==================================
+-- 8) DOCUMENT NUMBERING + STATE RULES
+-- ==================================
+
+CREATE TABLE IF NOT EXISTS document_numbers (
+    doc_number_id BIGSERIAL PRIMARY KEY,
+    company_id BIGINT NOT NULL,
+    document_type VARCHAR(50) NOT NULL,    -- invoice, bill, payment, transaction, voucher
+    prefix VARCHAR(20) DEFAULT '',
+    suffix VARCHAR(20) DEFAULT '',
+    next_value BIGINT NOT NULL DEFAULT 1,
+    zero_pad SMALLINT DEFAULT 5,
+    reset_policy VARCHAR(20) DEFAULT 'yearly', -- never, yearly, monthly
+    last_reset_at DATE,
+    is_locked BOOLEAN DEFAULT FALSE,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (company_id, document_type),
+    FOREIGN KEY (company_id) REFERENCES companies(company_id)
+);
+
+CREATE OR REPLACE FUNCTION doc_numbers_next(p_company_id BIGINT, p_doc_type TEXT)
+RETURNS TEXT LANGUAGE plpgsql AS
+$$
+DECLARE rec RECORD; value_text TEXT;
+BEGIN
+  SELECT * INTO rec FROM document_numbers
+   WHERE company_id = p_company_id AND document_type = p_doc_type FOR UPDATE;
+  IF NOT FOUND THEN
+     RAISE EXCEPTION 'No document number row for company=% type=%', p_company_id, p_doc_type;
+  END IF;
+  value_text := LPAD(rec.next_value::text, COALESCE(rec.zero_pad,5), '0');
+  UPDATE document_numbers SET next_value = rec.next_value + 1, updated_at = CURRENT_TIMESTAMP
+   WHERE doc_number_id = rec.doc_number_id;
+  RETURN rec.prefix || value_text || rec.suffix;
+END;
+$$;
+
+
+-- ==================================
+-- 9) AUDIT HOOKS (data change capture)
+-- ==================================
+
+-- Generic audit function (INSERT/UPDATE/DELETE)
+CREATE OR REPLACE FUNCTION audit_capture()
+RETURNS trigger LANGUAGE plpgsql AS
+$$
+BEGIN
+  INSERT INTO audit_trail(company_id, table_name, record_id, action, old_values, new_values, changed_by, changed_at)
+  VALUES (
+    COALESCE(NEW.company_id, OLD.company_id),
+    TG_TABLE_NAME,
+    COALESCE((to_jsonb(NEW)->>'id')::BIGINT, (to_jsonb(OLD)->>'id')::BIGINT, 0),
+    TG_OP,
+    CASE WHEN TG_OP IN ('UPDATE','DELETE') THEN to_jsonb(OLD) ELSE NULL END,
+    CASE WHEN TG_OP IN ('INSERT','UPDATE') THEN to_jsonb(NEW) ELSE NULL END,
+    NULL,
+    CURRENT_TIMESTAMP
+  );
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+-- Example attachments (commented out to avoid heavy overhead by default)
+-- CREATE TRIGGER audit_invoices          AFTER INSERT OR UPDATE OR DELETE ON invoices          FOR EACH ROW EXECUTE FUNCTION audit_capture();
+-- CREATE TRIGGER audit_bills             AFTER INSERT OR UPDATE OR DELETE ON bills             FOR EACH ROW EXECUTE FUNCTION audit_capture();
+-- CREATE TRIGGER audit_transactions      AFTER INSERT OR UPDATE OR DELETE ON transactions      FOR EACH ROW EXECUTE FUNCTION audit_capture();
+-- CREATE TRIGGER audit_journal_entries   AFTER INSERT OR UPDATE OR DELETE ON journal_entries   FOR EACH ROW EXECUTE FUNCTION audit_capture();
+
+
+-- =================
+-- 10) SECURITY/RLS
+-- =================
+
+-- Enable RLS on tenant-scoped tables and add a simple policy.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT tablename FROM pg_tables
+    WHERE schemaname='public'
+      AND tablename IN (
+        'customers','vendors','items','invoices','invoice_items','bills','bill_items',
+        'transactions','journal_entries','payments','payment_allocations',
+        'accounts_receivable','accounts_payable','chart_of_accounts','documents'
+      )
+  LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', r.tablename);
+    -- Simple policy: only rows with company_id in current_setting('app.company_id')
+    EXECUTE format($sql$
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='%1$s' AND policyname='%1$s_company_isolation'
+        ) THEN
+          CREATE POLICY %1$s_company_isolation ON %1$s
+          USING (company_id::text = current_setting('app.company_id', true));
+        END IF;
+      END $$;
+    $sql$, r.tablename);
+  END LOOP;
+END $$;
+
+
+-- ====================================
+-- 11) PERFORMANCE & PARTITION TEMPLATES
+-- ====================================
+
+-- Example: time-range partitioning for transactions by month. Optional.
+-- Requires creating a new partitioned parent and attaching the existing data if desired.
+-- Skipped automatic migration to avoid downtime. Template below:
+
+-- CREATE TABLE transactions_p (
+--   LIKE transactions INCLUDING ALL
+-- ) PARTITION BY RANGE (transaction_date);
+--
+-- CREATE TABLE transactions_2025_08 PARTITION OF transactions_p
+--   FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
+--
+-- -- Move data and swap names during maintenance window.
+
+
+-- ====================================
+-- 12) REPORTING SURFACE: MVs
+-- ====================================
+
+-- Fast Trial Balance by period
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_trial_balance AS
+SELECT
+  t.company_id,
+  t.period_id,
+  je.account_id,
+  SUM(je.debit_amount) AS total_debit,
+  SUM(je.credit_amount) AS total_credit,
+  SUM(je.debit_amount - je.credit_amount) AS net_change
+FROM transactions t
+JOIN journal_entries je ON je.transaction_id = t.transaction_id
+GROUP BY t.company_id, t.period_id, je.account_id;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_trial_balance_pk ON mv_trial_balance(company_id, period_id, account_id);
+
+-- Account balances by period for fast Balance Sheet / P&L
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_balances_by_account_period AS
+SELECT
+  t.company_id,
+  t.period_id,
+  a.account_id,
+  a.account_type,
+  a.balance_type,
+  SUM(je.debit_amount - je.credit_amount) AS period_change
+FROM transactions t
+JOIN journal_entries je ON je.transaction_id = t.transaction_id
+JOIN chart_of_accounts a ON a.account_id = je.account_id
+GROUP BY t.company_id, t.period_id, a.account_id, a.account_type, a.balance_type;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_balances_by_account_period_pk
+ON mv_balances_by_account_period(company_id, period_id, account_id);
+
+-- Refresh helpers
+CREATE OR REPLACE FUNCTION refresh_reporting_mvs()
+RETURNS void LANGUAGE plpgsql AS
+$$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY mv_trial_balance;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY mv_balances_by_account_period;
+END;
+$$;
+
+-- ===============================================
+-- END OF PATCH
+-- ===============================================

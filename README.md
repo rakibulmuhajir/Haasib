@@ -1,33 +1,41 @@
-# Deployment & Operations Guide — SME Modular Accounting (PostgreSQL)
+#App Deployment Guide
 
-Target: PostgreSQL 14+
-Audience: Backend developers and DevOps
+## 1. SME Modular Accounting — Deployment, Operations, and Expansion Guide (PostgreSQL)
+
+## 0. Scope
+
+Covers deployment, table purposes, usage patterns, operations, and expansion for all modules:
+`00_core`, `10_acct`, `11_ar`, `12_ap`, `13_bank`, `14_tax`, `15_posting`, `20_inv`, `21_inventory_costing`, `30_reporting`, `31_fin_reports`, `40_crm`, `50_payroll`, `51_payroll_extended`, `60_vms`, `90_sys`, `91_webhook_deliveries`, `92_failed_jobs`, `93_schema_version`.
 
 ---
 
-## 1) Prerequisites
+## 1. Architecture and Tenancy
 
-* PostgreSQL 14 or higher
-* Superuser or a role with `CREATE` on the target database
-* `psql` in PATH
-* UTF‑8 DB, `timezone=UTC`
-* Network access to DB from CI or local shell
+* **Module-based schemas.** Each domain lives in its own schema for isolation and optionality.
+* **Logical multi-tenancy.** Every business table carries `company_id` with tenant-scoped unique keys like `(company_id, number)`.
+* **Optional cross-module FKs.** Added conditionally via `DO $$` blocks so you can deploy subsets without errors.
 
-Optional hardening (recommended):
+**Do not** create a separate PostgreSQL schema per company unless you need hard isolation. It complicates migrations, pooling, and cross-tenant reporting. Prefer one set of module schemas with `company_id` filters.
 
-* Create a dedicated role `app_owner` that owns schemas and objects
-* Separate runtime role `app_user` with `USAGE` on schemas and `SELECT/INSERT/UPDATE/DELETE` on tables
+---
+
+## 2. Versions, Roles, and Cluster Prep
+
+* PostgreSQL 14+.
+* Enable `pg_stat_statements` for monitoring.
+* Create roles:
 
 ```sql
--- Example roles
 CREATE ROLE app_owner LOGIN PASSWORD '***';
 CREATE ROLE app_user  LOGIN PASSWORD '***';
-GRANT app_owner TO app_user; -- optional during bootstrap
+GRANT app_owner TO app_user; -- temporary during bootstrap only
 ```
+
+* After bootstrap, revoke ownership from `app_user`. Grant runtime privileges only.
 
 ---
 
-## 2) Files and Load Order
+## 3. Files and Load Order
 
 ```
 00_core.sql
@@ -35,407 +43,485 @@ GRANT app_owner TO app_user; -- optional during bootstrap
 11_ar.sql
 12_ap.sql
 13_bank.sql
-14_tax.sql       # new
-15_posting.sql   # new
+14_tax.sql
+15_posting.sql
 20_inventory.sql
+21_inventory_costing.sql
 30_reporting.sql
+31_fin_reports.sql
 40_crm.sql
 50_payroll.sql
+51_payroll_extended.sql
 60_vms.sql
 90_system.sql
+91_webhook_deliveries.sql
+92_failed_jobs.sql
+93_schema_version.sql
 ```
 
-Reasoning: `core` → `acct` → subledgers → bank; tax before posting; posting relies on AR/AP; others are optional.
+Deploy with `deploy.sh` or manually using `psql -v ON_ERROR_STOP=1 -f <file>` in the above order.
 
 ---
 
-## 3) Full Deployment
-
-### 3.1 With helper script
-
-```bash
-PGHOST=localhost PGPORT=5432 PGDATABASE=mydb \
-PGUSER=app_owner PGPASSWORD=*** ./deploy.sh
-```
-
-### 3.2 Manual
-
-```bash
-psql -v ON_ERROR_STOP=1 -f 00_core.sql
-psql -v ON_ERROR_STOP=1 -f 10_accounting.sql
-psql -v ON_ERROR_STOP=1 -f 11_ar.sql
-psql -v ON_ERROR_STOP=1 -f 12_ap.sql
-psql -v ON_ERROR_STOP=1 -f 13_bank.sql
-psql -v ON_ERROR_STOP=1 -f 14_tax.sql
-psql -v ON_ERROR_STOP=1 -f 15_posting.sql
-psql -v ON_ERROR_STOP=1 -f 20_inventory.sql
-psql -v ON_ERROR_STOP=1 -f 30_reporting.sql
-psql -v ON_ERROR_STOP=1 -f 40_crm.sql
-psql -v ON_ERROR_STOP=1 -f 50_payroll.sql
-psql -v ON_ERROR_STOP=1 -f 60_vms.sql
-psql -v ON_ERROR_STOP=1 -f 90_system.sql
-```
-
-Selective install: apply any prefix‑closed subset that respects dependencies. Example: core+acct+AR only → run `00,10,11`.
-
----
-
-## 4) Post‑Install Verification
-
-Run quick health checks.
+## 4. Post-Install Verification
 
 ```sql
--- Schemas exist
-SELECT nspname FROM pg_namespace WHERE nspname IN ('core','acct','acct_ar','acct_ap','bank','tax','acct_post');
+-- Schemas present
+SELECT nspname FROM pg_namespace
+WHERE nspname IN ('core','acct','acct_ar','acct_ap','bank','tax','acct_post','inv','rpt','crm','pay','vms','sys');
 
--- Core refs populated?
-SELECT COUNT(*) currencies, COUNT(*) countries FROM core.currencies, core.countries;
-
--- Triggers installed
-SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('journal_entries_aiud','transactions_biu_period','ar_autopost','ap_autopost');
+-- Critical triggers present
+SELECT tgname, tgrelid::regclass
+FROM pg_trigger
+WHERE NOT tgisinternal
+  AND tgname IN ('ar_autopost','ap_autopost','payslip_lines_rollup_aiud','stock_movements_aiud_cost_wa');
 ```
 
 ---
 
-## 5) Tenant Onboarding
+## 5. Tenant Onboarding
+
+1. Create company and first admin.
 
 ```sql
--- 5.1 Company
-INSERT INTO core.companies (name, primary_currency_id, fiscal_year_start_month, schema_name)
-VALUES ('Acme Travel', 1, 1, 'acme');  -- adjust currency id
+INSERT INTO core.companies(name, primary_currency_id, fiscal_year_start_month, schema_name)
+VALUES ('Acme Travel', 1, 1, 'acme');
 
--- 5.2 First user
-INSERT INTO core.user_accounts (company_id, username, email, password_hash, first_name, last_name)
-VALUES (1, 'admin', 'admin@acme.test', 'bcrypt$...','Sys','Admin');
+INSERT INTO core.user_accounts(company_id, username, email, password_hash, first_name, last_name)
+VALUES (1,'admin','admin@acme.test','bcrypt$...','Sys','Admin');
+```
 
--- 5.3 Fiscal year and periods
-INSERT INTO acct.fiscal_years (company_id, name, start_date, end_date, is_current)
-VALUES (1, 'FY2025', '2025-01-01', '2025-12-31', TRUE);
+2. Fiscal year and periods.
 
--- Generate periods (monthly example)
-INSERT INTO acct.accounting_periods (company_id, fiscal_year_id, name, start_date, end_date)
-SELECT 1, fiscal_year_id,
-       to_char(d, 'Mon YYYY'),
-       date_trunc('month', d)::date,
-       (date_trunc('month', d) + INTERVAL '1 month - 1 day')::date
-FROM acct.fiscal_years, generate_series('2025-01-01'::date, '2025-12-01'::date, '1 month') d;
+```sql
+INSERT INTO acct.fiscal_years(company_id,name,start_date,end_date,is_current)
+VALUES (1,'FY2025','2025-01-01','2025-12-31',true);
+
+INSERT INTO acct.accounting_periods(company_id,fiscal_year_id,name,start_date,end_date)
+SELECT 1, fiscal_year_id, to_char(d,'Mon YYYY'),
+       date_trunc('month',d)::date,
+       (date_trunc('month',d) + interval '1 month - 1 day')::date
+FROM acct.fiscal_years fy
+CROSS JOIN generate_series('2025-01-01','2025-12-01','1 month') d
+WHERE fy.company_id=1 AND fy.name='FY2025';
+```
+
+3. Chart of accounts seed (import your COA).
+
+---
+
+## 6. Module Deep-Dive: Tables and How To Use Them
+
+### 6.1 `core` — Tenancy and shared refs
+
+* `core.companies` — one row per tenant. Holds primary currency and fiscal settings.
+* `core.user_accounts` — application users. Join on `company_id` for tenancy.
+* `core.countries`, `core.currencies`, `core.exchange_rates` — dimension data for docs and reporting.
+
+**Use:** always include `company_id` in inserts and filters.
+
+---
+
+### 6.2 `acct` — General Ledger
+
+* `acct.chart_of_accounts` — account tree. Fields: `account_code`, `account_type` (asset, liability, equity, revenue, expense), `balance_type` (debit/credit).
+* `acct.fiscal_years`, `acct.accounting_periods` — calendar control. `is_closed` blocks postings.
+* `acct.transactions` — header per GL document. Stores type, dates, totals.
+* `acct.journal_entries` — lines per account with `debit_amount` or `credit_amount`.
+
+**Use:**
+
+* Manual journal:
+
+```sql
+INSERT INTO acct.transactions(company_id,transaction_number,transaction_type,transaction_date,description,currency_id)
+VALUES (1,'GJ-0001','journal',CURRENT_DATE,'Year open',(SELECT primary_currency_id FROM core.companies WHERE company_id=1))
+RETURNING transaction_id;
+
+INSERT INTO acct.journal_entries(transaction_id,account_id,debit_amount,description) VALUES (:tx,1000,100,'Open');
+INSERT INTO acct.journal_entries(transaction_id,account_id,credit_amount,description) VALUES (:tx,3000,100,'Open');
 ```
 
 ---
 
-## 6) Enable Tax per Company (Optional)
+### 6.3 `acct_ar` — Accounts Receivable
 
-Populate country and jurisdiction, then toggle.
+* `invoices`, `invoice_items`, `invoice_item_taxes` — sales docs and line taxes.
+* `payments` — cash received.
+* `payment_allocations` — links payment to invoices; never exceed invoice total.
+
+**Use:** create invoice → optional taxes → post to GL (via `15_posting`) → receive payment → allocate.
+
+---
+
+### 6.4 `acct_ap` — Accounts Payable
+
+* `bills`, `bill_items`, `bill_item_taxes` — vendor bills and taxes.
+* `payments`, `payment_allocations` — outflows and allocation to bills.
+
+**Use:** enter bill → post to GL → pay vendor → allocate.
+
+---
+
+### 6.5 `bank` — Banking
+
+* `bank_accounts` — per company bank ledgers. Optional FK to GL cash account.
+* `bank_transactions` — imported statement lines or recorded bank activity.
+* `reconciliations` — reconciliation sessions.
+
+**Use:** import lines, match to AR/AP payments, reconcile.
+
+---
+
+### 6.6 `tax` — Jurisdictions and rates
+
+* `jurisdictions` — country or sub-region codes.
+* `company_tax_settings` — feature toggle, price-includes-tax, rounding.
+* `tax_rates` — rate and validity windows.
+* `tax_groups`, `tax_group_components` — composite taxes.
+* `company_tax_registrations`, `tax_exemptions` — compliance metadata.
+
+**Use:** enable for a company and attach `tax_rate_id` per AR/AP line. Posting includes tax only when enabled.
+
+---
+
+### 6.7 `acct_post` — Auto-posting to GL
+
+* `posting_templates` — per company, per doc type (`AR_INVOICE`, `AP_BILL`).
+* `posting_template_lines` — map roles to GL accounts: AR/AP control, Revenue, Expense, Tax, Discount, Shipping.
+* Functions:
+  `acct_post.post_ar_invoice(invoice_id, template_id)`
+  `acct_post.post_ap_bill(bill_id, template_id)`
+* Triggers: `ar_autopost` and `ap_autopost` post on `status='posted'`.
+
+**Use:**
 
 ```sql
--- 6.1 Jurisdiction for company country (example Pakistan)
-INSERT INTO tax.jurisdictions (country_id, code, name) VALUES ((SELECT country_id FROM core.countries WHERE code='PAK'), 'PK', 'Pakistan')
+-- template
+INSERT INTO acct_post.posting_templates(company_id,doc_type,name) VALUES (1,'AR_INVOICE','Default');
+INSERT INTO acct_post.posting_template_lines(template_id,role,account_id)
+VALUES ((SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AR_INVOICE'),
+        'AR',1100),('Revenue',4000),('TaxPayable',2100),('Discount',4050);
+
+-- manual post
+SELECT acct_post.post_ar_invoice(:invoice_id,
+  (SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AR_INVOICE'));
+```
+
+Common errors: tax enabled but `TaxPayable` missing; closed period.
+
+---
+
+### 6.8 `inv` — Inventory
+
+* `item_categories`, `items` — SKUs and attributes.
+* `warehouses` — locations.
+* `stock_levels` — snapshot quantity per `(warehouse,item)`.
+* `stock_movements` — in, out, transfer, adjustment. Optional links to AR/AP.
+
+**Use:** write a movement row for each change. Keep unit cost for inbound movements.
+
+---
+
+### 6.9 `21_inventory_costing` — Costing and COGS
+
+* `cost_policies` — WA or FIFO per company.
+* `item_costs` — moving average and values per `(company,item,warehouse)`.
+* `cost_layers`, `layer_consumptions` — FIFO scaffolding.
+* `cogs_entries` — COGS per stock issue.
+* Trigger `inv.trg_costing_wa` — maintains averages and creates COGS on outbound.
+
+**Use:** set policy to `WA` to activate trigger. For FIFO, build layers in app jobs.
+
+---
+
+### 6.10 `rpt` — Reporting metadata and snapshots
+
+* `report_templates` — custom SQL templates and parameter definitions.
+* `reports` — generated files with parameters.
+* `financial_statements` — JSON snapshots of TB, BS, PL. Auditable.
+
+**Use:** store generated output and expose to UI for downloads and audit.
+
+---
+
+### 6.11 `31_fin_reports` — Financial statement functions
+
+* Functions:
+  `rpt.trial_balance(company_id, start_date, end_date)`
+  `rpt.profit_and_loss(company_id, start_date, end_date)`
+  `rpt.balance_sheet(company_id, as_of)`
+* Views: `v_trial_balance_current`, `v_profit_and_loss_current`, `v_balance_sheet_today`.
+* Snapshot helper: `rpt.snapshot_trial_balance(company_id, period_id)` → writes to `rpt.financial_statements`.
+
+**Use:** backend calls functions for live pages; cache heavy periods with snapshots.
+
+---
+
+### 6.12 `crm` — Master data
+
+* `customers`, `vendors` — parties.
+* `contacts`, `interactions` — people and activity history.
+
+**Use:** link AR to customers and AP to vendors via conditional FKs.
+
+---
+
+### 6.13 `pay` — Payroll core
+
+* `employees` — staff master.
+* `payroll_periods`, `payroll_runs` — pay cycle control.
+* `payroll_details`, `payroll_deductions` — run outcomes.
+* `payroll_gl_mappings` — optional GL mapping table.
+
+---
+
+### 6.14 `51_payroll_extended` — Leave, benefits, payslips
+
+* `earning_types`, `deduction_types` — normalized codes.
+* `benefit_plans`, `employee_benefits` — contributions.
+* `leave_types`, `leave_requests` — entitlement and requests.
+* `payslips`, `payslip_lines` — calculated payslips. Trigger rolls up totals.
+
+**Use:** generate payslips per period, then post to GL with your template mapping.
+
+---
+
+### 6.15 `vms` — Visitor Management (travel vertical)
+
+* `groups` — group trips.
+* `visitors` — travelers.
+* `services` — visas, hotels, flights, tours.
+* `bookings`, `booking_items` — order header and lines; optional link to AR invoices.
+* `vouchers`, `itineraries`, `itinerary_items` — documents and daily plans.
+
+**Use:** build bookings, convert to AR invoices if needed.
+
+---
+
+### 6.16 `sys` — Platform utilities
+
+* `settings` — per-company configuration key/value.
+* `api_keys` — tokens and scopes.
+* `webhooks` — event endpoints.
+* `audit_log` — coarse audit trail.
+* `jobs` — general purpose job queue.
+* `notifications`, `error_log` — user notices and errors.
+
+---
+
+### 6.17 `91_webhook_deliveries`
+
+* `webhook_deliveries` — delivery header with status and counters.
+* `webhook_delivery_events` — per attempt details.
+* Function `sys.log_webhook_attempt(...)` — append and roll up.
+
+**Use:** worker scans pending, posts, records attempt, schedules retries.
+
+---
+
+### 6.18 `92_failed_jobs`
+
+* `failed_jobs` — persistent record of failures with payloads.
+* Functions: `sys.log_failed_job`, `sys.retry_failed_job`, `sys.resolve_failed_job`.
+
+**Use:** build dashboards and retry flows.
+
+---
+
+### 6.19 `93_schema_version`
+
+* `schema_versions` — registry of applied modules.
+* Function `sys.register_migration(...)` — idempotent upsert.
+
+**Use:** record every migration in CI/CD.
+
+---
+
+## 7. Enabling Tax and Auto-Posting
+
+Enable tax for a company:
+
+```sql
+INSERT INTO tax.jurisdictions(country_id,code,name)
+VALUES ((SELECT country_id FROM core.countries WHERE code='PAK'),'PK','Pakistan')
 ON CONFLICT DO NOTHING;
 
--- 6.2 Company tax settings
-INSERT INTO tax.company_tax_settings (company_id, enabled, default_jurisdiction_id, price_includes_tax, rounding_mode)
-VALUES (1, TRUE, (SELECT jurisdiction_id FROM tax.jurisdictions WHERE code='PK'), FALSE, 'half_up')
+INSERT INTO tax.company_tax_settings(company_id,enabled,default_jurisdiction_id,price_includes_tax,rounding_mode)
+VALUES (1,true,(SELECT jurisdiction_id FROM tax.jurisdictions WHERE code='PK'),false,'half_up')
 ON CONFLICT (company_id) DO UPDATE SET enabled=EXCLUDED.enabled, default_jurisdiction_id=EXCLUDED.default_jurisdiction_id;
-
--- 6.3 Define rates and groups
-INSERT INTO tax.tax_rates (company_id, jurisdiction_id, code, name, rate)
-VALUES (1, (SELECT jurisdiction_id FROM tax.jurisdictions WHERE code='PK'), 'GST-STD', 'GST Standard', 18.0);
-
-INSERT INTO tax.tax_groups (company_id, code, name, jurisdiction_id)
-VALUES (1, 'STD', 'Standard Taxes', (SELECT jurisdiction_id FROM tax.jurisdictions WHERE code='PK'));
-
-INSERT INTO tax.tax_group_components (tax_group_id, tax_rate_id)
-VALUES (
-  (SELECT tax_group_id FROM tax.tax_groups WHERE company_id=1 AND code='STD'),
-  (SELECT tax_rate_id  FROM tax.tax_rates  WHERE company_id=1 AND code='GST-STD')
-);
 ```
 
-Assign taxes at line level through AR/AP tables:
-
-* AR: `acct_ar.invoice_item_taxes (invoice_item_id, tax_rate_id, tax_amount)`
-* AP: `acct_ap.bill_item_taxes   (bill_item_id,   tax_rate_id, tax_amount)`
-
-> Tax is included in postings only when `tax.company_tax_settings.enabled = TRUE` for the company.
+Create posting templates and post as in 6.7.
 
 ---
 
-## 7) Configure Double‑Entry Posting
+## 8. Reporting Execution Patterns
 
-Create a posting template per company and doc type.
+### 8.1 Live compute
 
-```sql
--- 7.1 AR template
-INSERT INTO acct_post.posting_templates (company_id, doc_type, name)
-VALUES (1, 'AR_INVOICE', 'Default AR');
+Backend calls the `rpt.*` functions with parameters. Paginate in code.
 
--- Map roles → accounts (replace account ids with your COA)
-INSERT INTO acct_post.posting_template_lines (template_id, role, account_id)
-SELECT template_id, role, account_id FROM (
-  SELECT (SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AR_INVOICE') AS template_id,
-         *
-  FROM (VALUES
-    ('AR',        1100),  -- Accounts Receivable
-    ('Revenue',   4000),
-    ('TaxPayable',2100),
-    ('Discount',  4050),
-    ('Shipping',  4060)
-  ) AS m(role, account_id)
-) s;
+### 8.2 Snapshot on close
 
--- 7.2 AP template
-INSERT INTO acct_post.posting_templates (company_id, doc_type, name)
-VALUES (1, 'AP_BILL', 'Default AP');
+Call `rpt.snapshot_trial_balance(company_id, period_id)` on period close. Display `rpt.financial_statements` in UI.
 
-INSERT INTO acct_post.posting_template_lines (template_id, role, account_id)
-SELECT template_id, role, account_id FROM (
-  SELECT (SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AP_BILL') AS template_id,
-         *
-  FROM (VALUES
-    ('AP',            2101), -- Accounts Payable
-    ('Expense',       5000),
-    ('TaxReceivable', 1300),
-    ('Discount',      5090)
-  ) AS m(role, account_id)
-) s;
-```
+### 8.3 Materialization (optional)
+
+Create materialized views for fixed windows and refresh nightly.
 
 ---
 
-## 8) Working With AR/AP and Posting
+## 9. Operational Runbooks
 
-### 8.1 Create a customer and invoice (minimal)
+### 9.1 Month-end close
+
+* Verify unbalanced transactions query returns zero.
+* Set `is_closed=true` on prior periods.
+* Snapshot TB and store in `rpt.financial_statements`.
+
+### 9.2 Bank reconciliation
+
+* Load `bank.bank_transactions`.
+* Match to AR/AP payments.
+* Mark reconciliation complete.
+
+### 9.3 Costing
+
+* For WA, confirm `inv.cost_policies.method='WA'`.
+* Monitor `inv.cogs_entries` vs negative movements.
+
+### 9.4 Webhook worker
+
+* Pull pending rows from `sys.webhook_deliveries` by `status='pending'` and `next_attempt_at`.
+* Deliver. Call `sys.log_webhook_attempt(...)`.
+* Reschedule with exponential backoff.
+
+### 9.5 Failed job sweeper
+
+* Dashboard by `queue`, `job_type`, `status`.
+* Call `sys.retry_failed_job(job_id, NOW() + interval '5 min')`.
+
+---
+
+## 10. Performance and Monitoring
+
+### 10.1 Autovacuum tuning (heavy tables)
 
 ```sql
-INSERT INTO crm.customers (company_id, name) VALUES (1, 'Contoso Ltd') ON CONFLICT DO NOTHING;
-
-INSERT INTO acct_ar.invoices (company_id, customer_id, invoice_number, invoice_date, due_date, currency_id, subtotal, discount_amount, shipping_amount, total_amount)
-VALUES (1, (SELECT customer_id FROM crm.customers WHERE company_id=1 AND name='Contoso Ltd'), 'INV-1001', CURRENT_DATE, CURRENT_DATE + 30,
-        (SELECT primary_currency_id FROM core.companies WHERE company_id=1), 1000, 0, 0, 1180); -- total includes expected tax
-
-INSERT INTO acct_ar.invoice_items (invoice_id, description, quantity, unit_price, discount_percentage, discount_amount, line_total)
-VALUES ((SELECT invoice_id FROM acct_ar.invoices WHERE company_id=1 AND invoice_number='INV-1001'), 'Consulting', 1, 1000, 0, 0, 1000);
-
--- Add tax per line (if tax enabled)
-INSERT INTO acct_ar.invoice_item_taxes (invoice_item_id, tax_rate_id, tax_amount)
-VALUES (
-  (SELECT invoice_item_id FROM acct_ar.invoice_items i JOIN acct_ar.invoices v ON v.invoice_id=i.invoice_id WHERE v.invoice_number='INV-1001'),
-  (SELECT tax_rate_id FROM tax.tax_rates WHERE company_id=1 AND code='GST-STD'),
-  180
+ALTER TABLE acct.journal_entries SET (
+  autovacuum_vacuum_scale_factor=0.05,
+  autovacuum_analyze_scale_factor=0.05
+);
+ALTER TABLE acct.transactions SET (
+  autovacuum_vacuum_scale_factor=0.05,
+  autovacuum_analyze_scale_factor=0.05
 );
 ```
 
-### 8.2 Post the invoice
+### 10.2 Indexing patterns
 
-Manual:
+* `(company_id, status)`, `(company_id, transaction_date)`.
+* Partial indexes for hot statuses.
+* `REINDEX CONCURRENTLY` off-peak for bloat.
+
+### 10.3 Partitioning
+
+* Range partition `acct.transactions` and related facts by month when sizes warrant.
+
+### 10.4 Pooling
+
+* Use pgbouncer transaction pooling. Keep transactions short.
+
+---
+
+## 11. Security and Access
+
+* Grant `USAGE` on module schemas to app roles.
+* Grant CRUD on tables as needed. Use default privileges for future tables.
+* Enforce `company_id` filters in all queries. Add unit tests that assert tenant isolation.
+
+---
+
+## 12. Backups and DR
+
+* Nightly `pg_dump -Fc` per database.
+* WAL archiving for PITR.
+* Restore drills: verify trigger presence and health queries post-restore.
+
+---
+
+## 13. CI/CD
+
+* Run migrations with `ON_ERROR_STOP=1`.
+* Register each module version in `sys.schema_versions`.
+* Health check query:
 
 ```sql
-SELECT acct_post.post_ar_invoice((SELECT invoice_id FROM acct_ar.invoices WHERE invoice_number='INV-1001'),
-                                 (SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AR_INVOICE'));
-```
-
-Auto (via trigger):
-
-```sql
-UPDATE acct_ar.invoices SET status='posted' WHERE invoice_number='INV-1001';
-```
-
-### 8.3 Verify GL
-
-```sql
--- Find the GL transaction
-SELECT t.*
+SELECT t.transaction_id
 FROM acct.transactions t
-WHERE t.reference_type='acct_ar.invoices'
-  AND t.reference_id=(SELECT invoice_id FROM acct_ar.invoices WHERE invoice_number='INV-1001');
-
--- Check journal lines balance
-SELECT entry_id, account_id, debit_amount, credit_amount
-FROM acct.journal_entries
-WHERE transaction_id = (
-  SELECT transaction_id FROM acct.transactions WHERE reference_type='acct_ar.invoices' AND reference_id=(SELECT invoice_id FROM acct_ar.invoices WHERE invoice_number='INV-1001')
-);
-```
-
-### 8.4 Create a vendor bill and post
-
-```sql
-INSERT INTO crm.vendors (company_id, name) VALUES (1, 'Fabrikam Supplies') ON CONFLICT DO NOTHING;
-
-INSERT INTO acct_ap.bills (company_id, vendor_id, bill_number, bill_date, due_date, currency_id, subtotal, discount_amount, total_amount)
-VALUES (1, (SELECT vendor_id FROM crm.vendors WHERE company_id=1 AND name='Fabrikam Supplies'), 'B-2001', CURRENT_DATE, CURRENT_DATE + 30,
-        (SELECT primary_currency_id FROM core.companies WHERE company_id=1), 500, 0, 590);
-
-INSERT INTO acct_ap.bill_items (bill_id, description, quantity, unit_price, discount_percentage, discount_amount, line_total)
-VALUES ((SELECT bill_id FROM acct_ap.bills WHERE bill_number='B-2001'), 'Office Supplies', 1, 500, 0, 0, 500);
-
-INSERT INTO acct_ap.bill_item_taxes (bill_item_id, tax_rate_id, tax_amount)
-VALUES (
-  (SELECT bill_item_id FROM acct_ap.bill_items i JOIN acct_ap.bills b ON b.bill_id=i.bill_id WHERE b.bill_number='B-2001'),
-  (SELECT tax_rate_id FROM tax.tax_rates WHERE company_id=1 AND code='GST-STD'),
-  90
-);
-
--- Post
-SELECT acct_post.post_ap_bill((SELECT bill_id FROM acct_ap.bills WHERE bill_number='B-2001'),
-                              (SELECT template_id FROM acct_post.posting_templates WHERE company_id=1 AND doc_type='AP_BILL'));
-```
-
----
-
-## 9) Reconciliation of AR/AP Payments (outline)
-
-* Record payments in `acct_ar.payments` and `acct_ap.payments`.
-* Allocate via `payment_allocations` to invoices or bills.
-* Import bank lines into `bank.bank_transactions` and match to payments.
-
----
-
-## 10) Maintenance and Safety
-
-* Idempotent DDL: all files use `IF NOT EXISTS` and guarded `ALTER`s.
-* Heavy indexes: create later with `CREATE INDEX CONCURRENTLY` in a separate migration, not inside `BEGIN`.
-* Closing periods: set `is_closed = TRUE` on `acct.accounting_periods`. Trigger blocks postings.
-* Backups: use `pg_dump -Fc` and WAL archiving for PITR.
-
-Rollback strategy:
-
-* DDL is additive. To revert data changes from a failed post, delete GL rows by `reference_type`+`reference_id` in a transaction.
-
-```sql
-BEGIN;
-DELETE FROM acct.journal_entries WHERE transaction_id IN (
-  SELECT transaction_id FROM acct.transactions WHERE reference_type='acct_ar.invoices' AND reference_id=:invoice_id);
-DELETE FROM acct.transactions WHERE reference_type='acct_ar.invoices' AND reference_id=:invoice_id;
-COMMIT;
-```
-
----
-
-## 11) Permissions Model (suggested)
-
-```sql
-GRANT USAGE ON SCHEMA core, acct, acct_ar, acct_ap, tax, acct_post TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA core, acct, acct_ar, acct_ap, tax, acct_post TO app_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA core, acct, acct_ar, acct_ap, tax, acct_post GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
-```
-
----
-
-## 12) Common Errors
-
-* **FK missing to tax**: ensure `14_tax.sql` ran before using invoice/bill line taxes.
-* **Auto‑post not firing**: check triggers `ar_autopost` and `ap_autopost` exist and status changed from non‑posted to `posted`.
-* **Unbalanced transaction**: template missing a role or tax enabled without `TaxPayable`/`TaxReceivable` account.
-* **Closed period error**: posting into a closed `acct.accounting_periods` row.
-
----
-
-## 13) CI/CD Tips
-
-* Run `psql -v ON_ERROR_STOP=1` in pipelines.
-* After migration, run a health query that returns zero rows if OK:
-
-```sql
-SELECT t.transaction_id FROM acct.transactions t
 LEFT JOIN (
   SELECT transaction_id, SUM(debit_amount) d, SUM(credit_amount) c
   FROM acct.journal_entries GROUP BY 1
 ) s USING (transaction_id)
-WHERE COALESCE(d,0) <> COALESCE(total_debit,0)
-   OR COALESCE(c,0) <> COALESCE(total_credit,0);
+WHERE COALESCE(d,0)<>COALESCE(total_debit,0)
+   OR COALESCE(c,0)<>COALESCE(total_credit,0);
 ```
 
 ---
 
-## 14) Performance Tuning (scale guidance for DBAs)
+## 14. Future Expansions
 
-### 14.1 General settings (per cluster)
+### Accounting
 
-* Enable `pg_stat_statements` and track normalised query patterns.
-* Size `shared_buffers` \~25% RAM, `effective_cache_size` \~50–75% RAM.
-* Start with `work_mem` 4–32MB per sort/hash, raise in controlled workloads.
-* Set `maintenance_work_mem` 512MB–2GB for VACUUM/CREATE INDEX on large tables.
+* **Credit notes**: AR/AP reversal doc types and posting roles.
+* **Accruals and deferrals**: schedule-based postings.
+* **Multi-currency remeasurement**: unrealized FX at period end.
 
-### 14.2 VACUUM/ANALYZE
+### Inventory
 
-Create aggressive autovacuum for heavy‑write tables (`acct.journal_entries`, `acct.transactions`, `acct_ar.payment_allocations`, `acct_ap.payment_allocations`, `bank.bank_transactions`).
+* **FIFO engine**: job to maintain `cost_layers` and consume on outbound.
+* **GL hooks**: inventory and COGS postings on AR/AP events.
 
-```sql
-ALTER TABLE acct.journal_entries SET (
-  autovacuum_vacuum_scale_factor = 0.05,
-  autovacuum_analyze_scale_factor = 0.05,
-  autovacuum_vacuum_cost_limit = 400,
-  autovacuum_vacuum_cost_delay = 2
-);
-ALTER TABLE acct.transactions SET (
-  autovacuum_vacuum_scale_factor = 0.05,
-  autovacuum_analyze_scale_factor = 0.05
-);
-```
+### Reporting
 
-Manual cadence for analytics/reporting tables after bulk loads:
+* **Materialized TB/BS/PL**: by month and company.
+* **Cash-flow**: indirect method function using GL activity.
 
-```sql
-VACUUM (ANALYZE) rpt.financial_statements;
-```
+### System
 
-### 14.3 Index maintenance
+* **Bank imports**: `13_bank_imports.sql` for formats and matching rules.
+* **Data retention**: purge policies for logs and jobs.
+* **Fine-grained audit**: row-level audit triggers.
 
-* Prefer **covering indexes** for common filters: `(company_id, date)` or `(company_id, status)`.
-* Rebuild bloated indexes with `REINDEX CONCURRENTLY` off‑peak.
-* Add partial indexes for active subsets, e.g. `WHERE status IN ('posted','completed')`.
+### Travel vertical
 
-Examples:
-
-```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tx_company_date ON acct.transactions(company_id, transaction_date);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_inv_status_open ON acct_ar.invoices(company_id, status) WHERE status IN ('sent','posted');
-```
-
-### 14.4 Partitioning
-
-Use **declarative range partitioning** by month for very large facts.
-
-```sql
--- Parent
-ALTER TABLE acct.transactions PARTITION BY RANGE (transaction_date);
--- Example partitions
-CREATE TABLE acct.transactions_2025_01 PARTITION OF acct.transactions
-  FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
-CREATE TABLE acct.transactions_2025_02 PARTITION OF acct.transactions
-  FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
--- Default catch‑all
-CREATE TABLE acct.transactions_default PARTITION OF acct.transactions DEFAULT;
-```
-
-Mirror partitioning on `acct.journal_entries` by referencing the same date via `transactions.transaction_date` at insert time (handled in app or via trigger). Create local indexes per partition.
-
-### 14.5 Query plans and hints
-
-* Always parameterise tenant: `WHERE company_id = $1`.
-* Avoid `SELECT *` in hot paths. Project needed columns only.
-* Use `EXPLAIN (ANALYZE, BUFFERS)` on slow queries; add indexes accordingly.
-
-### 14.6 Connection and workload
-
-* Use a pooler (e.g. pgbouncer) with transaction pooling for web workloads.
-* Keep transactions short; commit early to reduce row version churn.
-
-### 14.7 Monitoring
-
-* Track: autovacuum activity, dead tuples, index bloat, long‑running queries.
-* Sample bloat check (approximate):
-
-```sql
-SELECT schemaname, relname, pg_size_pretty(pg_total_relation_size(relid)) AS total_size
-FROM pg_stat_user_tables
-ORDER BY pg_total_relation_size(relid) DESC
-LIMIT 20;
-```
-
-* Expose key metrics via `pg_stat_statements` and your APM.
+* **61\_vms\_catalog**: hotels, airlines, cities, vendors.
+* **62\_supplier\_contracts**: rate cards and seasons.
 
 ---
 
-This guide provides the exact steps to deploy, enable tax, configure posting, run routines, and scale PostgreSQL safely. Apply with your company IDs, account IDs, and jurisdiction codes as needed.
+## 15. Appendix: Common API-SQL Bridges
+
+### Reports
+
+* TB endpoint calls `rpt.trial_balance`.
+* PL endpoint calls `rpt.profit_and_loss`.
+* BS endpoint calls `rpt.balance_sheet`.
+
+### Posting
+
+* Set invoice status to `posted` to trigger autopost.
+* Or call `acct_post.post_ar_invoice` / `post_ap_bill` directly.
+
+### Payslips
+
+* Insert lines, totals roll up automatically. Transition to `approved`, then record payment in AP or bank.
+
+---
+
+This guide gives deployment, table purposes, how to use each table set effectively, operations, and expansion paths. Financial reports are computed in the backend via `31_fin_reports.sql` functions and can be snapshotted in `rpt.financial_statements`.
+
+## 2. API
+
+## 3. Laravel Setup and initialization

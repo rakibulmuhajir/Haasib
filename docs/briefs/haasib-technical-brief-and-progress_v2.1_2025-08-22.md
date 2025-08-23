@@ -1,276 +1,314 @@
-# Haasib SaaS — Technical Brief & Progress Snapshot (v2.1)
+# Haasib Engineering Handbook (v3.0)
 
-A concise, durable brief you can hand to future-you (or a collaborator) to resume instantly.
+**Date:** 2025-08-23
+**Owner:** banna
+**Scope:** Accounting-first, multi-company SaaS with extensible business modules.
+**Status:** Active build
 
----
-
-## 1) Product Brief
-
-* **Problem**: SME accounting + extensible business modules with rock‑solid data integrity and low latency.
-* **Audience**: International SMEs (starting with UAE), owners, bookkeepers, and external accountants who may access multiple companies.
-* **Core outcomes**: Accurate double‑entry ledger, fast UX, multi‑company access, manual payments + reconciliation, open‑ended module model.
+> This is the canonical reference for what we’re building, why, how, and in what order. Keep it updated as we learn.
 
 ---
 
-## 2) Architecture & Stack
+## 0) Product North Star
 
-* **Pattern**: Laravel **modular monolith**.
-* **Backend**: Laravel 11 (PHP 8.3), **Octane + Swoole** (WSL/Linux), Redis (cache/queues), Horizon, Sanctum.
-* **Frontend**: Inertia + Vue 3 + Vite (SSR + hydration).
-* **DB**: PostgreSQL 16, **module‑per‑schema** (e.g., `auth`, `ledger`, `billing`, `ops`, `crm`), UUID PKs.
-* **Storage**: S3‑compatible object storage for uploads.
-* **Edge**: Cloudflare (Brotli, HTTP/3, WAF, cache rules for `/build/*`).
+* **Outcome:** Reliable system of record for SMEs with fast UI, strict data integrity, and clean extensibility.
+* **Initial markets:** International, starting with UAE (AED) and English/Arabic.
+* **Pillars:** Double-entry accuracy, hard multi-tenancy (RLS), manual-first payments + reconciliation, module extensibility, offline-friendly API patterns.
+* **Non-goals (v1):** Bank API integrations, payroll, local payment gateways, microservices.
 
 ---
 
-## 3) Tenancy & Access Control
+## 1) Architecture Overview
 
-* **Multi‑company**: `auth.users`, `auth.companies`, **pivot** `auth.company_user(company_id, user_id, role)`; active company via session/header.
-* **RLS**: Every tenant table includes `company_id`. Policies enforce `company_id = current_setting('app.current_company')::uuid`.
-* **Context middleware**: `SetTenantContext` sets `app.current_company` and `app.current_user` per request (API, web, jobs, CLI).
-* **RBAC**: `spatie/laravel-permission` with roles `owner|admin|accountant|member` and granular permissions (`ledger.post`, `invoice.view`, `report.export`, ...).
+* **Pattern:** Modular monolith on **Laravel 11 / PHP 8.3**.
+* **Runtime:** **Octane + Swoole** (Linux/WSL), Redis (cache/queues), Horizon.
+* **Frontend:** Inertia + Vue 3 + Vite (SSR + hydration).
+* **Database:** PostgreSQL 16, single DB, **schema-per-module**: `auth`, `ledger`, `billing`, `ops`, `crm`, `audit`.
+* **API:** `/api/v1` with **Sanctum**; idempotent writes; compact/sparse/delta endpoints.
+* **Edge:** Cloudflare (Brotli, HTTP/3, WAF, cache rules for `/build/*`).
+* **Storage:** S3-compatible object storage for documents and receipts.
 
----
+**Why this stack**
 
-## 4) Accounting Core
-
-* **Double‑entry ledger**: `ledger.ledger_accounts`, `ledger.journal_entries` (header), `ledger.journal_lines` (debit/credit). All financial ops **post balanced entries**.
-* **Immutability**: Documents (invoices/bills/payments) are not edited in place; changes use credit notes or reversing entries; soft‑delete only with `voided_at` + reason.
-* **Money math**: Minor units per currency; calculations via `brick/money`.
-
----
-
-## 5) Internationalization & Currency
-
-* **Per‑company base currency** and locale: `auth.companies.base_currency`, `language`, `locale`.
-* **Rates**: `ops.currencies`, `ops.exchange_rates(base, quote, rate_ppm, as_of)`; `CurrencyService` converts safely.
-* **i18n**: JSON translations; number/date/currency formatting; RTL support for Arabic; PDFs respect locale.
+* Laravel for velocity + ecosystem; Octane/Swoole for latency; Postgres RLS for real isolation; Inertia for SPA feel without API duplication.
 
 ---
 
-## 6) Payments & Onboarding (Manual First)
+## 2) Tenancy, Security & Access
 
-* **Tenant onboarding**: wizard collects base currency/locale, seeds chart of accounts (localized).
-* **Your SaaS billing**: **manual bank/wire** subscription invoices with receipt upload + approval flow (Stripe/Paddle postponed to post‑MVP).
-* **Tenant payments**: `billing.payments(...)` recorded with method/reference/attachment; **approve → post to ledger**.
+* **Multi-company model:** `auth.users`, `auth.companies`, `auth.company_user(company_id,user_id,role)`.
+* **RLS:** All tenant tables include `company_id uuid not null`. Policies match `company_id = current_setting('app.current_company', true)::uuid`.
+* **Context:** `SetTenantContext` middleware sets `app.current_company` from session/header/token; jobs/CLI accept `--company` and set context.
+* **RBAC:** `spatie/laravel-permission` roles `owner|admin|accountant|member`; permissions by capability (`invoice.view`, `ledger.post`, `report.export`, etc.).
+* **Auth:** `auth` (web) + `auth:sanctum` (API). For API, either one token per company or header `X-Company-Id` with membership check.
+* **Auditing:** Append-only audit entries for all financial mutations; export per company.
 
----
-
-## 7) Bank Reconciliation (No Bank APIs)
-
-* **Statements**: `ops.bank_transactions` populated via CSV uploads.
-* **Matching**: fuzzy rules by amount/date/reference; queue for unmatched; full audit log of matches/edits.
+**Why**: DB-level isolation beats app-level checks; RBAC and policies gate actions; logs make accountants and auditors trust us.
 
 ---
 
-## 8) API Design
+## 3) Internationalization & Currency
 
-* **Namespace**: `/api/v1` with Sanctum auth.
-* **Conventions**: UUIDs, `snake_case`, ISO‑8601 UTC, `{ data, meta, links }` envelope, filters `?filter[...]`, sorts `?sort=-created_at`.
-* **Writes**: **Idempotency‑Key** required; service‑layer `DB::transaction(...)` for all monetary mutations.
-* **Mobile‑friendly**: compact JSON media type, **sparse fields** (`?fields[entity]=id,name`), **delta sync** `/api/v1/sync?updated_since=...`.
-* **Versioning**: path‑based; deprecation headers; 90‑day grace; structured error codes.
+* **Company profile:** `base_currency`, `language`, `locale` (e.g., `en_AE`, `ar_AE`).
+* **Rates:** `ops.currencies`, `ops.exchange_rates(base, quote, rate_ppm, as_of)`; **CurrencyService** uses `brick/money` and minor units.
+* **i18n:** JSON translation files, RTL toggle, localized PDFs/exports.
 
----
-
-## 9) Web UI (Inertia + Vue)
-
-* SPA‑feel via server routing; SSR where needed; tables with server filters/sorts; optimistic updates when safe.
-* Company switcher in navbar; locale/currency in user/company profile.
+**Why**: International-first, any base currency per company, proper formatting, and safe arithmetic.
 
 ---
 
-## 10) Extensibility (Module System)
+## 4) Data & API Conventions
 
-* **Per‑module** schema, routes, policies, migrations under `database/migrations/<module>`.
-* **Module registry**: `config/modules.php` toggles features.
-* **Domain events**: modules can react/extend without modifying core (e.g., Visitor Management posts fees into ledger).
+* **IDs:** UUID (strings).
+* **Columns:** `company_id`, timestamps, soft deletes where needed; composite indexes like `(company_id, created_at)`.
+* **Constraints:** **CHECK** amounts ≥ 0, whitelist statuses; FKs everywhere; no orphan rows.
+* **API v1:** path versioning; snake\_case; ISO-8601 UTC; envelope `{ data, meta, links }`; filters `?filter[...]`; sorting `?sort=-created_at`.
+* **Writes:** `Idempotency-Key` required; service-layer `DB::transaction(...)` wraps monetary changes.
+* **Mobile ergonomics:** content negotiation for compact JSON; **sparse fields** `?fields[entity]=id,name`; **delta sync** `/sync?updated_since=`.
+* **Deprecation:** headers + 90-day grace; structured error codes.
 
----
-
-## 11) Data Conventions
-
-* UUID PKs; timestamps; `(company_id, created_at)` composite indexes.
-* Aggressive **CHECK** constraints (amounts ≥ 0; valid statuses) and FKs.
-
----
-
-## 12) Performance
-
-* Octane + Swoole; OPcache; config/route/view caches; Redis cache/queues; avoid N+1 with eager loads; materialized views for heavy reports.
+**Why**: consistency, safe retried writes, and bandwidth-aware clients.
 
 ---
 
-## 13) Security & Compliance
+## 5) Coding Standards
 
-* HTTPS, HSTS, strict CORS for `/api`; CSRF on web; secrets in env; audit logs (append‑only, exportable per company).
-* Roles/policies tests for sensitive actions; rate limits; WAF at edge.
+**PHP/Laravel**
 
----
+* Style: **PSR-12** via Pint.
+* Static analysis: Larastan (max level feasible).
+* Tests: **Pest** for unit/feature; dedicated RLS tests; balance tests for ledger.
+* Services over fat controllers; thin Eloquent models; avoid hidden globals.
 
-## 14) Observability & Health
+**Vue/TS**
 
-* Sentry for errors/perf; structured JSON logs; metrics: API p95/p99, queue depth/latency, slow queries.
-* `/health`: read‑only query against `ledger` + Redis + queue checks + build SHA.
+* **Composition API** with `<script setup lang="ts">`.
+* State minimal; prefer server-driven pagination/filtering.
+* Components under `resources/js/Components`; pages under `resources/js/Pages/<Module>`.
 
----
+**Commits & Branching**
 
-## 15) CI/CD
-
-* GitHub Actions: lint (Pint), static analysis (Larastan), tests (Pest), build (Vite), migrate.
-* **Pre‑deploy backup hook** (`pg_dump` + checksum). **Zero‑downtime** deploy (atomic symlink switch). Two‑phase migrations.
-
----
-
-## 16) Backups & DR
-
-* Nightly encrypted backups to object storage; **weekly restore drill** verifies RLS and **trial balance** matches.
+* Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`...).
+* Branches: `main` (prod), `develop` (staging), feature branches `feat/<module>-<slug>`.
 
 ---
 
-## 17) Timeline (baseline)
+## 6) Environments, CI/CD, Backups
 
-* **Week 0**: Local env, auth, multi‑company pivot, RLS table, onboarding skeleton.
-* **Week 1**: SetTenantContext, policies, ledger accounts scaffold.
-* **Week 2**: Ledger journal entries/lines + balancing tests.
-* **Week 3**: First business module (e.g., invoicing) web + API v1.
-* **Week 4**: CLI/queues; delta sync; compact JSON; i18n surface.
-* **Week 5**: Manual subscription invoices + receipt approval; reconciliation CSV flow.
-* **Week 6**: Reports v1 (trial balance, aging) via materialized views.
-* **Week 7**: Perf pass, metrics/alerts, backup/restore drill.
-* **Week 8**: Staging soak, seed demo tenants, production cutover.
-* **Weeks 9–12 (optional)**: Online payments (Stripe/Paddle), advanced reporting, localizations.
+* **Local:** WSL Ubuntu 24.04; Swoole; Postgres/Redis system services.
+* **Staging/Prod regions:** ap-south-1 or ap-southeast-1 behind Cloudflare.
+* **CI (GitHub Actions):** install PHP/Node, run Pint/Larastan/Pest, build assets, run migrations.
+* **Deploy:** pre-deploy `pg_dump` (encrypted + checksum), two-phase migrations, zero-downtime symlink switch, Horizon supervised.
+* **Backups & DR:** nightly encrypted backups, weekly restore drill verifies RLS and trial balance.
+
+**Why**: repeatable deploys with guardrails against data loss.
 
 ---
 
-## 18) Definition of Done (per module)
+## 7) Observability & Health
 
-* ✅ Schema + RLS + CHECK/FK + indexes
-* ✅ Domain services with **transactions** + tests
-* ✅ Web UI (Inertia/Vue) + validation + flashes
-* ✅ API v1 + OpenAPI + rate limits + **Idempotency‑Key** + structured errors
-* ✅ CLI/jobs set `app.current_company` before DB access
-* ✅ RBAC policies + tests; audit trail for create/update/void
-* ✅ Caching/invalidations; reporting views refreshed
-* ✅ Health/metrics cover module; backup includes new tables
+* **Errors:** Sentry (errors + traces).
+* **Metrics:** API p95/p99, queue depth/latency, DB slow query log.
+* **Health:** `/health` performs read-only query against `ledger`, checks Redis + queue + build SHA.
 
 ---
 
-# Progress Snapshot (to date)
+## 8) Module Order & Why
 
-**Environment & tooling**
-
-* WSL Ubuntu 24.04 under VS Code; installed PHP 8.3 toolchain, Node 20, Redis, PostgreSQL 16.
-* Installed Swoole via PECL (no ZTS/threads), enabled for CLI; Octane will use Swoole.
-
-**Laravel app**
-
-* Created Laravel 11 project; generated app key; installed Breeze (Inertia + Vue + SSR + TS).
-* Installed core packages: Sanctum, Octane, Horizon, spatie/permission, spatie/activitylog, brick/money.
-* Installed dev tools: Pint, Pest (+ Laravel plugin), Larastan, Telescope, Scribe.
-
-**Database**
-
-* Created role `superadmin` and DB `acctdb`.
-* Updated `pg_hba.conf` to **scram‑sha‑256** for `127.0.0.1/32` and `::1/128`; reloaded Postgres.
-* Set and tested password auth over TCP; updated `.env` to use pgsql with `acctdb`.
-* Ran default migrations successfully (users/cache/jobs tables created).
-
-**Gotchas resolved**
-
-* Avoided accidental SQLite path by updating `.env` and removing `database.sqlite`.
-* Resolved `peer`/password auth mismatch; normalized CRLF/LF plan noted to avoid Windows/WSL line‑ending noise.
-
-**Next short steps**
-
-* Add `auth` and `ledger` schemas/migrations; implement `SetTenantContext` and per‑request `TransactionPerRequest` middleware.
-* Seed roles/permissions; scaffold company switcher; create `ledger` balancing tests.
-* Create docs under `/docs` (ADR, API, DB, runbooks) using the templates from the Kickstart plan.
-
-This brief is intended to be the single source of truth for resuming work or onboarding a collaborator.
+1. **Foundations: Auth + Multi-company + RBAC** → everything depends on it.
+2. **Ledger Core** → source of truth; all money posts here.
+3. **Invoicing (Sales)** → early business value, simple flow to validate posting.
+4. **Payments (Manual Receipts)** → cash in, approval workflow, ledger posting.
+5. **Bank Reconciliation (CSV)** → trust; match bank statements.
+6. **Taxes (Calculator + presets)** → compliance basics for AE/PK.
+7. **Reporting v1** → trial balance, aging, P\&L/BS.
+8. **API v1 & Mobile Sync** → compact/sparse/delta.
+9. **Internationalization & Localization** → polish for first international users.
+10. **Module Registry & Extensibility** → enable custom vertical modules.
+11. **Observability & Health** → alerts dialed-in.
+12. **Backups & DR Automation** → institutionalize the weekly restore drill.
+13. **Onboarding Wizard & SaaS Subscription (Manual)** → create company, COA seed, manual sub invoice + activation.
 
 ---
 
-## 19) Module‑by‑Module Development Plan
+## 9) Detailed Module Plans (What/Why/How)
 
-**Standard loop for every module**
+### 9.1 Foundations: Auth + Multi-company + RBAC
 
-1. **Data model**: schema-qualified tables with `company_id`, UUID PKs, CHECK/FK constraints, indexes.
-2. **RLS**: enable RLS + policy using `current_setting('app.current_company', true)`; add RLS tests.
-3. **Domain services**: business logic wrapped in `DB::transaction(...)` where needed; events emitted.
-4. **Web UI (Inertia/Vue)**: pages, forms, server validation, optimistic updates where safe.
-5. **API v1**: controllers + Resources, filters/sort/pagination, Idempotency‑Key on writes.
-6. **CLI/Jobs**: commands and queued jobs accept `--company` and set tenant context.
-7. **RBAC & policies**: roles/permissions mapped; policy tests for sensitive actions.
-8. **Caching**: tag caches, invalidation on writes; background refresh if applicable.
-9. **Reporting hooks**: materialized view refresh or summary tables.
-10. **Definition of Done**: health/metrics, audit trail, OpenAPI, rate limits, backup inclusions.
+**What:** `auth` schema, `companies`, `company_user`, roles/permissions, company switcher.
+**Why:** multi-company accountants; secure access; per-request tenant context.
+**How:**
+
+* Migrations create schema + tables; RLS on any tenant table.
+* Middleware: `SetTenantContext` + `TransactionPerRequest` registered in `bootstrap/app.php`.
+* Policies guard sensitive actions; seed roles/permissions.
+* Endpoints: `GET /me/companies`, `POST /me/companies/switch`.
+* DoD: RLS tests, policy tests, basic UI switcher.
+
+### 9.2 Ledger Core
+
+**What:** `ledger.ledger_accounts`, `ledger.journal_entries`, `ledger.journal_lines`; balanced posting service; reversing & credit notes.
+**Why:** accounting engine; everything posts here.
+**How:**
+
+* Constraints: lines must net to zero per entry; CHECK amounts ≥ 0; FK to accounts.
+* Services: `LedgerService::post($entry)` throws `UnbalancedJournal` if not balanced.
+* Tests: balance enforced; RLS; performance on common queries.
+* Reports base: materialized views refreshed after posting batch.
+
+### 9.3 Invoicing (Sales)
+
+**What:** `billing.invoices`, `billing.invoice_items`, statuses (`draft|sent|paid|void`).
+**Why:** quick path to revenue and posting flows.
+**How:**
+
+* Create/Send PDF; post AR + revenue + tax lines on `paid`.
+* API + UI with idempotent writes and server validation.
+* DoD: OpenAPI docs; audit trail; unit + feature tests.
+
+### 9.4 Payments (Manual Receipts)
+
+**What:** `billing.payments` with method/reference/receipt attachment; approval posts to ledger.
+**Why:** manual bank/wire first; no gateways.
+**How:**
+
+* Upload + approve workflow; idempotency to avoid duplicates.
+* Reconciliation references link to bank CSV lines where matched.
+
+### 9.5 Bank Reconciliation (CSV)
+
+**What:** `ops.bank_accounts`, `ops.bank_transactions`; CSV import; fuzzy matching; unmatched queue; reconciliation report.
+**How:**
+
+* Matching rules: exact amount+date window; then amount+reference; manual override.
+* Audit every match/unmatch.
+
+### 9.6 Taxes
+
+**What:** `ops.tax_rates` per company; `TaxCalculator` with `AE-VAT` and `PK-GST` presets.
+**How:**
+
+* Hook into posting pipeline; liability accounts updated on invoice/payment events.
+
+### 9.7 Reporting v1
+
+**What:** Materialized views: `trial_balance_mv`, `aging_report_mv`; lightweight P\&L/BS.
+**How:** refresh concurrently after posting; scheduled nightly refresh; indexed columns.
+
+### 9.8 API v1 & Mobile Sync
+
+**What:** compact JSON, sparse fields, delta `/sync?updated_since=`.
+**How:** ETags/If-None-Match for list endpoints; enforce rate limits; structured error codes.
+
+### 9.9 Internationalization & Localization
+
+**What:** per-company locale/currency; Arabic RTL; localized PDFs.
+**How:** translation JSON; date/number via Intl; currency formatting via Money.
+
+### 9.10 Module Registry & Extensibility
+
+**What:** `config/modules.php`; domain events; sample Visitor module posting fees.
+**How:** Service providers register routes/policies/migrations when enabled.
+
+### 9.11 Observability & Health
+
+**What:** Sentry, metrics dashboards, `/health` with ledger read + Redis + queue.
+
+### 9.12 Backups & DR Automation
+
+**What:** nightly encrypted `pg_dump` + checksum; weekly restore + trial balance verification.
+
+### 9.13 Onboarding Wizard & SaaS Subscription (Manual)
+
+**What:** create company, set base currency/locale, seed COA; create subscription invoice; receipt upload; activation job.
 
 ---
 
-## 20) Module Task Backlog (v1 scope)
+## 10) Tooling — Now & Later
 
-> Track these as GitHub issues. Each task is a module with its own sub‑issues following the loop above.
-
-1. [ ] **Foundations: Auth + Multi‑company + RBAC**
-   *Tables*: `auth.users`, `auth.companies`, `auth.company_user`
-   *Deliverables*: company switcher, roles (`owner|admin|accountant|member`), policies, seeders, RLS smoke test.
-
-2. [ ] **Ledger Core**
-   *Tables*: `ledger.ledger_accounts`, `ledger.journal_entries`, `ledger.journal_lines`
-   *Deliverables*: posting service with balance enforcement, reversing entries, credit notes, unit tests.
-
-3. [ ] **Invoicing (Sales)**
-   *Tables*: `billing.invoices`, `billing.invoice_items`
-   *Deliverables*: CRUD, statuses, posting to ledger, PDF, API v1, OpenAPI docs.
-
-4. [ ] **Payments (Manual Receipts)**
-   *Tables*: `billing.payments`
-   *Deliverables*: receipt upload, approval workflow, ledger posting, idempotent API writes.
-
-5. [ ] **Bank Reconciliation (CSV)**
-   *Tables*: `ops.bank_accounts`, `ops.bank_transactions`
-   *Deliverables*: CSV import, fuzzy matching, unmatched queue, audits, reconciliation report.
-
-6. [ ] **Taxes (Calculator + PK/AE presets)**
-   *Tables*: `ops.tax_rates`
-   *Deliverables*: `TaxCalculator` interface, `PakistanGSTCalculator`, `UAE-VAT` preset, posting of tax liabilities.
-
-7. [ ] **Reporting v1**
-   *Views/Tables*: `trial_balance_mv`, `aging_report_mv`, summary tables
-   *Deliverables*: P\&L (basic), Balance Sheet (basic), Aging, materialized view refresh hooks.
-
-8. [ ] **API v1 & Mobile Sync**
-   *Deliverables*: compact media type, sparse fields, `/sync?updated_since=...`, rate limits, structured error codes.
-
-9. [ ] **Internationalization & Localization**
-   *Deliverables*: per‑company `base_currency|language|locale`, RTL support, localized PDFs, date/number formats.
-
-10. [ ] **Module Registry & Extensibility**
-    *Deliverables*: `config/modules.php`, domain events, sample **Visitor Management** stub posting a fee to ledger.
-
-11. [ ] **Observability & Health**
-    *Deliverables*: Sentry, p95/p99, queue depth alerts, slow query logs, `/health` with ledger read + Redis + build SHA.
-
-12. [ ] **Backups & DR Automation**
-    *Deliverables*: nightly encrypted `pg_dump`, checksum upload, weekly restore drill script with trial balance verification.
-
-13. [ ] **Onboarding Wizard & SaaS Subscription (Manual)**
-    *Deliverables*: company creation wizard, COA seed, manual subscription invoice + receipt approval, activation job.
+**Now:** PHP 8.3, Composer, Node 20, Postgres 16, Redis 7, Swoole, Horizon, Sanctum, Pint, Pest, Larastan, Telescope, Scribe.
+**Later (optional):** Stripe/Paddle (hosted billing), Meilisearch/Algolia (search), Laravel WebSockets (realtime), Envoy/Deployer (releases).
 
 ---
 
-### Optional Post‑MVP Modules (Weeks 9–12)
+## 11) Performance Budgets
 
-* [ ] **Online Payments** (Stripe/Paddle driver layer)
-* [ ] **Advanced Reporting** (cash flow, custom KPIs, dashboards)
-* [ ] **Importers** (QuickBooks/Xero CSV, opening balances, contacts)
-* [ ] **Notifications** (email templates, async digest, webhooks)
+* P50 HTML render < 100 ms server time for common pages.
+* P95 API endpoints < 250 ms under expected load.
+* Index all list queries; no N+1; paginate everywhere.
 
 ---
 
-### Quick Totals
+## 12) Risk Register (active)
 
-* **Modules in v1**: 13
-* **Post‑MVP candidates**: 4
-  Document sub‑tasks per module using the standard loop to keep scope tight.
+* **Tax complexity** higher than expected → mitigate with pluggable calculators and feature flags.
+* **Manual payments** require strong reconciliation UX → invest in unmatched queue and audit logs.
+* **i18n RTL edge cases** in PDFs → add visual tests and Arabic QA pass.
+
+---
+
+## 13) Engineering Log (why/what/how) — running entries
+
+> Add a dated entry for any architectural choice, migration, or prod change.
+
+### 2025-08-23 — Base setup & DB auth
+
+* **Why:** needed a fast local stack with Octane/Swoole and Postgres over TCP.
+* **What:** WSL Ubuntu 24.04; PHP 8.3; Node 20; Redis; Postgres 16; Swoole via PECL (no threads, no pgsql ext inside Swoole).
+* **How:** installed packages; set `pg_hba.conf` localhost to `scram-sha-256`; created role `superadmin`, db `acctdb`; `.env` switched to pgsql; ran base migrations.
+
+### 2025-08-23 — Packages & scaffolding
+
+* **Why:** establish DX and runtime tooling.
+* **What:** Sanctum, Octane, Horizon, spatie/permission, spatie/activitylog, brick/money; dev: Pint, Pest, Larastan, Telescope, Scribe.
+* **How:** `composer require ...`; installed stubs; verified Octane Swoole; fixed Vite/chokidar.
+
+### 2025-08-23 — Multi-company schema start
+
+* **Why:** enable per-company isolation and accountant access across companies.
+* **What:** `auth` schema, `auth.companies`, `auth.company_user` migrations; added schema creation prior to tables.
+* **How:** `DB::statement('CREATE SCHEMA IF NOT EXISTS auth')`; created tables with UUIDs; prepared RLS policies for tenant tables.
+
+> Use this template for new entries:
+>
+> * **Date — Change title**
+>   **Why:**
+>   **What:**
+>   **How:**
+
+---
+
+## 14) Definition of Done (module)
+
+* Schema + RLS + CHECK/FK + indexes; services with transactions; API v1 + OpenAPI; RBAC policies + tests; audit trail; caching/invalidations; reporting refresh; health/metrics updated; backups include new tables; idempotency enforced on writes.
+
+---
+
+## 15) How to Contribute (internal)
+
+* Keep PRs < 300 LOC; include tests and docs updates.
+* Update this handbook with any decision that affects architecture, data, or API.
+
+---
+
+## 16) Open Questions
+
+* Which first customer vertical post-MVP?
+* Which reporting KPIs matter most for v1 dashboards?
+* What minimum locales to ship at GA (en, ar)?
+
+---
+
+## 17) Quick Start Commands (local)
+
+```bash
+npm run dev &
+php artisan octane:start --server=swoole --watch
+```
+
+---
+
+## 18) Links
+
+* Docs index: `/docs` in repo (ADR, API, DB, runbooks).
+* Brief snapshot: `docs/briefs/haasib-technical-brief-and-progress_v2.1_2025-08-22.md`.

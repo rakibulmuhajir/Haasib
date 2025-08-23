@@ -14,6 +14,7 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "laravel/boost": "dev-main#148c9631a25fb5ae63220837c66f8c3a16aa346f",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
         "laravel/sail": "^1.41",
@@ -73,6 +74,12 @@
             "php-http/discovery": true
         }
     },
-    "minimum-stability": "stable",
-    "prefer-stable": true
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": {
+        "boost": {
+            "type": "vcs",
+            "url": "https://github.com/andreilungeanu/boost.git"
+        }
+    }
 }

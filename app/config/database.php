@@ -93,8 +93,10 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public, app',
             'sslmode' => 'prefer',
+            'schema' => env('DB_SCHEMA', 'public'),      // used by migrations/refresh
+            'search_path' => env('DB_SEARCH_PATH', 'public'), // connection search path
+
         ],
 
         'sqlsrv' => [

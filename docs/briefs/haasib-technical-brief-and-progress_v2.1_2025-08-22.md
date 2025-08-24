@@ -269,6 +269,30 @@
 * **What:** `auth` schema, `auth.companies`, `auth.company_user` migrations; added schema creation prior to tables.
 * **How:** `DB::statement('CREATE SCHEMA IF NOT EXISTS auth')`; created tables with UUIDs; prepared RLS policies for tenant tables.
 
+### 2025-08-23 — Middleware bootstrapped & route groups wired
+**Why:** Centralize tenancy and DB transaction handling so every request has correct tenant context and safe per-request transactions.
+**What:** Registered SetTenantContext + TransactionPerRequest in bootstrap/app.php with aliases; appended both to 'web' and 'api' groups; standardized route usage (Option A); excluded /health from tenant stack.
+**How:** Edited bootstrap/app.php to add $middleware->alias(...) and ->appendToGroup('web'|'api', ...); verified with `route:list` and `app('router')->getMiddlewareGroups()`; restarted Octane.
+
+
+### 2025-08-24 — Foundations: Tenancy & Transactions wired
+**Why:** Guarantee every request runs inside a DB transaction and sees only its company’s data.
+**What:** Implemented SetTenantContext (session for web, X-Company-Id for API) with membership check and `set local app.current_company_id`; added TransactionPerRequest; created /api/v1/me/companies and /api/v1/me/companies/switch; enabled Postgres RLS function `app.company_match(company_id)` and policy template; added feature tests.
+**How:** Aliased and appended middleware in bootstrap/app.php (Option A); defined controller actions; added migration for RLS function and policy scaffolding; verified via `route:list` and tests; restarted Octane.
+
+
+### 2025-08-24 — Added Health & Home endpoints for Foundations
+**Why:** Provide unauthenticated liveness endpoint independent of tenant stack; define a default authenticated landing route for web.
+**What:** Implemented invokable HealthController (checks DB + cache, returns JSON) and HomeController (Inertia "Home" component or Blade fallback). Wired routes with Option A groups; kept /health outside tenant/txn.
+**How:** Created two controllers in app/Http/Controllers; updated routes/web.php; verified with `php artisan route:list`; restarted Octane.
+
+
+### 2025-08-24 — App schema created for RLS namespace
+**Why:** Namespaces RLS helpers (functions, views) away from public to avoid collisions.
+**What:** Created PostgreSQL schema 'app'; set owner to current role; kept function references schema-qualified.
+**How:** Added migration `create_app_schema`; verified with information_schema; optional search_path set to 'public,app'.
+
+
 > Use this template for new entries:
 >
 > * **Date — Change title**

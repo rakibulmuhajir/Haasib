@@ -45,4 +45,11 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // app/Models/User.php
+public function companies()
+{
+    return $this->belongsToMany(\App\Models\Company::class)->withPivot('role')->withTimestamps();
+}
+
 }

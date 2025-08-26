@@ -5,12 +5,10 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-if (config('app.dev_console_enabled')) {
-    Route::middleware(['auth','throttle:devcli'])->group(function () {
-        Route::get('/dev/cli', [\App\Http\Controllers\DevCliController::class, 'index'])->name('dev.cli');
-        Route::post('/dev/cli/execute', [\App\Http\Controllers\DevCliController::class, 'execute'])->name('dev.cli.execute');
-    });
-}
+Route::middleware(['auth','throttle:devcli'])->group(function () {
+    Route::get('/dev/cli', [\App\Http\Controllers\DevCliController::class, 'index'])->name('dev.cli');
+    Route::post('/dev/cli/execute', [\App\Http\Controllers\DevCliController::class, 'execute'])->name('dev.cli.execute');
+});
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [

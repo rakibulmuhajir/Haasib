@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class CompanyDelete extends Command
 {
-    protected $signature = 'haasib:company:delete {--company=}';
+    protected $signature = 'company:delete {--company=}';
     protected $description = 'Delete a company by id or name';
 
     public function handle(DevOpsService $ops): int

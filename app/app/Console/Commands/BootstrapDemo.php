@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class BootstrapDemo extends Command
 {
-    protected $signature = 'haasib:bootstrap:demo {--name=Founder} {--email=} {--companies=} {--role=owner}';
+    protected $signature = 'bootstrap:demo {--name=Founder} {--email=} {--companies=} {--role=owner}';
     protected $description = 'Create a user and attach companies list';
 
     public function handle(DevOpsService $ops): int

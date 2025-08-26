@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class CompanyAssign extends Command
 {
-    protected $signature = 'haasib:company:assign {--email=} {--company=} {--role=viewer}';
+    protected $signature = 'company:assign {--email=} {--company=} {--role=viewer}';
     protected $description = 'Assign user to company with role';
 
     public function handle(DevOpsService $ops): int

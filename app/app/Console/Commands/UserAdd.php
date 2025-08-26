@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class UserAdd extends Command
 {
-    protected $signature = 'haasib:user:add {--name=} {--email=} {--password=}';
+    protected $signature = 'user:add {--name=} {--email=} {--password=}';
     protected $description = 'Add user (idempotent by email)';
 
     public function handle(DevOpsService $ops): int

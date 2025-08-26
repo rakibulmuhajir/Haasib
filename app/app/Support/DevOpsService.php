@@ -76,6 +76,14 @@ class DevOpsService
 
     private function findCompany(string $idOrName): Company
     {
-        return Company::where('id', $idOrName)->orWhere('name', $idOrName)->firstOrFail();
+        $idOrName = trim($idOrName);
+
+        if (Str::isUuid($idOrName)) {
+            return Company::findOrFail($idOrName);
+        }
+
+        return Company::where('name', $idOrName)
+            ->orWhere('slug', $idOrName)
+            ->firstOrFail();
     }
 }

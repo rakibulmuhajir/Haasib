@@ -17,6 +17,22 @@ class Company extends Model
     protected $fillable = ['name','slug','base_currency','language','locale','settings'];
     protected $casts = ['settings' => 'array'];
 
+
+   protected static function booted(): void
+    {
+        static::creating(function (Company $company) {
+            if (!$company->slug) {
+                $base = Str::slug((string) $company->name) ?: Str::slug(Str::uuid());
+                $slug = $base;
+                $i = 1;
+                while (self::where('slug', $slug)->exists()) {
+                    $slug = $base.'-'.$i++;
+                }
+                $company->slug = $slug;
+            }
+        });
+    }
+
     public function users()
 {
     return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')

@@ -18,8 +18,8 @@
         </include>
     </source>
     <php>
-    <env name="DB_PASSWORD" value="Temp1234@"/>
-    <env name="DB_USERNAME" value="superadmin"/>
+    <env name="DB_PASSWORD" value="2332"/>
+    <env name="DB_USERNAME" value="test_user"/>
     <env name="DB_SCHEMA" value="public,auth,app"/>
     <env name="DB_SEARCH_PATH" value="public,auth,app"/>
 

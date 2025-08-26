@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => \App\Http\Middleware\SetTenantContext::class,
             'txn'    => \App\Http\Middleware\TransactionPerRequest::class,
+            'devconsole.enabled' => \App\Http\Middleware\EnsureDevConsoleEnabled::class,
         ]);
 
          // optional: auto-apply to groups (keeps routes cleaner)

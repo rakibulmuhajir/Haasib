@@ -24,9 +24,13 @@ class DevOpsService
     public function createCompany(string $name): array
     {
         $name = trim($name);
-        if ($name === '') throw ValidationException::withMessages(['name' => 'Company name required']);
-        $company = Company::firstOrCreate(['name' => $name]);
-        return ['company' => $company->only(['id','name'])];
+        if ($name === '') throw \Illuminate\Validation\ValidationException::withMessages(['name'=>'Company name required']);
+        $slug = \Illuminate\Support\Str::slug($name) ?: \Illuminate\Support\Str::slug(\Illuminate\Support\Str::uuid());
+
+        $company = \App\Models\Company::where('slug', $slug)->orWhere('name', $name)->first();
+        if (!$company) $company = \App\Models\Company::create(['name' => $name, 'slug' => $slug]);
+
+        return ['company' => $company->only(['id','name','slug'])];
     }
 
     public function assignCompany(string $email, string $company, string $role = 'viewer'): array

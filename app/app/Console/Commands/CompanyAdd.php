@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class CompanyAdd extends Command
 {
-    protected $signature = 'haasib:company:add {--name=}';
+    protected $signature = 'company:add {--name=}';
     protected $description = 'Add company (idempotent by name)';
 
     public function handle(DevOpsService $ops): int

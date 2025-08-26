@@ -13,13 +13,13 @@ class DevCliController extends Controller
         abort_unless(config('app.dev_console_enabled'), 403);
         return Inertia::render('DevCli', ['examples' => [
             'help',
-            'haasib:user:add --name="Jane Doe" --email=jane@example.com --password=secret',
-            'haasib:company:add --name="Acme"',
-            'haasib:company:assign --email=jane@example.com --company=Acme --role=admin',
-            'haasib:company:unassign --email=jane@example.com --company=Acme',
-            'haasib:user:delete --email=jane@example.com',
-            'haasib:company:delete --company=Acme',
-            'haasib:bootstrap:demo --name="Founder" --email=founder@example.com --companies="Acme,BetaCo"',
+            'user:add --name="Jane Doe" --email=jane@example.com --password=secret',
+            'company:add --name="Acme"',
+            'company:assign --email=jane@example.com --company=Acme --role=admin',
+            'company:unassign --email=jane@example.com --company=Acme',
+            'user:delete --email=jane@example.com',
+            'company:delete --company=Acme',
+            'bootstrap:demo --name="Founder" --email=founder@example.com --companies="Acme,BetaCo"',
         ]]);
     }
 
@@ -30,22 +30,23 @@ class DevCliController extends Controller
         if ($cmd === '' || $cmd === 'help') {
             return response()->json(['ok'=>true,'help'=>true]);
         }
-        // Parse "verb --k=v" into name + options
-        [$name, $opts] = $this->parse($cmd);
+        [$name, $opts] = $this->parse($request->string('command'));
+        $name = $this->normalize($name);
         try {
-            // Prefer calling services directly instead of Artisan::call for structured output
-            $ops = app(DevOpsService::class);
+            $ops  = app(DevOpsService::class);
+
             $map = [
-                'haasib:user:add'        => fn() => $ops->createUser($opts['name'] ?? 'User', $opts['email'] ?? '', $opts['password'] ?? null),
-                'haasib:company:add'     => fn() => $ops->createCompany($opts['name'] ?? ''),
-                'haasib:company:assign'  => fn() => $ops->assignCompany($opts['email'] ?? '', $opts['company'] ?? '', $opts['role'] ?? 'viewer'),
-                'haasib:company:unassign'=> fn() => $ops->unassignCompany($opts['email'] ?? '', $opts['company'] ?? ''),
-                'haasib:user:delete'     => fn() => $ops->deleteUser($opts['email'] ?? ''),
-                'haasib:company:delete'  => fn() => $ops->deleteCompany($opts['company'] ?? ''),
-                'haasib:bootstrap:demo'  => fn() => $ops->createUserAndCompanies($opts['name'] ?? 'Founder', $opts['email'] ?? '', array_filter(array_map('trim', explode(',', $opts['companies'] ?? ''))), $opts['role'] ?? 'owner'),
+                'user:add'          => fn() => $ops->createUser($opts['name'] ?? 'User', $opts['email'] ?? '', $opts['password'] ?? null),
+                'user:delete'       => fn() => $ops->deleteUser($opts['email'] ?? ''),
+                'company:add'       => fn() => $ops->createCompany($opts['name'] ?? ''),
+                'company:assign'    => fn() => $ops->assignCompany($opts['email'] ?? '', $opts['company'] ?? '', $opts['role'] ?? 'viewer'),
+                'company:unassign'  => fn() => $ops->unassignCompany($opts['email'] ?? '', $opts['company'] ?? ''),
+                'company:delete'    => fn() => $ops->deleteCompany($opts['company'] ?? ''),
+                'bootstrap:demo'    => fn() => $ops->createUserAndCompanies($opts['name'] ?? 'Founder', $opts['email'] ?? '', array_filter(array_map('trim', explode(',', $opts['companies'] ?? ''))), $opts['role'] ?? 'owner'),
             ];
+
             if (!isset($map[$name])) {
-                return response()->json(['ok'=>false, 'error'=>"Unknown command: {$name}"], 422);
+                return response()->json(['ok'=>false,'error'=>"Unknown command: {$name}"], 422);
             }
             return response()->json(['ok'=>true, 'output'=>$map[$name]()]);
         } catch (\Throwable $e) {
@@ -53,10 +54,29 @@ class DevCliController extends Controller
         }
     }
 
-    private function parse(string $cmd): array
-    {
-        $parts = preg_split('/\s+/', $cmd); $name = array_shift($parts); $opts = [];
+    private function parse(string $cmd): array {
+        $parts = preg_split('/\s+/', trim($cmd)); $first = array_shift($parts) ?? '';
+        $opts = [];
         foreach ($parts as $p) if (preg_match('/--([^=\s]+)=?(.*)?/',$p,$m)) $opts[$m[1]] = trim($m[2] ?? '', '"\'');
-        return [$name, $opts];
+        return [$first . ' ' . ($parts[0] ?? ''), $opts]; // keep first two tokens for normalization
+    }
+
+    private function normalize(string $twoTokens): string {
+        [$t1, $t2] = array_pad(explode(' ', trim($twoTokens), 2), 2, '');
+        $entity = match (true) {
+            str_starts_with($t1, 'u') => 'user',
+            str_starts_with($t1, 'c') => 'company',
+            str_starts_with($t1, 'boot') => 'bootstrap',
+            default => str_contains($t1, ':') ? explode(':', $t1, 2)[0] : $t1,
+        };
+        if ($entity === 'bootstrap') return 'bootstrap:demo';
+        $action = match (true) {
+            str_starts_with($t2, 'ass') => 'assign',
+            str_starts_with($t2, 'unass') => 'unassign',
+            str_starts_with($t2, 'del') || str_starts_with($t2, 'rm') => 'delete',
+            str_starts_with($t2, 'add') => 'add',
+            default => (str_contains($t1, ':') ? explode(':', $t1, 2)[1] ?? '' : ''),
+        };
+        return trim($entity . ':' . $action, ':');
     }
 }

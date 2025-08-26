@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class CompanyUnassign extends Command
 {
-    protected $signature = 'haasib:company:unassign {--email=} {--company=}';
+    protected $signature = 'company:unassign {--email=} {--company=}';
     protected $description = 'Remove user from company';
 
     public function handle(DevOpsService $ops): int

@@ -8,7 +8,7 @@ use App\Support\DevOpsService;
 
 class UserDelete extends Command
 {
-    protected $signature = 'haasib:user:delete {--email=}';
+    protected $signature = 'user:delete {--email=}';
     protected $description = 'Delete a user by email';
 
     public function handle(DevOpsService $ops): int

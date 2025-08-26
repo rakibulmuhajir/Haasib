@@ -2,6 +2,7 @@
 import './bootstrap'   // if Breeze created it; harmless if present
 import { createInertiaApp } from '@inertiajs/vue3'
 import { createApp, h } from 'vue'
+import { ZiggyVue } from '../../vendor/tightenco/ziggy'
 
 createInertiaApp({
   resolve: name => {
@@ -11,6 +12,10 @@ createInertiaApp({
   setup({ el, App, props, plugin }) {
     const vue = createApp({ render: () => h(App, props) })
     vue.use(plugin)
+    vue.use(ZiggyVue, {
+      ...props.initialPage.props.ziggy,
+      location: new URL(props.initialPage.props.ziggy.location),
+    })
     vue.mount(el)
   },
 })

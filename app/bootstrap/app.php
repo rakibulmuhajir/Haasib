@@ -35,6 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\TransactionPerRequest::class,
         ]);
     })
+    ->withProviders([
+        \App\Providers\AppServiceProvider::class,
+        \App\Providers\AuthServiceProvider::class,
+    ])
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

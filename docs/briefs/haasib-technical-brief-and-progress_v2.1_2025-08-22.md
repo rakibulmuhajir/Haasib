@@ -292,6 +292,89 @@
 **What:** Created PostgreSQL schema 'app'; set owner to current role; kept function references schema-qualified.
 **How:** Added migration `create_app_schema`; verified with information_schema; optional search_path set to 'public,app'.
 
+### 2025-08-25 — Foundations milestone: auth + tenancy bootstrapped and verified
+**Why:** Establish secure request context and stable developer ergonomics before Ledger features.
+**What:**
+- Installed Breeze (Vue + Inertia) and Sanctum; added full auth flow (/login, /register, resets).
+- Created PostgreSQL schema 'app'; added RLS helper `app.company_match(company uuid)`.
+- Implemented middleware: SetTenantContext (session for web, X-Company-Id for API) and TransactionPerRequest.
+- Adopted Option A routing: appended tenant/txn to 'web' & 'api' groups in bootstrap/app.php.
+- Added endpoints: GET /api/v1/me/companies and POST /api/v1/me/companies/switch.
+- Added HealthController and HomeController; kept /health outside tenant/txn.
+**Proof:**
+- `php artisan test` — 27 tests passing (Auth suite, Profile suite, Tenancy: lists companies; blocks cross-company switch).
+**How:**
+- Migrations: create_app_schema; add RLS function migration.
+- Code: middleware classes, MeController, HealthController, HomeController.
+- Commands: composer require breeze --dev; breeze:install vue --ssr; composer require laravel/sanctum; migrate; npm run build; Octane restart.
+
+### 2025-08-26 — Foundations Complete: Auth, Tenancy, RBAC, Switcher
+**Why:** Lock a secure, company-scoped base so ledger features don’t devolve into permissions whack-a-mole.
+**What:**
+- Breeze (Vue + Inertia) auth + Sanctum; `/login` et al working.
+- PostgreSQL `app` schema + RLS helper `app.company_match(company uuid)`; tenancy middleware sets `set local app.current_company_id`.
+- Middleware: `SetTenantContext` (session for web, `X-Company-Id` for API) and `TransactionPerRequest`.
+- Routing Option A: appended tenant/txn to `web` and `api` groups in `bootstrap/app.php`; `/health` excluded.
+- Endpoints: `GET /api/v1/me/companies`, `POST /api/v1/me/companies/switch`; Inertia `HandleInertiaRequests` shares `auth.user` and `auth.companyId`.
+- UI: `CompanySwitcher` in `AuthenticatedLayout` (desktop + mobile); Axios interceptor adds `X-Company-Id`.
+- RBAC: pivot roles (owner/admin/accountant/viewer); gates `company.manageMembers`, `ledger.view`, `ledger.postJournal`.
+**Proof:** `php artisan test` → 35 passed (85 assertions), including `InertiaShareTest`, `RbacTest`, and tenancy tests.
+**How:** Migrations for `app` schema + RLS function; middleware, controller, and layout updates; Sanctum/CORS settings; asset build and Octane restart.
+
+### 2025-08-26 — Foundations: implementation notes & testing tweaks
+**Test helpers**
+- `Tests\TestCase::setTenant($companyId)` for Gate checks; feature tests use `->withHeader('X-Company-Id', $id)` (API) and `->withSession(['current_company_id' => $id])` (web/Inertia).
+
+**Middleware safety**
+- `SetTenantContext` skips `/api/v1/me/companies*` and unauth routes (e.g. `/up`), and only touches session when `$request->hasSession()` to avoid “Session store not set”.
+
+**Membership check (schema-qualified)**
+- All membership lookups target `auth.company_user`. Eloquent `belongsToMany` uses `'auth.company_user'` explicitly.
+
+**RLS mechanics**
+- Per-request `set local app.current_company_id = :uuid`, guarded in `try/catch` so non-PG drivers noop.
+- Policies match `company_id = current_setting('app.current_company_id', true)::uuid`.
+
+**RBAC gates**
+- `Gate::before` grants owner/admin full access.
+- Explicit abilities: `company.manageMembers`, `ledger.view`, `ledger.postJournal` (owner/admin/accountant).
+
+**Seeds for demo/user flows**
+- `founder@example.com` owns **Acme**, viewer in **BetaCo**.
+- Pivot roles: `owner | admin | accountant | viewer`.
+
+**API/Web consistency**
+- Axios interceptor sets `X-Company-Id`.
+- Inertia share exposes `{ auth: { user, companyId } }` so SPA state and backend agree.
+
+**Per-request transaction scope**
+- `TransactionPerRequest` wraps **POST/PUT/PATCH/DELETE** only, avoiding “current transaction is aborted” noise on reads.
+
+**Failure modes (documented)**
+- Missing context ⇒ **422**; not a member ⇒ **403**. Both covered by tests.
+
+**Caching in tests**
+- `CACHE_STORE=array` in `testing` to keep cache ops from poking the DB.
+
+**Octane note**
+- Safe because `set local` is request-scoped; middleware resets GUCs so connections aren’t “haunted” across requests.
+
+**DX footnotes**
+- Local debug header `Tenant-Company` echoes resolved company.
+- `php artisan app:whoami` prints `{user, company}` for CLI sanity checks.
+
+**Next up (immediately actionable)**
+- Ledger schema (accounts, journals, lines) + policies, then UI for posting/browsing entries.
+- Members UI (promote/demote/remove) using `company.manageMembers`.
+- Audit log on role changes and journal posts.
+- Happy-path E2E (PHPUnit + Dusk or Playwright via `/api/v1` + Inertia flows).
+
+### 2025-08-26 — Decision: build CLI envelope in Foundations (CLI-F1)
+**Why:** Hybrid UX is a core differentiator; admin verbs speed setup/testing; interface now avoids rework later.
+**What:** Browser + Artisan CLI shell with unique-verb parser; commands: setup/company/users/switch/assign/unassign/bootstrap:demo; all wired to services; tenant context applied before ops; audit + idempotency + structured errors.
+**Defers:** Financial/reporting commands (invoice, bill, payment, reconcile, P&L/BS) to Ledger Core (CLI-L1) once posting and ledger schemas are in place.
+**References:** Plan: CLI in same codebase, Artisan-first; CLI per-module in DoD; module loop adds CLI after services.
+
 
 > Use this template for new entries:
 >

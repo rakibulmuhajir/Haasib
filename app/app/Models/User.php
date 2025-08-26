@@ -53,7 +53,9 @@ class User extends Authenticatable
     // app/Models/User.php
 public function companies()
 {
-    return $this->belongsToMany(\App\Models\Company::class)->withPivot('role')->withTimestamps();
+    return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
+        ->withPivot('role')
+        ->withTimestamps();
 }
 
 }

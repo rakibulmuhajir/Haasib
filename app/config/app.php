@@ -27,6 +27,8 @@ return [
     */
 
     'env' => env('APP_ENV', 'production'),
+       // config/app.php
+    'dev_console_enabled' => (bool) env('DEV_CONSOLE_ENABLED', false),
 
     /*
     |--------------------------------------------------------------------------

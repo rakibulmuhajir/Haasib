@@ -18,7 +18,10 @@ class Company extends Model
     protected $casts = ['settings' => 'array'];
 
     public function users()
-    {
-        return $this->belongsToMany(User::class, 'auth.company_user', 'company_id', 'user_id');
-    }
+{
+    return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
+        ->withPivot('role')
+        ->withTimestamps();
+}
+
 }

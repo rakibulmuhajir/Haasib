@@ -3,6 +3,7 @@ import './bootstrap'   // if Breeze created it; harmless if present
 import { createInertiaApp } from '@inertiajs/vue3'
 import { createApp, h } from 'vue'
 import { ZiggyVue } from '../../vendor/tightenco/ziggy'
+import '../css/app.css';
 
 createInertiaApp({
   resolve: name => {

@@ -58,4 +58,8 @@ public function companies()
         ->withTimestamps();
 }
 
+// app/Models/User.php
+public function isSuperAdmin(): bool { return $this->system_role === 'superadmin'; }
+
+
 }

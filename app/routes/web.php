@@ -23,6 +23,11 @@ Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+Route::middleware(['auth','require.superadmin'])->prefix('admin')->group(function () {
+    Route::get('/', fn() => inertia('Admin/Dashboard'))->name('admin.dashboard');
+    // add your sys tools here, e.g. user/company management views
+});
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

@@ -19,11 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-         // aliases so you can use 'tenant' and 'txn' in routes
+        // aliases so you can use 'tenant' and 'txn' in routes
         $middleware->alias([
             'tenant' => \App\Http\Middleware\SetTenantContext::class,
             'txn'    => \App\Http\Middleware\TransactionPerRequest::class,
             'devconsole.enabled' => \App\Http\Middleware\EnsureDevConsoleEnabled::class,
+            'require.superadmin' => \App\Http\Middleware\RequireSuperadmin::class,
         ]);
 
          // optional: auto-apply to groups (keeps routes cleaner)

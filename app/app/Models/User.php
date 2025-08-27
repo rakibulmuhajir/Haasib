@@ -6,7 +6,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Laravel\Sanctum\HasApiTokens; // <-- correct import
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
@@ -50,16 +50,15 @@ class User extends Authenticatable
         ];
     }
 
-    // app/Models/User.php
-public function companies()
-{
-    return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
-        ->withPivot('role')
-        ->withTimestamps();
-}
+    public function companies()
+    {
+        return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
 
-// app/Models/User.php
-public function isSuperAdmin(): bool { return $this->system_role === 'superadmin'; }
-
-
+    public function isSuperAdmin(): bool
+    {
+        return $this->system_role === 'superadmin';
+    }
 }

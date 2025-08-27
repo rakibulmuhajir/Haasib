@@ -28,6 +28,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'companyId' => $companyId,
+                'isSuperAdmin' => (bool) optional($request->user())->isSuperAdmin(),
             ],
 
             'ziggy' => fn () => [

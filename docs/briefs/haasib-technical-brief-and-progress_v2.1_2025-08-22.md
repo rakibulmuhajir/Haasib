@@ -375,6 +375,11 @@
 **Defers:** Financial/reporting commands (invoice, bill, payment, reconcile, P&L/BS) to Ledger Core (CLI-L1) once posting and ledger schemas are in place.
 **References:** Plan: CLI in same codebase, Artisan-first; CLI per-module in DoD; module loop adds CLI after services.
 
+### 2025-08-28 — Palette DevOps foundations
+- Transport: POST /commands (web middleware), Headless UI + Fuse palette, session tenancy.
+- Implemented action bus + DevOps actions: user create/delete, company create/delete, assign/unassign.
+- Kept DevCliController for dev-only console; both paths use same actions.
+- Tests cover success, RBAC, idempotency.
 
 > Use this template for new entries:
 >

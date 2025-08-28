@@ -10,6 +10,8 @@ Route::middleware(['auth','throttle:devcli'])->group(function () {
     Route::post('/dev/cli/execute', [\App\Http\Controllers\DevCliController::class, 'execute'])->name('dev.cli.execute');
 });
 
+Route::middleware(['auth', 'verified'])->post('/commands', [\App\Http\Controllers\CommandController::class, 'execute']);
+
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Support\Str;
 
 class Company extends Model
 {
@@ -18,7 +19,7 @@ class Company extends Model
     protected $casts = ['settings' => 'array'];
 
 
-   protected static function booted(): void
+    protected static function booted(): void
     {
         static::creating(function (Company $company) {
             if (!$company->slug) {
@@ -34,10 +35,10 @@ class Company extends Model
     }
 
     public function users()
-{
-    return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
-        ->withPivot('role')
-        ->withTimestamps();
-}
+    {
+        return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
 
 }

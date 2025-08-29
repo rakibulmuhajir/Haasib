@@ -375,13 +375,11 @@
 **Defers:** Financial/reporting commands (invoice, bill, payment, reconcile, P&L/BS) to Ledger Core (CLI-L1) once posting and ledger schemas are in place.
 **References:** Plan: CLI in same codebase via command bus/palette; bus per-module in DoD; module loop adds CLI after services.
 
-<<<<<<< HEAD
 ### 2025-08-28 — Palette DevOps foundations
 - Transport: POST /commands (web middleware), Headless UI + Fuse palette, session tenancy.
 - Implemented action bus + DevOps actions: user create/delete, company create/delete, assign/unassign.
 - Kept DevCliController for dev-only console; both paths use same actions.
 - Tests cover success, RBAC, idempotency.
-=======
 ### 2025-08-28 — Palette-first command UX approved
 Primary: Headless CMD-K palette (Fuse.js) with inline mini-forms and server-driven field schemas.
 Backend: Single /api/commands endpoint; ActionBus + per-action handlers; transactions, idempotency, RBAC, audit, GL preview.
@@ -397,7 +395,6 @@ Installed:
 Removed:
 - vue-command-palette — replaced to gain full control over bottom-dock layout, prompts, and preview.
 
->>>>>>> a63dd86 (feat: enhance CLI with palette-first UX and structured command API)
 
 > Use this template for new entries:
 >

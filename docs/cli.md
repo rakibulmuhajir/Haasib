@@ -11,6 +11,43 @@
 
 **CLI Activation**: Dedicated hotkey (e.g., Ctrl+`) expands CLI halfway up screen
 
+## Mini-grammar & Parsing
+
+**Grammar (v1):** `<verb> [subject] [amount] [date] [flags]`
+- `verb`: canonical action id (invoice | payment | bill | pay | transfer | …)
+- `subject`: fuzzy-matched entity by name/code (customer, invoice, vendor, account)
+- `amount`: numbers with optional currency; parse locale
+- `date`: natural date (“net30”, “today”, “2025-09-30”)
+- `flags`: `--customer/-c`, `--vendor/-v`, `--amount/-a`, `--date/-d`, `--draft`, `--ref`, etc.
+
+**EBNF sketch**
+- command = verb , { SP , (subject | amount | date | flag) } ;
+- verb = "invoice" | "payment" | "bill" | "pay" | "transfer" | "dashboard" | … ;
+- subject = QUOTED | WORD+ ;
+- amount = CURRENCY? , NUMBER ;
+- date = "today" | "tomorrow" | "net" , NUMBER | ISO_DATE ;
+- flag = "--" WORD [ "=" VALUE ] | "-" ALIAS VALUE ;
+
+
+**Synonym map (client)**
+- `invoice` ⇆ `bill-customer` ⇆ `send invoice` (already established in doc). :contentReference[oaicite:2]{index=2}
+- `payment` ⇆ `record payment` ⇆ `got paid` (also in doc). :contentReference[oaicite:3]{index=3}
+- `bill` ⇆ `expense` ⇆ `create bill`. :contentReference[oaicite:4]{index=4}
+
+**Parser behavior**
+- Tokenize with quotes. Map synonyms to a canonical `action`.
+- Use Fuse to fuzzy-match `subject` against customers/vendors/invoices.
+- Heuristics: first number → `amount`, `netXX`/date token → `date`.
+- Output `{ action, params, missing, idemKey }` where `idemKey` is a client-generated UUID for idempotency.
+
+## Palette UI: placement & controls
+
+- **Placement:** a thin **status-bar dock** at the bottom when idle; on `Ctrl+`` it **expands to half screen**. You already documented half-screen; this cements the bottom-dock default. :contentReference[oaicite:5]{index=5}
+- **Controls (right side):** `▢` expand-to-half, `—` hide to dock, `⛶` full screen.
+- **Focus trap**, `aria-live` for results, ESC to close.
+- **Hotkeys:** `Ctrl+`` toggle palette; `Tab` cycles suggestions; `Enter` runs; Up/Down navigate history.
+
+
 ---
 
 ## 1. Core Command Set
@@ -375,6 +412,47 @@ Which bill? Here are recent unpaid bills:
 
 ---
 
+## 11. Structured Command API (server)
+
+Single endpoint powers palette (and later, xterm):
+POST /api/v1/commands
+Headers: X-Idempotency-Key: <uuid>
+Body: { "action": "invoice.create", "params": { ... } }
+
+
+**Contract**
+- On success: `{ ok: true, message, data, redirect? }`
+- On validation: `422 { ok:false, errors }`
+- On missing params: `200 { status:"prompt", fields:[{name,label,type,required,options?}], defaults? }`
+
+**Notes**
+- Wrap mutating actions in `DB::transaction`.
+- Responses follow API v1 conventions (snake_case, ISO-8601, errors envelope). :contentReference[oaicite:8]{index=8}
+
+## 12. Idempotency & Audit
+
+- Require `X-Idempotency-Key` for POST/PUT; persist keys 24h per user+tenant. You already call for idempotency in the platform plan; mirror it here explicitly for the palette. :contentReference[oaicite:9]{index=9}
+- Audit table stores: raw command string, parsed params, user, company, results (model ids), latency.
+
+## 13. Auth, RBAC & Tenancy
+
+- Enforce policies per action; verbs map to abilities (*ledger.post*, *invoice.create*, *payment.create*).
+- Tenant scoping from active company; palette calls piggyback on your existing RLS/tenant context. :contentReference[oaicite:10]{index=10}
+- Failure modes: 422 for missing context, 403 for not-a-member, align with your middleware rules.
+
+## 14. Superadmin Console (xterm) — separate
+
+- Hidden route `/super/console` gated by `system_role=superadmin` (global). Different from company roles.
+- Console speaks the **same** `{action, params}` API so logic lives in one place. Admin-only ops (queues, imports, reindex) go here, not the palette.
+
+## 15. UX & Perf Tests
+
+- Parser golden tests: string → `{action, params}`.
+- Contract tests per action: params → domain result + GL rows (transactional).
+- UX probes: keystroke→suggestions < 60 ms; enter→posted < 300 ms p50 (log spans).
+- A11y: role="dialog", focus trap, `aria-activedescendant` on list, `aria-live="polite"`.
+
+
 ## Why This Approach Wins
 
 **🎯 Cognitive Load**: One word = one action
@@ -394,3 +472,4 @@ If you had 100+ commands, grouping might help discoverability. But with smart au
 - CLI slides down, shows success message in GUI
 
 This creates the "fastest accounting app experience" you're targeting while keeping it approachable for non-technical users.
+

@@ -19,14 +19,14 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **DB**: Postgres 16+. Single database. **Schemas per module**: `auth`, `billing`, `crm`, etc.
 * **Tenancy**: single DB table space. Every row has `company_id` (UUID). Enforced by **RLS**.
 * **API**: `/api/v1` in the same app. Auth via **Sanctum** (SPA + token for mobile).
-* **CLI**: First pass as **Artisan commands** (fastest). Optional: extract to **Laravel Zero** later.
+* **CLI**: DevOps tasks run through a command bus/palette (Artisan commands deprecated).
 * **Edge**: Cloudflare in front, object storage (S3-compatible) for user uploads.
 
 ```
 [Client] —HTTP/HTTPS—> [Nginx] -> [Laravel (Octane)] -> [Postgres + Redis]
                                        |-> Inertia/Vue (SSR)
                                        |-> /api/v1 (Sanctum)
-                                       |-> Artisan CLI / Queues (Horizon)
+                                       |-> Command bus / Queues (Horizon)
 ```
 
 ---
@@ -358,7 +358,7 @@ Pick one path and ignore the rest.
 3. **Domain services** in `App/Domain/<Module>`; keep controllers thin.
 4. **Web UI**: Inertia pages for CRUD and reports.
 5. **API**: Resource controllers under `/api/v1/<module>`; API Resources for output.
-6. **CLI**: Artisan commands calling the same services (no duplicated logic).
+6. **CLI**: Command bus/palette invoking the same services (no duplicated logic).
 7. **Tests**: Pest unit + feature; a tenant fixture factory that sets `company_id`.
 8. **Perf pass**: verify queries use indexes; cache hot lists in Redis.
 

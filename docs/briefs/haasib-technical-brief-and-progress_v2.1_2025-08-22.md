@@ -371,9 +371,9 @@
 
 ### 2025-08-26 — Decision: build CLI envelope in Foundations (CLI-F1)
 **Why:** Hybrid UX is a core differentiator; admin verbs speed setup/testing; interface now avoids rework later.
-**What:** Browser + Artisan CLI shell with unique-verb parser; commands: setup/company/users/switch/assign/unassign/bootstrap:demo; all wired to services; tenant context applied before ops; audit + idempotency + structured errors.
+**What:** Browser + command bus/palette with unique-verb parser; commands: setup/company/users/switch/assign/unassign/bootstrap:demo; all wired to services; tenant context applied before ops; audit + idempotency + structured errors.
 **Defers:** Financial/reporting commands (invoice, bill, payment, reconcile, P&L/BS) to Ledger Core (CLI-L1) once posting and ledger schemas are in place.
-**References:** Plan: CLI in same codebase, Artisan-first; CLI per-module in DoD; module loop adds CLI after services.
+**References:** Plan: CLI in same codebase via command bus/palette; bus per-module in DoD; module loop adds CLI after services.
 
 <<<<<<< HEAD
 ### 2025-08-28 — Palette DevOps foundations

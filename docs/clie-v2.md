@@ -8,6 +8,20 @@ Here’s the **complete `cli.md`** with your patch baked in: palette-first UX, b
 
 ---
 
+Update — 2025-08-29: Entity-First Guided Flow (Foundations)
+
+- We’re shifting to an entity-first, guided palette. The flow is:
+  1) Select entity (e.g., company, user) — autocomplete after 3 characters
+  2) Pick verb (create, delete, assign, unassign, …)
+  3) Fill inline grey flags in order (e.g., -name, -email, -role)
+- Phase 1 scope (Foundations): only `company` and `user` entities wired to existing actions:
+  - company.create, company.delete, company.assign, company.unassign
+  - user.create, user.delete
+- The backend contract remains unchanged — we still submit `X-Action` and `params`; this is a client UX improvement.
+- Later phases (Ledger/Invoices/Payments) will reuse the same guided pattern.
+
+---
+
 ## 0) Product goals
 
 - **Speed**: keyboard-first, sub-300 ms command→result p50
@@ -49,23 +63,23 @@ Here’s the **complete `cli.md`** with your patch baked in: palette-first UX, b
 **Shape**
 ```
 
-<verb> \[subject] \[amount] \[date] \[flags]
+<entity> <verb> <flags>
 
 ```
 
 **BNF-ish**
 ```
 
-<verb>      ::= "invoice" | "payment" | "bill" | "pay" | "customer" | "vendor" | ... <subject>   ::= free text | quoted string | ID (e.g. INV-123) | alias <amount>    ::= number | currency-formatted (1,500.00 | \$1500 | 1.5k) <date>      ::= natural date ("today" | "tomorrow" | "30 days" | "Mar 15") <flags>     ::= (--key value)\* | (-k value)\*
+<entity>    ::= "company" | "user" | … (later: invoice, payment, bill)
+<verb>      ::= "create" | "delete" | "assign" | "unassign" | …
+<flags>     ::= (-key value)* shown as inline grey placeholders in order
 
 ```
 
 **Heuristics**
-- First token maps to **action** via synonyms (e.g. “bill customer” → `invoice.create`)
-- First numeric token becomes **amount** unless already assigned
-- Strings after known keywords bind accordingly: `for`, `to`, `on`, `due`
-- Quoted text stays intact: `"Acme Middle East"`
-- Locale-aware parsing for currency and dates
+- After 3 characters typed, suggest entities; on select, constrain to that entity’s verbs.
+- After verb select, show required flags one-by-one; TAB/Enter fills current flag and focuses the next.
+- Optional flags can be skipped; Run becomes enabled when required flags are filled.
 
 **Universal Flags (optional)**
 ```
@@ -82,7 +96,7 @@ Here’s the **complete `cli.md`** with your patch baked in: palette-first UX, b
 A typed registry powering autocomplete, prompting, preview, and submission.
 
 ```ts
-// resources/js/commands/registry.ts
+// resources/js/palette/entities.ts (Foundations: company + user)
 export type CommandCtx = {
   raw: string
   action: string                 // canonical id, e.g. 'invoice.create'

@@ -396,6 +396,17 @@ Removed:
 - vue-command-palette — replaced to gain full control over bottom-dock layout, prompts, and preview.
 
 
+### 2025-08-29 — Palette UX shift to entity-first (Foundations scope)
+**Why:** Improve learnability and speed by funneling choices: entity → verb → flags, with inline grey prompts and autocomplete. Avoids users guessing verb phrasing.
+**What:**
+- Guided flow: select entity (company, user), then verb (create/delete/assign/unassign), then fill ordered flags (-name, -email, -role, …).
+- Phase 1 only wires company/user actions to existing backend bus: company.create/delete/assign/unassign; user.create/delete.
+- Kept transport and backend contract unchanged (X-Action + params + idempotency).
+**How:**
+- Added `resources/js/palette/entities.ts` registry for guided steps.
+- Refactored `CommandPalette.vue` to step through entity → verb → flags with Fuse suggestions and idempotency header.
+- Updated `docs/clie-v2.md` with an “Entity-First Guided Flow” note and mini-grammar tweak.
+
 > Use this template for new entries:
 >
 > * **Date — Change title**

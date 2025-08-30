@@ -21,7 +21,7 @@ class MeController extends Controller
         ]);
 
         $user = $request->user();
-        $isMember = DB::table('company_user')
+        $isMember = DB::table('auth.company_user')
             ->where('user_id', $user->id)
             ->where('company_id', $data['company_id'])
             ->exists();

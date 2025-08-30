@@ -12,6 +12,13 @@ Route::middleware(['auth','throttle:devcli'])->group(function () {
 
 Route::middleware(['auth', 'verified'])->post('/commands', [\App\Http\Controllers\CommandController::class, 'execute']);
 
+// SPA lookups via web guard (avoids Sanctum issues in local/dev)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
+    Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
+    Route::get('/web/companies/{company}/users', [\App\Http\Controllers\CompanyLookupController::class, 'users']);
+});
+
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),

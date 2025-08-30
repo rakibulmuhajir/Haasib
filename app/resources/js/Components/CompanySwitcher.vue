@@ -6,11 +6,16 @@ const companies = ref([])
 const currentId = ref(localStorage.getItem('currentCompanyId') || null)
 
 onMounted(async () => {
-  const { data } = await axios.get('/api/v1/me/companies')
-  companies.value = data.data
-  if (!currentId.value && companies.value.length === 1) {
-    currentId.value = companies.value[0].id
-    localStorage.setItem('currentCompanyId', currentId.value)
+  try {
+    const { data } = await axios.get('/api/v1/me/companies')
+    companies.value = data.data
+    if (!currentId.value && companies.value.length === 1) {
+      currentId.value = companies.value[0].id
+      localStorage.setItem('currentCompanyId', currentId.value)
+    }
+  } catch (e) {
+    // Silently ignore if unauthenticated or API not available
+    companies.value = []
   }
 })
 

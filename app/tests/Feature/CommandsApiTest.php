@@ -84,6 +84,24 @@ class CommandsApiTest extends TestCase
         $this->postJson('/commands', ['name' => 'Beta'], $headers)->assertStatus(409);
     }
 
+    public function test_company_delete(): void
+    {
+        $actor = User::factory()->create(['system_role' => 'superadmin']);
+        $company = Company::factory()->create(['name' => 'ToRemoveCo']);
+
+        $this->actingAs($actor)
+            ->withSession(['current_company_id' => null])
+            ->postJson('/commands', [
+                'company' => $company->id,
+            ], [
+                'X-Action' => 'company.delete',
+                'X-Idempotency-Key' => 'd1',
+            ])
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('auth.companies', ['id' => $company->id]);
+    }
+
     public function test_unauthorized_assign(): void
     {
         $actor = User::factory()->create();

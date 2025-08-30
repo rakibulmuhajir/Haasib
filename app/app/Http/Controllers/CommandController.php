@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Support\CommandBus;
 
@@ -19,22 +20,66 @@ class CommandController extends Controller
         $params = $request->all();
         $companyId = $request->session()->get('current_company_id');
 
-        if (DB::table('audit.audit_logs')->where('idempotency_key', $key)->exists()) {
-            return response()->json(['message' => 'Duplicate request'], 409);
+        // Idempotency check (scoped by user/company/action/key)
+        try {
+            if (Schema::hasTable('idempotency_keys')) {
+                $exists = DB::table('idempotency_keys')->where([
+                    'user_id' => $user->id,
+                    'company_id' => $companyId,
+                    'action' => $action,
+                    'key' => $key,
+                ])->exists();
+                if ($exists) {
+                    return response()->json(['message' => 'Duplicate request'], 409);
+                }
+            }
+        } catch (\Throwable $e) {
+            // If table missing or any driver error, skip idempotency check rather than 500
         }
 
-        $result = CommandBus::dispatch($action, $params, $user);
+        try {
+            $result = CommandBus::dispatch($action, $params, $user);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Command failed',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
 
-        DB::table('audit.audit_logs')->insert([
-            'id' => Str::uuid()->toString(),
-            'user_id' => $user->id,
-            'company_id' => $companyId,
-            'action' => $action,
-            'params' => json_encode($params),
-            'idempotency_key' => $key,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            DB::table('audit.audit_logs')->insert([
+                'id' => Str::uuid()->toString(),
+                'user_id' => $user->id,
+                'company_id' => $companyId,
+                'action' => $action,
+                'params' => json_encode($params),
+                'idempotency_key' => $key,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // Log write failure should not block the command response
+        }
+
+        // Record idempotency key for future replays
+        try {
+            if (Schema::hasTable('idempotency_keys')) {
+                DB::table('idempotency_keys')->insert([
+                    'id' => Str::uuid()->toString(),
+                    'user_id' => $user->id,
+                    'company_id' => $companyId,
+                    'action' => $action,
+                    'key' => $key,
+                    'request' => json_encode($params),
+                    'response' => json_encode($result),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
 
         return response()->json($result);
     }

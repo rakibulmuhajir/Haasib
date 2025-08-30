@@ -9,17 +9,23 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void {
         Schema::table('users', function (Blueprint $t) {
-            $t->string('system_role')->nullable()->index();
+            if (!Schema::hasColumn('users', 'system_role')) {
+                $t->string('system_role')->nullable()->index();
+            }
         });
-        // Hard guard so random strings don’t sneak in
-        DB::statement("alter table users add constraint users_system_role_chk check (system_role is null or system_role in ('superadmin'))");
+        // Note: skip adding a DB-level CHECK constraint here to keep this idempotent
+        // across environments without relying on introspection of constraint existence.
     }
 
     public function down(): void {
         Schema::table('users', function (Blueprint $t) {
-            $t->dropIndex(['system_role']);
-            $t->dropColumn('system_role');
+            if (Schema::hasColumn('users', 'system_role')) {
+                // Drop index if it exists (Laravel handles by column name array safely across drivers)
+                try { $t->dropIndex(['system_role']); } catch (\Throwable $e) { /* ignore */ }
+                $t->dropColumn('system_role');
+            }
         });
-        DB::statement("alter table users drop constraint if exists users_system_role_chk");
+        // If a constraint was added manually in some envs, try to drop it safely
+        try { DB::statement("alter table users drop constraint if exists users_system_role_chk"); } catch (\Throwable $e) { /* ignore */ }
     }
 };

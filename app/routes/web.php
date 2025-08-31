@@ -15,8 +15,17 @@ Route::middleware(['auth', 'verified'])->post('/commands', [\App\Http\Controller
 // SPA lookups via web guard (avoids Sanctum issues in local/dev)
 Route::middleware(['auth'])->group(function () {
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
+    Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
     Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
     Route::get('/web/companies/{company}/users', [\App\Http\Controllers\CompanyLookupController::class, 'users']);
+    Route::get('/web/companies/{company}', [\App\Http\Controllers\CompanyLookupController::class, 'show']);
+    Route::post('/web/companies/switch', [\App\Http\Controllers\MeController::class, 'switch']);
+
+    // Reference data lookups for pickers
+    Route::get('/web/countries/suggest', [\App\Http\Controllers\CountryLookupController::class, 'suggest']);
+    Route::get('/web/languages/suggest', [\App\Http\Controllers\LanguageLookupController::class, 'suggest']);
+    Route::get('/web/currencies/suggest', [\App\Http\Controllers\CurrencyLookupController::class, 'suggest']);
+    Route::get('/web/locales/suggest', [\App\Http\Controllers\LocaleLookupController::class, 'suggest']);
 });
 
 Route::get('/', function () {

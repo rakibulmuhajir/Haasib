@@ -17,11 +17,14 @@ class CompanyLookupController extends Controller
         $userEmail = $request->query('user_email');
         $limit = (int) $request->query('limit', 10);
 
-        $query = Company::query()->select(['id','name']);
+        $query = Company::query()->select(['id','name','slug','base_currency','language','locale']);
 
         if ($q !== '') {
             $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-            $query->where('name', 'ilike', $like);
+            $query->where(function($w) use ($like) {
+                $w->where('name', 'ilike', $like)
+                  ->orWhere('slug', 'ilike', $like);
+            });
         }
 
         // If superadmin, can see all; otherwise limit to companies the current user belongs to
@@ -45,6 +48,73 @@ class CompanyLookupController extends Controller
 
         $companies = $query->limit($limit)->get();
         return response()->json(['data' => $companies]);
+    }
+
+    public function show(Request $request, string $company)
+    {
+        $user = $request->user();
+        $record = Company::where('id', $company)
+            ->orWhere('slug', $company)
+            ->orWhere('name', $company)
+            ->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
+
+        if (! $user->isSuperAdmin()) {
+            $isMember = DB::table('auth.company_user')
+                ->where('user_id', $user->id)
+                ->where('company_id', $record->id)
+                ->exists();
+            abort_unless($isMember, 403);
+        }
+
+        $members = DB::table('auth.company_user as cu')
+            ->join('users as u', 'u.id', '=', 'cu.user_id')
+            ->where('cu.company_id', $record->id)
+            ->select('u.id','u.name','u.email','cu.role')
+            ->orderBy('u.name')
+            ->limit(10)
+            ->get();
+
+        $owners = DB::table('auth.company_user as cu')
+            ->join('users as u', 'u.id', '=', 'cu.user_id')
+            ->where('cu.company_id', $record->id)
+            ->where('cu.role', 'owner')
+            ->select('u.id','u.name','u.email')
+            ->orderBy('u.name')
+            ->get();
+
+        $roleCounts = DB::table('auth.company_user')
+            ->select('role', DB::raw('count(*) as cnt'))
+            ->where('company_id', $record->id)
+            ->groupBy('role')
+            ->pluck('cnt','role');
+
+        // Latest activity from audit logs if available
+        $lastActivity = null;
+        try {
+            $lastActivity = DB::table('audit.audit_logs')
+                ->where('company_id', $record->id)
+                ->orderByDesc('created_at')
+                ->limit(1)
+                ->first(['action','created_at']);
+        } catch (\Throwable $e) {
+            // audit schema may not exist yet; ignore
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $record->id,
+                'name' => $record->name,
+                'slug' => $record->slug,
+                'base_currency' => $record->base_currency,
+                'language' => $record->language,
+                'locale' => $record->locale,
+                'members_preview' => $members,
+                'members_count' => DB::table('auth.company_user')->where('company_id', $record->id)->count(),
+                'owners' => $owners,
+                'role_counts' => (object) $roleCounts,
+                'last_activity' => $lastActivity,
+            ]
+        ]);
     }
 
     public function users(Request $request, string $companyId)
@@ -85,4 +155,3 @@ class CompanyLookupController extends Controller
         return response()->json(['data' => $users]);
     }
 }
-

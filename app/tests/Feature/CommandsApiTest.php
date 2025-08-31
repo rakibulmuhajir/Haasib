@@ -102,6 +102,25 @@ class CommandsApiTest extends TestCase
         $this->assertDatabaseMissing('auth.companies', ['id' => $company->id]);
     }
 
+    public function test_company_name_unique(): void
+    {
+        $actor = User::factory()->create(['system_role' => 'superadmin']);
+
+        $res1 = $this->actingAs($actor)
+            ->postJson('/commands', ['name' => 'Acme'], [
+                'X-Action' => 'company.create',
+                'X-Idempotency-Key' => 'u-1',
+            ]);
+        $res1->assertStatus(200);
+
+        $res2 = $this->actingAs($actor)
+            ->postJson('/commands', ['name' => 'Acme'], [
+                'X-Action' => 'company.create',
+                'X-Idempotency-Key' => 'u-2',
+            ]);
+        $this->assertTrue(in_array($res2->status(), [422, 500]), 'Expected validation error status');
+    }
+
     public function test_unauthorized_assign(): void
     {
         $actor = User::factory()->create();

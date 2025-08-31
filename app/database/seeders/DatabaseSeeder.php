@@ -11,6 +11,8 @@ class DatabaseSeeder extends Seeder
 {
 
 public function run(): void {
+    // Reference data first (idempotent)
+    $this->call(ReferenceDataSeeder::class);
     $user = User::factory()->create(['email'=>'founder@example.com']);
     $acme = Company::factory()->create(['name'=>'Acme']);
     $beta = Company::factory()->create(['name'=>'BetaCo']);

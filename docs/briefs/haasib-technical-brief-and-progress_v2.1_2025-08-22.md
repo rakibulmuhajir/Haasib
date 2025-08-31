@@ -414,6 +414,33 @@ Removed:
 >   **What:**
 >   **How:**
 
+### 2025-08-31 — Command Palette UI: terminal aesthetic pass
+**Why:** The palette should feel like a terminal: no input borders or motion, clean breadcrumb pathing, and legible cues without visual noise.
+**What:**
+- Removed the “Active Parameter” info card; moved to inline context and breadcrumb path.
+- Introduced borderless, horizontally aligned breadcrumbs (entity → verb → active param) with subtle solid fills; earlier segments sit above later segments; left curves removed for all but the first segment.
+- Removed input borders and focus rings to match terminal input; removed transparency/blur artifacts and all animations/transitions.
+- Kept discoverability via available/completed parameter chips and keyboard hints.
+**How:** Edited `resources/js/Components/CommandPalette.vue`:
+- Reworked breadcrumb markup and styles; zeroed left radii for non-first segs; z-index ordering; subtle solid colors.
+- Dropped animate/transition classes; removed ghost-prefix and in-input chip; input now `border-0`, no ring.
+
+### 2025-08-31 — Reference data schema for i18n and money pickers
+**Why:** Power fast, filterable pickers for countries, languages, currencies, and locales using normalized, queryable data.
+**What:** Added normalized tables + pivots:
+- `languages` (ISO 639, script, rtl)
+- `currencies` (ISO 4217, symbol, minor_unit, cash_minor_unit, rounding)
+- `countries` (ISO 3166-1, alpha3, region, emoji, capital, calling_code)
+- `locales` (BCP 47 tag with `language_code` and optional `country_code`)
+- Pivots: `country_language(official, primary, order)`, `country_currency(official, from_date, to_date)`
+Files:
+- `app/database/migrations/2025_08_31_100000_create_languages_table.php`
+- `app/database/migrations/2025_08_31_100100_create_currencies_table.php`
+- `app/database/migrations/2025_08_31_100200_create_countries_table.php`
+- `app/database/migrations/2025_08_31_100300_create_locales_table.php`
+- `app/database/migrations/2025_08_31_100400_create_country_relations_tables.php`
+**How:** Normalized ISO/BCP codes as primary identifiers; string FKs for clarity (`language_code`, `country_code`, `currency_code`). Next steps: add seeders (Symfony Intl or Umpirsky datasets) and `/web/*/suggest` endpoints for each entity.
+
 ---
 
 ## 14) Definition of Done (module)

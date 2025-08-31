@@ -42,6 +42,9 @@ export const entities: EntityDef[] = [
         action: 'company.create',
         fields: [
           { id: 'name', label: 'Name', placeholder: '-name', required: true, type: 'text' },
+          { id: 'base_currency', label: 'Base currency', placeholder: '-base_currency', required: false, type: 'text' },
+          { id: 'language', label: 'Language', placeholder: '-language', required: false, type: 'text' },
+          { id: 'locale', label: 'Locale', placeholder: '-locale', required: false, type: 'text' },
         ],
       },
       {

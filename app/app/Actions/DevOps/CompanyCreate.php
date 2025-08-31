@@ -14,7 +14,7 @@ class CompanyCreate
         abort_unless($actor->isSuperAdmin(), 403);
 
         $data = Validator::make($p, [
-            'name' => 'required|string',
+            'name' => 'required|string|unique:auth.companies,name',
             'base_currency' => 'nullable|string|size:3',
             'language' => 'nullable|string',
             'locale' => 'nullable|string',

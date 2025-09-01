@@ -4,8 +4,22 @@ export type FieldDef = {
   label: string
   placeholder: string // e.g., "-amount"
   required: boolean
-  type: 'text' | 'email' | 'password' | 'date' | 'money' | 'select'
+  type: 'text' | 'email' | 'password' | 'date' | 'money' | 'select' | 'remote'
   options?: string[]
+  // UI + data-driven extensions
+  picker?: 'inline' | 'panel'
+  default?: string | ((params: Record<string, any>) => string)
+  validate?: (value: any, params: Record<string, any>) => true | string
+  source?: {
+    kind: 'static' | 'remote'
+    endpoint?: string
+    queryKey?: string
+    limit?: number
+    valueKey: string
+    labelKey?: string
+    labelTemplate?: string
+    dependsOn?: string[]
+  }
 }
 
 export type VerbDef = {
@@ -42,9 +56,21 @@ export const entities: EntityDef[] = [
         action: 'company.create',
         fields: [
           { id: 'name', label: 'Name', placeholder: '-name', required: true, type: 'text' },
-          { id: 'base_currency', label: 'Base currency', placeholder: '-base_currency', required: false, type: 'text' },
-          { id: 'language', label: 'Language', placeholder: '-language', required: false, type: 'text' },
-          { id: 'locale', label: 'Locale', placeholder: '-locale', required: false, type: 'text' },
+          {
+            id: 'base_currency', label: 'Base currency', placeholder: '-base_currency', required: false, type: 'remote', picker: 'inline',
+            default: 'USD',
+            source: { kind: 'remote', endpoint: '/web/currencies/suggest', queryKey: 'q', limit: 12, valueKey: 'code', labelTemplate: '{code} — {name}' }
+          },
+          {
+            id: 'language', label: 'Language', placeholder: '-language', required: false, type: 'remote', picker: 'inline',
+            default: 'en',
+            source: { kind: 'remote', endpoint: '/web/languages/suggest', queryKey: 'q', limit: 12, valueKey: 'code', labelTemplate: '{code} — {name}' }
+          },
+          {
+            id: 'locale', label: 'Locale', placeholder: '-locale', required: false, type: 'remote', picker: 'inline',
+            default: 'en-US',
+            source: { kind: 'remote', endpoint: '/web/locales/suggest', queryKey: 'q', limit: 12, valueKey: 'tag', labelTemplate: '{tag}', dependsOn: ['language', 'country'] }
+          },
         ],
       },
       {
@@ -52,7 +78,10 @@ export const entities: EntityDef[] = [
         label: 'delete',
         action: 'company.delete',
         fields: [
-          { id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'text' },
+          {
+            id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
+          },
         ],
       },
       {
@@ -60,8 +89,14 @@ export const entities: EntityDef[] = [
         label: 'assign',
         action: 'company.assign',
         fields: [
-          { id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'email' },
-          { id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'text' },
+          {
+            id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/users/suggest', queryKey: 'q', valueKey: 'email', labelTemplate: '{name} — {email}' }
+          },
+          {
+            id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
+          },
           { id: 'role', label: 'Role', placeholder: '-role', required: true, type: 'select', options: ['owner','admin','accountant','viewer'] },
         ],
       },
@@ -70,8 +105,14 @@ export const entities: EntityDef[] = [
         label: 'unassign',
         action: 'company.unassign',
         fields: [
-          { id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'email' },
-          { id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'text' },
+          {
+            id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/users/suggest', queryKey: 'q', valueKey: 'email', labelTemplate: '{name} — {email}' }
+          },
+          {
+            id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
+          },
         ],
       },
     ],
@@ -86,7 +127,10 @@ export const entities: EntityDef[] = [
         label: 'list',
         action: 'ui.list.users',
         fields: [
-          { id: 'email', label: 'Email', placeholder: '-email', required: false, type: 'text' },
+          {
+            id: 'email', label: 'Email', placeholder: '-email', required: false, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/users/suggest', queryKey: 'q', valueKey: 'email', labelTemplate: '{name} — {email}' }
+          },
         ],
       },
       {
@@ -105,7 +149,10 @@ export const entities: EntityDef[] = [
         label: 'delete',
         action: 'user.delete',
         fields: [
-          { id: 'email', label: 'Email', placeholder: '-email', required: true, type: 'email' },
+          {
+            id: 'email', label: 'User to delete', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/users/suggest', queryKey: 'q', valueKey: 'email', labelTemplate: '{name} — {email}' }
+          },
         ],
       },
     ],

@@ -9,6 +9,40 @@ use Illuminate\Support\Str;
 
 class InvitationController extends Controller
 {
+    public function companyInvitations(Request $request, string $company)
+    {
+        $auth = $request->user();
+
+        // Resolve company by id or slug or name
+        $q = \App\Models\Company::query();
+        if (\Illuminate\Support\Str::isUuid($company)) {
+            $q->where('id', $company);
+        } else {
+            $q->where(function ($w) use ($company) {
+                $w->where('slug', $company)->orWhere('name', $company);
+            });
+        }
+        $co = $q->firstOrFail(['id','name','slug']);
+
+        // Permission: owner/admin or superadmin
+        $allowed = $auth->isSuperAdmin() || \Illuminate\Support\Facades\DB::table('auth.company_user')
+            ->where('company_id', $co->id)
+            ->where('user_id', $auth->id)
+            ->whereIn('role', ['owner','admin'])
+            ->exists();
+        abort_unless($allowed, 403);
+
+        $status = $request->query('status', 'pending');
+
+        $rows = \Illuminate\Support\Facades\DB::table('auth.company_invitations as i')
+            ->leftJoin('users as u', 'u.id', '=', 'i.invited_by_user_id')
+            ->where('i.company_id', $co->id)
+            ->when($status, fn($w) => $w->where('i.status', $status))
+            ->orderByDesc('i.created_at')
+            ->get(['i.id','i.invited_email as email','i.role','i.status','i.expires_at','i.created_at','u.name as invited_by']);
+
+        return response()->json(['data' => $rows]);
+    }
     public function myInvitations(Request $request)
     {
         $user = $request->user();
@@ -108,4 +142,3 @@ class InvitationController extends Controller
         return response()->json(['message' => 'Invitation revoked']);
     }
 }
-

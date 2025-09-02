@@ -25,6 +25,7 @@
         "vue": "^3.4.0"
     },
     "dependencies": {
+        "@floating-ui/dom": "^1.7.4",
         "@headlessui/vue": "^1.7.23",
         "@vueuse/core": "^13.8.0",
         "fuse.js": "^7.1.0"

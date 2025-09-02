@@ -14,11 +14,17 @@ Route::middleware(['auth', 'verified'])->post('/commands', [\App\Http\Controller
 
 // SPA lookups via web guard (avoids Sanctum issues in local/dev)
 Route::middleware(['auth'])->group(function () {
+    // Me / companies via web guard (avoids Sanctum 401s in SPA)
+    Route::get('/web/me/companies', [\App\Http\Controllers\MeController::class, 'companies']);
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
     Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
     Route::get('/web/companies/{company}/users', [\App\Http\Controllers\CompanyLookupController::class, 'users']);
     Route::get('/web/companies/{company}', [\App\Http\Controllers\CompanyLookupController::class, 'show']);
+    // Invitations via web guard
+    Route::get('/web/companies/{company}/invitations', [\App\Http\Controllers\InvitationController::class, 'companyInvitations']);
+    Route::post('/web/companies/{company}/invite', [\App\Http\Controllers\CompanyController::class, 'invite']);
+    Route::post('/web/invitations/{id}/revoke', [\App\Http\Controllers\InvitationController::class, 'revoke']);
     Route::post('/web/companies/switch', [\App\Http\Controllers\MeController::class, 'switch']);
 
     // Reference data lookups for pickers
@@ -43,7 +49,21 @@ Route::get('/dashboard', function () {
 
 Route::middleware(['auth','require.superadmin'])->prefix('admin')->group(function () {
     Route::get('/', fn() => inertia('Admin/Dashboard'))->name('admin.dashboard');
-    // add your sys tools here, e.g. user/company management views
+    // Companies
+    Route::get('/companies', fn() => inertia('Admin/Companies/Index'))
+        ->name('admin.companies.index');
+    Route::get('/companies/create', fn() => inertia('Admin/Companies/Create'))
+        ->name('admin.companies.create');
+    Route::get('/companies/{company}', fn(string $company) => inertia('Admin/Companies/Show', ['company' => $company]))
+        ->name('admin.companies.show');
+
+    // Users
+    Route::get('/users', fn() => inertia('Admin/Users/Index'))
+        ->name('admin.users.index');
+    Route::get('/users/create', fn() => inertia('Admin/Users/Create'))
+        ->name('admin.users.create');
+    Route::get('/users/{id}', fn(string $id) => inertia('Admin/Users/Show', ['id' => $id]))
+        ->name('admin.users.show');
 });
 
 Route::middleware('auth')->group(function () {

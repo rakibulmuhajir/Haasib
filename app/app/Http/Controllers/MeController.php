@@ -10,7 +10,8 @@ class MeController extends Controller
 {
     public function companies(Request $request)
     {
-        $companies = $request->user()->companies()->select('companies.id','companies.name')->get();
+        // Use schema-qualified table to match Company::$table = 'auth.companies'
+        $companies = $request->user()->companies()->select('auth.companies.id','auth.companies.name')->get();
         return response()->json(['data' => $companies]);
     }
 

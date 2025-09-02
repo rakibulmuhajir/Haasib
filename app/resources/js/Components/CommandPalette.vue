@@ -1,6 +1,6 @@
 <!-- resources/js/Components/CommandPalette.vue -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, nextTick } from 'vue'
+import { onMounted, onUnmounted, nextTick, ref, computed, watch } from 'vue'
 import { Dialog, DialogPanel } from '@headlessui/vue'
 import SuggestList from '@/Components/SuggestList.vue'
 import { usePalette } from '@/palette/composables/usePalette'
@@ -9,8 +9,8 @@ import { usePaletteKeybindings } from '@/palette/composables/usePaletteKeybindin
 const palette = usePalette()
   const {
   	  open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults,
-  	  activeFlagId, animatingToCompleted,
-  	  isSuperAdmin, userSource, companySource,
+  	  activeFlagId,
+  	  isSuperAdmin, userSource, companySource, mainPanelEl,
   	  panelItems,
   	  companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
   	  entitySuggestions, verbSuggestions, availableFlags, filledFlags, currentField, dashParameterMatch, allRequiredFilled, currentChoices,
@@ -24,7 +24,91 @@ const palette = usePalette()
   pickUserEmail, pickCompanyName, pickGeneric,
 } = palette
 
+watch([() => allRequiredFilled.value, () => activeFlagId.value, () => open.value], ([reqFilled, activeId, isOpen]) => {
+  if (isOpen && step.value === 'fields' && reqFilled && !activeId) {
+    nextTick(() => {
+      mainPanelEl.value?.focus()
+    })
+  }
+})
+
 const { handleKeydown } = usePaletteKeybindings(palette)
+
+// Bottom dock size state
+type DockSize = 'strip' | 'half' | 'full'
+const lastSize = ref<Exclude<DockSize, 'strip'>>((localStorage.getItem('palette.lastSize') as any) === 'full' ? 'full' : 'half')
+const dockSize = ref<DockSize>('strip')
+const isExpanded = computed(() => open.value && dockSize.value !== 'strip')
+const autoSizing = ref(false)
+
+watch(lastSize, (v) => localStorage.setItem('palette.lastSize', v))
+
+// Auto-expand when results panel is triggered while collapsed
+watch(() => showResults.value, (v) => {
+  if (v && dockSize.value === 'strip') {
+    openTo(lastSize.value as Exclude<DockSize, 'strip'>, { reset: false, auto: true })
+  }
+})
+
+// If dialog closes via palette navigation, reflect collapsed state in dockSize
+watch(isExpanded, (v) => {
+  if (!v) dockSize.value = 'strip'
+})
+
+function openTo(size: Exclude<DockSize, 'strip'>, { reset, auto }: { reset: boolean, auto?: boolean } = { reset: true, auto: false }) {
+  lastSize.value = size
+  if (reset) resetAll()
+  open.value = true
+  dockSize.value = size
+  autoSizing.value = !!auto
+  nextTick(() => inputEl.value?.focus())
+}
+
+function collapseToStrip() {
+  open.value = false
+  dockSize.value = 'strip'
+  autoSizing.value = false
+}
+
+function toggleShortcutOpen() {
+  if (!isExpanded.value) {
+    openTo(lastSize.value as Exclude<DockSize, 'strip'>, { reset: true, auto: false })
+  } else {
+    collapseToStrip()
+  }
+}
+
+// Expand automatically when user starts typing in the strip
+watch(q, (val) => {
+  if (dockSize.value === 'strip' && String(val || '').trim().length > 0) {
+    openTo(lastSize.value as Exclude<DockSize, 'strip'>, { reset: false, auto: true })
+  }
+})
+
+// Heuristic auto-sizing between half/full based on suggestion count
+const suggestionCount = computed(() => {
+  if (step.value === 'entity') return (entitySuggestions.value || []).length
+  if (step.value === 'verb') return (verbSuggestions.value || []).length
+  const counts = [
+    (inlineSuggestions.value || []).length,
+    (panelItems.value || []).length,
+    (currentChoices.value || []).length,
+  ]
+  return Math.max(0, ...counts)
+})
+
+let autoSizeTimer: any = null
+watch([suggestionCount, isExpanded, autoSizing, () => dockSize.value], ([cnt, expanded, auto]) => {
+  if (!expanded || !auto) return
+  clearTimeout(autoSizeTimer)
+  autoSizeTimer = setTimeout(() => {
+    if (cnt >= 12 && dockSize.value !== 'full') {
+      openTo('full', { reset: false, auto: true })
+    } else if (cnt <= 6 && dockSize.value === 'full') {
+      openTo('half', { reset: false, auto: true })
+    }
+  }, 80)
+})
 
 function escapeHtml(s: string): string {
   return s
@@ -58,9 +142,7 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   if (isCmdK || isCtrlShiftK || isCtrlSlash || isCtrlSpace || isAltK) {
     e.preventDefault()
     e.stopPropagation()
-    open.value = true
-    resetAll()
-    nextTick(() => inputEl.value?.focus())
+    toggleShortcutOpen()
   }
 }
 
@@ -75,27 +157,47 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Floating Terminal Button -->
-  <div class="fixed bottom-4 right-4 z-40">
-    <button type="button"
-      @click="open=true; resetAll(); nextTick(() => inputEl?.focus())"
-      class="px-4 py-3 bg-gradient-to-br from-gray-800 to-gray-900 text-green-400 font-mono text-sm rounded-lg border border-green-600/30 hover:border-green-400 shadow-xl flex items-center gap-2 group"
-    >
-      <span class="text-green-300">$</span>
-      <span>command</span>
-      <kbd class="px-2 py-1 bg-gray-700/50 rounded text-xs border border-gray-600 group-hover:border-green-400/50">⌘K</kbd>
-    </button>
+  <!-- Bottom Command Strip -->
+  <div class="fixed bottom-0 inset-x-0 z-40">
+    <div class="mx-auto w-full max-w-5xl px-3">
+      <div class="h-10 bg-gray-900/95 border border-gray-700 border-b-0 rounded-t-xl shadow-inner flex items-center justify-between px-3 font-mono text-xs text-gray-300">
+        <div class="flex items-center gap-2 w-full">
+          <span class="text-green-400">❯</span>
+          <div class="flex-1 min-w-0">
+            <!-- Inline input while minimized -->
+            <input v-if="dockSize==='strip'"
+                   v-model="q"
+                   @keydown.enter="openTo(lastSize as any, { reset: false, auto: true })"
+                   class="w-full bg-transparent outline-none focus:outline-none ring-0 border-0 placeholder-gray-600 text-gray-300"
+                   placeholder="Type a command… (Enter to expand)" />
+            <div v-else class="hidden sm:flex items-center gap-2 text-gray-500">
+              <span>command</span><span>— Press</span>
+              <kbd class="px-1.5 py-0.5 bg-gray-800/70 rounded border border-gray-700">⌘K</kbd>
+              <span>to {{ isExpanded ? 'collapse' : 'expand' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 whitespace-nowrap">
+          <button v-if="dockSize!=='half'" type="button" title="Half screen" @click="openTo('half', { reset: false })" class="px-2 py-1 rounded hover:bg-gray-800/70 border border-transparent" :class="isExpanded && dockSize==='half' ? 'text-green-400' : 'text-gray-400'">▭</button>
+          <button v-if="dockSize!=='strip'" type="button" title="Collapse" @click="collapseToStrip" class="px-2 py-1 rounded hover:bg-gray-800/70 text-gray-400">—</button>
+          <button v-if="dockSize!=='full'" type="button" title="Fullscreen" @click="openTo('full', { reset: false })" class="px-2 py-1 rounded hover:bg-gray-800/70 border border-transparent" :class="isExpanded && dockSize==='full' ? 'text-green-400' : 'text-gray-400'">⛶</button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <Dialog :open="open" @close="open=false" class="relative z-50">
+  <Dialog :open="isExpanded" @close="collapseToStrip()" class="relative z-50">
     <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true"></div>
 
-    <div class="fixed inset-0 flex items-start justify-center pt-4 sm:pt-20 px-4">
-      <div class="w-full max-w-4xl flex flex-col lg:flex-row gap-4" :class="showResults ? 'lg:max-w-5xl' : ''">
+    <div class="fixed inset-x-0 bottom-0 flex items-end justify-center pb-2 sm:pb-4 px-2">
+      <div class="w-full max-w-5xl flex flex-col lg:flex-row gap-4"
+           :class="[showResults ? 'lg:max-w-5xl' : '', dockSize==='full' ? 'h-[88vh]' : 'h-[56vh]']">
 
         <!-- Main Command Palette - Enhanced design -->
-        <DialogPanel class="flex-1 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl font-mono text-sm overflow-hidden" :class="open ? 'scale-100 opacity-100' : 'scale-105 opacity-0'" @keydown="(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); goBack() } }">
-          <div class="flex flex-col h-96 sm:h-[500px]" @keydown="handleKeydown">
+        <DialogPanel class="flex-1 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-t-xl shadow-2xl font-mono text-sm overflow-hidden"
+                     :class="isExpanded ? 'scale-100 opacity-100' : 'scale-105 opacity-0'"
+                     @keydown="(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); goBack() } }">
+          <div class="flex flex-col h-full" @keydown="handleKeydown" ref="mainPanelEl" tabindex="-1">
 
             <!-- Terminal Header - Enhanced -->
             <div class="px-4 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900">
@@ -126,91 +228,53 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Available Flags - Enhanced -->
-            <div v-if="step === 'fields' && selectedVerb" class="px-4 py-3 border-b border-gray-700/30 bg-gray-800/40">
-              <div class="text-gray-500 text-xs mb-2 font-medium tracking-wide">AVAILABLE PARAMETERS:</div>
-              <div class="flex flex-wrap gap-2">
-                <button type="button"
-                  v-for="flag in availableFlags"
-                  :key="flag.id"
-                  @click="selectFlag(flag.id)"
-                  class="px-3 py-1.5 text-xs rounded-lg border backdrop-blur-sm"
-                  :class="[
-                    'border-gray-600/50 text-gray-300 bg-gray-800/40 hover:border-orange-500/70 hover:text-orange-300 hover:bg-orange-900/20',
-                    ''
-                ]"
-                >
-                  {{ flag.placeholder }}
-                  <span v-if="flag.required" class="ml-1 text-red-400">*</span>
-                </button>
-              </div>
-              <div v-if="!activeFlagId && !dashParameterMatch" class="text-gray-600 text-xs mt-2 flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-                Click a parameter above or type -paramName to start entering values
-              </div>
-              <div v-if="dashParameterMatch" class="text-orange-400 text-xs mt-2 flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
-                </svg>
-                Press Enter to select: {{ dashParameterMatch.placeholder }}
-              </div>
-            </div>
-
             <!-- Command Line - Enhanced -->
             <div class="px-4 py-3 border-b border-gray-700/30 bg-gradient-to-b from-gray-900/50 to-gray-900/10">
               <div class="flex items-center gap-2">
                 <span class="text-green-400 text-lg">❯</span>
-
-                <!-- Breadcrumb -->
-                <div class="flex items-center gap-2 text-gray-400">
-                  <template v-if="selectedEntity">
-                    <span class="text-blue-300">{{ selectedEntity.label }}</span>
-                    <template v-if="selectedVerb">
-                      <span class="text-gray-500">&gt;</span>
-                      <span class="text-purple-300">{{ selectedVerb.label }}</span>
-                    </template>
-                    <template v-if="step === 'fields' && currentField">
-                      <span class="text-gray-500">&gt;</span>
-                      <span class="text-orange-300">{{ currentField.placeholder }}<span v-if="currentField.required" class="ml-0.5 text-red-300">*</span></span>
-                    </template>
-                  </template>
-                </div>
-
                 <div class="flex-1">
-                  <!-- Ready to Execute State -->
-                  <div v-if="step === 'fields' && allRequiredFilled && !activeFlagId" class="w-full flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 text-xs">
-                    <template v-if="!executing">
-                      <div class="flex items-center gap-2 text-gray-400 w-full">
-                        <span class="mr-auto">Press ↵ to</span>
-                        <button @click="execute" class="px-3 py-1 bg-green-700/50 text-green-100 rounded-md border border-green-600/50 flex items-center gap-1 backdrop-blur-sm hover:bg-green-600/50">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
-                          </svg>
-                          Execute
-                        </button>
-                        <span>or ⎋ to</span>
-                        <button @click="goBack" class="px-3 py-1 bg-red-800/50 text-red-200 rounded-md border border-red-700/50 flex items-center gap-1 backdrop-blur-sm hover:bg-red-700/50">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                          </svg>
-                          Cancel
-                        </button>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div class="w-full flex items-center justify-center gap-2 text-green-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 animate-spin" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-                        </svg>
-                        <span>Executing...</span>
-                      </div>
-                    </template>
-                  </div>
+                  <Transition name="fade-scale" mode="out-in">
+                    <!-- Ready to Execute State -->
+                    <div v-if="step === 'fields' && allRequiredFilled && !activeFlagId" key="ready" class="w-full flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 text-xs">
+                      <template v-if="!executing">
+                        <div class="flex items-center gap-2 text-gray-400 w-full">
+                          <span class="mr-auto">Press ↵ to</span>
+                          <button @click="execute" class="px-3 py-1 bg-green-700/50 text-green-100 rounded-md border border-green-600/50 flex items-center gap-1 backdrop-blur-sm hover:bg-green-600/50">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                            Execute
+                          </button>
+                          <span>or ⎋ to</span>
+                          <button @click="goBack" class="px-3 py-1 bg-red-800/50 text-red-200 rounded-md border border-red-700/50 flex items-center gap-1 backdrop-blur-sm hover:bg-red-700/50">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Cancel
+                          </button>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="w-full flex items-center justify-center gap-2 text-green-300">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 animate-spin" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" /></svg>
+                          <span>Executing...</span>
+                        </div>
+                      </template>
+                    </div>
 
-                  <!-- Input State -->
-                  <div v-else class="flex items-center gap-2 relative w-full">
+                    <!-- Input State -->
+                    <div v-else key="input" class="flex-1 flex items-center gap-2 relative">
+                      <!-- Breadcrumb -->
+                      <div class="flex items-center gap-2 text-gray-400 whitespace-nowrap">
+                        <template v-if="selectedEntity">
+                          <span class="text-blue-300">{{ selectedEntity.label }}</span>
+                          <template v-if="selectedVerb">
+                            <span class="text-gray-500">&gt;</span>
+                            <span class="text-purple-300">{{ selectedVerb.label }}</span>
+                          </template>
+                          <template v-if="step === 'fields' && currentField">
+                            <span class="text-gray-500">&gt;</span>
+                            <span class="text-orange-300">{{ currentField.placeholder }}<span v-if="currentField.required" class="ml-0.5 text-red-300">*</span></span>
+                          </template>
+                        </template>
+                      </div>
+
                       <input
                         ref="inputEl"
                         v-model="q"
@@ -224,28 +288,17 @@ onUnmounted(() => {
                         :disabled="executing"
                       />
 
-                      <button type="button"
-                        v-if="step === 'fields' && activeFlagId && q.trim()"
-                        @click="completeCurrentFlag"
-                        class="px-3 py-1.5 bg-orange-700/50 text-orange-100 rounded-lg border border-orange-600/50 text-xs flex items-center gap-1 backdrop-blur-sm"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
+                      <button type="button" v-if="step === 'fields' && activeFlagId && q.trim()" @click="completeCurrentFlag" class="px-3 py-1.5 bg-orange-700/50 text-orange-100 rounded-lg border border-orange-600/50 text-xs flex items-center gap-1 backdrop-blur-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
                         Set
                       </button>
 
-                      <button type="button"
-                        v-if="step === 'fields' && !activeFlagId && dashParameterMatch"
-                        @click="handleDashParameter"
-                        class="px-3 py-1.5 bg-yellow-700/50 text-yellow-100 rounded-lg border border-yellow-600/50 text-xs flex items-center gap-1 backdrop-blur-sm"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                        </svg>
+                      <button type="button" v-if="step === 'fields' && !activeFlagId && dashParameterMatch" @click="handleDashParameter" class="px-3 py-1.5 bg-yellow-700/50 text-yellow-100 rounded-lg border border-yellow-600/50 text-xs flex items-center gap-1 backdrop-blur-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
                         Select
                       </button>
-                  </div>
+                    </div>
+                  </Transition>
                 </div>
               </div>
             </div>
@@ -298,8 +351,8 @@ onUnmounted(() => {
               <!-- Field input - Enhanced -->
               <div v-else-if="step === 'fields'" class="space-y-4" key="fields-step">
 
-                <!-- Suggestions when actively editing a field -->
                 <div v-if="activeFlagId">
+                  <!-- Suggestions when actively editing a field -->
                   <!-- Select options (finite lists only) -->
                   <div v-if="currentChoices.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
@@ -337,37 +390,54 @@ onUnmounted(() => {
 
                 <!-- Summary view when not editing a field -->
                 <div v-else>
-                  <div class="text-gray-500 text-xs px-2 py-1.5 mb-3 bg-gray-800/30 rounded-lg backdrop-blur-sm inline-flex items-center gap-2">
+                  <div class="text-lg font-medium mb-4 flex items-center gap-2" :class="allRequiredFilled ? 'text-green-300' : 'text-gray-400'">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" :class="allRequiredFilled ? 'text-green-400' : 'text-gray-500'" viewBox="0 0 20 20" fill="currentColor">
                       <path v-if="allRequiredFilled" fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                       <path v-else d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 12a1 1 0 112 0v1a1 1 0 11-2 0v-1zm1-9a1 1 0 00-1 1v4a1 1 0 102 0V4a1 1 0 00-1-1z" />
                     </svg>
-                    {{ allRequiredFilled ? 'Confirm & Execute' : 'Command Summary' }}
+                    <span>{{ allRequiredFilled ? 'Confirm & Execute' : 'Command Summary' }}</span>
                   </div>
-                  <div class="bg-gray-800/20 border border-gray-700/30 rounded-xl p-4 space-y-3">
+                  <div class="bg-gray-900/30 border border-gray-700/30 rounded-xl p-4 space-y-4">
                     <div v-if="selectedEntity && selectedVerb" class="text-lg text-white font-medium mb-2">
                       {{ selectedEntity.label }} &rarr; {{ selectedVerb.label }}
                     </div>
-                    <div v-if="filledFlags.length > 0">
-                      <div v-for="flag in filledFlags" :key="flag.id" class="flex items-center justify-between text-sm border-b border-gray-700/20 pb-2 last:border-b-0">
-                        <div class="text-gray-400">{{ flag.label }}</div>
-                        <div class="flex items-center gap-3">
-                          <span class="text-green-300 font-medium text-right">{{ params[flag.id] }}</span>
-                          <button @click="editFilledFlag(flag.id)" class="text-xs text-blue-400 hover:text-blue-300 hover:underline p-1" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                              <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" />
-                            </svg>
-                          </button>
+                    <div v-if="filledFlags.length > 0" class="relative">
+                      <TransitionGroup tag="div" name="list-anim" class="space-y-0">
+                        <div v-for="flag in filledFlags" :key="flag.id" class="flex items-start justify-between text-sm py-2 border-b border-gray-800/50 last:border-b-0">
+                          <div class="text-gray-400">{{ flag.label }}</div>
+                          <div class="flex items-center gap-3">
+                            <span class="text-green-300 font-medium text-right max-w-xs truncate">{{ params[flag.id] }}</span>
+                            <button @click="editFilledFlag(flag.id)" class="text-xs text-blue-400 hover:text-blue-300 hover:underline p-1" title="Edit">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
+                      </TransitionGroup>
+                    </div>
+                    <div v-if="!allRequiredFilled && availableFlags.length > 0" class="pt-2 border-t border-gray-800/50">
+                      <div class="text-gray-400 text-xs font-medium mb-2">Available Parameters</div>
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button" v-for="flag in availableFlags" :key="flag.id" @click="selectFlag(flag.id)" class="px-3 py-1.5 text-xs rounded-lg border backdrop-blur-sm border-gray-600/50 text-gray-300 bg-gray-800/40 hover:border-orange-500/70 hover:text-orange-300 hover:bg-orange-900/20">
+                          {{ flag.placeholder }}
+                          <span v-if="flag.required" class="ml-1 text-red-400">*</span>
+                        </button>
                       </div>
                     </div>
-                    <div v-else class="text-center py-10">
+                    <div v-if="filledFlags.length === 0 && allRequiredFilled" class="text-center py-10">
                       <div class="text-gray-500 text-sm mb-4 flex flex-col items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 opacity-50" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                         </svg>
-                        Click a parameter above to start entering values
+                        All parameters filled. Ready to execute.
+                      </div>
+                    </div>
+                    <div v-if="!allRequiredFilled" class="text-center py-10">
+                      <div class="text-gray-500 text-sm mb-4 flex flex-col items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 opacity-50" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 102 0V7zm-1 9a1 1 0 110-2 1 1 0 010 2z" clip-rule="evenodd" /></svg>
+                        Fill required parameters to continue.
                       </div>
                     </div>
                   </div>
@@ -406,11 +476,9 @@ onUnmounted(() => {
         </DialogPanel>
 
         <!-- Results Panel - Enhanced -->
-        <div
-          v-if="showResults && results.length > 0"
-          class="w-full lg:w-80 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl font-mono text-sm overflow-hidden"
-          :class="showResults ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'"
-        >
+        <div v-if="showResults && results.length > 0"
+             class="w-full lg:w-80 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl font-mono text-sm overflow-hidden"
+             :class="showResults ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'">
           <div class="px-4 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900">
             <div class="flex items-center gap-2">
               <span class="text-green-400">●</span>

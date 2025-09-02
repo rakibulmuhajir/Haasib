@@ -16,6 +16,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/suggest', [UserLookupController::class, 'suggest']);
     Route::get('/companies', [CompanyLookupController::class, 'index']);
     Route::get('/companies/{company}/users', [CompanyLookupController::class, 'users']);
+    Route::get('/companies/{company}/invitations', [InvitationController::class, 'companyInvitations']);
 
     // Company create + invitations
     Route::post('/companies', [CompanyController::class, 'store']);

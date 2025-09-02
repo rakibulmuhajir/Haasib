@@ -80,37 +80,38 @@ export const entities: EntityDef[] = [
           },
         ],
       },
- {
-   id: 'delete',
-   label: 'Delete Company',
-   action: 'company.delete',
-   fields: [/*... your fields ...*/],
-   preExecute: (context: PreExecuteContext) => {
-     const { params, companyDetails, deleteConfirmRequired, deleteConfirmText } = context;
-     const companyId = params.value['company'];
+      {
+        id: 'delete',
+        label: 'delete',
+        action: 'company.delete',
+        fields: [
+          {
+            id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
+          },
+        ],
+        preExecute: (context: PreExecuteContext) => {
+          const { params, companyDetails, deleteConfirmRequired, deleteConfirmText } = context
+          const companyId = params.value['company']
 
-     // This check is only for company deletion.
-     if (!companyId) return true;
+          if (!companyId) return true
 
-     const details = companyDetails.value[companyId];
-     if (details) {
-       // Set the required confirmation text if it's not already set.
-       // This handles cases where execute is triggered before the UI fully updates.
-       if (!deleteConfirmRequired.value) {
-         deleteConfirmRequired.value = details.slug || details.name;
-       }
-
-       // The actual validation: prevent execution if the confirmation text doesn't match.
-       if (deleteConfirmText.value !== deleteConfirmRequired.value) {
-         return false;
-       }
-     }
-
-     // All checks passed.
-     return true;
-   },
- },
- // ... other verbs
+          const details = companyDetails.value[companyId]
+          if (details) {
+            if (!deleteConfirmRequired.value) {
+              deleteConfirmRequired.value = details.slug || details.name
+            }
+            if (deleteConfirmText.value !== deleteConfirmRequired.value) {
+              return false
+            }
+          }
+          return true
+        },
+        postExecute: (context: PostExecuteContext) => {
+          // Clear confirmation UI state after success
+          context.palette.resetAll()
+        },
+      },
 
       {
         id: 'assign',

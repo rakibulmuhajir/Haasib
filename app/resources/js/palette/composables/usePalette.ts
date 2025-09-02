@@ -23,7 +23,7 @@ export interface PreExecuteContext {
 type Step = 'entity' | 'verb' | 'fields'
 
 export function usePalette() {
-  const paletteApi = {} as UsePalette
+  let paletteApi = {} as UsePalette
 
   // Core State
   const open = ref(false)
@@ -351,6 +351,8 @@ export function usePalette() {
     executing.value = false
     activeFlagId.value = null
     editingFlagId.value = null
+    deleteConfirmText.value = ''
+    deleteConfirmRequired.value = ''
   }
 
   function goHome() {
@@ -407,6 +409,9 @@ export function usePalette() {
     q.value = ''
     selectedIndex.value = 0
     activeFlagId.value = null
+    // Reset any destructive-action confirmations when switching verbs
+    deleteConfirmText.value = ''
+    deleteConfirmRequired.value = ''
     nextTick(() => inputEl.value?.focus())
 
     if (Object.keys(stashParams.value).length > 0 && selectedVerb.value) {
@@ -431,14 +436,15 @@ export function usePalette() {
   async function execute() {
     if (!selectedVerb.value) return
     if (selectedVerb.value.action.startsWith('ui.')) return
-
-    if (selectedVerb.value.id === 'delete' && params.value['company']) {
-      const coId = params.value['company']
-      const details = companyDetails.value[coId]
-      if (details) {
-        if (!deleteConfirmRequired.value) deleteConfirmRequired.value = details.slug || details.name
-        if (!deleteConfirmText.value || deleteConfirmText.value !== deleteConfirmRequired.value) return
-      }
+    // Invoke optional preExecute hook (e.g., delete confirmations)
+    if (typeof selectedVerb.value.preExecute === 'function') {
+      const ok = await selectedVerb.value.preExecute({
+        params,
+        companyDetails,
+        deleteConfirmRequired,
+        deleteConfirmText,
+      })
+      if (ok === false) return
     }
 
     if (!allRequiredFilled.value) return
@@ -447,6 +453,12 @@ export function usePalette() {
     try {
       const response = await http.post('/commands', params.value, { headers: withIdempotency({ 'X-Action': selectedVerb.value.action }) })
       results.value = [{ success: true, action: selectedVerb.value.action, params: params.value, timestamp: new Date().toISOString(), message: `Successfully executed ${selectedEntity.value?.label} ${selectedVerb.value.label}`, data: response.data }, ...results.value.slice(0, 4)]
+      // Optional postExecute hook (cleanup, navigation, etc.)
+      if (typeof selectedVerb.value.postExecute === 'function') {
+        try {
+          await selectedVerb.value.postExecute({ response: response.data, params: params.value, palette: paletteApi })
+        } catch (_) { /* ignore hook errors */ }
+      }
       showResults.value = true
       setTimeout(() => { resetAll(); open.value = false }, 2000)
     } catch (error: any) {
@@ -582,7 +594,7 @@ export function usePalette() {
     }
   })
 
-  return {
+  const api = {
     open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults, stashParams,
     activeFlagId, flagAnimating, editingFlagId,
     isSuperAdmin, currentCompanyId, userSource, companySource,
@@ -598,6 +610,10 @@ export function usePalette() {
     selectEntity, selectVerb, selectChoice, execute,
     pickUserEmail, pickCompanyName, pickGeneric,
   }
+
+  // Expose self-reference for hook contexts
+  paletteApi = api as UsePalette
+  return paletteApi
 }
 
 export type UsePalette = ReturnType<typeof usePalette>

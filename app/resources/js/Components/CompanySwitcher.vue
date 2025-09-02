@@ -1,27 +1,27 @@
 <!-- resources/js/Components/CompanySwitcher.vue -->
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { http } from '@/lib/http'
 const companies = ref([])
 const currentId = ref(localStorage.getItem('currentCompanyId') || null)
 
 onMounted(async () => {
   try {
-    const { data } = await axios.get('/api/v1/me/companies')
+    const { data } = await http.get('/web/me/companies')
     companies.value = data.data
     if (!currentId.value && companies.value.length === 1) {
       currentId.value = companies.value[0].id
       localStorage.setItem('currentCompanyId', currentId.value)
     }
   } catch (e) {
-    // Silently ignore if unauthenticated or API not available
+    // Silently ignore if unauthenticated or endpoint not available
     companies.value = []
   }
 })
 
 async function switchCompany(id) {
   if (!id) return
-  await axios.post('/api/v1/me/companies/switch', { company_id: id })
+  await http.post('/web/companies/switch', { company_id: id })
   localStorage.setItem('currentCompanyId', id)
   window.location.reload()
 }

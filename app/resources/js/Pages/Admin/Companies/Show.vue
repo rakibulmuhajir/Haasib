@@ -1,16 +1,19 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import TextInput from '@/Components/TextInput.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
 import UserPicker from '@/Components/Pickers/UserPicker.vue'
 import { http, withIdempotency } from '@/lib/http'
-import { TabGroup, TabList, Tab, TabPanels, TabPanel, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { Disclosure, DisclosureButton, DisclosurePanel, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
+import { useToasts } from '@/composables/useToasts.js'
+import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 
 const props = defineProps({ company: { type: String, required: true } })
+const { addToast } = useToasts()
 
 const c = ref(null)
 const members = ref([])
@@ -64,31 +67,39 @@ async function assignUser() {
   assignLoading.value = true
   assignError.value = ''
   try {
-    await http.post('/commands', {
+    const { data } = await http.post('/commands', {
       email: assign.value.email,
       company: c.value?.slug || props.company,
       role: assign.value.role,
     }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-    assign.value.email = ''
+    members.value.unshift(data.data) // Add new member to the top of the list
+    assign.value.email = '' // Reset form
     assign.value.role = 'viewer'
-    await loadMembers()
+    addToast('User assigned successfully.', 'success')
   } catch (e) {
-    assignError.value = e?.response?.data?.message || 'Failed to assign user'
+    const message = e?.response?.data?.message || 'Failed to assign user'
+    assignError.value = message
+    addToast(message, 'danger')
   } finally {
     assignLoading.value = false
   }
 }
 
 async function updateRole(m) {
+  const originalRole = members.value.find(mem => mem.id === m.id)?.role
+  if (originalRole === m.role) return; // No change
   try {
-    await http.post('/commands', {
+    const { data } = await http.post('/commands', {
       email: m.email,
       company: c.value?.slug || props.company,
       role: m.role,
     }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-    await loadMembers()
+    const index = members.value.findIndex(mem => mem.id === m.id)
+    if (index !== -1) members.value.splice(index, 1, data.data)
+    addToast('Role updated successfully.', 'success')
   } catch (e) {
-    alert(e?.response?.data?.message || 'Failed to update role')
+    m.role = originalRole // Revert UI on failure
+    addToast(e?.response?.data?.message || 'Failed to update role', 'danger')
   }
 }
 
@@ -99,9 +110,10 @@ async function unassign(m) {
       email: m.email,
       company: c.value?.slug || props.company,
     }, { headers: withIdempotency({ 'X-Action': 'company.unassign' }) })
-    await loadMembers()
+    members.value = members.value.filter(mem => mem.id !== m.id)
+    addToast('User removed successfully.', 'success')
   } catch (e) {
-    alert(e?.response?.data?.message || 'Failed to remove user')
+    addToast(e?.response?.data?.message || 'Failed to remove user', 'danger')
   }
 }
 
@@ -119,13 +131,18 @@ async function sendInvite() {
   inviteError.value = ''
   inviteOk.value = null
   try {
-    const target = encodeURIComponent(c.value?.slug || props.company)
-    const { data } = await http.post(`/web/companies/${target}/invite`, invite.value)
+    const { data } = await http.post('/commands', {
+      ...invite.value,
+      company: c.value?.slug || props.company,
+    }, { headers: withIdempotency({ 'X-Action': 'company.invite' }) })
     inviteOk.value = data.data
+    invites.value.unshift(data.data)
     invite.value.email = ''
-    await loadInvites()
+    addToast('Invitation sent successfully.', 'success')
   } catch (e) {
-    inviteError.value = e?.response?.data?.message || 'Failed to create invitation'
+    const message = e?.response?.data?.message || 'Failed to create invitation'
+    inviteError.value = message
+    addToast(message, 'danger')
   } finally {
     inviteLoading.value = false
   }
@@ -136,39 +153,21 @@ async function revokeInvite(id) {
   const target = id || revokeId.value
   if (!target) return
   try {
-    await http.post(`/web/invitations/${encodeURIComponent(target)}/revoke`)
+    await http.post('/commands', {
+      id: target,
+    }, { headers: withIdempotency({ 'X-Action': 'invitation.revoke' }) })
     if (inviteOk.value && inviteOk.value.id === target) inviteOk.value.status = 'revoked'
     revokeId.value = ''
-    await loadInvites()
+    invites.value = invites.value.filter(i => i.id !== target)
+    addToast('Invitation revoked.', 'success')
   } catch (e) {
-    alert(e?.response?.data?.message || 'Failed to revoke invitation')
+    addToast(e?.response?.data?.message || 'Failed to revoke invitation', 'danger')
   }
 }
 
-// Persist selected tab (hash or localStorage)
-const tabNames = ['members','assign','invite']
-const selectedTab = ref(0)
-const entityKey = ref(String(props.company))
-watch(c, (val) => { if (val?.slug) entityKey.value = val.slug })
-function applyInitialTab() {
-  const m = window.location.hash.match(/tab=([A-Za-z0-9_-]+)/)
-  let name = m ? m[1] : null
-  if (!name) {
-    const saved = localStorage.getItem(`admin.company.tab.${entityKey.value}`)
-    name = saved || null
-  }
-  const idx = name ? Math.max(0, tabNames.indexOf(name)) : 0
-  selectedTab.value = idx
-}
-applyInitialTab()
-
-watch(selectedTab, (i) => {
-  const name = tabNames[i] || tabNames[0]
-  try { localStorage.setItem(`admin.company.tab.${entityKey.value}`, name) } catch {}
-  const base = window.location.hash.replace(/tab=[^&]*/,'').replace(/^#&?/,'')
-  const next = base ? `#${base}&tab=${name}` : `#tab=${name}`
-  if (window.location.hash !== next) window.location.hash = next
-})
+const tabNames = ['members', 'assign', 'invite']
+const storageKey = computed(() => `admin.company.tab.${c.value?.slug || props.company}`)
+const { selectedTab } = usePersistentTabs(tabNames, storageKey)
 
 async function loadInvites() {
   invitesLoading.value = true
@@ -215,7 +214,7 @@ async function loadInvites() {
 
           <!-- Members / Assign / Invite as tabs -->
           <div class="lg:col-span-2">
-            <TabGroup v-model:selectedIndex="selectedTab" as="div">
+            <TabGroup :selectedIndex="selectedTab" @change="selectedTab = $event" as="div">
               <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
                 <TabList class="flex space-x-2 border-b border-gray-200 px-2">
                   <Tab as="template" v-slot="{ selected }">

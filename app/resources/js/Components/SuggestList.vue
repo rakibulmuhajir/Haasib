@@ -11,7 +11,11 @@ const props = defineProps<{
   showPreview?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'select', item: Item): void }>()
+const emit = defineEmits<{
+  (e: 'select', item: Item): void
+  (e: 'highlight', index: number): void
+  (e: 'choose', payload: { item: Item; index: number }): void
+}>()
 
 const highlighted = computed(() => {
   if (!props.items || props.items.length === 0) return null
@@ -32,7 +36,8 @@ const highlighted = computed(() => {
       <button type="button"
         v-for="(it, index) in items"
         :key="it.value + ':' + index"
-        @click="emit('select', it)"
+        @click="emit('choose', { item: it, index }); emit('select', it)"
+        @mouseover="emit('highlight', index)"
         class="w-full text-left px-4 py-2.5 hover:bg-gray-800/30 text-gray-300 border-t border-gray-800/50"
         :class="index === selectedIndex ? 'bg-gray-800/50' : ''"
       >

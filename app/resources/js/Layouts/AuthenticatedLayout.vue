@@ -10,6 +10,9 @@ import { Link } from '@inertiajs/vue3'
 import CompanySwitcher from '@/Components/CompanySwitcher.vue'   // ← add this
 import CommandPalette from '@/Components/CommandPalette.vue'
 import Tooltip from '@/Components/Tooltip.vue'
+import Toasts from '@/Components/Toasts.vue';
+
+
 
 const showingNavigationDropdown = ref(false)
 
@@ -35,6 +38,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
+    <Toasts />
     <div>
         <div class="min-h-screen bg-gray-100">
             <nav class="border-b border-gray-100 bg-white">

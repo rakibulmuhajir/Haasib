@@ -1,16 +1,19 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import TextInput from '@/Components/TextInput.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
 import { http, withIdempotency } from '@/lib/http'
-import { TabGroup, TabList, Tab, TabPanels, TabPanel, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { Disclosure, DisclosureButton, DisclosurePanel, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
+import { useToasts } from '@/composables/useToasts.js'
+import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 
 const props = defineProps({ id: { type: String, required: true } })
+const { addToast } = useToasts()
 const loading = ref(false)
 const error = ref('')
 const user = ref(null)
@@ -47,31 +50,39 @@ async function assignToCompany() {
   assignLoading.value = true
   assignError.value = ''
   try {
-    await http.post('/commands', {
+    const { data } = await http.post('/commands', {
       email: user.value.email,
       company: assign.value.company,
       role: assign.value.role,
     }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-    await load()
+    user.value.memberships.unshift(data.data)
     assign.value.company = ''
     assign.value.role = 'viewer'
+    addToast('User assigned to company.', 'success')
   } catch (e) {
-    assignError.value = e?.response?.data?.message || 'Failed to assign'
+    const message = e?.response?.data?.message || 'Failed to assign'
+    assignError.value = message
+    addToast(message, 'danger')
   } finally {
     assignLoading.value = false
   }
 }
 
 async function changeRole(m) {
+  const originalRole = user.value.memberships.find(mem => mem.id === m.id)?.role
+  if (originalRole === m.role) return // No change
   try {
-    await http.post('/commands', {
+    const { data } = await http.post('/commands', {
       email: user.value.email,
       company: m.slug || m.id,
       role: m.role,
     }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-    await load()
+    const index = user.value.memberships.findIndex(mem => mem.id === m.id)
+    if (index !== -1) user.value.memberships.splice(index, 1, data.data)
+    addToast('Role changed successfully.', 'success')
   } catch (e) {
-    alert(e?.response?.data?.message || 'Failed to change role')
+    m.role = originalRole // Revert UI on failure
+    addToast(e?.response?.data?.message || 'Failed to change role', 'danger')
   }
 }
 
@@ -82,34 +93,16 @@ async function unassign(m) {
       email: user.value.email,
       company: m.slug || m.id,
     }, { headers: withIdempotency({ 'X-Action': 'company.unassign' }) })
-    await load()
+    user.value.memberships = user.value.memberships.filter(mem => mem.id !== m.id)
+    addToast('User removed from company.', 'success')
   } catch (e) {
-    alert(e?.response?.data?.message || 'Failed to remove')
+    addToast(e?.response?.data?.message || 'Failed to remove', 'danger')
   }
 }
 
-// Persist selected tab (hash or localStorage)
-const tabNames = ['memberships','assign']
-const selectedTab = ref(0)
-function applyInitialTab() {
-  const m = window.location.hash.match(/tab=([A-Za-z0-9_-]+)/)
-  let name = m ? m[1] : null
-  if (!name) {
-    const saved = localStorage.getItem(`admin.user.tab.${props.id}`)
-    name = saved || null
-  }
-  const idx = name ? Math.max(0, tabNames.indexOf(name)) : 0
-  selectedTab.value = idx
-}
-applyInitialTab()
-
-watch(selectedTab, (i) => {
-  const name = tabNames[i] || tabNames[0]
-  try { localStorage.setItem(`admin.user.tab.${props.id}`, name) } catch {}
-  const base = window.location.hash.replace(/tab=[^&]*/,'').replace(/^#&?/,'')
-  const next = base ? `#${base}&tab=${name}` : `#tab=${name}`
-  if (window.location.hash !== next) window.location.hash = next
-})
+const tabNames = ['memberships', 'assign']
+const storageKey = computed(() => `admin.user.tab.${props.id}`)
+const { selectedTab } = usePersistentTabs(tabNames, storageKey)
 </script>
 
 <template>
@@ -138,7 +131,7 @@ watch(selectedTab, (i) => {
 
           <!-- Tabs for memberships vs assign -->
           <div class="lg:col-span-2">
-            <TabGroup v-model:selectedIndex="selectedTab" as="div">
+            <TabGroup :selectedIndex="selectedTab" @change="selectedTab = $event" as="div">
               <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
                 <TabList class="flex space-x-2 border-b border-gray-200 px-2">
                   <Tab as="template" v-slot="{ selected }">

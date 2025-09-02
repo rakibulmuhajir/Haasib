@@ -8,20 +8,22 @@ import { usePaletteKeybindings } from '@/palette/composables/usePaletteKeybindin
 
 const palette = usePalette()
   const {
-  	  open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults,
-  	  activeFlagId,
-  	  isSuperAdmin, userSource, companySource, mainPanelEl,
-  	  panelItems,
-  	  companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
-  	  entitySuggestions, verbSuggestions, availableFlags, filledFlags, currentField, dashParameterMatch, allRequiredFilled, currentChoices,
-  	  showUserPicker, showCompanyPicker, showGenericPanelPicker, inlineSuggestions,
-  	  highlightedItem,
-  	  statusText,
+      open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults,
+      activeFlagId,
+      isSuperAdmin, userSource, companySource, mainPanelEl,
+      panelItems,
+      companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
+      entitySuggestions, verbSuggestions, availableFlags, filledFlags, currentField, dashParameterMatch, allRequiredFilled, currentChoices,
+      isUIList, showUserPicker, showCompanyPicker, showGenericPanelPicker, inlineSuggestions,
+      uiListActionMode, uiListActionIndex, uiListActionCount,
+      highlightedItem,
+      statusText,
   selectFlag, editFilledFlag, completeCurrentFlag, handleDashParameter,
   loadCompanyMembers, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
   resetAll, goHome, goBack,
-  selectEntity, selectVerb, selectChoice, execute,
+  selectEntity, selectVerb, selectChoice, execute, startVerb,
   pickUserEmail, pickCompanyName, pickGeneric,
+  performUIListAction,
 } = palette
 
 watch([() => allRequiredFilled.value, () => activeFlagId.value, () => open.value], ([reqFilled, activeId, isOpen]) => {
@@ -278,10 +280,20 @@ onUnmounted(() => {
                       <input
                         ref="inputEl"
                         v-model="q"
-                        :placeholder="step === 'entity' ? 'Search entities...' : step === 'verb' ? 'Search actions...' : (!activeFlagId ? 'Select parameter or type -param...' : 'Enter value...')"
+                        :placeholder="
+                          step === 'entity'
+                            ? 'Search entities...'
+                            : step === 'verb'
+                              ? 'Search actions...'
+                              : (!activeFlagId
+                                  ? (isUIList ? 'Type name, email, slug to search…' : 'Select parameter or type -param...')
+                                  : 'Enter value...')
+                        "
                         class="w-full bg-transparent outline-none focus:outline-none ring-0 focus:ring-0 focus-visible:ring-0 appearance-none py-2 no-focus-ring border-0"
                         :class="[
                           step === 'fields' && currentField ? 'text-orange-300 placeholder-orange-300/50' : '',
+                          // When on fields step without an active field, default to readable text color
+                          step === 'fields' && !currentField && !dashParameterMatch ? 'text-gray-200 placeholder-gray-500' : '',
                           dashParameterMatch ? 'text-yellow-300' : (step !== 'fields' ? 'text-green-400 placeholder-gray-600' : '')
                         ]"
                         :style="{}"
@@ -388,8 +400,97 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- Summary view when not editing a field -->
+                <!-- Summary / UI list view when not editing a field -->
                 <div v-else>
+                  <!-- For UI list actions, show live results without forcing parameter click -->
+                  <div v-if="isUIList">
+                    <!-- Users UI List: hover selects, click is ignored to stay in list mode -->
+                    <SuggestList
+                      v-if="showUserPicker"
+                      :items="panelItems"
+                      :selected-index="selectedIndex"
+                      :show-preview="true"
+                      @highlight="(i:number) => selectedIndex = i"
+                      @choose="(p:any) => { selectedIndex = p.index; nextTick(() => inputEl?.focus?.()) }"
+                    >
+                      <template #header><span>Users</span></template>
+                      <template #preview="{ item }">
+                        <div class="space-y-2">
+                          <div class="text-gray-300">
+                            <div class="font-semibold">{{ item.meta?.name || item.label }}</div>
+                            <div class="text-gray-400 text-xs">{{ item.meta?.email || item.value }}</div>
+                            <div class="text-gray-500 text-xs" v-if="item.meta?.id">ID: {{ item.meta.id }}</div>
+                          </div>
+                          <div class="flex flex-wrap gap-2 pt-2 border-t border-gray-800/60">
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-blue-100 hover:bg-blue-700/60"
+                              :class="uiListActionMode && uiListActionIndex===0 ? 'bg-blue-700/70 border-blue-500/70' : 'bg-blue-700/40 border-blue-600/40'"
+                              @click="quickAssignUserToCompany(item.meta?.email || item.value)">
+                              Assign to company
+                            </button>
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-red-100 hover:bg-red-800/60"
+                              :class="uiListActionMode && uiListActionIndex===1 ? 'bg-red-800/70 border-red-600/70' : 'bg-red-800/40 border-red-700/40'"
+                              @click="startVerb('user','delete', { email: (item.meta?.email || item.value) })">
+                              Delete user
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+                    </SuggestList>
+
+                    <!-- Companies UI List -->
+                    <SuggestList
+                      v-if="showCompanyPicker"
+                      :items="panelItems"
+                      :selected-index="selectedIndex"
+                      :show-preview="true"
+                      @highlight="(i:number) => selectedIndex = i"
+                      @choose="(p:any) => { selectedIndex = p.index; nextTick(() => inputEl?.focus?.()) }"
+                    >
+                      <template #header><span>Companies</span></template>
+                      <template #preview="{ item }">
+                        <div class="space-y-2">
+                          <div class="text-gray-300">
+                            <div class="font-semibold">{{ item.meta?.name || item.label }}</div>
+                            <div class="text-gray-400 text-xs" v-if="item.meta?.slug">slug: {{ item.meta.slug }}</div>
+                            <div class="text-gray-500 text-xs" v-if="item.meta?.id">ID: {{ item.meta.id }}</div>
+                            <div class="text-gray-500 text-xs" v-if="item.meta?.members_count !== undefined">members: {{ item.meta.members_count }}</div>
+                          </div>
+                          <div class="flex flex-wrap gap-2 pt-2 border-t border-gray-800/60">
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-blue-100 hover:bg-blue-700/60"
+                              :class="uiListActionMode && uiListActionIndex===0 ? 'bg-blue-700/70 border-blue-500/70' : 'bg-blue-700/40 border-blue-600/40'"
+                              @click="quickAssignToCompany(item.meta?.id || item.value)">
+                              Assign user
+                            </button>
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-amber-100 hover:bg-amber-700/60"
+                              :class="uiListActionMode && uiListActionIndex===1 ? 'bg-amber-700/70 border-amber-600/70' : 'bg-amber-700/40 border-amber-600/40'"
+                              @click="setActiveCompany(item.meta?.id || item.value)">
+                              Switch active
+                            </button>
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-red-100 hover:bg-red-800/60"
+                              :class="uiListActionMode && uiListActionIndex===2 ? 'bg-red-800/70 border-red-600/70' : 'bg-red-800/40 border-red-700/40'"
+                              @click="startVerb('company','delete', { company: (item.meta?.id || item.value) })">
+                              Delete company
+                            </button>
+                            <button type="button" class="px-2.5 py-1 text-xs rounded-md border text-gray-200 hover:bg-gray-700/60"
+                              :class="uiListActionMode && uiListActionIndex===3 ? 'bg-gray-700/70 border-gray-500/70' : 'bg-gray-700/40 border-gray-600/40'"
+                              @click="loadCompanyMembers(item.meta?.id || item.value)">
+                              View members
+                            </button>
+                          </div>
+                          <div class="pt-2" v-if="companyMembers[item.meta?.id || item.value] && companyMembers[item.meta?.id || item.value].length > 0">
+                            <div class="text-gray-400 text-xs mb-1">Members</div>
+                            <div class="max-h-24 overflow-auto rounded-md border border-gray-800/50">
+                              <div v-for="m in companyMembers[item.meta?.id || item.value]" :key="m.id + ':' + m.email" class="px-2 py-1 text-xs text-gray-300 border-b border-gray-800/50 last:border-b-0">
+                                <span class="text-gray-200">{{ m.name }}</span>
+                                <span class="text-gray-500"> — {{ m.email }}</span>
+                                <span class="ml-2 text-gray-400">({{ m.role }})</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </template>
+                    </SuggestList>
+                  </div>
                   <div class="text-lg font-medium mb-4 flex items-center gap-2" :class="allRequiredFilled ? 'text-green-300' : 'text-gray-400'">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" :class="allRequiredFilled ? 'text-green-400' : 'text-gray-500'" viewBox="0 0 20 20" fill="currentColor">
                       <path v-if="allRequiredFilled" fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -417,7 +518,7 @@ onUnmounted(() => {
                         </div>
                       </TransitionGroup>
                     </div>
-                    <div v-if="!allRequiredFilled && availableFlags.length > 0" class="pt-2 border-t border-gray-800/50">
+                    <div v-if="!isUIList && !allRequiredFilled && availableFlags.length > 0" class="pt-2 border-t border-gray-800/50">
                       <div class="text-gray-400 text-xs font-medium mb-2">Available Parameters</div>
                       <div class="flex flex-wrap gap-2">
                         <button type="button" v-for="flag in availableFlags" :key="flag.id" @click="selectFlag(flag.id)" class="px-3 py-1.5 text-xs rounded-lg border backdrop-blur-sm border-gray-600/50 text-gray-300 bg-gray-800/40 hover:border-orange-500/70 hover:text-orange-300 hover:bg-orange-900/20">

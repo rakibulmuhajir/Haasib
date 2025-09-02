@@ -8,6 +8,9 @@ export function usePaletteKeybindings(palette: UsePalette) {
     step,
     q,
     isUIList,
+    uiListActionMode,
+    uiListActionIndex,
+    uiListActionCount,
     inputEl,
     selectedIndex,
     entitySuggestions,
@@ -35,6 +38,7 @@ export function usePaletteKeybindings(palette: UsePalette) {
     handleDashParameter,
     goBack,
     resetAll,
+    performUIListAction,
   } = palette
 
   function handleKeydown(e: KeyboardEvent) {
@@ -54,6 +58,27 @@ export function usePaletteKeybindings(palette: UsePalette) {
 
     const activeSource = suggestionSources.find(s => s.condition)
 
+    if (uiListActionMode.value && isUIList.value && step.value === 'fields' && !activeFlagId.value) {
+      // Navigate actions with arrow keys
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        uiListActionIndex.value = Math.min(uiListActionIndex.value + 1, Math.max(0, uiListActionCount.value - 1))
+        return
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        uiListActionIndex.value = Math.max(uiListActionIndex.value - 1, 0)
+        return
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        performUIListAction()
+        return
+      } else if (e.key === 'Escape') {
+        e.preventDefault(); e.stopPropagation()
+        uiListActionMode.value = false
+        return
+      }
+    }
+
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       if (activeSource) {
@@ -69,8 +94,10 @@ export function usePaletteKeybindings(palette: UsePalette) {
       if (step.value === 'entity' && entitySuggestions.value[selectedIndex.value]) selectEntity(entitySuggestions.value[selectedIndex.value])
       else if (step.value === 'verb' && verbSuggestions.value[selectedIndex.value]) selectVerb(verbSuggestions.value[selectedIndex.value])
       else if (step.value === 'fields') {
-        // In UI list mode, pressing Enter should not change state
-        if (isUIList.value) {
+        // In UI list mode, Enter opens action mode for the highlighted item
+        if (isUIList.value && !activeFlagId.value) {
+          uiListActionMode.value = true
+          uiListActionIndex.value = 0
           return
         }
         if (currentChoices.value.length > 0 && selectedIndex.value < currentChoices.value.length) {
@@ -94,7 +121,11 @@ export function usePaletteKeybindings(palette: UsePalette) {
     } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
-      goBack()
+      if (uiListActionMode.value) {
+        uiListActionMode.value = false
+      } else {
+        goBack()
+      }
     }
   }
 

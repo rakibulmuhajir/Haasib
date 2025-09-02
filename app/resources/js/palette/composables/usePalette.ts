@@ -169,6 +169,15 @@ export function usePalette() {
     }
     return null
   })
+  // UI list action mode state (keyboard navigation for actions on highlighted item)
+  const uiListActionMode = ref(false)
+  const uiListActionIndex = ref(0)
+  const uiListActionCount = computed(() => {
+    if (!isUIList.value) return 0
+    if (showUserPicker.value) return 2 // Assign to company, Delete user
+    if (showCompanyPicker.value) return 4 // Assign user, Switch active, Delete, View members
+    return 0
+  })
   // For backward compatibility in the template until it's refactored
   const highlightedUser = computed(() => showUserPicker.value ? highlightedItem.value : null)
   const highlightedCompany = computed(() => showCompanyPicker.value ? highlightedItem.value : null)
@@ -176,7 +185,11 @@ export function usePalette() {
   const statusText = computed(() => {
     if (step.value === 'entity') return 'SELECT_ENTITY'
     if (step.value === 'verb') return 'SELECT_ACTION'
-    if (step.value === 'fields') return activeFlagId.value ? 'INPUT_VALUE' : 'SELECT_PARAM'
+    if (step.value === 'fields') {
+      if (activeFlagId.value) return 'INPUT_VALUE'
+      if (isUIList.value) return uiListActionMode.value ? 'ACTIONS' : 'SEARCH'
+      return 'SELECT_PARAM'
+    }
     return 'READY'
   })
 
@@ -353,6 +366,8 @@ export function usePalette() {
     editingFlagId.value = null
     deleteConfirmText.value = ''
     deleteConfirmRequired.value = ''
+    uiListActionMode.value = false
+    uiListActionIndex.value = 0
   }
 
   function goHome() {
@@ -363,6 +378,8 @@ export function usePalette() {
     selectedIndex.value = 0
     activeFlagId.value = null
     editingFlagId.value = null
+    uiListActionMode.value = false
+    uiListActionIndex.value = 0
   }
 
   function goBack() {
@@ -594,6 +611,40 @@ export function usePalette() {
     }
   })
 
+  // Exit action mode when leaving UI list context
+  watch([isUIList, step], ([ui, st]) => {
+    if (st !== 'fields' || !ui) {
+      uiListActionMode.value = false
+      uiListActionIndex.value = 0
+    }
+  })
+
+  function performUIListAction() {
+    const item = highlightedItem.value
+    if (!item) return
+    const meta = item.meta || {}
+    if (showUserPicker.value) {
+      const email = meta.email || item.value
+      if (uiListActionIndex.value === 0) {
+        // Assign to company flow
+        quickAssignUserToCompany(email)
+      } else if (uiListActionIndex.value === 1) {
+        startVerb('user', 'delete', { email })
+      }
+    } else if (showCompanyPicker.value) {
+      const id = meta.id || item.value
+      if (uiListActionIndex.value === 0) {
+        quickAssignToCompany(id)
+      } else if (uiListActionIndex.value === 1) {
+        setActiveCompany(id)
+      } else if (uiListActionIndex.value === 2) {
+        startVerb('company', 'delete', { company: id })
+      } else if (uiListActionIndex.value === 3) {
+        loadCompanyMembers(id)
+      }
+    }
+  }
+
   const api = {
     open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults, stashParams,
     activeFlagId, flagAnimating, editingFlagId,
@@ -604,11 +655,13 @@ export function usePalette() {
     isUIList, showUserPicker, showCompanyPicker, showGenericPanelPicker, inlineSuggestions,
     highlightedUser, highlightedCompany, highlightedItem,
     statusText, getTabCompletion,
+    uiListActionMode, uiListActionIndex, uiListActionCount,
     animateFlag, selectFlag, editFilledFlag, completeCurrentFlag, cycleToLastFilledFlag, handleDashParameter,
     loadCompanyMembers, startVerb, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
     resetAll, goHome, goBack,
     selectEntity, selectVerb, selectChoice, execute,
     pickUserEmail, pickCompanyName, pickGeneric,
+    performUIListAction,
   }
 
   // Expose self-reference for hook contexts

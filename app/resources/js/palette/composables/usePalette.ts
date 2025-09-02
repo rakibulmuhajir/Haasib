@@ -305,6 +305,16 @@ export function usePalette() {
     }
   }
 
+  async function ensureCompanyDetails(companyId: string) {
+    if (!companyId) return
+    if (companyDetails.value[companyId]) return
+    try {
+      await ensureCsrf()
+      const { data } = await http.get(`/web/companies/${encodeURIComponent(companyId)}`)
+      companyDetails.value[companyId] = data?.data || {}
+    } catch (e) { /* ignore */ }
+  }
+
   function startVerb(entityId: string, verbId: string, initialParams: Record<string, any> = {}) {
     const entity = entities.find(e => e.id === entityId) || null
     if (!entity) return
@@ -657,7 +667,7 @@ export function usePalette() {
     statusText, getTabCompletion,
     uiListActionMode, uiListActionIndex, uiListActionCount,
     animateFlag, selectFlag, editFilledFlag, completeCurrentFlag, cycleToLastFilledFlag, handleDashParameter,
-    loadCompanyMembers, startVerb, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
+    loadCompanyMembers, ensureCompanyDetails, startVerb, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
     resetAll, goHome, goBack,
     selectEntity, selectVerb, selectChoice, execute,
     pickUserEmail, pickCompanyName, pickGeneric,

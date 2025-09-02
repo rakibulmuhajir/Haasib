@@ -443,6 +443,25 @@ Files:
 
 ---
 
+### 2025-09-02 — Frontend Command Palette: foundational CLI features replicated
+**Why:** Unify the fast, discoverable CLI workflow with the web UI so common admin and ops tasks (companies/users) are accessible without leaving the browser, while keeping keyboard-first speed.
+**What:**
+- Entity-first palette supports company and user verbs, mirroring CLI: list, create, delete, assign, unassign (where applicable).
+- UI List flow: free‑text search by name/email/slug; results update live; Enter opens an Actions mode with keyboard navigation; Escape exits.
+- Actions on list preview:
+  - Users: Assign to company, Delete user.
+  - Companies: Assign user, Switch active, Delete company, View members (inline fetch and display).
+- Input polish: fixed low‑contrast text, contextual placeholders for list/search vs param entry; status banner shows SEARCH or ACTIONS.
+- Delete confirmations: company delete loads details (slug/name) and auto‑focuses confirmation input; execution guarded by preExecute.
+- Suggestions provider: unified remote/static provider with contextual params (company_id/user_email) and caching; inline vs panel pickers.
+- Transport: still posts to `/commands` with `X-Action` and idempotency key; results stream to side log panel.
+**How:**
+- `CommandPalette.vue` — step UI, list preview with actions, keyboard focus, improved input/placeholder; log panel polish.
+- `usePalette.ts` — core state machine, UI List Actions mode, pre/post execute hooks, ensureCompanyDetails, member loading.
+- `usePaletteKeybindings.ts` — typing first; Enter toggles action mode; arrows select actions; Enter executes; Escape backs out.
+- `entities.ts` — entity/verb/field registry for company/user; UI list verbs map to remote sources.
+- `SuggestList.vue` — emits highlight/choose for smooth mouse and keyboard interaction.
+
 ## 14) Definition of Done (module)
 
 * Schema + RLS + CHECK/FK + indexes; services with transactions; API v1 + OpenAPI; RBAC policies + tests; audit trail; caching/invalidations; reporting refresh; health/metrics updated; backups include new tables; idempotency enforced on writes.

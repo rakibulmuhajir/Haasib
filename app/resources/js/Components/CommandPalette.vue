@@ -19,12 +19,22 @@ const palette = usePalette()
       highlightedItem,
       statusText,
   selectFlag, editFilledFlag, completeCurrentFlag, handleDashParameter,
-  loadCompanyMembers, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
+  loadCompanyMembers, ensureCompanyDetails, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
   resetAll, goHome, goBack,
   selectEntity, selectVerb, selectChoice, execute, startVerb,
   pickUserEmail, pickCompanyName, pickGeneric,
   performUIListAction,
 } = palette
+
+// Focus management for delete confirmation input (company delete)
+const deleteConfirmInputEl = ref<HTMLInputElement | null>(null)
+
+watch([selectedVerb, () => params.company], async ([verb, company]) => {
+  if (verb && (verb as any).id === 'delete' && company) {
+    await ensureCompanyDetails(company as any)
+    nextTick(() => deleteConfirmInputEl.value?.focus())
+  }
+})
 
 watch([() => allRequiredFilled.value, () => activeFlagId.value, () => open.value], ([reqFilled, activeId, isOpen]) => {
   if (isOpen && step.value === 'fields' && reqFilled && !activeId) {
@@ -551,7 +561,7 @@ onUnmounted(() => {
                       <div class="text-sm font-medium">Confirm Deletion</div>
                     </div>
                     <div class="text-xs mb-3">Type <strong class="text-red-100">{{ companyDetails[params.company].slug || companyDetails[params.company].name }}</strong> to confirm deletion of this company with {{ companyDetails[params.company].members_count }} members.</div>
-                    <input v-model="deleteConfirmText" class="w-full bg-red-900/30 border border-red-700/50 rounded-lg p-2.5 text-red-100 placeholder-red-300/70 focus:outline-none" :placeholder="companyDetails[params.company].slug || companyDetails[params.company].name" />
+                    <input ref="deleteConfirmInputEl" v-model="deleteConfirmText" class="w-full bg-red-900/30 border border-red-700/50 rounded-lg p-2.5 text-red-100 placeholder-red-300/70 focus:outline-none" :placeholder="companyDetails[params.company].slug || companyDetails[params.company].name" />
                   </div>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 // resources/js/palette/entities.ts
+import type { PreExecuteContext, PostExecuteContext } from '@/palette/composables/usePalette'
 export type FieldDef = {
   id: string
   label: string
@@ -27,6 +28,8 @@ export type VerbDef = {
   label: string
   action: string // backend action id, e.g. 'company.create'
   fields: FieldDef[] // ordered, shown as grey flags one-by-one
+  preExecute?: (context: PreExecuteContext) => boolean | Promise<boolean>
+  postExecute?: (context: PostExecuteContext) => void | Promise<void>
 }
 
 export type EntityDef = {
@@ -47,7 +50,11 @@ export const entities: EntityDef[] = [
         label: 'list',
         action: 'ui.list.companies',
         fields: [
-          { id: 'company', label: 'Company', placeholder: '-company', required: false, type: 'text' },
+          {
+            id: 'company', label: 'Company', placeholder: '-company', required: false, type: 'remote', picker: 'panel',
+            // This source is used to populate the list for the 'ui.list.companies' action.
+            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
+          },
         ],
       },
       {
@@ -73,17 +80,38 @@ export const entities: EntityDef[] = [
           },
         ],
       },
-      {
-        id: 'delete',
-        label: 'delete',
-        action: 'company.delete',
-        fields: [
-          {
-            id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
-            source: { kind: 'remote', endpoint: '/web/companies', valueKey: 'id', labelKey: 'name' }
-          },
-        ],
-      },
+ {
+   id: 'delete',
+   label: 'Delete Company',
+   action: 'company.delete',
+   fields: [/*... your fields ...*/],
+   preExecute: (context: PreExecuteContext) => {
+     const { params, companyDetails, deleteConfirmRequired, deleteConfirmText } = context;
+     const companyId = params.value['company'];
+
+     // This check is only for company deletion.
+     if (!companyId) return true;
+
+     const details = companyDetails.value[companyId];
+     if (details) {
+       // Set the required confirmation text if it's not already set.
+       // This handles cases where execute is triggered before the UI fully updates.
+       if (!deleteConfirmRequired.value) {
+         deleteConfirmRequired.value = details.slug || details.name;
+       }
+
+       // The actual validation: prevent execution if the confirmation text doesn't match.
+       if (deleteConfirmText.value !== deleteConfirmRequired.value) {
+         return false;
+       }
+     }
+
+     // All checks passed.
+     return true;
+   },
+ },
+ // ... other verbs
+
       {
         id: 'assign',
         label: 'assign',

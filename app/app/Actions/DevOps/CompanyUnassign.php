@@ -16,10 +16,16 @@ class CompanyUnassign
             'company' => 'required|string',
         ])->validate();
 
-        $company = Company::where('id', $data['company'])
-            ->orWhere('slug', $data['company'])
-            ->orWhere('name', $data['company'])
-            ->firstOrFail();
+        $needle = $data['company'];
+        $q = Company::query();
+        if (\Illuminate\Support\Str::isUuid($needle)) {
+            $q->where('id', $needle);
+        } else {
+            $q->where(function ($w) use ($needle) {
+                $w->where('slug', $needle)->orWhere('name', $needle);
+            });
+        }
+        $company = $q->firstOrFail();
 
         if (!$actor->isSuperAdmin()) {
             $active = session('current_company_id');

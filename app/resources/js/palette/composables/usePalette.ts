@@ -6,9 +6,25 @@ import { http, ensureCsrf, withIdempotency } from '@/lib/http'
 import { entities, type EntityDef, type VerbDef, type FieldDef } from '@/palette/entities'
 import { useSuggestions } from '@/palette/composables/useSuggestions'
 
+export interface PostExecuteContext {
+  response: any;
+  params: Record<string, any>;
+  palette: UsePalette;
+}
+
+// This could be in a shared types file, e.g., @/palette/types.ts
+export interface PreExecuteContext {
+  params: Ref<Record<string, any>>;
+  companyDetails: Ref<Record<string, any>>;
+  deleteConfirmRequired: Ref<string>;
+  deleteConfirmText: Ref<string>;
+}
+
 type Step = 'entity' | 'verb' | 'fields'
 
 export function usePalette() {
+  const paletteApi = {} as UsePalette
+
   // Core State
   const open = ref(false)
   const q = ref('')
@@ -27,7 +43,6 @@ export function usePalette() {
   const activeFlagId = ref<string | null>(null)
   const flagAnimating = ref<string | null>(null)
   const editingFlagId = ref<string | null>(null)
-  const animatingToCompleted = ref<string | null>(null)
 
   // Data & Context
   const page = usePage<any>()
@@ -72,12 +87,12 @@ export function usePalette() {
 
   const availableFlags = computed<FieldDef[]>(() => {
     if (!selectedVerb.value) return []
-    return selectedVerb.value.fields.filter(f => !params.value[f.id] && f.id !== activeFlagId.value && f.id !== animatingToCompleted.value)
+    return selectedVerb.value.fields.filter(f => !params.value[f.id] && f.id !== activeFlagId.value)
   })
 
   const filledFlags = computed<FieldDef[]>(() => {
     if (!selectedVerb.value) return []
-    return selectedVerb.value.fields.filter(f => params.value[f.id] && f.id !== activeFlagId.value && f.id !== animatingToCompleted.value)
+    return selectedVerb.value.fields.filter(f => params.value[f.id] && f.id !== activeFlagId.value)
   })
 
   const currentField = computed<FieldDef | undefined>(() => {
@@ -96,6 +111,8 @@ export function usePalette() {
 
   const allRequiredFilled = computed(() => {
     if (!selectedVerb.value) return false
+    // UI-only actions never show Execute
+    if (selectedVerb.value.action.startsWith('ui.')) return false
     return selectedVerb.value.fields.filter(f => f.required).every(f => params.value[f.id])
   })
 
@@ -191,22 +208,20 @@ export function usePalette() {
   function selectFlag(flagId: string) {
     if (activeFlagId.value === flagId) return
     animateFlag(flagId)
-    setTimeout(() => {
-      activeFlagId.value = flagId
-      q.value = ''
-      selectedIndex.value = 0
-      nextTick(() => inputEl.value?.focus())
+    activeFlagId.value = flagId
+    q.value = ''
+    selectedIndex.value = 0
+    nextTick(() => inputEl.value?.focus())
 
-      const field = selectedVerb.value?.fields.find(f => f.id === flagId)
-      let defVal: string | undefined
-      if (field && typeof (field as any).default !== 'undefined') {
-        defVal = typeof (field as any).default === 'function' ? (field as any).default(params.value) : (field as any).default
-      }
-      if (!params.value[flagId] && defVal) {
-        q.value = defVal
-        nextTick(() => { inputEl.value?.focus(); inputEl.value?.select() })
-      }
-    }, 200)
+    const field = selectedVerb.value?.fields.find(f => f.id === flagId)
+    let defVal: string | undefined
+    if (field && typeof (field as any).default !== 'undefined') {
+      defVal = typeof (field as any).default === 'function' ? (field as any).default(params.value) : (field as any).default
+    }
+    if (!params.value[flagId] && defVal) {
+      q.value = defVal
+      nextTick(() => { inputEl.value?.focus(); inputEl.value?.select() })
+    }
   }
 
   function editFilledFlag(flagId: string) {
@@ -237,14 +252,14 @@ export function usePalette() {
         nextField = nextRequired || nextAvailable
       }
 
-      animatingToCompleted.value = completingFlagId
       activeFlagId.value = null
       editingFlagId.value = null
       q.value = ''
       selectedIndex.value = 0
 
-      if (nextField) setTimeout(() => selectFlag(nextField!.id), 200)
-      setTimeout(() => { animatingToCompleted.value = null }, 450)
+      if (nextField) {
+        selectFlag(nextField!.id)
+      }
     }
   }
 
@@ -277,19 +292,37 @@ export function usePalette() {
     }
   }
 
-  function quickAssignToCompany(companyId: string) {
-    const coEntity = entities.find(e => e.id === 'company') || null
-    if (!coEntity) return
-    selectedEntity.value = coEntity
-    const assignVerb = coEntity.verbs.find(v => v.id === 'assign') || null
-    selectedVerb.value = assignVerb || null
+  function startVerb(entityId: string, verbId: string, initialParams: Record<string, any> = {}) {
+    const entity = entities.find(e => e.id === entityId) || null
+    if (!entity) return
+
+    selectedEntity.value = entity
+    const verb = entity.verbs.find(v => v.id === verbId) || null
+    if (!verb) return
+
+    selectedVerb.value = verb
     step.value = 'fields'
-    params.value['company'] = companyId
-    const emailField = assignVerb?.fields.find(f => f.id === 'email')
-    if (emailField) selectFlag('email')
+    params.value = { ...initialParams }
+
+    // Find the first field to focus that isn't already pre-filled.
+    // Prioritize required fields.
+    const nextField = verb.fields.find(f => f.required && !params.value[f.id])
+                   || verb.fields.find(f => !params.value[f.id])
+
+    if (nextField) {
+      selectFlag(nextField.id)
+    } else {
+      // All fields are filled, just focus the input.
+      activeFlagId.value = null
+    }
+
     selectedIndex.value = 0
     q.value = ''
     nextTick(() => inputEl.value?.focus())
+  }
+
+  function quickAssignToCompany(companyId: string) {
+    startVerb('company', 'assign', { company: companyId })
   }
 
   async function setActiveCompany(companyId: string) {
@@ -301,32 +334,11 @@ export function usePalette() {
   }
 
   function quickAssignUserToCompany(userIdOrEmail: string) {
-    const coEntity = entities.find(e => e.id === 'company') || null
-    if (!coEntity) return
-    selectedEntity.value = coEntity
-    const assignVerb = coEntity.verbs.find(v => v.id === 'assign') || null
-    selectedVerb.value = assignVerb || null
-    step.value = 'fields'
-    params.value['email'] = userIdOrEmail
-    const companyField = assignVerb?.fields.find(f => f.id === 'company')
-    if (companyField) selectFlag('company')
-    selectedIndex.value = 0
-    q.value = ''
-    nextTick(() => inputEl.value?.focus())
+    startVerb('company', 'assign', { email: userIdOrEmail })
   }
 
   function quickUnassignUserFromCompany(userEmail: string, companyId: string) {
-    const coEntity = entities.find(e => e.id === 'company') || null
-    if (!coEntity) return
-    selectedEntity.value = coEntity
-    const unassignVerb = coEntity.verbs.find(v => v.id === 'unassign') || null
-    selectedVerb.value = unassignVerb || null
-    step.value = 'fields'
-    params.value['email'] = userEmail
-    params.value['company'] = companyId
-    selectedIndex.value = 0
-    q.value = ''
-    nextTick(() => inputEl.value?.focus())
+    startVerb('company', 'unassign', { email: userEmail, company: companyId })
   }
 
   function resetAll() {
@@ -339,7 +351,6 @@ export function usePalette() {
     executing.value = false
     activeFlagId.value = null
     editingFlagId.value = null
-    animatingToCompleted.value = null
   }
 
   function goHome() {
@@ -350,7 +361,6 @@ export function usePalette() {
     selectedIndex.value = 0
     activeFlagId.value = null
     editingFlagId.value = null
-    animatingToCompleted.value = null
   }
 
   function goBack() {
@@ -407,10 +417,9 @@ export function usePalette() {
       stashParams.value = {}
     }
 
-    setTimeout(() => {
-      const firstRequired = verb.fields.find(f => f.required)
-      if (firstRequired) selectFlag(firstRequired.id)
-    }, 100)
+    // No need to wait, select the first required field immediately.
+    const firstRequired = verb.fields.find(f => f.required)
+    if (firstRequired) selectFlag(firstRequired.id)
   }
 
   function selectChoice(choice: string) {
@@ -558,9 +567,24 @@ export function usePalette() {
     schedule('remote-lookup:' + (cf as any).id, 160, run)
   })
 
+  // Populate panel items for UI list actions (companies/users)
+  watch([isUIList, step, q, companySource, userSource, () => params.value.email, selectedVerb], async ([ui, st]) => {
+    if (!ui || st !== 'fields') return
+    const verb = selectedVerb.value
+    if (verb && verb.fields.length > 0) {
+      const fieldDef = verb.fields[0]
+      try {
+        const items = await provider.fromField(fieldDef, q.value, params.value)
+        panelItems.value = items
+      } catch (e) {
+        panelItems.value = []
+      }
+    }
+  })
+
   return {
     open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults, stashParams,
-    activeFlagId, flagAnimating, editingFlagId, animatingToCompleted,
+    activeFlagId, flagAnimating, editingFlagId,
     isSuperAdmin, currentCompanyId, userSource, companySource,
     panelItems, inlineItems, // Replaces userOptions, companyOptions, etc.
     companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
@@ -569,7 +593,7 @@ export function usePalette() {
     highlightedUser, highlightedCompany, highlightedItem,
     statusText, getTabCompletion,
     animateFlag, selectFlag, editFilledFlag, completeCurrentFlag, cycleToLastFilledFlag, handleDashParameter,
-    loadCompanyMembers, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
+    loadCompanyMembers, startVerb, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
     resetAll, goHome, goBack,
     selectEntity, selectVerb, selectChoice, execute,
     pickUserEmail, pickCompanyName, pickGeneric,

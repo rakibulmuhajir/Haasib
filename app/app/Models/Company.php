@@ -37,7 +37,7 @@ class Company extends Model
     public function users()
     {
         return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
-            ->withPivot('role')
+            ->withPivot('role', 'invited_by_user_id')
             ->withTimestamps();
     }
 

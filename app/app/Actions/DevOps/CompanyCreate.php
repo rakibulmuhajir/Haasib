@@ -5,6 +5,7 @@ namespace App\Actions\DevOps;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 
 class CompanyCreate
@@ -14,7 +15,7 @@ class CompanyCreate
         abort_unless($actor->isSuperAdmin(), 403);
 
         $data = Validator::make($p, [
-            'name' => 'required|string|unique:auth.companies,name',
+            'name' => ['required','string', Rule::unique(Company::class, 'name')],
             'base_currency' => 'nullable|string|size:3',
             'language' => 'nullable|string',
             'locale' => 'nullable|string',

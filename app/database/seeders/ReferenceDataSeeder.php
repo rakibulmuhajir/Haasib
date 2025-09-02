@@ -39,6 +39,7 @@ class ReferenceDataSeeder extends Seeder
         // Locales
         $locales = [
             ['tag'=>'en-US','name'=>'English (United States)','native_name'=>'English (United States)','language_code'=>'en','country_code'=>'US','script'=>'Latn','variant'=>null],
+            ['tag'=>'en-AE','name'=>'English (UAE)','native_name'=>'English (UAE)','language_code'=>'en','country_code'=>'AE','script'=>'Latn','variant'=>null],
             ['tag'=>'ar-AE','name'=>'Arabic (UAE)','native_name'=>'العربية (الإمارات)','language_code'=>'ar','country_code'=>'AE','script'=>'Arab','variant'=>null],
         ];
         foreach ($locales as $loc) {
@@ -71,4 +72,3 @@ class ReferenceDataSeeder extends Seeder
         }
     }
 }
-

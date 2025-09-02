@@ -14,10 +14,24 @@ class SetTenantContext
             return $next($request);
         }
 
+        // Always set current_user_id for RLS-aware queries
+        try {
+            DB::select("select set_config('app.current_user_id', ?, true)", [$user->getKey()]);
+            DB::select("select set_config('app.current_user_email', ?, true)", [strtolower($user->email)]);
+        } catch (\Throwable $e) {
+            // noop for non-PgSQL
+        }
+
         $inApi = $request->is('api/v1/*');
 
-        // Allow company management endpoints to run without tenant context
-        if ($inApi && $request->is('api/v1/me/companies*')) {
+        // Allow company management and invitation endpoints to run without tenant context
+        if ($inApi && (
+            $request->is('api/v1/me/companies*') ||
+            $request->is('api/v1/me/invitations') ||
+            ($request->is('api/v1/companies') && $request->isMethod('post')) ||
+            ($request->is('api/v1/companies/*/invite') && $request->isMethod('post')) ||
+            $request->is('api/v1/invitations/*')
+        )) {
             return $next($request);
         }
 

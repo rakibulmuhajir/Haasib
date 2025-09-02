@@ -20,7 +20,7 @@ class CompanyFactory extends Factory
             'slug' => Str::slug($name) . '-' . Str::lower(Str::random(6)),
             'base_currency' => 'AED',
             'language' => 'en',
-            'locale' => 'en_AE',
+            'locale' => 'en-AE',
             'settings' => [],
         ];
     }

@@ -7,6 +7,7 @@ export function usePaletteKeybindings(palette: UsePalette) {
     open,
     step,
     q,
+    isUIList,
     inputEl,
     selectedIndex,
     entitySuggestions,
@@ -68,6 +69,10 @@ export function usePaletteKeybindings(palette: UsePalette) {
       if (step.value === 'entity' && entitySuggestions.value[selectedIndex.value]) selectEntity(entitySuggestions.value[selectedIndex.value])
       else if (step.value === 'verb' && verbSuggestions.value[selectedIndex.value]) selectVerb(verbSuggestions.value[selectedIndex.value])
       else if (step.value === 'fields') {
+        // In UI list mode, pressing Enter should not change state
+        if (isUIList.value) {
+          return
+        }
         if (currentChoices.value.length > 0 && selectedIndex.value < currentChoices.value.length) {
           selectChoice(currentChoices.value[selectedIndex.value])
         } else if ((showUserPicker.value || showCompanyPicker.value || showGenericPanelPicker.value) && panelItems.value[selectedIndex.value]) {
@@ -86,7 +91,6 @@ export function usePaletteKeybindings(palette: UsePalette) {
       if (e.shiftKey && step.value === 'fields' && filledFlags.value.length > 0) cycleToLastFilledFlag()
       else if (step.value === 'entity') q.value = getTabCompletion.value
       else if (step.value === 'fields' && activeFlagId.value) completeCurrentFlag()
-      else if (activeSource && activeSource.list.value.length > 0) selectedIndex.value = (selectedIndex.value + 1) % activeSource.list.value.length
     } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()

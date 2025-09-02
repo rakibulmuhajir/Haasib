@@ -8,6 +8,7 @@ const props = defineProps<{
   selectedIndex: number
   loading?: boolean
   error?: string | null
+  showPreview?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'select', item: Item): void }>()
@@ -28,7 +29,7 @@ const highlighted = computed(() => {
     <div v-else-if="error" class="px-4 py-3 text-red-300 text-xs">{{ error }}</div>
 
     <div v-else class="max-h-40 overflow-auto">
-      <button
+      <button type="button"
         v-for="(it, index) in items"
         :key="it.value + ':' + index"
         @click="emit('select', it)"
@@ -42,9 +43,8 @@ const highlighted = computed(() => {
       </button>
     </div>
 
-    <div v-if="highlighted" class="px-4 py-3 text-xs text-gray-400 border-t border-gray-800/50 bg-gray-800/20">
+    <div v-if="(showPreview ?? true) && highlighted" class="px-4 py-3 text-xs text-gray-400 border-t border-gray-800/50 bg-gray-800/20">
       <slot name="preview" :item="highlighted" />
     </div>
   </div>
 </template>
-

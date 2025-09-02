@@ -50,10 +50,20 @@ class User extends Authenticatable
         ];
     }
 
+    public function creator()
+    {
+        return $this->belongsTo(self::class, 'created_by_user_id');
+    }
+
+    public function createdUsers()
+    {
+        return $this->hasMany(self::class, 'created_by_user_id');
+    }
+
     public function companies()
     {
         return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
-            ->withPivot('role')
+            ->withPivot('role', 'invited_by_user_id')
             ->withTimestamps();
     }
 

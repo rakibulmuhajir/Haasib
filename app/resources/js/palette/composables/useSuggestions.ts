@@ -26,13 +26,32 @@ export function useSuggestions(ctx: SuggestContext) {
 
     const depends = (src.dependsOn || []).reduce((acc: any, key: string) => { acc[key] = params?.[key]; return acc }, {})
     const qkey = src.queryKey || 'q'
-    const limit = typeof src.limit === 'number' ? src.limit : 12
-    const cacheKey = JSON.stringify({ ep: src.endpoint, q: qstr || '', depends })
+
+    const reqParams: any = { ...depends }
+    if (qstr) {
+      reqParams[qkey] = qstr
+    }
+    if (typeof src.limit === 'number') {
+      reqParams.limit = src.limit
+    }
+
+    // Handle special contextual parameters for known endpoints
+    if (src.endpoint.includes('/users/suggest')) {
+      if (!ctx.isSuperAdmin.value || ctx.userSource.value === 'company') {
+        reqParams.company_id = ctx.currentCompanyId.value
+      }
+    }
+    if (src.endpoint === '/web/companies') {
+      if (ctx.companySource.value === 'byUser' && ctx.isSuperAdmin.value && ctx.params.value.email) {
+        reqParams.user_email = ctx.params.value.email
+      }
+    }
+
+    const cacheKey = JSON.stringify({ ep: src.endpoint, params: reqParams })
     const now = Date.now()
     const hit = cache.get(cacheKey)
     if (hit && now - hit.ts < TTL_MS) return hit.items
 
-    const reqParams: any = { [qkey]: qstr, limit, ...depends }
     await ensureCsrf()
     const { data } = await http.get(src.endpoint, { params: reqParams })
     const list = data?.data || []
@@ -44,61 +63,6 @@ export function useSuggestions(ctx: SuggestContext) {
     cache.set(cacheKey, { ts: now, items })
     return items
   }
-  async function users(qstr: string): Promise<SuggestItem[]> {
-    const paramsAny: any = { q: qstr }
-    if (!ctx.isSuperAdmin.value || ctx.userSource.value === 'company') {
-      paramsAny.company_id = ctx.currentCompanyId.value
-    }
-    await ensureCsrf()
-    const { data } = await http.get('/web/users/suggest', { params: paramsAny })
-    const list = data?.data || []
-    return list.map((u: any) => ({ value: u.email, label: u.name, meta: { email: u.email, id: u.id, name: u.name } }))
-  }
 
-  async function companies(): Promise<SuggestItem[]> {
-    const qobj: any = {}
-    if (ctx.companySource.value === 'byUser' && ctx.isSuperAdmin.value && ctx.params.value.email) {
-      qobj.user_email = ctx.params.value.email
-    }
-    if (ctx.q.value && ctx.q.value.length > 0) {
-      qobj.q = ctx.q.value
-    }
-    await ensureCsrf()
-    const { data } = await http.get('/web/companies', { params: qobj })
-    const list = data?.data || []
-    return list.map((c: any) => ({ value: c.id, label: c.name, meta: { id: c.id } }))
-  }
-
-  async function currencies(qstr: string): Promise<SuggestItem[]> {
-    await ensureCsrf()
-    const { data } = await http.get('/web/currencies/suggest', { params: { q: qstr, limit: 12 } })
-    const list = data?.data || []
-    return list.map((c: any) => ({ value: c.code, label: `${c.code} — ${c.name}${c.symbol ? ` (${c.symbol})` : ''}`, meta: c }))
-  }
-
-  async function languages(qstr: string): Promise<SuggestItem[]> {
-    await ensureCsrf()
-    const { data } = await http.get('/web/languages/suggest', { params: { q: qstr, limit: 12 } })
-    const list = data?.data || []
-    return list.map((l: any) => ({ value: l.code, label: `${l.code} — ${l.native_name || l.name}${l.rtl ? ' (RTL)' : ''}`, meta: l }))
-  }
-
-  async function locales(qstr: string): Promise<SuggestItem[]> {
-    await ensureCsrf()
-    const paramsAny: any = { q: qstr, limit: 12 }
-    if (ctx.params.value?.language) paramsAny.language = ctx.params.value.language
-    if (ctx.params.value?.country) paramsAny.country = ctx.params.value.country
-    const { data } = await http.get('/web/locales/suggest', { params: paramsAny })
-    const list = data?.data || []
-    return list.map((l: any) => ({ value: l.tag, label: `${l.tag} — ${l.native_name || l.name || ''}`.trim(), meta: l }))
-  }
-
-  async function countries(qstr: string): Promise<SuggestItem[]> {
-    await ensureCsrf()
-    const { data } = await http.get('/web/countries/suggest', { params: { q: qstr, limit: 12 } })
-    const list = data?.data || []
-    return list.map((c: any) => ({ value: c.code, label: `${c.emoji ? c.emoji + ' ' : ''}${c.name} — ${c.code}`, meta: c }))
-  }
-
-  return { users, companies, currencies, languages, locales, countries, fromField }
+  return { fromField }
 }

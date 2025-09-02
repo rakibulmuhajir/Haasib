@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Support\CommandBus;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CommandController extends Controller
 {
@@ -39,6 +41,17 @@ class CommandController extends Controller
 
         try {
             $result = CommandBus::dispatch($action, $params, $user);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (HttpExceptionInterface $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage() ?: 'Request not allowed',
+            ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,

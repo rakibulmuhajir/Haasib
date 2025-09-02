@@ -53,10 +53,15 @@ class CompanyLookupController extends Controller
     public function show(Request $request, string $company)
     {
         $user = $request->user();
-        $record = Company::where('id', $company)
-            ->orWhere('slug', $company)
-            ->orWhere('name', $company)
-            ->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
+        $query = Company::query();
+        if (\Illuminate\Support\Str::isUuid($company)) {
+            $query->where('id', $company);
+        } else {
+            $query->where(function ($w) use ($company) {
+                $w->where('slug', $company)->orWhere('name', $company);
+            });
+        }
+        $record = $query->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
 
         if (! $user->isSuperAdmin()) {
             $isMember = DB::table('auth.company_user')
@@ -122,10 +127,15 @@ class CompanyLookupController extends Controller
         $user = $request->user();
 
         // Resolve company by id or slug or name
-        $company = Company::where('id', $companyId)
-            ->orWhere('slug', $companyId)
-            ->orWhere('name', $companyId)
-            ->firstOrFail(['id']);
+        $q = Company::query();
+        if (\Illuminate\Support\Str::isUuid($companyId)) {
+            $q->where('id', $companyId);
+        } else {
+            $q->where(function ($w) use ($companyId) {
+                $w->where('slug', $companyId)->orWhere('name', $companyId);
+            });
+        }
+        $company = $q->firstOrFail(['id']);
 
         // Access: superadmin OR any member of the company
         if (! $user->isSuperAdmin()) {

@@ -634,11 +634,18 @@ export function usePalette() {
   })
 
   // Populate panel items for UI list actions (companies/users)
-  watch([isUIList, () => state.step, () => state.q, companySource, userSource, () => state.params.email, () => state.selectedVerb], async ([isList, currentStep, qVal, coSource, uSource, email, verb]) => {
-    if (!isList || currentStep !== 'fields' || !verb) return
-    const verb = state.selectedVerb
-    if (verb && verb.fields.length > 0) {
-      const fieldDef = verb.fields[0]
+  watch([
+    isUIList,
+    () => state.step,
+    () => state.q,
+    companySource,
+    userSource,
+    () => state.params.email,
+    () => state.selectedVerb,
+  ], async ([isList, currentStep, qVal, coSource, uSource, email, selectedVerb]) => {
+    if (!isList || currentStep !== 'fields' || !selectedVerb) return
+    if (selectedVerb && selectedVerb.fields.length > 0) {
+      const fieldDef = selectedVerb.fields[0]
       try {
         const items = await provider.fromField(fieldDef, state.q, state.params)
         panelItems.value = items

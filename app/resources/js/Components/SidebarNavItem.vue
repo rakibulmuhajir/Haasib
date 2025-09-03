@@ -1,12 +1,12 @@
-<script setup>
+<script setup lang="ts">
 import { Link } from '@inertiajs/vue3'
 import Tooltip from '@/Components/Tooltip.vue'
 
 const props = defineProps<{
-  href: string
-  active: boolean
-  expanded: boolean
-  tooltip: string
+  href: string,
+  active: boolean,
+  expanded: boolean,
+  tooltip: string,
 }>()
 </script>
 
@@ -20,4 +20,3 @@ const props = defineProps<{
     <span v-if="props.expanded"><slot /></span>
   </Link>
 </template>
-

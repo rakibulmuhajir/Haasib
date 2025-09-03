@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import NavLink from '@/Components/NavLink.vue'
-const props = defineProps<{ items: Array<any> }>()
+import type { NavLinkItem } from '@/types'
+const props = defineProps<{ items: NavLinkItem[] }>()
 </script>
 
 <template>

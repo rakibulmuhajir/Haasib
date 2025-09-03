@@ -1,18 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import { Link } from '@inertiajs/vue3'
 import TextInput from '@/Components/TextInput.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
-import { Disclosure, DisclosureButton, DisclosurePanel, Transition } from '@headlessui/vue'
+import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { Transition } from 'vue'
+import type { CompanyMember, RoleOption } from '@/types'
 
-defineProps({
-  members: { type: Array, required: true },
-  loading: { type: Boolean, default: false },
-  query: { type: String, default: '' },
-  roleOptions: { type: Array, required: true },
-})
+defineProps<{
+  members: CompanyMember[],
+  loading?: boolean,
+  query?: string,
+  roleOptions: RoleOption[],
+}>()
 
-defineEmits(['update:query', 'update-role', 'unassign'])
+defineEmits<{
+  (e: 'update:query', value: string): void,
+  (e: 'update-role', member: CompanyMember): void,
+  (e: 'unassign', member: CompanyMember): void,
+}>()
 </script>
 
 <template>

@@ -2,23 +2,48 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Company extends Model
 {
     use HasFactory, HasUuids;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
     protected $table = 'auth.companies';
-    public $incrementing = false;
-    protected $keyType = 'string';
 
-    protected $fillable = ['name','slug','base_currency','language','locale','settings'];
-    protected $casts = ['settings' => 'array'];
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'slug',
+        'base_currency',
+        'language',
+        'locale',
+        'settings',
+    ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'settings' => 'array',
+    ];
 
+    /**
+     *  Setup model event hooks
+     */
     protected static function booted(): void
     {
         static::creating(function (Company $company) {
@@ -34,11 +59,13 @@ class Company extends Model
         });
     }
 
+    /**
+     * The users that belong to the company.
+     */
     public function users()
     {
         return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
             ->withPivot('role', 'invited_by_user_id')
             ->withTimestamps();
     }
-
 }

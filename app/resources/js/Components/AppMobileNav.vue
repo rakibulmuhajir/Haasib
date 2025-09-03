@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import CompanySwitcher from '@/Components/CompanySwitcher.vue'
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue'
 
@@ -34,4 +34,3 @@ const props = defineProps<{ open: boolean }>()
     </div>
   </div>
 </template>
-

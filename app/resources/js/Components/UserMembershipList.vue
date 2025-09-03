@@ -1,16 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { Link } from '@inertiajs/vue3'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
-import { Disclosure, DisclosureButton, DisclosurePanel, Transition } from '@headlessui/vue'
+import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { Transition } from 'vue'
+import type { UserMembership, RoleOption } from '@/types'
 
-defineProps({
-  memberships: { type: Array, required: true },
-  loading: { type: Boolean, default: false },
-  roleOptions: { type: Array, required: true },
-})
+defineProps<{
+  memberships: UserMembership[],
+  loading?: boolean,
+  roleOptions: RoleOption[],
+}>()
 
-defineEmits(['update-role', 'unassign'])
+defineEmits<{
+  (e: 'update-role', membership: UserMembership): void,
+  (e: 'unassign', membership: UserMembership): void,
+}>()
 </script>
 
 <template>

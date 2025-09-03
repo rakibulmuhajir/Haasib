@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import NavLink from '@/Components/NavLink.vue'
 const props = defineProps<{ items: Array<any> }>()
 </script>
@@ -14,4 +14,3 @@ const props = defineProps<{ items: Array<any> }>()
     </template>
   </div>
 </template>
-

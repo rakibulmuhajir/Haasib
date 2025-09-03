@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
 import SidebarNavItem from '@/Components/SidebarNavItem.vue'
 import { navLinks } from '@/nav/links'

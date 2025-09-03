@@ -1,5 +1,4 @@
-// resources/js/palette/composables/usePalette.ts
-import { ref, computed, nextTick, watch, type Ref } from 'vue'
+import { reactive, ref, computed, nextTick, watch, toRefs, type Ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import Fuse from 'fuse.js'
 import { http, ensureCsrf, withIdempotency } from '@/lib/http'
@@ -22,27 +21,52 @@ export interface PreExecuteContext {
 
 type Step = 'entity' | 'verb' | 'fields'
 
+interface PaletteState {
+  open: boolean
+  q: string
+  step: Step
+  selectedIndex: number
+  executing: boolean
+  results: any[]
+  showResults: boolean
+  selectedEntity: EntityDef | null
+  selectedVerb: VerbDef | null
+  params: Record<string, any>
+  stashParams: Record<string, string>
+  activeFlagId: string | null
+  flagAnimating: string | null
+  editingFlagId: string | null
+  deleteConfirmText: string
+  deleteConfirmRequired: string
+  uiListActionMode: boolean
+  uiListActionIndex: number
+}
+
 export function usePalette() {
   let paletteApi = {} as UsePalette
 
-  // Core State
-  const open = ref(false)
-  const q = ref('')
-  const step = ref<Step>('entity')
-  const selectedEntity = ref<EntityDef | null>(null)
-  const selectedVerb = ref<VerbDef | null>(null)
-  const params = ref<Record<string, any>>({})
-  const inputEl = ref<HTMLInputElement | null>(null)
-  const selectedIndex = ref(0)
-  const executing = ref(false)
-  const results = ref<any[]>([])
-  const showResults = ref(false)
-  const stashParams = ref<Record<string, string>>({})
+  const state = reactive<PaletteState>({
+    open: false,
+    q: '',
+    step: 'entity',
+    selectedIndex: 0,
+    executing: false,
+    results: [],
+    showResults: false,
+    selectedEntity: null,
+    selectedVerb: null,
+    params: {},
+    stashParams: {},
+    activeFlagId: null,
+    flagAnimating: null,
+    editingFlagId: null,
+    deleteConfirmText: '',
+    deleteConfirmRequired: '',
+    uiListActionMode: false,
+    uiListActionIndex: 0,
+  })
 
-  // Animation & UI State
-  const activeFlagId = ref<string | null>(null)
-  const flagAnimating = ref<string | null>(null)
-  const editingFlagId = ref<string | null>(null)
+  const inputEl = ref<HTMLInputElement | null>(null)
 
   // Data & Context
   const page = usePage<any>()
@@ -60,11 +84,9 @@ export function usePalette() {
   const companyMembers = ref<Record<string, Array<{ id: string; name: string; email: string; role: string }>>>({})
   const companyMembersLoading = ref<Record<string, boolean>>({})
   const userDetails = ref<Record<string, any>>({})
-  const deleteConfirmText = ref('')
-  const deleteConfirmRequired = ref('')
 
   // Suggestions Provider
-  const provider = useSuggestions({ isSuperAdmin, currentCompanyId, userSource, companySource, q, params })
+  const provider = useSuggestions({ isSuperAdmin, currentCompanyId, userSource, companySource, q: toRefs(state).q, params: toRefs(state).params })
 
   // Fuzzy Search
   const entFuse = new Fuse(entities, { keys: ['label', 'aliases'], includeScore: true, threshold: 0.3 })
@@ -72,48 +94,48 @@ export function usePalette() {
   // --- COMPUTED PROPERTIES ---
 
   const entitySuggestions = computed(() => {
-    if (q.value.length < 2) return entities.slice(0, 6)
-    const results = entFuse.search(q.value)
+    if (state.q.length < 2) return entities.slice(0, 6)
+    const results = entFuse.search(state.q)
     return results.map(r => r.item).slice(0, 6)
   })
 
   const verbSuggestions = computed(() => {
-    if (!selectedEntity.value) return []
-    const verbs = selectedEntity.value.verbs
-    const needle = q.value.trim().toLowerCase()
+    if (!state.selectedEntity) return []
+    const verbs = state.selectedEntity.verbs
+    const needle = state.q.trim().toLowerCase()
     if (!needle) return verbs
     return verbs.filter(v => v.label.toLowerCase().includes(needle) || v.id.toLowerCase().includes(needle))
   })
 
   const availableFlags = computed<FieldDef[]>(() => {
-    if (!selectedVerb.value) return []
-    return selectedVerb.value.fields.filter(f => !params.value[f.id] && f.id !== activeFlagId.value)
+    if (!state.selectedVerb) return []
+    return state.selectedVerb.fields.filter(f => !state.params[f.id] && f.id !== state.activeFlagId)
   })
 
   const filledFlags = computed<FieldDef[]>(() => {
-    if (!selectedVerb.value) return []
-    return selectedVerb.value.fields.filter(f => params.value[f.id] && f.id !== activeFlagId.value)
+    if (!state.selectedVerb) return []
+    return state.selectedVerb.fields.filter(f => state.params[f.id] && f.id !== state.activeFlagId)
   })
 
   const currentField = computed<FieldDef | undefined>(() => {
-    if (activeFlagId.value && selectedVerb.value) {
-      return selectedVerb.value.fields.find(f => f.id === activeFlagId.value)
+    if (state.activeFlagId && state.selectedVerb) {
+      return state.selectedVerb.fields.find(f => f.id === state.activeFlagId)
     }
     return undefined
   })
 
   const dashParameterMatch = computed(() => {
-    if (step.value !== 'fields' || !selectedVerb.value || activeFlagId.value) return null
-    if (!q.value.startsWith('-')) return null
-    const paramName = q.value.slice(1).toLowerCase()
-    return selectedVerb.value.fields.find(f => f.id.toLowerCase().startsWith(paramName) || f.placeholder.toLowerCase().startsWith(paramName))
+    if (state.step !== 'fields' || !state.selectedVerb || state.activeFlagId) return null
+    if (!state.q.startsWith('-')) return null
+    const paramName = state.q.slice(1).toLowerCase()
+    return state.selectedVerb.fields.find(f => f.id.toLowerCase().startsWith(paramName) || f.placeholder.toLowerCase().startsWith(paramName))
   })
 
   const allRequiredFilled = computed(() => {
-    if (!selectedVerb.value) return false
+    if (!state.selectedVerb) return false
     // UI-only actions never show Execute
-    if (selectedVerb.value.action.startsWith('ui.')) return false
-    return selectedVerb.value.fields.filter(f => f.required).every(f => params.value[f.id])
+    if (state.selectedVerb.action.startsWith('ui.')) return false
+    return state.selectedVerb.fields.filter(f => f.required).every(f => state.params[f.id])
   })
 
   const currentChoices = computed<string[]>(() => {
@@ -123,18 +145,18 @@ export function usePalette() {
     return []
   })
 
-  const isUIList = computed(() => !!selectedVerb.value && selectedVerb.value.action.startsWith('ui.list.'))
+  const isUIList = computed(() => !!state.selectedVerb && state.selectedVerb.action.startsWith('ui.list.'))
 
   const showUserPicker = computed(() => {
-    if (!selectedVerb.value) return false
-    if (isUIList.value && selectedVerb.value.action === 'ui.list.users') return true
+    if (!state.selectedVerb) return false
+    if (isUIList.value && state.selectedVerb.action === 'ui.list.users') return true
     const f: any = currentField.value
     return f?.type === 'remote' && f?.picker === 'panel' && f?.source?.endpoint?.includes('/users/')
   })
 
   const showCompanyPicker = computed(() => {
-    if (!selectedVerb.value) return false
-    if (isUIList.value && selectedVerb.value.action === 'ui.list.companies') return true
+    if (!state.selectedVerb) return false
+    if (isUIList.value && state.selectedVerb.action === 'ui.list.companies') return true
     const f: any = currentField.value
     return f?.type === 'remote' && f?.picker === 'panel' && f?.source?.endpoint?.includes('/companies')
   })
@@ -147,8 +169,8 @@ export function usePalette() {
 
   const inlineSuggestions = computed(() => {
     const f: any = currentField.value
-    if (step.value !== 'fields' || !f || f.type !== 'remote' || f.picker !== 'inline') return []
-    const term = (q.value || '').toString().trim()
+    if (state.step !== 'fields' || !f || f.type !== 'remote' || f.picker !== 'inline') return []
+    const term = (state.q || '').toString().trim()
     const list = inlineItems.value
     if (list.length === 0) return []
 
@@ -165,13 +187,11 @@ export function usePalette() {
   const highlightedItem = computed(() => {
     const isPanelActive = showUserPicker.value || showCompanyPicker.value || showGenericPanelPicker.value
     if (isPanelActive && panelItems.value.length > 0) {
-      return panelItems.value[Math.min(selectedIndex.value, panelItems.value.length - 1)]
+      return panelItems.value[Math.min(state.selectedIndex, panelItems.value.length - 1)]
     }
     return null
   })
   // UI list action mode state (keyboard navigation for actions on highlighted item)
-  const uiListActionMode = ref(false)
-  const uiListActionIndex = ref(0)
   const uiListActionCount = computed(() => {
     if (!isUIList.value) return 0
     if (showUserPicker.value) return 2 // Assign to company, Delete user
@@ -183,66 +203,66 @@ export function usePalette() {
   const highlightedCompany = computed(() => showCompanyPicker.value ? highlightedItem.value : null)
 
   const statusText = computed(() => {
-    if (step.value === 'entity') return 'SELECT_ENTITY'
-    if (step.value === 'verb') return 'SELECT_ACTION'
-    if (step.value === 'fields') {
-      if (activeFlagId.value) return 'INPUT_VALUE'
-      if (isUIList.value) return uiListActionMode.value ? 'ACTIONS' : 'SEARCH'
+    if (state.step === 'entity') return 'SELECT_ENTITY'
+    if (state.step === 'verb') return 'SELECT_ACTION'
+    if (state.step === 'fields') {
+      if (state.activeFlagId) return 'INPUT_VALUE'
+      if (isUIList.value) return state.uiListActionMode ? 'ACTIONS' : 'SEARCH'
       return 'SELECT_PARAM'
     }
     return 'READY'
   })
 
   const getTabCompletion = computed(() => {
-    if (step.value === 'entity' && q.value.length > 0) {
-      const matches = entitySuggestions.value.filter(e => e.label.startsWith(q.value.toLowerCase()) || e.aliases.some(a => a.startsWith(q.value.toLowerCase())))
+    if (state.step === 'entity' && state.q.length > 0) {
+      const matches = entitySuggestions.value.filter(e => e.label.startsWith(state.q.toLowerCase()) || e.aliases.some(a => a.toLowerCase().startsWith(state.q.toLowerCase())))
       if (matches.length === 1) return matches[0].label
       if (matches.length > 1) {
         const labels = matches.map(m => m.label)
         let commonPrefix = labels[0]
         for (let i = 1; i < labels.length; i++) {
-          while (!labels[i].startsWith(commonPrefix) && commonPrefix.length > 0) {
+          while (commonPrefix.length > 0 && !labels[i].startsWith(commonPrefix)) {
             commonPrefix = commonPrefix.slice(0, -1)
           }
         }
-        if (commonPrefix.length > q.value.length) return commonPrefix
+        if (commonPrefix.length > state.q.length) return commonPrefix
       }
     }
-    return q.value
+    return state.q
   })
 
   // --- METHODS ---
 
   function animateFlag(flagId: string) {
-    flagAnimating.value = flagId
-    setTimeout(() => { flagAnimating.value = null }, 300)
+    state.flagAnimating = flagId
+    setTimeout(() => { state.flagAnimating = null }, 300)
   }
 
   function selectFlag(flagId: string) {
-    if (activeFlagId.value === flagId) return
+    if (state.activeFlagId === flagId) return
     animateFlag(flagId)
-    activeFlagId.value = flagId
-    q.value = ''
-    selectedIndex.value = 0
+    state.activeFlagId = flagId
+    state.q = ''
+    state.selectedIndex = 0
     nextTick(() => inputEl.value?.focus())
 
-    const field = selectedVerb.value?.fields.find(f => f.id === flagId)
+    const field = state.selectedVerb?.fields.find(f => f.id === flagId)
     let defVal: string | undefined
     if (field && typeof (field as any).default !== 'undefined') {
-      defVal = typeof (field as any).default === 'function' ? (field as any).default(params.value) : (field as any).default
+      defVal = typeof (field as any).default === 'function' ? (field as any).default(state.params) : (field as any).default
     }
-    if (!params.value[flagId] && defVal) {
-      q.value = defVal
+    if (!state.params[flagId] && defVal) {
+      state.q = defVal
       nextTick(() => { inputEl.value?.focus(); inputEl.value?.select() })
     }
   }
 
   function editFilledFlag(flagId: string) {
-    const currentValue = params.value[flagId]
-    delete params.value[flagId]
-    activeFlagId.value = flagId
-    q.value = currentValue || ''
-    editingFlagId.value = flagId
+    const currentValue = state.params[flagId]
+    delete state.params[flagId]
+    state.activeFlagId = flagId
+    state.q = currentValue || ''
+    state.editingFlagId = flagId
     nextTick(() => {
       if (inputEl.value) {
         inputEl.value.focus()
@@ -252,23 +272,23 @@ export function usePalette() {
   }
 
   function completeCurrentFlag() {
-    if (!activeFlagId.value || !currentField.value) return
-    const val = q.value.trim()
+    if (!state.activeFlagId || !currentField.value) return
+    const val = state.q.trim()
     if (val || !currentField.value.required) {
-      const completingFlagId = activeFlagId.value
-      if (val) params.value[completingFlagId] = val
+      const completingFlagId = state.activeFlagId
+      if (val) state.params[completingFlagId] = val
 
       let nextField: FieldDef | undefined
-      if (selectedVerb.value) {
-        const nextRequired = selectedVerb.value.fields.find(f => f.required && !params.value[f.id])
-        const nextAvailable = selectedVerb.value.fields.find(f => !params.value[f.id])
+      if (state.selectedVerb) {
+        const nextRequired = state.selectedVerb.fields.find(f => f.required && !state.params[f.id])
+        const nextAvailable = state.selectedVerb.fields.find(f => !state.params[f.id])
         nextField = nextRequired || nextAvailable
       }
 
-      activeFlagId.value = null
-      editingFlagId.value = null
-      q.value = ''
-      selectedIndex.value = 0
+      state.activeFlagId = null
+      state.editingFlagId = null
+      state.q = ''
+      state.selectedIndex = 0
 
       if (nextField) {
         selectFlag(nextField!.id)
@@ -319,28 +339,28 @@ export function usePalette() {
     const entity = entities.find(e => e.id === entityId) || null
     if (!entity) return
 
-    selectedEntity.value = entity
+    state.selectedEntity = entity
     const verb = entity.verbs.find(v => v.id === verbId) || null
     if (!verb) return
 
-    selectedVerb.value = verb
-    step.value = 'fields'
-    params.value = { ...initialParams }
+    state.selectedVerb = verb
+    state.step = 'fields'
+    state.params = { ...initialParams }
 
     // Find the first field to focus that isn't already pre-filled.
     // Prioritize required fields.
-    const nextField = verb.fields.find(f => f.required && !params.value[f.id])
-                   || verb.fields.find(f => !params.value[f.id])
+    const nextField = verb.fields.find(f => f.required && !state.params[f.id])
+                   || verb.fields.find(f => !state.params[f.id])
 
     if (nextField) {
       selectFlag(nextField.id)
     } else {
       // All fields are filled, just focus the input.
-      activeFlagId.value = null
+      state.activeFlagId = null
     }
 
-    selectedIndex.value = 0
-    q.value = ''
+    state.selectedIndex = 0
+    state.q = ''
     nextTick(() => inputEl.value?.focus())
   }
 
@@ -365,88 +385,95 @@ export function usePalette() {
   }
 
   function resetAll() {
-    step.value = 'entity'
-    q.value = ''
-    selectedEntity.value = null
-    selectedVerb.value = null
-    params.value = {}
-    selectedIndex.value = 0
-    executing.value = false
-    activeFlagId.value = null
-    editingFlagId.value = null
-    deleteConfirmText.value = ''
-    deleteConfirmRequired.value = ''
-    uiListActionMode.value = false
-    uiListActionIndex.value = 0
+    Object.assign(state, {
+      open: state.open, // Keep open state
+      q: '',
+      step: 'entity',
+      selectedIndex: 0,
+      executing: false,
+      // results: [], // Keep results for a bit
+      // showResults: false,
+      selectedEntity: null,
+      selectedVerb: null,
+      params: {},
+      stashParams: {},
+      activeFlagId: null,
+      flagAnimating: null,
+      editingFlagId: null,
+      deleteConfirmText: '',
+      deleteConfirmRequired: '',
+      uiListActionMode: false,
+      uiListActionIndex: 0,
+    })
   }
 
   function goHome() {
-    step.value = 'entity'
-    q.value = ''
-    selectedVerb.value = null
-    selectedEntity.value = null
-    selectedIndex.value = 0
-    activeFlagId.value = null
-    editingFlagId.value = null
-    uiListActionMode.value = false
-    uiListActionIndex.value = 0
+    state.step = 'entity'
+    state.q = ''
+    state.selectedVerb = null
+    state.selectedEntity = null
+    state.selectedIndex = 0
+    state.activeFlagId = null
+    state.editingFlagId = null
+    state.uiListActionMode = false
+    state.uiListActionIndex = 0
   }
 
   function goBack() {
-    if (step.value === 'fields' && activeFlagId.value) {
-      activeFlagId.value = null
-      editingFlagId.value = null
-      q.value = ''
+    if (state.step === 'fields' && state.activeFlagId) {
+      state.activeFlagId = null
+      state.editingFlagId = null
+      state.q = ''
       return
     }
-    if (step.value === 'fields' && selectedVerb.value) {
-      if (q.value) { q.value = ''; return }
-      selectedVerb.value = null
-      step.value = 'verb'
-      q.value = ''
-      selectedIndex.value = 0
+    if (state.step === 'fields' && state.selectedVerb) {
+      if (state.q) { state.q = ''; return }
+      state.selectedVerb = null
+      state.step = 'verb'
+      state.q = ''
+      state.selectedIndex = 0
       return
     }
-    if (step.value === 'verb' && selectedEntity.value) {
-      if (q.value) { q.value = ''; return }
-      selectedEntity.value = null
-      step.value = 'entity'
-      q.value = ''
-      selectedIndex.value = 0
+    if (state.step === 'verb' && state.selectedEntity) {
+      if (state.q) { state.q = ''; return }
+      state.selectedEntity = null
+      state.step = 'entity'
+      state.q = ''
+      state.selectedIndex = 0
       return
     }
-    if (step.value === 'entity' && q.value) {
-      q.value = ''
+    if (state.step === 'entity' && state.q) {
+      state.q = ''
       return
     }
-    open.value = false
+    state.open = false
   }
 
   function selectEntity(entity: EntityDef) {
-    selectedEntity.value = entity
-    step.value = 'verb'
-    q.value = ''
-    selectedIndex.value = 0
+    state.selectedEntity = entity
+    state.step = 'verb'
+    state.q = ''
+    state.selectedIndex = 0
     nextTick(() => inputEl.value?.focus())
   }
 
   function selectVerb(verb: VerbDef) {
-    selectedVerb.value = verb
-    step.value = 'fields'
-    q.value = ''
-    selectedIndex.value = 0
-    activeFlagId.value = null
+    state.selectedVerb = verb
+    state.step = 'fields'
+    state.q = ''
+    state.selectedIndex = 0
+    state.activeFlagId = null
     // Reset any destructive-action confirmations when switching verbs
-    deleteConfirmText.value = ''
-    deleteConfirmRequired.value = ''
+    state.deleteConfirmText = ''
+    state.deleteConfirmRequired = ''
     nextTick(() => inputEl.value?.focus())
 
-    if (Object.keys(stashParams.value).length > 0 && selectedVerb.value) {
-      for (const f of selectedVerb.value.fields) {
-        const v = stashParams.value[f.id]
-        if (v && !params.value[f.id]) params.value[f.id] = v
+    if (Object.keys(state.stashParams).length > 0 && state.selectedVerb) {
+      for (const f of state.selectedVerb.fields) {
+        const v = state.stashParams[f.id]
+        if (v && !state.params[f.id]) state.params[f.id] = v
       }
-      stashParams.value = {}
+      state.stashParams = {}
     }
 
     // No need to wait, select the first required field immediately.
@@ -456,88 +483,88 @@ export function usePalette() {
 
   function selectChoice(choice: string) {
     if (!currentField.value) return
-    q.value = choice
+    state.q = choice
     setTimeout(completeCurrentFlag, 50)
   }
 
   async function execute() {
-    if (!selectedVerb.value) return
-    if (selectedVerb.value.action.startsWith('ui.')) return
+    if (!state.selectedVerb) return
+    if (state.selectedVerb.action.startsWith('ui.')) return
     // Invoke optional preExecute hook (e.g., delete confirmations)
-    if (typeof selectedVerb.value.preExecute === 'function') {
-      const ok = await selectedVerb.value.preExecute({
-        params,
+    if (typeof state.selectedVerb.preExecute === 'function') {
+      const ok = await state.selectedVerb.preExecute({
+        params: toRefs(state).params,
         companyDetails,
-        deleteConfirmRequired,
-        deleteConfirmText,
+        deleteConfirmRequired: toRefs(state).deleteConfirmRequired,
+        deleteConfirmText: toRefs(state).deleteConfirmText,
       })
       if (ok === false) return
     }
 
     if (!allRequiredFilled.value) return
 
-    executing.value = true
+    state.executing = true
     try {
-      const response = await http.post('/commands', params.value, { headers: withIdempotency({ 'X-Action': selectedVerb.value.action }) })
-      results.value = [{ success: true, action: selectedVerb.value.action, params: params.value, timestamp: new Date().toISOString(), message: `Successfully executed ${selectedEntity.value?.label} ${selectedVerb.value.label}`, data: response.data }, ...results.value.slice(0, 4)]
+      const response = await http.post('/commands', state.params, { headers: withIdempotency({ 'X-Action': state.selectedVerb.action }) })
+      state.results = [{ success: true, action: state.selectedVerb.action, params: state.params, timestamp: new Date().toISOString(), message: `Successfully executed ${state.selectedEntity?.label} ${state.selectedVerb.label}`, data: response.data }, ...state.results.slice(0, 4)]
       // Optional postExecute hook (cleanup, navigation, etc.)
-      if (typeof selectedVerb.value.postExecute === 'function') {
+      if (typeof state.selectedVerb.postExecute === 'function') {
         try {
-          await selectedVerb.value.postExecute({ response: response.data, params: params.value, palette: paletteApi })
+          await state.selectedVerb.postExecute({ response: response.data, params: state.params, palette: paletteApi })
         } catch (_) { /* ignore hook errors */ }
       }
-      showResults.value = true
-      setTimeout(() => { resetAll(); open.value = false }, 2000)
+      state.showResults = true
+      setTimeout(() => { resetAll(); state.open = false }, 2000)
     } catch (error: any) {
-      results.value = [{ success: false, action: selectedVerb.value.action, params: params.value, timestamp: new Date().toISOString(), message: `Failed to execute ${selectedEntity.value?.label} ${selectedVerb.value.label}`, error: error.response?.data || error.message }, ...results.value.slice(0, 4)]
-      showResults.value = true
+      state.results = [{ success: false, action: state.selectedVerb.action, params: state.params, timestamp: new Date().toISOString(), message: `Failed to execute ${state.selectedEntity?.label} ${state.selectedVerb.label}`, error: error.response?.data || error.message }, ...state.results.slice(0, 4)]
+      state.showResults = true
     } finally {
-      executing.value = false
+      state.executing = false
     }
   }
 
   function pickUserEmail(email: string) {
     if (currentField.value?.id === 'email') {
-      q.value = email
+      state.q = email
       setTimeout(completeCurrentFlag, 10)
     } else {
       const userEntity = entities.find(e => e.id === 'user') || null
-      if (userEntity) {
-        selectedEntity.value = userEntity
-        step.value = 'verb'
-        q.value = ''
-        selectedIndex.value = 0
-        stashParams.value = { email }
+      if (userEntity) { // @ts-ignore
+        state.selectedEntity = userEntity
+        state.step = 'verb'
+        state.q = ''
+        state.selectedIndex = 0
+        state.stashParams = { email }
       } else {
-        q.value = email
+        state.q = email
       }
     }
   }
 
   function pickCompanyName(idOrName: string) {
     if (currentField.value?.id === 'company') {
-      q.value = idOrName
+      state.q = idOrName
       setTimeout(completeCurrentFlag, 10)
     } else {
       const coEntity = entities.find(e => e.id === 'company') || null
       if (coEntity) {
-        selectedEntity.value = coEntity
-        step.value = 'verb'
-        q.value = ''
-        selectedIndex.value = 0
-        stashParams.value = { company: idOrName }
+        state.selectedEntity = coEntity
+        state.step = 'verb'
+        state.q = ''
+        state.selectedIndex = 0
+        state.stashParams = { company: idOrName }
       } else {
-        q.value = idOrName
+        state.q = idOrName
       }
     }
   }
 
   function pickGeneric(value: string) {
     if (currentField.value) {
-      q.value = value
+      state.q = value
       setTimeout(completeCurrentFlag, 10)
     } else {
-      q.value = value
+      state.q = value
     }
   }
 
@@ -565,23 +592,23 @@ export function usePalette() {
     }
   })
 
-  watch([q, step], ([newQ, newStep]) => {
+  watch(() => [state.q, state.step], ([newQ, newStep]) => {
     if (newStep === 'entity' && newQ.length >= 2) {
       const exact = entitySuggestions.value.find(e => e.label.toLowerCase() === newQ.toLowerCase() || e.aliases.some(a => a.toLowerCase() === newQ.toLowerCase()))
       if (exact) setTimeout(() => selectEntity(exact), 100)
     }
   })
 
-  watch([verbSuggestions, step], () => {
-    if (step.value === 'verb') {
-      if (selectedIndex.value >= verbSuggestions.value.length) {
-        selectedIndex.value = 0
+  watch([verbSuggestions, () => state.step], ([suggestions, currentStep]) => {
+    if (currentStep === 'verb') {
+      if (state.selectedIndex >= suggestions.length) {
+        state.selectedIndex = 0
       }
     }
   })
 
   const lookupTimers: Record<string, any> = {}
-  watch([q, currentField, step, companySource, userSource, () => params.value.email], async ([qv, cf, st]) => {
+  watch([() => state.q, currentField, () => state.step, companySource, userSource, () => state.params.email], async ([qv, cf, st]) => {
     const schedule = (key: string, ms: number, fn: () => void) => {
       clearTimeout(lookupTimers[key])
       lookupTimers[key] = setTimeout(fn, ms)
@@ -595,7 +622,7 @@ export function usePalette() {
 
     const qstr = (qv as string) || ''
     const run = async () => {
-      const items = await provider.fromField(cf as any, qstr, params.value)
+      const items = await provider.fromField(cf as any, qstr, state.params)
       if ((cf as any).picker === 'panel') {
         panelItems.value = items
       } else {
@@ -607,13 +634,13 @@ export function usePalette() {
   })
 
   // Populate panel items for UI list actions (companies/users)
-  watch([isUIList, step, q, companySource, userSource, () => params.value.email, selectedVerb], async ([ui, st]) => {
-    if (!ui || st !== 'fields') return
-    const verb = selectedVerb.value
+  watch([isUIList, () => state.step, () => state.q, companySource, userSource, () => state.params.email, () => state.selectedVerb], async ([isList, currentStep, qVal, coSource, uSource, email, verb]) => {
+    if (!isList || currentStep !== 'fields' || !verb) return
+    const verb = state.selectedVerb
     if (verb && verb.fields.length > 0) {
       const fieldDef = verb.fields[0]
       try {
-        const items = await provider.fromField(fieldDef, q.value, params.value)
+        const items = await provider.fromField(fieldDef, state.q, state.params)
         panelItems.value = items
       } catch (e) {
         panelItems.value = []
@@ -622,10 +649,10 @@ export function usePalette() {
   })
 
   // Exit action mode when leaving UI list context
-  watch([isUIList, step], ([ui, st]) => {
-    if (st !== 'fields' || !ui) {
-      uiListActionMode.value = false
-      uiListActionIndex.value = 0
+  watch([isUIList, () => state.step], ([isList, currentStep]) => {
+    if (currentStep !== 'fields' || !isList) {
+      state.uiListActionMode = false
+      state.uiListActionIndex = 0
     }
   })
 
@@ -635,21 +662,21 @@ export function usePalette() {
     const meta = item.meta || {}
     if (showUserPicker.value) {
       const email = meta.email || item.value
-      if (uiListActionIndex.value === 0) {
+      if (state.uiListActionIndex === 0) {
         // Assign to company flow
         quickAssignUserToCompany(email)
-      } else if (uiListActionIndex.value === 1) {
+      } else if (state.uiListActionIndex === 1) {
         startVerb('user', 'delete', { email })
       }
     } else if (showCompanyPicker.value) {
       const id = meta.id || item.value
-      if (uiListActionIndex.value === 0) {
+      if (state.uiListActionIndex === 0) {
         quickAssignToCompany(id)
-      } else if (uiListActionIndex.value === 1) {
+      } else if (state.uiListActionIndex === 1) {
         setActiveCompany(id)
-      } else if (uiListActionIndex.value === 2) {
+      } else if (state.uiListActionIndex === 2) {
         startVerb('company', 'delete', { company: id })
-      } else if (uiListActionIndex.value === 3) {
+      } else if (state.uiListActionIndex === 3) {
         loadCompanyMembers(id)
       }
     }
@@ -657,10 +684,10 @@ export function usePalette() {
 
   const api = {
     open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults, stashParams,
-    activeFlagId, flagAnimating, editingFlagId,
+    activeFlagId, flagAnimating, editingFlagId, deleteConfirmText, deleteConfirmRequired,
     isSuperAdmin, currentCompanyId, userSource, companySource,
     panelItems, inlineItems, // Replaces userOptions, companyOptions, etc.
-    companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
+    companyDetails, companyMembers, companyMembersLoading, userDetails,
     entitySuggestions, verbSuggestions, availableFlags, filledFlags, currentField, dashParameterMatch, allRequiredFilled, currentChoices,
     isUIList, showUserPicker, showCompanyPicker, showGenericPanelPicker, inlineSuggestions,
     highlightedUser, highlightedCompany, highlightedItem,
@@ -675,8 +702,11 @@ export function usePalette() {
   }
 
   // Expose self-reference for hook contexts
-  paletteApi = api as UsePalette
-  return paletteApi
+  paletteApi = {
+    ...toRefs(state),
+    ...api,
+  } as UsePalette
+  return paletteApi as UsePalette
 }
 
 export type UsePalette = ReturnType<typeof usePalette>

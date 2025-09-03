@@ -8,8 +8,8 @@ import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
 import UserMembershipList from '@/Components/UserMembershipList.vue'
-import { http, withIdempotency } from '@/lib/http'
-import { Disclosure, DisclosureButton, DisclosurePanel, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
+import { http, withIdempotency } from '@/lib/http';
+import { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent } from 'reka-ui';
 import { useToasts } from '@/composables/useToasts.js'
 import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 
@@ -132,19 +132,19 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey)
 
           <!-- Tabs for memberships vs assign -->
           <div class="lg:col-span-2">
-            <TabGroup :selectedIndex="selectedTab" @change="selectedTab = $event" as="div">
+            <Tabs v-model="selectedTab" class="w-full">
               <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-                <TabList class="flex space-x-2 border-b border-gray-200 px-2">
-                  <Tab as="template" v-slot="{ selected }">
-                    <button class="focus:outline-none" :class="['px-4 py-2 text-sm', selected ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600 hover:text-gray-800']">Memberships</button>
-                  </Tab>
-                  <Tab as="template" v-slot="{ selected }">
-                    <button class="focus:outline-none" :class="['px-4 py-2 text-sm', selected ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600 hover:text-gray-800']">Assign</button>
-                  </Tab>
-                </TabList>
+                <TabsList class="flex space-x-2 border-b border-gray-200 px-2">
+                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                    Memberships
+                  </TabsTrigger>
+                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                    Assign
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <TabPanels class="mt-4">
-                <TabPanel>
+              <div class="mt-4">
+                <TabsContent value="0">
                   <UserMembershipList
                     :memberships="user?.memberships || []"
                     :loading="loading"
@@ -152,8 +152,8 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey)
                     @update-role="changeRole"
                     @unassign="unassign"
                   />
-                </TabPanel>
-                <TabPanel>
+                </TabsContent>
+                <TabsContent value="1">
                   <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
                     <div class="font-medium mb-3">Assign to Company</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
@@ -174,9 +174,9 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey)
                     </div>
                     <div v-if="assignError" class="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ assignError }}</div>
                   </div>
-                </TabPanel>
-              </TabPanels>
-            </TabGroup>
+                </TabsContent>
+              </div>
+            </Tabs>
           </div>
         </div>
       </div>

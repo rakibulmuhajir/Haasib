@@ -7,9 +7,10 @@ import TextInput from '@/Components/TextInput.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
 import UserPicker from '@/Components/Pickers/UserPicker.vue'
+import Collapsible from '@/Components/Collapsible.vue'
 import CompanyMemberList from '@/Components/CompanyMemberList.vue'
-import { http, withIdempotency } from '@/lib/http'
-import { Disclosure, DisclosureButton, DisclosurePanel, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
+import { http, withIdempotency } from '@/lib/http';
+import { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent } from 'reka-ui';
 import { useToasts } from '@/composables/useToasts.js'
 import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 
@@ -215,23 +216,23 @@ async function loadInvites() {
 
           <!-- Members / Assign / Invite as tabs -->
           <div class="lg:col-span-2">
-            <TabGroup :selectedIndex="selectedTab" @change="selectedTab = $event" as="div">
+            <Tabs v-model="selectedTab" class="w-full">
               <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-                <TabList class="flex space-x-2 border-b border-gray-200 px-2">
-                  <Tab as="template" v-slot="{ selected }">
-                    <button class="focus:outline-none" :class="['px-4 py-2 text-sm', selected ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600 hover:text-gray-800']">Members</button>
-                  </Tab>
-                  <Tab as="template" v-slot="{ selected }">
-                    <button class="focus:outline-none" :class="['px-4 py-2 text-sm', selected ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600 hover:text-gray-800']">Assign</button>
-                  </Tab>
-                  <Tab as="template" v-slot="{ selected }">
-                    <button class="focus:outline-none" :class="['px-4 py-2 text-sm', selected ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-600 hover:text-gray-800']">Invite</button>
-                  </Tab>
-                </TabList>
+                <TabsList class="flex space-x-2 border-b border-gray-200 px-2">
+                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                    Members
+                  </TabsTrigger>
+                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                    Assign
+                  </TabsTrigger>
+                  <TabsTrigger value="2" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                    Invite
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <TabPanels class="mt-4">
+              <div class="mt-4">
                 <!-- Members Tab -->
-                <TabPanel>
+                <TabsContent value="0">
                   <CompanyMemberList
                     :members="members"
                     :loading="loading"
@@ -240,10 +241,10 @@ async function loadInvites() {
                     @update-role="updateRole"
                     @unassign="unassign"
                   />
-                </TabPanel>
+                </TabsContent>
 
                 <!-- Assign Tab -->
-                <TabPanel>
+                <TabsContent value="1">
                   <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
                     <div class="font-medium mb-3">Assign Existing User</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
@@ -264,10 +265,10 @@ async function loadInvites() {
                     </div>
                     <div v-if="assignError" class="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ assignError }}</div>
                   </div>
-                </TabPanel>
+                </TabsContent>
 
                 <!-- Invite Tab -->
-                <TabPanel>
+                <TabsContent value="2">
                   <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
                     <div class="font-medium mb-3">Invite by Email</div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -302,39 +303,37 @@ async function loadInvites() {
                     </div>
 
                     <div class="mt-6">
-                      <Disclosure :defaultOpen="true">
-                        <DisclosureButton class="flex w-full items-center justify-between rounded bg-gray-50 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100">
-                          <span>Pending Invitations</span>
-                          <span class="text-xs text-gray-500">(click to toggle)</span>
-                        </DisclosureButton>
-                        <Transition enter="transition ease-out duration-150" enter-from="opacity-0 -translate-y-1" enter-to="opacity-100 translate-y-0" leave="transition ease-in duration-100" leave-from="opacity-100" leave-to="opacity-0 -translate-y-1">
-                          <DisclosurePanel>
-                            <div class="pt-2">
-                              <div v-if="invitesLoading" class="text-sm text-gray-500">Loading…</div>
-                              <div v-else-if="invitesError" class="text-sm text-red-600">{{ invitesError }}</div>
-                              <div v-else>
-                                <ul class="divide-y divide-gray-200">
-                                  <li v-for="i in invites" :key="i.id" class="py-3 flex items-center justify-between">
-                                    <div>
-                                      <div class="text-sm font-medium text-gray-900">{{ i.email }}</div>
-                                      <div class="text-xs text-gray-500">role: {{ i.role }} · invited by: {{ i.invited_by || '—' }} · expires: {{ i.expires_at || '—' }}</div>
-                                    </div>
-                                    <div>
-                                      <SecondaryButton @click="revokeInvite(i.id)">Revoke</SecondaryButton>
-                                    </div>
-                                  </li>
-                                  <li v-if="(invites || []).length === 0" class="py-3 text-sm text-gray-500">No pending invitations.</li>
-                                </ul>
-                              </div>
+                      <Collapsible :defaultOpen="true">
+                        <template #trigger>
+                          <button class="flex w-full items-center justify-between rounded bg-gray-50 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100">
+                            <span>Pending Invitations</span>
+                            <span class="text-xs text-gray-500">(click to toggle)</span>
+                          </button>
+                        </template>
+                        <div class="pt-2">
+                          <div v-if="invitesLoading" class="text-sm text-gray-500">Loading…</div>
+                          <div v-else-if="invitesError" class="text-sm text-red-600">{{ invitesError }}</div>
+                          <div v-else>
+                            <ul class="divide-y divide-gray-200">
+                              <li v-for="i in invites" :key="i.id" class="py-3 flex items-center justify-between">
+                                <div>
+                                  <div class="text-sm font-medium text-gray-900">{{ i.email }}</div>
+                                  <div class="text-xs text-gray-500">role: {{ i.role }} · invited by: {{ i.invited_by || '—' }} · expires: {{ i.expires_at || '—' }}</div>
+                                </div>
+                                <div>
+                                  <SecondaryButton @click="revokeInvite(i.id)">Revoke</SecondaryButton>
+                                </div>
+                              </li>
+                              <li v-if="(invites || []).length === 0" class="py-3 text-sm text-gray-500">No pending invitations.</li>
+                            </ul>
                             </div>
-                          </DisclosurePanel>
-                        </Transition>
-                      </Disclosure>
+                          </div>
+                      </Collapsible>
                     </div>
                   </div>
-                </TabPanel>
-              </TabPanels>
-            </TabGroup>
+                </TabsContent>
+              </div>
+            </Tabs>
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 <!-- resources/js/Components/CommandPalette.vue -->
 <script setup lang="ts">
 import { onMounted, onUnmounted, nextTick, ref, computed, watch } from 'vue'
-import { Dialog, DialogPanel } from '@headlessui/vue'
+import { DialogRoot, DialogPortal, DialogOverlay, DialogContent } from 'reka-ui'
 import SuggestList from '@/Components/SuggestList.vue'
 import { usePalette } from '@/palette/composables/usePalette'
 import { usePaletteKeybindings } from '@/palette/composables/usePaletteKeybindings'
@@ -200,18 +200,19 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <Dialog :open="isExpanded" @close="collapseToStrip()" class="relative z-50">
-    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true"></div>
+  <DialogRoot :open="isExpanded" @update:open="(v) => { if (!v) collapseToStrip() }" class="relative z-50">
+    <DialogPortal>
+      <DialogOverlay class="fixed inset-0 bg-black/70 backdrop-blur-sm" />
 
-    <div class="fixed inset-x-0 bottom-0 flex items-end justify-center pb-2 sm:pb-4 px-2">
-      <div class="w-full max-w-5xl flex flex-col lg:flex-row gap-4"
-           :class="[showResults ? 'lg:max-w-5xl' : '', dockSize==='full' ? 'h-[88vh]' : 'h-[56vh]']">
+      <div class="fixed inset-x-0 bottom-0 flex items-end justify-center pb-2 sm:pb-4 px-2">
+        <DialogContent class="w-full max-w-5xl flex flex-col lg:flex-row gap-4"
+                       :class="[showResults ? 'lg:max-w-5xl' : '', dockSize==='full' ? 'h-[88vh]' : 'h-[56vh]']">
 
-        <!-- Main Command Palette - Enhanced design -->
-        <DialogPanel class="flex-1 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-t-xl shadow-2xl font-mono text-sm overflow-hidden"
-                     :class="isExpanded ? 'scale-100 opacity-100' : 'scale-105 opacity-0'"
-                     @keydown="(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); goBack() } }">
-          <div class="flex flex-col h-full" @keydown="handleKeydown" ref="mainPanelEl" tabindex="-1">
+          <!-- Main Command Palette - Enhanced design -->
+          <div class="flex-1 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-t-xl shadow-2xl font-mono text-sm overflow-hidden"
+                       :class="isExpanded ? 'scale-100 opacity-100' : 'scale-105 opacity-0'"
+                       @keydown="(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); goBack() } }">
+            <div class="flex flex-col h-full" @keydown="handleKeydown" ref="mainPanelEl" tabindex="-1">
 
             <!-- Terminal Header - Enhanced -->
             <div class="px-4 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900">
@@ -586,7 +587,7 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-        </DialogPanel>
+        </div>
 
         <!-- Results Panel - Enhanced -->
         <div v-if="showResults && results.length > 0"
@@ -628,9 +629,10 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        </DialogContent>
       </div>
-    </div>
-  </Dialog>
+    </DialogPortal>
+  </DialogRoot>
 </template>
 
 <style scoped>

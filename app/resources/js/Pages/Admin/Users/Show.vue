@@ -104,6 +104,10 @@ async function unassign(m) {
 const tabNames = ['memberships', 'assign']
 const storageKey = computed(() => `admin.user.tab.${props.id}`)
 const { selectedTab } = usePersistentTabs(tabNames, storageKey)
+const tabValue = computed({
+  get: () => String(selectedTab.value),
+  set: (val) => { selectedTab.value = Number(val) }
+})
 </script>
 
 <template>
@@ -132,7 +136,7 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey)
 
           <!-- Tabs for memberships vs assign -->
           <div class="lg:col-span-2">
-            <Tabs v-model="selectedTab" class="w-full">
+            <Tabs v-model="tabValue" class="w-full">
               <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
                 <TabsList class="flex space-x-2 border-b border-gray-200 px-2">
                   <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">

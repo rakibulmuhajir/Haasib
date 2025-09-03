@@ -683,8 +683,7 @@ export function usePalette() {
   }
 
   const api = {
-    open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults, stashParams,
-    activeFlagId, flagAnimating, editingFlagId, deleteConfirmText, deleteConfirmRequired,
+    inputEl,
     isSuperAdmin, currentCompanyId, userSource, companySource,
     panelItems, inlineItems, // Replaces userOptions, companyOptions, etc.
     companyDetails, companyMembers, companyMembersLoading, userDetails,
@@ -692,7 +691,7 @@ export function usePalette() {
     isUIList, showUserPicker, showCompanyPicker, showGenericPanelPicker, inlineSuggestions,
     highlightedUser, highlightedCompany, highlightedItem,
     statusText, getTabCompletion,
-    uiListActionMode, uiListActionIndex, uiListActionCount,
+    uiListActionCount,
     animateFlag, selectFlag, editFilledFlag, completeCurrentFlag, cycleToLastFilledFlag, handleDashParameter,
     loadCompanyMembers, ensureCompanyDetails, startVerb, quickAssignToCompany, setActiveCompany, quickAssignUserToCompany, quickUnassignUserFromCompany,
     resetAll, goHome, goBack,

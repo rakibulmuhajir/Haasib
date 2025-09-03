@@ -10,7 +10,7 @@ const palette = usePalette()
   const {
       open, q, step, selectedEntity, selectedVerb, params, inputEl, selectedIndex, executing, results, showResults,
       activeFlagId,
-      isSuperAdmin, userSource, companySource, mainPanelEl,
+      isSuperAdmin, userSource, companySource,
       panelItems,
       companyDetails, companyMembers, companyMembersLoading, userDetails, deleteConfirmText, deleteConfirmRequired,
       entitySuggestions, verbSuggestions, availableFlags, filledFlags, currentField, dashParameterMatch, allRequiredFilled, currentChoices,
@@ -25,6 +25,8 @@ const palette = usePalette()
   pickUserEmail, pickCompanyName, pickGeneric,
   performUIListAction,
 } = palette
+
+const mainPanelEl = ref<HTMLDivElement | null>(null)
 
 // Focus management for delete confirmation input (company delete)
 const deleteConfirmInputEl = ref<HTMLInputElement | null>(null)

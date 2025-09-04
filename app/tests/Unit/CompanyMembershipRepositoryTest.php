@@ -42,5 +42,29 @@ class CompanyMembershipRepositoryTest extends TestCase
             $c2->id,
         ], $memberships->pluck('id')->all());
     }
+
+    public function test_upsert_membership_inserts_and_updates(): void
+    {
+        $user = User::factory()->create();
+        $company = Company::factory()->create();
+
+        $repo = new CompanyMembershipRepository();
+
+        $repo->upsertMembership($company->id, $user->id, 'owner');
+
+        $this->assertDatabaseHas('auth.company_user', [
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        $repo->upsertMembership($company->id, $user->id, 'admin');
+
+        $this->assertDatabaseHas('auth.company_user', [
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'role' => 'admin',
+        ]);
+    }
 }
 

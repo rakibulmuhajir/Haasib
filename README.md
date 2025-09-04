@@ -1,4 +1,4 @@
-#App Deployment Guide
+# App Deployment Guide
 
 ## 1. SME Modular Accounting — Deployment, Operations, and Expansion Guide (PostgreSQL)
 

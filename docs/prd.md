@@ -100,7 +100,7 @@ LedgerFly is a hybrid accounting app designed for SMEs that merges the power and
 
 * "Zero-friction first time use"
 * Onboarding via CLI wizard or GUI tour
-* Realtime CLI/GU sync view
+* Realtime CLI/GUI sync view
 * Dashboard with widgets for pending invoices, due bills, bank balances
 
 ---

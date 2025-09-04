@@ -57,9 +57,10 @@ class Tenancy
         try {
             DB::select("select set_config('app.current_user_id', ?, true)", [$user->getKey()]);
             DB::select("select set_config('app.current_user_email', ?, true)", [strtolower($user->email)]);
-            if ($companyId) {
-                DB::select("select set_config('app.current_company_id', ?, true)", [$companyId]);
-            }
+            DB::select(
+                "select set_config('app.current_company_id', ?, true)",
+                [$companyId ?: '']
+            );
         } catch (\Throwable $e) {
             // noop for non-PgSQL
         }

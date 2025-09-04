@@ -537,6 +537,7 @@ Additional routes and sample requests are available in the API documentation wit
 1. **Environment**
    - Copy `.env.example` to `.env`.
    - Configure database credentials and other environment variables.
+   - Set `DEV_CONSOLE_ENABLED=true` in `.env` to enable the development CLI when needed.
    - Install dependencies with `composer install`.
    - Generate the application key: `php artisan key:generate`.
 2. **Migrations**

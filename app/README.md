@@ -14,6 +14,7 @@ Haasib is a modular accounting and business management platform built on the Lar
    ```
 3. **Configure environment**
    Copy `.env.example` to `.env` and update database and service credentials.
+   Set `DEV_CONSOLE_ENABLED=true` to enable the development CLI when needed.
 4. **Generate application key**
    ```bash
    php artisan key:generate

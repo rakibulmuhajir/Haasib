@@ -15,21 +15,8 @@ class CommandExecutor
     public function execute(string $action, array $params, User $user, ?int $companyId, string $key): array
     {
         // Idempotency check (scoped by user/company/action/key)
-        try {
-            if (Schema::hasTable('idempotency_keys')) {
-                $exists = DB::table('idempotency_keys')->where([
-                    'user_id' => $user->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'key' => $key,
-                ])->exists();
-
-                if ($exists) {
-                    return [['message' => 'Duplicate request'], 409];
-                }
-            }
-        } catch (\Throwable $e) {
-            // If table missing or any driver error, skip idempotency check rather than 500
+        if ($this->checkIdempotency($action, $user, $companyId, $key)) {
+            return [['message' => 'Duplicate request'], 409];
         }
 
         try {
@@ -53,6 +40,34 @@ class CommandExecutor
             ], 500];
         }
 
+        $this->logAudit($action, $params, $user, $companyId, $key);
+
+        // Record idempotency key for future replays
+        $this->storeIdempotencyKey($action, $params, $user, $companyId, $key, $result);
+
+        return [$result, 200];
+    }
+
+    private function checkIdempotency(string $action, User $user, ?int $companyId, string $key): bool
+    {
+        try {
+            if (Schema::hasTable('idempotency_keys')) {
+                return DB::table('idempotency_keys')->where([
+                    'user_id' => $user->id,
+                    'company_id' => $companyId,
+                    'action' => $action,
+                    'key' => $key,
+                ])->exists();
+            }
+        } catch (\Throwable $e) {
+            // If table missing or any driver error, skip idempotency check rather than 500
+        }
+
+        return false;
+    }
+
+    private function logAudit(string $action, array $params, User $user, ?int $companyId, string $key): void
+    {
         try {
             DB::table('audit.audit_logs')->insert([
                 'id' => Str::uuid()->toString(),
@@ -67,8 +82,10 @@ class CommandExecutor
         } catch (\Throwable $e) {
             // Log write failure should not block the command response
         }
+    }
 
-        // Record idempotency key for future replays
+    private function storeIdempotencyKey(string $action, array $params, User $user, ?int $companyId, string $key, $result): void
+    {
         try {
             if (Schema::hasTable('idempotency_keys')) {
                 DB::table('idempotency_keys')->insert([
@@ -86,7 +103,5 @@ class CommandExecutor
         } catch (\Throwable $e) {
             // ignore
         }
-
-        return [$result, 200];
     }
 }

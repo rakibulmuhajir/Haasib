@@ -27,6 +27,6 @@ import ThemeSwitcher from '@/Components/ThemeSwitcher.vue'
         <DropdownLink :href="route('logout')" method="post" as="button">Log Out</DropdownLink>
       </template>
     </Dropdown>
-    <ThemeSwitcher class="ms-3" />
   </div>
+  <ThemeSwitcher class="ms-3" />
 </template>

@@ -29,7 +29,7 @@ return [
     */
 
     'env' => env('APP_ENV', 'production'),
-    'dev_console_enabled' => (bool) env('DEV_CONSOLE_ENABLED', false),
+    'dev_console_enabled' => env('DEV_CONSOLE_ENABLED', false),
 
     /*
     |--------------------------------------------------------------------------

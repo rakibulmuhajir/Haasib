@@ -104,7 +104,6 @@ class CompanyLookupController extends Controller
         if (! $user->isSuperAdmin()) {
             abort_unless($this->lookup->isMember($company->id, $user->id), 403);
         }
-
         $q = (string) $request->query('q', '');
         $limit = (int) $request->query('limit', 10);
         $users = $this->lookup->members($company->id, $limit, $q);

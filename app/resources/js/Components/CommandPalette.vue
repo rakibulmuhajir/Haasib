@@ -107,9 +107,9 @@ onUnmounted(() => {
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 bg-black/70 backdrop-blur-sm" />
       <div class="fixed inset-x-0 bottom-0 flex items-end justify-center pb-2 sm:pb-4 px-2">
-        <DialogContent class="w-full max-w-5xl flex flex-col lg:flex-row gap-4" :class="[palette.showResults ? 'lg:max-w-5xl' : '', dockSize === 'full' ? 'h-[88vh]' : 'h-[56vh]']">
+        <DialogContent class="w-full max-w-5xl flex flex-col lg:flex-row gap-4" :class="[palette.showResults.value ? 'lg:max-w-5xl' : '', dockSize === 'full' ? 'h-[88vh]' : 'h-[56vh]']">
           <PalettePanel :palette="palette" :handle-keydown="handleKeydown" :is-expanded="isExpanded" />
-          <PaletteResults :results="palette.results" :show="palette.showResults" @close="palette.showResults = false" />
+          <PaletteResults :results="palette.results.value" :show="palette.showResults.value" @close="palette.showResults.value = false" />
         </DialogContent>
       </div>
     </DialogPortal>

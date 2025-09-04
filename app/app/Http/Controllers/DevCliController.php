@@ -2,7 +2,7 @@
 // app/Http/Controllers/DevCliController.php
 namespace App\Http\Controllers;
 
-use App\Support\DevOpsService;
+use App\Support\CommandBus;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -33,22 +33,47 @@ class DevCliController extends Controller
         [$name, $opts] = $this->parse($request->string('command'));
         $name = $this->normalize($name);
         try {
-            $ops  = app(DevOpsService::class);
+            $user = $request->user();
 
-            $map = [
-                'user:add'          => fn() => $ops->createUser($opts['name'] ?? 'User', $opts['email'] ?? '', $opts['password'] ?? null),
-                'user:delete'       => fn() => $ops->deleteUser($opts['email'] ?? ''),
-                'company:add'       => fn() => $ops->createCompany($opts['name'] ?? ''),
-                'company:assign'    => fn() => $ops->assignCompany($opts['email'] ?? '', $opts['company'] ?? '', $opts['role'] ?? 'viewer'),
-                'company:unassign'  => fn() => $ops->unassignCompany($opts['email'] ?? '', $opts['company'] ?? ''),
-                'company:delete'    => fn() => $ops->deleteCompany($opts['company'] ?? ''),
-                'bootstrap:demo'    => fn() => $ops->createUserAndCompanies($opts['name'] ?? 'Founder', $opts['email'] ?? '', array_filter(array_map('trim', explode(',', $opts['companies'] ?? ''))), $opts['role'] ?? 'owner'),
+            if ($name === 'bootstrap:demo') {
+                $companies = array_filter(array_map('trim', explode(',', $opts['companies'] ?? '')));
+                $summary = CommandBus::dispatch('user.create', [
+                    'name' => $opts['name'] ?? 'Founder',
+                    'email' => $opts['email'] ?? '',
+                    'password' => $opts['password'] ?? null,
+                ], $user);
+                foreach ($companies as $co) {
+                    CommandBus::dispatch('company.create', ['name' => $co], $user);
+                    CommandBus::dispatch('company.assign', [
+                        'email' => $opts['email'] ?? '',
+                        'company' => $co,
+                        'role' => $opts['role'] ?? 'owner',
+                    ], $user);
+                }
+                return response()->json(['ok'=>true, 'output'=>['summary'=>$summary, 'companies'=>$companies]]);
+            }
+
+            $action = str_replace(':', '.', $name);
+            if (str_ends_with($action, '.add')) {
+                $action = str_replace('.add', '.create', $action);
+            }
+
+            $valid = [
+                'user.create', 'user.delete', 'company.create', 'company.delete', 'company.assign', 'company.unassign',
             ];
-
-            if (!isset($map[$name])) {
+            if (!in_array($action, $valid, true)) {
                 return response()->json(['ok'=>false,'error'=>"Unknown command: {$name}"], 422);
             }
-            return response()->json(['ok'=>true, 'output'=>$map[$name]()]);
+
+            if ($action === 'company.assign') {
+                $opts['role'] = $opts['role'] ?? 'viewer';
+            }
+            if ($action === 'user.create') {
+                $opts['name'] = $opts['name'] ?? 'User';
+            }
+
+            $result = CommandBus::dispatch($action, $opts, $user);
+            return response()->json(['ok'=>true, 'output'=>$result]);
         } catch (\Throwable $e) {
             return response()->json(['ok'=>false, 'error'=>$e->getMessage()], 422);
         }

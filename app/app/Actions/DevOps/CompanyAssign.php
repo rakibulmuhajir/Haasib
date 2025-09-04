@@ -42,11 +42,19 @@ class CompanyAssign
             );
         }
 
-        DB::transaction(function () use ($data, $company) {
+        $member = DB::transaction(function () use ($data, $company) {
             $user = User::where('email', $data['email'])->firstOrFail();
             $company->users()->syncWithoutDetaching([$user->id => ['role' => $data['role']]]);
+            $user = $company->users()->where('users.id', $user->id)->first();
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->pivot->role,
+            ];
         });
 
-        return ['message' => 'User assigned', 'data' => ['email' => $data['email'], 'company' => $company->slug]];
+        return ['message' => 'User assigned', 'data' => $member];
     }
 }

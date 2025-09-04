@@ -18,14 +18,25 @@
 
         <script>
             // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            const storedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
                 document.documentElement.classList.add('dark');
             } else {
                 document.documentElement.classList.remove('dark');
             }
+            const fonts = {
+                sans: 'Figtree, sans-serif',
+                serif: 'Georgia, serif',
+                mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            };
+            const storedFont = localStorage.getItem('font');
+            if (storedFont && fonts[storedFont]) {
+                document.documentElement.style.setProperty('--app-font', fonts[storedFont]);
+            }
         </script>
     </head>
-    <body class="font-sans antialiased">
+    <body class="antialiased">
         @inertia
     </body>
 </html>

@@ -120,7 +120,7 @@ class CompanyLookupService
             ->join('auth.companies as c', 'c.id', '=', 'cu.company_id')
             ->where('cu.user_id', $userId)
             ->orderBy('c.name')
-            ->get(['c.id','c.name','c.slug','cu.role']);
+            ->get(['c.id','c.name','c.slug','cu.role','cu.created_at','cu.updated_at']);
     }
 
     public function shareCompany(string $userId, string $otherUserId): bool

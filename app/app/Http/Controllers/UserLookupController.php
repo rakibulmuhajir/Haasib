@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Repositories\CompanyMembershipRepository;
 
 class UserLookupController extends Controller
 {
+    public function __construct(protected CompanyLookupService $lookup) {}
+
     public function suggest(Request $request)
     {
         $user = $request->user();
@@ -31,8 +33,7 @@ class UserLookupController extends Controller
             // Non-superadmin: restrict to users in the current company (or provided company_id)
             $cid = $companyId ?: $request->session()->get('current_company_id');
             abort_if(! $cid, 422, 'Company context required');
-            $ids = app(CompanyMembershipRepository::class)->userIdsForCompany($cid);
-            $query->whereIn('id', $ids);
+            $this->lookup->restrictUsersToCompany($query, $cid);
         }
 
         $users = $query->limit($limit)->get(['id','name','email']);
@@ -50,14 +51,12 @@ class UserLookupController extends Controller
 
         // Access: superadmin OR share at least one company
         if (! $actor->isSuperAdmin()) {
-            $actorIds = $repo->memberships($actor->id)->pluck('id');
-            $userIds = $repo->memberships($user->id)->pluck('id');
-            $shared = $actorIds->intersect($userIds)->isNotEmpty();
+            $shared = $this->lookup->shareCompany($user->id, $actor->id);
             abort_unless($shared, 403);
         }
 
         // Memberships
-        $memberships = $repo->memberships($user->id);
+        $memberships = $this->lookup->membershipsForUser($user->id);
 
         // Last activity from audit logs if available
         $lastActivity = null;

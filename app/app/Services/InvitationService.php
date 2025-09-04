@@ -11,6 +11,7 @@ use App\Repositories\CompanyMembershipRepository;
 
 class InvitationService
 {
+    public function __construct(protected CompanyLookupService $lookup) {}
     /**
      * List invitations for a given company.
      */
@@ -28,9 +29,7 @@ class InvitationService
         $co = $q->firstOrFail(['id', 'name', 'slug']);
 
         // Permission check: owner/admin or superadmin
-        $repo = app(CompanyMembershipRepository::class);
-        $role = $repo->roleForUser($auth->id, $co->id);
-        $allowed = $auth->isSuperAdmin() || in_array($role, ['owner', 'admin']);
+        $allowed = $auth->isSuperAdmin() || $this->lookup->userHasRole($co->id, $auth->id, ['owner','admin']);
         abort_unless($allowed, 403);
 
         return CompanyInvitation::query()
@@ -103,22 +102,17 @@ class InvitationService
             abort_unless(Str::lower($auth->email) === Str::lower($inv->invited_email), 403, 'This invite is for a different email');
         }
 
-        $repo = app(CompanyMembershipRepository::class);
-
-        DB::transaction(function () use ($inv, $targetUserId, $now, $auth, $repo) {
-            $repo->upsertMembership(
-                $inv->company_id,
-                $targetUserId,
-                $inv->role,
-                $inv->invited_by_user_id ?? $auth->id,
-                $now
-            );
+        DB::transaction(function () use ($inv, $targetUserId, $auth) {
+            $this->lookup->upsertMember($inv->company_id, $targetUserId, [
+                'role' => $inv->role,
+                'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
+            ]);
 
             $inv->update([
                 'status' => 'accepted',
-                'accepted_at' => $now,
+                'accepted_at' => now(),
                 'accepted_by_user_id' => $targetUserId,
-                'updated_at' => $now,
+                'updated_at' => now(),
             ]);
         });
 
@@ -134,9 +128,7 @@ class InvitationService
         abort_unless($inv, 404);
 
         // Permission: inviter, admin/owner of company, or superadmin
-        $repo = app(CompanyMembershipRepository::class);
-        $role = $repo->roleForUser($auth->id, $inv->company_id);
-        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || in_array($role, ['owner', 'admin']);
+        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || $this->lookup->userHasRole($inv->company_id, $auth->id, ['owner','admin']);
         abort_unless($allowed, 403);
 
         $inv->update(['status' => 'revoked', 'updated_at' => now()]);

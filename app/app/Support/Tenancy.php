@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Repositories\CompanyMembershipRepository;
@@ -18,7 +19,7 @@ class Tenancy
         $cid = self::currentCompanyId();
         if (! $cid) return null;
 
-        return app(CompanyMembershipRepository::class)->roleForUser($userId, $cid);
+        return app(CompanyLookupService::class)->userRole($cid, $userId);
     }
 
     public static function isMember(string $userId): bool
@@ -47,7 +48,8 @@ class Tenancy
 
     public static function verifyMembership(string $userId, string $companyId): bool
     {
-        return app(CompanyMembershipRepository::class)->verifyMembership($userId, $companyId);
+
+        return app(CompanyLookupService::class)->isMember($companyId, $userId);
     }
 
     public static function applyDbSessionSettings($user, ?string $companyId = null): void

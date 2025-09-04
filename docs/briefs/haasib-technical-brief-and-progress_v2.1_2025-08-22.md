@@ -376,24 +376,25 @@
 **References:** Plan: CLI in same codebase via command bus/palette; bus per-module in DoD; module loop adds CLI after services.
 
 ### 2025-08-28 — Palette DevOps foundations
-- Transport: POST /commands (web middleware), Headless UI + Fuse palette, session tenancy.
+- Transport: POST /commands (web middleware), Reka UI + Fuse palette, session tenancy.
 - Implemented action bus + DevOps actions: user create/delete, company create/delete, assign/unassign.
 - Kept DevCliController for dev-only console; both paths use same actions.
 - Tests cover success, RBAC, idempotency.
 ### 2025-08-28 — Palette-first command UX approved
-Primary: Headless CMD-K palette (Fuse.js) with inline mini-forms and server-driven field schemas.
+Primary: Reka UI CMD-K palette (Fuse.js) with inline mini-forms and server-driven field schemas. Headless UI has been replaced with Reka UI for these primitives and we'll standardize on Reka UI going forward.
 Backend: Single /api/commands endpoint; ActionBus + per-action handlers; transactions, idempotency, RBAC, audit, GL preview.
 Admin: xterm.js console behind superadmin; reuses same action endpoint plus ops-only verbs.
 Reason: Fast, discoverable, accessible for SMEs; no duplicated logic; ops power retained without inflicting terminals on users.
 
 ### 2025-08-28 — Frontend CLI deps
 Installed:
-- @headlessui/vue — accessible primitives (Dialog/Combobox) to build the bottom-dock CMD-K palette with inline mini-forms and preview.
+- reka-ui — accessible primitives (Dialog/Combobox) to build the bottom-dock CMD-K palette with inline mini-forms and preview; replacing Headless UI and planned for continued use.
 - fuse.js — fast fuzzy matching for commands, customers, vendors, accounts.
 - @vueuse/core — utilities (hotkeys, debounced refs, storage) for CMD-K, history, and state.
 
 Removed:
 - vue-command-palette — replaced to gain full control over bottom-dock layout, prompts, and preview.
+- @headlessui/vue — superseded by Reka UI as the default component library.
 
 
 ### 2025-08-29 — Palette UX shift to entity-first (Foundations scope)

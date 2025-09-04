@@ -8,6 +8,10 @@ use App\Support\CommandBus;
 
 class DevOpsService
 {
+    public function __construct(private CommandBus $bus)
+    {
+    }
+
     protected function actor(): User
     {
         return Auth::user() ?? User::where('system_role', 'superadmin')->firstOrFail();
@@ -15,7 +19,7 @@ class DevOpsService
 
     public function createUser(string $name, string $email, ?string $password = null): array
     {
-        return CommandBus::dispatch('user.create', [
+        return $this->bus->dispatch('user.create', [
             'name' => $name,
             'email' => $email,
             'password' => $password,
@@ -24,22 +28,22 @@ class DevOpsService
 
     public function deleteUser(string $email): array
     {
-        return CommandBus::dispatch('user.delete', ['email' => $email], $this->actor());
+        return $this->bus->dispatch('user.delete', ['email' => $email], $this->actor());
     }
 
     public function createCompany(string $name): array
     {
-        return CommandBus::dispatch('company.create', ['name' => $name], $this->actor());
+        return $this->bus->dispatch('company.create', ['name' => $name], $this->actor());
     }
 
     public function deleteCompany(string $company): array
     {
-        return CommandBus::dispatch('company.delete', ['company' => $company], $this->actor());
+        return $this->bus->dispatch('company.delete', ['company' => $company], $this->actor());
     }
 
     public function assignCompany(string $email, string $company, string $role = 'viewer'): array
     {
-        return CommandBus::dispatch('company.assign', [
+        return $this->bus->dispatch('company.assign', [
             'email' => $email,
             'company' => $company,
             'role' => $role,
@@ -48,7 +52,7 @@ class DevOpsService
 
     public function unassignCompany(string $email, string $company): array
     {
-        return CommandBus::dispatch('company.unassign', [
+        return $this->bus->dispatch('company.unassign', [
             'email' => $email,
             'company' => $company,
         ], $this->actor());

@@ -12,6 +12,10 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CommandExecutor
 {
+    public function __construct(private CommandBus $bus)
+    {
+    }
+
     public function execute(string $action, array $params, User $user, ?int $companyId, string $key): array
     {
         // Idempotency check (scoped by user/company/action/key)
@@ -33,7 +37,7 @@ class CommandExecutor
         }
 
         try {
-            $result = CommandBus::dispatch($action, $params, $user);
+            $result = $this->bus->dispatch($action, $params, $user);
         } catch (ValidationException $e) {
             return [[
                 'ok' => false,

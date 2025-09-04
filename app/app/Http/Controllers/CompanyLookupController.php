@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Repositories\CompanyMembershipRepository;
 
 class CompanyLookupController extends Controller
 {
@@ -27,23 +28,26 @@ class CompanyLookupController extends Controller
             });
         }
 
+        $repo = app(CompanyMembershipRepository::class);
+
         // If superadmin, can see all; otherwise limit to companies the current user belongs to
         if (! $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($user) {
-                $sub->from('auth.company_user')->select('company_id')->where('user_id', $user->id);
-            });
+            $ids = $repo->memberships($user->id)->pluck('id');
+            $query->whereIn('id', $ids);
         }
 
         // Filter: companies associated to a specific user (superadmin only)
         if (($userId || $userEmail) && $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($userId, $userEmail) {
-                $sub->from('auth.company_user')->select('company_id')
-                    ->when($userId, fn($w) => $w->where('user_id', $userId))
-                    ->when($userEmail, function ($w) use ($userEmail) {
-                        $uid = User::where('email', $userEmail)->value('id');
-                        if ($uid) $w->where('user_id', $uid);
-                    });
-            });
+            $targetId = $userId;
+            if (! $targetId && $userEmail) {
+                $targetId = User::where('email', $userEmail)->value('id');
+            }
+            if ($targetId) {
+                $ids = $repo->memberships($targetId)->pluck('id');
+                $query->whereIn('id', $ids);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         $companies = $query->limit($limit)->get();
@@ -63,35 +67,16 @@ class CompanyLookupController extends Controller
         }
         $record = $query->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
 
+        $repo = app(CompanyMembershipRepository::class);
+
         if (! $user->isSuperAdmin()) {
-            $isMember = DB::table('auth.company_user')
-                ->where('user_id', $user->id)
-                ->where('company_id', $record->id)
-                ->exists();
-            abort_unless($isMember, 403);
+            abort_unless($repo->verifyMembership($user->id, $record->id), 403);
         }
 
-        $members = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $record->id)
-            ->select('u.id','u.name','u.email','cu.role')
-            ->orderBy('u.name')
-            ->limit(10)
-            ->get();
-
-        $owners = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $record->id)
-            ->where('cu.role', 'owner')
-            ->select('u.id','u.name','u.email')
-            ->orderBy('u.name')
-            ->get();
-
-        $roleCounts = DB::table('auth.company_user')
-            ->select('role', DB::raw('count(*) as cnt'))
-            ->where('company_id', $record->id)
-            ->groupBy('role')
-            ->pluck('cnt','role');
+        $members = $repo->membersPreview($record->id);
+        $owners = $repo->owners($record->id);
+        $roleCounts = $repo->roleCounts($record->id);
+        $membersCount = $repo->countMembers($record->id);
 
         // Latest activity from audit logs if available
         $lastActivity = null;
@@ -114,7 +99,7 @@ class CompanyLookupController extends Controller
                 'language' => $record->language,
                 'locale' => $record->locale,
                 'members_preview' => $members,
-                'members_count' => DB::table('auth.company_user')->where('company_id', $record->id)->count(),
+                'members_count' => $membersCount,
                 'owners' => $owners,
                 'role_counts' => (object) $roleCounts,
                 'last_activity' => $lastActivity,
@@ -137,31 +122,19 @@ class CompanyLookupController extends Controller
         }
         $company = $q->firstOrFail(['id']);
 
+        $repo = app(CompanyMembershipRepository::class);
+
         // Access: superadmin OR any member of the company
         if (! $user->isSuperAdmin()) {
-            $isMember = DB::table('auth.company_user')
-                ->where('user_id', $user->id)
-                ->where('company_id', $company->id)
-                ->exists();
-            abort_unless($isMember, 403);
+            abort_unless($repo->verifyMembership($user->id, $company->id), 403);
         }
 
-        $q = (string) $request->query('q', '');
+        $qTerm = (string) $request->query('q', '');
         $limit = (int) $request->query('limit', 10);
 
-        $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-        $users = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $company->id)
-            ->when($q !== '', function ($w) use ($like) {
-                $w->where(function($q2) use ($like) {
-                    $q2->where('u.email', 'ilike', $like)
-                       ->orWhere('u.name', 'ilike', $like);
-                });
-            })
-            ->limit($limit)
-            ->get(['u.id','u.name','u.email','cu.role']);
+        $users = $repo->searchMembers($company->id, $qTerm, $limit);
 
         return response()->json(['data' => $users]);
     }
 }
+

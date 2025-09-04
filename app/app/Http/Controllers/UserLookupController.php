@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Repositories\CompanyMembershipRepository;
 
 class UserLookupController extends Controller
 {
@@ -29,9 +31,8 @@ class UserLookupController extends Controller
             // Non-superadmin: restrict to users in the current company (or provided company_id)
             $cid = $companyId ?: $request->session()->get('current_company_id');
             abort_if(! $cid, 422, 'Company context required');
-            $query->whereIn('id', function ($sub) use ($cid) {
-                $sub->from('auth.company_user')->select('user_id')->where('company_id', $cid);
-            });
+            $ids = app(CompanyMembershipRepository::class)->userIdsForCompany($cid);
+            $query->whereIn('id', $ids);
         }
 
         $users = $query->limit($limit)->get(['id','name','email']);
@@ -45,29 +46,23 @@ class UserLookupController extends Controller
             ->when(str_contains($userKey, '@'), fn($q) => $q->where('email', $userKey), fn($q) => $q->where('id', $userKey))
             ->firstOrFail(['id','name','email','created_at','updated_at']);
 
+        $repo = app(CompanyMembershipRepository::class);
+
         // Access: superadmin OR share at least one company
         if (! $actor->isSuperAdmin()) {
-            $shared = \Illuminate\Support\Facades\DB::table('auth.company_user as cu1')
-                ->join('auth.company_user as cu2', function($j) use ($actor) {
-                    $j->on('cu1.company_id', '=', 'cu2.company_id')
-                      ->where('cu2.user_id', '=', $actor->id);
-                })
-                ->where('cu1.user_id', $user->id)
-                ->exists();
+            $actorIds = $repo->memberships($actor->id)->pluck('id');
+            $userIds = $repo->memberships($user->id)->pluck('id');
+            $shared = $actorIds->intersect($userIds)->isNotEmpty();
             abort_unless($shared, 403);
         }
 
         // Memberships
-        $memberships = \Illuminate\Support\Facades\DB::table('auth.company_user as cu')
-            ->join('auth.companies as c', 'c.id', '=', 'cu.company_id')
-            ->where('cu.user_id', $user->id)
-            ->orderBy('c.name')
-            ->get(['c.id','c.name','c.slug','cu.role']);
+        $memberships = $repo->memberships($user->id);
 
         // Last activity from audit logs if available
         $lastActivity = null;
         try {
-            $lastActivity = \Illuminate\Support\Facades\DB::table('audit.audit_logs')
+            $lastActivity = DB::table('audit.audit_logs')
                 ->where('user_id', $user->id)
                 ->orderByDesc('created_at')
                 ->limit(1)
@@ -85,3 +80,4 @@ class UserLookupController extends Controller
         ]);
     }
 }
+

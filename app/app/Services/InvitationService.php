@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\CompanyInvitation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Repositories\CompanyMembershipRepository;
 
 class InvitationService
 {
@@ -27,11 +28,9 @@ class InvitationService
         $co = $q->firstOrFail(['id', 'name', 'slug']);
 
         // Permission check: owner/admin or superadmin
-        $allowed = $auth->isSuperAdmin() || DB::table('auth.company_user')
-            ->where('company_id', $co->id)
-            ->where('user_id', $auth->id)
-            ->whereIn('role', ['owner', 'admin'])
-            ->exists();
+        $repo = app(CompanyMembershipRepository::class);
+        $role = $repo->roleForUser($auth->id, $co->id);
+        $allowed = $auth->isSuperAdmin() || in_array($role, ['owner', 'admin']);
         abort_unless($allowed, 403);
 
         return CompanyInvitation::query()
@@ -104,31 +103,16 @@ class InvitationService
             abort_unless(Str::lower($auth->email) === Str::lower($inv->invited_email), 403, 'This invite is for a different email');
         }
 
-        DB::transaction(function () use ($inv, $targetUserId, $now, $auth) {
-            $exists = DB::table('auth.company_user')
-                ->where('company_id', $inv->company_id)
-                ->where('user_id', $targetUserId)
-                ->exists();
+        $repo = app(CompanyMembershipRepository::class);
 
-            if ($exists) {
-                DB::table('auth.company_user')
-                    ->where('company_id', $inv->company_id)
-                    ->where('user_id', $targetUserId)
-                    ->update([
-                        'role' => $inv->role,
-                        'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
-                        'updated_at' => $now,
-                    ]);
-            } else {
-                DB::table('auth.company_user')->insert([
-                    'company_id' => $inv->company_id,
-                    'user_id' => $targetUserId,
-                    'role' => $inv->role,
-                    'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            }
+        DB::transaction(function () use ($inv, $targetUserId, $now, $auth, $repo) {
+            $repo->upsertMembership(
+                $inv->company_id,
+                $targetUserId,
+                $inv->role,
+                $inv->invited_by_user_id ?? $auth->id,
+                $now
+            );
 
             $inv->update([
                 'status' => 'accepted',
@@ -150,13 +134,12 @@ class InvitationService
         abort_unless($inv, 404);
 
         // Permission: inviter, admin/owner of company, or superadmin
-        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || DB::table('auth.company_user')
-            ->where('company_id', $inv->company_id)
-            ->where('user_id', $auth->id)
-            ->whereIn('role', ['owner', 'admin'])
-            ->exists();
+        $repo = app(CompanyMembershipRepository::class);
+        $role = $repo->roleForUser($auth->id, $inv->company_id);
+        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || in_array($role, ['owner', 'admin']);
         abort_unless($allowed, 403);
 
         $inv->update(['status' => 'revoked', 'updated_at' => now()]);
     }
 }
+

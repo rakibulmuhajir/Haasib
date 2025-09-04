@@ -30,9 +30,9 @@
 
 
 **Synonym map (client)**
-- `invoice` ⇆ `bill-customer` ⇆ `send invoice` (already established in doc). :contentReference[oaicite:2]{index=2}
-- `payment` ⇆ `record payment` ⇆ `got paid` (also in doc). :contentReference[oaicite:3]{index=3}
-- `bill` ⇆ `expense` ⇆ `create bill`. :contentReference[oaicite:4]{index=4}
+- `invoice` ⇆ `bill-customer` ⇆ `send invoice` (already established in the [functional spec](clie-v2.md#synonyms-that-map-to-actions)).
+- `payment` ⇆ `record payment` ⇆ `got paid` (also covered in the [functional spec](clie-v2.md#synonyms-that-map-to-actions)).
+- `bill` ⇆ `expense` ⇆ `create bill` (see the [functional spec](clie-v2.md#synonyms-that-map-to-actions)).
 
 **Parser behavior**
 - Tokenize with quotes. Map synonyms to a canonical `action`.
@@ -42,7 +42,7 @@
 
 ## Palette UI: placement & controls
 
-- **Placement:** a thin **status-bar dock** at the bottom when idle; on `Ctrl+`` it **expands to half screen**. You already documented half-screen; this cements the bottom-dock default. :contentReference[oaicite:5]{index=5}
+- **Placement:** a thin **status-bar dock** at the bottom when idle; on `Ctrl+`` it **expands to half screen**. You already documented half-screen; this cements the bottom-dock default (see [palette spec](clie-v2.md#1-shell--interaction-model)).
 - **Controls (right side):** `▢` expand-to-half, `—` hide to dock, `⛶` full screen.
 - **Focus trap**, `aria-live` for results, ESC to close.
 - **Hotkeys:** `Ctrl+`` toggle palette; `Tab` cycles suggestions; `Enter` runs; Up/Down navigate history.
@@ -427,17 +427,17 @@ Body: { "action": "invoice.create", "params": { ... } }
 
 **Notes**
 - Wrap mutating actions in `DB::transaction`.
-- Responses follow API v1 conventions (snake_case, ISO-8601, errors envelope). :contentReference[oaicite:8]{index=8}
+ - Responses follow API v1 conventions (snake_case, ISO-8601, errors envelope) as detailed in the [dev plan](dev-plan.md#6-api-v1-design).
 
 ## 12. Idempotency & Audit
 
-- Require `X-Idempotency-Key` for POST/PUT; persist keys 24h per user+tenant. You already call for idempotency in the platform plan; mirror it here explicitly for the palette. :contentReference[oaicite:9]{index=9}
+ - Require `X-Idempotency-Key` for POST/PUT; persist keys 24h per user+tenant. This mirrors the idempotency guidance in the [dev plan](dev-plan.md#6-api-v1-design).
 - Audit table stores: raw command string, parsed params, user, company, results (model ids), latency.
 
 ## 13. Auth, RBAC & Tenancy
 
 - Enforce policies per action; verbs map to abilities (*ledger.post*, *invoice.create*, *payment.create*).
-- Tenant scoping from active company; palette calls piggyback on your existing RLS/tenant context. :contentReference[oaicite:10]{index=10}
+ - Tenant scoping from the active company; palette calls piggyback on your existing RLS/tenant context (see [dev plan](dev-plan.md#example-migration-schema--table--rls)).
 - Failure modes: 422 for missing context, 403 for not-a-member, align with your middleware rules.
 
 ## 14. Superadmin Console (xterm) — separate

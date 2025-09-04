@@ -107,11 +107,12 @@ class CompanyLookupService
             ->pluck('cnt','role');
     }
 
-    public function memberUserIds(string $companyId)
+    public function memberUserIds(string $companyId): array
     {
         return DB::table('auth.company_user')
             ->where('company_id', $companyId)
-            ->pluck('user_id');
+            ->pluck('user_id')
+            ->all();
     }
 
     public function membershipsForUser(string $userId)
@@ -120,7 +121,7 @@ class CompanyLookupService
             ->join('auth.companies as c', 'c.id', '=', 'cu.company_id')
             ->where('cu.user_id', $userId)
             ->orderBy('c.name')
-            ->get(['c.id','c.name','c.slug','cu.role']);
+            ->get(['c.id','c.name','c.slug','cu.role','cu.created_at','cu.updated_at']);
     }
 
     public function shareCompany(string $userId, string $otherUserId): bool
@@ -146,6 +147,23 @@ class CompanyLookupService
         $query->whereIn('id', function ($sub) use ($userId) {
             $sub->from('auth.company_user')->select('company_id')->where('user_id', $userId);
         });
+    }
+
+    public function restrictCompaniesToUserIdOrEmail(Builder $query, ?string $userId, ?string $email): void
+    {
+        if (! $userId && ! $email) {
+            return;
+        }
+
+        if (! $userId && $email) {
+            $userId = DB::table('users')->where('email', $email)->value('id');
+            if (! $userId) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+        }
+
+        $this->restrictCompaniesToUser($query, $userId);
     }
 
     public function upsertMember(string $companyId, string $userId, array $data): void

@@ -17,7 +17,6 @@ class CompanyLookupServiceTest extends TestCase
         $user = User::factory()->create();
         $company = Company::factory()->create();
         $user->companies()->attach($company->id, ['role' => 'admin']);
-
         $svc = new CompanyLookupService();
 
         $this->assertTrue($svc->isMember($company->id, $user->id));
@@ -32,7 +31,6 @@ class CompanyLookupServiceTest extends TestCase
         $c2 = Company::factory()->create(['name' => 'Beta']);
         $user->companies()->attach($c1->id, ['role' => 'owner']);
         $user->companies()->attach($c2->id, ['role' => 'viewer']);
-
         $svc = new CompanyLookupService();
         $memberships = $svc->membershipsForUser($user->id);
 
@@ -47,7 +45,6 @@ class CompanyLookupServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $company = Company::factory()->create();
-
         $svc = new CompanyLookupService();
 
         $svc->upsertMember($company->id, $user->id, ['role' => 'owner']);
@@ -57,7 +54,6 @@ class CompanyLookupServiceTest extends TestCase
             'user_id' => $user->id,
             'role' => 'owner',
         ]);
-
         $svc->upsertMember($company->id, $user->id, ['role' => 'admin']);
 
         $this->assertDatabaseHas('auth.company_user', [

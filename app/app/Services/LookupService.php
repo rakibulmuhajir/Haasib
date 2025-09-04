@@ -5,10 +5,12 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Services\CompanyLookupService;
 
 class LookupService
 {
+    public function __construct(protected CompanyLookupService $companies) {}
+
     /**
      * Lookup companies applying membership and query filters.
      */
@@ -25,22 +27,11 @@ class LookupService
         }
 
         if (! $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($user) {
-                $sub->from('auth.company_user')->select('company_id')->where('user_id', $user->id);
-            });
+            $this->companies->restrictCompaniesToUser($query, $user->id);
         }
 
         if (($filters['user_id'] ?? null || $filters['user_email'] ?? null) && $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($filters) {
-                $sub->from('auth.company_user')->select('company_id')
-                    ->when($filters['user_id'] ?? null, fn($w, $uid) => $w->where('user_id', $uid))
-                    ->when($filters['user_email'] ?? null, function ($w, $email) {
-                        $uid = DB::table('users')->where('email', $email)->value('id');
-                        if ($uid) {
-                            $w->where('user_id', $uid);
-                        }
-                    });
-            });
+            $this->companies->restrictCompaniesToUserIdOrEmail($query, $filters['user_id'] ?? null, $filters['user_email'] ?? null);
         }
 
         return $query->limit($limit)->get();

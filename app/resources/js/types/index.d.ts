@@ -20,6 +20,8 @@ export interface UserMembership {
   name: string;
   slug: string;
   role: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Represents a navigation link item

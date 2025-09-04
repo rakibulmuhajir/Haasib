@@ -24,10 +24,11 @@ return [
     | running in. This may determine how you prefer to configure various
     | services the application utilizes. Set this in your ".env" file.
     |
+    | The "dev_console_enabled" option toggles the development console.
+    |
     */
 
     'env' => env('APP_ENV', 'production'),
-       // config/app.php
     'dev_console_enabled' => (bool) env('DEV_CONSOLE_ENABLED', false),
 
     /*

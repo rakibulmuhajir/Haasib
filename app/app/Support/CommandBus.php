@@ -8,7 +8,8 @@ class CommandBus
 {
     public static function dispatch(string $action, array $params, User $user): array
     {
-        $handlerClass = config("command-bus.{$action}");
+        $handlers = config('command-bus');
+        $handlerClass = $handlers[$action] ?? null;
 
         if (! $handlerClass) {
             throw new \InvalidArgumentException("Unknown action: {$action}");

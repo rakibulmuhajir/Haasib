@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\User;
+use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class CompanyLookupController extends Controller
 {
+    public function __construct(protected CompanyLookupService $lookup) {}
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -29,21 +32,17 @@ class CompanyLookupController extends Controller
 
         // If superadmin, can see all; otherwise limit to companies the current user belongs to
         if (! $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($user) {
-                $sub->from('auth.company_user')->select('company_id')->where('user_id', $user->id);
-            });
+            $this->lookup->restrictCompaniesToUser($query, $user->id);
         }
 
         // Filter: companies associated to a specific user (superadmin only)
         if (($userId || $userEmail) && $user->isSuperAdmin()) {
-            $query->whereIn('id', function ($sub) use ($userId, $userEmail) {
-                $sub->from('auth.company_user')->select('company_id')
-                    ->when($userId, fn($w) => $w->where('user_id', $userId))
-                    ->when($userEmail, function ($w) use ($userEmail) {
-                        $uid = User::where('email', $userEmail)->value('id');
-                        if ($uid) $w->where('user_id', $uid);
-                    });
-            });
+            if (! $userId && $userEmail) {
+                $userId = User::where('email', $userEmail)->value('id');
+            }
+            if ($userId) {
+                $this->lookup->restrictCompaniesToUser($query, $userId);
+            }
         }
 
         $companies = $query->limit($limit)->get();
@@ -53,45 +52,17 @@ class CompanyLookupController extends Controller
     public function show(Request $request, string $company)
     {
         $user = $request->user();
-        $query = Company::query();
-        if (\Illuminate\Support\Str::isUuid($company)) {
-            $query->where('id', $company);
-        } else {
-            $query->where(function ($w) use ($company) {
-                $w->where('slug', $company)->orWhere('name', $company);
-            });
-        }
-        $record = $query->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
+        $record = $this->lookup->resolve($company);
 
         if (! $user->isSuperAdmin()) {
-            $isMember = DB::table('auth.company_user')
-                ->where('user_id', $user->id)
-                ->where('company_id', $record->id)
-                ->exists();
-            abort_unless($isMember, 403);
+            abort_unless($this->lookup->isMember($record->id, $user->id), 403);
         }
 
-        $members = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $record->id)
-            ->select('u.id','u.name','u.email','cu.role')
-            ->orderBy('u.name')
-            ->limit(10)
-            ->get();
+        $members = $this->lookup->members($record->id, 10);
 
-        $owners = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $record->id)
-            ->where('cu.role', 'owner')
-            ->select('u.id','u.name','u.email')
-            ->orderBy('u.name')
-            ->get();
+        $owners = $this->lookup->owners($record->id);
 
-        $roleCounts = DB::table('auth.company_user')
-            ->select('role', DB::raw('count(*) as cnt'))
-            ->where('company_id', $record->id)
-            ->groupBy('role')
-            ->pluck('cnt','role');
+        $roleCounts = $this->lookup->roleCounts($record->id);
 
         // Latest activity from audit logs if available
         $lastActivity = null;
@@ -114,7 +85,7 @@ class CompanyLookupController extends Controller
                 'language' => $record->language,
                 'locale' => $record->locale,
                 'members_preview' => $members,
-                'members_count' => DB::table('auth.company_user')->where('company_id', $record->id)->count(),
+                'members_count' => $this->lookup->membersCount($record->id),
                 'owners' => $owners,
                 'role_counts' => (object) $roleCounts,
                 'last_activity' => $lastActivity,
@@ -127,40 +98,17 @@ class CompanyLookupController extends Controller
         $user = $request->user();
 
         // Resolve company by id or slug or name
-        $q = Company::query();
-        if (\Illuminate\Support\Str::isUuid($companyId)) {
-            $q->where('id', $companyId);
-        } else {
-            $q->where(function ($w) use ($companyId) {
-                $w->where('slug', $companyId)->orWhere('name', $companyId);
-            });
-        }
-        $company = $q->firstOrFail(['id']);
+        $company = $this->lookup->resolve($companyId);
 
         // Access: superadmin OR any member of the company
         if (! $user->isSuperAdmin()) {
-            $isMember = DB::table('auth.company_user')
-                ->where('user_id', $user->id)
-                ->where('company_id', $company->id)
-                ->exists();
-            abort_unless($isMember, 403);
+            abort_unless($this->lookup->isMember($company->id, $user->id), 403);
         }
 
         $q = (string) $request->query('q', '');
         $limit = (int) $request->query('limit', 10);
 
-        $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-        $users = DB::table('auth.company_user as cu')
-            ->join('users as u', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $company->id)
-            ->when($q !== '', function ($w) use ($like) {
-                $w->where(function($q2) use ($like) {
-                    $q2->where('u.email', 'ilike', $like)
-                       ->orWhere('u.name', 'ilike', $like);
-                });
-            })
-            ->limit($limit)
-            ->get(['u.id','u.name','u.email','cu.role']);
+        $users = $this->lookup->members($company->id, $limit, $q);
 
         return response()->json(['data' => $users]);
     }

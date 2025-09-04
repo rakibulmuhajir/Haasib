@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 
 class InvitationService
 {
+    public function __construct(protected CompanyLookupService $lookup) {}
     /**
      * List invitations for a given company.
      */
@@ -27,11 +28,7 @@ class InvitationService
         $co = $q->firstOrFail(['id', 'name', 'slug']);
 
         // Permission check: owner/admin or superadmin
-        $allowed = $auth->isSuperAdmin() || DB::table('auth.company_user')
-            ->where('company_id', $co->id)
-            ->where('user_id', $auth->id)
-            ->whereIn('role', ['owner', 'admin'])
-            ->exists();
+        $allowed = $auth->isSuperAdmin() || $this->lookup->userHasRole($co->id, $auth->id, ['owner','admin']);
         abort_unless($allowed, 403);
 
         return CompanyInvitation::query()
@@ -104,37 +101,17 @@ class InvitationService
             abort_unless(Str::lower($auth->email) === Str::lower($inv->invited_email), 403, 'This invite is for a different email');
         }
 
-        DB::transaction(function () use ($inv, $targetUserId, $now, $auth) {
-            $exists = DB::table('auth.company_user')
-                ->where('company_id', $inv->company_id)
-                ->where('user_id', $targetUserId)
-                ->exists();
-
-            if ($exists) {
-                DB::table('auth.company_user')
-                    ->where('company_id', $inv->company_id)
-                    ->where('user_id', $targetUserId)
-                    ->update([
-                        'role' => $inv->role,
-                        'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
-                        'updated_at' => $now,
-                    ]);
-            } else {
-                DB::table('auth.company_user')->insert([
-                    'company_id' => $inv->company_id,
-                    'user_id' => $targetUserId,
-                    'role' => $inv->role,
-                    'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            }
+        DB::transaction(function () use ($inv, $targetUserId, $auth) {
+            $this->lookup->upsertMember($inv->company_id, $targetUserId, [
+                'role' => $inv->role,
+                'invited_by_user_id' => $inv->invited_by_user_id ?? $auth->id,
+            ]);
 
             $inv->update([
                 'status' => 'accepted',
-                'accepted_at' => $now,
+                'accepted_at' => now(),
                 'accepted_by_user_id' => $targetUserId,
-                'updated_at' => $now,
+                'updated_at' => now(),
             ]);
         });
 
@@ -150,11 +127,7 @@ class InvitationService
         abort_unless($inv, 404);
 
         // Permission: inviter, admin/owner of company, or superadmin
-        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || DB::table('auth.company_user')
-            ->where('company_id', $inv->company_id)
-            ->where('user_id', $auth->id)
-            ->whereIn('role', ['owner', 'admin'])
-            ->exists();
+        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || $this->lookup->userHasRole($inv->company_id, $auth->id, ['owner','admin']);
         abort_unless($allowed, 403);
 
         $inv->update(['status' => 'revoked', 'updated_at' => now()]);

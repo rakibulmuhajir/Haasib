@@ -3,11 +3,12 @@
 // app/Http/Controllers/MeController.php
 namespace App\Http\Controllers;
 
+use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class MeController extends Controller
 {
+    public function __construct(protected CompanyLookupService $lookup) {}
     public function companies(Request $request)
     {
         // Use schema-qualified table to match Company::$table = 'auth.companies'
@@ -22,10 +23,7 @@ class MeController extends Controller
         ]);
 
         $user = $request->user();
-        $isMember = DB::table('auth.company_user')
-            ->where('user_id', $user->id)
-            ->where('company_id', $data['company_id'])
-            ->exists();
+        $isMember = $this->lookup->isMember($data['company_id'], $user->id);
 
         if (!$isMember) {
             return response()->json(['message' => 'Not a member of that company'], 403);

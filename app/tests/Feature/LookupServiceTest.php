@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\User;
+use App\Services\CompanyLookupService;
 use App\Services\LookupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,7 +20,7 @@ class LookupServiceTest extends TestCase
         $companyB = Company::factory()->create(['name' => 'Beta']);
         $user->companies()->attach($companyA->id, ['role' => 'member']);
 
-        $service = new LookupService();
+        $service = new LookupService(new CompanyLookupService());
         $results = $service->companies($user);
 
         $this->assertCount(1, $results);
@@ -32,7 +33,7 @@ class LookupServiceTest extends TestCase
         Company::factory()->create(['name' => 'Acme Co']);
         Company::factory()->create(['name' => 'Beta Co']);
 
-        $service = new LookupService();
+        $service = new LookupService(new CompanyLookupService());
         $results = $service->companies($super, 'Acme');
 
         $this->assertCount(1, $results);
@@ -46,7 +47,7 @@ class LookupServiceTest extends TestCase
         $company = Company::factory()->create(['name' => 'Gamma']);
         $member->companies()->attach($company->id, ['role' => 'member']);
 
-        $service = new LookupService();
+        $service = new LookupService(new CompanyLookupService());
         $results = $service->companies($super, '', 10, ['user_email' => $member->email]);
 
         $this->assertCount(1, $results);

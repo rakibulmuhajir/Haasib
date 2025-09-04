@@ -16,6 +16,7 @@ class CommandController extends Controller
         $user   = $request->user();
         $params = $request->all();
         $companyId = $request->session()->get('current_company_id');
+        $companyId = $companyId !== null ? (int) $companyId : null;
 
         [$body, $status] = $executor->execute($action, $params, $user, $companyId, $key);
 

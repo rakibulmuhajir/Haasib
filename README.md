@@ -524,4 +524,23 @@ This guide gives deployment, table purposes, how to use each table set effective
 
 ## 2. API
 
+The backend exposes a REST-style API for interacting with the system.
+
+* `POST /api/v1/auth/login` – authenticate and receive an access token.
+* `GET  /api/v1/status` – simple health check.
+* `GET  /api/v1/users` – list existing users (authentication required).
+
+Additional routes and sample requests are available in the API documentation within the `docs/` directory.
+
 ## 3. Laravel Setup and initialization
+
+1. **Environment**
+   - Copy `.env.example` to `.env`.
+   - Configure database credentials and other environment variables.
+   - Install dependencies with `composer install`.
+   - Generate the application key: `php artisan key:generate`.
+2. **Migrations**
+   - Run database migrations: `php artisan migrate`.
+3. **Seed Data**
+   - Populate reference data and defaults: `php artisan db:seed`.
+

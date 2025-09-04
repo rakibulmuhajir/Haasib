@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Repositories\CompanyMembershipRepository;
 
 class CompanyLookupController extends Controller
 {
@@ -30,8 +29,6 @@ class CompanyLookupController extends Controller
                   ->orWhere('slug', 'ilike', $like);
             });
         }
-
-        $repo = app(CompanyMembershipRepository::class);
 
         // If superadmin, can see all; otherwise limit to companies the current user belongs to
         if (! $user->isSuperAdmin()) {
@@ -56,8 +53,6 @@ class CompanyLookupController extends Controller
     {
         $user = $request->user();
         $record = $this->lookup->resolve($company);
-
-        $repo = app(CompanyMembershipRepository::class);
 
         if (! $user->isSuperAdmin()) {
             abort_unless($this->lookup->isMember($record->id, $user->id), 403);
@@ -105,14 +100,12 @@ class CompanyLookupController extends Controller
         // Resolve company by id or slug or name
         $company = $this->lookup->resolve($companyId);
 
-        $repo = app(CompanyMembershipRepository::class);
-
         // Access: superadmin OR any member of the company
         if (! $user->isSuperAdmin()) {
             abort_unless($this->lookup->isMember($company->id, $user->id), 403);
         }
 
-        $qTerm = (string) $request->query('q', '');
+        $q = (string) $request->query('q', '');
         $limit = (int) $request->query('limit', 10);
         $users = $this->lookup->members($company->id, $limit, $q);
 

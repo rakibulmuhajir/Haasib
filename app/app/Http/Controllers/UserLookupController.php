@@ -47,8 +47,6 @@ class UserLookupController extends Controller
             ->when(str_contains($userKey, '@'), fn($q) => $q->where('email', $userKey), fn($q) => $q->where('id', $userKey))
             ->firstOrFail(['id','name','email','created_at','updated_at']);
 
-        $repo = app(CompanyMembershipRepository::class);
-
         // Access: superadmin OR share at least one company
         if (! $actor->isSuperAdmin()) {
             $shared = $this->lookup->shareCompany($user->id, $actor->id);

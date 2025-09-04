@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Tenancy;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class SetTenantContext
 {
@@ -14,13 +14,7 @@ class SetTenantContext
             return $next($request);
         }
 
-        // Always set current_user_id for RLS-aware queries
-        try {
-            DB::select("select set_config('app.current_user_id', ?, true)", [$user->getKey()]);
-            DB::select("select set_config('app.current_user_email', ?, true)", [strtolower($user->email)]);
-        } catch (\Throwable $e) {
-            // noop for non-PgSQL
-        }
+        Tenancy::applyDbSessionSettings($user);
 
         $inApi = $request->is('api/v1/*');
 
@@ -38,19 +32,7 @@ class SetTenantContext
         // Enforce tenant context for API routes (except the ones above), not for web
         $enforce = $inApi;
 
-        // Prefer header for API, session for web – but only touch session if it exists
-        $companyId = $request->header('X-Company-Id');
-        if (! $companyId && $request->hasSession()) {
-            $companyId = $request->session()->get('current_company_id');
-        }
-
-        // Fallback: if the user has any companies, pick the first (no session write on API)
-        if (! $companyId) {
-            $companyId = $user->companies()
-                ->limit(1)
-                ->pluck($user->companies()->getRelated()->getQualifiedKeyName()) // e.g. "auth.companies.id"
-                ->first();
-        }
+        $companyId = Tenancy::resolveCompanyId($request, $user);
 
         if (! $companyId) {
             return $enforce
@@ -59,27 +41,16 @@ class SetTenantContext
         }
 
         if ($companyId && $request->hasSession() && ! $request->hasHeader('X-Company-Id')) {
-    $request->session()->put('current_company_id', $companyId);
-}
+            $request->session()->put('current_company_id', $companyId);
+        }
 
-        // Verify membership via schema-qualified pivot
-        $isMember = DB::table('auth.company_user')
-            ->where('user_id', $user->getKey())
-            ->where('company_id', $companyId)
-            ->exists();
-
-        if (! $isMember) {
+        if (! Tenancy::verifyMembership($user->getKey(), $companyId)) {
             return $enforce
                 ? abort(403, 'Not a member of the selected company')
                 : $next($request);
         }
 
-        // Set Postgres LOCAL setting for RLS; safe no-op on unsupported drivers
-        try {
-            DB::select("select set_config('app.current_company_id', ?, true)", [$companyId]);
-        } catch (\Throwable $e) {
-            // noop
-        }
+        Tenancy::applyDbSessionSettings($user, $companyId);
 
         app()->instance('tenant.company_id', $companyId);
 

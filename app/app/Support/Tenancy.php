@@ -5,7 +5,6 @@ namespace App\Support;
 use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Repositories\CompanyMembershipRepository;
 
 class Tenancy
 {

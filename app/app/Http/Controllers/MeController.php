@@ -4,7 +4,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Repositories\CompanyMembershipRepository;
 
 class MeController extends Controller
 {
@@ -22,10 +22,8 @@ class MeController extends Controller
         ]);
 
         $user = $request->user();
-        $isMember = DB::table('auth.company_user')
-            ->where('user_id', $user->id)
-            ->where('company_id', $data['company_id'])
-            ->exists();
+        $repo = app(CompanyMembershipRepository::class);
+        $isMember = $repo->verifyMembership($user->id, $data['company_id']);
 
         if (!$isMember) {
             return response()->json(['message' => 'Not a member of that company'], 403);
@@ -37,3 +35,4 @@ class MeController extends Controller
         return response()->json(['ok' => true]);
     }
 }
+

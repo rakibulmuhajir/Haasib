@@ -4,6 +4,10 @@ import { createInertiaApp } from '@inertiajs/vue3'
 import { createApp, h } from 'vue'
 import { ZiggyVue } from '../../vendor/tightenco/ziggy'
 import '../css/app.css';
+import { useTheme } from './utils/theme';
+
+// initialize theme handling on app startup
+useTheme();
 
 createInertiaApp({
   resolve: name => {

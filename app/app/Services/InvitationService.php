@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Models\CompanyInvitation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Repositories\CompanyMembershipRepository;
 
 class InvitationService
 {

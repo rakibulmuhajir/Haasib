@@ -2,78 +2,47 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Request;
+
+use App\Models\Company;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class LookupService
 {
-    public function __construct(private Request $request)
-    {
-    }
-
     /**
-     * Suggest records from a table using generic lookup behavior.
-     *
-     * @param string $table   The table name to query.
-     * @param array  $fields  Configuration including:
-     *                        - 'select': columns to return
-     *                        - 'search': columns to apply the q filter
-     *                        - 'order': column to order by (optional)
-     * @param array  $filters Map of request param => column config. Each value may
-     *                        be a string column name, an array with 'column' and optional
-     *                        'type' => 'bool', or a callable receiving ($query,$value).
+     * Lookup companies applying membership and query filters.
      */
-    public function suggest(string $table, array $fields, array $filters = [])
+    public function companies(User $user, string $q = '', int $limit = 10, array $filters = [])
     {
-        $q = (string) $this->request->query('q', '');
-        $limit = (int) $this->request->query('limit', 10);
+        $query = Company::query()->select(['id','name','slug','base_currency','language','locale']);
 
-        $select = $fields['select'] ?? [];
-        $search = $fields['search'] ?? [];
-        $orderBy = $fields['order'] ?? null;
-
-        $query = DB::table($table);
-
-        if ($q !== '' && $search) {
-            $like = '%' . str_replace(['%','_'], ['\\%','\\_'], $q) . '%';
-            $query->where(function ($w) use ($search, $like) {
-                foreach ($search as $idx => $col) {
-                    if ($idx === 0) {
-                        $w->where($col, 'ilike', $like);
-                    } else {
-                        $w->orWhere($col, 'ilike', $like);
-                    }
-                }
+        if ($q !== '') {
+            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
+            $query->where(function ($w) use ($like) {
+                $w->where('name', 'ilike', $like)
+                  ->orWhere('slug', 'ilike', $like);
             });
         }
 
-        foreach ($filters as $param => $config) {
-            $value = $this->request->query($param);
-            if ($value === null || $value === '') {
-                continue;
-            }
-
-            if (is_callable($config)) {
-                $config($query, $value);
-                continue;
-            }
-
-            if (is_array($config)) {
-                $column = $config['column'] ?? $param;
-                if (($config['type'] ?? null) === 'bool') {
-                    $value = (bool) $value;
-                }
-            } else {
-                $column = $config;
-            }
-
-            $query->where($column, $value);
+        if (! $user->isSuperAdmin()) {
+            $query->whereIn('id', function ($sub) use ($user) {
+                $sub->from('auth.company_user')->select('company_id')->where('user_id', $user->id);
+            });
         }
 
-        if ($orderBy) {
-            $query->orderBy($orderBy);
+        if (($filters['user_id'] ?? null || $filters['user_email'] ?? null) && $user->isSuperAdmin()) {
+            $query->whereIn('id', function ($sub) use ($filters) {
+                $sub->from('auth.company_user')->select('company_id')
+                    ->when($filters['user_id'] ?? null, fn($w, $uid) => $w->where('user_id', $uid))
+                    ->when($filters['user_email'] ?? null, function ($w, $email) {
+                        $uid = DB::table('users')->where('email', $email)->value('id');
+                        if ($uid) {
+                            $w->where('user_id', $uid);
+                        }
+                    });
+            });
         }
 
-        return $query->limit($limit)->get($select);
+        return $query->limit($limit)->get();
     }
 }

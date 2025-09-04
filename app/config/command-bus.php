@@ -7,5 +7,7 @@ return [
     'company.delete' => App\Actions\DevOps\CompanyDelete::class,
     'company.assign' => App\Actions\DevOps\CompanyAssign::class,
     'company.unassign' => App\Actions\DevOps\CompanyUnassign::class,
+    'company.invite' => App\Actions\Company\CompanyInvite::class,
+    'invitation.revoke' => App\Actions\Invitation\InvitationRevoke::class,
 ];
 

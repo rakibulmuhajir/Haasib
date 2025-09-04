@@ -16,7 +16,7 @@ class CommandExecutor
     {
     }
 
-    public function execute(string $action, array $params, User $user, ?int $companyId, string $key): array
+    public function execute(string $action, array $params, User $user, ?string $companyId, string $key): array
     {
         // Idempotency check (scoped by user/company/action/key)
         if ($this->checkIdempotency($action, $user, $companyId, $key)) {
@@ -52,16 +52,18 @@ class CommandExecutor
         return [$result, 200];
     }
 
-    private function checkIdempotency(string $action, User $user, ?int $companyId, string $key): bool
+    private function checkIdempotency(string $action, User $user, ?string $companyId, string $key): bool
     {
         try {
             if (Schema::hasTable('idempotency_keys')) {
-                return DB::table('idempotency_keys')->where([
-                    'user_id' => $user->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'key' => $key,
-                ])->exists();
+                return DB::transaction(function () use ($action, $user, $companyId, $key) {
+                    return DB::table('idempotency_keys')->where([
+                        'user_id' => $user->id,
+                        'company_id' => $companyId,
+                        'action' => $action,
+                        'key' => $key,
+                    ])->exists();
+                });
             }
         } catch (\Throwable $e) {
             // If table missing or any driver error, skip idempotency check rather than 500
@@ -70,39 +72,45 @@ class CommandExecutor
         return false;
     }
 
-    private function logAudit(string $action, array $params, User $user, ?int $companyId, string $key): void
+    private function logAudit(string $action, array $params, User $user, ?string $companyId, string $key): void
     {
         try {
-            DB::table('audit.audit_logs')->insert([
-                'id' => Str::uuid()->toString(),
-                'user_id' => $user->id,
-                'company_id' => $companyId,
-                'action' => $action,
-                'params' => json_encode($params),
-                'idempotency_key' => $key,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            // Use a nested transaction (savepoint) so a failure here
+            // does not poison the outer request transaction.
+            DB::transaction(function () use ($action, $params, $user, $companyId, $key) {
+                DB::table('audit.audit_logs')->insert([
+                    'id' => Str::uuid()->toString(),
+                    'user_id' => $user->id,
+                    'company_id' => $companyId,
+                    'action' => $action,
+                    'params' => json_encode($params),
+                    'idempotency_key' => $key,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
         } catch (\Throwable $e) {
             // Log write failure should not block the command response
         }
     }
 
-    private function storeIdempotencyKey(string $action, array $params, User $user, ?int $companyId, string $key, $result): void
+    private function storeIdempotencyKey(string $action, array $params, User $user, ?string $companyId, string $key, $result): void
     {
         try {
             if (Schema::hasTable('idempotency_keys')) {
-                DB::table('idempotency_keys')->insert([
-                    'id' => Str::uuid()->toString(),
-                    'user_id' => $user->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'key' => $key,
-                    'request' => json_encode($params),
-                    'response' => json_encode($result),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                DB::transaction(function () use ($action, $params, $user, $companyId, $key, $result) {
+                    DB::table('idempotency_keys')->insert([
+                        'id' => Str::uuid()->toString(),
+                        'user_id' => $user->id,
+                        'company_id' => $companyId,
+                        'action' => $action,
+                        'key' => $key,
+                        'request' => json_encode($params),
+                        'response' => json_encode($result),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                });
             }
         } catch (\Throwable $e) {
             // ignore

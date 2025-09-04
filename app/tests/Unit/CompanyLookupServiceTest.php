@@ -4,11 +4,11 @@ namespace Tests\Unit;
 
 use App\Models\User;
 use App\Models\Company;
-use App\Repositories\CompanyMembershipRepository;
+use App\Services\CompanyLookupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class CompanyMembershipRepositoryTest extends TestCase
+class CompanyLookupServiceTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -18,11 +18,11 @@ class CompanyMembershipRepositoryTest extends TestCase
         $company = Company::factory()->create();
         $user->companies()->attach($company->id, ['role' => 'admin']);
 
-        $repo = new CompanyMembershipRepository();
+        $lookup = new CompanyLookupService();
 
-        $this->assertTrue($repo->verifyMembership($user->id, $company->id));
-        $this->assertSame('admin', $repo->roleForUser($user->id, $company->id));
-        $this->assertFalse($repo->verifyMembership($user->id, \Ramsey\Uuid\Uuid::uuid4()->toString()));
+        $this->assertTrue($lookup->isMember($company->id, $user->id));
+        $this->assertSame('admin', $lookup->userRole($company->id, $user->id));
+        $this->assertFalse($lookup->isMember(\Ramsey\Uuid\Uuid::uuid4()->toString(), $user->id));
     }
 
     public function test_memberships_returns_user_companies(): void
@@ -33,14 +33,16 @@ class CompanyMembershipRepositoryTest extends TestCase
         $user->companies()->attach($c1->id, ['role' => 'owner']);
         $user->companies()->attach($c2->id, ['role' => 'viewer']);
 
-        $repo = new CompanyMembershipRepository();
-        $memberships = $repo->memberships($user->id);
+        $lookup = new CompanyLookupService();
+        $memberships = $lookup->membershipsForUser($user->id);
 
         $this->assertCount(2, $memberships);
         $this->assertEqualsCanonicalizing([
             $c1->id,
             $c2->id,
         ], $memberships->pluck('id')->all());
+        $this->assertNotNull($memberships->first()->created_at);
+        $this->assertNotNull($memberships->first()->updated_at);
     }
 
     public function test_upsert_membership_inserts_and_updates(): void
@@ -48,9 +50,9 @@ class CompanyMembershipRepositoryTest extends TestCase
         $user = User::factory()->create();
         $company = Company::factory()->create();
 
-        $repo = new CompanyMembershipRepository();
+        $lookup = new CompanyLookupService();
 
-        $repo->upsertMembership($company->id, $user->id, 'owner');
+        $lookup->upsertMember($company->id, $user->id, ['role' => 'owner']);
 
         $this->assertDatabaseHas('auth.company_user', [
             'company_id' => $company->id,
@@ -58,7 +60,7 @@ class CompanyMembershipRepositoryTest extends TestCase
             'role' => 'owner',
         ]);
 
-        $repo->upsertMembership($company->id, $user->id, 'admin');
+        $lookup->upsertMember($company->id, $user->id, ['role' => 'admin']);
 
         $this->assertDatabaseHas('auth.company_user', [
             'company_id' => $company->id,

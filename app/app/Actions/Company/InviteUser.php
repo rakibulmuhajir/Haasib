@@ -10,6 +10,10 @@ use Illuminate\Support\Str;
 
 class InviteUser
 {
+    public function __construct(private Tenancy $tenancy)
+    {
+    }
+
     public function handle(string $company, array $data, User $actor): array
     {
         $q = Company::query();
@@ -25,7 +29,7 @@ class InviteUser
         if (! $actor->isSuperAdmin()) {
             $previous = app()->bound('tenant.company_id') ? app('tenant.company_id') : null;
             app()->instance('tenant.company_id', $co->id);
-            $role = Tenancy::userRoleInCurrentCompany($actor->id);
+            $role = $this->tenancy->userRoleInCurrentCompany($actor->id);
             if ($previous) {
                 app()->instance('tenant.company_id', $previous);
             } else {

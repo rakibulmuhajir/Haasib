@@ -6,7 +6,7 @@ use App\Models\User;
 
 class CommandBus
 {
-    public static function dispatch(string $action, array $params, User $user): array
+    public function dispatch(string $action, array $params, User $user): array
     {
         $handlers = config('command-bus');
         $handlerClass = $handlers[$action] ?? null;

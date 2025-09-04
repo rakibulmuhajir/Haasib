@@ -8,13 +8,17 @@ use Illuminate\Http\Request;
 
 class SetTenantContext
 {
+    public function __construct(private Tenancy $tenancy)
+    {
+    }
+
     public function handle(Request $request, Closure $next)
     {
         if (! $user = $request->user()) {
             return $next($request);
         }
 
-        Tenancy::applyDbSessionSettings($user);
+        $this->tenancy->applyDbSessionSettings($user);
 
         $inApi = $request->is('api/v1/*');
 
@@ -32,7 +36,7 @@ class SetTenantContext
         // Enforce tenant context for API routes (except the ones above), not for web
         $enforce = $inApi;
 
-        $companyId = Tenancy::resolveCompanyId($request, $user);
+        $companyId = $this->tenancy->resolveCompanyId($request, $user);
 
         if (! $companyId) {
             return $enforce
@@ -44,13 +48,13 @@ class SetTenantContext
             $request->session()->put('current_company_id', $companyId);
         }
 
-        if (! Tenancy::verifyMembership($user->getKey(), $companyId)) {
+        if (! $this->tenancy->verifyMembership($user->getKey(), $companyId)) {
             return $enforce
                 ? abort(403, 'Not a member of the selected company')
                 : $next($request);
         }
 
-        Tenancy::applyDbSessionSettings($user, $companyId);
+        $this->tenancy->applyDbSessionSettings($user, $companyId);
 
         app()->instance('tenant.company_id', $companyId);
 

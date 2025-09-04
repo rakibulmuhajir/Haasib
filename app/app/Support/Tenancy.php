@@ -8,28 +8,28 @@ use Illuminate\Support\Facades\DB;
 
 class Tenancy
 {
-    public static function currentCompanyId(): ?string
+    public function currentCompanyId(): ?string
     {
         return app()->bound('tenant.company_id') ? app('tenant.company_id') : null;
     }
 
-    public static function userRoleInCurrentCompany(string $userId): ?string
+    public function userRoleInCurrentCompany(string $userId): ?string
     {
-        $cid = self::currentCompanyId();
+        $cid = $this->currentCompanyId();
         if (! $cid) return null;
 
         return app(CompanyLookupService::class)->userRole($cid, $userId);
     }
 
-    public static function isMember(string $userId): bool
+    public function isMember(string $userId): bool
     {
-        $cid = self::currentCompanyId();
+        $cid = $this->currentCompanyId();
         if (! $cid) return false;
 
-        return self::verifyMembership($userId, $cid);
+        return $this->verifyMembership($userId, $cid);
     }
 
-    public static function resolveCompanyId(Request $request, $user): ?string
+    public function resolveCompanyId(Request $request, $user): ?string
     {
         $companyId = $request->header('X-Company-Id');
         if (! $companyId && $request->hasSession()) {
@@ -45,13 +45,12 @@ class Tenancy
         return $companyId ?: null;
     }
 
-    public static function verifyMembership(string $userId, string $companyId): bool
+    public function verifyMembership(string $userId, string $companyId): bool
     {
-
         return app(CompanyLookupService::class)->isMember($companyId, $userId);
     }
 
-    public static function applyDbSessionSettings($user, ?string $companyId = null): void
+    public function applyDbSessionSettings($user, ?string $companyId = null): void
     {
         try {
             DB::select("select set_config('app.current_user_id', ?, true)", [$user->getKey()]);

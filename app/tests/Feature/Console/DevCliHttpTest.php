@@ -3,6 +3,7 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 use App\Models\User;
+use App\Support\CommandBus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class DevCliHttpTest extends TestCase
@@ -13,6 +14,17 @@ class DevCliHttpTest extends TestCase
     {
         config()->set('app.dev_console_enabled', true);
         $user = User::factory()->create();
+
+        $mock = \Mockery::mock(CommandBus::class);
+        $mock->shouldReceive('dispatch')
+            ->with('user.create', [
+                'name' => 'X',
+                'email' => 'x@example.com',
+                'password' => null,
+            ], \Mockery::type(User::class))
+            ->andReturn(['user' => ['email' => 'x@example.com']]);
+        $this->instance(CommandBus::class, $mock);
+
         $this->actingAs($user)
             ->postJson('/dev/cli/execute', ['command' => 'user:add --name="X" --email=x@example.com'])
             ->assertOk()

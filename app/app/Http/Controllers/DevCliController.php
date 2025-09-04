@@ -23,7 +23,7 @@ class DevCliController extends Controller
         ]]);
     }
 
-    public function execute(Request $request)
+    public function execute(Request $request, CommandBus $bus)
     {
         abort_unless(config('app.dev_console_enabled'), 403);
         $cmd = trim((string) $request->input('command'));
@@ -37,14 +37,14 @@ class DevCliController extends Controller
 
             if ($name === 'bootstrap:demo') {
                 $companies = array_filter(array_map('trim', explode(',', $opts['companies'] ?? '')));
-                $summary = CommandBus::dispatch('user.create', [
+                $summary = $bus->dispatch('user.create', [
                     'name' => $opts['name'] ?? 'Founder',
                     'email' => $opts['email'] ?? '',
                     'password' => $opts['password'] ?? null,
                 ], $user);
                 foreach ($companies as $co) {
-                    CommandBus::dispatch('company.create', ['name' => $co], $user);
-                    CommandBus::dispatch('company.assign', [
+                    $bus->dispatch('company.create', ['name' => $co], $user);
+                    $bus->dispatch('company.assign', [
                         'email' => $opts['email'] ?? '',
                         'company' => $co,
                         'role' => $opts['role'] ?? 'owner',
@@ -72,7 +72,7 @@ class DevCliController extends Controller
                 $opts['name'] = $opts['name'] ?? 'User';
             }
 
-            $result = CommandBus::dispatch($action, $opts, $user);
+            $result = $bus->dispatch($action, $opts, $user);
             return response()->json(['ok'=>true, 'output'=>$result]);
         } catch (\Throwable $e) {
             return response()->json(['ok'=>false, 'error'=>$e->getMessage()], 422);

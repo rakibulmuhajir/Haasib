@@ -4,11 +4,11 @@ namespace Tests\Unit;
 
 use App\Models\User;
 use App\Models\Company;
-use App\Repositories\CompanyMembershipRepository;
+use App\Services\CompanyLookupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class CompanyMembershipRepositoryTest extends TestCase
+class CompanyLookupServiceTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -18,11 +18,11 @@ class CompanyMembershipRepositoryTest extends TestCase
         $company = Company::factory()->create();
         $user->companies()->attach($company->id, ['role' => 'admin']);
 
-        $repo = new CompanyMembershipRepository();
+        $service = new CompanyLookupService();
 
-        $this->assertTrue($repo->verifyMembership($user->id, $company->id));
-        $this->assertSame('admin', $repo->roleForUser($user->id, $company->id));
-        $this->assertFalse($repo->verifyMembership($user->id, \Ramsey\Uuid\Uuid::uuid4()->toString()));
+        $this->assertTrue($service->isMember($company->id, $user->id));
+        $this->assertSame('admin', $service->userRole($company->id, $user->id));
+        $this->assertFalse($service->isMember(\Ramsey\Uuid\Uuid::uuid4()->toString(), $user->id));
     }
 
     public function test_memberships_returns_user_companies(): void
@@ -33,8 +33,8 @@ class CompanyMembershipRepositoryTest extends TestCase
         $user->companies()->attach($c1->id, ['role' => 'owner']);
         $user->companies()->attach($c2->id, ['role' => 'viewer']);
 
-        $repo = new CompanyMembershipRepository();
-        $memberships = $repo->memberships($user->id);
+        $service = new CompanyLookupService();
+        $memberships = $service->membershipsForUser($user->id);
 
         $this->assertCount(2, $memberships);
         $this->assertEqualsCanonicalizing([

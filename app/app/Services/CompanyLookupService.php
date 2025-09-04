@@ -170,4 +170,52 @@ class CompanyLookupService
             ], $data));
         }
     }
+
+    // -----------------------------------------------------------------
+    // Backwards compatibility aliases (former CompanyMembershipRepository)
+    // -----------------------------------------------------------------
+
+    public function verifyMembership(string $userId, string $companyId): bool
+    {
+        return $this->isMember($companyId, $userId);
+    }
+
+    public function roleForUser(string $userId, string $companyId): ?string
+    {
+        return $this->userRole($companyId, $userId);
+    }
+
+    public function memberships(string $userId)
+    {
+        return $this->membershipsForUser($userId);
+    }
+
+    public function membersPreview(string $companyId, int $limit = 10)
+    {
+        return $this->members($companyId, $limit);
+    }
+
+    public function searchMembers(string $companyId, string $q, int $limit = 10)
+    {
+        return $this->members($companyId, $limit, $q);
+    }
+
+    public function userIdsForCompany(string $companyId): array
+    {
+        return $this->memberUserIds($companyId)->all();
+    }
+
+    public function countMembers(string $companyId): int
+    {
+        return $this->membersCount($companyId);
+    }
+
+    public function upsertMembership(string $companyId, string $userId, string $role, ?string $invitedByUserId = null, $now = null): void
+    {
+        $data = ['role' => $role, 'invited_by_user_id' => $invitedByUserId];
+        if ($now) {
+            $data['updated_at'] = $now;
+        }
+        $this->upsertMember($companyId, $userId, $data);
+    }
 }

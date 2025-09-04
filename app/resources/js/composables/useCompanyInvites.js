@@ -1,5 +1,5 @@
 import { ref, unref } from 'vue'
-import { http, withIdempotency } from '@/lib/http'
+import { http } from '@/lib/http'
 import { useToasts } from './useToasts.js'
 
 export function useCompanyInvites(company) {
@@ -23,10 +23,9 @@ export function useCompanyInvites(company) {
     inviteError.value = ''
     inviteOk.value = null
     try {
-      const { data } = await http.post('/commands', {
+      const { data } = await http.post(`/web/companies/${companySlug()}/invite`, {
         ...invite.value,
-        company: unref(company),
-      }, { headers: withIdempotency({ 'X-Action': 'company.invite' }) })
+      })
       inviteOk.value = data.data
       invites.value.unshift(data.data)
       invite.value.email = ''
@@ -44,9 +43,7 @@ export function useCompanyInvites(company) {
     const target = id || revokeId.value
     if (!target) return
     try {
-      await http.post('/commands', {
-        id: target,
-      }, { headers: withIdempotency({ 'X-Action': 'invitation.revoke' }) })
+      await http.post(`/web/invitations/${target}/revoke`)
       if (inviteOk.value && inviteOk.value.id === target) inviteOk.value.status = 'revoked'
       revokeId.value = ''
       invites.value = invites.value.filter(i => i.id !== target)

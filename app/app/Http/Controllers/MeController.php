@@ -35,3 +35,4 @@ class MeController extends Controller
         return response()->json(['ok' => true]);
     }
 }
+

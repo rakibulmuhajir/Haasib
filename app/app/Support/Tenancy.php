@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Services\CompanyLookupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Repositories\CompanyMembershipRepository;
 
 class Tenancy
 {
@@ -47,6 +48,7 @@ class Tenancy
 
     public static function verifyMembership(string $userId, string $companyId): bool
     {
+
         return app(CompanyLookupService::class)->isMember($companyId, $userId);
     }
 
@@ -63,3 +65,4 @@ class Tenancy
         }
     }
 }
+

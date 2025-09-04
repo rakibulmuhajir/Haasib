@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TooltipRoot, TooltipTrigger, TooltipContent, TooltipArrow } from 'reka-ui'
+import { TooltipRoot, TooltipTrigger, TooltipContent, TooltipArrow, TooltipProvider } from 'reka-ui'
 
 const props = defineProps({
   text: { type: String, required: true },
@@ -8,7 +8,8 @@ const props = defineProps({
 </script>
 
 <template>
-  <TooltipRoot>
+  <TooltipProvider>
+  <TooltipRoot :delay-duration="0">
     <TooltipTrigger as-child>
       <span class="inline-flex" tabindex="0">
         <slot />
@@ -19,4 +20,5 @@ const props = defineProps({
       <TooltipArrow class="fill-gray-900" />
     </TooltipContent>
   </TooltipRoot>
+  </TooltipProvider>
 </template>

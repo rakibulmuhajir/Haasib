@@ -3,36 +3,21 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Services\LookupService;
 
 class CountryLookupController extends Controller
 {
-    public function suggest(Request $request)
+    public function suggest(Request $request, LookupService $lookup)
     {
         $request->user(); // ensure auth
 
-        $q = (string) $request->query('q', '');
-        $region = (string) $request->query('region', '');
-        $limit = (int) $request->query('limit', 10);
-
-        $query = DB::table('countries');
-
-        if ($q !== '') {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-            $query->where(function ($w) use ($like) {
-                $w->where('name', 'ilike', $like)
-                  ->orWhere('code', 'ilike', $like)
-                  ->orWhere('alpha3', 'ilike', $like);
-            });
-        }
-        if ($region !== '') {
-            $query->where('region', $region);
-        }
-
-        $rows = $query
-            ->orderBy('name')
-            ->limit($limit)
-            ->get(['code','alpha3','name','emoji','region','subregion','calling_code']);
+        $rows = $lookup->suggest('countries', [
+            'select' => ['code','alpha3','name','emoji','region','subregion','calling_code'],
+            'search' => ['name','code','alpha3'],
+            'order' => 'name',
+        ], [
+            'region' => 'region',
+        ]);
 
         return response()->json(['data' => $rows]);
     }

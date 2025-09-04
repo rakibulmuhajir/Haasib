@@ -4,11 +4,16 @@ namespace App\Actions\DevOps;
 
 use App\Models\Company;
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
+use App\Services\CompanyLookupService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class CompanyAssign
 {
+    public function __construct(private CompanyLookupService $lookup)
+    {
+    }
+
     public function handle(array $p, User $actor): array
     {
         $data = Validator::make($p, [
@@ -31,11 +36,10 @@ class CompanyAssign
         if (!$actor->isSuperAdmin()) {
             $active = session('current_company_id');
             abort_if($active !== $company->id, 403);
-            $isOwner = $actor->companies()
-                ->where('auth.company_user.company_id', $company->id)
-                ->wherePivot('role', 'owner')
-                ->exists();
-            abort_unless($isOwner, 403);
+            abort_unless(
+                $this->lookup->userHasRole($company->id, $actor->id, ['owner']),
+                403
+            );
         }
 
         DB::transaction(function () use ($data, $company) {

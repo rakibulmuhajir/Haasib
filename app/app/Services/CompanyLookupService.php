@@ -148,6 +148,23 @@ class CompanyLookupService
         });
     }
 
+    public function restrictCompaniesToUserIdOrEmail(Builder $query, ?string $userId, ?string $email): void
+    {
+        if (! $userId && ! $email) {
+            return;
+        }
+
+        if (! $userId && $email) {
+            $userId = DB::table('users')->where('email', $email)->value('id');
+            if (! $userId) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+        }
+
+        $this->restrictCompaniesToUser($query, $userId);
+    }
+
     public function upsertMember(string $companyId, string $userId, array $data): void
     {
         $now = $data['updated_at'] ?? now();

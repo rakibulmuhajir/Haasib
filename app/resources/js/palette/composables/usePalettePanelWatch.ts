@@ -18,8 +18,12 @@ export function usePalettePanelWatch(
   const { selectedVerb, params, ensureCompanyDetails, allRequiredFilled, activeFlagId, open, step } = deps
 
   watch([selectedVerb, () => params.value.company], async ([verb, company]) => {
-    if (verb && (verb as any).id === 'delete' && company) {
-      await ensureCompanyDetails(company as any)
+    if (!company) return
+    // Always ensure company details are available when a company is selected,
+    // so UI can render the company name instead of UUID for any verb.
+    await ensureCompanyDetails(company as any)
+    // For delete, still focus the confirm input once details load.
+    if (verb && (verb as any).id === 'delete') {
       nextTick(() => deleteConfirmInputEl.value?.focus())
     }
   })

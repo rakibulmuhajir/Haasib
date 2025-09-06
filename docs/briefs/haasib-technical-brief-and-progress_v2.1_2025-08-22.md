@@ -463,6 +463,23 @@ Files:
 - `entities.ts` — entity/verb/field registry for company/user; UI list verbs map to remote sources.
 - `SuggestList.vue` — emits highlight/choose for smooth mouse and keyboard interaction.
 
+### 2025-09-05 — CLI Freeform + Guided Parity; UX tightening
+**Why:** Reduce friction and deliver MVP speed: power users use freeform; new users rely on guided flags — both in one palette.
+**What:**
+- Always-on freeform parsing (tries before suggestions); Cmd/Ctrl+Enter parses+executes when complete.
+- Flags parsing supports `--flag` and `-flag` syntaxes with `=value` or next-token value; flagged tokens excluded from subject.
+- Prepositions: `to|for` → company/customer; `as` → role; `from` → company (unassign). Heuristic: if an email is present, prefer `user` on verb-led commands.
+- New verb: `user.update` (change name/email/password) with guided fields.
+- Summary panel (always visible) shows all flags with hotkeys; click-to-edit; list actions show bordered key badges.
+- Validation toasts for field errors (email/password); explicit 422 errors surfaced (e.g., missing user/company on assign/unassign).
+- Focus hardening: input focuses on open/expand and after navigation; palette resets clean after actions (success/error) to start fresh.
+- Compact “pro” toggle preserved.
+**How:**
+- Parser: `resources/js/palette/parser.ts` — flags + prepositions + email/user bias.
+- Palette: `usePalette.ts`, `usePaletteKeybindings.ts`, `entities.ts`, `CommandPalette.vue`, `PaletteSuggestions.vue`.
+- Backend: explicit `ValidationException` messages in `CompanyAssign/Unassign`; added `UserUpdate` action; command-bus mapping updated.
+- Tooling: `tools/cli_probe.py`, `tools/cli_suite.py`, `tools/gui_suite.py` for API/GUI checks; PR checklist and team memory docs added.
+
 ## 14) Definition of Done (module)
 
 * Schema + RLS + CHECK/FK + indexes; services with transactions; API v1 + OpenAPI; RBAC policies + tests; audit trail; caching/invalidations; reporting refresh; health/metrics updated; backups include new tables; idempotency enforced on writes.

@@ -544,4 +544,8 @@ Additional routes and sample requests are available in the API documentation wit
    - Run database migrations: `php artisan migrate`.
 3. **Seed Data**
    - Populate reference data and defaults: `php artisan db:seed`.
+## Contributing (MVP Phase)
+
+- Read team priorities in `docs/TEAM_MEMORY.md`.
+- Use the PR checklist in `.github/pull_request_template.md` to keep changes MVP‑focused, use Reka UI components, and ensure CLI freeform parity for guided features.
 

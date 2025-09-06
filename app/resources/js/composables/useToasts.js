@@ -1,34 +1,42 @@
-import { ref } from 'vue'
-
-const toasts = ref([])
+// PrimeVue-backed toasts composable
+// Maintains the same external API shape used across the app while routing
+// notifications through PrimeVue's ToastService.
+import { useToast as usePrimeToast } from 'primevue/usetoast'
 
 /**
- * A composable to provide a consistent way to show toasts.
- * This manages a global state of toasts to be rendered by the Toasts.vue component.
- *
- * @returns {{addToast: function(message: string, type: 'info'|'success'|'warning'|'danger', duration?: int)}}
+ * @returns {{ addToast: (message: string, type?: 'info'|'success'|'warning'|'danger', duration?: number, summary?: string) => void,
+ *             success: (message: string, duration?: number, summary?: string) => void,
+ *             info: (message: string, duration?: number, summary?: string) => void,
+ *             warning: (message: string, duration?: number, summary?: string) => void,
+ *             danger: (message: string, duration?: number, summary?: string) => void,
+ *             removeToast: (id: number) => void }}
  */
 export function useToasts() {
-  /**
-   * Removes a toast from the global list by its ID.
-   * @param {number} id The unique ID of the toast to remove.
-   */
-  const removeToast = (id) => {
-    toasts.value = toasts.value.filter(t => t.id !== id)
-  }
+  const toast = usePrimeToast()
 
-  /**
-   * @param {string} message The content of the toast.
-   * @param {'info'|'success'|'warning'|'danger'} [type='info'] The type of toast.
-   * @param {number} [duration=5000] Duration in milliseconds.
-   */
-  const addToast = (message, type = 'info', duration = 5000) => {
-    const id = Date.now() + Math.random()
-    toasts.value.push({ id, message, type, duration, open: true })
-    if (duration) {
-      setTimeout(() => removeToast(id), duration)
+  const mapSeverity = (type) => {
+    switch (type) {
+      case 'success': return 'success'
+      case 'warning': return 'warn'
+      case 'danger': return 'error'
+      case 'info':
+      default: return 'info'
     }
   }
 
-  return { toasts, addToast, removeToast }
+  const addToast = (message, type = 'info', duration = 5000, summary) => {
+    const severity = mapSeverity(type)
+    toast.add({ severity, summary: summary ?? (type?.toString?.() ?? 'Info'), detail: message, life: duration })
+  }
+
+  // Backward-compat convenience helpers
+  const success = (message, duration, summary) => addToast(message, 'success', duration, summary)
+  const info = (message, duration, summary) => addToast(message, 'info', duration, summary)
+  const warning = (message, duration, summary) => addToast(message, 'warning', duration, summary)
+  const danger = (message, duration, summary) => addToast(message, 'danger', duration, summary)
+
+  // No-op kept for API compatibility with old Reka-based implementation
+  const removeToast = () => {}
+
+  return { addToast, success, info, warning, danger, removeToast }
 }

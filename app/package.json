@@ -25,8 +25,10 @@
     },
     "dependencies": {
         "@floating-ui/dom": "^1.7.4",
+        "@primeuix/themes": "^1.2.3",
         "@vueuse/core": "^13.8.0",
         "fuse.js": "^7.1.0",
+        "primevue": "^4.3.9",
         "reka-ui": "^2.5.0"
     }
 }

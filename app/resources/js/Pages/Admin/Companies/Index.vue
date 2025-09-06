@@ -33,8 +33,8 @@ watch(q, () => { const t = setTimeout(fetchCompanies, 250); return () => clearTi
   <AuthenticatedLayout>
     <template #header>
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Companies</h2>
-        <Link :href="route('admin.companies.create')" class="text-sm text-indigo-600 hover:underline">Create Company</Link>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Companies</h2>
+        <Link :href="route('admin.companies.create')" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Create Company</Link>
       </div>
     </template>
 
@@ -45,26 +45,26 @@ watch(q, () => { const t = setTimeout(fetchCompanies, 250); return () => clearTi
           <PrimaryButton @click="fetchCompanies">Search</PrimaryButton>
         </div>
 
-        <div v-if="error" class="text-red-600 text-sm mb-2">{{ error }}</div>
-        <div class="overflow-hidden bg-white shadow sm:rounded-md">
-          <ul role="list" class="divide-y divide-gray-200">
+        <div v-if="error" class="text-red-600 dark:text-red-400 text-sm mb-2">{{ error }}</div>
+        <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md">
+          <ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
             <li v-for="c in items" :key="c.id" class="px-4 py-4 sm:px-6">
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-sm font-medium text-gray-900">{{ c.name }}</div>
-                  <div class="text-xs text-gray-500">Slug: {{ c.slug }} · {{ c.base_currency }} · {{ c.language }} · {{ c.locale }}</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ c.name }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Slug: {{ c.slug }} · {{ c.base_currency }} · {{ c.language }} · {{ c.locale }}</div>
                 </div>
                 <div>
-                  <Link :href="route('admin.companies.show', c.slug || c.id)" class="text-sm text-indigo-600 hover:underline">Manage</Link>
+                  <Link :href="route('admin.companies.show', c.slug || c.id)" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Manage</Link>
                 </div>
               </div>
             </li>
-            <li v-if="!loading && items.length === 0" class="px-4 py-6 text-sm text-gray-500">No companies found.</li>
-            <li v-if="loading" class="px-4 py-6 text-sm text-gray-500">Loading…</li>
+            <li v-if="!loading && items.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No companies found.</li>
+            <li v-if="loading" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Loading…</li>
           </ul>
         </div>
       </div>
     </div>
   </AuthenticatedLayout>
-  
+
 </template>

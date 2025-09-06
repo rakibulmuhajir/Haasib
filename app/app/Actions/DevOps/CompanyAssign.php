@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\CompanyLookupService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class CompanyAssign
 {
@@ -31,7 +32,10 @@ class CompanyAssign
                 $w->where('slug', $needle)->orWhere('name', $needle);
             });
         }
-        $company = $q->firstOrFail();
+        $company = $q->first();
+        if (! $company) {
+            throw ValidationException::withMessages(['company' => 'Company not found']);
+        }
 
         if (!$actor->isSuperAdmin()) {
             $active = session('current_company_id');
@@ -43,7 +47,10 @@ class CompanyAssign
         }
 
         $member = DB::transaction(function () use ($data, $company) {
-            $user = User::where('email', $data['email'])->firstOrFail();
+            $user = User::where('email', $data['email'])->first();
+            if (! $user) {
+                throw ValidationException::withMessages(['email' => 'User not found']);
+            }
             $company->users()->syncWithoutDetaching([$user->id => ['role' => $data['role']]]);
             $user = $company->users()->where('users.id', $user->id)->first();
 

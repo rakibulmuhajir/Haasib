@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { watch, nextTick, onMounted } from 'vue'
 const props = defineProps<{ palette: any }>()
 const {
   step,
@@ -17,6 +18,22 @@ const {
   completeCurrentFlag,
   handleDashParameter,
 } = props.palette
+
+// Keep input focused whenever the palette view changes
+function focusInputSoon() {
+  nextTick(() => {
+    const el = inputEl.value as HTMLInputElement | null
+    if (el) {
+      try { el.focus(); } catch {}
+    }
+  })
+}
+
+onMounted(() => focusInputSoon())
+
+watch(() => props.palette.open.value, (v) => { if (v) focusInputSoon() })
+watch([step, selectedEntity, selectedVerb, activeFlagId], () => focusInputSoon())
+watch(() => props.palette.selectedIndex.value, () => { if (step.value !== 'fields' || !!activeFlagId.value) focusInputSoon() })
 </script>
 
 <template>
@@ -69,9 +86,10 @@ const {
             <input
               :ref="inputEl"
               v-model="q"
+              :type="(step === 'fields' && currentField && currentField.type === 'password') ? 'password' : 'text'"
               :placeholder="
                 step === 'entity'
-                  ? 'Search entities...'
+                  ? 'Type a command or entity…'
                   : step === 'verb'
                     ? 'Search actions...'
                     : (!activeFlagId

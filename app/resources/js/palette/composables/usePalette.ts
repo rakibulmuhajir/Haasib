@@ -2,7 +2,9 @@ import { reactive, ref, computed, nextTick, watch, toRefs, type Ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import Fuse from 'fuse.js'
 import { http, ensureCsrf, withIdempotency } from '@/lib/http'
-import { entities, type EntityDef, type VerbDef, type FieldDef } from '@/palette/entities'
+import { useToasts } from '@/composables/useToasts.js'
+import { entities as baseEntities, type EntityDef, type VerbDef, type FieldDef } from '@/palette/entities'
+import { parseCommand } from '@/palette/parser'
 import { useSuggestions } from '@/palette/composables/useSuggestions'
 
 export interface PostExecuteContext {
@@ -40,6 +42,7 @@ interface PaletteState {
   deleteConfirmRequired: string
   uiListActionMode: boolean
   uiListActionIndex: number
+  paramFrom?: Record<string, 'freeform' | 'guided'>
 }
 
 export function usePalette() {
@@ -64,9 +67,11 @@ export function usePalette() {
     deleteConfirmRequired: '',
     uiListActionMode: false,
     uiListActionIndex: 0,
+    paramFrom: {},
   })
 
   const inputEl = ref<HTMLInputElement | null>(null)
+  const { addToast } = useToasts()
 
   // Data & Context
   const page = usePage<any>()
@@ -88,20 +93,78 @@ export function usePalette() {
   // Suggestions Provider
   const provider = useSuggestions({ isSuperAdmin, currentCompanyId, userSource, companySource, q: toRefs(state).q, params: toRefs(state).params })
 
-  // Fuzzy Search
-  const entFuse = new Fuse(entities, { keys: ['label', 'aliases'], includeScore: true, threshold: 0.3 })
+  // Command overlays (UI-only): enable/disable, label/aliases/order
+  type OverlayRow = { entity_id: string; verb_id?: string | null; enabled?: boolean | null; label_override?: string | null; aliases_override?: string[] | null; order_override?: number | null }
+  const overlays = ref<OverlayRow[]>([])
+  const allowedActions = ref<string[]>([])
+
+  async function loadOverlays() {
+    try {
+      await ensureCsrf()
+      const { data } = await http.get('/web/commands/overlays')
+      overlays.value = data?.data || []
+    } catch { overlays.value = [] }
+  }
+
+  async function loadCapabilities() {
+    try {
+      await ensureCsrf()
+      const { data } = await http.get('/web/commands/capabilities')
+      allowedActions.value = data?.allowed_actions || []
+    } catch { allowedActions.value = [] }
+  }
+
+  // Merge overlays into base entity catalog
+  function applyEntityOverlay(e: EntityDef): EntityDef | null {
+    const entityRows = overlays.value.filter(r => r.entity_id === e.id && (!r.verb_id || r.verb_id === null))
+    const disabled = entityRows.find(r => r.enabled === false)
+    if (disabled) return null
+    const labelOverride = entityRows.find(r => r.label_override)?.label_override || null
+    const aliasesOverride = (entityRows.find(r => r.aliases_override)?.aliases_override as any) || null
+    const mappedVerbs: VerbDef[] = e.verbs
+      .map((v) => applyVerbOverlay(e.id, v))
+      .filter((v): v is VerbDef => v !== null)
+    const out: EntityDef = {
+      ...e,
+      label: labelOverride || e.label,
+      aliases: aliasesOverride || e.aliases,
+      verbs: mappedVerbs,
+    }
+    return out
+  }
+
+  function applyVerbOverlay(entityId: string, v: VerbDef): VerbDef | null {
+    const rows = overlays.value.filter(r => r.entity_id === entityId && r.verb_id === v.id)
+    const disabled = rows.find(r => r.enabled === false)
+    if (disabled) return null
+    const labelOverride = rows.find(r => r.label_override)?.label_override || null
+    const out: VerbDef = { ...v, label: labelOverride || v.label }
+    return out
+  }
+
+  const activeEntities = computed<EntityDef[]>(() => {
+    if (!overlays.value || overlays.value.length === 0) return baseEntities
+    const mapped = baseEntities
+      .map(e => applyEntityOverlay(e))
+      .filter((e): e is EntityDef => e !== null)
+    return mapped
+  })
+
+  // Fuzzy Search over active entities
+  const entFuse = computed(() => new Fuse(activeEntities.value, { keys: ['label', 'aliases'], includeScore: true, threshold: 0.3 }))
 
   // --- COMPUTED PROPERTIES ---
 
   const entitySuggestions = computed(() => {
-    if (state.q.length < 2) return entities.slice(0, 6)
-    const results = entFuse.search(state.q)
+    if (state.q.length < 2) return activeEntities.value.slice(0, 6)
+    const results = entFuse.value.search(state.q)
     return results.map(r => r.item).slice(0, 6)
   })
 
   const verbSuggestions = computed(() => {
     if (!state.selectedEntity) return []
-    const verbs = state.selectedEntity.verbs
+    // Filter verbs by server capabilities; ui.* verbs are always allowed
+    const verbs = state.selectedEntity.verbs.filter(v => v.action.startsWith('ui.') || allowedActions.value.includes(v.action))
     const needle = state.q.trim().toLowerCase()
     if (!needle) return verbs
     return verbs.filter(v => v.label.toLowerCase().includes(needle) || v.id.toLowerCase().includes(needle))
@@ -194,7 +257,7 @@ export function usePalette() {
   // UI list action mode state (keyboard navigation for actions on highlighted item)
   const uiListActionCount = computed(() => {
     if (!isUIList.value) return 0
-    if (showUserPicker.value) return 2 // Assign to company, Delete user
+    if (showUserPicker.value) return 3 // Assign to company, Delete user, Update user
     if (showCompanyPicker.value) return 4 // Assign user, Switch active, Delete, View members
     return 0
   })
@@ -274,9 +337,24 @@ export function usePalette() {
   function completeCurrentFlag() {
     if (!state.activeFlagId || !currentField.value) return
     const val = state.q.trim()
+    // Run field-level validate if provided
+    const validator = (currentField.value as any).validate as undefined | ((value: any, params: Record<string, any>) => true | string)
+    if (validator) {
+      try {
+        const ok = validator(val, state.params)
+        if (ok !== true) {
+          // Keep focus in place; do not complete on validation failure
+          if (typeof ok === 'string') { try { (addToast as any)(ok, 'warning') } catch {} }
+          return
+        }
+      } catch { /* ignore and treat as invalid */ return }
+    }
     if (val || !currentField.value.required) {
       const completingFlagId = state.activeFlagId
-      if (val) state.params[completingFlagId] = val
+      if (val) {
+        state.params[completingFlagId] = val
+        try { (state as any).paramFrom && ((state as any).paramFrom[completingFlagId] = 'guided') } catch {}
+      }
 
       let nextField: FieldDef | undefined
       if (state.selectedVerb) {
@@ -311,6 +389,43 @@ export function usePalette() {
     return false
   }
 
+  // Attempt to parse the current input as a full command and start the flow.
+  // If executeIfComplete is true and all required fields are satisfied, will execute immediately.
+  function parseAndStartFromInput(opts: { executeIfComplete?: boolean } = {}): boolean {
+    const input = state.q.trim()
+    if (!input) return false
+    try {
+      const parsed = parseCommand(input, activeEntities.value)
+      if (!parsed) return false
+      // Seed selected entity/verb/params, then advance to next missing field
+      startVerb(parsed.entityId, parsed.verbId, parsed.params)
+      try { (state as any).paramFrom && Object.keys(parsed.params||{}).forEach(k => (state as any).paramFrom[k] = 'freeform') } catch {}
+      state.q = ''
+      if (opts.executeIfComplete) {
+        // Check if all required fields are present
+        const verb = state.selectedVerb
+        if (verb) {
+          const missing = verb.fields.filter(f => f.required && !state.params[f.id])
+          // Require reasonably confident parse to run directly
+          const confident = (parsed as any).confidence && (parsed as any).confidence >= 0.85
+          if (missing.length === 0 && confident) {
+            // Execute on next tick so UI state settles
+            nextTick(() => {
+              // Guard again in case state changed
+              const stillMissing = verb.fields.filter(f => f.required && !(state.params as any)[f.id])
+              if (stillMissing.length === 0) {
+                ;(execute as any)()
+              }
+            })
+          }
+        }
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async function loadCompanyMembers(companyId: string) {
     if (companyMembersLoading.value[companyId]) return
     companyMembersLoading.value[companyId] = true
@@ -335,8 +450,22 @@ export function usePalette() {
     } catch (e) { /* ignore */ }
   }
 
+  async function ensureUserDetails(userKey: string) {
+    if (!userKey) return
+    if (userDetails.value[userKey]) return
+    try {
+      await ensureCsrf()
+      const { data } = await http.get(`/web/users/${encodeURIComponent(userKey)}`)
+      const u = data?.data || null
+      if (u) {
+        userDetails.value[u.id] = u
+        userDetails.value[u.email] = u
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   function startVerb(entityId: string, verbId: string, initialParams: Record<string, any> = {}) {
-    const entity = entities.find(e => e.id === entityId) || null
+    const entity = activeEntities.value.find(e => e.id === entityId) || null
     if (!entity) return
 
     state.selectedEntity = entity
@@ -404,6 +533,7 @@ export function usePalette() {
       deleteConfirmRequired: '',
       uiListActionMode: false,
       uiListActionIndex: 0,
+      paramFrom: {},
     })
   }
 
@@ -468,6 +598,36 @@ export function usePalette() {
     state.deleteConfirmRequired = ''
     nextTick(() => inputEl.value?.focus())
 
+    // UI Help actions: show examples/shortcuts in results panel immediately
+    if (verb.action === 'ui.help' || verb.action === 'ui.help.shortcuts') {
+      const now = new Date().toISOString()
+      const base = { success: true, action: verb.action, params: {}, timestamp: now, message: 'Help' }
+      const details = verb.action === 'ui.help'
+        ? [
+            'Examples:',
+            '• company create Acme',
+            '• create company Acme',
+            '• user create Jane jane@example.com',
+            '• user delete jane@example.com',
+            '• company assign jane@example.com to Acme as admin',
+            '• unassign jane@example.com from Acme',
+          ]
+        : [
+            'Shortcuts:',
+            '• Enter: execute/confirm, or parse freeform',
+            '• Tab: complete entity/flag; Shift+Tab: edit last flag',
+            '• Esc: back; Esc twice: close',
+            '• Arrow keys: navigate suggestions; A/S/D/V on lists for actions',
+            '• Pro toggle: button top-right of palette',
+          ]
+      state.results = [{ ...base, details }, ...state.results.slice(0, 4)]
+      state.showResults = true
+      // Return to verb selection for continued exploration
+      state.step = 'verb'
+      state.selectedVerb = null
+      return
+    }
+
     if (Object.keys(state.stashParams).length > 0 && state.selectedVerb) {
       for (const f of state.selectedVerb.fields) {
         const v = state.stashParams[f.id]
@@ -501,23 +661,57 @@ export function usePalette() {
       if (ok === false) return
     }
 
+    // If password provided, require confirmation field to be filled and matching
+    try {
+      const hasPwd = !!state.params['password']
+      const needsConfirm = !!(state.selectedVerb.fields || []).find(f => f.id === 'password_confirm')
+      const pwdFrom = ((state as any).paramFrom && (state as any).paramFrom['password']) || 'guided'
+      // Only require confirmation when password was entered via guided flow
+      if (hasPwd && needsConfirm && !state.params['password_confirm'] && pwdFrom === 'guided') {
+        selectFlag('password_confirm')
+        return
+      }
+    } catch { /* ignore */ }
     if (!allRequiredFilled.value) return
 
     state.executing = true
     try {
       const response = await http.post('/commands', state.params, { headers: withIdempotency({ 'X-Action': state.selectedVerb.action }) })
-      state.results = [{ success: true, action: state.selectedVerb.action, params: state.params, timestamp: new Date().toISOString(), message: `Successfully executed ${state.selectedEntity?.label} ${state.selectedVerb.label}`, data: response.data }, ...state.results.slice(0, 4)]
+      const executedEntity = state.selectedEntity
+      const executedVerb = state.selectedVerb
+      const carriedParams = { ...state.params }
+
       // Optional postExecute hook (cleanup, navigation, etc.)
-      if (typeof state.selectedVerb.postExecute === 'function') {
+      if (typeof executedVerb!.postExecute === 'function') {
         try {
-          await state.selectedVerb.postExecute({ response: response.data, params: state.params, palette: paletteApi })
+          await executedVerb!.postExecute({ response: response.data, params: carriedParams, palette: paletteApi })
         } catch (_) { /* ignore hook errors */ }
       }
-      state.showResults = true
-      setTimeout(() => { resetAll(); state.open = false }, 2000)
+      // Hard reset to start clean after any action
+      resetAll()
+      state.open = true
+      nextTick(() => inputEl.value?.focus())
     } catch (error: any) {
-      state.results = [{ success: false, action: state.selectedVerb.action, params: state.params, timestamp: new Date().toISOString(), message: `Failed to execute ${state.selectedEntity?.label} ${state.selectedVerb.label}`, error: error.response?.data || error.message }, ...state.results.slice(0, 4)]
-      state.showResults = true
+      const status = error?.response?.status
+      const data = error?.response?.data
+      const message = (data && (data.message || data.error)) || (typeof data === 'string' ? data : '') || error.message || 'Failed'
+      const details: string[] = []
+      if (data && data.errors && typeof data.errors === 'object') {
+        try {
+          Object.entries<any>(data.errors).forEach(([field, msgs]) => {
+            const first = Array.isArray(msgs) ? msgs[0] : String(msgs)
+            details.push(`${field}: ${first}`)
+          })
+        } catch { /* ignore */ }
+      } else if (typeof data === 'string') {
+        details.push(data)
+      } else if (data && data.error && typeof data.error === 'string') {
+        details.push(data.error)
+      }
+      // Reset after errors too; rely on toasts/logging elsewhere
+      resetAll()
+      state.open = true
+      nextTick(() => inputEl.value?.focus())
     } finally {
       state.executing = false
     }
@@ -528,7 +722,7 @@ export function usePalette() {
       state.q = email
       setTimeout(completeCurrentFlag, 10)
     } else {
-      const userEntity = entities.find(e => e.id === 'user') || null
+      const userEntity = activeEntities.value.find(e => e.id === 'user') || null
       if (userEntity) { // @ts-ignore
         state.selectedEntity = userEntity
         state.step = 'verb'
@@ -546,7 +740,7 @@ export function usePalette() {
       state.q = idOrName
       setTimeout(completeCurrentFlag, 10)
     } else {
-      const coEntity = entities.find(e => e.id === 'company') || null
+      const coEntity = activeEntities.value.find(e => e.id === 'company') || null
       if (coEntity) {
         state.selectedEntity = coEntity
         state.step = 'verb'
@@ -607,6 +801,26 @@ export function usePalette() {
     }
   })
 
+  // Keep selection in range for entity and field suggestion sources
+  watch([entitySuggestions, () => state.step], ([suggestions, currentStep]) => {
+    if (currentStep === 'entity') {
+      if (state.selectedIndex >= suggestions.length) state.selectedIndex = 0
+    }
+  })
+
+  watch([panelItems, inlineItems, currentChoices, () => state.step, () => state.activeFlagId], ([panel, inline, choices, currentStep]) => {
+    if (currentStep !== 'fields') return
+    const len = (choices && choices.length) ? choices.length
+      : (panel && panel.length) ? panel.length
+      : (inline && inline.length) ? inline.length
+      : 0
+    if (len === 0) {
+      state.selectedIndex = 0
+    } else if (state.selectedIndex >= len) {
+      state.selectedIndex = 0
+    }
+  })
+
   const lookupTimers: Record<string, any> = {}
   watch([() => state.q, currentField, () => state.step, companySource, userSource, () => state.params.email], async ([qv, cf, st]) => {
     const schedule = (key: string, ms: number, fn: () => void) => {
@@ -633,6 +847,23 @@ export function usePalette() {
     schedule('remote-lookup:' + (cf as any).id, 160, run)
   })
 
+  // Dynamically scope company suggestions to the selected user during unassign flow
+  watch([
+    () => state.selectedVerb,
+    () => state.params.email,
+    () => state.step,
+    isSuperAdmin,
+  ], ([verb, email, stepVal, isSA]) => {
+    const action = verb ? (verb as any).action : ''
+    const isFields = stepVal === 'fields'
+    if (isFields && action === 'company.unassign' && email) {
+      companySource.value = 'byUser'
+    } else {
+      // Reset to default scope outside of unassign-with-email context
+      companySource.value = isSA ? 'all' : 'me'
+    }
+  })
+
   // Populate panel items for UI list actions (companies/users)
   watch([
     isUIList,
@@ -655,6 +886,12 @@ export function usePalette() {
     }
   })
 
+  // Load user details if email param holds an id (no @)
+  watch(() => state.params.email, (val) => {
+    const v = String(val || '')
+    if (v && !v.includes('@')) ensureUserDetails(v)
+  })
+
   // Exit action mode when leaving UI list context
   watch([isUIList, () => state.step], ([isList, currentStep]) => {
     if (currentStep !== 'fields' || !isList) {
@@ -674,6 +911,8 @@ export function usePalette() {
         quickAssignUserToCompany(email)
       } else if (state.uiListActionIndex === 1) {
         startVerb('user', 'delete', { email })
+      } else if (state.uiListActionIndex === 2) {
+        startVerb('user', 'update', { email })
       }
     } else if (showCompanyPicker.value) {
       const id = meta.id || item.value
@@ -705,6 +944,8 @@ export function usePalette() {
     selectEntity, selectVerb, selectChoice, execute,
     pickUserEmail, pickCompanyName, pickGeneric,
     performUIListAction,
+    parseAndStartFromInput,
+    ensureUserDetails,
   }
 
   // Expose self-reference for hook contexts
@@ -712,7 +953,9 @@ export function usePalette() {
     ...toRefs(state),
     ...api,
   } as UsePalette
+  // Load overlays + capabilities when palette opens
+  watch(() => state.open, (isOpen) => { if (isOpen) { loadOverlays(); loadCapabilities(); } }, { immediate: false })
+
   return paletteApi as UsePalette
 }
-
-export type UsePalette = ReturnType<typeof usePalette>
+  export type UsePalette = ReturnType<typeof usePalette>

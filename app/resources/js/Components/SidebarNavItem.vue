@@ -11,8 +11,8 @@ const props = defineProps<{
 </script>
 
 <template>
-  <Link :href="props.href" class="group mx-1 my-0.5 flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-gray-100"
-        :class="props.active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'">
+  <Link :href="props.href" class="group mx-1 my-0.5 flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800/60"
+        :class="props.active ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'">
     <Tooltip v-if="!props.expanded" :text="props.tooltip">
       <slot name="icon" />
     </Tooltip>

@@ -1,12 +1,14 @@
 <!-- resources/js/Layouts/AuthenticatedLayout.vue -->
 <script setup>
 import { ref } from 'vue'
-import { ToastProvider } from 'reka-ui'
 import CommandPalette from '@/Components/CommandPalette.vue'
 import AppSidebar from '@/Components/AppSidebar.vue'
 import AppHeader from '@/Components/AppHeader.vue'
-import Toasts from '@/Components/Toasts.vue'
 import { useSidebar } from '@/composables/useSidebar'
+
+// PrimeVue roots (kept alongside Reka during migration)
+import Toast from 'primevue/toast'
+import ConfirmDialog from 'primevue/confirmdialog'
 
 
 
@@ -18,30 +20,30 @@ const sidebarExpanded = expanded
 </script>
 
 <template>
-  <ToastProvider>
-      <div>
-          <div class="min-h-screen bg-gray-100">
-              <AppHeader />
+  <div>
+      <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
+          <AppHeader />
 
-              <!-- Left sidebar (desktop) -->
-              <AppSidebar :expanded="sidebarExpanded" @toggle="toggleSidebar" />
+          <!-- Left sidebar (desktop) -->
+          <AppSidebar :expanded="sidebarExpanded" @toggle="toggleSidebar" />
 
-              <div :class="contentPadClass">
-                  <!-- Page Heading -->
-                  <header class="bg-white shadow" v-if="$slots.header">
-                      <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                          <slot name="header" />
-                      </div>
-                  </header>
+          <div :class="contentPadClass">
+              <!-- Page Heading -->
+              <header class="bg-white dark:bg-gray-800 dark:border-b dark:border-gray-700 shadow dark:shadow-none" v-if="$slots.header">
+                  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                      <slot name="header" />
+                  </div>
+              </header>
 
-                  <!-- Page Content -->
-                  <main>
-                      <slot />
-                  </main>
-              </div>
+              <!-- Page Content -->
+              <main class="text-gray-900 dark:text-gray-100">
+                  <slot />
+              </main>
           </div>
-          <CommandPalette />
-          <Toasts />
       </div>
-  </ToastProvider>
+      <CommandPalette />
+      <!-- PrimeVue global portals -->
+      <Toast position="top-right" />
+      <ConfirmDialog />
+  </div>
 </template>

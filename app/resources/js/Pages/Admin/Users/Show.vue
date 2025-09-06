@@ -115,8 +115,8 @@ const tabValue = computed({
   <AuthenticatedLayout>
     <template #header>
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">User</h2>
-        <Link :href="route('admin.users.index')" class="text-sm text-gray-600 hover:underline">Back to users</Link>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">User</h2>
+        <Link :href="route('admin.users.index')" class="text-sm text-gray-600 dark:text-gray-300 hover:underline">Back to users</Link>
       </div>
     </template>
 
@@ -127,22 +127,22 @@ const tabValue = computed({
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Profile -->
           <div class="lg:col-span-1">
-            <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
+            <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md p-6">
               <div class="text-lg font-semibold">{{ user?.name || '—' }}</div>
-              <div class="text-sm text-gray-600">{{ user?.email }}</div>
-              <div class="mt-3 text-xs text-gray-500">ID: {{ user?.id }}</div>
+              <div class="text-sm text-gray-600 dark:text-gray-300">{{ user?.email }}</div>
+              <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">ID: {{ user?.id }}</div>
             </div>
           </div>
 
           <!-- Tabs for memberships vs assign -->
           <div class="lg:col-span-2">
             <Tabs v-model="tabValue" class="w-full">
-              <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-                <TabsList class="flex space-x-2 border-b border-gray-200 px-2">
-                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+              <div class="sticky top-16 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-gray-900/60">
+                <TabsList class="flex space-x-2 border-b border-gray-200 dark:border-gray-700 px-2">
+                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
                     Memberships
                   </TabsTrigger>
-                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
                     Assign
                   </TabsTrigger>
                 </TabsList>
@@ -158,7 +158,7 @@ const tabValue = computed({
                   />
                 </TabsContent>
                 <TabsContent value="1">
-                  <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
+                  <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md p-6">
                     <div class="font-medium mb-3">Assign to Company</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                       <div>
@@ -167,7 +167,7 @@ const tabValue = computed({
                       </div>
                       <div>
                         <InputLabel value="Role" />
-                        <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300">
+                        <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                           <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
                         </select>
                       </div>
@@ -176,7 +176,7 @@ const tabValue = computed({
                         <span v-if="assignLoading" class="ms-2 text-sm text-gray-500">Assigning…</span>
                       </div>
                     </div>
-                    <div v-if="assignError" class="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ assignError }}</div>
+                    <div v-if="assignError" class="mt-3 rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 text-xs text-red-700 dark:text-red-300">{{ assignError }}</div>
                   </div>
                 </TabsContent>
               </div>

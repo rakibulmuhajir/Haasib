@@ -29,7 +29,7 @@ onMounted(loadInvites)
 </script>
 
 <template>
-  <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
+  <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md p-6">
     <div class="font-medium mb-3">Invite by Email</div>
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       <div class="md:col-span-2">
@@ -38,7 +38,7 @@ onMounted(loadInvites)
       </div>
       <div>
         <InputLabel value="Role" />
-        <select v-model="invite.role" class="mt-1 block w-full rounded border-gray-300">
+        <select v-model="invite.role" class="mt-1 block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
           <option value="owner">Owner</option>
           <option value="admin">Admin</option>
           <option value="accountant">Accountant</option>
@@ -54,8 +54,8 @@ onMounted(loadInvites)
       <PrimaryButton @click="sendInvite" :disabled="inviteLoading">Send Invitation</PrimaryButton>
       <span v-if="inviteLoading" class="ms-2 text-sm text-gray-500">Sending…</span>
     </div>
-    <div v-if="inviteError" class="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{{ inviteError }}</div>
-    <div v-if="inviteOk" class="mt-3 rounded border border-green-200 bg-green-50 p-2 text-xs text-green-700">
+    <div v-if="inviteError" class="mt-3 rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 text-xs text-red-700 dark:text-red-300">{{ inviteError }}</div>
+    <div v-if="inviteOk" class="mt-3 rounded border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-2 text-xs text-green-700 dark:text-green-300">
       Invitation created for <b>{{ inviteOk.email }}</b> (role: {{ inviteOk.role }}) · id: <code>{{ inviteOk.id }}</code>
       <div class="mt-1">Token (dev only): <code class="break-all">{{ inviteOk.token }}</code></div>
       <div class="mt-2 flex items-center gap-2">
@@ -68,9 +68,9 @@ onMounted(loadInvites)
     <div class="mt-6">
       <Collapsible :defaultOpen="true">
         <template #trigger>
-          <button class="flex w-full items-center justify-between rounded bg-gray-50 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100">
+          <button class="flex w-full items-center justify-between rounded bg-gray-50 dark:bg-gray-900 px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
             <span>Pending Invitations</span>
-            <span class="text-xs text-gray-500">(click to toggle)</span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">(click to toggle)</span>
           </button>
         </template>
         <div class="pt-2">

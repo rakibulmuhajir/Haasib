@@ -30,6 +30,7 @@ export type VerbDef = {
   fields: FieldDef[] // ordered, shown as grey flags one-by-one
   preExecute?: (context: PreExecuteContext) => boolean | Promise<boolean>
   postExecute?: (context: PostExecuteContext) => void | Promise<void>
+  aliases?: string[]
 }
 
 export type EntityDef = {
@@ -41,6 +42,15 @@ export type EntityDef = {
 
 export const entities: EntityDef[] = [
   {
+    id: 'help',
+    label: 'help',
+    aliases: ['help','?','examples','shortcuts'],
+    verbs: [
+      { id: 'show', label: 'show', action: 'ui.help', fields: [], aliases: ['show','open','help'] },
+      { id: 'shortcuts', label: 'shortcuts', action: 'ui.help.shortcuts', fields: [], aliases: ['shortcuts','keys'] },
+    ],
+  },
+  {
     id: 'company',
     label: 'company',
     aliases: ['company', 'comp', 'co', 'cmp'],
@@ -49,6 +59,7 @@ export const entities: EntityDef[] = [
         id: 'list',
         label: 'list',
         action: 'ui.list.companies',
+        aliases: ['list','show','browse'],
         fields: [
           {
             id: 'company', label: 'Company', placeholder: '-company', required: false, type: 'remote', picker: 'panel',
@@ -61,6 +72,7 @@ export const entities: EntityDef[] = [
         id: 'create',
         label: 'create',
         action: 'company.create',
+        aliases: ['create','add','new','make'],
         fields: [
           { id: 'name', label: 'Name', placeholder: '-name', required: true, type: 'text' },
           {
@@ -84,6 +96,7 @@ export const entities: EntityDef[] = [
         id: 'delete',
         label: 'delete',
         action: 'company.delete',
+        aliases: ['delete','remove','rm','del'],
         fields: [
           {
             id: 'company', label: 'Company', placeholder: '-company', required: true, type: 'remote', picker: 'panel',
@@ -117,6 +130,7 @@ export const entities: EntityDef[] = [
         id: 'assign',
         label: 'assign',
         action: 'company.assign',
+        aliases: ['assign','invite','add member','add to','assign to'],
         fields: [
           {
             id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
@@ -133,6 +147,7 @@ export const entities: EntityDef[] = [
         id: 'unassign',
         label: 'unassign',
         action: 'company.unassign',
+        aliases: ['unassign','remove member','remove from','kick','detach'],
         fields: [
           {
             id: 'email', label: 'User email', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
@@ -155,6 +170,7 @@ export const entities: EntityDef[] = [
         id: 'list',
         label: 'list',
         action: 'ui.list.users',
+        aliases: ['list','show','browse'],
         fields: [
           {
             id: 'email', label: 'Email', placeholder: '-email', required: false, type: 'remote', picker: 'panel',
@@ -166,17 +182,39 @@ export const entities: EntityDef[] = [
         id: 'create',
         label: 'create',
         action: 'user.create',
+        aliases: ['create','add','new','invite'],
         fields: [
           { id: 'name', label: 'Name', placeholder: '-name', required: true, type: 'text' },
-          { id: 'email', label: 'Email', placeholder: '-email', required: true, type: 'email' },
-          { id: 'password', label: 'Password', placeholder: '-password', required: false, type: 'password' },
-          { id: 'system_role', label: 'System role', placeholder: '-system_role', required: false, type: 'select', options: ['superadmin'] },
+          { id: 'email', label: 'Email', placeholder: '-email', required: true, type: 'email',
+            validate: (value: any) => /.+@.+\..+/.test(String(value)) || 'Invalid email' },
+          { id: 'password', label: 'Password', placeholder: '-password', required: false, type: 'password',
+            validate: (value: any) => (value ? String(value).length >= 6 : true) || 'Min 6 chars' },
+          { id: 'password_confirm', label: 'Confirm password', placeholder: '-password_confirm', required: false, type: 'password',
+            validate: (value: any, params: Record<string, any>) => (params.password ? value === params.password : true) || 'Passwords do not match' },
+        ],
+      },
+      {
+        id: 'update',
+        label: 'update',
+        action: 'user.update',
+        aliases: ['update','edit','change'],
+        fields: [
+          { id: 'email', label: 'Target email', placeholder: '-email', required: true, type: 'remote', picker: 'panel',
+            source: { kind: 'remote', endpoint: '/web/users/suggest', queryKey: 'q', valueKey: 'email', labelTemplate: '{name} — {email}' } },
+          { id: 'name', label: 'New name', placeholder: '-name', required: false, type: 'text' },
+          { id: 'new_email', label: 'New email', placeholder: '-new_email', required: false, type: 'email',
+            validate: (value: any) => (value ? /.+@.+\..+/.test(String(value)) : true) || 'Invalid email' },
+          { id: 'password', label: 'New password', placeholder: '-password', required: false, type: 'password',
+            validate: (value: any) => (value ? String(value).length >= 6 : true) || 'Min 6 chars' },
+          { id: 'password_confirm', label: 'Confirm password', placeholder: '-password_confirm', required: false, type: 'password',
+            validate: (value: any, params: Record<string, any>) => (params.password ? value === params.password : true) || 'Passwords do not match' },
         ],
       },
       {
         id: 'delete',
         label: 'delete',
         action: 'user.delete',
+        aliases: ['delete','remove','rm','del'],
         fields: [
           {
             id: 'email', label: 'User to delete', placeholder: '-email', required: true, type: 'remote', picker: 'panel',

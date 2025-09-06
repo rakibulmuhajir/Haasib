@@ -24,7 +24,7 @@ const highlighted = computed(() => {
 </script>
 
 <template>
-  <div class="border border-gray-700/50 rounded-xl bg-gray-900/50 backdrop-blur-sm overflow-hidden">
+  <div class="border border-gray-700/50 rounded-xl bg-gray-900/50 backdrop-blur-sm overflow-hidden" role="listbox">
     <div class="text-gray-500 text-xs px-4 py-2.5 mb-1 bg-gray-800/30 flex items-center gap-2">
       <slot name="header" />
     </div>
@@ -39,6 +39,8 @@ const highlighted = computed(() => {
         @click="emit('choose', { item: it, index }); emit('select', it)"
         @mouseover="emit('highlight', index)"
         class="w-full text-left px-4 py-2.5 hover:bg-gray-800/30 text-gray-300 border-t border-gray-800/50"
+        role="option"
+        :aria-selected="index === selectedIndex"
         :class="index === selectedIndex ? 'bg-gray-800/50' : ''"
       >
         <div class="font-medium">{{ it.label }}</div>

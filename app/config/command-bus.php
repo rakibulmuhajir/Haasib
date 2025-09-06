@@ -2,6 +2,7 @@
 
 return [
     'user.create' => App\Actions\DevOps\UserCreate::class,
+    'user.update' => App\Actions\DevOps\UserUpdate::class,
     'user.delete' => App\Actions\DevOps\UserDelete::class,
     'company.create' => App\Actions\DevOps\CompanyCreate::class,
     'company.delete' => App\Actions\DevOps\CompanyDelete::class,
@@ -10,4 +11,3 @@ return [
     'company.invite' => App\Actions\Company\CompanyInvite::class,
     'invitation.revoke' => App\Actions\Invitation\InvitationRevoke::class,
 ];
-

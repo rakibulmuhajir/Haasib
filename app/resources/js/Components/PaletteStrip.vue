@@ -15,13 +15,13 @@ const props = defineProps<{
 
 const { palette, dockSize, lastSize, isExpanded, openTo, collapseToStrip } = props
 
-watch(() => palette.showResults, (v) => {
+watch(() => palette.showResults.value, (v) => {
   if (v && dockSize.value === 'strip') {
     openTo(lastSize.value, { reset: false, auto: true })
   }
 })
 
-watch(() => palette.q, (val) => {
+watch(() => palette.q.value, (val) => {
   if (dockSize.value === 'strip' && String(val || '').trim().length > 0) {
     openTo(lastSize.value, { reset: false, auto: true })
   }
@@ -29,32 +29,27 @@ watch(() => palette.q, (val) => {
 </script>
 
 <template>
-  <!-- Bottom Command Strip -->
-  <div class="fixed bottom-0 inset-x-0 z-40">
-    <div class="mx-auto w-full max-w-5xl px-3">
-      <div class="h-10 bg-gray-900/95 border border-gray-700 border-b-0 rounded-t-xl shadow-inner flex items-center justify-between px-3 font-mono text-xs text-gray-300">
-        <div class="flex items-center gap-2 w-full">
-          <span class="text-green-400">❯</span>
-          <div class="flex-1 min-w-0">
-            <!-- Inline input while minimized -->
-            <input v-if="dockSize === 'strip'"
-                   v-model="palette.q"
-                   @keydown.enter="openTo(lastSize as any, { reset: false, auto: true })"
-                   class="w-full bg-transparent outline-none focus:outline-none ring-0 border-0 placeholder-gray-600 text-gray-300"
-                   placeholder="Type a command… (Enter to expand)" />
-            <div v-else class="hidden sm:flex items-center gap-2 text-gray-500">
-              <span>command</span><span>— Press</span>
-              <kbd class="px-1.5 py-0.5 bg-gray-800/70 rounded border border-gray-700">⌘K</kbd>
-              <span>to {{ isExpanded ? 'collapse' : 'expand' }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 whitespace-nowrap">
-          <button v-if="dockSize !== 'half'" type="button" title="Half screen" @click="openTo('half', { reset: false })" class="px-2 py-1 rounded hover:bg-gray-800/70 border border-transparent" :class="isExpanded && dockSize === 'half' ? 'text-green-400' : 'text-gray-400'">▭</button>
-          <button v-if="dockSize !== 'strip'" type="button" title="Collapse" @click="collapseToStrip" class="px-2 py-1 rounded hover:bg-gray-800/70 text-gray-400">—</button>
-          <button v-if="dockSize !== 'full'" type="button" title="Fullscreen" @click="openTo('full', { reset: false })" class="px-2 py-1 rounded hover:bg-gray-800/70 border border-transparent" :class="isExpanded && dockSize === 'full' ? 'text-green-400' : 'text-gray-400'">⛶</button>
-        </div>
-      </div>
+  <!-- Bottom-right mini bubble -->
+  <div class="fixed bottom-3 right-3 z-40" aria-live="polite">
+    <div
+      class="max-w-sm w-[320px] rounded-2xl shadow-lg border border-gray-700 bg-gray-900/90 backdrop-blur-md px-3 py-2 font-mono text-xs text-gray-300 flex items-center gap-2"
+    >
+      <span class="text-green-400">❯</span>
+      <input
+        v-if="dockSize === 'strip'"
+        v-model="palette.q.value"
+        @focus="openTo('half', { reset: true, auto: true })"
+        @keydown.enter.prevent="openTo('half', { reset: true, auto: true })"
+        class="flex-1 bg-transparent outline-none focus:outline-none ring-0 border-0 placeholder-gray-600 text-gray-300"
+        placeholder="Type a command…"
+      />
+      <button
+        v-else
+        type="button"
+        @click="openTo('half', { reset: true, auto: true })"
+        class="ml-auto px-2 py-1 rounded-md border border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800/60"
+        title="Open command palette (⌘K)"
+      >Open</button>
     </div>
   </div>
 </template>

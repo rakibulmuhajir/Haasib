@@ -2,13 +2,17 @@
 const props = defineProps<{
   results: any[],
   show: boolean,
+  entityId?: string | null,
+  entityLabel?: string | null,
+  relatedVerbs?: Array<{ id: string; label: string }>,
+  compact?: boolean,
 }>()
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'start-verb'])
 </script>
 
 <template>
-  <div v-if="show" class="w-full lg:w-80 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-t-xl shadow-2xl font-mono text-sm overflow-hidden" :class="show ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'">
+  <div v-if="show" class="w-full lg:w-96 bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-t-xl shadow-2xl font-mono text-sm overflow-hidden" :class="[show ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4', compact ? 'bg-gray-900' : '']">
     <div class="px-4 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900">
       <div class="flex items-center gap-2">
         <span class="text-green-400">●</span>
@@ -38,9 +42,32 @@ const emit = defineEmits(['close'])
             {{ result.action }}
           </span>
         </div>
-        <div :class="result.success ? 'text-green-200' : 'text-red-200'" class="text-xs mb-2">{{ result.message }}</div>
-        <div class="text-gray-500 text-xs">
-          {{ new Date(result.timestamp).toLocaleTimeString() }}
+        <div :class="result.success ? 'text-green-200' : 'text-red-200'" class="text-xs mb-2">
+          <span v-if="!result.success && result.status" class="mr-1 text-gray-400">[{{ result.status }}]</span>
+          {{ result.message }}
+        </div>
+        <ul v-if="!result.success && result.details && result.details.length" class="text-xs text-red-200/90 list-disc ml-5 mb-2">
+          <li v-for="(d, di) in result.details" :key="di">{{ d }}</li>
+        </ul>
+        <div class="text-gray-500 text-xs">{{ new Date(result.timestamp).toLocaleTimeString() }}</div>
+        <div v-if="result.details && Array.isArray(result.details)" class="mt-2 space-y-1">
+          <div v-for="(line, li) in result.details" :key="li" class="text-gray-300/90 text-xs">{{ line }}</div>
+        </div>
+      </div>
+
+      <!-- Next actions -->
+      <div v-if="relatedVerbs && relatedVerbs.length > 0" class="bg-gray-800/20 p-3 rounded-xl border border-gray-700/40">
+        <div class="text-gray-400 text-xs mb-2">Next actions<span v-if="entityLabel"> for {{ entityLabel }}</span></div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="(v, i) in relatedVerbs"
+            :key="v.id"
+            @click="emit('start-verb', v.id)"
+            class="px-2.5 py-1 text-xs rounded-md border bg-gray-800/40 border-gray-700/40 text-gray-200 hover:bg-gray-700/40"
+            :title="`${i+1}`"
+          >
+            {{ v.label }} <span class="opacity-60">({{ i+1 }})</span>
+          </button>
         </div>
       </div>
     </div>

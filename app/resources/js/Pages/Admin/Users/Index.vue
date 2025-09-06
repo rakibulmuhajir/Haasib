@@ -33,8 +33,8 @@ watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeou
   <AuthenticatedLayout>
     <template #header>
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Users</h2>
-        <Link :href="route('admin.users.create')" class="text-sm text-indigo-600 hover:underline">Create User</Link>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Users</h2>
+        <Link :href="route('admin.users.create')" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Create User</Link>
       </div>
     </template>
 
@@ -45,26 +45,25 @@ watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeou
           <PrimaryButton @click="fetchUsers">Search</PrimaryButton>
         </div>
 
-        <div v-if="error" class="text-red-600 text-sm mb-2">{{ error }}</div>
-        <div class="overflow-hidden bg-white shadow sm:rounded-md">
-          <ul role="list" class="divide-y divide-gray-200">
+        <div v-if="error" class="text-red-600 dark:text-red-400 text-sm mb-2">{{ error }}</div>
+        <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md">
+          <ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
             <li v-for="u in items" :key="u.id" class="px-4 py-4 sm:px-6">
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-sm font-medium text-gray-900">{{ u.name }}</div>
-                  <div class="text-xs text-gray-500">{{ u.email }}</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ u.name }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ u.email }}</div>
                 </div>
                 <div>
-                  <Link :href="route('admin.users.show', u.id)" class="text-sm text-indigo-600 hover:underline">Manage</Link>
+                  <Link :href="route('admin.users.show', u.id)" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Manage</Link>
                 </div>
               </div>
             </li>
-            <li v-if="!loading && items.length === 0" class="px-4 py-6 text-sm text-gray-500">No users found.</li>
-            <li v-if="loading" class="px-4 py-6 text-sm text-gray-500">Loading…</li>
+            <li v-if="!loading && items.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No users found.</li>
+            <li v-if="loading" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Loading…</li>
           </ul>
         </div>
       </div>
     </div>
   </AuthenticatedLayout>
 </template>
-

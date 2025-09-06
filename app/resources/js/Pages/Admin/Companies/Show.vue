@@ -41,8 +41,8 @@ const tabValue = computed({
   <AuthenticatedLayout>
     <template #header>
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Company</h2>
-        <Link :href="route('admin.companies.index')" class="text-sm text-gray-600 hover:underline">Back to companies</Link>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Company</h2>
+        <Link :href="route('admin.companies.index')" class="text-sm text-gray-600 dark:text-gray-300 hover:underline">Back to companies</Link>
       </div>
     </template>
 
@@ -57,12 +57,12 @@ const tabValue = computed({
 
           <div class="lg:col-span-2">
             <Tabs v-model="tabValue" class="w-full">
-              <div class="sticky top-16 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-                <TabsList class="flex space-x-2 border-b border-gray-200 px-2">
-                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+              <div class="sticky top-16 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-gray-900/60">
+                <TabsList class="flex space-x-2 border-b border-gray-200 dark:border-gray-700 px-2">
+                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
                     Members
                   </TabsTrigger>
-                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-600 text-gray-600 hover:text-gray-800">
+                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
                     Invite
                   </TabsTrigger>
                 </TabsList>

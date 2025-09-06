@@ -473,3 +473,49 @@ If you had 100+ commands, grouping might help discoverability. But with smart au
 
 This creates the "fastest accounting app experience" you're targeting while keeping it approachable for non-technical users.
 
+---
+
+## Implementation Status (MVP Foundations)
+
+What’s implemented now
+- Guided palette: entity → verb → flags with inline/panel pickers (Reka UI).
+- Freeform parsing: always-on; Enter tries to parse before suggestions.
+  - Flags: supports both `--flag=value|value` and `-flag=value|value`.
+  - Prepositions: `to|for` → company/customer, `as` → role, `from` → company (unassign).
+  - Heuristics: if command contains an email and verb supports `user`, prefer `user` entity (e.g., `create jane@x`).
+  - Cmd/Ctrl+Enter: parse + execute if complete and confident.
+- DevOps verbs wired: `user.create|delete|update`; `company.create|delete|assign|unassign`.
+- UX polish: summary (filled+empty) with numeric hotkeys; list actions with letter hotkeys; compact mode toggle.
+- Validation & errors: toasts for field validation and explicit 422 errors (backend) surface in results/toasts.
+- Idempotency & audit: enforced via `/commands` controller + `CommandExecutor`.
+- Tests & probes: Python CLI probe/suite and Playwright GUI scaffold in `tools/`.
+
+---
+
+## How to Add a New Command (Entity/Verb/Flags + Freeform)
+
+1) Backend action
+- Add an action under `app/app/Actions/<Domain>/<Name>.php` with `handle(array $p, User $actor): array`.
+- Validate with `Validator::make(...)->validate()`; throw `ValidationException::withMessages([...])` for explicit 422s.
+- Wrap mutations in `DB::transaction(...)`; return `{ message, data }`.
+- Register in `app/config/command-bus.php` as `'entity.verb' => Class::class`.
+
+2) Guided palette (UI)
+- Edit `app/resources/js/palette/entities.ts`:
+  - Add/extend an `EntityDef` with a `VerbDef` and ordered `fields` (text/email/password/select/remote).
+  - Provide `aliases` for the verb (synonyms users might type).
+  - Optional `validate`, `preExecute`, `postExecute`, and remote `source` for pickers.
+
+3) Freeform parsing (client)
+- Edit `app/resources/js/palette/parser.ts`:
+  - Map synonyms to the verb/entity.
+  - Add a small pattern to collect params from the subject; use prepositions where appropriate (`to|for|as|from`).
+  - Parse flags (both `--` and `-`) and exclude consumed tokens from the subject using the `consumed` indices.
+
+4) Wire errors and UX
+- Backend: use 422 ValidationException for missing/not-found; 403 for forbidden.
+- Frontend: toasts already surface field validation and server errors.
+
+5) Optional probes/tests
+- Add a scenario in `tools/cli_suite.py` and/or `tools/gui_suite.py`.
+

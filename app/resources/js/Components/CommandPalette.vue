@@ -17,15 +17,33 @@ const dockSize = ref<DockSize>('strip')
 const isExpanded = computed(() => open.value && dockSize.value !== 'strip')
 const autoSizing = ref(false)
 
+// Compact (pro) mode preference
+const compact = ref(localStorage.getItem('palette.compact') === '1')
+watch(compact, (v) => localStorage.setItem('palette.compact', v ? '1' : '0'))
+
 watch(lastSize, (v) => localStorage.setItem('palette.lastSize', v))
 
 watch(isExpanded, (v) => {
-  if (!v) dockSize.value = 'strip'
+  if (!v) {
+    dockSize.value = 'strip'
+  } else {
+    nextTick(() => palette.inputEl.value?.focus())
+  }
+})
+
+// Ensure focus whenever palette opens (added redundancy for robustness)
+watch(() => palette.open.value, (v) => {
+  if (v) nextTick(() => palette.inputEl.value?.focus())
+})
+
+// Ensure input focuses whenever a new flag starts (e.g., moving to company selection)
+watch(() => palette.activeFlagId.value, (v) => {
+  if (v) nextTick(() => palette.inputEl.value?.focus())
 })
 
 function openTo(size: Exclude<DockSize, 'strip'>, { reset, auto }: { reset: boolean, auto?: boolean } = { reset: true, auto: false }) {
   lastSize.value = size
-  if (reset) resetAll()
+  if (reset) { resetAll(); palette.showResults.value = false }
   open.value = true
   dockSize.value = size
   autoSizing.value = !!auto
@@ -36,6 +54,13 @@ function collapseToStrip() {
   open.value = false
   dockSize.value = 'strip'
   autoSizing.value = false
+  // Clear palette state when minimizing so we start fresh next time
+  try {
+    palette.resetAll()
+    // Also clear residual results/log so reopening feels fresh
+    palette.showResults.value = false
+    palette.results.value = []
+  } catch {}
 }
 
 function toggleShortcutOpen() {
@@ -55,6 +80,14 @@ const suggestionCount = computed(() => {
     (currentChoices.value || []).length,
   ]
   return Math.max(0, ...counts)
+})
+
+// Related verbs for results panel
+const relatedVerbs = computed(() => {
+  const entity = palette.selectedEntity.value
+  if (!entity) return []
+  const currentVerbId = palette.selectedVerb.value?.id
+  return (entity.verbs || []).filter((v: any) => v.id !== currentVerbId).map((v: any) => ({ id: v.id, label: v.label }))
 })
 
 let autoSizeTimer: any = null
@@ -87,15 +120,23 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, { passive: false })
+  // Refocus palette input after Inertia page changes
+  const inertiaFinish = () => { if (open.value) nextTick(() => palette.inputEl.value?.focus()) }
+  window.addEventListener('inertia:finish', inertiaFinish)
+  ;(window as any).__palette_inertia_finish = inertiaFinish
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  const inertiaFinish = (window as any).__palette_inertia_finish
+  if (inertiaFinish) window.removeEventListener('inertia:finish', inertiaFinish)
 })
 </script>
 
 <template>
+  <!-- Minimized bubble; hide it when expanded to avoid focus conflicts -->
   <PaletteStrip
+    v-if="!isExpanded"
     :palette="palette"
     :dock-size="dockSize"
     :last-size="lastSize"
@@ -107,9 +148,25 @@ onUnmounted(() => {
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 bg-black/70 backdrop-blur-sm" />
       <div class="fixed inset-x-0 bottom-0 flex items-end justify-center pb-2 sm:pb-4 px-2">
-        <DialogContent class="w-full max-w-5xl flex flex-col lg:flex-row gap-4" :class="[palette.showResults.value ? 'lg:max-w-5xl' : '', dockSize === 'full' ? 'h-[88vh]' : 'h-[56vh]']">
-          <PalettePanel :palette="palette" :handle-keydown="handleKeydown" :is-expanded="isExpanded" />
-          <PaletteResults :results="palette.results.value" :show="palette.showResults.value" @close="palette.showResults.value = false" />
+        <DialogContent class="w-full max-w-6xl flex flex-col lg:flex-row gap-4 relative" :class="[palette.showResults.value ? 'lg:max-w-6xl' : '', dockSize === 'full' ? 'h-[88vh]' : 'h-[56vh]']">
+          <!-- Compact toggle -->
+          <button
+            class="absolute top-2 right-2 px-2 py-1 rounded-md text-xs border border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800/60"
+            title="Toggle compact (pro) mode"
+            @click="compact = !compact"
+          >{{ compact ? 'Pro: On' : 'Pro: Off' }}</button>
+
+          <PalettePanel :palette="palette" :handle-keydown="handleKeydown" :is-expanded="isExpanded" :compact="compact" />
+          <PaletteResults
+            :results="palette.results.value"
+            :show="palette.showResults.value"
+            :entity-id="palette.selectedEntity.value?.id || null"
+            :entity-label="palette.selectedEntity.value?.label || null"
+            :related-verbs="relatedVerbs"
+            :compact="compact"
+            @close="palette.showResults.value = false"
+            @start-verb="(vid) => { const eid = palette.selectedEntity.value?.id; if (eid) palette.startVerb(eid, vid, palette.stashParams.value || {}) }"
+          />
         </DialogContent>
       </div>
     </DialogPortal>

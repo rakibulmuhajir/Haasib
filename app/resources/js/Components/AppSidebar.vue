@@ -9,21 +9,21 @@ const emit = defineEmits<{ (e: 'toggle'): void }>()
 
 <template>
   <aside
-    class="hidden md:flex fixed top-16 bottom-0 left-0 border-r border-gray-200 bg-white transition-[width] duration-200"
+    class="hidden md:flex fixed top-16 bottom-0 left-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 transition-[width] duration-200"
     :class="props.expanded ? 'w-56' : 'w-16'"
   >
     <div class="flex w-full flex-col">
-      <div class="flex items-center justify-between px-2 py-2 border-b border-gray-200">
-        <button @click="emit('toggle')" class="rounded p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100">
+      <div class="flex items-center justify-between px-2 py-2 border-b border-gray-200 dark:border-gray-700">
+        <button @click="emit('toggle')" class="rounded p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800/60">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
             <path fill-rule="evenodd" d="M3 4.75A.75.75 0 0 1 3.75 4h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 4.75Zm0 10.5a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75ZM3 10a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 3 10Z" clip-rule="evenodd" />
           </svg>
         </button>
-        <div v-if="props.expanded" class="text-xs text-gray-500 px-2">Menu</div>
+        <div v-if="props.expanded" class="text-xs text-gray-500 dark:text-gray-400 px-2">Menu</div>
       </div>
 
       <nav class="flex-1 overflow-y-auto py-2">
-        <div v-if="props.expanded" class="px-3 py-1 text-[11px] uppercase tracking-wide text-gray-500">General</div>
+        <div v-if="props.expanded" class="px-3 py-1 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">General</div>
 
         <SidebarNavItem v-for="item in navLinks.filter(l => l.group==='general' && l.includeInSidebar)"
                         :key="item.id"
@@ -41,7 +41,7 @@ const emit = defineEmits<{ (e: 'toggle'): void }>()
         </SidebarNavItem>
 
         <template v-if="$page.props.auth.isSuperAdmin">
-          <div v-if="props.expanded" class="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">Admin</div>
+          <div v-if="props.expanded" class="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Admin</div>
 
           <SidebarNavItem v-for="item in navLinks.filter(l => l.group==='admin' && l.includeInSidebar)"
                           :key="item.id"

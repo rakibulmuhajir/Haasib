@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\CommandBus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -24,6 +25,8 @@ class CommandExecutor
         }
 
         try {
+            // Authorize command before dispatching
+            Gate::authorize('command.execute', [$action, $companyId]);
             $result = $this->bus->dispatch($action, $params, $user);
         } catch (ValidationException $e) {
             return [[

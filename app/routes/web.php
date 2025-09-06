@@ -32,6 +32,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/web/languages/suggest', [\App\Http\Controllers\LanguageLookupController::class, 'suggest']);
     Route::get('/web/currencies/suggest', [\App\Http\Controllers\CurrencyLookupController::class, 'suggest']);
     Route::get('/web/locales/suggest', [\App\Http\Controllers\LocaleLookupController::class, 'suggest']);
+    // Capabilities for CLI palette (server-authoritative)
+    Route::get('/web/commands/capabilities', [\App\Http\Controllers\CapabilitiesController::class, 'index']);
+    // Command overlays for the palette (UI control only)
+    Route::get('/web/commands/overlays', [\App\Http\Controllers\CommandOverlayController::class, 'index']);
 });
 
 Route::get('/', function () {

@@ -1,0 +1,49 @@
+/* PrimeVue v4 (PrimeUIX themes) lightweight overrides
+   Goal: Align PrimeVue tokens with existing Tailwind + Figtree without extra packages. */
+
+/* Base (light) */
+:root {
+  /* Use the app font everywhere PrimeVue reads its font token */
+  --p-font-family: var(--app-font, 'Figtree', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji');
+
+  /* Brand primary palette (Tailwind Indigo) */
+  --p-primary-50:  #eef2ff;
+  --p-primary-100: #e0e7ff;
+  --p-primary-200: #c7d2fe;
+  --p-primary-300: #a5b4fc;
+  --p-primary-400: #818cf8;
+  --p-primary-500: #6366f1; /* main */
+  --p-primary-600: #4f46e5;
+  --p-primary-700: #4338ca;
+  --p-primary-800: #3730a3;
+  --p-primary-900: #312e81;
+
+  /* Optional surface tweaks for better contrast in light mode */
+  --p-surface-0:   #ffffff;
+  --p-surface-50:  #f9fafb;
+  --p-surface-100: #f3f4f6;
+  --p-surface-200: #e5e7eb;
+  --p-surface-300: #d1d5db;
+  --p-surface-800: #1f2937;
+  --p-text-color:  #111827;
+}
+
+/* Dark mode (class-based) */
+.dark {
+  --p-font-family: var(--app-font, 'Figtree', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji');
+
+  /* Keep same brand; adjust surfaces */
+  --p-surface-0:   #0b1220;  /* very dark */
+  --p-surface-50:  #0f172a;  /* slate-900-ish */
+  --p-surface-100: #111827;
+  --p-surface-200: #1f2937;
+  --p-surface-300: #374151;
+  --p-surface-800: #e5e7eb;  /* for borders on dark */
+  --p-text-color:  #e5e7eb;
+}
+
+/* Minor polish so Prime components blend with Tailwind defaults */
+.p-card, .p-panel, .p-toolbar {
+  border-radius: 0.5rem; /* match sm:rounded-lg */
+}
+

@@ -1,0 +1,18 @@
+app/resources/js/Components/CommandPalette.vue
+app/resources/js/Pages/Dashboard.vue
+app/resources/js/Pages/Admin/Dashboard.vue
+app/resources/js/Pages/Admin/Companies/
+app/resources/js/Components/UserMenu.vue
+app/resources/js/Components/CompanyMemberList.vue
+app/resources/js/Components/UserMembershipList.vue
+app/resources/js/Layouts/AuthenticatedLayout.vue
+app/resources/js/Components/AppHeader.vue
+app/resources/js/Components/Collapsible.vue
+app/resources/js/Components/ThemeSwitcher.vue
+# Backend likely involved:
+app/app/Models/
+app/app/Http/Controllers/
+app/app/Policies/
+app/app/Http/Requests/
+app/database/migrations/
+app/routes/

@@ -87,17 +87,24 @@
 }
 .layout-root-submenulist { list-style: none; margin: 0; padding: 0; }
 .layout-menu a {
-  border-radius: 999px;
+  /* Card-like chip by default */
+  border-radius: var(--p-overlay-popover-border-radius, 10px);
   padding: .5rem .65rem;
   color: var(--p-text-color);
-  transition: background-color var(--p-transition-duration, .2s);
+  transition: background-color var(--p-transition-duration, .2s), box-shadow var(--p-transition-duration, .2s), border-color var(--p-transition-duration, .2s);
+  display: flex;
+  width: 100%;
 }
 .layout-menu a:hover {
   background: var(--p-content-hover-background);
 }
 .layout-menu a.active-route {
-  border: 1px solid var(--p-primary-color);
-  color: var(--p-primary-color);
+  /* Card style: same background transparency, border and radius as cards */
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-overlay-popover-border-radius, 10px);
+  color: var(--p-text-color);
+  box-shadow: var(--p-overlay-popover-shadow, none);
 }
 
 /* Slim mode (desktop) */

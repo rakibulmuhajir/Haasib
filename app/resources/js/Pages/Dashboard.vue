@@ -35,20 +35,26 @@ const shellRef = ref()
     <LayoutShell ref="shellRef">
       <template #sidebar>
         <Sidebar title="Blue Whale">
-          <SidebarMenu :sections="[
+          <SidebarMenu iconSet="line" :sections="[
             { title: 'Dashboards', items: [
-              { label: 'Banking', path: '/dashboard-banking', icon: 'dashboard' },
-              { label: 'Analytics', path: '/dashboard-analytics', icon: 'analytics' }
+              { label: 'Banking', path: '/dashboard-banking', icon: 'dashboard', routeName: 'dashboard' },
+              { label: 'Analytics', path: '/dashboard-analytics', icon: 'analytics', routeName: 'dashboard', children: [
+                { label: 'Trends', path: '/dashboard-analytics/trends', icon: 'analytics' },
+                { label: 'Overview', path: '/dashboard-analytics/overview', icon: 'dashboard' }
+              ] }
             ]},
             { title: 'Apps', items: [
-              { label: 'Companies', path: '/companies', icon: 'companies' },
-              { label: 'Users', path: '/users', icon: 'users' },
-              { label: 'Files', path: '/files', icon: 'files' }
+              { label: 'Companies', path: '/companies', icon: 'companies', routeName: 'companies.index' },
+              { label: 'Users', path: '/users', icon: 'users', routeName: 'users.index', children: [
+                { label: 'All Users', path: '/users', icon: 'users', routeName: 'users.index' },
+                { label: 'Profile', path: '/profile', icon: 'profile', routeName: 'profile.edit' }
+              ] },
+              { label: 'Files', path: '/files', icon: 'files', routeName: 'files.index' }
             ]},
             { title: 'System', items: [
-              { label: 'Settings', path: '/settings', icon: 'settings' },
-              { label: 'Profile', path: '/profile', icon: 'profile' },
-              { label: 'Logout', path: '/logout', icon: 'logout' }
+              { label: 'Settings', path: '/settings', icon: 'settings', routeName: 'settings' },
+              { label: 'Profile', path: '/profile', icon: 'profile', routeName: 'profile.edit' },
+              { label: 'Logout', path: '/logout', icon: 'logout', routeName: 'logout' }
             ]}
           ]"/>
         </Sidebar>

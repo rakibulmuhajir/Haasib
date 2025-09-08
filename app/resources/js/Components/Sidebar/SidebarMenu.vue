@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import SvgIcon from '@/Components/SvgIcon.vue'
 import { computed, reactive, onMounted, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import SidebarMenuItem, { type MenuItem } from './SidebarMenuItem.vue'
 
-export interface MenuItem { label: string; path?: string; icon?: string; routeName?: string }
 export interface MenuSection { title?: string; items: MenuItem[] }
 
 const props = defineProps<{ sections: MenuSection[]; iconSet?: 'solid'|'line' }>()
@@ -13,20 +12,25 @@ const here = computed(() => (page?.url as string) || (typeof window !== 'undefin
 // Collapsible state per section index
 const open = reactive<Record<number, boolean>>({})
 onMounted(() => {
-  props.sections.forEach((_, i) => {
+  props.sections.forEach((section, i) => {
     const key = `sidebar.open.${i}`
-    open[i] = localStorage.getItem(key) !== '0'
+    // auto-open if any child item is active
+    const active = section.items?.some((it) => isActiveDeep(it))
+    const saved = localStorage.getItem(key)
+    open[i] = saved !== null ? saved === '1' : !!active
   })
 })
 watch(open, (val) => {
   Object.entries(val).forEach(([k, v]) => localStorage.setItem(`sidebar.open.${k}`, v ? '1' : '0'))
 }, { deep: true })
 
-function isActive(item: MenuItem): boolean {
-  if (item.routeName && (window as any).route) {
-    try { return (window as any).route().current(item.routeName) } catch { /* ignore */ }
+function isActiveDeep(item: MenuItem): boolean {
+  const r = (window as any).route
+  if (item.routeName && typeof r === 'function') {
+    try { if (r().current(item.routeName)) return true } catch {}
   }
-  if (item.path) return here.value === item.path || here.value.startsWith(item.path + '/')
+  if (item.path && (here.value === item.path || here.value.startsWith(item.path + '/'))) return true
+  if (item.children) return item.children.some(isActiveDeep)
   return false
 }
 </script>
@@ -41,15 +45,7 @@ function isActive(item: MenuItem): boolean {
         </button>
       </div>
       <ul class="layout-root-submenulist" v-show="open[si]">
-        <li v-for="(item, ii) in section.items" :key="ii">
-          <a :href="item.path || '#'" class="inline-flex items-center gap-2 px-2 py-1 rounded-full"
-             :class="{ 'router-link-active active-route': isActive(item) }"
-             style="color: var(--p-text-color)"
-          >
-            <SvgIcon :name="item.icon || 'placeholder'" :set="iconSet || 'line'" class="opacity-90" />
-            <span class="layout-menuitem-text text-sm">{{ item.label }}</span>
-          </a>
-        </li>
+        <SidebarMenuItem v-for="(item, ii) in section.items" :key="ii" :item="item" :icon-set="iconSet || 'line'" />
       </ul>
     </li>
   </ul>

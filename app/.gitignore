@@ -12,15 +12,6 @@
 /.vscode
 /.zed
 /auth.json
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
-/bootstrap/ssr
 /node_modules
 /public/build
 /public/hot

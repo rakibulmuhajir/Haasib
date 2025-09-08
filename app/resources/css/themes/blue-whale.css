@@ -1,0 +1,134 @@
+/* Blue Whale Theme Tokens (light + dark)
+   Works with PrimeVue token names and can be used by Tailwind via CSS vars. */
+
+/* Light */
+:root[data-theme="blue-whale"], :root {
+  /* Brand blues (Tailwindish) */
+  --p-blue-50:#eff6ff; --p-blue-100:#dbeafe; --p-blue-200:#bfdbfe; --p-blue-300:#93c5fd;
+  --p-blue-400:#60a5fa; --p-blue-500:#3b82f6; --p-blue-600:#2563eb; --p-blue-700:#1d4ed8;
+  --p-blue-800:#1e40af; --p-blue-900:#1e3a8a; --p-blue-950:#172554;
+
+  /* Primary mapping */
+  --p-primary-50: var(--p-blue-50);
+  --p-primary-100: var(--p-blue-100);
+  --p-primary-200: var(--p-blue-200);
+  --p-primary-300: var(--p-blue-300);
+  --p-primary-400: var(--p-blue-400);
+  --p-primary-500: var(--p-blue-500);
+  --p-primary-600: var(--p-blue-600);
+  --p-primary-700: var(--p-blue-700);
+  --p-primary-800: var(--p-blue-800);
+  --p-primary-900: var(--p-blue-900);
+  --p-primary-950: var(--p-blue-950);
+  --p-primary-color: var(--p-primary-500);
+  --p-primary-hover-color: var(--p-primary-600);
+  --p-primary-active-color: var(--p-primary-700);
+  --p-primary-contrast-color: #fff;
+
+  /* Brand‑tinted surfaces */
+  --p-surface-0:  color-mix(in srgb, var(--p-primary-950), white 100%);
+  --p-surface-50: color-mix(in srgb, var(--p-primary-950), white 95%);
+  --p-surface-100:color-mix(in srgb, var(--p-primary-950), white 90%);
+  --p-surface-200:color-mix(in srgb, var(--p-primary-950), white 80%);
+  --p-surface-300:color-mix(in srgb, var(--p-primary-950), white 70%);
+  --p-surface-400:color-mix(in srgb, var(--p-primary-950), white 60%);
+  --p-surface-500:color-mix(in srgb, var(--p-primary-950), white 50%);
+  --p-surface-600:color-mix(in srgb, var(--p-primary-950), white 40%);
+  --p-surface-700:color-mix(in srgb, var(--p-primary-950), white 30%);
+  --p-surface-800:color-mix(in srgb, var(--p-primary-950), white 20%);
+  --p-surface-900:color-mix(in srgb, var(--p-primary-950), white 10%);
+  --p-surface-950:color-mix(in srgb, var(--p-primary-950), white 5%);
+
+  /* Text & borders */
+  --p-text-color: var(--p-surface-700);
+  --p-text-hover-color: var(--p-surface-800);
+  --p-text-muted-color: var(--p-surface-500);
+  --p-content-background: var(--p-surface-0);
+  --p-content-hover-background: var(--p-surface-100);
+  --p-content-border-color: var(--p-surface-200);
+
+  /* Highlights & focus */
+  --p-highlight-background: var(--p-primary-50);
+  --p-highlight-focus-background: var(--p-primary-100);
+  --p-highlight-color: var(--p-primary-700);
+  --p-highlight-focus-color: var(--p-primary-800);
+  --p-focus-ring-width: 1px;
+  --p-focus-ring-style: solid;
+  --p-focus-ring-color: var(--p-primary-color);
+  --p-focus-ring-offset: 2px;
+
+  /* Forms + motion */
+  --p-form-field-background: var(--p-surface-0);
+  --p-form-field-border-color: var(--p-surface-300);
+  --p-form-field-hover-border-color: var(--p-surface-400);
+  --p-form-field-focus-border-color: var(--p-primary-color);
+  --p-form-field-color: var(--p-surface-700);
+  --p-border-radius-sm: 4px;
+  --p-border-radius-md: 6px;
+  --p-border-radius-lg: 8px;
+  --p-overlay-popover-border-radius: 10px;
+  --p-overlay-modal-border-radius: 1.5rem;
+  --p-transition-duration: .2s;
+
+  /* Shadows */
+  --p-overlay-popover-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+  --p-overlay-modal-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+  --p-form-field-shadow: 0 0 #0000, 0 0 #0000, 0 1px 2px 0 rgba(18,18,23,.05);
+
+  /* Fonts */
+  --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-alt: "Roboto Flex", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Ground (page) background for light */
+  --surface-ground: linear-gradient(180deg, #e0e7f5 0%, rgba(170, 194, 239, 0.06) 111.26%);
+}
+
+html, body { font-family: var(--font-sans); }
+h1,h2,h3 { font-family: var(--font-alt); font-weight: 600; }
+body { background: var(--surface-ground, var(--p-surface-50)); }
+
+/* Dark */
+:root[data-theme="blue-whale-dark"] {
+  color-scheme: dark;
+  /* Ground (page) background for dark */
+  --surface-ground: rgb(0, 12, 35);
+
+  /* Overlays as translucent white on ground */
+  --p-surface-50: rgba(255, 255, 255, 0.04);
+  --p-surface-100: rgba(255, 255, 255, 0.08);
+  --p-surface-200: rgba(255, 255, 255, 0.12);
+  --p-surface-300: rgba(255, 255, 255, 0.16);
+  --p-surface-400: rgba(255, 255, 255, 0.24);
+  --p-surface-500: rgba(255, 255, 255, 0.32);
+  --p-surface-600: rgba(255, 255, 255, 0.40);
+  --p-surface-700: rgba(255, 255, 255, 0.52);
+  --p-surface-800: rgba(255, 255, 255, 0.64);
+  --p-surface-900: rgba(255, 255, 255, 0.76);
+  --p-surface-950: rgba(255, 255, 255, 0.88);
+  /* Card/background base */
+  --p-surface-0: rgba(255, 255, 255, 0.08);
+
+  /* Text ramp for dark */
+  --p-text-color: rgba(255, 255, 255, 0.92);
+  --p-text-hover-color: rgba(255, 255, 255, 1);
+  --p-text-muted-color: rgba(255, 255, 255, 0.48);
+
+  /* Borders on dark over ground */
+  --p-content-border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Component stitching (sample) */
+:root, :root[data-theme="blue-whale"], :root[data-theme="blue-whale-dark"] {
+  /* Button */
+  --p-button-primary-background: var(--p-primary-color);
+  --p-button-primary-hover-background: var(--p-primary-hover-color);
+  --p-button-primary-active-background: var(--p-primary-active-color);
+  --p-button-primary-color: var(--p-primary-contrast-color);
+  /* InputText */
+  --p-inputtext-background: var(--p-form-field-background);
+  --p-inputtext-border-color: var(--p-form-field-border-color);
+  --p-inputtext-hover-border-color: var(--p-form-field-hover-border-color);
+  --p-inputtext-focus-border-color: var(--p-form-field-focus-border-color);
+  --p-inputtext-color: var(--p-form-field-color);
+  --p-inputtext-shadow: var(--p-form-field-shadow);
+}

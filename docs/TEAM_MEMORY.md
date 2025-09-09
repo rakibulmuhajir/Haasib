@@ -23,8 +23,7 @@ Frontend Library Decision
 
 Migration SOP
 - Plan: See `docs/mig-to-prime.md` for the end-to-end PrimeVue migration order (root → leaves), acceptance criteria per phase, and verification checklist.
-- Dark Mode: Keep Tailwind’s `dark` class as the source of truth via `useTheme()`. Adjust PrimeVue theme tokens/CSS variables under `.dark` if needed for contrast.
-- Removal: Reka UI will be removed after migration passes verification (grep shows no `reka-ui` imports; UI parity confirmed).
+- Dark Mode: Use PrimeVue's built-in dark mode theming system. Configure through PrimeVue theme configuration rather than Tailwind dark classes.
 
 PrimeVue Guardrails
 - Local Docs: Use `docs/primevue-inventory.md` and `app/node_modules/primevue/README.md` as the API source of truth for v4.3.9.

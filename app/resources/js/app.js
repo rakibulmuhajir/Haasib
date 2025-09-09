@@ -1,7 +1,6 @@
 import '../css/app.css';
-// PrimeVue v4 styled mode injects CSS from the preset JS; no direct CSS file is required
-import '../css/themes/blue-whale.css';
 import '../css/layout/shell.css';
+import '../css/themes/blue-whale.css';
 import './bootstrap';
 
 import { createInertiaApp } from '@inertiajs/vue3';
@@ -19,8 +18,8 @@ import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 // PrimeVue preset (static import for reliable styling)
 // Ensure you have installed: npm i @primeuix/themes primevue
-import Aura from '@primeuix/themes/aura';
-// (already imported above to ensure correct order) import '@primeuix/themes/aura/theme.css'
+import blueWhale from './theme/bluewhale';
+// PrimeVue v4 styled mode injects CSS from the preset JS; no direct CSS file is required
 // Optional icons (install with: npm i primeicons)
 // import 'primeicons/primeicons.css'
 import Button from 'primevue/button'
@@ -30,7 +29,6 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Divider from 'primevue/divider'
 import Toast from 'primevue/toast'
-import blueWhale from './theme/bluewhale'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -49,11 +47,11 @@ createInertiaApp({
             ripple: true,
             unstyled: false,
             theme: {
-                preset: Aura,
+                preset: blueWhale,
                 options: {
+                    prefix: 'p',
                     darkModeSelector: '[data-theme="blue-whale-dark"]',
                 },
-                extend: blueWhale,
             },
         })
         vue.use(ToastService)

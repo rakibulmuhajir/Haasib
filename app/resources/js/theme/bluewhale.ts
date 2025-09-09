@@ -1,7 +1,7 @@
-// PrimeVue v4 styled mode token extension for Blue Whale theme
-// Minimal extension: brand primary + surface/text ramps for light/dark.
+import { definePreset } from '@primeuix/themes';
+import Aura from '@primeuix/themes/aura';
 
-const blueWhale = {
+const blueWhale = definePreset(Aura, {
   primitive: {
     blue: {
       50: '#eff6ff',
@@ -24,9 +24,27 @@ const blueWhale = {
       activeColor: '{blue.700}',
       contrastColor: '#ffffff',
     },
+    surface: {
+      0: '#ffffff',
+      50: 'color-mix(in srgb, {blue.950}, white 95%)',
+      100: 'color-mix(in srgb, {blue.950}, white 90%)',
+      200: 'color-mix(in srgb, {blue.950}, white 80%)',
+      300: 'color-mix(in srgb, {blue.950}, white 70%)',
+      400: 'color-mix(in srgb, {blue.950}, white 60%)',
+      500: 'color-mix(in srgb, {blue.950}, white 50%)',
+      600: 'color-mix(in srgb, {blue.950}, white 40%)',
+      700: 'color-mix(in srgb, {blue.950}, white 30%)',
+      800: 'color-mix(in srgb, {blue.950}, white 20%)',
+      900: 'color-mix(in srgb, {blue.950}, white 10%)',
+      950: 'color-mix(in srgb, {blue.950}, white 5%)',
+    },
+    text: {
+      color: '{surface.700}',
+      hoverColor: '{surface.800}',
+      mutedColor: '{surface.500}',
+    },
     colorScheme: {
       light: {
-        // Ensure primary in light scheme uses blue ramp
         primary: {
           color: '{blue.500}',
           hoverColor: '{blue.600}',
@@ -54,7 +72,6 @@ const blueWhale = {
         },
       },
       dark: {
-        // Ensure primary in dark scheme uses blue ramp
         primary: {
           color: '{blue.500}',
           hoverColor: '{blue.600}',
@@ -83,39 +100,54 @@ const blueWhale = {
       },
     },
   },
-  components: {
+ /*  components: {
     button: {
-      background: '{primary.color}',
-      hoverBackground: '{primary.hoverColor}',
-      activeBackground: '{primary.activeColor}',
-      color: '{primary.contrastColor}',
+      extend: {
+        root: {
+          primary: {
+            background: '{primary.color}',
+            hoverBackground: '{primary.hoverColor}',
+            activeBackground: '{primary.activeColor}',
+            color: '{primary.contrastColor}',
+          }
+        }
+      }
     },
     card: {
-      background: '{surface.0}',
-      color: '{text.color}',
-      borderColor: '{surface.200}',
+      extend: {
+        root: {
+          background: '{surface.0}',
+          color: '{text.color}',
+        }
+      }
     },
     toolbar: {
-      background: '{surface.0}',
-      color: '{text.color}',
-      borderColor: '{surface.200}',
+      extend: {
+        root: {
+          background: '{surface.0}',
+          color: '{text.color}',
+        }
+      }
     },
     datatable: {
-      header: {
-        background: '{surface.0}',
-        color: '{text.color}',
-        borderColor: '{surface.200}',
-      },
-      body: {
+      extend: {
+        root: {
+          borderColor: '{surface.200}',
+        },
+        header: {
+          background: '{surface.0}',
+          color: '{text.color}',
+          borderColor: '{surface.200}',
+        },
         row: {
           hoverBackground: '{surface.100}',
         },
-        cell: {
+        bodyCell: {
           borderColor: '{surface.200}',
         },
-      },
+      }
     },
-  },
-}
+  }, */
+});
 
-export default blueWhale
+export default blueWhale;

@@ -24,7 +24,7 @@ const rows = ref([
 ])
 
 function notify() {
-  toast.add({ severity: 'info', summary: 'Welcome', detail: 'Blue Whale is active', life: 1800 })
+  toast.add({ severity: 'info', summary: 'Welcome', detail: 'Blue Whale is active', life: 18000 })
 }
 const shellRef = ref()
 </script>
@@ -44,9 +44,10 @@ const shellRef = ref()
               ] }
             ]},
             { title: 'Apps', items: [
-              { label: 'Companies', path: '/companies', icon: 'companies', routeName: 'companies.index' },
-              { label: 'Users', path: '/users', icon: 'users', routeName: 'users.index', children: [
-                { label: 'All Users', path: '/users', icon: 'users', routeName: 'users.index' },
+              { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
+              { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index', children: [
+                { label: 'All Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' },
+                { label: 'Create User', path: '/admin/users/create', icon: 'user-plus', routeName: 'admin.users.create' },
                 { label: 'Profile', path: '/profile', icon: 'profile', routeName: 'profile.edit' }
               ] },
               { label: 'Files', path: '/files', icon: 'files', routeName: 'files.index' }
@@ -105,8 +106,12 @@ const shellRef = ref()
             </DataTable>
             <Divider />
             <div class="flex gap-2">
+              <Link :href="route('admin.companies.create')">
               <Button label="New Company" severity="primary" />
-              <Button label="Invite User" severity="secondary" outlined />
+            </Link>
+              <Link :href="route('admin.users.create')">
+                <Button label="Invite User" severity="secondary" outlined />
+              </Link>
             </div>
           </template>
         </Card>

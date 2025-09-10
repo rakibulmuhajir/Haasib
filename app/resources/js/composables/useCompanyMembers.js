@@ -60,19 +60,46 @@ export function useCompanyMembers(company) {
   }
 
   async function updateRole(m) {
+    console.log('🚀 updateRole FUNCTION CALLED - useCompanyMembers.js')
+    console.log('Input parameter m:', m)
+    
     const originalRole = members.value.find(mem => mem.id === m.id)?.role
-    if (originalRole === m.role) return
+    console.log('Original role from members array:', originalRole)
+    console.log('New role from parameter:', m.role)
+    
+    if (originalRole === m.role) {
+      console.log('❌ Role unchanged, returning early')
+      return
+    }
+    
+    console.log('📡 Making API call to /commands...')
+    
     try {
-      const { data } = await http.post('/commands', {
+      const payload = {
         email: m.email,
         company: unref(company),
         role: m.role,
-      }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
+      }
+      console.log('📤 Request payload:', payload)
+      
+      const { data } = await http.post('/commands', payload, { 
+        headers: withIdempotency({ 'X-Action': 'company.assign' }) 
+      })
+      
+      console.log('📥 API response received:', data)
+      
       const index = members.value.findIndex(mem => mem.id === m.id)
-      if (index !== -1) members.value.splice(index, 1, data.data)
+      if (index !== -1) {
+        console.log('🔄 Updating member in array at index:', index)
+        members.value.splice(index, 1, data.data)
+        console.log('✅ Member array updated')
+      }
+      
       addToast('Role updated successfully.', 'success')
+      console.log('🎉 Success toast shown')
     } catch (e) {
-      m.role = originalRole
+      console.error('💥 API call failed:', e)
+      console.error('Error response:', e?.response?.data)
       addToast(e?.response?.data?.message || 'Failed to update role', 'danger')
     }
   }

@@ -74,5 +74,8 @@ watch(slim, v => {
     </div>
 
     <div class="layout-mask" @click="closeMobile" />
+    
+    <!-- Toast container for notifications -->
+    <Toast position="top-right" />
   </div>
 </template>

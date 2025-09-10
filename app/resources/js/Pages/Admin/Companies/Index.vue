@@ -1,12 +1,14 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, onMounted, watch } from 'vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Button from 'primevue/button'
+import Toolbar from 'primevue/toolbar'
 import { http } from '@/lib/http'
 
 const q = ref('')
@@ -33,52 +35,79 @@ watch(q, () => { const t = setTimeout(fetchCompanies, 250); return () => clearTi
 
 <template>
   <Head title="Companies" />
-  <AuthenticatedLayout>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Companies</h2>
-        <Link :href="route('admin.companies.create')" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Create Company</Link>
-      </div>
+  
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel">
+        <SidebarMenu iconSet="line" :sections="[
+          { title: 'Admin', items: [
+            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
+            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
+          ]}
+        ]" />
+      </Sidebar>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div class="mb-4 flex items-center gap-2">
-          <TextInput v-model="q" placeholder="Search companies by name or slug…" class="w-72" />
-          <PrimaryButton @click="fetchCompanies">Search</PrimaryButton>
-        </div>
+    <template #topbar>
+      <Toolbar class="border-0 bg-transparent px-0">
+        <template #start>
+          <h1 class="text-2xl font-bold">Companies</h1>
+        </template>
+        <template #end>
+          <Link :href="route('admin.companies.create')">
+            <Button label="Create Company" icon="pi pi-plus" />
+          </Link>
+        </template>
+      </Toolbar>
+    </template>
 
-        <div v-if="error" class="text-red-600 dark:text-red-400 text-sm mb-2">{{ error }}</div>
-        <DataTable :value="items" :loading="loading" stripedRows class="w-full">
-          <Column field="name" header="Company Name">
-            <template #body="slotProps">
-              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {{ slotProps.data.name }}
-              </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                {{ slotProps.data.slug }}
-              </div>
-            </template>
-          </Column>
-          <Column field="base_currency" header="Currency" />
-          <Column field="language" header="Language" />
-          <Column field="locale" header="Locale" />
-          <Column header="Actions">
-            <template #body="slotProps">
-              <Link :href="route('admin.companies.show', slotProps.data.slug || slotProps.data.id)">
-                <Button label="Manage" size="small" />
-              </Link>
-            </template>
-          </Column>
-          <template #empty>
-            <div class="text-sm text-gray-500 dark:text-gray-400 px-4 py-6">No companies found.</div>
-          </template>
-          <template #loading>
-            <div class="text-sm text-gray-500 dark:text-gray-400 px-4 py-6">Loading…</div>
-          </template>
-        </DataTable>
+    <div class="space-y-4">
+      <div class="flex items-center gap-2">
+        <InputText 
+          v-model="q" 
+          placeholder="Search companies by name or slug…" 
+          class="w-96"
+          @keyup.enter="fetchCompanies"
+        />
+        <Button label="Search" @click="fetchCompanies" />
       </div>
-    </div>
-  </AuthenticatedLayout>
 
+      <div v-if="error" class="p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
+      
+      <DataTable 
+        :value="items" 
+        :loading="loading" 
+        stripedRows 
+        class="w-full"
+        :paginator="items.length > 10"
+        :rows="10"
+        :rowsPerPageOptions="[10, 25, 50]"
+      >
+        <Column field="name" header="Company Name">
+          <template #body="slotProps">
+            <div>
+              <div class="font-medium">{{ slotProps.data.name }}</div>
+              <div class="text-sm text-gray-500">{{ slotProps.data.slug }}</div>
+            </div>
+          </template>
+        </Column>
+        <Column field="base_currency" header="Currency" />
+        <Column field="language" header="Language" />
+        <Column field="locale" header="Locale" />
+        <Column header="Actions">
+          <template #body="slotProps">
+            <Link :href="route('admin.companies.show', slotProps.data.slug || slotProps.data.id)">
+              <Button label="Manage" size="small" icon="pi pi-cog" />
+            </Link>
+          </template>
+        </Column>
+        <template #empty>
+          <div class="text-center py-8 text-gray-500">No companies found.</div>
+        </template>
+        <template #loading>
+          <div class="text-center py-8 text-gray-500">Loading…</div>
+        </template>
+      </DataTable>
+    </div>
+  </LayoutShell>
 </template>

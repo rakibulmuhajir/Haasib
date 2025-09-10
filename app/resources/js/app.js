@@ -29,6 +29,9 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Divider from 'primevue/divider'
 import Toast from 'primevue/toast'
+import Badge from 'primevue/badge'
+import Dropdown from 'primevue/dropdown'
+import ProgressSpinner from 'primevue/progressspinner'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -63,6 +66,9 @@ createInertiaApp({
         vue.component('Column', Column)
         vue.component('Divider', Divider)
         vue.component('Toast', Toast)
+        vue.component('Badge', Badge)
+        vue.component('Dropdown', Dropdown)
+        vue.component('ProgressSpinner', ProgressSpinner)
         vue.mount(el)
         return vue
     },

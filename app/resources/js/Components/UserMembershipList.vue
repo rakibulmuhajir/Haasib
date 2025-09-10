@@ -1,8 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Link } from '@inertiajs/vue3'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import Collapsible from '@/Components/Collapsible.vue';
 import type { UserMembership, RoleOption } from '@/types'
 
 defineProps<{
@@ -11,52 +9,156 @@ defineProps<{
   roleOptions: RoleOption[],
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'update-role', membership: UserMembership): void,
   (e: 'unassign', membership: UserMembership): void,
 }>()
+
+const selectedRoles = ref<Record<string, string>>({})
+const updatingRole = ref<string | null>(null)
+const removingMembership = ref<string | null>(null)
+
+const getRoleSeverity = (role: string): 'success' | 'warning' | 'info' | 'danger' | 'secondary' => {
+  switch (role) {
+    case 'owner': return 'danger'
+    case 'admin': return 'warning'
+    case 'accountant': return 'info'
+    case 'viewer': return 'secondary'
+    default: return 'secondary'
+  }
+}
+
+const handleUpdateRole = async (membership: UserMembership) => {
+  console.log('🔥 UPDATE BUTTON CLICKED - UserMembershipList.vue')
+  console.log('Membership data:', membership)
+  const newRole = selectedRoles.value[membership.id] || membership.role
+  console.log('Selected role for membership:', membership.id, '->', newRole)
+  
+  if (!newRole || newRole === membership.role) {
+    console.log('❌ No role change detected, returning early')
+    return
+  }
+
+  updatingRole.value = membership.id
+  
+  try {
+    console.log('Emitting update-role event with:', { ...membership, role: newRole })
+    emit('update-role', { ...membership, role: newRole })
+    console.log('✅ Event emitted successfully')
+    
+    // Clear the selected role after successful update
+    delete selectedRoles.value[membership.id]
+  } catch (error) {
+    console.error('❌ Update failed:', error)
+  } finally {
+    setTimeout(() => {
+      updatingRole.value = null
+    }, 1000)
+  }
+}
+
+const onRoleChange = (membershipId: string, newRole: string) => {
+  console.log('📝 ROLE CHANGED - UserMembershipList.vue')
+  console.log('Membership ID:', membershipId, 'New Role:', newRole)
+  selectedRoles.value[membershipId] = newRole
+}
+
+const handleUnassign = (membership: UserMembership) => {
+  removingMembership.value = membership.id
+  emit('unassign', membership)
+  
+  // Reset loading state after a delay
+  setTimeout(() => {
+    removingMembership.value = null
+  }, 1000)
+}
 </script>
 
 <template>
-  <div class="overflow-hidden bg-white dark:bg-gray-800 shadow sm:rounded-md">
-    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-      <div class="font-medium text-gray-900 dark:text-gray-100">Company Memberships</div>
-    </div>
-    <ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
-      <li v-for="m in memberships" :key="m.id + ':' + m.slug" class="px-6 py-4">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ m.name }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">{{ m.slug }}</div>
+  <div class="space-y-3">
+    <!-- Membership Cards -->
+    <div v-for="m in memberships" :key="m.id" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <!-- Company Info -->
+        <div class="flex items-start gap-3 flex-1">
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+            {{ m.name?.charAt(0)?.toUpperCase() }}
           </div>
-          <div class="flex items-center gap-2">
-            <select v-model="m.role" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 text-sm">
-              <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-            </select>
-            <PrimaryButton @click="$emit('update-role', m)">Update</PrimaryButton>
-            <SecondaryButton @click="$emit('unassign', m)">Remove</SecondaryButton>
-          </div>
-        </div>
-        <Collapsible>
-          <template #trigger>
-            <button class="mt-2 text-xs text-indigo-600 hover:underline">More</button>
-          </template>
-          <div class="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3 text-xs text-gray-700 dark:text-gray-400">
-            <div class="flex items-center justify-between">
-              <div>
-                <div><span class="text-gray-500 dark:text-gray-500">Company ID:</span> {{ m.id }}</div>
-                <div><span class="text-gray-500 dark:text-gray-500">Slug:</span> {{ m.slug }}</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <Link :href="route('admin.companies.show', m.slug)" class="text-indigo-600 dark:text-indigo-400 hover:underline">Open company</Link>
-                <button type="button" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100" @click="navigator.clipboard?.writeText(m.slug)">Copy slug</button>
-              </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ m.name }}</h3>
+              <Button 
+                @click="navigator.clipboard?.writeText(m.name)"
+                icon="pi pi-copy"
+                size="small"
+                severity="secondary"
+                text
+                v-tooltip.top="'Copy Company Name'"
+                class="p-1"
+              />
+            </div>
+            <div class="flex items-center gap-2 mb-1">
+              <p class="text-sm text-gray-500 dark:text-gray-400">{{ m.slug }}</p>
+              <Button 
+                @click="navigator.clipboard?.writeText(m.slug)"
+                icon="pi pi-copy"
+                size="small"
+                severity="secondary"
+                text
+                v-tooltip.top="'Copy Company Slug'"
+                class="p-1"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <p class="text-xs text-gray-400 dark:text-gray-500">ID: {{ m.id }}</p>
+              <Badge :value="m.role" :severity="getRoleSeverity(m.role)" />
             </div>
           </div>
-        </Collapsible>
-      </li>
-      <li v-if="!loading && memberships.length === 0" class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">No memberships.</li>
-      <li v-if="loading" class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Loading…</li>
-    </ul>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2">
+          <Dropdown 
+            v-model="selectedRoles[m.id]" 
+            :options="roleOptions" 
+            optionLabel="label" 
+            optionValue="value"
+            :placeholder="m.role"
+            class="w-32"
+            @change="onRoleChange(m.id, $event.value)"
+            :loading="updatingRole === m.id"
+          />
+          <Button 
+            @click="handleUpdateRole(m)"
+            :loading="updatingRole === m.id"
+            :disabled="!selectedRoles[m.id] || selectedRoles[m.id] === m.role"
+            icon="pi pi-check"
+            size="small"
+            severity="success"
+            v-tooltip.top="'Update Role'"
+          />
+          <Button 
+            @click="handleUnassign(m)"
+            icon="pi pi-user-minus"
+            size="small"
+            severity="danger"
+            v-tooltip.top="'Remove from Company'"
+            :loading="removingMembership === m.id"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-if="!loading && memberships.length === 0" class="text-center py-8">
+      <div class="text-gray-500 dark:text-gray-400 mb-2">No company memberships found</div>
+      <div class="text-sm text-gray-400 dark:text-gray-500">This user is not assigned to any companies</div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="loading" class="text-center py-8">
+      <ProgressSpinner style="width: 40px; height: 40px" strokeWidth="4" />
+      <div class="mt-2 text-gray-500 dark:text-gray-400">Loading memberships...</div>
+    </div>
   </div>
 </template>

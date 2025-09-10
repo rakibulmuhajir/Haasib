@@ -1,8 +1,8 @@
 <script setup>
-import InputLabel from '@/Components/InputLabel.vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
-import SecondaryButton from '@/Components/SecondaryButton.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Message from 'primevue/message'
 import Collapsible from '@/Components/Collapsible.vue'
 import { onMounted, computed } from 'vue'
 import { useCompanyInvites } from '@/composables/useCompanyInvites.js'
@@ -33,11 +33,11 @@ onMounted(loadInvites)
     <div class="font-medium mb-3">Invite by Email</div>
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       <div class="md:col-span-2">
-        <InputLabel value="Email" />
-        <TextInput v-model="invite.email" class="mt-1 block w-full" placeholder="invitee@example.com" />
+        <label class="block text-sm font-medium mb-2">Email</label>
+        <InputText v-model="invite.email" class="w-full" placeholder="invitee@example.com" />
       </div>
       <div>
-        <InputLabel value="Role" />
+        <label class="block text-sm font-medium mb-2">Role</label>
         <select v-model="invite.role" class="mt-1 block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
           <option value="owner">Owner</option>
           <option value="admin">Admin</option>
@@ -46,12 +46,12 @@ onMounted(loadInvites)
         </select>
       </div>
       <div>
-        <InputLabel value="Expires in days" />
-        <TextInput v-model="invite.expires_in_days" class="mt-1 block w-full" placeholder="14" />
+        <label class="block text-sm font-medium mb-2">Expires in days</label>
+        <InputText v-model="invite.expires_in_days" class="mt-1 block w-full" placeholder="14" />
       </div>
     </div>
     <div class="mt-3">
-      <PrimaryButton @click="sendInvite" :disabled="inviteLoading">Send Invitation</PrimaryButton>
+      <Button @click="sendInvite" :disabled="inviteLoading">Send Invitation</Button>
       <span v-if="inviteLoading" class="ms-2 text-sm text-gray-500">Sending…</span>
     </div>
     <div v-if="inviteError" class="mt-3 rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 text-xs text-red-700 dark:text-red-300">{{ inviteError }}</div>
@@ -59,9 +59,9 @@ onMounted(loadInvites)
       Invitation created for <b>{{ inviteOk.email }}</b> (role: {{ inviteOk.role }}) · id: <code>{{ inviteOk.id }}</code>
       <div class="mt-1">Token (dev only): <code class="break-all">{{ inviteOk.token }}</code></div>
       <div class="mt-2 flex items-center gap-2">
-        <TextInput v-model="revokeId" placeholder="Paste invitation id to revoke" class="w-72" />
-        <SecondaryButton @click="revokeInvite(inviteOk.id)">Revoke this invite</SecondaryButton>
-        <SecondaryButton @click="revokeInvite()">Revoke by id</SecondaryButton>
+        <InputText v-model="revokeId" placeholder="Paste invitation id to revoke" class="w-72" />
+        <Button @click="revokeInvite(inviteOk.id)">Revoke this invite</Button>
+        <Button @click="revokeInvite()">Revoke by id</Button>
       </div>
     </div>
 
@@ -84,7 +84,7 @@ onMounted(loadInvites)
                   <div class="text-xs text-gray-500">role: {{ i.role }} · invited by: {{ i.invited_by || '—' }} · expires: {{ i.expires_at || '—' }}</div>
                 </div>
                 <div>
-                  <SecondaryButton @click="revokeInvite(i.id)">Revoke</SecondaryButton>
+                  <Button @click="revokeInvite(i.id)">Revoke</Button>
                 </div>
               </li>
               <li v-if="(invites || []).length === 0" class="py-3 text-sm text-gray-500">No pending invitations.</li>

@@ -1,6 +1,7 @@
 <script setup>
-import InputLabel from '@/Components/InputLabel.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Message from 'primevue/message'
 import UserPicker from '@/Components/Pickers/UserPicker.vue'
 import CompanyMemberList from '@/Components/CompanyMemberList.vue'
 import { onMounted, computed } from 'vue'
@@ -36,17 +37,17 @@ onMounted(loadMembers)
       <div class="font-medium mb-3">Assign Existing User</div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div>
-          <InputLabel value="User" />
+          <label class="block text-sm font-medium mb-2">User</label>
           <UserPicker v-model="assign.email" class="mt-1 block w-full" placeholder="Find user by name or email…" />
         </div>
         <div>
-          <InputLabel value="Role" />
+          <label class="block text-sm font-medium mb-2">Role</label>
           <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
             <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
           </select>
         </div>
         <div>
-          <PrimaryButton @click="assignUser" :disabled="assignLoading">Assign</PrimaryButton>
+          <Button @click="assignUser" :disabled="assignLoading" :loading="assignLoading" label="Assign" />
           <span v-if="assignLoading" class="ms-2 text-sm text-gray-500">Assigning…</span>
         </div>
       </div>
@@ -58,7 +59,13 @@ onMounted(loadMembers)
       :loading="loading"
       :role-options="roleOptions"
       v-model:query="q"
-      @update-role="updateRole"
+      @update-role="(member) => { 
+    console.log('🎯 update-role event RECEIVED - CompanyMembersSection.vue')
+    console.log('Received member data:', member)
+    console.log('About to call updateRole function...')
+    updateRole(member)
+    console.log('✅ updateRole function called')
+  }"
       @unassign="unassign"
     />
   </div>

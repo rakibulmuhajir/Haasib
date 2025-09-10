@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Select from 'primevue/select'
 import Collapsible from '@/Components/Collapsible.vue';
 import type { CompanyMember, RoleOption } from '@/types'
 
@@ -18,6 +18,22 @@ defineEmits<{
   (e: 'update-role', member: CompanyMember): void,
   (e: 'unassign', member: CompanyMember): void,
 }>()
+
+const selectedRoles = ref<Record<string, string>>({})
+
+const handleUpdateRole = (member: CompanyMember) => {
+  console.log('🔥 UPDATE BUTTON CLICKED - CompanyMemberList.vue')
+  console.log('Member data:', member)
+  const newRole = selectedRoles.value[member.id] || member.role
+  console.log('Selected role for member:', member.id, '->', newRole)
+  console.log('Emitting update-role event with:', { ...member, role: newRole })
+  $emit('update-role', { ...member, role: newRole })
+  console.log('✅ Event emitted successfully')
+}
+
+const onRoleChange = (memberId: string, newRole: string) => {
+  selectedRoles.value[memberId] = newRole
+}
 </script>
 
 <template>
@@ -25,7 +41,7 @@ defineEmits<{
     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
       <div class="font-medium text-gray-900 dark:text-gray-100">Members</div>
       <div class="flex items-center gap-2">
-        <TextInput :modelValue="query" @update:modelValue="$emit('update:query', $event)" placeholder="Filter by name or email…" class="w-72" />
+        <InputText :modelValue="query" @update:modelValue="$emit('update:query', $event)" placeholder="Filter by name or email…" class="w-72" />
       </div>
     </div>
     <ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -36,11 +52,9 @@ defineEmits<{
             <div class="text-xs text-gray-500 dark:text-gray-400">{{ m.email }}</div>
           </div>
           <div class="flex items-center gap-2">
-            <select v-model="m.role" class="rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 text-sm">
-              <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-            </select>
-            <PrimaryButton @click="$emit('update-role', m)">Update</PrimaryButton>
-            <SecondaryButton @click="$emit('unassign', m)">Remove</SecondaryButton>
+            <Select :modelValue="selectedRoles[m.id] || m.role" @update:modelValue="(value) => onRoleChange(m.id, value)" :options="roleOptions" optionLabel="label" optionValue="value" class="w-32" />
+            <Button @click="handleUpdateRole(m)" size="small">Update</Button>
+            <Button @click="$emit('unassign', m)" size="small" severity="secondary">Remove</Button>
           </div>
         </div>
         <Collapsible>

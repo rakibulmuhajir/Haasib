@@ -2,36 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Str;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, HasUuids, Notifiable;
 
-    /**
-     * Indicates if the model's ID is auto-incrementing.
-     *
-     * @var bool
-     */
     public $incrementing = false;
 
-    /**
-     * The primary key associated with the table.
-     *
-     * @var string
-     */
-    protected $primaryKey = 'id';
-
-    /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
-     */
     protected $keyType = 'string';
 
     /**
@@ -68,17 +51,25 @@ class User extends Authenticatable
         ];
     }
 
-    /**
-     * Boot the model.
-     */
-    protected static function boot()
+    public function creator()
     {
-        parent::boot();
+        return $this->belongsTo(self::class, 'created_by_user_id');
+    }
 
-        static::creating(function ($user) {
-            if (empty($user->{$user->getKeyName()})) {
-                $user->{$user->getKeyName()} = (string) Str::uuid();
-            }
-        });
+    public function createdUsers()
+    {
+        return $this->hasMany(self::class, 'created_by_user_id');
+    }
+
+    public function companies()
+    {
+        return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
+            ->withPivot('role', 'invited_by_user_id')
+            ->withTimestamps();
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->system_role === 'superadmin';
     }
 }

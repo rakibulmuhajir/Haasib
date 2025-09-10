@@ -1,12 +1,15 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import { ref, onMounted, watch } from 'vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Button from 'primevue/button'
+import Toolbar from 'primevue/toolbar'
+import Badge from 'primevue/badge'
 import { http } from '@/lib/http'
 
 const q = ref('')
@@ -33,40 +36,88 @@ watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeou
 
 <template>
   <Head title="Users" />
-  <AuthenticatedLayout>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Users</h2>
-        <Link :href="route('admin.users.create')" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Create User</Link>
-      </div>
+  
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel">
+        <SidebarMenu iconSet="line" :sections="[
+          { title: 'Admin', items: [
+            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
+            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
+          ]}
+        ]" />
+      </Sidebar>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div class="mb-4 flex items-center gap-2">
-          <TextInput v-model="q" placeholder="Search users by name or email…" class="w-72" />
-          <PrimaryButton @click="fetchUsers">Search</PrimaryButton>
-        </div>
+    <template #topbar>
+      <Toolbar class="border-0 bg-transparent px-0">
+        <template #start>
+          <h1 class="text-2xl font-bold">Users</h1>
+        </template>
+        <template #end>
+          <Link :href="route('admin.users.create')">
+            <Button label="Create User" icon="pi pi-user-plus" />
+          </Link>
+        </template>
+      </Toolbar>
+    </template>
 
-        <div v-if="error" class="text-red-600 dark:text-red-400 text-sm mb-2">{{ error }}</div>
-        <DataTable :value="items" :loading="loading" stripedRows class="w-full">
-          <Column field="name" header="Name" />
-          <Column field="email" header="Email" />
-          <Column header="Actions">
-            <template #body="slotProps">
-              <Link :href="route('admin.users.show', slotProps.data.id)">
-                <Button label="Manage" size="small" />
-              </Link>
-            </template>
-          </Column>
-          <template #empty>
-            <div class="text-sm text-gray-500 dark:text-gray-400 px-4 py-6">No users found.</div>
-          </template>
-          <template #loading>
-            <div class="text-sm text-gray-500 dark:text-gray-400 px-4 py-6">Loading…</div>
-          </template>
-        </DataTable>
+    <div class="space-y-4">
+      <div class="flex items-center gap-2">
+        <InputText 
+          v-model="q" 
+          placeholder="Search users by name or email…" 
+          class="w-96"
+          @keyup.enter="fetchUsers"
+        />
+        <Button label="Search" @click="fetchUsers" />
       </div>
+
+      <div v-if="error" class="p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
+      
+      <DataTable 
+        :value="items" 
+        :loading="loading" 
+        stripedRows 
+        class="w-full"
+        :paginator="items.length > 10"
+        :rows="10"
+        :rowsPerPageOptions="[10, 25, 50]"
+      >
+        <Column field="name" header="Name">
+          <template #body="slotProps">
+            <div class="font-medium">{{ slotProps.data.name }}</div>
+          </template>
+        </Column>
+        <Column field="email" header="Email">
+          <template #body="slotProps">
+            <div class="text-sm">{{ slotProps.data.email }}</div>
+          </template>
+        </Column>
+        <Column field="system_role" header="Role">
+          <template #body="slotProps">
+            <Badge 
+              v-if="slotProps.data.system_role === 'superadmin'" 
+              severity="danger" 
+              value="Super Admin"
+            />
+            <span v-else class="text-sm text-gray-500">User</span>
+          </template>
+        </Column>
+        <Column header="Actions">
+          <template #body="slotProps">
+            <Link :href="route('admin.users.show', slotProps.data.id)">
+              <Button label="Manage" size="small" icon="pi pi-cog" />
+            </Link>
+          </template>
+        </Column>
+        <template #empty>
+          <div class="text-center py-8 text-gray-500">No users found.</div>
+        </template>
+        <template #loading>
+          <div class="text-center py-8 text-gray-500">Loading…</div>
+        </template>
+      </DataTable>
     </div>
-  </AuthenticatedLayout>
+  </LayoutShell>
 </template>

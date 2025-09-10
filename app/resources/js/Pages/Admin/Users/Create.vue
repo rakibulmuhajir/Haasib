@@ -1,10 +1,15 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { Head, Link } from '@inertiajs/vue3'
 import { ref } from 'vue'
-import InputLabel from '@/Components/InputLabel.vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Toolbar from 'primevue/toolbar'
+import Message from 'primevue/message'
+import Dropdown from 'primevue/dropdown'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
 import { http, withIdempotency } from '@/lib/http'
 
@@ -12,7 +17,14 @@ const form = ref({ name: '', email: '', password: '', system_role: '' })
 const loading = ref(false)
 const error = ref('')
 const ok = ref('')
-const assign = ref({ company: '', role: 'viewer' })
+const assign = ref({ company: '', role: { value: 'viewer', label: 'Viewer' } })
+
+const roleOptions = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'accountant', label: 'Accountant' },
+  { value: 'viewer', label: 'Viewer' },
+]
 
 function randomPassword() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
@@ -32,7 +44,7 @@ async function submit() {
         await http.post('/commands', {
           email: form.value.email,
           company: assign.value.company,
-          role: assign.value.role,
+          role: assign.value.role.value,
         }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
         ok.value += ' · Assigned to company'
       } catch (e) {
@@ -50,62 +62,75 @@ async function submit() {
 
 <template>
   <Head title="Create User" />
-  <AuthenticatedLayout>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Create User</h2>
-        <Link :href="route('admin.users.index')" class="text-sm text-gray-600 hover:underline">Back to users</Link>
-      </div>
+  
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel">
+        <SidebarMenu iconSet="line" :sections="[
+          { title: 'Admin', items: [
+            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
+            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
+          ]}
+        ]" />
+      </Sidebar>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-2xl sm:px-6 lg:px-8">
-        <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
-          <div v-if="ok" class="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ ok }}</div>
-          <div v-if="error" class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
+    <template #topbar>
+      <Toolbar class="border-0 bg-transparent px-0">
+        <template #start>
+          <h1 class="text-2xl font-bold">Create User</h1>
+        </template>
+        <template #end>
+          <Link :href="route('admin.users.index')">
+            <Button label="Back to Users" icon="pi pi-arrow-left" severity="secondary" />
+          </Link>
+        </template>
+      </Toolbar>
+    </template>
 
+    <div class="space-y-4">
+      <Message v-if="ok" severity="success" :closable="false">{{ ok }}</Message>
+      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+
+      <Card class="w-full max-w-2xl mx-auto">
+        <template #title>Create New User</template>
+        <template #content>
           <div class="space-y-4">
             <div>
-              <InputLabel value="Name" />
-              <TextInput v-model="form.name" class="mt-1 block w-full" placeholder="Jane Doe" />
+              <label class="block text-sm font-medium mb-2">Name</label>
+              <InputText v-model="form.name" class="w-full" placeholder="Jane Doe" />
             </div>
             <div>
-              <InputLabel value="Email" />
-              <TextInput v-model="form.email" class="mt-1 block w-full" placeholder="jane@example.com" />
+              <label class="block text-sm font-medium mb-2">Email</label>
+              <InputText v-model="form.email" class="w-full" placeholder="jane@example.com" />
             </div>
             <div>
-              <InputLabel value="Password (optional)" />
-              <TextInput v-model="form.password" class="mt-1 block w-full" placeholder="Auto-generated if left blank" />
+              <label class="block text-sm font-medium mb-2">Password (optional)</label>
+              <InputText v-model="form.password" class="w-full" placeholder="Auto-generated if left blank" />
             </div>
             <div>
-              <InputLabel value="System Role (optional)" />
-              <TextInput v-model="form.system_role" class="mt-1 block w-full" placeholder="superadmin" />
+              <label class="block text-sm font-medium mb-2">System Role (optional)</label>
+              <InputText v-model="form.system_role" class="w-full" placeholder="superadmin" />
             </div>
-            <div class="border-t border-gray-200 pt-4">
-              <div class="text-sm text-gray-700 font-medium mb-2">Optional: Assign to a company</div>
+            <div class="border-t pt-4">
+              <div class="text-sm font-medium mb-2">Optional: Assign to a company</div>
               <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                 <div class="md:col-span-2">
-                  <InputLabel value="Company" />
+                  <label class="block text-sm font-medium mb-2">Company</label>
                   <CompanyPicker v-model="assign.company" />
                 </div>
                 <div>
-                  <InputLabel value="Role" />
-                  <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300">
-                    <option value="owner">Owner</option>
-                    <option value="admin">Admin</option>
-                    <option value="accountant">Accountant</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
+                  <label class="block text-sm font-medium mb-2">Role</label>
+                  <Dropdown v-model="assign.role" :options="roleOptions" optionLabel="label" class="w-full" />
                 </div>
               </div>
             </div>
             <div class="pt-2">
-              <PrimaryButton @click="submit" :disabled="loading">Create</PrimaryButton>
-              <span v-if="loading" class="ms-2 text-sm text-gray-500">Saving…</span>
+              <Button @click="submit" :loading="loading" label="Create User" icon="pi pi-user-plus" />
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </Card>
     </div>
-  </AuthenticatedLayout>
+  </LayoutShell>
 </template>

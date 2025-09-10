@@ -1,7 +1,11 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { Head, Link } from '@inertiajs/vue3'
-import { ref, onMounted, computed } from 'vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Toolbar from 'primevue/toolbar'
+import Message from 'primevue/message'
 import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
 import { http } from '@/lib/http'
@@ -9,6 +13,8 @@ import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 import CompanyMembersSection from './CompanyMembersSection.vue'
 import CompanyInviteSection from './CompanyInviteSection.vue'
 import CompanyOverview from './CompanyOverview.vue'
+import { Head, Link } from '@inertiajs/vue3'
+import { ref, onMounted, computed } from 'vue'
 
 const props = defineProps({ company: { type: String, required: true } })
 
@@ -35,38 +41,53 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
 
 <template>
   <Head :title="c ? `Company · ${c.name}` : 'Company'" />
-  <AuthenticatedLayout>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Company</h2>
-        <Link :href="route('admin.companies.index')" class="text-sm text-gray-600 dark:text-gray-300 hover:underline">Back to companies</Link>
-      </div>
+
+<LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel">
+        <SidebarMenu iconSet="line" :sections="[
+          { title: 'Admin', items: [
+            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
+            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
+          ]}
+        ]" />
+      </Sidebar>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div v-if="error" class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
+    <template #topbar>
+      <Toolbar class="border-0 bg-transparent px-0">
+        <template #start>
+          <h1 class="text-2xl font-bold">Company</h1>
+        </template>
+        <template #end>
+          <Link :href="route('admin.companies.index')">
+            <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
+          </Link>
+        </template>
+      </Toolbar>
+    </template>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div class="lg:col-span-1">
-            <CompanyOverview :company="c" />
-          </div>
+    <div class="space-y-4">
+      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
-          <div class="lg:col-span-2">
-            <div class="w-full">
-              <div class="sticky top-16 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-gray-900/60"></div>
-              <TabView v-model:activeIndex="selectedTab" class="w-full">
-                <TabPanel header="Members">
-                  <CompanyMembersSection :company="slug" />
-                </TabPanel>
-                <TabPanel header="Invite">
-                  <CompanyInviteSection :company="slug" />
-                </TabPanel>
-              </TabView>
-            </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-1">
+          <CompanyOverview :company="c" />
+        </div>
+
+        <div class="lg:col-span-2">
+          <div class="w-full">
+            <TabView v-model:activeIndex="selectedTab" class="w-full">
+              <TabPanel header="Members">
+                <CompanyMembersSection :company="slug" />
+              </TabPanel>
+              <TabPanel header="Invite">
+                <CompanyInviteSection :company="slug" />
+              </TabPanel>
+            </TabView>
           </div>
         </div>
       </div>
     </div>
-  </AuthenticatedLayout>
+</LayoutShell>
 </template>

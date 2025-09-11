@@ -6,9 +6,9 @@ use App\Models\Company;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
+use Brick\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Ramsey\Uuid\Uuid;
 
 class LedgerService
 {
@@ -25,7 +25,6 @@ class LedgerService
             $this->validateJournalLines($company, $lines);
 
             $entry = new JournalEntry([
-                'id' => Uuid::uuid4(),
                 'company_id' => $company->id,
                 'reference' => $reference,
                 'date' => $date ?? now()->toDateString(),
@@ -107,7 +106,7 @@ class LedgerService
         $totalDebit = $query->sum('debit_amount');
         $totalCredit = $query->sum('credit_amount');
 
-        $balance = $account->normal_balance === 'debit' 
+        $balance = $account->normal_balance === 'debit'
             ? $totalDebit - $totalCredit
             : $totalCredit - $totalDebit;
 
@@ -125,20 +124,22 @@ class LedgerService
             throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
         }
 
-        $totalDebit = 0;
-        $totalCredit = 0;
+        $accountIds = array_column($lines, 'account_id');
+        $dbAccounts = LedgerAccount::where('company_id', $company->id)
+            ->whereIn('id', $accountIds)
+            ->where('active', true)
+            ->pluck('id')
+            ->flip();
+
+        $totalDebit = Money::of(0, 'USD'); // Assuming USD, replace with company currency
+        $totalCredit = Money::of(0, 'USD');
 
         foreach ($lines as $index => $line) {
             if (!isset($line['account_id']) || !isset($line['debit_amount']) || !isset($line['credit_amount'])) {
                 throw new \InvalidArgumentException("Line {$index} is missing required fields");
             }
 
-            $account = LedgerAccount::where('company_id', $company->id)
-                ->where('id', $line['account_id'])
-                ->where('active', true)
-                ->first();
-
-            if (!$account) {
+            if (!isset($dbAccounts[$line['account_id']])) {
                 throw new \InvalidArgumentException("Invalid account ID: {$line['account_id']}");
             }
 
@@ -146,11 +147,12 @@ class LedgerService
                 throw new \InvalidArgumentException("Line {$index} cannot have both debit and credit amounts");
             }
 
-            $totalDebit += $line['debit_amount'];
-            $totalCredit += $line['credit_amount'];
+            // Use Money object for precise calculations
+            $totalDebit = $totalDebit->plus(Money::of($line['debit_amount'], 'USD'));
+            $totalCredit = $totalCredit->plus(Money::of($line['credit_amount'], 'USD'));
         }
 
-        if (abs($totalDebit - $totalCredit) > 0.01) {
+        if (!$totalDebit->isEqualTo($totalCredit)) {
             throw new \InvalidArgumentException('Journal entry must balance (debits must equal credits)');
         }
     }
@@ -161,7 +163,6 @@ class LedgerService
 
         foreach ($lines as $line) {
             JournalLine::create([
-                'id' => Uuid::uuid4(),
                 'company_id' => $entry->company_id,
                 'journal_entry_id' => $entry->id,
                 'ledger_account_id' => $line['account_id'],

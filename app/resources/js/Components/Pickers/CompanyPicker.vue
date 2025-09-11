@@ -4,8 +4,9 @@ import AutoComplete from 'primevue/autocomplete'
 import { http } from '@/lib/http'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' }, // emits slug (or id)
+  modelValue: { type: [String, Object], default: '' }, // can be slug/id or full company object
   placeholder: { type: String, default: 'Search companies…' },
+  excludeUserId: { type: String, default: '' }, // user ID to exclude companies for
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -21,9 +22,14 @@ async function search(event) {
   
   loading.value = true
   try {
-    const { data } = await http.get('/web/companies', { 
-      params: { q: event.query, limit: 8 } 
-    })
+    const params = { q: event.query, limit: 8 }
+    
+    // If excludeUserId is provided, filter out companies this user is already assigned to
+    if (props.excludeUserId) {
+      params.user_id = props.excludeUserId
+    }
+    
+    const { data } = await http.get('/web/companies', { params })
     suggestions.value = data.data || []
   } catch (e) {
     suggestions.value = []
@@ -33,7 +39,7 @@ async function search(event) {
 }
 
 function onSelect(event) {
-  emit('update:modelValue', event.value.slug || event.value.id)
+  emit('update:modelValue', event.value) // emit full company object
 }
 </script>
 

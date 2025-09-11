@@ -21,7 +21,20 @@ class CompanyCreate
             'locale' => 'nullable|string',
         ])->validate();
 
-        $company = DB::transaction(fn () => Company::create($data));
+        $company = DB::transaction(function () use ($data, $actor) {
+            // Create the company with creator information
+            $company = Company::create(array_merge($data, [
+                'created_by_user_id' => $actor->id,
+            ]));
+
+            // Automatically assign the creator as the owner of the company
+            $company->users()->attach($actor->id, [
+                'role' => 'owner',
+                'invited_by_user_id' => $actor->id,
+            ]);
+
+            return $company;
+        });
 
         return ['message' => 'Company created', 'data' => ['slug' => $company->slug]];
     }

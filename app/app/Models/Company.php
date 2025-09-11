@@ -30,6 +30,7 @@ class Company extends Model
         'language',
         'locale',
         'settings',
+        'created_by_user_id',
     ];
 
     /**
@@ -39,6 +40,7 @@ class Company extends Model
      */
     protected $casts = [
         'settings' => 'array',
+        'created_by_user_id' => 'string',
     ];
 
     /**
@@ -67,5 +69,29 @@ class Company extends Model
         return $this->belongsToMany(\App\Models\User::class, 'auth.company_user')
             ->withPivot('role', 'invited_by_user_id')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the user who created this company.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the companies created by this user.
+     */
+    public function createdCompanies()
+    {
+        return $this->hasMany(\App\Models\Company::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the owner of the company (user with 'owner' role).
+     */
+    public function owner()
+    {
+        return $this->users()->where('auth.company_user.role', 'owner')->first();
     }
 }

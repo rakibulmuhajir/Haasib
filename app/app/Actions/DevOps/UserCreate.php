@@ -20,12 +20,13 @@ class UserCreate
             'system_role' => 'nullable|in:superadmin',
         ])->validate();
 
-        $user = DB::transaction(function () use ($data) {
+        $user = DB::transaction(function () use ($data, $actor) {
             return User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'] ?? Str::random(12),
                 'system_role' => $data['system_role'] ?? null,
+                'created_by_user_id' => $actor->id,
             ]);
         });
 

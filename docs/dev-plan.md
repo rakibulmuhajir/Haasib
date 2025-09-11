@@ -15,7 +15,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 
 ## 1) Architecture Overview
 
-* **App**: Laravel 11, PHP 8.3, Octane (Swoole or RoadRunner), Redis (cache/queue), Horizon, Inertia + Vue 3 + Vite.
+* **App**: Laravel 12, PHP 8.3, Octane (Swoole or RoadRunner), Redis (cache/queue), Horizon, Inertia + Vue 3 + Vite.
 * **DB**: Postgres 16+. Single database. **Schemas per module**: `auth`, `billing`, `crm`, etc.
 * **Tenancy**: single DB table space. Every row has `company_id` (UUID). Enforced by **RLS**.
 * **API**: `/api/v1` in the same app. Auth via **Sanctum** (SPA + token for mobile).

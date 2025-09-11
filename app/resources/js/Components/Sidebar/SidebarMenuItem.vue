@@ -2,12 +2,11 @@
 import { computed, reactive, onMounted, watch } from 'vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
 
-export interface MenuItem { label: string; path?: string; icon?: string; routeName?: string; children?: MenuItem[] }
+export interface MenuItem { label: string; path?: string; routeName?: string; children?: MenuItem[] }
 
 const props = defineProps<{
   item: MenuItem
   depth?: number
-  iconSet?: 'solid'|'line'
 }>()
 
 const depth = computed(() => props.depth ?? 0)
@@ -36,7 +35,27 @@ function isActiveSelf(): boolean {
   return false
 }
 
+function isActiveExact(): boolean {
+  const r = routeFunc()
+  if (props.item.routeName && r) {
+    try { return r().current(props.item.routeName) } catch { /* ignore */ }
+  }
+  if (props.item.path) return here.value === props.item.path
+  return false
+}
+
 const hasChildren = computed(() => (props.item.children && props.item.children.length > 0) || false)
+const hasActiveChild = computed(() => {
+  if (!props.item.children) return false
+  return props.item.children.some(child => {
+    const r = routeFunc()
+    if (child.routeName && r) {
+      try { return r().current(child.routeName) } catch { /* ignore */ }
+    }
+    if (child.path) return here.value === child.path || here.value.startsWith(child.path + '/')
+    return false
+  })
+})
 
 // open state persistence per item key (label+routeName+path)
 const key = computed(() => `sidebar.item.open.${props.item.label}.${props.item.routeName || ''}.${props.item.path || ''}`)
@@ -46,38 +65,27 @@ onMounted(() => {
   const saved = localStorage.getItem(key.value)
   if (saved !== null) open.v = saved === '1'
   // auto-open if any descendant is active
-  if (anyActive(props.item)) open.v = true
+  if (hasActiveChild.value) open.v = true
 })
 
 watch(() => open.v, v => { try { localStorage.setItem(key.value, v ? '1' : '0') } catch {} })
 
-function anyActive(node: MenuItem): boolean {
-  if (!node) return false
-  const r = routeFunc()
-  if (node.routeName && r) {
-    try { if (r().current(node.routeName)) return true } catch {}
-  }
-  if (node.path && (here.value === node.path || here.value.startsWith(node.path + '/'))) return true
-  if (node.children) return node.children.some(anyActive)
-  return false
-}
 </script>
 
 <template>
   <li>
     <a :href="buildHref()"
        class="flex w-full items-center gap-2 px-2 py-1 rounded-full"
-       :class="{ 'router-link-active active-route': isActiveSelf() }"
+       :class="{ 'router-link-active active-route': isActiveExact() && !hasActiveChild }"
        style="color: var(--p-text-color)"
     >
-      <SvgIcon :name="item.icon || 'placeholder'" :set="iconSet || 'line'" class="opacity-90" />
       <span class="layout-menuitem-text text-sm">{{ item.label }}</span>
       <button v-if="hasChildren" type="button" class="ms-auto inline-flex items-center" @click.prevent="open.v = !open.v">
-        <SvgIcon :name="open.v ? 'chevron-down' : 'chevron-right'" :set="iconSet || 'line'" />
+        <SvgIcon :name="open.v ? 'chevron-down' : 'chevron-right'" set="line" class="w-3 h-3" />
       </button>
     </a>
     <ul v-if="hasChildren" v-show="open.v" class="mt-1" :style="{ paddingLeft: (depth*12+12)+'px' }">
-      <SidebarMenuItem v-for="(child, idx) in item.children" :key="idx" :item="child" :depth="depth+1" :icon-set="iconSet" />
+      <SidebarMenuItem v-for="(child, idx) in item.children" :key="idx" :item="child" :depth="depth+1" />
     </ul>
   </li>
 </template>

@@ -16,6 +16,7 @@ import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
+import Tooltip from 'primevue/tooltip'
 // PrimeVue preset (static import for reliable styling)
 // Ensure you have installed: npm i @primeuix/themes primevue
 import blueWhale from './theme/bluewhale';
@@ -32,6 +33,7 @@ import Toast from 'primevue/toast'
 import Badge from 'primevue/badge'
 import Dropdown from 'primevue/dropdown'
 import ProgressSpinner from 'primevue/progressspinner'
+import Breadcrumb from 'primevue/breadcrumb'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -58,6 +60,7 @@ createInertiaApp({
             },
         })
         vue.use(ToastService)
+        vue.directive('tooltip', Tooltip)
         // Global PrimeVue components
         vue.component('Button', Button)
         vue.component('Card', Card)
@@ -69,6 +72,7 @@ createInertiaApp({
         vue.component('Badge', Badge)
         vue.component('Dropdown', Dropdown)
         vue.component('ProgressSpinner', ProgressSpinner)
+        vue.component('Breadcrumb', Breadcrumb)
         vue.mount(el)
         return vue
     },

@@ -5,10 +5,9 @@ import { useToast } from 'primevue/usetoast'
 import ThemeSwitcher from '@/Components/ThemeSwitcher.vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 
-import Toolbar from 'primevue/toolbar'
 import Toast from 'primevue/toast'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -23,6 +22,11 @@ const rows = ref([
   { id: 'C-1023', company: 'Kelp Labs', users: 3, status: 'Active' }
 ])
 
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Dashboard', url: '/dashboard', icon: 'dashboard' }
+])
+
 function notify() {
   toast.add({ severity: 'info', summary: 'Welcome', detail: 'Blue Whale is active', life: 18000 })
 }
@@ -34,51 +38,23 @@ const shellRef = ref()
 
     <LayoutShell ref="shellRef">
       <template #sidebar>
-        <Sidebar title="Blue Whale">
-          <SidebarMenu iconSet="line" :sections="[
-            { title: 'Dashboards', items: [
-              { label: 'Banking', path: '/dashboard-banking', icon: 'dashboard', routeName: 'dashboard' },
-              { label: 'Analytics', path: '/dashboard-analytics', icon: 'analytics', routeName: 'dashboard', children: [
-                { label: 'Trends', path: '/dashboard-analytics/trends', icon: 'analytics' },
-                { label: 'Overview', path: '/dashboard-analytics/overview', icon: 'dashboard' }
-              ] }
-            ]},
-            { title: 'Apps', items: [
-              { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
-              { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index', children: [
-                { label: 'All Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' },
-                { label: 'Create User', path: '/admin/users/create', icon: 'user-plus', routeName: 'admin.users.create' },
-                { label: 'Profile', path: '/profile', icon: 'profile', routeName: 'profile.edit' }
-              ] },
-              { label: 'Files', path: '/files', icon: 'files', routeName: 'files.index' }
-            ]},
-            { title: 'System', items: [
-              { label: 'Settings', path: '/settings', icon: 'settings', routeName: 'settings' },
-              { label: 'Profile', path: '/profile', icon: 'profile', routeName: 'profile.edit' },
-              { label: 'Logout', path: '/logout', icon: 'logout', routeName: 'logout' }
-            ]}
-          ]"/>
-        </Sidebar>
+        <Sidebar title="Blue Whale" />
       </template>
 
       <template #topbar>
-        <Toolbar class="!bg-transparent !border-0">
-          <template #start>
-            <div class="flex items-center gap-2">
-              <Button text @click="shellRef?.toggleMobile?.()">
-                <SvgIcon name="menu" />
-              </Button>
-              <Button text @click="shellRef?.toggleSlim?.()" class="hidden md:inline-flex">Sidebar</Button>
-              <div class="text-sm font-semibold" style="color:var(--p-text-color)">Dashboard</div>
-            </div>
-          </template>
-          <template #end>
-            <div class="flex items-center gap-2">
-              <ThemeSwitcher />
-              <Button label="Show Toast" @click="notify" />
-            </div>
-          </template>
-        </Toolbar>
+        <div class="flex items-center justify-between w-full">
+          <div class="flex items-center gap-2">
+            <Button text @click="shellRef?.toggleMobile?.()">
+              <SvgIcon name="menu" />
+            </Button>
+            <Button text @click="shellRef?.toggleSlim?.()" class="hidden md:inline-flex">Sidebar</Button>
+            <Breadcrumb :items="breadcrumbItems" />
+          </div>
+          <div class="flex items-center gap-2">
+            <ThemeSwitcher />
+            <Button label="Show Toast" @click="notify" />
+          </div>
+        </div>
       </template>
 
       <!-- content widgets as translucent cards -->

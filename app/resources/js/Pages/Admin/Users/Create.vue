@@ -3,14 +3,13 @@ import { Head, Link } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
-import Toolbar from 'primevue/toolbar'
 import Message from 'primevue/message'
 import Dropdown from 'primevue/dropdown'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 import { http, withIdempotency } from '@/lib/http'
 
 const form = ref({ name: '', email: '', password: '', system_role: '' })
@@ -29,6 +28,13 @@ const roleOptions = [
 function randomPassword() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
 }
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Users', url: '/admin/users', icon: 'users' },
+  { label: 'Create User', url: '#', icon: 'user-plus' }
+])
 
 async function submit() {
   loading.value = true
@@ -65,27 +71,13 @@ async function submit() {
   
   <LayoutShell>
     <template #sidebar>
-      <Sidebar title="Admin Panel">
-        <SidebarMenu iconSet="line" :sections="[
-          { title: 'Admin', items: [
-            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
-            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
-          ]}
-        ]" />
-      </Sidebar>
+      <Sidebar title="Admin Panel" />
     </template>
 
     <template #topbar>
-      <Toolbar class="border-0 bg-transparent px-0">
-        <template #start>
-          <h1 class="text-2xl font-bold">Create User</h1>
-        </template>
-        <template #end>
-          <Link :href="route('admin.users.index')">
-            <Button label="Back to Users" icon="pi pi-arrow-left" severity="secondary" />
-          </Link>
-        </template>
-      </Toolbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
+      </div>
     </template>
 
     <div class="space-y-4">

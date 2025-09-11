@@ -1,13 +1,12 @@
 <script setup>
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
-import Toolbar from 'primevue/toolbar'
 import Message from 'primevue/message'
 import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 import { http } from '@/lib/http'
 import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 import CompanyMembersSection from './CompanyMembersSection.vue'
@@ -37,6 +36,13 @@ const slug = computed(() => c.value?.slug || props.company)
 const tabNames = ['members', 'invite']
 const storageKey = computed(() => `admin.company.tab.${slug.value}`)
 const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Companies', url: '/admin/companies', icon: 'companies' },
+  { label: c.value?.name || 'Company', url: '#' }
+])
 </script>
 
 <template>
@@ -44,27 +50,16 @@ const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
 
 <LayoutShell>
     <template #sidebar>
-      <Sidebar title="Admin Panel">
-        <SidebarMenu iconSet="line" :sections="[
-          { title: 'Admin', items: [
-            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
-            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
-          ]}
-        ]" />
-      </Sidebar>
+      <Sidebar title="Admin Panel" />
     </template>
 
     <template #topbar>
-      <Toolbar class="border-0 bg-transparent px-0">
-        <template #start>
-          <h1 class="text-2xl font-bold">Company</h1>
-        </template>
-        <template #end>
-          <Link :href="route('admin.companies.index')">
-            <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
-          </Link>
-        </template>
-      </Toolbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
+        <Link :href="route('admin.companies.index')">
+          <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
+        </Link>
+      </div>
     </template>
 
     <div class="space-y-4">

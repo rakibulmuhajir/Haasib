@@ -8,8 +8,8 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Toolbar from 'primevue/toolbar'
 import Badge from 'primevue/badge'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 import { http } from '@/lib/http'
 
 const q = ref('')
@@ -32,6 +32,12 @@ async function fetchUsers() {
 
 onMounted(fetchUsers)
 watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeout(t) })
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Users', url: '/admin/users', icon: 'users' }
+])
 </script>
 
 <template>
@@ -39,27 +45,16 @@ watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeou
   
   <LayoutShell>
     <template #sidebar>
-      <Sidebar title="Admin Panel">
-        <SidebarMenu iconSet="line" :sections="[
-          { title: 'Admin', items: [
-            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
-            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
-          ]}
-        ]" />
-      </Sidebar>
+      <Sidebar title="Admin Panel" />
     </template>
 
     <template #topbar>
-      <Toolbar class="border-0 bg-transparent px-0">
-        <template #start>
-          <h1 class="text-2xl font-bold">Users</h1>
-        </template>
-        <template #end>
-          <Link :href="route('admin.users.create')">
-            <Button label="Create User" icon="pi pi-user-plus" />
-          </Link>
-        </template>
-      </Toolbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
+        <Link :href="route('admin.users.create')">
+          <Button label="Create User" icon="pi pi-user-plus" />
+        </Link>
+      </div>
     </template>
 
     <div class="space-y-4">
@@ -107,7 +102,7 @@ watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeou
         <Column header="Actions">
           <template #body="slotProps">
             <Link :href="route('admin.users.show', slotProps.data.id)">
-              <Button label="Manage" size="small" icon="pi pi-cog" />
+              <Button label="Manage" size="small" icon="pi pi-settings" />
             </Link>
           </template>
         </Column>

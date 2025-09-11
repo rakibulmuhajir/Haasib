@@ -3,13 +3,12 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
-import Toolbar from 'primevue/toolbar'
 import Message from 'primevue/message'
-import { http } from '@/lib/http'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
+import { http, withIdempotency } from '@/lib/http'
 import CurrencyPicker from '@/Components/Pickers/CurrencyPicker.vue'
 import LanguagePicker from '@/Components/Pickers/LanguagePicker.vue'
 import LocalePicker from '@/Components/Pickers/LocalePicker.vue'
@@ -19,11 +18,20 @@ const loading = ref(false)
 const error = ref('')
 const created = ref(null)
 
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Companies', url: '/admin/companies', icon: 'companies' },
+  { label: 'Create Company', url: '#', icon: 'plus' }
+])
+
 async function submit() {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await http.post('/api/v1/companies', form.value)
+    const { data } = await http.post('/commands', form.value, { 
+      headers: withIdempotency({ 'X-Action': 'company.create' })
+    })
     created.value = data.data
   } catch (e) {
     error.value = e?.response?.data?.message || 'Failed to create company'
@@ -38,27 +46,16 @@ async function submit() {
   
   <LayoutShell>
     <template #sidebar>
-      <Sidebar title="Admin Panel">
-        <SidebarMenu iconSet="line" :sections="[
-          { title: 'Admin', items: [
-            { label: 'Companies', path: '/admin/companies', icon: 'companies', routeName: 'admin.companies.index' },
-            { label: 'Users', path: '/admin/users', icon: 'users', routeName: 'admin.users.index' }
-          ]}
-        ]" />
-      </Sidebar>
+      <Sidebar title="Admin Panel" />
     </template>
 
     <template #topbar>
-      <Toolbar class="border-0 bg-transparent px-0">
-        <template #start>
-          <h1 class="text-2xl font-bold">Create Company</h1>
-        </template>
-        <template #end>
-          <Link :href="route('admin.companies.index')">
-            <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
-          </Link>
-        </template>
-      </Toolbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
+        <Link :href="route('admin.companies.index')">
+          <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
+        </Link>
+      </div>
     </template>
 
     <div class="max-w-2xl">

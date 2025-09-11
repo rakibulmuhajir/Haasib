@@ -49,6 +49,12 @@ class CompanyAssign
             if (! $user) {
                 throw ValidationException::withMessages(['email' => 'User not found']);
             }
+            
+            // Check if user is already assigned to this company
+            if ($company->users()->where('users.id', $user->id)->exists()) {
+                throw ValidationException::withMessages(['email' => 'User is already assigned to this company']);
+            }
+            
             $company->users()->syncWithoutDetaching([$user->id => ['role' => $data['role']]]);
             $user = $company->users()->where('users.id', $user->id)->first();
 

@@ -10,25 +10,25 @@ const menuSections = [
   {
     title: 'Admin',
     items: [
-      { 
-        label: 'Companies', 
-        path: '/admin/companies', 
-        icon: 'building', 
+      {
+        label: 'Companies',
+        path: '/admin/companies',
+        icon: 'building',
         routeName: 'admin.companies.index',
         children: [
           { label: 'All Companies', path: '/admin/companies', icon: 'list', routeName: 'admin.companies.index' },
           { label: 'Create Company', path: '/admin/companies/create', icon: 'plus', routeName: 'admin.companies.create' }
-        ] 
+        ]
       },
-      { 
-        label: 'Users', 
-        path: '/admin/users', 
-        icon: 'users', 
+      {
+        label: 'Users',
+        path: '/admin/users',
+        icon: 'users',
         routeName: 'admin.users.index',
         children: [
-          { label: 'All Users', path: '/admin/users', icon: 'list', routeName: 'admin.users.index' },
-          { label: 'Create User', path: '/admin/users/create', icon: 'user-plus', routeName: 'admin.users.create' }
-        ] 
+          { label: 'All Users', path: '/admin/users', routeName: 'admin.users.index' },
+          { label: 'Create User', path: '/admin/users/create', routeName: 'admin.users.create' }
+        ]
       }
     ]
   }
@@ -43,5 +43,5 @@ const menuSections = [
       <slot />
     </SidebarMenuContainer>
   </aside>
-  
+
 </template>

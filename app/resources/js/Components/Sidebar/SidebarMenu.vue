@@ -15,7 +15,7 @@ onMounted(() => {
   props.sections.forEach((section, i) => {
     const key = `sidebar.open.${i}`
     // auto-open if any child item is active
-    const active = section.items?.some((it) => isActiveDeep(it))
+    const active = section.items?.some((it) => hasActiveChild(it) || isActiveExact(it))
     const saved = localStorage.getItem(key)
     open[i] = saved !== null ? saved === '1' : !!active
   })
@@ -24,14 +24,26 @@ watch(open, (val) => {
   Object.entries(val).forEach(([k, v]) => localStorage.setItem(`sidebar.open.${k}`, v ? '1' : '0'))
 }, { deep: true })
 
-function isActiveDeep(item: MenuItem): boolean {
+
+function isActiveExact(item: MenuItem): boolean {
   const r = (window as any).route
   if (item.routeName && typeof r === 'function') {
-    try { if (r().current(item.routeName)) return true } catch {}
+    try { return r().current(item.routeName) } catch {}
   }
-  if (item.path && (here.value === item.path || here.value.startsWith(item.path + '/'))) return true
-  if (item.children) return item.children.some(isActiveDeep)
+  if (item.path) return here.value === item.path
   return false
+}
+
+function hasActiveChild(item: MenuItem): boolean {
+  if (!item.children) return false
+  return item.children.some(child => {
+    const r = (window as any).route
+    if (child.routeName && typeof r === 'function') {
+      try { return r().current(child.routeName) } catch {}
+    }
+    if (child.path) return here.value === child.path || here.value.startsWith(child.path + '/')
+    return false
+  })
 }
 </script>
 

@@ -480,6 +480,29 @@ Files:
 - Backend: explicit `ValidationException` messages in `CompanyAssign/Unassign`; added `UserUpdate` action; command-bus mapping updated.
 - Tooling: `tools/cli_probe.py`, `tools/cli_suite.py`, `tools/gui_suite.py` for API/GUI checks; PR checklist and team memory docs added.
 
+### 2025-09-11 — Ledger Core Module Complete
+**Why:** Establish the foundational double-entry bookkeeping system with proper tenant isolation and audit trail.
+**What:**
+- Created complete `ledger` schema with accounts, journal_entries, and journal_lines tables
+- Implemented double-entry posting service with brick/money precision handling
+- Added Chart of Accounts (COA) seeding system with hierarchical account structure
+- Built full CRUD UI components for journal entries with Johnny Ive design philosophy
+- Applied RLS policies for complete tenant data isolation at database level
+- Added comprehensive audit logging for all ledger operations
+**Proof:**
+- All ledger tables properly scoped to companies with RLS policies
+- Balance validation ensures proper double-entry accounting
+- Audit trail captures all journal entry and account operations
+- UI provides intuitive interface for creating and browsing journal entries
+**How:**
+- Migrations: `create_ledger_schema`, `create_ledger_rls_policies`
+- Service: `LedgerService` with create/post/void methods and account management
+- Controllers: `LedgerController` with proper authorization and validation
+- Components: Vue.js components with PrimeVue, TypeScript, and consistent design
+- Models: `JournalEntry`, `JournalLine`, `LedgerAccount` with proper relationships
+- Permissions: Extended RBAC system with ledger-specific permissions
+- Audit: Integrated with existing audit.audit_logs table for complete operation tracking
+
 ## 14) Definition of Done (module)
 
 * Schema + RLS + CHECK/FK + indexes; services with transactions; API v1 + OpenAPI; RBAC policies + tests; audit trail; caching/invalidations; reporting refresh; health/metrics updated; backups include new tables; idempotency enforced on writes.

@@ -37,12 +37,6 @@ const tabNames = ['members', 'invite']
 const storageKey = computed(() => `admin.company.tab.${slug.value}`)
 const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
 
-// Breadcrumb items
-const breadcrumbItems = ref([
-  { label: 'Admin', url: '/admin', icon: 'settings' },
-  { label: 'Companies', url: '/admin/companies', icon: 'companies' },
-  { label: c.value?.name || 'Company', url: '#' }
-])
 </script>
 
 <template>
@@ -55,7 +49,7 @@ const breadcrumbItems = ref([
 
     <template #topbar>
       <div class="flex items-center justify-between w-full">
-        <Breadcrumb :items="breadcrumbItems" />
+        <Breadcrumb />
         <Link :href="route('admin.companies.index')">
           <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
         </Link>

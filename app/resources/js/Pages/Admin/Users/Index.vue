@@ -1,37 +1,23 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Badge from 'primevue/badge'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
-import { http } from '@/lib/http'
+import { useApiList } from '@/composables/useApiList.js'
 
 const q = ref('')
-const loading = ref(false)
-const items = ref([])
-const error = ref('')
-
-async function fetchUsers() {
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await http.get('/web/users/suggest', { params: { q: q.value, limit: 50 } })
-    items.value = data.data || []
-  } catch (e) {
-    error.value = 'Failed to load users'
-  } finally {
-    loading.value = false
-  }
-}
+const { items, loading, error, fetch: fetchUsers } = useApiList('/web/users/suggest', {
+  query: q,
+  initialParams: { limit: 50 }
+})
 
 onMounted(fetchUsers)
-watch(q, () => { const t = setTimeout(fetchUsers, 250); return () => clearTimeout(t) })
 
 // Breadcrumb items
 const breadcrumbItems = ref([
@@ -42,7 +28,7 @@ const breadcrumbItems = ref([
 
 <template>
   <Head title="Users" />
-  
+
   <LayoutShell>
     <template #sidebar>
       <Sidebar title="Admin Panel" />
@@ -59,9 +45,9 @@ const breadcrumbItems = ref([
 
     <div class="space-y-4">
       <div class="flex items-center gap-2">
-        <InputText 
-          v-model="q" 
-          placeholder="Search users by name or email…" 
+        <InputText
+          v-model="q"
+          placeholder="Search users by name or email…"
           class="w-96"
           @keyup.enter="fetchUsers"
         />
@@ -69,11 +55,11 @@ const breadcrumbItems = ref([
       </div>
 
       <div v-if="error" class="p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
-      
-      <DataTable 
-        :value="items" 
-        :loading="loading" 
-        stripedRows 
+
+      <DataTable
+        :value="items"
+        :loading="loading"
+        stripedRows
         class="w-full"
         :paginator="items.length > 10"
         :rows="10"
@@ -91,9 +77,9 @@ const breadcrumbItems = ref([
         </Column>
         <Column field="system_role" header="Role">
           <template #body="slotProps">
-            <Badge 
-              v-if="slotProps.data.system_role === 'superadmin'" 
-              severity="danger" 
+            <Badge
+              v-if="slotProps.data.system_role === 'superadmin'"
+              severity="danger"
               value="Super Admin"
             />
             <span v-else class="text-sm text-gray-500">User</span>

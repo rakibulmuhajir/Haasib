@@ -22,24 +22,41 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage()
 const breadcrumbs = computed(() => {
   if (props.items.length > 0) {
-    return [props.home, ...props.items]
+    return [props.home, ...props.items];
   }
 
-  // Auto-generate breadcrumbs based on URL structure
-  const url = page.url
-  const segments = url.split('/').filter(segment => segment)
+  // Auto-generate from page props if available
+  const pageBreadcrumbs = page.props.breadcrumb as BreadcrumbItem[] | undefined;
+  if (pageBreadcrumbs && pageBreadcrumbs.length > 0) {
+    return [props.home, ...pageBreadcrumbs];
+  }
 
-  const generatedItems: BreadcrumbItem[] = [props.home]
+  // Fallback to URL segment generation
+  const segments = page.url.split('/').filter(segment => segment);
+  const generatedItems: BreadcrumbItem[] = [props.home];
 
   segments.forEach((segment, index) => {
-    const path = '/' + segments.slice(0, index + 1).join('/')
-    generatedItems.push({
-      label: segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' '),
-      url: path
-    })
-  })
+    let label = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+    const url = '/' + segments.slice(0, index + 1).join('/');
 
-  return generatedItems
+    // Check if the segment is a UUID or a long numeric ID, which likely corresponds to a model.
+    const isModelIdentifier = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(segment) || /^\d{5,}$/.test(segment);
+
+    if (isModelIdentifier) {
+      // Try to find a corresponding model in the page props.
+      // e.g., if the previous segment was 'companies', look for a 'company' prop.
+      const modelName = segments[index - 1]?.replace(/s$/, ''); // 'companies' -> 'company'
+      const modelData = (page.props as any)[modelName] as { name?: string; title?: string };
+
+      // Use the model's name or title if available, otherwise skip this segment.
+      label = modelData?.name || modelData?.title || '';
+      if (!label) return;
+    }
+
+    generatedItems.push({ label, url });
+  });
+
+  return generatedItems;
 })
 </script>
 

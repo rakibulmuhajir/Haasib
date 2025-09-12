@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
@@ -7,9 +8,18 @@ import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
 import ThemeSwitcher from '@/Components/ThemeSwitcher.vue'
+import CompanySwitcher from '@/Components/CompanySwitcher.vue'
 import Toast from 'primevue/toast'
 
+const page = usePage();
 const showingNavigationDropdown = ref(false);
+
+onMounted(() => {
+  console.log('🔍 [PAGE DEBUG] Current page:', page.url);
+  console.log('🔍 [PAGE DEBUG] Auth data:', page.props.auth);
+  console.log('🔍 [PAGE DEBUG] Company ID:', page.props.auth?.companyId);
+  console.log('🔍 [PAGE DEBUG] Is superadmin:', page.props.auth?.isSuperAdmin);
+});
 </script>
 
 <template>
@@ -45,6 +55,9 @@ const showingNavigationDropdown = ref(false);
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                            <!-- Company Switcher -->
+                            <CompanySwitcher class="me-3" />
+                            
                             <ThemeSwitcher class="me-3" />
                             <!-- Settings Dropdown -->
                             <div class="relative ms-3">

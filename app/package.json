@@ -22,6 +22,7 @@
     },
     "dependencies": {
         "@primeuix/themes": "^1.2.3",
+        "date-fns": "^4.1.0",
         "primevue": "^4.3.9"
     }
 }

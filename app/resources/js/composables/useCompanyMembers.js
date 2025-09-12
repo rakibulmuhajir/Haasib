@@ -1,6 +1,7 @@
 import { ref, watch, unref } from 'vue'
 import { http, withIdempotency } from '@/lib/http'
 import { useToasts } from './useToasts.js'
+import { useApiForm } from './useApiForm.js'
 
 const roleOptions = [
   { value: 'owner', label: 'Owner' },
@@ -14,10 +15,6 @@ export function useCompanyMembers(company) {
   const loading = ref(false)
   const error = ref('')
   const q = ref('')
-
-  const assign = ref({ email: '', role: 'viewer' })
-  const assignLoading = ref(false)
-  const assignError = ref('')
 
   const { addToast } = useToasts()
 
@@ -36,44 +33,37 @@ export function useCompanyMembers(company) {
     }
   }
 
-  async function assignUser() {
-    if (!assign.value.email || !assign.value.role) return
-    assignLoading.value = true
-    assignError.value = ''
-    try {
-      const { data } = await http.post('/commands', {
-        email: assign.value.email,
-        company: unref(company),
-        role: assign.value.role,
-      }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-      members.value.unshift(data.data)
-      assign.value.email = ''
-      assign.value.role = 'viewer'
-      addToast('User assigned successfully.', 'success')
-    } catch (e) {
-      const message = e?.response?.data?.message || 'Failed to assign user'
-      assignError.value = message
-      addToast(message, 'danger')
-    } finally {
-      assignLoading.value = false
+  const {
+    loading: assignLoading,
+    error: assignError,
+    execute: assignUser,
+    form: assign,
+  } = useApiForm(
+    (formData) => http.post('/commands', { ...formData, company: unref(company) }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) }),
+    {
+      initialFormState: { email: '', role: 'viewer' },
+      onSuccess: (newMember) => {
+        members.value.unshift(newMember)
+        addToast('User assigned successfully.', 'success')
+      },
     }
-  }
+  )
 
   async function updateRole(m) {
     console.log('🚀 updateRole FUNCTION CALLED - useCompanyMembers.js')
     console.log('Input parameter m:', m)
-    
+
     const originalRole = members.value.find(mem => mem.id === m.id)?.role
     console.log('Original role from members array:', originalRole)
     console.log('New role from parameter:', m.role)
-    
+
     if (originalRole === m.role) {
       console.log('❌ Role unchanged, returning early')
       return
     }
-    
+
     console.log('📡 Making API call to /commands...')
-    
+
     try {
       const payload = {
         email: m.email,
@@ -81,20 +71,20 @@ export function useCompanyMembers(company) {
         role: m.role,
       }
       console.log('📤 Request payload:', payload)
-      
-      const { data } = await http.post('/commands', payload, { 
-        headers: withIdempotency({ 'X-Action': 'company.assign' }) 
+
+      const { data } = await http.post('/commands', payload, {
+        headers: withIdempotency({ 'X-Action': 'company.assign' })
       })
-      
+
       console.log('📥 API response received:', data)
-      
+
       const index = members.value.findIndex(mem => mem.id === m.id)
       if (index !== -1) {
         console.log('🔄 Updating member in array at index:', index)
         members.value.splice(index, 1, data.data)
         console.log('✅ Member array updated')
       }
-      
+
       addToast('Role updated successfully.', 'success')
       console.log('🎉 Success toast shown')
     } catch (e) {

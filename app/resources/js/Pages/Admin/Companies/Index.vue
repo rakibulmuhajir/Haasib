@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import InputText from 'primevue/inputtext'
@@ -8,28 +8,15 @@ import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
-import { http } from '@/lib/http'
+import { useApiList } from '@/composables/useApiList.js'
 
 const q = ref('')
-const loading = ref(false)
-const items = ref([])
-const error = ref('')
-
-async function fetchCompanies() {
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await http.get('/web/companies', { params: { q: q.value, limit: 50 } })
-    items.value = data.data || []
-  } catch (e) {
-    error.value = 'Failed to load companies'
-  } finally {
-    loading.value = false
-  }
-}
+const { items, loading, error, fetch: fetchCompanies } = useApiList('/web/companies', {
+  query: q,
+  initialParams: { limit: 50 }
+})
 
 onMounted(fetchCompanies)
-watch(q, () => { const t = setTimeout(fetchCompanies, 250); return () => clearTimeout(t) })
 
 // Breadcrumb items
 const breadcrumbItems = ref([
@@ -40,7 +27,7 @@ const breadcrumbItems = ref([
 
 <template>
   <Head title="Companies" />
-  
+
   <LayoutShell>
     <template #sidebar>
       <Sidebar title="Admin Panel" />
@@ -57,9 +44,9 @@ const breadcrumbItems = ref([
 
     <div class="space-y-4">
       <div class="flex items-center gap-2">
-        <InputText 
-          v-model="q" 
-          placeholder="Search companies by name or slug…" 
+        <InputText
+          v-model="q"
+          placeholder="Search companies by name or slug…"
           class="w-96"
           @keyup.enter="fetchCompanies"
         />
@@ -67,11 +54,11 @@ const breadcrumbItems = ref([
       </div>
 
       <div v-if="error" class="p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
-      
-      <DataTable 
-        :value="items" 
-        :loading="loading" 
-        stripedRows 
+
+      <DataTable
+        :value="items"
+        :loading="loading"
+        stripedRows
         class="w-full"
         :paginator="items.length > 10"
         :rows="10"

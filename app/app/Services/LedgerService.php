@@ -6,12 +6,38 @@ use App\Models\Company;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
+use App\Models\User;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class LedgerService
 {
+    private function logAudit(string $action, array $params, ?User $user = null, ?string $companyId = null, ?string $idempotencyKey = null, ?array $result = null): void
+    {
+        try {
+            DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
+                DB::table('audit.audit_logs')->insert([
+                    'id' => Str::uuid()->toString(),
+                    'user_id' => $user?->id,
+                    'company_id' => $companyId,
+                    'action' => $action,
+                    'params' => json_encode($params),
+                    'result' => $result ? json_encode($result) : null,
+                    'idempotency_key' => $idempotencyKey,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Failed to write audit log', [
+                'action' => $action,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function createJournalEntry(
         Company $company,
         string $description,
@@ -21,7 +47,7 @@ class LedgerService
         ?string $sourceType = null,
         ?string $sourceId = null
     ): JournalEntry {
-        return DB::transaction(function () use ($company, $description, $lines, $reference, $date, $sourceType, $sourceId) {
+        $result = DB::transaction(function () use ($company, $description, $lines, $reference, $date, $sourceType, $sourceId) {
             $this->validateJournalLines($company, $lines);
 
             $entry = new JournalEntry([
@@ -40,16 +66,28 @@ class LedgerService
 
             return $entry->fresh(['journalLines.ledgerAccount']);
         });
+
+        $this->logAudit('ledger.journal_entry.create', [
+            'company_id' => $company->id,
+            'description' => $description,
+            'reference' => $reference,
+            'date' => $date,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'lines_count' => count($lines),
+        ], auth()->user(), $company->id, result: ['entry_id' => $result->id]);
+
+        return $result;
     }
 
     public function postJournalEntry(JournalEntry $entry): JournalEntry
     {
-        return DB::transaction(function () use ($entry) {
-            if (!$entry->canBePosted()) {
+        $result = DB::transaction(function () use ($entry) {
+            if (! $entry->canBePosted()) {
                 throw new \InvalidArgumentException('Journal entry cannot be posted');
             }
 
-            if (!$entry->isBalanced()) {
+            if (! $entry->isBalanced()) {
                 throw new \InvalidArgumentException('Journal entry is not balanced');
             }
 
@@ -66,12 +104,20 @@ class LedgerService
 
             return $entry->fresh();
         });
+
+        $this->logAudit('ledger.journal_entry.post', [
+            'entry_id' => $entry->id,
+            'company_id' => $entry->company_id,
+            'description' => $entry->description,
+        ], auth()->user(), $entry->company_id, result: ['posted_at' => $result->posted_at]);
+
+        return $result;
     }
 
     public function voidJournalEntry(JournalEntry $entry, string $reason): JournalEntry
     {
-        return DB::transaction(function () use ($entry, $reason) {
-            if (!$entry->canBeVoided()) {
+        $result = DB::transaction(function () use ($entry, $reason) {
+            if (! $entry->canBeVoided()) {
                 throw new \InvalidArgumentException('Journal entry cannot be voided');
             }
 
@@ -92,15 +138,24 @@ class LedgerService
 
             return $entry->fresh();
         });
+
+        $this->logAudit('ledger.journal_entry.void', [
+            'entry_id' => $entry->id,
+            'company_id' => $entry->company_id,
+            'reason' => $reason,
+            'description' => $entry->description,
+        ], auth()->user(), $entry->company_id, result: ['voided_at' => $result->metadata['voided_at']]);
+
+        return $result;
     }
 
     public function getAccountBalance(LedgerAccount $account, ?string $date = null): array
     {
         $query = $account->journalLines()
-            ->whereHas('journalEntry', fn($q) => $q->where('status', 'posted'));
+            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted'));
 
         if ($date) {
-            $query->whereHas('journalEntry', fn($q) => $q->where('date', '<=', $date));
+            $query->whereHas('journalEntry', fn ($q) => $q->where('date', '<=', $date));
         }
 
         $totalDebit = $query->sum('debit_amount');
@@ -135,11 +190,11 @@ class LedgerService
         $totalCredit = Money::of(0, 'USD');
 
         foreach ($lines as $index => $line) {
-            if (!isset($line['account_id']) || !isset($line['debit_amount']) || !isset($line['credit_amount'])) {
+            if (! isset($line['account_id']) || ! isset($line['debit_amount']) || ! isset($line['credit_amount'])) {
                 throw new \InvalidArgumentException("Line {$index} is missing required fields");
             }
 
-            if (!isset($dbAccounts[$line['account_id']])) {
+            if (! isset($dbAccounts[$line['account_id']])) {
                 throw new \InvalidArgumentException("Invalid account ID: {$line['account_id']}");
             }
 
@@ -152,9 +207,86 @@ class LedgerService
             $totalCredit = $totalCredit->plus(Money::of($line['credit_amount'], 'USD'));
         }
 
-        if (!$totalDebit->isEqualTo($totalCredit)) {
+        if (! $totalDebit->isEqualTo($totalCredit)) {
             throw new \InvalidArgumentException('Journal entry must balance (debits must equal credits)');
         }
+    }
+
+    public function createLedgerAccount(
+        Company $company,
+        string $name,
+        string $code,
+        string $type,
+        string $normalBalance,
+        ?string $description = null,
+        ?string $parentAccountId = null,
+        bool $active = true
+    ): LedgerAccount {
+        $result = DB::transaction(function () use ($company, $name, $code, $type, $normalBalance, $description, $parentAccountId, $active) {
+            $account = new LedgerAccount([
+                'company_id' => $company->id,
+                'name' => $name,
+                'code' => $code,
+                'type' => $type,
+                'normal_balance' => $normalBalance,
+                'description' => $description,
+                'parent_account_id' => $parentAccountId,
+                'active' => $active,
+            ]);
+
+            $account->save();
+
+            return $account;
+        });
+
+        $this->logAudit('ledger.account.create', [
+            'company_id' => $company->id,
+            'name' => $name,
+            'code' => $code,
+            'type' => $type,
+            'normal_balance' => $normalBalance,
+            'parent_account_id' => $parentAccountId,
+            'active' => $active,
+        ], auth()->user(), $company->id, result: ['account_id' => $result->id]);
+
+        return $result;
+    }
+
+    public function updateLedgerAccount(LedgerAccount $account, array $data): LedgerAccount
+    {
+        $oldData = $account->getAttributes();
+
+        $result = DB::transaction(function () use ($account, $data) {
+            $account->update($data);
+
+            return $account->fresh();
+        });
+
+        $this->logAudit('ledger.account.update', [
+            'account_id' => $account->id,
+            'company_id' => $account->company_id,
+            'old_data' => $oldData,
+            'new_data' => $data,
+        ], auth()->user(), $account->company_id, result: ['updated_at' => $result->updated_at]);
+
+        return $result;
+    }
+
+    public function deleteLedgerAccount(LedgerAccount $account, ?string $reason = null): void
+    {
+        $accountData = $account->getAttributes();
+
+        DB::transaction(function () use ($account) {
+            $account->delete();
+        });
+
+        $this->logAudit('ledger.account.delete', [
+            'account_id' => $account->id,
+            'company_id' => $account->company_id,
+            'name' => $account->name,
+            'code' => $account->code,
+            'reason' => $reason,
+        ], auth()->user(), $account->company_id);
     }
 
     private function createJournalLines(JournalEntry $entry, array $lines): void

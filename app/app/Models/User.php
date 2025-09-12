@@ -71,8 +71,33 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    // Ensure companies are loaded with pivot data when accessed
+    public function getCompaniesAttribute()
+    {
+        if (! $this->relationLoaded('companies')) {
+            $this->load('companies');
+        }
+
+        return $this->getRelation('companies');
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->system_role === 'superadmin';
+    }
+
+    public function getCurrentCompanyAttribute()
+    {
+        $companyId = session('current_company_id');
+        if (! $companyId) {
+            return null;
+        }
+
+        return $this->companies()->where('auth.companies.id', $companyId)->first();
+    }
+
+    public function currentCompany()
+    {
+        return $this->getCurrentCompanyAttribute();
     }
 }

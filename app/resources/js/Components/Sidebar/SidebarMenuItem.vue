@@ -1,13 +1,18 @@
-<script setup lang="ts">
-import { computed, reactive, onMounted, watch } from 'vue'
+<script setup lang="ts" generic="T extends MenuItem">
+import { computed } from 'vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import { Link } from '@inertiajs/vue3'
+import { useMenu } from '@/composables/useMenu'
 
-export interface MenuItem { label: string; path?: string; routeName?: string; children?: MenuItem[] }
+export interface MenuItem { label: string; path?: string; routeName?: string; icon?: string; permission?: string | string[]; children?: T[] }
 
 const props = defineProps<{
   item: MenuItem
   depth?: number
+  isSlim?: boolean
 }>()
+
+const { activeMenuKeys, getKey } = useMenu([]) // Pass empty array as menu is initialized in Sidebar.vue
 
 const depth = computed(() => props.depth ?? 0)
 
@@ -24,68 +29,34 @@ function buildHref(): string {
   return props.item.path || '#'
 }
 
-const here = computed(() => (typeof window !== 'undefined' ? window.location.pathname : '/'))
-
-function isActiveSelf(): boolean {
-  const r = routeFunc()
-  if (props.item.routeName && r) {
-    try { return r().current(props.item.routeName) } catch { /* ignore */ }
-  }
-  if (props.item.path) return here.value === props.item.path || here.value.startsWith(props.item.path + '/')
-  return false
-}
-
-function isActiveExact(): boolean {
-  const r = routeFunc()
-  if (props.item.routeName && r) {
-    try { return r().current(props.item.routeName) } catch { /* ignore */ }
-  }
-  if (props.item.path) return here.value === props.item.path
-  return false
-}
-
 const hasChildren = computed(() => (props.item.children && props.item.children.length > 0) || false)
-const hasActiveChild = computed(() => {
-  if (!props.item.children) return false
-  return props.item.children.some(child => {
-    const r = routeFunc()
-    if (child.routeName && r) {
-      try { return r().current(child.routeName) } catch { /* ignore */ }
-    }
-    if (child.path) return here.value === child.path || here.value.startsWith(child.path + '/')
-    return false
-  })
-})
 
-// open state persistence per item key (label+routeName+path)
-const key = computed(() => `sidebar.item.open.${props.item.label}.${props.item.routeName || ''}.${props.item.path || ''}`)
-const open = reactive<{ v: boolean }>({ v: true })
-
-onMounted(() => {
-  const saved = localStorage.getItem(key.value)
-  if (saved !== null) open.v = saved === '1'
-  // auto-open if any descendant is active
-  if (hasActiveChild.value) open.v = true
-})
-
-watch(() => open.v, v => { try { localStorage.setItem(key.value, v ? '1' : '0') } catch {} })
-
+const itemKey = computed(() => getKey(props.item))
+const isActive = computed(() => activeMenuKeys.value.has(itemKey.value))
+const isExpanded = computed(() => activeMenuKeys.value.has(itemKey.value))
 </script>
 
 <template>
   <li>
-    <a :href="buildHref()"
-       class="flex w-full items-center gap-2 px-2 py-1 rounded-full"
-       :class="{ 'router-link-active active-route': isActiveExact() && !hasActiveChild }"
+    <Link
+       :href="buildHref()"
+       class="flex w-full items-center gap-3 px-3 py-2 rounded-lg"
+       :class="{
+         'router-link-active active-route': isActive && !hasChildren,
+         'active-parent': isActive && hasChildren
+       }"
        style="color: var(--p-text-color)"
+       v-tooltip.right="{ value: isSlim ? item.label : '', disabled: !isSlim }"
     >
-      <span class="layout-menuitem-text text-sm">{{ item.label }}</span>
-      <button v-if="hasChildren" type="button" class="ms-auto inline-flex items-center" @click.prevent="open.v = !open.v">
-        <SvgIcon :name="open.v ? 'chevron-down' : 'chevron-right'" set="line" class="w-3 h-3" />
+      <SvgIcon v-if="item.icon" :name="item.icon" set="line" class="w-4 h-4" :monochrome="true" />
+      <span v-if="!isSlim" class="layout-menuitem-text text-sm flex-grow">{{ item.label }}</span>
+      <button v-if="hasChildren && !isSlim" type="button" class="ms-auto inline-flex items-center">
+        <SvgIcon :name="isExpanded ? 'chevron-down' : 'chevron-right'" set="line" class="w-3 h-3" />
       </button>
-    </a>
-    <ul v-if="hasChildren" v-show="open.v" class="mt-1" :style="{ paddingLeft: (depth*12+12)+'px' }">
-      <SidebarMenuItem v-for="(child, idx) in item.children" :key="idx" :item="child" :depth="depth+1" />
+    </Link>
+    <ul v-if="hasChildren" v-show="isExpanded" class="mt-1" :style="{ paddingLeft: (depth*12+12)+'px' }">
+      <!-- Pass active state down to children -->
+      <SidebarMenuItem v-for="(child, idx) in item.children" :key="idx" :item="child" :depth="depth+1" :is-slim="isSlim" />
     </ul>
   </li>
 </template>

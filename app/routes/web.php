@@ -3,6 +3,7 @@
 use App\Http\Controllers\CapabilitiesController;
 use App\Http\Controllers\CommandController;
 use App\Http\Controllers\CommandOverlayController;
+use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Company Switch Routes
+    Route::post('/company/{company}/switch', [CompanySwitchController::class, 'switch'])->name('company.switch');
+    Route::post('/company/set-first', [CompanySwitchController::class, 'setFirstCompany'])->name('company.set-first');
+
     // API Routes for SPA lookups
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
@@ -45,6 +50,24 @@ Route::middleware('auth')->group(function () {
     // Command capabilities and overlays
     Route::get('/web/commands/capabilities', [CapabilitiesController::class, 'index']);
     Route::get('/web/commands/overlays', [CommandOverlayController::class, 'index']);
+
+    // Ledger Routes
+    Route::prefix('ledger')->name('ledger.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\Ledger\LedgerController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'store'])->name('store');
+
+        // Ledger Accounts Routes - must come before dynamic parameter routes
+        Route::prefix('accounts')->name('accounts.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'show'])->name('show');
+        });
+
+        // Dynamic parameter routes - must come after specific routes
+        Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])->name('show');
+        Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])->name('post');
+        Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])->name('void');
+    });
 
     // Admin Routes
     Route::prefix('admin')->name('admin.')->group(function () {

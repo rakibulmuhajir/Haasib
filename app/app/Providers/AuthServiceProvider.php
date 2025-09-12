@@ -26,6 +26,53 @@ class AuthServiceProvider extends ServiceProvider
             return null;
         });
 
+        // Ledger permissions - require company context and proper role-based permissions
+        Gate::define('ledger.view', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+
+            // Superadmin can always view
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+
+            // Check if user has permission through role in current company
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
+        });
+
+        Gate::define('ledger.create', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin', 'accountant']);
+        });
+
+        Gate::define('ledger.accounts.view', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+            return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
+        });
+
         // Unified authorization for CLI + GUI command execution
         Gate::define('command.execute', function (User $user, string $action, ?string $companyId = null) {
             // Superadmin can do any command regardless of company context

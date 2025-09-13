@@ -503,6 +503,31 @@ Files:
 - Permissions: Extended RBAC system with ledger-specific permissions
 - Audit: Integrated with existing audit.audit_logs table for complete operation tracking
 
+### 2025-09-12 — Ledger Accessibility and Company Context System
+**Why:** Resolve critical 403 "unauthorized" errors preventing access to ledger and accounts pages due to missing company context and broken session management.
+**What:**
+- Fixed company context system to properly establish and maintain tenant isolation for RLS policies
+- Resolved session persistence issues where company IDs were stored but invalid
+- Implemented proper company switcher with debugging and validation
+- Fixed route conflicts where `/ledger/{id}` was capturing `/ledger/accounts` requests
+- Updated Vue permission system to use object-based permission checking
+- Added missing authorization gates for ledger accounts access
+- Created user-friendly error handling for unauthorized access scenarios
+**Proof:**
+- Users can now successfully access `/ledger` and `/ledger/accounts` pages with proper company context
+- Company switcher shows available companies and properly switches between them
+- Session validation prevents invalid company IDs from being used
+- PostgreSQL RLS context is properly set for all database operations
+- All Vue components correctly check permissions without runtime errors
+- Unauthorized users are directed to company selection interface
+**How:**
+- Session Management: Added validation in `HandleInertiaRequests` middleware to check user access to session company ID, with fallback to first available company
+- PostgreSQL RLS: Fixed syntax error in `SetCompanyContext` middleware by changing parameter binding to string interpolation for `SET SESSION app.current_company_id`
+- Route Ordering: Reordered routes in `web.php` so specific routes like `/ledger/accounts` come before dynamic parameter routes like `/ledger/{id}`
+- Permissions: Implemented permission object sharing in backend and updated Vue components from array.includes() to object access pattern
+- Authorization: Added missing `ledger.accounts.view` gate in `AuthServiceProvider` for proper RBAC checking
+- UI/UX: Created `CompanySwitcher.vue` component with comprehensive debugging and `NoCompany.vue` error page for better user experience
+
 ## 14) Definition of Done (module)
 
 * Schema + RLS + CHECK/FK + indexes; services with transactions; API v1 + OpenAPI; RBAC policies + tests; audit trail; caching/invalidations; reporting refresh; health/metrics updated; backups include new tables; idempotency enforced on writes.

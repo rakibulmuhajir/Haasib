@@ -1,0 +1,45 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('accounting_periods', function (Blueprint $table) {
+            $table->id('period_id');
+            $table->foreignId('company_id')->constrained('companies', 'company_id');
+            $table->foreignId('fiscal_year_id')->constrained('fiscal_years', 'fiscal_year_id');
+            $table->string('name', 100);
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->string('period_type', 50)->default('monthly');
+            $table->boolean('is_closed')->default(false);
+            $table->timestamp('closed_at')->nullable();
+            $table->timestamps();
+
+            $table->foreignId('closed_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            
+            $table->unique(['company_id', 'fiscal_year_id', 'name']);
+        });
+        
+        // Add check constraint for end_date > start_date
+        DB::statement('ALTER TABLE accounting_periods ADD CONSTRAINT chk_period_dates CHECK (end_date > start_date)');
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('accounting_periods');
+    }
+};

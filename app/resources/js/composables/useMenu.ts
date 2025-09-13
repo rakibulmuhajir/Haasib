@@ -40,8 +40,7 @@ export function useMenu(menu: MenuItem[]) {
 
   const removeListener = router.on('navigate', (event) => {
     const currentRouteName = event.detail.page.props.ziggy?.name || ''
-    const allItems = menu.flatMap(section => section.items)
-    const activePath = findActivePath(allItems, currentRouteName)
+    const activePath = findActivePath(menu, currentRouteName)
     activeMenuKeys.value = new Set(activePath)
   })
 

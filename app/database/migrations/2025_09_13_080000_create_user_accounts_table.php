@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('user_accounts', function (Blueprint $table) {
             $table->id('user_id');
-            $table->foreignId('company_id')->constrained('companies', 'company_id');
+            $table->uuid('company_id');
             $table->string('username', 100)->unique();
             $table->string('email', 255)->unique();
             $table->string('password');
@@ -30,6 +31,9 @@ return new class extends Migration
 
             $table->unique(['company_id', 'username']);
         });
+
+        // Add foreign key constraint to auth.companies
+        DB::statement('ALTER TABLE user_accounts ADD CONSTRAINT fk_user_accounts_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
     }
 
     /**

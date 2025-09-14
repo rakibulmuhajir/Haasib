@@ -15,6 +15,55 @@ const { isSlim } = useSidebar()
 // Define menu structure compatible with useMenu
 const menuItems: MenuItem[] = [
   {
+    label: 'Invoicing',
+    children: [
+      {
+        label: 'Invoices',
+        path: '/invoices',
+        icon: 'file-text',
+        routeName: 'invoices.index',
+        permission: 'invoices.view',
+        children: [
+          { label: 'All Invoices', path: '/invoices', icon: 'list', routeName: 'invoices.index', permission: 'invoices.view' },
+          { label: 'Create Invoice', path: '/invoices/create', icon: 'plus', routeName: 'invoices.create', permission: 'invoices.create' }
+        ]
+      },
+      {
+        label: 'Payments',
+        path: '/payments',
+        icon: 'credit-card',
+        routeName: 'payments.index',
+        permission: 'payments.view',
+        children: [
+          { label: 'All Payments', path: '/payments', icon: 'list', routeName: 'payments.index', permission: 'payments.view' },
+          { label: 'Record Payment', path: '/payments/create', icon: 'plus', routeName: 'payments.create', permission: 'payments.create' }
+        ]
+      },
+      {
+        label: 'Customers',
+        path: '/customers',
+        icon: 'users',
+        routeName: 'customers.index',
+        permission: 'customers.view',
+        children: [
+          { label: 'All Customers', path: '/customers', icon: 'list', routeName: 'customers.index', permission: 'customers.view' },
+          { label: 'Add Customer', path: '/customers/create', icon: 'plus', routeName: 'customers.create', permission: 'customers.create' }
+        ]
+      },
+      {
+        label: 'Currencies',
+        path: '/currencies',
+        icon: 'globe',
+        routeName: 'currencies.index',
+        permission: 'currencies.view',
+        children: [
+          { label: 'Currency Settings', path: '/currencies', icon: 'settings', routeName: 'currencies.index', permission: 'currencies.view' },
+          { label: 'Exchange Rates', path: '/currencies/exchange-rates', icon: 'refresh-cw', routeName: 'currencies.exchange-rates', permission: 'currencies.manage' }
+        ]
+      }
+    ]
+  },
+  {
     label: 'Ledger',
     children: [
       {
@@ -75,12 +124,16 @@ useMenu(menuItems)
 // Keep sections structure for template rendering
 const menuSections = [
   {
-    title: 'Ledger',
+    title: 'Invoicing',
     items: menuItems[0].children || []
   },
   {
-    title: 'Admin', 
+    title: 'Ledger',
     items: menuItems[1].children || []
+  },
+  {
+    title: 'Admin', 
+    items: menuItems[2].children || []
   }
 ]
 

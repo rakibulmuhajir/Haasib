@@ -2,17 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class JournalLine extends Model
 {
     use HasFactory;
 
     protected $table = 'ledger.journal_lines';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -109,6 +111,7 @@ class JournalLine extends Model
         if ($this->credit_amount > 0) {
             return 'credit';
         }
+
         return 'zero';
     }
 }

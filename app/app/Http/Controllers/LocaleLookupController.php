@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\LookupService;
+use Illuminate\Http\Request;
 
 class LocaleLookupController extends Controller
 {
@@ -12,8 +12,8 @@ class LocaleLookupController extends Controller
         $request->user();
 
         $rows = $lookup->suggest('locales', [
-            'select' => ['tag','name','native_name','language_code','country_code','script','variant'],
-            'search' => ['tag','name','native_name'],
+            'select' => ['tag', 'name', 'native_name', 'language_code', 'country_code', 'script', 'variant'],
+            'search' => ['tag', 'name', 'native_name'],
             'order' => 'tag',
         ], [
             'language' => 'language_code',
@@ -23,4 +23,3 @@ class LocaleLookupController extends Controller
         return response()->json(['data' => $rows]);
     }
 }
-

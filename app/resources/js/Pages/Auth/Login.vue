@@ -23,8 +23,16 @@ const form = useForm({
 });
 
 const submit = () => {
+    console.log('Submit function called');
+    console.log('Form data:', form.data());
     form.post(route('login'), {
         onFinish: () => form.reset('password'),
+        onError: (errors) => {
+            console.error('Form errors:', errors);
+        },
+        onSuccess: () => {
+            console.log('Login successful');
+        }
     });
 };
 </script>
@@ -87,13 +95,14 @@ const submit = () => {
                     Forgot your password?
                 </Link>
 
-                <PrimaryButton
-                    class="ms-4"
+                <button
+                    type="submit"
+                    class="ms-4 inline-flex items-center rounded-md border border-transparent bg-gray-800 px-4 py-2 text-xs font-medium uppercase tracking-widest text-white transition duration-150 ease-in-out hover:bg-gray-700 focus:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 dark:bg-gray-200 dark:text-gray-800 dark:hover:bg-white dark:focus:bg-white dark:focus:ring-offset-gray-800"
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
                     Log in
-                </PrimaryButton>
+                </button>
             </div>
         </form>
     </GuestLayout>

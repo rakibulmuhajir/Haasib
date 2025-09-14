@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -22,13 +22,16 @@ return new class extends Migration
             $table->string('reference_type', 50)->nullable();
             $table->bigInteger('reference_id')->nullable();
             $table->integer('sort_order')->default(0);
-            $table->foreignId('functional_currency_id')->nullable()->constrained('currencies');
+            $table->uuid('functional_currency_id')->nullable();
             $table->decimal('fx_rate', 20, 10)->nullable();
             $table->decimal('functional_debit', 15, 2)->default(0);
             $table->decimal('functional_credit', 15, 2)->default(0);
             $table->timestamps();
         });
-        
+
+        // Add foreign key constraint to currencies
+        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT fk_journal_entries_functional_currency_id FOREIGN KEY (functional_currency_id) REFERENCES currencies(id) ON DELETE SET NULL');
+
         // Add check constraint: either debit or credit must be positive, not both
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_debit_credit_xor CHECK ((debit_amount > 0 AND credit_amount = 0) OR (credit_amount > 0 AND debit_amount = 0))');
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_debit_positive CHECK (debit_amount >= 0)');

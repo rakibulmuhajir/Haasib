@@ -20,13 +20,13 @@ class CompanyLookupController extends Controller
         $userEmail = $request->query('user_email');
         $limit = (int) $request->query('limit', 10);
 
-        $query = Company::query()->select(['id','name','slug','base_currency','language','locale']);
+        $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale']);
 
         if ($q !== '') {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-            $query->where(function($w) use ($like) {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
+            $query->where(function ($w) use ($like) {
                 $w->where('name', 'ilike', $like)
-                  ->orWhere('slug', 'ilike', $like);
+                    ->orWhere('slug', 'ilike', $like);
             });
         }
 
@@ -46,6 +46,7 @@ class CompanyLookupController extends Controller
         }
 
         $companies = $query->limit($limit)->get();
+
         return response()->json(['data' => $companies]);
     }
 
@@ -71,7 +72,7 @@ class CompanyLookupController extends Controller
                 ->where('company_id', $record->id)
                 ->orderByDesc('created_at')
                 ->limit(1)
-                ->first(['action','created_at']);
+                ->first(['action', 'created_at']);
         } catch (\Throwable $e) {
             // audit schema may not exist yet; ignore
         }
@@ -89,7 +90,7 @@ class CompanyLookupController extends Controller
                 'owners' => $owners,
                 'role_counts' => (object) $roleCounts,
                 'last_activity' => $lastActivity,
-            ]
+            ],
         ]);
     }
 
@@ -111,4 +112,3 @@ class CompanyLookupController extends Controller
         return response()->json(['data' => $users]);
     }
 }
-

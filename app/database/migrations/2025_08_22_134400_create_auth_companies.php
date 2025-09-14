@@ -1,11 +1,12 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         DB::statement('CREATE SCHEMA IF NOT EXISTS auth');
@@ -15,6 +16,7 @@ return new class extends Migration {
         if (! $exists) {
             Schema::create('auth.companies', function (Blueprint $t) {
                 $t->uuid('id')->primary();
+                $t->uuid('created_by_user_id')->nullable()->index();
                 $t->string('name');
                 $t->string('slug')->unique();
                 $t->string('base_currency', 3)->default('AED');
@@ -22,6 +24,13 @@ return new class extends Migration {
                 $t->string('locale', 10)->default('en_AE');
                 $t->jsonb('settings')->nullable();
                 $t->timestamps();
+            });
+
+            // Add foreign key constraint for created_by_user_id
+            Schema::table('auth.companies', function (Blueprint $t) {
+                $t->foreign('created_by_user_id')
+                    ->references('id')->on('users')
+                    ->nullOnDelete();
             });
         }
     }

@@ -67,7 +67,7 @@ class User extends Authenticatable
     public function companies()
     {
         return $this->belongsToMany(\App\Models\Company::class, 'auth.company_user')
-            ->withPivot('role', 'invited_by_user_id')
+            ->withPivot('role')
             ->withTimestamps();
     }
 
@@ -99,5 +99,13 @@ class User extends Authenticatable
     public function currentCompany()
     {
         return $this->getCurrentCompanyAttribute();
+    }
+
+    /**
+     * Get the current company ID attribute.
+     */
+    public function getCurrentCompanyIdAttribute(): ?string
+    {
+        return session('current_company_id');
     }
 }

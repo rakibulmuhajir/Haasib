@@ -54,6 +54,38 @@ async function switchCompany(event) {
     optionValue="id"
     placeholder="Select Company"
     @change="switchCompany"
-    class="w-full md:w-56"
+    class="company-switcher"
   />
 </template>
+
+<style scoped>
+.company-switcher {
+  min-width: 200px;
+}
+
+.company-switcher :deep(.p-dropdown) {
+  border: 1px solid var(--surface-border);
+  background-color: var(--surface-card);
+  color: var(--text-color);
+  border-radius: 0.375rem;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+}
+
+.company-switcher :deep(.p-dropdown:hover) {
+  border-color: var(--primary-color);
+}
+
+.company-switcher :deep(.p-dropdown:focus) {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.company-switcher :deep(.p-dropdown-label) {
+  color: var(--text-color);
+}
+
+.company-switcher :deep(.p-dropdown-trigger) {
+  color: var(--text-color-secondary);
+}
+</style>

@@ -2,15 +2,16 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         DB::statement('CREATE SCHEMA IF NOT EXISTS audit');
 
-        if (!Schema::hasTable('audit.audit_logs')) {
+        if (! Schema::hasTable('audit.audit_logs')) {
             Schema::create('audit.audit_logs', function (Blueprint $t) {
                 $t->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
                 $t->uuid('user_id');
@@ -25,22 +26,24 @@ return new class extends Migration {
             // Ensure idempotency key uniqueness without breaking re-runs
             try {
                 DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit.audit_logs (idempotency_key)');
-            } catch (\Throwable $e) { /* ignore if driver unsupported */ }
+            } catch (\Throwable $e) { /* ignore if driver unsupported */
+            }
         } else {
             Schema::table('audit.audit_logs', function (Blueprint $t) {
-                if (!Schema::hasColumn('audit.audit_logs', 'raw')) {
+                if (! Schema::hasColumn('audit.audit_logs', 'raw')) {
                     $t->text('raw')->nullable();
                 }
-                if (!Schema::hasColumn('audit.audit_logs', 'result')) {
+                if (! Schema::hasColumn('audit.audit_logs', 'result')) {
                     $t->jsonb('result')->nullable();
                 }
-                if (!Schema::hasColumn('audit.audit_logs', 'idempotency_key')) {
+                if (! Schema::hasColumn('audit.audit_logs', 'idempotency_key')) {
                     $t->string('idempotency_key')->nullable();
                 }
             });
             try {
                 DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit.audit_logs (idempotency_key)');
-            } catch (\Throwable $e) { /* ignore if driver unsupported */ }
+            } catch (\Throwable $e) { /* ignore if driver unsupported */
+            }
         }
     }
 

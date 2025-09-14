@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\LookupService;
+use Illuminate\Http\Request;
 
 class CurrencyLookupController extends Controller
 {
@@ -12,12 +12,11 @@ class CurrencyLookupController extends Controller
         $request->user();
 
         $rows = $lookup->suggest('currencies', [
-            'select' => ['code','numeric_code','name','symbol','minor_unit','cash_minor_unit','rounding','fund'],
-            'search' => ['name','code','numeric_code','symbol'],
+            'select' => ['code', 'numeric_code', 'name', 'symbol', 'minor_unit', 'cash_minor_unit', 'rounding', 'fund'],
+            'search' => ['name', 'code', 'numeric_code', 'symbol'],
             'order' => 'code',
         ]);
 
         return response()->json(['data' => $rows]);
     }
 }
-

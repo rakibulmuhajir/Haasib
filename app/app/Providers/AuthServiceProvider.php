@@ -70,6 +70,7 @@ class AuthServiceProvider extends ServiceProvider
             }
 
             $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
             return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
         });
 

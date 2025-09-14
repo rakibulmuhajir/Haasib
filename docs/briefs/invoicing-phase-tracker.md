@@ -1,8 +1,8 @@
 # Invoicing Phase Database Tables Tracker
 
-**Created:** 2025-09-13  
-**Module:** Accounts Receivable (Invoicing)  
-**Schema File:** `docs/schemas/11_ar.sql`  
+**Created:** 2025-09-13
+**Module:** Accounts Receivable (Invoicing)
+**Schema File:** `docs/schemas/11_ar.sql`
 **Status:** Development Phase
 
 ## Tables to Create for Invoicing Phase
@@ -15,13 +15,13 @@
 ### Payment Processing Tables ✅ COMPLETED
 - [x] `payments` - Customer payment records (2025_09_13_090300_create_payments_table.php)
 - [x] `payment_allocations` - Payment to invoice allocations (2025_09_13_090400_create_payment_allocations_table.php)
-- [x] `accounts_receivable` - AR summary/aging table (2025_09_13_090500_create_accounts_receivable_table.php)
+- [x] `accounts_receivable_mv` - AR summary/aging materialized view (2025_09_13_090500_create_accounts_receivable_table.php)
 
 ## Dependencies (Must exist first)
 
 ### CRM Module (`40_crm.sql`)
 - [x] `crm.customers` - Customer entities
-- [x] `crm.vendors` - Vendor entities  
+- [x] `crm.vendors` - Vendor entities
 - [x] `crm.contacts` - Customer/Vendor contacts
 - [x] `crm.interactions` - Customer activity tracking
 
@@ -50,9 +50,9 @@
 
 ### Key Features to Implement
 1. **Multi-currency support** - Exchange rate handling
-2. **Multi-tax per line item** - Complex tax scenarios  
+2. **Multi-tax per line item** - Complex tax scenarios
 3. **Payment allocation** - Apply payments to multiple invoices
-4. **Aging reports** - Based on `accounts_receivable` table
+4. **Aging reports** - Based on `accounts_receivable_mv` materialized view
 5. **Audit trail** - Created/updated by tracking
 6. **Soft deletes** - `deleted_at` columns for data preservation
 
@@ -64,10 +64,19 @@
 
 ### Business Logic
 - Invoice numbering (company-scoped)
+- Invoice Status Workflow: `draft` → `sent` → `posted` → `void`
+  - `draft`: Editable, no GL impact.
+  - `sent`: Locked, awaiting payment.
+  - `posted`: Paid or partially paid, GL impact posted.
+  - `void`: Cancelled, triggers reversing journal entry.
+- Payment Status Tracking: `unpaid` → `partial` → `paid` → `overpaid`
+  - Calculated automatically based on allocations.
 - Payment allocation validation
 - Balance due calculations
-- Status workflow (draft → sent → posted → cancelled)
-- Payment status tracking (unpaid → partial → paid → overpaid)
+
+### RBAC Permissions (to be created)
+- `invoices.view`, `invoices.create`, `invoices.edit`, `invoices.delete`, `invoices.send`, `invoices.post`
+- `payments.view`, `payments.create`, `payments.edit`, `payments.delete`, `payments.allocate`
 
 ## Progress Tracking
 
@@ -82,7 +91,7 @@
 
 ### Migration Status Summary
 - **Core System**: 5 tables ✅
-- **CRM Module**: 4 tables ✅  
+- **CRM Module**: 4 tables ✅
 - **Accounting Module**: 5 tables ✅
 - **User Accounts**: 1 table ✅
 - **Invoicing (AR) Module**: 6 tables ✅
@@ -145,7 +154,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 
 ### 🎯 Phase 4: Advanced Features
 #### 4.1 Reporting & Analytics
-- [ ] Materialized views for aging reports (`aging_report_mv`)
+- [ ] Refresh and query logic for `accounts_receivable_mv`
 - [ ] Trial balance integration with invoicing data
 - [ ] Real-time dashboards for AR metrics
 - [ ] CSV export functionality
@@ -168,7 +177,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 
 ### **Milestone 1: Core Invoicing (2-3 weeks)**
 - ✅ Database schema
-- ⏳ Laravel models & factories 
+- ⏳ Laravel models & factories
 - ⏳ Domain services
 - ⏳ Basic CRUD operations
 
@@ -197,14 +206,14 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 **Start with Phase 1.1: Laravel Models & Factories**
 
 1. **Create Invoice model** with relationships to Customer, Company, Currency
-2. **Create InvoiceItem model** with line item calculations and tax support  
+2. **Create InvoiceItem model** with line item calculations and tax support
 3. **Create Payment model** with allocation logic
 4. **Create Factories** for comprehensive testing
 5. **Implement Money object** integration for precise financial calculations
 
 **Definition of Done Status:**
 - ✅ DB schema (COMPLETE)
-- ⏳ Domain services + tests 
+- ⏳ Domain services + tests
 - ⏳ Web CRUD + validation
 - ⏳ API v1 + OpenAPI + idempotency
 - ⏳ Audit trail for financial entities

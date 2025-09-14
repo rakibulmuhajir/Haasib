@@ -33,6 +33,16 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = $request->user();
+
+        // Check if user has a current company in session
+        if (! session('current_company_id')) {
+            $firstCompany = $user->companies()->first();
+            if ($firstCompany) {
+                session(['current_company_id' => $firstCompany->id]);
+            }
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

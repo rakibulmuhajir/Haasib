@@ -126,12 +126,11 @@ onUnmounted(() => {
         </span>
       </button>
 
-      <!-- Company Switcher (only if user has multiple companies) -->
-      <CompanySwitcher v-if="page.props.auth?.companies?.length > 1" />
+      <!-- Company Switcher (always show) -->
+      <CompanySwitcher />
 
       <!-- Mobile Menu Button -->
       <button
-        v-if="page.props.auth?.companies?.length <= 1"
         type="button"
         class="layout-topbar-action lg:hidden"
         @click="toggleUserMenu"

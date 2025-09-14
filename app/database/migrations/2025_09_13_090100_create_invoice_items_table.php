@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -25,14 +25,14 @@ return new class extends Migration
             $table->integer('sort_order')->default(0);
             $table->timestamps();
         });
-        
+
         // Add check constraints
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_quantity_positive CHECK (quantity > 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_unit_price_nonneg CHECK (unit_price >= 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_pct_range CHECK (discount_percentage BETWEEN 0 AND 100)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_line_total_nonneg CHECK (line_total >= 0)');
-        
+
         // Add indexes
         DB::statement('CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id)');
     }

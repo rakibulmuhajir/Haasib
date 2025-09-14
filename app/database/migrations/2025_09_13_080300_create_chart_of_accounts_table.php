@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('chart_of_accounts', function (Blueprint $table) {
             $table->id('account_id');
-            $table->foreignId('company_id')->constrained('companies', 'company_id');
+            $table->uuid('company_id');
             $table->foreignId('parent_account_id')->nullable()->constrained('chart_of_accounts', 'account_id');
             $table->string('account_code', 50);
             $table->string('account_name', 255);
@@ -29,10 +29,13 @@ return new class extends Migration
 
             $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
             $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
-            
+
             $table->unique(['company_id', 'account_code']);
         });
-        
+
+        // Add foreign key constraint to auth.companies
+        DB::statement('ALTER TABLE chart_of_accounts ADD CONSTRAINT fk_chart_of_accounts_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
+
         // Add check constraint for opening_balance >= 0
         DB::statement('ALTER TABLE chart_of_accounts ADD CONSTRAINT chk_opening_balance CHECK (opening_balance >= 0)');
     }

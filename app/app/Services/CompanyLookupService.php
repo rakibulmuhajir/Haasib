@@ -34,7 +34,8 @@ class CompanyLookupService
                 $w->where('slug', $value)->orWhere('name', $value);
             });
         }
-        return $query->firstOrFail(['id','name','slug','base_currency','language','locale','created_at','updated_at']);
+
+        return $query->firstOrFail(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'created_at', 'updated_at']);
     }
 
     public function isMember(string $companyId, string $userId): bool
@@ -64,17 +65,18 @@ class CompanyLookupService
 
     public function members(string $companyId, int $limit = 10, string $q = '')
     {
-        $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
+
         return DB::table('auth.company_user as cu')
             ->join('users as u', 'u.id', '=', 'cu.user_id')
             ->where('cu.company_id', $companyId)
             ->when($q !== '', function ($w) use ($like) {
-                $w->where(function($q2) use ($like) {
+                $w->where(function ($q2) use ($like) {
                     $q2->where('u.email', 'ilike', $like)
-                       ->orWhere('u.name', 'ilike', $like);
+                        ->orWhere('u.name', 'ilike', $like);
                 });
             })
-            ->select('u.id','u.name','u.email','cu.role')
+            ->select('u.id', 'u.name', 'u.email', 'cu.role')
             ->orderBy('u.name')
             ->limit($limit)
             ->get();
@@ -86,7 +88,7 @@ class CompanyLookupService
             ->join('users as u', 'u.id', '=', 'cu.user_id')
             ->where('cu.company_id', $companyId)
             ->where('cu.role', 'owner')
-            ->select('u.id','u.name','u.email')
+            ->select('u.id', 'u.name', 'u.email')
             ->orderBy('u.name')
             ->get();
     }
@@ -104,7 +106,7 @@ class CompanyLookupService
             ->select('role', DB::raw('count(*) as cnt'))
             ->where('company_id', $companyId)
             ->groupBy('role')
-            ->pluck('cnt','role');
+            ->pluck('cnt', 'role');
     }
 
     public function memberUserIds(string $companyId): array
@@ -121,15 +123,15 @@ class CompanyLookupService
             ->join('auth.companies as c', 'c.id', '=', 'cu.company_id')
             ->where('cu.user_id', $userId)
             ->orderBy('c.name')
-            ->get(['c.id','c.name','c.slug','cu.role','cu.created_at','cu.updated_at']);
+            ->get(['c.id', 'c.name', 'c.slug', 'cu.role', 'cu.created_at', 'cu.updated_at']);
     }
 
     public function shareCompany(string $userId, string $otherUserId): bool
     {
         return DB::table('auth.company_user as cu1')
-            ->join('auth.company_user as cu2', function($j) use ($otherUserId) {
+            ->join('auth.company_user as cu2', function ($j) use ($otherUserId) {
                 $j->on('cu1.company_id', '=', 'cu2.company_id')
-                  ->where('cu2.user_id', '=', $otherUserId);
+                    ->where('cu2.user_id', '=', $otherUserId);
             })
             ->where('cu1.user_id', $userId)
             ->exists();
@@ -159,6 +161,7 @@ class CompanyLookupService
             $userId = DB::table('users')->where('email', $email)->value('id');
             if (! $userId) {
                 $query->whereRaw('1 = 0');
+
                 return;
             }
         }

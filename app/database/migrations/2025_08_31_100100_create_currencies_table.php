@@ -4,11 +4,12 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('currencies', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             // ISO 4217 alpha code (e.g., USD)
             $table->string('code', 3)->unique();
             $table->string('numeric_code', 3)->nullable();
@@ -19,6 +20,7 @@ return new class extends Migration {
             $table->decimal('rounding', 6, 3)->default(0); // some currencies round (e.g., CHF cash)
             $table->boolean('fund')->default(false); // ISO fund codes
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
@@ -27,4 +29,3 @@ return new class extends Migration {
         Schema::dropIfExists('currencies');
     }
 };
-

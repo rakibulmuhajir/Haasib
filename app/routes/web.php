@@ -51,6 +51,69 @@ Route::middleware('auth')->group(function () {
     Route::get('/web/commands/capabilities', [CapabilitiesController::class, 'index']);
     Route::get('/web/commands/overlays', [CommandOverlayController::class, 'index']);
 
+    // Invoicing Routes
+    Route::prefix('invoices')->name('invoices.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])->name('store');
+        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])->name('show');
+        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])->name('edit');
+        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])->name('update');
+        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])->name('destroy');
+
+        // Invoice Actions
+        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])->name('send');
+        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])->name('post');
+        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])->name('cancel');
+        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->name('generate-pdf');
+        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->name('send-email');
+        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->name('duplicate');
+    });
+
+    // Payment Routes
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\PaymentController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'store'])->name('store');
+        Route::get('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'show'])->name('show');
+        Route::get('/{payment}/edit', [\App\Http\Controllers\Invoicing\PaymentController::class, 'edit'])->name('edit');
+        Route::put('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'update'])->name('update');
+        Route::delete('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'destroy'])->name('destroy');
+
+        // Payment Actions
+        Route::post('/{payment}/allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'allocate'])->name('allocate');
+        Route::post('/{payment}/auto-allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'autoAllocate'])->name('auto-allocate');
+        Route::post('/{payment}/void', [\App\Http\Controllers\Invoicing\PaymentController::class, 'void'])->name('void');
+        Route::post('/{payment}/refund', [\App\Http\Controllers\Invoicing\PaymentController::class, 'refund'])->name('refund');
+    });
+
+    // Customer Routes
+    Route::prefix('customers')->name('customers.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])->name('store');
+        Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])->name('show');
+        Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])->name('edit');
+        Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])->name('update');
+        Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])->name('destroy');
+
+        // Customer Relations
+        Route::get('/{customer}/invoices', [\App\Http\Controllers\Invoicing\CustomerController::class, 'invoices'])->name('invoices');
+        Route::get('/{customer}/payments', [\App\Http\Controllers\Invoicing\CustomerController::class, 'payments'])->name('payments');
+        Route::get('/{customer}/statement', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statement'])->name('statement');
+        Route::get('/{customer}/statistics', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statistics'])->name('statistics');
+    });
+
+    // Currency Routes
+    Route::prefix('currencies')->name('currencies.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'index'])->name('index');
+        Route::get('/exchange-rates', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'exchangeRates'])->name('exchange-rates');
+        Route::post('/enable', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'enable'])->name('enable');
+        Route::post('/disable', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'disable'])->name('disable');
+        Route::post('/update-rate', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'updateRate'])->name('update-rate');
+        Route::post('/sync-rates', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'syncRates'])->name('sync-rates');
+    });
+
     // Ledger Routes
     Route::prefix('ledger')->name('ledger.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'index'])->name('index');

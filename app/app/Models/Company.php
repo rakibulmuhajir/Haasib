@@ -49,7 +49,7 @@ class Company extends Model
     protected static function booted(): void
     {
         static::creating(function (Company $company) {
-            if (!$company->slug) {
+            if (! $company->slug) {
                 $base = Str::slug((string) $company->name) ?: Str::slug(Str::uuid());
                 $slug = $base;
                 $i = 1;
@@ -85,6 +85,14 @@ class Company extends Model
     public function createdCompanies()
     {
         return $this->hasMany(\App\Models\Company::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the customers that belong to the company.
+     */
+    public function customers()
+    {
+        return $this->hasMany(Customer::class, 'company_id', 'company_id');
     }
 
     /**

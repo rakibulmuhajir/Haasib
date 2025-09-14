@@ -1,0 +1,397 @@
+<?php
+
+namespace App\Models;
+
+use Brick\Money\Money;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
+
+class Payment extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'payments';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    protected $fillable = [
+        'id',
+        'company_id',
+        'customer_id',
+        'payment_method',
+        'payment_reference',
+        'amount',
+        'currency_id',
+        'exchange_rate',
+        'status',
+        'payment_date',
+        'notes',
+        'metadata',
+    ];
+
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'exchange_rate' => 'decimal:6',
+        'payment_date' => 'date',
+        'metadata' => 'array',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $attributes = [
+        'status' => 'pending',
+        'exchange_rate' => 1.0,
+    ];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            $model->id = $model->id ?: (string) Str::uuid();
+        });
+
+        static::creating(function ($payment) {
+            if (! $payment->payment_reference) {
+                $payment->payment_reference = $payment->generatePaymentReference();
+            }
+        });
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function currency(): BelongsTo
+    {
+        return $this->belongsTo(Currency::class);
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
+    public function invoices()
+    {
+        return $this->belongsToMany(Invoice::class, 'payment_allocations')
+            ->withPivot('amount', 'created_at', 'updated_at');
+    }
+
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    public function scopeForCustomer($query, $customerId)
+    {
+        return $query->where('customer_id', $customerId);
+    }
+
+    public function scopeWithStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    public function scopeByPaymentMethod($query, $method)
+    {
+        return $query->where('payment_method', $method);
+    }
+
+    public function scopeBetweenDates($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('payment_date', [$startDate, $endDate]);
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    public function isFailed(): bool
+    {
+        return $this->status === 'failed';
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    public function isPartiallyAllocated(): bool
+    {
+        return $this->getAllocatedAmount()->isGreaterThan(Money::of(0, $this->currency->code)) &&
+               $this->getAllocatedAmount()->isLessThan($this->getAmount());
+    }
+
+    public function isFullyAllocated(): bool
+    {
+        return $this->getAllocatedAmount()->isEqualTo($this->getAmount());
+    }
+
+    public function isUnallocated(): bool
+    {
+        return $this->getAllocatedAmount()->isZero();
+    }
+
+    public function getAmount(): Money
+    {
+        return Money::of($this->amount, $this->currency->code);
+    }
+
+    public function getAllocatedAmount(): Money
+    {
+        $allocated = $this->allocations()->sum('amount');
+
+        return Money::of($allocated, $this->currency->code);
+    }
+
+    public function getUnallocatedAmount(): Money
+    {
+        return $this->getAmount()->minus($this->getAllocatedAmount());
+    }
+
+    public function getAmountInCompanyCurrency(): Money
+    {
+        $company = $this->company;
+        if ($this->currency->code === $company->base_currency) {
+            return $this->getAmount();
+        }
+
+        return $this->getAmount()->multipliedBy($this->exchange_rate);
+    }
+
+    public function canBeAllocated(): bool
+    {
+        return $this->isCompleted() && ! $this->isFullyAllocated();
+    }
+
+    public function canBeVoided(): bool
+    {
+        return ! $this->isCancelled() && ! $this->isFailed();
+    }
+
+    public function canBeRefunded(): bool
+    {
+        return $this->isCompleted() && $this->getAllocatedAmount()->isGreaterThan(Money::of(0, $this->currency->code));
+    }
+
+    public function generatePaymentReference(): string
+    {
+        $company = $this->company;
+        $year = now()->year;
+        $month = now()->format('m');
+        $day = now()->format('d');
+
+        $prefix = $company->settings['payment_prefix'] ?? 'PAY';
+        $pattern = $company->settings['payment_reference_pattern'] ?? '{prefix}-{year}{month}{day}-{sequence:4}';
+
+        $latestPayment = static::where('company_id', $company->id)
+            ->whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->whereDay('created_at', $day)
+            ->orderByRaw('CAST(SUBSTRING(payment_reference FROM GREATEST(POSITION("-" IN payment_reference), POSITION(" " IN payment_reference)) + 1) AS UNSIGNED) DESC')
+            ->first();
+
+        $sequence = $latestPayment ? ((int) preg_replace('/.*?(\d+)$/', '$1', $latestPayment->payment_reference)) + 1 : 1;
+
+        return str_replace(
+            ['{prefix}', '{year}', '{month}', '{day}', '{sequence:4}', '{sequence:5}', '{sequence:6}'],
+            [$prefix, $year, $month, $day, str_pad($sequence, 4, '0', STR_PAD_LEFT), str_pad($sequence, 5, '0', STR_PAD_LEFT), str_pad($sequence, 6, '0', STR_PAD_LEFT)],
+            $pattern
+        );
+    }
+
+    public function markAsCompleted(?string $processorReference = null): void
+    {
+        $this->status = 'completed';
+        $this->metadata = array_merge($this->metadata ?? [], [
+            'completed_at' => now()->toISOString(),
+            'processor_reference' => $processorReference,
+        ]);
+        $this->save();
+    }
+
+    public function markAsFailed(?string $reason = null): void
+    {
+        $this->status = 'failed';
+        $this->metadata = array_merge($this->metadata ?? [], [
+            'failed_at' => now()->toISOString(),
+            'failure_reason' => $reason,
+        ]);
+        $this->save();
+    }
+
+    public function markAsCancelled(?string $reason = null): void
+    {
+        $this->status = 'cancelled';
+        $this->metadata = array_merge($this->metadata ?? [], [
+            'cancelled_at' => now()->toISOString(),
+            'cancellation_reason' => $reason,
+        ]);
+        $this->save();
+    }
+
+    public function allocateToInvoice(Invoice $invoice, Money $amount, ?string $notes = null): PaymentAllocation
+    {
+        if (! $this->canBeAllocated()) {
+            throw new \InvalidArgumentException('Payment cannot be allocated');
+        }
+
+        $unallocatedAmount = $this->getUnallocatedAmount();
+        if ($amount->isGreaterThan($unallocatedAmount)) {
+            throw new \InvalidArgumentException('Allocation amount exceeds unallocated amount');
+        }
+
+        $invoiceBalance = Money::of($invoice->balance_due, $invoice->currency->code);
+        if ($amount->isGreaterThan($invoiceBalance)) {
+            throw new \InvalidArgumentException('Allocation amount exceeds invoice balance due');
+        }
+
+        return PaymentAllocation::create([
+            'payment_id' => $this->id,
+            'invoice_id' => $invoice->id,
+            'amount' => $amount->getAmount()->toFloat(),
+            'notes' => $notes,
+        ]);
+    }
+
+    public function autoAllocate(): array
+    {
+        if (! $this->canBeAllocated()) {
+            return [];
+        }
+
+        $allocations = [];
+        $unallocatedAmount = $this->getUnallocatedAmount();
+
+        $outstandingInvoices = Invoice::where('customer_id', $this->customer_id)
+            ->where('company_id', $this->company_id)
+            ->where('status', '!=', 'paid')
+            ->where('status', '!=', 'cancelled')
+            ->where('balance_due', '>', 0)
+            ->orderBy('due_date')
+            ->get();
+
+        foreach ($outstandingInvoices as $invoice) {
+            if ($unallocatedAmount->isZero()) {
+                break;
+            }
+
+            $invoiceBalance = Money::of($invoice->balance_due, $invoice->currency->code);
+            $allocationAmount = $unallocatedAmount->isLessThan($invoiceBalance) ? $unallocatedAmount : $invoiceBalance;
+
+            if ($allocationAmount->isGreaterThan(Money::of(0, $this->currency->code))) {
+                $allocation = $this->allocateToInvoice($invoice, $allocationAmount);
+                $allocations[] = $allocation;
+                $unallocatedAmount = $unallocatedAmount->minus($allocationAmount);
+            }
+        }
+
+        return $allocations;
+    }
+
+    public function voidAllocations(?string $reason = null): void
+    {
+        foreach ($this->allocations as $allocation) {
+            $allocation->void($reason);
+        }
+    }
+
+    public function refund(Money $amount, ?string $reason = null): array
+    {
+        if (! $this->canBeRefunded()) {
+            throw new \InvalidArgumentException('Payment cannot be refunded');
+        }
+
+        $totalAllocated = $this->getAllocatedAmount();
+        if ($amount->isGreaterThan($totalAllocated)) {
+            throw new \InvalidArgumentException('Refund amount exceeds allocated amount');
+        }
+
+        $refundedAmount = Money::of(0, $this->currency->code);
+        $refunds = [];
+
+        $allocations = $this->allocations()
+            ->orderBy('created_at')
+            ->get();
+
+        foreach ($allocations as $allocation) {
+            if ($refundedAmount->isGreaterThanOrEqualTo($amount)) {
+                break;
+            }
+
+            $allocationAmount = Money::of($allocation->amount, $this->currency->code);
+            $remainingToRefund = $amount->minus($refundedAmount);
+            $refundAllocationAmount = $allocationAmount->isLessThan($remainingToRefund) ? $allocationAmount : $remainingToRefund;
+
+            if ($refundAllocationAmount->isGreaterThan(Money::of(0, $this->currency->code))) {
+                $refund = $allocation->refund($refundAllocationAmount, $reason);
+                $refunds[] = $refund;
+                $refundedAmount = $refundedAmount->plus($refundAllocationAmount);
+            }
+        }
+
+        return $refunds;
+    }
+
+    public function getPaymentMethodName(): string
+    {
+        $methods = [
+            'cash' => 'Cash',
+            'check' => 'Check',
+            'bank_transfer' => 'Bank Transfer',
+            'credit_card' => 'Credit Card',
+            'debit_card' => 'Debit Card',
+            'paypal' => 'PayPal',
+            'stripe' => 'Stripe',
+            'other' => 'Other',
+        ];
+
+        return $methods[$this->payment_method] ?? ucfirst(str_replace('_', ' ', $this->payment_method));
+    }
+
+    public function getDisplayStatus(): string
+    {
+        return match ($this->status) {
+            'pending' => 'Pending',
+            'completed' => 'Completed',
+            'failed' => 'Failed',
+            'cancelled' => 'Cancelled',
+            default => ucfirst($this->status),
+        };
+    }
+
+    public function getDisplayAmount(): string
+    {
+        return number_format($this->amount, 2).' '.$this->currency->code;
+    }
+
+    public function getDisplayAllocatedAmount(): string
+    {
+        return number_format($this->getAllocatedAmount()->getAmount()->toFloat(), 2).' '.$this->currency->code;
+    }
+
+    public function getDisplayUnallocatedAmount(): string
+    {
+        return number_format($this->getUnallocatedAmount()->getAmount()->toFloat(), 2).' '.$this->currency->code;
+    }
+}

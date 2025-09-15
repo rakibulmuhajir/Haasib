@@ -5,6 +5,7 @@ use App\Http\Controllers\CommandController;
 use App\Http\Controllers\CommandOverlayController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SessionTestController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;

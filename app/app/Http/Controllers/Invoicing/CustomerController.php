@@ -24,7 +24,7 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::with(['currency', 'country', 'primaryContact'])
+        $query = Customer::with(['currency', 'country'])
             ->where('company_id', $request->user()->current_company_id);
 
         // Apply filters
@@ -202,7 +202,7 @@ class CustomerController extends Controller
     {
         $this->authorize('view', $customer);
 
-        $customer->load(['currency', 'country', 'primaryContact', 'contacts']);
+        $customer->load(['currency', 'country', 'contacts']);
 
         return Inertia::render('Invoicing/Customers/Show', [
             'customer' => $customer,
@@ -216,7 +216,7 @@ class CustomerController extends Controller
     {
         $this->authorize('update', $customer);
 
-        $customer->load(['currency', 'country', 'primaryContact', 'contacts']);
+        $customer->load(['currency', 'country', 'contacts']);
 
         $countries = Country::orderBy('name')
             ->get(['id', 'name', 'code']);

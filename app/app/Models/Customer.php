@@ -128,7 +128,7 @@ class Customer extends Model
 
     public function primaryContact(): HasOne
     {
-        return $this->hasOne(Contact::class, 'customer_id', 'customer_id')->orderBy('created_at');
+        return $this->hasOne(Contact::class, 'customer_id', 'customer_id')->where('is_primary', true);
     }
 
     public function scopeForCompany($query, $companyId)

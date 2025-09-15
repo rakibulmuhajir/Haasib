@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class InvoiceItem extends Model
 {
@@ -57,7 +56,17 @@ class InvoiceItem extends Model
         parent::boot();
 
         static::saving(function ($item) {
-            $item->calculateTotals();
+            // Only calculate totals if we have the necessary data
+            if ($item->invoice_id && ($item->isDirty('quantity') || $item->isDirty('unit_price') || $item->isDirty('discount_percentage') || $item->isDirty('discount_amount'))) {
+                // Load the invoice relationship if not already loaded
+                if (! $item->relationLoaded('invoice')) {
+                    $item->load('invoice');
+                }
+
+                if ($item->invoice && $item->invoice->currency) {
+                    $item->calculateTotals();
+                }
+            }
         });
     }
 
@@ -99,6 +108,7 @@ class InvoiceItem extends Model
         if (! $this->invoice || ! $this->invoice->currency) {
             throw new \LogicException('Cannot calculate totals without an associated invoice and currency.');
         }
+
         return Money::of($this->discount_amount, $this->invoice->currency->code);
     }
 
@@ -237,6 +247,7 @@ class InvoiceItem extends Model
             if (! $this->invoice || ! $this->invoice->currency) {
                 throw new \LogicException('Cannot calculate totals without an associated invoice and currency.');
             }
+
             return Money::of(0, $this->invoice->currency->code);
         }
 

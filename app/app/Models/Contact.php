@@ -30,12 +30,14 @@ class Contact extends Model
         'vendor_id',
         'position',
         'notes',
+        'is_primary',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'customer_id' => 'string',
         'vendor_id' => 'string',
+        'is_primary' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -68,6 +70,6 @@ class Contact extends Model
 
     public function getDisplayName(): string
     {
-        return trim($this->first_name . ' ' . $this->last_name);
+        return trim($this->first_name.' '.$this->last_name);
     }
 }

@@ -9,10 +9,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('CREATE SCHEMA IF NOT EXISTS audit');
-
-        if (! Schema::hasTable('audit.audit_logs')) {
-            Schema::create('audit.audit_logs', function (Blueprint $t) {
+        if (! Schema::hasTable('audit_logs')) {
+            Schema::create('audit_logs', function (Blueprint $t) {
                 $t->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
                 $t->uuid('user_id');
                 $t->uuid('company_id')->nullable();
@@ -25,23 +23,23 @@ return new class extends Migration
             });
             // Ensure idempotency key uniqueness without breaking re-runs
             try {
-                DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit.audit_logs (idempotency_key)');
+                DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit_logs (idempotency_key)');
             } catch (\Throwable $e) { /* ignore if driver unsupported */
             }
         } else {
-            Schema::table('audit.audit_logs', function (Blueprint $t) {
-                if (! Schema::hasColumn('audit.audit_logs', 'raw')) {
+            Schema::table('audit_logs', function (Blueprint $t) {
+                if (! Schema::hasColumn('audit_logs', 'raw')) {
                     $t->text('raw')->nullable();
                 }
-                if (! Schema::hasColumn('audit.audit_logs', 'result')) {
+                if (! Schema::hasColumn('audit_logs', 'result')) {
                     $t->jsonb('result')->nullable();
                 }
-                if (! Schema::hasColumn('audit.audit_logs', 'idempotency_key')) {
+                if (! Schema::hasColumn('audit_logs', 'idempotency_key')) {
                     $t->string('idempotency_key')->nullable();
                 }
             });
             try {
-                DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit.audit_logs (idempotency_key)');
+                DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_idempotency_key_unique ON audit_logs (idempotency_key)');
             } catch (\Throwable $e) { /* ignore if driver unsupported */
             }
         }
@@ -49,6 +47,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('audit.audit_logs');
+        Schema::dropIfExists('audit_logs');
     }
 };

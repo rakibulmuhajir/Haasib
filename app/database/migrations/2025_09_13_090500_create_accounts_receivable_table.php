@@ -15,8 +15,8 @@ return new class extends Migration
         Schema::create('accounts_receivable', function (Blueprint $table) {
             $table->id('ar_id');
             $table->uuid('company_id');
-            $table->foreignId('customer_id')->nullable()->constrained('customers', 'customer_id');
-            $table->foreignId('invoice_id')->unique()->constrained('invoices', 'invoice_id');
+            $table->uuid('customer_id')->nullable();
+            $table->unsignedBigInteger('invoice_id')->unique();
             $table->decimal('amount_due', 15, 2);
             $table->decimal('original_amount', 15, 2);
             $table->uuid('currency_id');
@@ -29,9 +29,12 @@ return new class extends Migration
             $table->index('due_date');
         });
 
-        // Add foreign key constraints
-        DB::statement('ALTER TABLE accounts_receivable ADD CONSTRAINT fk_accounts_receivable_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE accounts_receivable ADD CONSTRAINT fk_accounts_receivable_currency_id FOREIGN KEY (currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
+        Schema::table('accounts_receivable', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+            $table->foreign('customer_id')->references('customer_id')->on('customers')->onDelete('set null');
+            $table->foreign('invoice_id')->references('invoice_id')->on('invoices')->onDelete('cascade');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
+        });
 
         // Add check constraints
         DB::statement('ALTER TABLE accounts_receivable ADD CONSTRAINT chk_amount_due_nonneg CHECK (amount_due >= 0)');

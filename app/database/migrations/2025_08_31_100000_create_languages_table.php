@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('languages', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
             // ISO 639-1 two-letter where available; fall back to 639-2/3
             $table->string('code', 8)->unique();
             $table->string('name');

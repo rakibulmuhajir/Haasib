@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('exchange_rates', function (Blueprint $table) {
-            $table->id('exchange_rate_id');
+            $table->uuid('id')->primary();
             $table->uuid('base_currency_id');
             $table->uuid('target_currency_id');
             $table->decimal('rate', 20, 10);
@@ -26,9 +26,10 @@ return new class extends Migration
         });
 
         // Add foreign key constraints
-        DB::statement('ALTER TABLE exchange_rates ADD CONSTRAINT fk_exchange_rates_base_currency_id FOREIGN KEY (base_currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
-        DB::statement('ALTER TABLE exchange_rates ADD CONSTRAINT fk_exchange_rates_target_currency_id FOREIGN KEY (target_currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
-
+        Schema::table('exchange_rates', function (Blueprint $table) {
+            $table->foreign('base_currency_id')->references('id')->on('currencies')->onDelete('restrict');
+            $table->foreign('target_currency_id')->references('id')->on('currencies')->onDelete('restrict');
+        });
         // Add check constraint using raw SQL
         DB::statement('ALTER TABLE exchange_rates ADD CONSTRAINT chk_diff_ccy CHECK (base_currency_id <> target_currency_id)');
     }

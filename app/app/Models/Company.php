@@ -27,6 +27,8 @@ class Company extends Model
         'name',
         'slug',
         'base_currency',
+        'currency_id',
+        'exchange_rate_id',
         'language',
         'locale',
         'settings',
@@ -41,6 +43,8 @@ class Company extends Model
     protected $casts = [
         'settings' => 'array',
         'created_by_user_id' => 'string',
+        'currency_id' => 'string',
+        'exchange_rate_id' => 'integer',
     ];
 
     /**
@@ -101,5 +105,77 @@ class Company extends Model
     public function owner()
     {
         return $this->users()->where('auth.company_user.role', 'owner')->first();
+    }
+
+    /**
+     * Get the primary currency for the company.
+     */
+    public function currency()
+    {
+        return $this->belongsTo(Currency::class);
+    }
+
+    /**
+     * Get the exchange rate for the company's primary currency.
+     */
+    public function exchangeRate()
+    {
+        return $this->belongsTo(ExchangeRate::class, 'exchange_rate_id', 'exchange_rate_id');
+    }
+
+    /**
+     * Get the secondary currencies for the company.
+     */
+    public function secondaryCurrencies()
+    {
+        return $this->hasMany(CompanySecondaryCurrency::class);
+    }
+
+    /**
+     * Get all currencies available to this company (primary + active secondary).
+     */
+    public function availableCurrencies()
+    {
+        $primaryCurrency = $this->currency ? collect([$this->currency]) : collect();
+        $secondaryCurrencies = $this->secondaryCurrencies()->active()->with('currency')->get()->pluck('currency');
+
+        return $primaryCurrency->merge($secondaryCurrencies)->unique('id');
+    }
+
+    /**
+     * Get the current exchange rate for a specific target currency.
+     */
+    public function getExchangeRateFor($targetCurrencyId)
+    {
+        if (! $this->currency_id) {
+            return null;
+        }
+
+        return ExchangeRate::where('base_currency_id', $this->currency_id)
+            ->where('target_currency_id', $targetCurrencyId)
+            ->active()
+            ->forDate(now())
+            ->first();
+    }
+
+    /**
+     * Add a secondary currency to the company.
+     */
+    public function addSecondaryCurrency($currencyId, $settings = [])
+    {
+        return $this->secondaryCurrencies()->create([
+            'currency_id' => $currencyId,
+            'exchange_rate_id' => $this->getExchangeRateFor($currencyId)?->exchange_rate_id,
+            'settings' => $settings,
+            'is_active' => true,
+        ]);
+    }
+
+    /**
+     * Remove a secondary currency from the company.
+     */
+    public function removeSecondaryCurrency($currencyId)
+    {
+        return $this->secondaryCurrencies()->where('currency_id', $currencyId)->delete();
     }
 }

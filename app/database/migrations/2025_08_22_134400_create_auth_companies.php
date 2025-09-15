@@ -20,6 +20,8 @@ return new class extends Migration
                 $t->string('name');
                 $t->string('slug')->unique();
                 $t->string('base_currency', 3)->default('AED');
+                $t->uuid('currency_id')->nullable();
+                $t->uuid('exchange_rate_id')->nullable();
                 $t->string('language', 5)->default('en');
                 $t->string('locale', 10)->default('en_AE');
                 $t->jsonb('settings')->nullable();
@@ -32,6 +34,9 @@ return new class extends Migration
                     ->references('id')->on('users')
                     ->nullOnDelete();
             });
+
+            // Note: Currency and exchange rate relationships will be added in separate migrations
+            // after currencies and exchange_rates tables are created
         }
     }
 

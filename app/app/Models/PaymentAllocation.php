@@ -15,63 +15,36 @@ class PaymentAllocation extends Model
 
     protected $table = 'payment_allocations';
 
-    protected $keyType = 'string';
+    protected $primaryKey = 'allocation_id';
 
-    public $incrementing = false;
+    public $incrementing = true;
 
     protected $fillable = [
-        'id',
         'payment_id',
         'invoice_id',
-        'amount',
-        'status',
-        'allocation_date',
-        'notes',
-        'metadata',
+        'allocated_amount',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'allocation_date' => 'date',
-        'metadata' => 'array',
+        'allocated_amount' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
     protected $attributes = [
-        'status' => 'active',
-        'allocation_date' => 'today',
+        'allocated_amount' => 0,
     ];
 
     protected static function boot(): void
     {
         parent::boot();
 
-        static::creating(function ($model) {
-            $model->id = $model->id ?: (string) Str::uuid();
-        });
-
-        static::creating(function ($allocation) {
-            if (! $allocation->allocation_date) {
-                $allocation->allocation_date = now()->toDateString();
-            }
-
-            $allocation->validateAllocation();
-        });
-
-        static::updating(function ($allocation) {
-            if ($allocation->isDirty(['payment_id', 'invoice_id', 'amount'])) {
-                $allocation->validateAllocation();
-            }
-        });
-
         static::created(function ($allocation) {
             $allocation->updateInvoicePayments();
         });
 
         static::updated(function ($allocation) {
-            if ($allocation->isDirty('amount') || $allocation->isDirty('status')) {
+            if ($allocation->isDirty('allocated_amount')) {
                 $allocation->updateInvoicePayments();
             }
         });

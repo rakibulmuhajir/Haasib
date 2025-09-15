@@ -29,8 +29,9 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Add foreign key constraint to currencies
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT fk_journal_entries_functional_currency_id FOREIGN KEY (functional_currency_id) REFERENCES currencies(id) ON DELETE SET NULL');
+        Schema::table('journal_entries', function (Blueprint $table) {
+            $table->foreign('functional_currency_id')->references('id')->on('currencies')->onDelete('set null');
+        });
 
         // Add check constraint: either debit or credit must be positive, not both
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_debit_credit_xor CHECK ((debit_amount > 0 AND credit_amount = 0) OR (credit_amount > 0 AND debit_amount = 0))');

@@ -29,8 +29,9 @@ return new class extends Migration
             $table->unique(['company_id', 'name']);
         });
 
-        // Add foreign key constraint to auth.companies
-        DB::statement('ALTER TABLE fiscal_years ADD CONSTRAINT fk_fiscal_years_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
+        Schema::table('fiscal_years', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+        });
 
         // Add check constraint for end_date > start_date
         DB::statement('ALTER TABLE fiscal_years ADD CONSTRAINT chk_fiscal_year_dates CHECK (end_date > start_date)');

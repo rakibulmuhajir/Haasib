@@ -24,16 +24,21 @@ class CurrencyController extends Controller
     public function index(Request $request)
     {
         $query = Currency::query();
+        $currentCompanyId = $request->user()->current_company_id;
 
         // Apply filters
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $currentCompanyId) {
             if ($request->status === 'enabled') {
-                $query->whereHas('companies', function ($q) use ($request) {
-                    $q->where('company_id', $request->user()->current_company_id);
+                $query->whereHas('primaryCompanies', function ($q) use ($currentCompanyId) {
+                    $q->where('auth.companies.id', $currentCompanyId);
+                })->orWhereHas('companies', function ($q) use ($currentCompanyId) {
+                    $q->where('auth.companies.id', $currentCompanyId)->where('company_secondary_currencies.is_active', true);
                 });
             } elseif ($request->status === 'disabled') {
-                $query->whereDoesntHave('companies', function ($q) use ($request) {
-                    $q->where('company_id', $request->user()->current_company_id);
+                $query->whereDoesntHave('primaryCompanies', function ($q) use ($currentCompanyId) {
+                    $q->where('auth.companies.id', $currentCompanyId);
+                })->whereDoesntHave('companies', function ($q) use ($currentCompanyId) {
+                    $q->where('auth.companies.id', $currentCompanyId)->where('company_secondary_currencies.is_active', true);
                 });
             }
         }
@@ -59,9 +64,14 @@ class CurrencyController extends Controller
             ->withQueryString();
 
         // Get company currencies
-        $companyCurrencies = Currency::whereHas('companies', function ($q) use ($request) {
-            $q->where('company_id', $request->user()->current_company_id);
-        })->get(['id', 'code', 'name', 'symbol']);
+        $companyCurrencies = collect([]);
+        if ($currentCompanyId) {
+            $companyCurrencies = Currency::whereHas('primaryCompanies', function ($q) use ($currentCompanyId) {
+                $q->where('auth.companies.id', $currentCompanyId);
+            })->orWhereHas('companies', function ($q) use ($currentCompanyId) {
+                $q->where('auth.companies.id', $currentCompanyId)->where('company_secondary_currencies.is_active', true);
+            })->get(['id', 'code', 'name', 'symbol']);
+        }
 
         return Inertia::render('Invoicing/Currencies/Index', [
             'currencies' => $currencies,

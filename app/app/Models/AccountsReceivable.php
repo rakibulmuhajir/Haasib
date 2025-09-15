@@ -322,27 +322,29 @@ class AccountsReceivable extends Model
 
     public static function getAgingReport(int $companyId): array
     {
-        $records = static::where('company_id', $companyId)
-            ->where('amount_due', '>', 0)
-            ->get();
-
-        $report = [
+        $initialReport = [
             'current' => ['count' => 0, 'amount' => 0],
             '1-30' => ['count' => 0, 'amount' => 0],
             '31-60' => ['count' => 0, 'amount' => 0],
             '61-90' => ['count' => 0, 'amount' => 0],
             '90+' => ['count' => 0, 'amount' => 0],
-            'total' => ['count' => 0, 'amount' => 0],
         ];
 
-        foreach ($records as $record) {
-            if (isset($report[$record->aging_category])) {
-                $report[$record->aging_category]['count']++;
-                $report[$record->aging_category]['amount'] += $record->amount_due;
-                $report['total']['count']++;
-                $report['total']['amount'] += $record->amount_due;
-            }
-        }
+        $results = static::where('company_id', $companyId)
+            ->where('amount_due', '>', 0)
+            ->selectRaw('aging_category, count(*) as count, sum(amount_due) as amount')
+            ->groupBy('aging_category')
+            ->get()
+            ->keyBy('aging_category');
+
+        // Merge DB results with the initial structure to ensure all keys exist
+        $report = array_merge($initialReport, $results->toArray());
+
+        // Calculate total
+        $report['total'] = [
+            'count' => array_sum(array_column($report, 'count')),
+            'amount' => array_sum(array_column($report, 'amount')),
+        ];
 
         return $report;
     }

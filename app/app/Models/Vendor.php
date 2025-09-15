@@ -6,49 +6,45 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Vendor extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     protected $table = 'vendors';
+
+    protected $primaryKey = 'vendor_id';
 
     protected $keyType = 'string';
 
     public $incrementing = false;
 
     protected $fillable = [
-        'id',
+        'vendor_id',
         'company_id',
-        'vendor_number',
         'name',
         'email',
         'phone',
-        'tax_id',
+        'tax_number',
+        'address',
         'currency_id',
-        'payment_terms',
-        'billing_address',
-        'shipping_address',
-        'notes',
         'is_active',
-        'metadata',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
-        'billing_address' => 'array',
-        'shipping_address' => 'array',
-        'payment_terms' => 'integer',
+        'company_id' => 'string',
+        'currency_id' => 'string',
+        'created_by' => 'string',
+        'updated_by' => 'string',
         'is_active' => 'boolean',
-        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
     protected $attributes = [
-        'payment_terms' => 30,
         'is_active' => true,
     ];
 
@@ -57,7 +53,7 @@ class Vendor extends Model
         parent::boot();
 
         static::creating(function ($model) {
-            $model->id = $model->id ?: (string) Str::uuid();
+            $model->vendor_id = $model->vendor_id ?: (string) Str::uuid();
         });
     }
 

@@ -26,15 +26,16 @@ return new class extends Migration
             $table->timestamps();
         });
 
+        Schema::table('invoice_items', function (Blueprint $table) {
+            $table->index('invoice_id', 'idx_invoice_items_invoice');
+        });
+
         // Add check constraints
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_quantity_positive CHECK (quantity > 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_unit_price_nonneg CHECK (unit_price >= 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_pct_range CHECK (discount_percentage BETWEEN 0 AND 100)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_line_total_nonneg CHECK (line_total >= 0)');
-
-        // Add indexes
-        DB::statement('CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id)');
     }
 
     /**

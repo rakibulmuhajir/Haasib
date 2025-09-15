@@ -41,16 +41,14 @@ return new class extends Migration
             $table->unique(['company_id', 'payment_number']);
         });
 
-        // Add foreign key constraints
-        DB::statement('ALTER TABLE payments ADD CONSTRAINT fk_payments_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE payments ADD CONSTRAINT fk_payments_currency_id FOREIGN KEY (currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
+        Schema::table('payments', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
+            $table->index(['company_id', 'payment_date'], 'idx_payments_date');
+        });
 
         // Add check constraints
         DB::statement('ALTER TABLE payments ADD CONSTRAINT chk_amount_positive CHECK (amount > 0)');
-
-        // Add indexes
-        DB::statement('CREATE INDEX idx_payments_company ON payments(company_id)');
-        DB::statement('CREATE INDEX idx_payments_date ON payments(company_id, payment_date)');
     }
 
     /**

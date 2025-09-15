@@ -79,7 +79,7 @@ class InvoiceController extends Controller
             ->get(['customer_id', 'name']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('company_id', $request->user()->current_company_id);
+            $query->where('auth.companies.id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name']);
 
         $statusOptions = [
@@ -116,10 +116,10 @@ class InvoiceController extends Controller
     {
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'currency_id']);
+            ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('company_id', $request->user()->current_company_id);
+            $query->where('id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name', 'symbol']);
 
         // Get the next invoice number
@@ -220,10 +220,10 @@ class InvoiceController extends Controller
 
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'currency_id']);
+            ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('company_id', $request->user()->current_company_id);
+            $query->where('id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name', 'symbol']);
 
         return Inertia::render('Invoicing/Invoices/Edit', [

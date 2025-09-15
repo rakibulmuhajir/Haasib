@@ -210,14 +210,14 @@
 
   <!-- Disable Confirmation Dialog -->
   <Dialog 
-    v-model:visible="disableDialog" 
+    v-model:visible="disableDialog.visible" 
     :header="'Disable Currency'" 
     :style="{ width: '500px' }"
     modal
   >
     <div class="space-y-4">
       <div class="text-gray-600">
-        Are you sure you want to disable currency <strong>{{ currencyToDisable?.name }}</strong> ({{ currencyToDisable?.code }})?
+        Are you sure you want to disable currency <strong>{{ disableDialog.currency?.name }}</strong> ({{ disableDialog.currency?.code }})?
       </div>
       
       <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -254,6 +254,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -290,7 +291,7 @@ const filterForm = reactive<FilterForm>({
   sort_direction: props.filters.sort_direction || 'asc'
 })
 
-const disableDialog = ref({
+const disableDialog = reactive({
   visible: false,
   currency: null as Currency | null,
   loading: false
@@ -363,24 +364,24 @@ const enableCurrency = (currency: Currency) => {
 }
 
 const confirmDisable = (currency: Currency) => {
-  disableDialog.value.currency = currency
-  disableDialog.value.visible = true
+  disableDialog.currency = currency
+  disableDialog.visible = true
 }
 
 const disableCurrency = () => {
-  if (!disableDialog.value.currency) return
+  if (!disableDialog.currency) return
 
-  disableDialog.value.loading = true
+  disableDialog.loading = true
   router.post(
     route('currencies.disable'),
-    { currency_id: disableDialog.value.currency.id },
+    { currency_id: disableDialog.currency.id },
     {
       onSuccess: () => {
-        disableDialog.value.visible = false
-        disableDialog.value.currency = null
+        disableDialog.visible = false
+        disableDialog.currency = null
       },
       onFinish: () => {
-        disableDialog.value.loading = false
+        disableDialog.loading = false
       }
     }
   )

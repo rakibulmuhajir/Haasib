@@ -18,13 +18,24 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         // pull from session if available
-        $companyId = $request->hasSession() ? $request->session()->get('current_company_id') : null;
+        $hasSession = $request->hasSession();
+        $companyId = $hasSession ? $request->session()->get('current_company_id') : null;
+
+        \Log::debug('[HandleInertiaRequests] Request has session: '.($hasSession ? 'yes' : 'no'));
+        \Log::debug('[HandleInertiaRequests] Session ID: '.($hasSession ? $request->session()->getId() : 'none'));
+        \Log::debug('[HandleInertiaRequests] Session data before access: ', $hasSession ? $request->session()->all() : []);
+        \Log::debug('[HandleInertiaRequests] Retrieved company ID from session: '.($companyId ?: 'null'));
 
         // Validate that the user has access to the session company
         if ($companyId && $request->user()) {
-            $hasAccess = $request->user()->companies()
-                ->where('auth.companies.id', $companyId)
-                ->exists();
+            // Super admins can access any company
+            if ($request->user()->isSuperAdmin()) {
+                $hasAccess = true;
+            } else {
+                $hasAccess = $request->user()->companies()
+                    ->where('auth.companies.id', $companyId)
+                    ->exists();
+            }
 
             if (! $hasAccess) {
                 \Log::debug('[HandleInertiaRequests] User does not have access to session company, clearing it');
@@ -33,14 +44,12 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Fallback to first company if no session company (same logic as Tenancy class)
+        // Only set fallback to first company if no session company exists and user has companies
         if (! $companyId && $request->user()) {
-            $companyId = $request->user()->companies()
-                ->limit(1)
-                ->pluck($request->user()->companies()->getRelated()->getQualifiedKeyName())
-                ->first();
+            $firstCompany = $request->user()->companies()->first();
 
-            if ($companyId) {
+            if ($firstCompany) {
+                $companyId = $firstCompany->id;
                 \Log::debug('[HandleInertiaRequests] Set fallback company ID: '.$companyId);
                 $request->session()->put('current_company_id', $companyId);
             }
@@ -62,6 +71,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user() ? $request->user()->load('companies') : null,
                 'companyId' => $companyId,
+                'currentCompany' => $request->user() ? $request->user()->currentCompany : null,
                 'isSuperAdmin' => (bool) optional($request->user())->isSuperAdmin(),
                 'permissions' => $request->user() ? [
                     'ledger.view' => $request->user()->can('ledger.view'),

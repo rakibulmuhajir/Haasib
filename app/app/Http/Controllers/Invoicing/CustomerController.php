@@ -24,20 +24,18 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::with(['currency', 'primaryContact'])
+        $query = Customer::with(['currency', 'country', 'primaryContact'])
             ->where('company_id', $request->user()->current_company_id);
 
         // Apply filters
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('customer_type')) {
-            $query->where('customer_type', $request->customer_type);
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
         }
 
         if ($request->filled('country_id')) {
-            $query->where('country_id', $request->country_id);
+            $query->whereHas('country', function ($q) use ($request) {
+                $q->where('id', $request->country_id);
+            });
         }
 
         if ($request->filled('created_from')) {
@@ -54,11 +52,9 @@ class CustomerController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('customer_number', 'like', "%{$search}%")
-                    ->orWhere('website', 'like', "%{$search}%")
-                    ->orWhere('address_line_1', 'like', "%{$search}%")
-                    ->orWhere('address_line_2', 'like', "%{$search}%")
-                    ->orWhere('city', 'like', "%{$search}%");
+                    ->orWhere('tax_number', 'like', "%{$search}%")
+                    ->orWhereJsonContains('billing_address', $search)
+                    ->orWhereJsonContains('shipping_address', $search);
             });
         }
 
@@ -66,7 +62,7 @@ class CustomerController extends Controller
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDirection = $request->input('sort_direction', 'desc');
 
-        if (in_array($sortBy, ['created_at', 'name', 'email', 'customer_number', 'status'])) {
+        if (in_array($sortBy, ['created_at', 'name', 'email', 'tax_number', 'is_active'])) {
             $query->orderBy($sortBy, $sortDirection);
         }
 
@@ -78,23 +74,14 @@ class CustomerController extends Controller
             ->get(['id', 'name', 'code']);
 
         $statusOptions = [
-            ['value' => 'active', 'label' => 'Active'],
-            ['value' => 'inactive', 'label' => 'Inactive'],
-            ['value' => 'suspended', 'label' => 'Suspended'],
-        ];
-
-        $customerTypeOptions = [
-            ['value' => 'individual', 'label' => 'Individual'],
-            ['value' => 'business', 'label' => 'Business'],
-            ['value' => 'non_profit', 'label' => 'Non-Profit'],
-            ['value' => 'government', 'label' => 'Government'],
+            ['value' => '1', 'label' => 'Active'],
+            ['value' => '0', 'label' => 'Inactive'],
         ];
 
         return Inertia::render('Invoicing/Customers/Index', [
             'customers' => $customers,
             'filters' => [
-                'status' => $request->input('status'),
-                'customer_type' => $request->input('customer_type'),
+                'is_active' => $request->input('is_active'),
                 'country_id' => $request->input('country_id'),
                 'created_from' => $request->input('created_from'),
                 'created_to' => $request->input('created_to'),
@@ -104,7 +91,6 @@ class CustomerController extends Controller
             ],
             'countries' => $countries,
             'statusOptions' => $statusOptions,
-            'customerTypeOptions' => $customerTypeOptions,
         ]);
     }
 

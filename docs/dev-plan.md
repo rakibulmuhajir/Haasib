@@ -83,6 +83,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **Columns**: every table that stores tenant data has `company_id uuid not null`.
 * **Keys**: primary keys are UUIDs. Index `(company_id, created_at)` on event-like tables; unique with partial indexes where needed.
 * **Timestamps**: `created_at`, `updated_at`, soft deletes where useful.
+* **Auditability**: tables representing user-creatable resources should have `created_by_user_id uuid nullable` and `updated_by_user_id uuid nullable` columns, with foreign keys to `users.id` and `onDelete('set null')`. This provides a clear audit trail.
 
 ### Example Migration (schema + table + RLS)
 

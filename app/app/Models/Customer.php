@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -40,38 +41,33 @@ class Customer extends Model
         'customer_id',
         'id',
         'company_id',
-        'customer_number',
         'name',
         'email',
         'phone',
-        'tax_id',
-        'currency_id',
-        'credit_limit',
-        'payment_terms',
+        'tax_number',
         'billing_address',
         'shipping_address',
-        'notes',
+        'currency_id',
         'is_active',
-        'metadata',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'billing_address' => 'array',
         'shipping_address' => 'array',
-        'credit_limit' => 'decimal:2',
-        'payment_terms' => 'integer',
+        'currency_id' => 'string',
+        'created_by' => 'string',
+        'updated_by' => 'string',
         'is_active' => 'boolean',
-        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
     protected $attributes = [
-        'payment_terms' => 30,
         'is_active' => true,
-        'credit_limit' => 0,
     ];
 
     protected static function boot(): void
@@ -88,12 +84,6 @@ class Customer extends Model
                 $model->id = $model->customer_id;
             }
         });
-
-        static::creating(function ($customer) {
-            if (! $customer->customer_number) {
-                $customer->customer_number = $customer->generateCustomerNumber();
-            }
-        });
     }
 
     public function company(): BelongsTo
@@ -104,6 +94,11 @@ class Customer extends Model
     public function currency(): BelongsTo
     {
         return $this->belongsTo(Currency::class);
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
     }
 
     public function invoices(): HasMany
@@ -123,12 +118,17 @@ class Customer extends Model
 
     public function contacts(): HasMany
     {
-        return $this->hasMany(Contact::class);
+        return $this->hasMany(Contact::class, 'customer_id', 'customer_id');
     }
 
     public function interactions(): HasMany
     {
         return $this->hasMany(Interaction::class);
+    }
+
+    public function primaryContact(): HasOne
+    {
+        return $this->hasOne(Contact::class, 'customer_id', 'customer_id')->orderBy('created_at');
     }
 
     public function scopeForCompany($query, $companyId)

@@ -33,8 +33,9 @@ return new class extends Migration
             $table->unique(['company_id', 'account_code']);
         });
 
-        // Add foreign key constraint to auth.companies
-        DB::statement('ALTER TABLE chart_of_accounts ADD CONSTRAINT fk_chart_of_accounts_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
+        Schema::table('chart_of_accounts', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+        });
 
         // Add check constraint for opening_balance >= 0
         DB::statement('ALTER TABLE chart_of_accounts ADD CONSTRAINT chk_opening_balance CHECK (opening_balance >= 0)');

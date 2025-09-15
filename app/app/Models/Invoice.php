@@ -23,30 +23,37 @@ class Invoice extends Model
         'company_id',
         'customer_id',
         'invoice_number',
+        'reference_number',
         'invoice_date',
         'due_date',
         'currency_id',
+        'exchange_rate',
         'subtotal',
-        'total_tax',
+        'tax_amount',
+        'discount_amount',
+        'shipping_amount',
         'total_amount',
-        'amount_paid',
+        'paid_amount',
         'balance_due',
         'status',
+        'payment_status',
         'notes',
-        'terms',
-        'metadata',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'invoice_date' => 'date',
         'due_date' => 'date',
+        'exchange_rate' => 'decimal:10',
         'subtotal' => 'decimal:2',
-        'total_tax' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'shipping_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
-        'amount_paid' => 'decimal:2',
+        'paid_amount' => 'decimal:2',
         'balance_due' => 'decimal:2',
-        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -54,11 +61,15 @@ class Invoice extends Model
 
     protected $attributes = [
         'status' => 'draft',
+        'payment_status' => 'unpaid',
         'subtotal' => 0,
-        'total_tax' => 0,
+        'tax_amount' => 0,
+        'discount_amount' => 0,
+        'shipping_amount' => 0,
         'total_amount' => 0,
-        'amount_paid' => 0,
+        'paid_amount' => 0,
         'balance_due' => 0,
+        'exchange_rate' => 1.0,
     ];
 
     protected static function boot(): void
@@ -573,27 +584,24 @@ class Invoice extends Model
 
     public function updatePaymentStatus(): void
     {
-        $oldStatus = $this->status;
+        $newStatus = $this->status;
 
         if ($this->balance_due <= 0) {
-            $this->status = 'paid';
+            $newStatus = 'paid';
         } elseif ($this->amount_paid > 0) {
-            $this->status = 'partial';
-        } else {
-            $this->status = match ($oldStatus) {
-                'draft' => 'draft',
-                'sent' => 'sent',
-                'posted' => 'posted',
-                default => 'sent',
-            };
+            $newStatus = 'partial';
+        } elseif (in_array($this->status, ['paid', 'partial'])) {
+            // If it was paid/partial and now has a balance, revert to 'posted' or 'sent'
+            $newStatus = $this->posted_at ? 'posted' : 'sent';
         }
 
-        if ($oldStatus !== $this->status) {
+        if ($this->status !== $newStatus && $this->canTransitionTo($newStatus)) {
             $this->metadata = array_merge($this->metadata ?? [], [
                 'status_changed_at' => now()->toISOString(),
-                'previous_status' => $oldStatus,
+                'previous_status' => $this->status,
                 'status_change_reason' => 'payment_update',
             ]);
+            $this->transitionTo($newStatus);
         }
     }
 

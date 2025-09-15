@@ -16,51 +16,60 @@ class Payment extends Model
 
     protected $table = 'payments';
 
-    protected $keyType = 'string';
+    protected $primaryKey = 'payment_id';
 
-    public $incrementing = false;
+    public $incrementing = true;
 
     protected $fillable = [
-        'id',
         'company_id',
-        'customer_id',
+        'payment_number',
+        'payment_type',
+        'entity_type',
+        'entity_id',
+        'bank_account_id',
         'payment_method',
-        'payment_reference',
+        'payment_date',
         'amount',
         'currency_id',
         'exchange_rate',
+        'reference_number',
+        'check_number',
+        'bank_txn_id',
         'status',
-        'payment_date',
+        'reconciled',
+        'reconciled_date',
         'notes',
-        'metadata',
+        'created_by',
+        'updated_by',
+        'reconciled_by',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'exchange_rate' => 'decimal:6',
         'payment_date' => 'date',
-        'metadata' => 'array',
+        'reconciled' => 'boolean',
+        'reconciled_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
     protected $attributes = [
+        'payment_type' => 'customer_payment',
+        'entity_type' => 'customer',
         'status' => 'pending',
         'exchange_rate' => 1.0,
+        'reconciled' => false,
     ];
 
     protected static function boot(): void
     {
         parent::boot();
 
-        static::creating(function ($model) {
-            $model->id = $model->id ?: (string) Str::uuid();
-        });
-
         static::creating(function ($payment) {
-            if (! $payment->payment_reference) {
-                $payment->payment_reference = $payment->generatePaymentReference();
+            if (! $payment->payment_number) {
+                $payment->payment_number = $payment->generatePaymentNumber();
             }
         });
     }
@@ -194,7 +203,7 @@ class Payment extends Model
         return $this->isCompleted() && $this->getAllocatedAmount()->isGreaterThan(Money::of(0, $this->currency->code));
     }
 
-    public function generatePaymentReference(): string
+    public function generatePaymentNumber(): string
     {
         $company = $this->company;
         $year = now()->year;
@@ -202,16 +211,15 @@ class Payment extends Model
         $day = now()->format('d');
 
         $prefix = $company->settings['payment_prefix'] ?? 'PAY';
-        $pattern = $company->settings['payment_reference_pattern'] ?? '{prefix}-{year}{month}{day}-{sequence:4}';
+        $pattern = $company->settings['payment_number_pattern'] ?? '{prefix}-{year}{month}{day}-{sequence:4}';
 
+        // For seeder purposes, use a simple sequential number
         $latestPayment = static::where('company_id', $company->id)
-            ->whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->whereDay('created_at', $day)
-            ->orderByRaw('CAST(SUBSTRING(payment_reference FROM GREATEST(POSITION("-" IN payment_reference), POSITION(" " IN payment_reference)) + 1) AS UNSIGNED) DESC')
+            ->whereDate('created_at', today())
+            ->orderBy('payment_id', 'desc')
             ->first();
 
-        $sequence = $latestPayment ? ((int) preg_replace('/.*?(\d+)$/', '$1', $latestPayment->payment_reference)) + 1 : 1;
+        $sequence = $latestPayment ? ($latestPayment->payment_id % 10000) + 1 : 1;
 
         return str_replace(
             ['{prefix}', '{year}', '{month}', '{day}', '{sequence:4}', '{sequence:5}', '{sequence:6}'],

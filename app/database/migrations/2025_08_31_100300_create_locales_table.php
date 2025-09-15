@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('locales', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
             // BCP 47 tag, e.g. en-US, pt-BR, zh-Hant-TW
             $table->string('tag', 35)->unique();
             $table->string('name')->nullable();

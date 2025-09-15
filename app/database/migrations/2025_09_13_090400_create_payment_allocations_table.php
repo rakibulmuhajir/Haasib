@@ -20,14 +20,13 @@ return new class extends Migration
             $table->timestamps();
         });
 
+        Schema::table('payment_allocations', function (Blueprint $table) {
+            $table->index('payment_id', 'idx_alloc_payment');
+            $table->index('invoice_id', 'idx_alloc_invoice');
+        });
+
         // Add check constraint
         DB::statement('ALTER TABLE payment_allocations ADD CONSTRAINT chk_allocated_positive CHECK (allocated_amount > 0)');
-
-        // Add indexes
-        DB::statement('CREATE INDEX idx_alloc_payment ON payment_allocations(payment_id)');
-        DB::statement('CREATE INDEX idx_alloc_invoice ON payment_allocations(invoice_id)');
-
-        // Add trigger function for validation (will be implemented in a separate migration)
     }
 
     /**

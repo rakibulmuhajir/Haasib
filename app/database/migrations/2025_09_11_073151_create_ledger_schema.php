@@ -12,11 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create ledger schema
-        DB::statement('CREATE SCHEMA IF NOT EXISTS ledger');
-
         // Create ledger_accounts table
-        Schema::create('ledger.ledger_accounts', function (Blueprint $table) {
+        Schema::create('ledger_accounts', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id')->notNullable();
             $table->string('code', 20)->notNullable(); // e.g., "1001", "2001"
@@ -42,7 +39,7 @@ return new class extends Migration
         });
 
         // Create journal_entries table
-        Schema::create('ledger.journal_entries', function (Blueprint $table) {
+        Schema::create('journal_entries', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id')->notNullable();
             $table->string('reference')->nullable(); // e.g., "INV-2025-001", "JE-2025-001"
@@ -71,7 +68,7 @@ return new class extends Migration
         });
 
         // Create journal_lines table
-        Schema::create('ledger.journal_lines', function (Blueprint $table) {
+        Schema::create('journal_lines', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id')->notNullable();
             $table->uuid('journal_entry_id')->notNullable();
@@ -87,25 +84,23 @@ return new class extends Migration
             $table->index(['company_id', 'journal_entry_id']);
             $table->index(['company_id', 'ledger_account_id']);
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('journal_entry_id')->references('id')->on('ledger.journal_entries')->onDelete('cascade');
-            $table->foreign('ledger_account_id')->references('id')->on('ledger.ledger_accounts')->onDelete('restrict');
+            $table->foreign('journal_entry_id')->references('id')->on('journal_entries')->onDelete('cascade');
+            $table->foreign('ledger_account_id')->references('id')->on('ledger_accounts')->onDelete('restrict');
         });
 
         // Create balance constraint trigger function
         DB::unprepared('
-            CREATE OR REPLACE FUNCTION ledger.check_journal_entry_balance()
+            CREATE OR REPLACE FUNCTION check_journal_entry_balance()
             RETURNS TRIGGER AS $$
             DECLARE
                 total_debit DECIMAL(15,2);
                 total_credit DECIMAL(15,2);
             BEGIN
                 IF NEW.status = \'posted\' THEN
-                    SELECT COALESCE(SUM(debit_amount), 0) INTO total_debit
-                    FROM ledger.journal_lines
+                    SELECT COALESCE(SUM(debit_amount), 0) INTO total_debit FROM journal_lines
                     WHERE journal_entry_id = NEW.id;
 
-                    SELECT COALESCE(SUM(credit_amount), 0) INTO total_credit
-                    FROM ledger.journal_lines
+                    SELECT COALESCE(SUM(credit_amount), 0) INTO total_credit FROM journal_lines
                     WHERE journal_entry_id = NEW.id;
 
                     IF total_debit != total_credit THEN
@@ -121,24 +116,24 @@ return new class extends Migration
         // Create trigger for balance validation
         DB::unprepared('
             CREATE TRIGGER validate_journal_entry_balance
-            BEFORE UPDATE ON ledger.journal_entries
+            BEFORE UPDATE ON journal_entries
             FOR EACH ROW
-            EXECUTE FUNCTION ledger.check_journal_entry_balance();
+            EXECUTE FUNCTION check_journal_entry_balance();
         ');
 
         // Create trigger function to recompute totals on the journal entry header
         DB::unprepared('
-            CREATE OR REPLACE FUNCTION ledger.recompute_journal_entry_totals()
+            CREATE OR REPLACE FUNCTION recompute_journal_entry_totals()
             RETURNS TRIGGER AS $$
             DECLARE
                 entry_id UUID;
             BEGIN
                 entry_id := COALESCE(NEW.journal_entry_id, OLD.journal_entry_id);
 
-                UPDATE ledger.journal_entries
+                UPDATE journal_entries
                 SET
-                    total_debit = (SELECT COALESCE(SUM(debit_amount), 0) FROM ledger.journal_lines WHERE journal_entry_id = entry_id),
-                    total_credit = (SELECT COALESCE(SUM(credit_amount), 0) FROM ledger.journal_lines WHERE journal_entry_id = entry_id)
+                    total_debit = (SELECT COALESCE(SUM(debit_amount), 0) FROM journal_lines WHERE journal_entry_id = entry_id),
+                    total_credit = (SELECT COALESCE(SUM(credit_amount), 0) FROM journal_lines WHERE journal_entry_id = entry_id)
                 WHERE id = entry_id;
 
                 RETURN NULL; -- result is ignored since this is an AFTER trigger
@@ -149,13 +144,13 @@ return new class extends Migration
         // Attach the recomputation trigger to the journal_lines table
         DB::unprepared('
             CREATE TRIGGER update_journal_entry_totals
-            AFTER INSERT OR UPDATE OR DELETE ON ledger.journal_lines
+            AFTER INSERT OR UPDATE OR DELETE ON journal_lines
             FOR EACH ROW
-            EXECUTE FUNCTION ledger.recompute_journal_entry_totals();
+            EXECUTE FUNCTION recompute_journal_entry_totals();
         ');
 
         // Add self-referencing foreign key constraint after table creation
-        DB::statement('ALTER TABLE ledger.ledger_accounts ADD CONSTRAINT ledger_ledger_accounts_parent_id_foreign FOREIGN KEY (parent_id) REFERENCES ledger.ledger_accounts(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE ledger_accounts ADD CONSTRAINT ledger_accounts_parent_id_foreign FOREIGN KEY (parent_id) REFERENCES ledger_accounts(id) ON DELETE SET NULL');
     }
 
     /**
@@ -163,21 +158,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Drop trigger and function
-        DB::unprepared('DROP TRIGGER IF EXISTS update_journal_entry_totals ON ledger.journal_lines');
-        DB::unprepared('DROP FUNCTION IF EXISTS ledger.recompute_journal_entry_totals()');
-        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_entry_balance ON ledger.journal_entries');
-        DB::unprepared('DROP FUNCTION IF EXISTS ledger.check_journal_entry_balance()');
+        DB::unprepared('DROP TRIGGER IF EXISTS update_journal_entry_totals ON journal_lines');
+        DB::unprepared('DROP FUNCTION IF EXISTS recompute_journal_entry_totals()');
+        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_entry_balance ON journal_entries');
+        DB::unprepared('DROP FUNCTION IF EXISTS check_journal_entry_balance()');
 
-        // Drop self-referencing foreign key constraint
-        DB::statement('ALTER TABLE ledger.ledger_accounts DROP CONSTRAINT IF EXISTS ledger_ledger_accounts_parent_id_foreign');
+        DB::statement('ALTER TABLE ledger_accounts DROP CONSTRAINT IF EXISTS ledger_accounts_parent_id_foreign');
 
         // Drop tables
-        Schema::dropIfExists('ledger.journal_lines');
-        Schema::dropIfExists('ledger.journal_entries');
-        Schema::dropIfExists('ledger.ledger_accounts');
-
-        // Drop schema
-        DB::statement('DROP SCHEMA IF EXISTS ledger CASCADE');
+        Schema::dropIfExists('journal_lines');
+        Schema::dropIfExists('journal_entries');
+        Schema::dropIfExists('ledger_accounts');
     }
 };

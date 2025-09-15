@@ -15,7 +15,7 @@ return new class extends Migration
         Schema::create('invoices', function (Blueprint $table) {
             $table->id('invoice_id');
             $table->uuid('company_id');
-            $table->foreignId('customer_id')->nullable()->constrained('customers', 'customer_id');
+            $table->uuid('customer_id')->nullable();
             $table->string('invoice_number', 100);
             $table->string('reference_number', 100)->nullable();
             $table->date('invoice_date');
@@ -35,15 +35,21 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
 
             $table->unique(['company_id', 'invoice_number']);
         });
 
-        // Add foreign key constraint to auth.companies
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT fk_invoices_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT fk_invoices_currency_id FOREIGN KEY (currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
+        Schema::table('invoices', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+            $table->foreign('customer_id')->references('customer_id')->on('customers')->onDelete('set null');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
+            $table->foreign('created_by')->references('user_id')->on('user_accounts')->onDelete('set null');
+            $table->foreign('updated_by')->references('user_id')->on('user_accounts')->onDelete('set null');
+            $table->index(['company_id', 'invoice_date'], 'idx_invoices_dates');
+            $table->index(['company_id', 'status'], 'idx_invoices_status');
+        });
 
         // Add check constraints
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_due_date CHECK (due_date >= invoice_date)');
@@ -54,11 +60,6 @@ return new class extends Migration
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_total_nonneg CHECK (total_amount >= 0)');
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_paid_nonneg CHECK (paid_amount >= 0)');
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_balance_nonneg CHECK (balance_due >= 0)');
-
-        // Add indexes
-        DB::statement('CREATE INDEX idx_invoices_company ON invoices(company_id)');
-        DB::statement('CREATE INDEX idx_invoices_dates ON invoices(company_id, invoice_date)');
-        DB::statement('CREATE INDEX idx_invoices_status ON invoices(company_id, status)');
     }
 
     /**

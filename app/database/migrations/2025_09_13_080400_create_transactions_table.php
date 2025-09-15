@@ -37,9 +37,10 @@ return new class extends Migration
             $table->unique(['company_id', 'transaction_number']);
         });
 
-        // Add foreign key constraints
-        DB::statement('ALTER TABLE transactions ADD CONSTRAINT fk_transactions_company_id FOREIGN KEY (company_id) REFERENCES auth.companies(id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE transactions ADD CONSTRAINT fk_transactions_currency_id FOREIGN KEY (currency_id) REFERENCES currencies(id) ON DELETE RESTRICT');
+        Schema::table('transactions', function (Blueprint $table) {
+            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
+        });
 
         // Add check constraints
         DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_totals_equal CHECK (total_debit = total_credit)');

@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('countries', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
             // ISO 3166-1 alpha-2 and alpha-3
             $table->char('code', 2)->unique();
             $table->char('alpha3', 3)->nullable()->index();

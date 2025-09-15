@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -24,7 +25,7 @@ class Currency extends Model
         'name',
         'symbol',
         'symbol_position',
-        'decimal_places',
+        'minor_unit',
         'thousands_separator',
         'decimal_separator',
         'is_active',
@@ -34,7 +35,7 @@ class Currency extends Model
     ];
 
     protected $casts = [
-        'decimal_places' => 'integer',
+        'minor_unit' => 'integer',
         'is_active' => 'boolean',
         'exchange_rate' => 'decimal:6',
         'last_updated_at' => 'datetime',
@@ -46,7 +47,7 @@ class Currency extends Model
 
     protected $attributes = [
         'symbol_position' => 'before',
-        'decimal_places' => 2,
+        'minor_unit' => 2,
         'thousands_separator' => ',',
         'decimal_separator' => '.',
         'is_active' => true,
@@ -62,9 +63,16 @@ class Currency extends Model
         });
     }
 
-    public function companies(): HasMany
+    public function companies(): BelongsToMany
     {
-        return $this->hasMany(Company::class, 'base_currency', 'code');
+        return $this->belongsToMany(Company::class, 'company_secondary_currencies', 'currency_id', 'company_id')
+            ->withPivot('is_active', 'settings')
+            ->withTimestamps();
+    }
+
+    public function primaryCompanies(): HasMany
+    {
+        return $this->hasMany(Company::class, 'currency_id');
     }
 
     public function customers(): HasMany
@@ -101,7 +109,7 @@ class Currency extends Model
     {
         $formattedNumber = number_format(
             $amount,
-            $this->decimal_places,
+            $this->minor_unit,
             $this->decimal_separator,
             $this->thousands_separator
         );
@@ -205,7 +213,7 @@ class Currency extends Model
 
     public function roundAmount(float $amount): float
     {
-        $factor = pow(10, $this->decimal_places);
+        $factor = pow(10, $this->minor_unit);
 
         return round($amount * $factor) / $factor;
     }

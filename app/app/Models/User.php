@@ -88,9 +88,25 @@ class User extends Authenticatable
 
     public function getCurrentCompanyAttribute()
     {
-        $companyId = session('current_company_id');
+        // Try to get from request session first, then fall back to global session
+        $request = request();
+        $companyId = null;
+
+        if ($request && $request->hasSession()) {
+            $companyId = $request->session()->get('current_company_id');
+        }
+
+        if (! $companyId) {
+            $companyId = session('current_company_id');
+        }
+
         if (! $companyId) {
             return null;
+        }
+
+        // Super admins can access any company
+        if ($this->isSuperAdmin()) {
+            return \App\Models\Company::find($companyId);
         }
 
         return $this->companies()->where('auth.companies.id', $companyId)->first();
@@ -106,6 +122,18 @@ class User extends Authenticatable
      */
     public function getCurrentCompanyIdAttribute(): ?string
     {
-        return session('current_company_id');
+        // Try to get from request session first, then fall back to global session
+        $request = request();
+        $companyId = null;
+
+        if ($request && $request->hasSession()) {
+            $companyId = $request->session()->get('current_company_id');
+        }
+
+        if (! $companyId) {
+            $companyId = session('current_company_id');
+        }
+
+        return $companyId;
     }
 }

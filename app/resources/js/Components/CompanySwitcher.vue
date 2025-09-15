@@ -35,10 +35,8 @@ async function switchCompany(event) {
     const response = await http.post(`/company/${companyId}/switch`)
     console.log('🔍 [DEBUG] Switch response:', response.data)
     
-    // Instead of a full reload, we visit the current page to refresh Inertia props.
-    router.visit(window.location.href, {
-      preserveState: false, // We want a fresh state
-    })
+    // Use Inertia's router to reload the page with fresh state
+    router.reload({ only: ['auth'] })
   } catch (e) {
     console.error('🔍 [DEBUG] Error switching company:', e)
     console.error('🔍 [DEBUG] Error response:', e.response?.data)

@@ -74,7 +74,7 @@ class PaymentController extends Controller
         // Get available filters
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['customer_id', 'name']);
 
         $statusOptions = [
             ['value' => 'pending', 'label' => 'Pending'],
@@ -120,13 +120,13 @@ class PaymentController extends Controller
     {
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'currency_id']);
+            ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $invoices = Invoice::where('company_id', $request->user()->current_company_id)
             ->whereIn('status', ['sent', 'posted'])
             ->where('balance_amount', '>', 0)
             ->orderBy('invoice_date')
-            ->get(['id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
+            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
 
         // Get the next payment number
         $nextPaymentNumber = $this->paymentService->generateNextPaymentNumber($request->user()->current_company_id);
@@ -228,13 +228,13 @@ class PaymentController extends Controller
 
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'currency_id']);
+            ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $invoices = Invoice::where('company_id', $request->user()->current_company_id)
             ->whereIn('status', ['sent', 'posted'])
             ->where('balance_amount', '>', 0)
             ->orderBy('invoice_date')
-            ->get(['id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
+            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
 
         return Inertia::render('Invoicing/Payments/Edit', [
             'payment' => $payment,

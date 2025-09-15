@@ -27,9 +27,14 @@ class CompanySwitchController extends Controller
         // Ensure session is saved
         Session::save();
 
+        // Verify session was saved
+        $savedCompanyId = Session::get('current_company_id');
+
         // Debug logging
-        \Log::debug('[CompanySwitchController] Stored company ID in session: '.$company->id);
+        \Log::debug('[CompanySwitchController] Attempting to store company ID: '.$company->id);
+        \Log::debug('[CompanySwitchController] Retrieved from session after save: '.$savedCompanyId);
         \Log::debug('[CompanySwitchController] Session after save: ', Session::all());
+        \Log::debug('[CompanySwitchController] Session ID: '.Session::getId());
 
         // If the request expects JSON, return success response
         if ($request->expectsJson()) {

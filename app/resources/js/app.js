@@ -34,6 +34,10 @@ import Badge from 'primevue/badge'
 import Dropdown from 'primevue/dropdown'
 import ProgressSpinner from 'primevue/progressspinner'
 import Breadcrumb from 'primevue/breadcrumb'
+import Menu from 'primevue/menu'
+import Avatar from 'primevue/avatar'
+import InputText from 'primevue/inputtext'
+import Dialog from 'primevue/dialog'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -73,6 +77,10 @@ createInertiaApp({
         vue.component('Dropdown', Dropdown)
         vue.component('ProgressSpinner', ProgressSpinner)
         vue.component('Breadcrumb', Breadcrumb)
+        vue.component('Menu', Menu)
+        vue.component('Avatar', Avatar)
+        vue.component('InputText', InputText)
+        vue.component('Dialog', Dialog)
         vue.mount(el)
         return vue
     },

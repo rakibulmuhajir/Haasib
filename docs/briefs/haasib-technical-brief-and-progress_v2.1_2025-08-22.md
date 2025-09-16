@@ -78,6 +78,8 @@
 * Style: **PSR-12** via Pint.
 * Static analysis: Larastan (max level feasible).
 * Tests: **Pest** for unit/feature; dedicated RLS tests; balance tests for ledger.
+* **State Machines:** For models with complex lifecycles (e.g., `Invoice`, `Payment`), extract status transition logic into a dedicated `App\StateMachines\<Model>StateMachine` class. This keeps models thin and centralizes state management logic.
+* **Queued Jobs:** Offload any long-running or non-critical data synchronization tasks to background jobs. For example, updating the `accounts_receivable` table after an invoice is modified should be handled by a dispatched job, not run synchronously during the web request.
 * Services over fat controllers; thin Eloquent models; avoid hidden globals.
 
 **Vue/TS**
@@ -193,7 +195,7 @@
 ### 9.7 Reporting v1
 
 **What:** Materialized views: `trial_balance_mv`, `aging_report_mv`; lightweight P\&L/BS.
-**How:** refresh concurrently after posting; scheduled nightly refresh; indexed columns.
+**How:** Refresh concurrently after posting. For application-level summary tables like `accounts_receivable`, use a nightly scheduled command (`ar:update-aging`) to keep data fresh. Indexed columns are critical.
 
 ### 9.8 API v1 & Mobile Sync
 

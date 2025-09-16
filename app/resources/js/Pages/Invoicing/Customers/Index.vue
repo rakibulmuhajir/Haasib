@@ -112,14 +112,14 @@
             class="w-full"
           >
             <Column 
-              field="customer_number" 
-              header="Customer #" 
+              field="created_at" 
+              header="Customer Since" 
               sortable
               style="width: 140px"
             >
               <template #body="{ data }">
                 <div class="font-medium text-gray-900">
-                  {{ data.customer_number }}
+                  {{ formatDate(data.created_at) }}
                 </div>
                 <div class="text-xs text-gray-500" v-if="data.is_active">
                   Active
@@ -147,17 +147,15 @@
             </Column>
 
             <Column 
-              field="customer_type" 
-              header="Type" 
+              field="tax_number" 
+              header="Tax ID" 
               sortable
-              style="width: 100px"
+              style="width: 120px"
             >
               <template #body="{ data }">
-                <Badge 
-                  :value="formatCustomerType(data.customer_type)"
-                  :severity="getTypeSeverity(data.customer_type)"
-                  size="small"
-                />
+                <span class="text-sm text-gray-600">
+                  {{ data.tax_number || '-' }}
+                </span>
               </template>
             </Column>
 

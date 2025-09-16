@@ -44,9 +44,15 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        // Only set fallback to first company if no session company exists and user has companies
+        // Set fallback company if no session company exists and user has companies
+        // For superadmins without companies, use the first company in the system
         if (! $companyId && $request->user()) {
             $firstCompany = $request->user()->companies()->first();
+
+            if (! $firstCompany && $request->user()->isSuperAdmin()) {
+                // Super admins can use any company, get the first one
+                $firstCompany = \App\Models\Company::first();
+            }
 
             if ($firstCompany) {
                 $companyId = $firstCompany->id;

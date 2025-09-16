@@ -15,12 +15,14 @@ class AccountsReceivable extends Model
 
     protected $table = 'accounts_receivable';
 
+    protected $primaryKey = 'ar_id';
+
     protected $keyType = 'string';
 
     public $incrementing = false;
 
     protected $fillable = [
-        'id',
+        'ar_id',
         'company_id',
         'customer_id',
         'invoice_id',
@@ -56,7 +58,7 @@ class AccountsReceivable extends Model
         parent::boot();
 
         static::creating(function ($model) {
-            $model->id = $model->id ?: (string) Str::uuid();
+            $model->ar_id = $model->ar_id ?: (string) Str::uuid();
         });
 
         static::created(function ($ar) {
@@ -280,44 +282,14 @@ class AccountsReceivable extends Model
         $this->save();
     }
 
-    public static function updateForCustomer(int $customerId): void
+    public static function updateForCustomer(string $customerId): void
     {
-        $invoices = Invoice::where('customer_id', $customerId)
-            ->where('status', '!=', 'cancelled')
-            ->get();
-
-        foreach ($invoices as $invoice) {
-            $ar = static::firstOrNew(['invoice_id' => $invoice->id]);
-
-            if (! $ar->exists) {
-                $ar->id = (string) Str::uuid();
-                $ar->company_id = $invoice->company_id;
-                $ar->customer_id = $invoice->customer_id;
-                $ar->currency_id = $invoice->currency_id;
-            }
-
-            $ar->updateFromInvoice();
-        }
+        \App\Jobs\AccountsReceivable\UpdateForCustomer::dispatch($customerId);
     }
 
     public static function updateForCompany(int $companyId): void
     {
-        $invoices = Invoice::where('company_id', $companyId)
-            ->where('status', '!=', 'cancelled')
-            ->get();
-
-        foreach ($invoices as $invoice) {
-            $ar = static::firstOrNew(['invoice_id' => $invoice->id]);
-
-            if (! $ar->exists) {
-                $ar->id = (string) Str::uuid();
-                $ar->company_id = $invoice->company_id;
-                $ar->customer_id = $invoice->customer_id;
-                $ar->currency_id = $invoice->currency_id;
-            }
-
-            $ar->updateFromInvoice();
-        }
+        \App\Jobs\AccountsReceivable\UpdateForCompany::dispatch($companyId);
     }
 
     public static function getAgingReport(int $companyId): array

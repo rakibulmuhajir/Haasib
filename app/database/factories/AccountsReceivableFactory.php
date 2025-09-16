@@ -31,7 +31,7 @@ class AccountsReceivableFactory extends Factory
         $dueDate = fake()->dateTimeBetween('-60 days', '+30 days');
 
         return [
-            'id' => fake()->uuid(),
+            'ar_id' => fake()->uuid(),
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'invoice_id' => $invoice->id,

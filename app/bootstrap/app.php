@@ -30,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'idempotent' => \App\Http\Middleware\EnsureIdempotency::class,
         ]);
     })
+    ->withSchedule(function ($schedule): void {
+        $schedule->command('ar:update-aging')->daily()->at('23:59');
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

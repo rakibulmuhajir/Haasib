@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\StateMachines\InvoiceStateMachine;
 use Brick\Money\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -114,7 +115,7 @@ class Invoice extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(InvoiceItem::class);
+        return $this->hasMany(InvoiceItem::class, 'invoice_id', 'invoice_id');
     }
 
     public function payments(): HasMany
@@ -267,86 +268,22 @@ class Invoice extends Model
 
     public function getValidStatusTransitions(): array
     {
-        $transitions = [
-            'draft' => ['sent', 'cancelled'],
-            'sent' => ['draft', 'posted', 'cancelled'],
-            'posted' => ['sent', 'cancelled'],
-            'partial' => ['partial', 'paid'],
-            'paid' => ['paid'],
-            'cancelled' => ['draft'],
-        ];
-
-        return $transitions[$this->status] ?? [];
+        return $this->stateMachine()->transitions[$this->status] ?? [];
     }
 
     public function canTransitionTo(string $newStatus): bool
     {
-        return in_array($newStatus, $this->getValidStatusTransitions());
-    }
-
-    public function validateStatusTransition(string $newStatus, ?string $reason = null): void
-    {
-        if ($this->status === $newStatus) {
-            return;
-        }
-
-        if (! $this->canTransitionTo($newStatus)) {
-            throw new \InvalidArgumentException("Cannot transition invoice from {$this->status} to {$newStatus}");
-        }
-
-        if ($newStatus === 'cancelled' && empty(trim($reason ?? ''))) {
-            throw new \InvalidArgumentException('Cancellation reason is required');
-        }
-
-        if ($newStatus === 'posted' && $this->balance_due <= 0) {
-            throw new \InvalidArgumentException('Cannot post invoice with zero balance due');
-        }
-
-        if ($newStatus === 'draft' && $this->status === 'cancelled') {
-            if ($this->paymentAllocations()->where('status', 'active')->exists()) {
-                throw new \InvalidArgumentException('Cannot reopen cancelled invoice with existing payment allocations');
-            }
-        }
+        return $this->stateMachine()->canTransitionTo($newStatus);
     }
 
     public function transitionTo(string $newStatus, ?string $reason = null): void
     {
-        $this->validateStatusTransition($newStatus, $reason);
-        $oldStatus = $this->status;
-
-        switch ($newStatus) {
-            case 'sent':
-                $this->markAsSent();
-                break;
-            case 'posted':
-                $this->markAsPosted();
-                break;
-            case 'cancelled':
-                $this->markAsCancelled($reason);
-                break;
-            case 'draft':
-                $this->markAsDraft();
-                break;
-            default:
-                $this->status = $newStatus;
-                $this->save();
-        }
-
-        $this->logStatusTransition($oldStatus, $newStatus, $reason);
+        $this->stateMachine()->transitionTo($newStatus, ['reason' => $reason]);
     }
 
     public function markAsDraft(): void
     {
-        if (! $this->canBeReopened()) {
-            throw new \InvalidArgumentException('Invoice cannot be reopened to draft');
-        }
-
-        $this->status = 'draft';
-        $this->metadata = array_merge($this->metadata ?? [], [
-            'reopened_at' => now()->toISOString(),
-            'reopened_by_user_id' => auth()->id(),
-        ]);
-        $this->save();
+        $this->transitionTo('draft');
     }
 
     public function getStatusWorkflowSummary(): array
@@ -354,14 +291,6 @@ class Invoice extends Model
         return [
             'current_status' => $this->status,
             'display_status' => $this->getDisplayStatus(),
-            'can_be_edited' => $this->canBeEdited(),
-            'can_be_sent' => $this->canBeSent(),
-            'can_be_posted' => $this->canBePosted(),
-            'can_be_cancelled' => $this->canBeCancelled(),
-            'can_be_reopened' => $this->canBeReopened(),
-            'can_be_duplicated' => $this->canBeDuplicated(),
-            'can_generate_pdf' => $this->canGeneratePDF(),
-            'can_be_emailed' => $this->canBeEmailed(),
             'valid_transitions' => $this->getValidStatusTransitions(),
             'workflow_restrictions' => $this->getWorkflowRestrictions(),
         ];
@@ -396,19 +325,6 @@ class Invoice extends Model
         }
 
         return $restrictions;
-    }
-
-    private function logStatusTransition(string $oldStatus, string $newStatus, ?string $reason = null): void
-    {
-        Log::info('Invoice status transition', [
-            'invoice_id' => $this->invoice_id,
-            'invoice_number' => $this->invoice_number,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-            'reason' => $reason,
-            'user_id' => auth()->id(),
-            'timestamp' => now()->toISOString(),
-        ]);
     }
 
     public function generateInvoiceNumber(): string
@@ -584,25 +500,7 @@ class Invoice extends Model
 
     public function updatePaymentStatus(): void
     {
-        $newStatus = $this->status;
-
-        if ($this->balance_due <= 0) {
-            $newStatus = 'paid';
-        } elseif ($this->amount_paid > 0) {
-            $newStatus = 'partial';
-        } elseif (in_array($this->status, ['paid', 'partial'])) {
-            // If it was paid/partial and now has a balance, revert to 'posted' or 'sent'
-            $newStatus = $this->posted_at ? 'posted' : 'sent';
-        }
-
-        if ($this->status !== $newStatus && $this->canTransitionTo($newStatus)) {
-            $this->metadata = array_merge($this->metadata ?? [], [
-                'status_changed_at' => now()->toISOString(),
-                'previous_status' => $this->status,
-                'status_change_reason' => 'payment_update',
-            ]);
-            $this->transitionTo($newStatus);
-        }
+        $this->stateMachine()->updatePaymentStatus();
     }
 
     public function recalculateAndSave(): void
@@ -612,7 +510,6 @@ class Invoice extends Model
         $oldStatus = $this->status;
 
         $this->calculateTotals();
-        $this->updatePaymentStatus();
         $this->save();
 
         if ($oldBalanceDue != $this->balance_due || $oldAmountPaid != $this->amount_paid || $oldStatus != $this->status) {
@@ -814,33 +711,25 @@ class Invoice extends Model
 
     public function markAsSent(): void
     {
-        if ($this->canBeSent()) {
-            $this->status = 'sent';
-            $this->sent_at = now();
-            $this->save();
-        }
+        $this->transitionTo('sent');
     }
 
     public function markAsPosted(): void
     {
-        if ($this->canBePosted()) {
-            $this->status = 'posted';
-            $this->posted_at = now();
-            $this->save();
-        }
+        $this->transitionTo('posted');
     }
 
     public function markAsCancelled(?string $reason = null): void
     {
-        if ($this->canBeCancelled()) {
-            $this->status = 'cancelled';
-            $this->cancelled_at = now();
-            $this->metadata = array_merge($this->metadata ?? [], [
-                'cancellation_reason' => $reason,
-                'cancelled_at' => now()->toISOString(),
-            ]);
-            $this->save();
-        }
+        $this->transitionTo('cancelled', $reason);
+    }
+
+    /**
+     * Get an instance of the state machine for this invoice.
+     */
+    public function stateMachine(): InvoiceStateMachine
+    {
+        return new InvoiceStateMachine($this);
     }
 
     public function getDisplayStatus(): string

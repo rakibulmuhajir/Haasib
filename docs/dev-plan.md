@@ -356,7 +356,7 @@ Pick one path and ignore the rest.
 
 1. **Model the data**: table(s) in the module schema with `company_id`, add indexes.
 2. **Migrate + RLS**: enable policy as shown above.
-3. **Domain services** in `App/Domain/<Module>`; keep controllers thin.
+3. **Domain services** in `App/Domain/<Module>`; keep controllers thin. Extract complex model lifecycles (e.g., `draft` → `sent` → `paid`) into dedicated **State Machine** classes.
 4. **Web UI**: Inertia pages for CRUD and reports.
 5. **API**: Resource controllers under `/api/v1/<module>`; API Resources for output.
 6. **CLI**: Command bus/palette invoking the same services (no duplicated logic).
@@ -381,7 +381,7 @@ Pick one path and ignore the rest.
 ### 9B) Reporting & Search
 
 * Use Postgres **materialized views** or summary tables for P\&L, balance sheet, aging; refresh on schedule.
-* Enable full-text or trigram indexes for invoices, contacts, and ledger memos to speed search.
+* For application-level summary tables (like `accounts_receivable`), use **scheduled commands** (e.g., a nightly `ar:update-aging` command) to prevent data from becoming stale.
 
 ---
 
@@ -555,6 +555,8 @@ location / {
 * ✅ Web CRUD (Inertia/Vue) + server validation + flash/errors
 * ✅ API v1 endpoints + **OpenAPI** docs + **rate limits** + **idempotency on all writes** + structured error codes
 * ✅ CLI commands using the same services; jobs/commands set `app.current_company`
+* ✅ Complex model statuses managed by a dedicated **State Machine** class
+* ✅ Long-running data sync operations (e.g., A/R updates from invoices) are offloaded to **queued jobs**
 * ✅ **Audit trail** for create/update/void actions on financial entities; immutable docs with credit notes
 * ✅ `/health` reflects module deps; **metrics/alerts** wired (queue depth, p95, DB slow queries)
 * ✅ **Reconciliation** jobs and alerts for payment webhooks; **caching** updated and invalidated correctly

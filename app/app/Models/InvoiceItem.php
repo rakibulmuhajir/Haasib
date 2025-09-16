@@ -72,7 +72,7 @@ class InvoiceItem extends Model
 
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        return $this->belongsTo(Invoice::class, 'invoice_id', 'invoice_id');
     }
 
     public function item(): BelongsTo

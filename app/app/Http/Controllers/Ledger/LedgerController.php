@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Ledger;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Ledger\StoreJournalEntryRequest;
 use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
 use App\Services\LedgerService;
@@ -55,33 +56,25 @@ class LedgerController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreJournalEntryRequest $request, LedgerService $ledgerService)
     {
-        $this->authorize('ledger.create');
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'description' => 'required|string|max:255',
-            'reference' => 'nullable|string|max:50',
-            'date' => 'required|date',
-            'lines' => 'required|array|min:2',
-            'lines.*.account_id' => 'required|uuid|exists:ledger.ledger_accounts,id',
-            'lines.*.description' => 'nullable|string|max:255',
-            'lines.*.debit_amount' => 'required|numeric|min:0',
-            'lines.*.credit_amount' => 'required|numeric|min:0',
-        ]);
-
-        $company = Auth::user()->currentCompany;
-
-        $entry = $this->ledgerService->createJournalEntry(
-            $company,
-            $validated['description'],
-            $validated['lines'],
-            $validated['reference'] ?? null,
-            $validated['date'],
+        $journalEntry = $ledgerService->createJournalEntry(
+            company: $request->user()->currentCompany,
+            description: $validated['description'],
+            lines: $validated['lines'],
+            reference: $validated['reference'] ?? null,
+            date: $validated['date']
         );
 
-        return redirect()->route('ledger.show', $entry->id)
-            ->with('success', 'Journal entry created successfully');
+        // If the user wants to post it immediately
+        if ($request->input('post_now')) {
+            $ledgerService->postJournalEntry($journalEntry);
+        }
+
+        return redirect()->route('ledger.show', $journalEntry->id)
+            ->with('success', 'Journal entry created successfully.');
     }
 
     public function show($id)

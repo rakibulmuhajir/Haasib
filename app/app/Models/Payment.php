@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class Payment extends Model
 {
@@ -91,13 +90,13 @@ class Payment extends Model
 
     public function allocations(): HasMany
     {
-        return $this->hasMany(PaymentAllocation::class);
+        return $this->hasMany(PaymentAllocation::class, 'payment_id', 'payment_id');
     }
 
     public function invoices()
     {
-        return $this->belongsToMany(Invoice::class, 'payment_allocations')
-            ->withPivot('amount', 'created_at', 'updated_at');
+        return $this->belongsToMany(Invoice::class, 'payment_allocations', 'payment_id', 'invoice_id')
+            ->withPivot('allocated_amount as amount', 'created_at', 'updated_at');
     }
 
     public function scopeForCompany($query, $companyId)
@@ -168,7 +167,7 @@ class Payment extends Model
 
     public function getAllocatedAmount(): Money
     {
-        $allocated = $this->allocations()->sum('amount');
+        $allocated = $this->allocations()->sum('allocated_amount');
 
         return Money::of($allocated, $this->currency->code);
     }
@@ -277,7 +276,7 @@ class Payment extends Model
         return PaymentAllocation::create([
             'payment_id' => $this->id,
             'invoice_id' => $invoice->id,
-            'amount' => $amount->getAmount()->toFloat(),
+            'allocated_amount' => $amount->getAmount()->toFloat(),
             'notes' => $notes,
         ]);
     }
@@ -347,7 +346,7 @@ class Payment extends Model
                 break;
             }
 
-            $allocationAmount = Money::of($allocation->amount, $this->currency->code);
+            $allocationAmount = Money::of($allocation->allocated_amount, $this->currency->code);
             $remainingToRefund = $amount->minus($refundedAmount);
             $refundAllocationAmount = $allocationAmount->isLessThan($remainingToRefund) ? $allocationAmount : $remainingToRefund;
 

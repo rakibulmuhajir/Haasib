@@ -34,7 +34,7 @@ class Customer extends Model
      */
     public function getIdAttribute(): string
     {
-        return $this->attributes['customer_id'];
+        return $this->attributes['customer_id'] ?? '';
     }
 
     protected $fillable = [

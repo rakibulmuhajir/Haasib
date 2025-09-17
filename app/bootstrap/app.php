@@ -14,16 +14,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\Auth\Middleware\Authenticate::class, // Ensure auth runs before tenant context
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\SetCompanyContext::class,
         ]);
 
         $middleware->api(append: [
-            \Illuminate\Session\Middleware\StartSession::class,
-            \App\Http\Middleware\ApiRateLimit::class,
             \Illuminate\Auth\Middleware\Authenticate::class,
-            \App\Http\Middleware\SetCompanyContext::class,
+            \App\Http\Middleware\ApiRateLimit::class,
+            \App\Http\Middleware\EnsureApiHasCompanyContext::class,
         ]);
 
         $middleware->alias([

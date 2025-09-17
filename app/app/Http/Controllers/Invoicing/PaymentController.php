@@ -3,13 +3,15 @@
 namespace App\Http\Controllers\Invoicing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Invoicing\AllocatePaymentRequest;
+use App\Http\Requests\Invoicing\RefundPaymentRequest;
+use App\Http\Requests\Invoicing\StorePaymentRequest;
+use App\Http\Requests\Invoicing\UpdatePaymentRequest;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 
 class PaymentController extends Controller
@@ -26,31 +28,16 @@ class PaymentController extends Controller
         $query = Payment::with(['customer', 'invoices', 'allocations'])
             ->where('company_id', $request->user()->current_company_id);
 
-        // Apply filters
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
+        $query->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->customer_id))
+            ->when($request->filled('payment_method'), fn ($q) => $q->where('payment_method', $request->payment_method))
+            ->when($request->filled('date_from'), fn ($q) => $q->where('payment_date', '>=', $request->date_from))
+            ->when($request->filled('date_to'), fn ($q) => $q->where('payment_date', '<=', $request->date_to));
 
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->customer_id);
-        }
-
-        if ($request->filled('payment_method')) {
-            $query->where('payment_method', $request->payment_method);
-        }
-
-        if ($request->filled('date_from')) {
-            $query->where('payment_date', '>=', $request->date_from);
-        }
-
-        if ($request->filled('date_to')) {
-            $query->where('payment_date', '<=', $request->date_to);
-        }
-
-        if ($request->filled('search')) {
+        $query->when($request->filled('search'), function ($q) use ($request) {
             $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('payment_number', 'like', "%{$search}%")
+            $q->where(function ($subQuery) use ($search) {
+                $subQuery->where('payment_number', 'like', "%{$search}%")
                     ->orWhere('reference_number', 'like', "%{$search}%")
                     ->orWhere('notes', 'like', "%{$search}%")
                     ->orWhereHas('customer', function ($customerQuery) use ($search) {
@@ -58,7 +45,7 @@ class PaymentController extends Controller
                             ->orWhere('email', 'like', "%{$search}%");
                     });
             });
-        }
+        });
 
         // Apply sorting
         $sortBy = $request->input('sort_by', 'created_at');
@@ -141,44 +128,25 @@ class PaymentController extends Controller
     /**
      * Store a newly created payment in storage.
      */
-    public function store(Request $request)
+    public function store(StorePaymentRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,id',
-            'payment_number' => 'required|string|max:50',
-            'payment_date' => 'required|date',
-            'amount' => 'required|numeric|min:0.01',
-            'currency_id' => 'required|exists:currencies,id',
-            'payment_method' => 'required|string|max:50',
-            'reference_number' => 'nullable|string|max:50',
-            'notes' => 'nullable|string|max:1000',
-            'auto_allocate' => 'boolean',
-            'invoice_allocations' => 'array',
-            'invoice_allocations.*.invoice_id' => 'required|exists:invoices,id',
-            'invoice_allocations.*.amount' => 'required|numeric|min:0.01',
-        ]);
-
-        if ($validator->fails()) {
-            return back()
-                ->withErrors($validator)
-                ->withInput();
-        }
+        $validated = $request->validated();
 
         try {
-            $customer = Customer::findOrFail($request->customer_id);
+            $customer = Customer::findOrFail($validated['customer_id']);
 
             $payment = $this->paymentService->createPayment(
                 company: $request->user()->current_company,
                 customer: $customer,
-                amount: $request->amount,
-                currency: $request->currency_id,
-                paymentMethod: $request->payment_method,
-                paymentDate: $request->payment_date,
-                paymentNumber: $request->payment_number,
-                referenceNumber: $request->reference_number,
-                notes: $request->notes,
-                autoAllocate: $request->boolean('auto_allocate'),
-                invoiceAllocations: $request->invoice_allocations,
+                amount: $validated['amount'],
+                currency: $validated['currency_id'],
+                paymentMethod: $validated['payment_method'],
+                paymentDate: $validated['payment_date'],
+                paymentNumber: $validated['payment_number'],
+                referenceNumber: $validated['reference_number'] ?? null,
+                notes: $validated['notes'] ?? null,
+                autoAllocate: $validated['auto_allocate'] ?? false,
+                invoiceAllocations: $validated['invoice_allocations'] ?? [],
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
@@ -187,9 +155,9 @@ class PaymentController extends Controller
                 ->with('success', 'Payment created successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to create payment', [
+            \Log::error('Failed to create payment', [
                 'error' => $e->getMessage(),
-                'request' => $request->all(),
+                'request' => $validated,
                 'user_id' => $request->user()->id,
             ]);
 
@@ -246,50 +214,29 @@ class PaymentController extends Controller
     /**
      * Update the specified payment in storage.
      */
-    public function update(Request $request, Payment $payment)
+    public function update(UpdatePaymentRequest $request, Payment $payment)
     {
-        $this->authorize('update', $payment);
-
         if ($payment->status !== 'pending') {
             return back()->with('error', 'Only pending payments can be updated.');
         }
 
-        $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,id',
-            'payment_number' => 'required|string|max:50',
-            'payment_date' => 'required|date',
-            'amount' => 'required|numeric|min:0.01',
-            'currency_id' => 'required|exists:currencies,id',
-            'payment_method' => 'required|string|max:50',
-            'reference_number' => 'nullable|string|max:50',
-            'notes' => 'nullable|string|max:1000',
-            'auto_allocate' => 'boolean',
-            'invoice_allocations' => 'array',
-            'invoice_allocations.*.invoice_id' => 'required|exists:invoices,id',
-            'invoice_allocations.*.amount' => 'required|numeric|min:0.01',
-        ]);
-
-        if ($validator->fails()) {
-            return back()
-                ->withErrors($validator)
-                ->withInput();
-        }
+        $validated = $request->validated();
 
         try {
-            $customer = Customer::findOrFail($request->customer_id);
+            $customer = Customer::findOrFail($validated['customer_id']);
 
             $updatedPayment = $this->paymentService->updatePayment(
                 payment: $payment,
                 customer: $customer,
-                amount: $request->amount,
-                currency: $request->currency_id,
-                paymentMethod: $request->payment_method,
-                paymentDate: $request->payment_date,
-                paymentNumber: $request->payment_number,
-                referenceNumber: $request->reference_number,
-                notes: $request->notes,
-                autoAllocate: $request->boolean('auto_allocate'),
-                invoiceAllocations: $request->invoice_allocations,
+                amount: $validated['amount'],
+                currency: $validated['currency_id'],
+                paymentMethod: $validated['payment_method'],
+                paymentDate: $validated['payment_date'],
+                paymentNumber: $validated['payment_number'],
+                referenceNumber: $validated['reference_number'] ?? null,
+                notes: $validated['notes'] ?? null,
+                autoAllocate: $validated['auto_allocate'] ?? false,
+                invoiceAllocations: $validated['invoice_allocations'] ?? [],
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
@@ -298,7 +245,7 @@ class PaymentController extends Controller
                 ->with('success', 'Payment updated successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to update payment', [
+            \Log::error('Failed to update payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,
@@ -329,7 +276,7 @@ class PaymentController extends Controller
                 ->with('success', 'Payment deleted successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to delete payment', [
+            \Log::error('Failed to delete payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,
@@ -342,37 +289,26 @@ class PaymentController extends Controller
     /**
      * Allocate payment to invoices.
      */
-    public function allocate(Request $request, Payment $payment)
+    public function allocate(AllocatePaymentRequest $request, Payment $payment)
     {
-        $this->authorize('update', $payment);
-
         if ($payment->status === 'void' || $payment->status === 'refunded') {
             return back()->with('error', 'Cannot allocate void or refunded payments.');
         }
 
-        $validator = Validator::make($request->all(), [
-            'invoice_allocations' => 'required|array|min:1',
-            'invoice_allocations.*.invoice_id' => 'required|exists:invoices,id',
-            'invoice_allocations.*.amount' => 'required|numeric|min:0.01',
-        ]);
-
-        if ($validator->fails()) {
-            return back()
-                ->withErrors($validator)
-                ->withInput();
-        }
+        $validated = $request->validated();
 
         try {
+            // The authorize method is handled by the Form Request
             $this->paymentService->allocatePayment(
                 payment: $payment,
-                invoiceAllocations: $request->invoice_allocations,
+                invoiceAllocations: $validated['invoice_allocations'],
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
             return back()->with('success', 'Payment allocated successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to allocate payment', [
+            \Log::error('Failed to allocate payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,
@@ -399,7 +335,7 @@ class PaymentController extends Controller
             return back()->with('success', 'Payment auto-allocated successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to auto-allocate payment', [
+            \Log::error('Failed to auto-allocate payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,
@@ -426,7 +362,7 @@ class PaymentController extends Controller
             return back()->with('success', 'Payment voided successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to void payment', [
+            \Log::error('Failed to void payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,
@@ -439,37 +375,27 @@ class PaymentController extends Controller
     /**
      * Refund payment.
      */
-    public function refund(Request $request, Payment $payment)
+    public function refund(RefundPaymentRequest $request, Payment $payment)
     {
-        $this->authorize('update', $payment);
-
         if (! in_array($payment->status, ['allocated', 'partial'])) {
             return back()->with('error', 'Only allocated or partially allocated payments can be refunded.');
         }
 
-        $validator = Validator::make($request->all(), [
-            'refund_amount' => 'required|numeric|min:0.01|max:'.$payment->allocated_amount,
-            'refund_reason' => 'nullable|string|max:1000',
-        ]);
-
-        if ($validator->fails()) {
-            return back()
-                ->withErrors($validator)
-                ->withInput();
-        }
+        $validated = $request->validated();
 
         try {
+            // The authorize method is handled by the Form Request
             $this->paymentService->refundPayment(
                 payment: $payment,
-                refundAmount: $request->refund_amount,
-                refundReason: $request->refund_reason,
+                refundAmount: $validated['refund_amount'],
+                refundReason: $validated['refund_reason'] ?? null,
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
             return back()->with('success', 'Payment refunded successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Failed to refund payment', [
+            \Log::error('Failed to refund payment', [
                 'error' => $e->getMessage(),
                 'payment_id' => $payment->id,
                 'user_id' => $request->user()->id,

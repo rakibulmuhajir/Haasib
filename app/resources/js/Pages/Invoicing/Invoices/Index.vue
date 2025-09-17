@@ -345,7 +345,7 @@ const exportInvoices = () => {
             >
               <template #body="slotProps">
                 <Link 
-                  :href="route('invoices.show', slotProps.data.id)"
+                  :href="route('invoices.show', slotProps.data.invoice_id)"
                   class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
                 >
                   {{ slotProps.data.invoice_number }}
@@ -413,7 +413,7 @@ const exportInvoices = () => {
             <Column header="Actions" style="width: 200px">
               <template #body="slotProps">
                 <div class="flex items-center gap-1">
-                  <Link :href="route('invoices.show', slotProps.data.id)">
+                  <Link :href="route('invoices.show', slotProps.data.invoice_id)">
                     <Button 
                       icon="pi pi-eye" 
                       size="small" 
@@ -424,7 +424,7 @@ const exportInvoices = () => {
                   </Link>
 
                   <Link 
-                    :href="route('invoices.edit', slotProps.data.id)"
+                    :href="route('invoices.edit', slotProps.data.invoice_id)"
                     v-if="slotProps.data.status === 'draft'"
                   >
                     <Button 
@@ -436,7 +436,7 @@ const exportInvoices = () => {
                     />
                   </Link>
 
-                  <Link :href="route('invoices.generate-pdf', slotProps.data.id)" target="_blank">
+                  <Link :href="route('invoices.generate-pdf', slotProps.data.invoice_id)" target="_blank">
                     <Button 
                       icon="pi pi-file-pdf" 
                       size="small" 
@@ -454,7 +454,7 @@ const exportInvoices = () => {
                       severity="warning" 
                       outlined 
                       v-tooltip="'Mark as Sent'"
-                      @click="router.post(route('invoices.send', slotProps.data.id))"
+                      @click="router.post(route('invoices.send', slotProps.data.invoice_id))"
                     />
                   </template>
 
@@ -465,7 +465,7 @@ const exportInvoices = () => {
                       severity="success" 
                       outlined 
                       v-tooltip="'Post to Ledger'"
-                      @click="router.post(route('invoices.post', slotProps.data.id))"
+                      @click="router.post(route('invoices.post', slotProps.data.invoice_id))"
                     />
                   </template>
                 </div>

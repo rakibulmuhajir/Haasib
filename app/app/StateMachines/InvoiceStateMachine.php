@@ -14,10 +14,10 @@ class InvoiceStateMachine
      * Events that should be dispatched for each transition.
      */
     protected array $dispatchesEvents = [
-        'sent' => \App\Events\InvoiceSent::class,
-        'posted' => \App\Events\InvoicePosted::class,
-        'paid' => \App\Events\InvoicePaid::class,
-        'cancelled' => \App\Events\InvoiceCancelled::class,
+        'sent' => \App\Events\Invoicing\InvoiceSent::class,
+        'posted' => \App\Events\Invoicing\InvoicePosted::class,
+        'paid' => \App\Events\Invoicing\InvoicePaid::class,
+        'cancelled' => \App\Events\Invoicing\InvoiceCancelled::class,
     ];
 
     /**
@@ -33,19 +33,6 @@ class InvoiceStateMachine
         'cancelled' => ['draft'],
     ];
 
-    /**
-     * A map of states that can be entered from other states.
-     * Key: target status, Value: array of source statuses.
-     */
-    protected array $reverseTransitions = [
-        'draft' => ['sent', 'cancelled'],
-        'sent' => ['draft', 'posted', 'partial', 'paid'],
-        'posted' => ['sent', 'partial', 'paid'],
-        'partial' => ['sent', 'posted', 'paid'],
-        'paid' => ['sent', 'posted', 'partial'],
-        'cancelled' => ['draft'],
-    ];
-
     public function __construct(Invoice $invoice)
     {
         $this->invoice = $invoice;
@@ -54,14 +41,6 @@ class InvoiceStateMachine
     public function canTransitionTo(string $newStatus): bool
     {
         return in_array($newStatus, $this->transitions[$this->invoice->status] ?? []);
-    }
-
-    /**
-     * Check if a state can be entered from another state.
-     */
-    public function canTransitionFrom(string $fromStatus, string $toStatus): bool
-    {
-        return in_array($fromStatus, $this->reverseTransitions[$toStatus] ?? []);
     }
 
     /**
@@ -92,12 +71,12 @@ class InvoiceStateMachine
 
         $this->logStatusTransition($oldStatus, $newStatus, $context['reason'] ?? null);
 
+        $this->invoice->save();
+
         // Dispatch event if defined
         if (isset($this->dispatchesEvents[$newStatus])) {
             event(new $this->dispatchesEvents[$newStatus]($this->invoice, $context));
         }
-
-        $this->invoice->save();
     }
 
     /**

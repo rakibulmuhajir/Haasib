@@ -36,7 +36,7 @@ async function switchCompany(event) {
     console.log('🔍 [DEBUG] Switch response:', response.data)
     
     // Use Inertia's router to reload the page with fresh state
-    router.reload({ only: ['auth'] })
+    router.reload()
   } catch (e) {
     console.error('🔍 [DEBUG] Error switching company:', e)
     console.error('🔍 [DEBUG] Error response:', e.response?.data)

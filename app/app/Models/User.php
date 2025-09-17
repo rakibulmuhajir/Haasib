@@ -100,6 +100,20 @@ class User extends Authenticatable
             $companyId = session('current_company_id');
         }
 
+        // If no company is selected, get the first company for the user
+        if (! $companyId) {
+            $firstCompany = $this->companies()->first();
+            if ($firstCompany) {
+                $companyId = $firstCompany->id;
+                // Set it in session for future requests
+                if ($request && $request->hasSession()) {
+                    $request->session()->put('current_company_id', $companyId);
+                } else {
+                    session(['current_company_id' => $companyId]);
+                }
+            }
+        }
+
         if (! $companyId) {
             return null;
         }
@@ -122,18 +136,8 @@ class User extends Authenticatable
      */
     public function getCurrentCompanyIdAttribute(): ?string
     {
-        // Try to get from request session first, then fall back to global session
-        $request = request();
-        $companyId = null;
+        $company = $this->getCurrentCompanyAttribute();
 
-        if ($request && $request->hasSession()) {
-            $companyId = $request->session()->get('current_company_id');
-        }
-
-        if (! $companyId) {
-            $companyId = session('current_company_id');
-        }
-
-        return $companyId;
+        return $company ? $company->id : null;
     }
 }

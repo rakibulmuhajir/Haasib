@@ -78,6 +78,13 @@ class CustomerController extends Controller
             ['value' => '0', 'label' => 'Inactive'],
         ];
 
+        $customerTypeOptions = [
+            ['value' => 'individual', 'label' => 'Individual'],
+            ['value' => 'business', 'label' => 'Business'],
+            ['value' => 'government', 'label' => 'Government'],
+            ['value' => 'non_profit', 'label' => 'Non-Profit'],
+        ];
+
         return Inertia::render('Invoicing/Customers/Index', [
             'customers' => $customers,
             'filters' => [
@@ -91,6 +98,7 @@ class CustomerController extends Controller
             ],
             'countries' => $countries,
             'statusOptions' => $statusOptions,
+            'customerTypeOptions' => $customerTypeOptions,
         ]);
     }
 

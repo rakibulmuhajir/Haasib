@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\StateMachines\JournalEntryStateMachine;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -60,6 +61,13 @@ class JournalEntry extends Model
         static::creating(function ($model) {
             if (empty($model->{$model->getKeyName()})) {
                 $model->{$model->getKeyName()} = (string) Str::uuid();
+            }
+        });
+
+        static::deleting(function ($journalEntry) {
+            // Prevent hard-deletes of posted entries. They must be voided.
+            if ($journalEntry->isPosted() && ! $journalEntry->isForceDeleting()) {
+                throw new \LogicException('Posted journal entries cannot be deleted. They must be voided.');
             }
         });
     }
@@ -142,5 +150,24 @@ class JournalEntry extends Model
     public function isBalanced(): bool
     {
         return $this->total_debit === $this->total_credit;
+    }
+
+    /**
+     * Recalculates and sets the total debit and credit amounts from the lines.
+     * Does not save the model.
+     */
+    public function calculateTotals(): void
+    {
+        $totals = $this->journalLines()
+            ->selectRaw('SUM(debit_amount) as total_debit, SUM(credit_amount) as total_credit')
+            ->first();
+
+        $this->total_debit = $totals->total_debit ?? 0;
+        $this->total_credit = $totals->total_credit ?? 0;
+    }
+
+    public function stateMachine(): JournalEntryStateMachine
+    {
+        return new JournalEntryStateMachine($this);
     }
 }

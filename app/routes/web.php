@@ -39,7 +39,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/session-test/store', [SessionTestController::class, 'store'])->name('session.test.store');
     Route::get('/session-test/retrieve', [SessionTestController::class, 'retrieve'])->name('session.test.retrieve');
     Route::get('/session-test/company', [SessionTestController::class, 'companySession'])->name('session.test.company');
-
+    
+    
     // API Routes for SPA lookups
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);

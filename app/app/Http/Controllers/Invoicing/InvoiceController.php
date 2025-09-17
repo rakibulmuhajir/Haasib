@@ -76,10 +76,10 @@ class InvoiceController extends Controller
         $customers = Customer::where('company_id', $request->user()->current_company_id)
             ->withTrashed() // Temporarily ignore soft deletes for this query
             ->orderBy('name')
-            ->get(['customer_id', 'name']);
+            ->get(['customer_id as id', 'name']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('auth.companies.id', $request->user()->current_company_id);
+            $query->where('companies.id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name']);
 
         $statusOptions = [

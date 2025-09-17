@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\UnbalancedJournalException;
 use App\Models\Company;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
@@ -82,27 +83,12 @@ class LedgerService
 
     public function postJournalEntry(JournalEntry $entry): JournalEntry
     {
+        // Delegate posting to the state machine, which handles validation,
+        // transactions, and saving.
         $result = DB::transaction(function () use ($entry) {
-            if (! $entry->canBePosted()) {
-                throw new \InvalidArgumentException('Journal entry cannot be posted');
-            }
+            $entry->stateMachine()->transitionTo('posted');
 
-            if (! $entry->isBalanced()) {
-                throw new \InvalidArgumentException('Journal entry is not balanced');
-            }
-
-            $entry->status = 'posted';
-            $entry->posted_at = now();
-            $entry->posted_by_user_id = auth()->id();
-            $entry->save();
-
-            Log::info('Journal entry posted', [
-                'entry_id' => $entry->id,
-                'company_id' => $entry->company_id,
-                'user_id' => $entry->posted_by_user_id,
-            ]);
-
-            return $entry->fresh();
+            return $entry->fresh(['journalLines.ledgerAccount']);
         });
 
         $this->logAudit('ledger.journal_entry.post', [
@@ -114,39 +100,39 @@ class LedgerService
         return $result;
     }
 
-    public function voidJournalEntry(JournalEntry $entry, string $reason): JournalEntry
+    public function voidJournalEntry(JournalEntry $entry, string $reason): array
     {
-        $result = DB::transaction(function () use ($entry, $reason) {
+        $results = DB::transaction(function () use ($entry, $reason) {
             if (! $entry->canBeVoided()) {
                 throw new \InvalidArgumentException('Journal entry cannot be voided');
             }
 
-            $entry->status = 'void';
-            $entry->metadata = array_merge($entry->metadata ?? [], [
-                'void_reason' => $reason,
-                'voided_at' => now()->toISOString(),
-                'voided_by_user_id' => auth()->id(),
-            ]);
-            $entry->save();
+            // 1. Create the reversing entry by swapping debits and credits
+            $reversingLines = $entry->journalLines->map(function (JournalLine $line) {
+                return [
+                    'account_id' => $line->ledger_account_id,
+                    'debit_amount' => $line->credit_amount,
+                    'credit_amount' => $line->debit_amount,
+                    'description' => 'Reversal of J.E. '.$entry->reference,
+                ];
+            })->all();
 
-            Log::info('Journal entry voided', [
-                'entry_id' => $entry->id,
-                'company_id' => $entry->company_id,
-                'reason' => $reason,
-                'user_id' => auth()->id(),
-            ]);
+            $reversingEntry = $this->createJournalEntry($entry->company, 'Reversal for entry: '.$entry->description, $reversingLines, null, now()->toDateString(), JournalEntry::class, $entry->id);
+            $this->postJournalEntry($reversingEntry);
 
-            return $entry->fresh();
+            // 2. Void the original entry using the state machine
+            $entry->stateMachine()->transitionTo('void', ['reason' => $reason, 'reversing_entry_id' => $reversingEntry->id]);
+
+            return ['original' => $entry->fresh(), 'reversing' => $reversingEntry];
         });
 
         $this->logAudit('ledger.journal_entry.void', [
             'entry_id' => $entry->id,
             'company_id' => $entry->company_id,
             'reason' => $reason,
-            'description' => $entry->description,
-        ], auth()->user(), $entry->company_id, result: ['voided_at' => $result->metadata['voided_at']]);
+        ], auth()->user(), $entry->company_id, result: ['voided_at' => $results['original']->metadata['voided_at'], 'reversing_entry_id' => $results['reversing']->id]);
 
-        return $result;
+        return $results;
     }
 
     public function getAccountBalance(LedgerAccount $account, ?string $date = null): array
@@ -186,8 +172,11 @@ class LedgerService
             ->pluck('id')
             ->flip();
 
-        $totalDebit = Money::of(0, 'USD'); // Assuming USD, replace with company currency
-        $totalCredit = Money::of(0, 'USD');
+        // Use the company's base currency for accurate calculations
+        $currencyCode = $company->base_currency ?? 'USD';
+
+        $totalDebit = Money::of(0, $currencyCode);
+        $totalCredit = Money::of(0, $currencyCode);
 
         foreach ($lines as $index => $line) {
             if (! isset($line['account_id']) || ! isset($line['debit_amount']) || ! isset($line['credit_amount'])) {
@@ -203,12 +192,12 @@ class LedgerService
             }
 
             // Use Money object for precise calculations
-            $totalDebit = $totalDebit->plus(Money::of($line['debit_amount'], 'USD'));
-            $totalCredit = $totalCredit->plus(Money::of($line['credit_amount'], 'USD'));
+            $totalDebit = $totalDebit->plus(Money::of($line['debit_amount'], $currencyCode));
+            $totalCredit = $totalCredit->plus(Money::of($line['credit_amount'], $currencyCode));
         }
 
         if (! $totalDebit->isEqualTo($totalCredit)) {
-            throw new \InvalidArgumentException('Journal entry must balance (debits must equal credits)');
+            throw new UnbalancedJournalException('Journal entry must balance (debits must equal credits)');
         }
     }
 

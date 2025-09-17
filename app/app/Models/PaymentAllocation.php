@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class PaymentAllocation extends Model
 {
@@ -56,12 +55,12 @@ class PaymentAllocation extends Model
 
     public function payment(): BelongsTo
     {
-        return $this->belongsTo(Payment::class);
+        return $this->belongsTo(Payment::class, 'payment_id', 'payment_id');
     }
 
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        return $this->belongsTo(Invoice::class, 'invoice_id', 'invoice_id');
     }
 
     public function scopeForPayment($query, $paymentId)
@@ -116,7 +115,7 @@ class PaymentAllocation extends Model
 
     public function getAmount(): Money
     {
-        return Money::of($this->amount, $this->payment->currency->code);
+        return Money::of($this->allocated_amount, $this->payment->currency->code);
     }
 
     public function getAmountInInvoiceCurrency(): Money
@@ -170,7 +169,7 @@ class PaymentAllocation extends Model
         $refund = new self([
             'payment_id' => $this->payment_id,
             'invoice_id' => $this->invoice_id,
-            'amount' => $amount->getAmount()->toFloat(),
+            'allocated_amount' => $amount->getAmount()->toFloat(),
             'status' => 'refunded',
             'allocation_date' => now()->toDateString(),
             'notes' => $reason,
@@ -207,7 +206,7 @@ class PaymentAllocation extends Model
 
         $totalPaid = $invoice->paymentAllocations()
             ->where('status', 'active')
-            ->sum('amount');
+            ->sum('allocated_amount');
 
         $invoice->amount_paid = $totalPaid;
         $invoice->calculateTotals();
@@ -265,7 +264,7 @@ class PaymentAllocation extends Model
 
     public function getDisplayAmount(): string
     {
-        return number_format($this->amount, 2).' '.$this->payment->currency->code;
+        return number_format($this->allocated_amount, 2).' '.$this->payment->currency->code;
     }
 
     public function getDisplayAllocationDate(): string
@@ -310,16 +309,16 @@ class PaymentAllocation extends Model
             throw new \InvalidArgumentException('Invoice must be in sent, posted, or partial status to receive payments');
         }
 
-        if ($this->amount <= 0) {
+        if ($this->allocated_amount <= 0) {
             throw new \InvalidArgumentException('Allocation amount must be positive');
         }
 
         $currentAllocations = $payment->allocations()
             ->where('status', 'active')
             ->where('id', '!=', $this->id ?? null)
-            ->sum('amount');
+            ->sum('allocated_amount');
 
-        $totalAllocated = $currentAllocations + $this->amount;
+        $totalAllocated = $currentAllocations + $this->allocated_amount;
 
         if ($totalAllocated > $payment->amount) {
             $overAllocationAmount = $totalAllocated - $payment->amount;
@@ -329,9 +328,9 @@ class PaymentAllocation extends Model
         $invoiceAllocations = $invoice->paymentAllocations()
             ->where('status', 'active')
             ->where('id', '!=', $this->id ?? null)
-            ->sum('amount');
+            ->sum('allocated_amount');
 
-        $totalInvoiceAllocated = $invoiceAllocations + $this->amount;
+        $totalInvoiceAllocated = $invoiceAllocations + $this->allocated_amount;
 
         if ($totalInvoiceAllocated > $invoice->total_amount) {
             $overAllocationAmount = $totalInvoiceAllocated - $invoice->total_amount;

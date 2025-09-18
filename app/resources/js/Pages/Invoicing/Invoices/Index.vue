@@ -1,18 +1,22 @@
-<script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
-import { ref, watch } from 'vue'
+<script setup lang="ts">
+import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Calendar from 'primevue/calendar'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
+import DataTablePro from '@/Components/DataTablePro.vue'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import PageHeader from '@/Components/PageHeader.vue'
+import { FilterMatchMode } from '@primevue/core/api'
+import { buildDefaultTableFiltersFromColumns, buildDslFromTableFilters } from '@/Utils/filters'
+import { usePageActions } from '@/composables/usePageActions'
+import { useToast } from 'primevue/usetoast'
 
 const props = defineProps({
   invoices: Object,
@@ -24,6 +28,8 @@ const props = defineProps({
 
 const page = usePage()
 const toast = page.props.toast || {}
+const { setActions, clearActions } = usePageActions()
+const toasty = useToast()
 
 // Breadcrumb items
 const breadcrumbItems = ref([
@@ -42,6 +48,28 @@ const filterForm = useForm({
   sort_by: props.filters?.sort_by || 'created_at',
   sort_direction: props.filters?.sort_direction || 'desc',
 })
+
+// DataTablePro columns and filters
+const columns = [
+  { field: 'invoice_number', header: 'Invoice #', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 160px' },
+  { field: 'customer', header: 'Customer', filterField: 'customer_name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 220px' },
+  { field: 'invoice_date', header: 'Invoice Date', filter: { type: 'date', matchMode: FilterMatchMode.DATE_AFTER }, style: 'width: 140px' },
+  { field: 'due_date', header: 'Due Date', filter: { type: 'date', matchMode: FilterMatchMode.DATE_AFTER }, style: 'width: 140px' },
+  { field: 'total_amount', header: 'Total', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 120px; text-align: right' },
+  { field: 'balance_due', header: 'Balance', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 120px; text-align: right' },
+  { field: 'status', header: 'Status', filter: { type: 'select', matchMode: FilterMatchMode.EQUALS, options: props.statusOptions }, style: 'width: 120px' },
+  { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 200px; text-align: center' },
+]
+
+const tableFilters = ref<Record<string, any>>(buildDefaultTableFiltersFromColumns(columns as any))
+
+const buildQuery = () => {
+  const data = filterForm.data() as Record<string, any>
+  const base = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== '' && v !== null && v !== undefined))
+  const dsl = buildDslFromTableFilters(tableFilters.value)
+  if (dsl.rules.length) base.filters = JSON.stringify(dsl)
+  return base
+}
 
 // Status badge styling
 const getStatusSeverity = (status) => {
@@ -80,7 +108,7 @@ const formatDate = (date) => {
 
 // Apply filters
 const applyFilters = () => {
-  filterForm.get(route('invoices.index'), {
+  router.get(route('invoices.index'), buildQuery(), {
     preserveState: true,
     preserveScroll: true
   })
@@ -89,7 +117,8 @@ const applyFilters = () => {
 // Clear filters
 const clearFilters = () => {
   filterForm.reset()
-  filterForm.get(route('invoices.index'), {
+  tableFilters.value = buildDefaultTableFiltersFromColumns(columns as any)
+  router.get(route('invoices.index'), {}, {
     preserveState: true,
     preserveScroll: true
   })
@@ -114,10 +143,89 @@ watch(
   { deep: true }
 )
 
-// Handle sorting
-const handleSort = (event) => {
-  filterForm.sort_by = event.sortField || 'created_at'
-  filterForm.sort_direction = event.sortOrder === 1 ? 'asc' : 'desc'
+// Table events
+const onPage = (e) => {
+  const params = { ...buildQuery(), page: (e.page || 0) + 1 }
+  router.get(route('invoices.index'), params, { preserveState: true, preserveScroll: true })
+}
+
+const onSort = (e) => {
+  if (!e.sortField) return
+  const allowed = ['created_at', 'invoice_date', 'due_date', 'total_amount', 'status']
+  if (!allowed.includes(e.sortField)) return
+  filterForm.sort_by = e.sortField
+  filterForm.sort_direction = e.sortOrder === 1 ? 'asc' : 'desc'
+  applyFilters()
+}
+
+const onFilter = (e) => {
+  if (e && e.filters) tableFilters.value = e.filters
+  applyFilters()
+}
+
+// Active filter chips derived from tableFilters
+const activeFilters = computed(() => {
+  const chips: Array<{ key: string; display: string; field: string }> = []
+  const f: any = tableFilters.value || {}
+  const first = (k: string) => f[k]?.constraints?.[0]
+
+  const addChip = (key: string, field: string, display: string) => chips.push({ key, display, field })
+
+  const pn = first('invoice_number')
+  if (pn?.value) addChip('invoice_number', 'invoice_number', `# ${pn.value}`)
+  const cn = first('customer_name')
+  if (cn?.value) addChip('customer_name', 'customer_name', `Customer: ${cn.value}`)
+  const st = first('status')
+  if (st?.value) addChip('status', 'status', `Status: ${st.value}`)
+
+  // Dates
+  const dateChip = (k: string, label: string) => {
+    const c = f[k]?.constraints || []
+    const between = c.find((x: any) => String(x.matchMode||'').toLowerCase()==='between')
+    const fmt = (d:any)=>{ if(!d)return ''; const dt=new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}` }
+    if (between && Array.isArray(between.value)) {
+      const a = fmt(between.value[0]); const b = fmt(between.value[1])
+      if (a||b) addChip(k, k, `${label}: ${a||'…'} — ${b||'…'}`)
+    } else {
+      for (const x of c) {
+        const mm = String(x.matchMode||'').toLowerCase()
+        const d = fmt(x.value)
+        if (!d) continue
+        if (mm.includes('after')) addChip(k, k, `${label} ≥ ${d}`)
+        else if (mm.includes('before')) addChip(k, k, `${label} ≤ ${d}`)
+        else if (mm.includes('dateis')||mm.includes('equals')) addChip(k, k, `${label} = ${d}`)
+      }
+    }
+  }
+  dateChip('invoice_date', 'Invoice Date')
+  dateChip('due_date', 'Due Date')
+
+  // Numbers
+  const numberChip = (k: string, label: string) => {
+    const c = f[k]?.constraints || []
+    const between = c.find((x: any) => String(x.matchMode||'').toLowerCase()==='between')
+    if (between && Array.isArray(between.value)) {
+      const [a,b] = between.value
+      if (a!=null || b!=null) addChip(k, k, `${label}: ${a ?? '…'} — ${b ?? '…'}`)
+    } else {
+      for (const x of c) {
+        const mm = String(x.matchMode||'').toLowerCase()
+        const n = x.value
+        if (n==='' || n==null) continue
+        if (mm.includes('greater')) addChip(k, k, `${label} ≥ ${n}`)
+        else if (mm.includes('less')) addChip(k, k, `${label} ≤ ${n}`)
+        else if (mm.includes('equals')) addChip(k, k, `${label} = ${n}`)
+      }
+    }
+  }
+  numberChip('total_amount', 'Total')
+  numberChip('balance_due', 'Balance')
+
+  return chips
+})
+
+const clearFilterChip = (chip: { key: string; field: string }) => {
+  clearTableFilterField(tableFilters.value, chip.field)
   applyFilters()
 }
 
@@ -125,6 +233,27 @@ const handleSort = (event) => {
 const exportInvoices = () => {
   window.location.href = route('invoices.export', filterForm.data())
 }
+
+// Page Actions for Invoices
+const selectedRows = ref<any[]>([])
+async function bulkRemind() {
+  if (!selectedRows.value.length) return
+  await router.post(route('invoices.bulk'), { action: 'remind', invoice_ids: selectedRows.value.map((r:any) => r.invoice_id ?? r.id) }, { preserveState: true, preserveScroll: true })
+}
+async function bulkCancel() {
+  if (!selectedRows.value.length) return
+  await router.post(route('invoices.bulk'), { action: 'cancel', invoice_ids: selectedRows.value.map((r:any) => r.invoice_id ?? r.id) }, { preserveState: true, preserveScroll: true })
+}
+
+setActions([
+  { key: 'create', label: 'Create Invoice', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('invoices.create')) },
+  { key: 'remind', label: 'Send Reminders', icon: 'pi pi-bell', severity: 'secondary', disabled: () => selectedRows.value.length === 0, click: bulkRemind },
+  { key: 'cancel', label: 'Cancel', icon: 'pi pi-ban', severity: 'danger', disabled: () => selectedRows.value.length === 0, click: bulkCancel },
+  { key: 'export', label: 'Export', icon: 'pi pi-download', severity: 'secondary', outlined: true, click: () => exportInvoices() },
+  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => applyFilters() },
+])
+
+onUnmounted(() => clearActions())
 </script>
 
 <template>
@@ -138,282 +267,99 @@ const exportInvoices = () => {
     <template #topbar>
       <div class="flex items-center justify-between w-full">
         <Breadcrumb :items="breadcrumbItems" />
-        <Link :href="route('invoices.create')">
-          <Button label="Create Invoice" icon="pi pi-plus" severity="primary" />
-        </Link>
       </div>
     </template>
 
     <div class="space-y-6">
-      <!-- Page Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Invoices</h1>
-          <p class="text-gray-600 dark:text-gray-400">Manage and track your invoices</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <Button 
-            label="Export" 
-            icon="pi pi-download" 
-            severity="secondary" 
-            outlined 
-            @click="exportInvoices"
-          />
-          <Button 
-            label="Refresh" 
-            icon="pi pi-refresh" 
-            severity="secondary" 
-            @click="applyFilters"
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Invoices"
+        subtitle="Manage and track your invoices"
+        :maxActions="4"
+      />
 
-      <!-- Filters Section -->
-      <Card class="p-4">
-        <template #title>
-          <div class="flex items-center justify-between">
-            <span>Filters</span>
-            <Button 
-              label="Clear Filters" 
-              icon="pi pi-times" 
-              size="small" 
-              severity="secondary" 
-              outlined 
-              @click="clearFilters"
-              v-if="filterForm.isDirty"
-            />
-          </div>
-        </template>
-        <template #content>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Search -->
-            <div class="lg:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Search
-              </label>
-              <InputText
-                v-model="filterForm.search"
-                placeholder="Search invoices by number, customer, notes..."
-                class="w-full"
-                fluid
-              />
-            </div>
-
-            <!-- Status -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Status
-              </label>
-              <Dropdown
-                v-model="filterForm.status"
-                :options="statusOptions"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="All Statuses"
-                class="w-full"
-                fluid
-                showClear
-              />
-            </div>
-
-            <!-- Customer -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Customer
-              </label>
-              <Dropdown
-                v-model="filterForm.customer_id"
-                :options="customers"
-                optionLabel="name"
-                optionValue="id"
-                placeholder="All Customers"
-                class="w-full"
-                fluid
-                showClear
-              />
-            </div>
-
-            <!-- Currency -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Currency
-              </label>
-              <Dropdown
-                v-model="filterForm.currency_id"
-                :options="currencies"
-                optionLabel="code"
-                optionValue="id"
-                placeholder="All Currencies"
-                class="w-full"
-                fluid
-                showClear
-              />
-            </div>
-
-            <!-- Date Range -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                From Date
-              </label>
-              <Calendar
-                v-model="filterForm.date_from"
-                placeholder="Select date"
-                class="w-full"
-                fluid
-                showClear
-                dateFormat="yy-mm-dd"
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                To Date
-              </label>
-              <Calendar
-                v-model="filterForm.date_to"
-                placeholder="Select date"
-                class="w-full"
-                fluid
-                showClear
-                dateFormat="yy-mm-dd"
-              />
-            </div>
-
-            <!-- Sorting -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Sort By
-              </label>
-              <Dropdown
-                v-model="filterForm.sort_by"
-                :options="[
-                  { label: 'Created Date', value: 'created_at' },
-                  { label: 'Invoice Date', value: 'invoice_date' },
-                  { label: 'Due Date', value: 'due_date' },
-                  { label: 'Total Amount', value: 'total_amount' },
-                  { label: 'Status', value: 'status' }
-                ]"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                fluid
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Direction
-              </label>
-              <Dropdown
-                v-model="filterForm.sort_direction"
-                :options="[
-                  { label: 'Descending', value: 'desc' },
-                  { label: 'Ascending', value: 'asc' }
-                ]"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                fluid
-              />
-            </div>
-          </div>
-        </template>
-      </Card>
+      <!-- Column-menu filters only (header filter card removed) -->
 
       <!-- Invoices Table -->
       <Card>
         <template #content>
-          <DataTable
+          <!-- Active Filters Chips -->
+          <div v-if="activeFilters.length" class="flex flex-wrap items-center gap-2 mb-3">
+            <span class="text-xs text-gray-500">Filters:</span>
+            <span
+              v-for="f in activeFilters"
+              :key="f.key"
+              class="inline-flex items-center text-xs bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded"
+            >
+              <span class="mr-1">{{ f.display }}</span>
+              <button
+                type="button"
+                class="ml-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
+                @click="clearFilterChip(f)"
+                aria-label="Clear filter"
+              >
+                ×
+              </button>
+            </span>
+            <Button label="Clear all" size="small" text @click="clearFilters" />
+          </div>
+          <DataTablePro
             :value="invoices.data"
             :loading="invoices.loading"
             :paginator="true"
             :rows="invoices.per_page"
             :totalRecords="invoices.total"
             :lazy="true"
-            @sort="handleSort"
             :sortField="filterForm.sort_by"
             :sortOrder="filterForm.sort_direction === 'asc' ? 1 : -1"
-            stripedRows
-            responsiveLayout="scroll"
-            class="w-full"
+            :columns="columns"
+            v-model:filters="tableFilters"
+            v-model:selection="selectedRows"
+            selectionMode="multiple"
+            dataKey="invoice_id"
+            :showSelectionColumn="true"
+            @page="onPage"
+            @sort="onSort"
+            @filter="onFilter"
           >
-            <Column 
-              field="invoice_number" 
-              header="Invoice #" 
-              sortable 
-              style="width: 120px"
-            >
-              <template #body="slotProps">
-                <Link 
-                  :href="route('invoices.show', slotProps.data.invoice_id)"
-                  class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-                >
-                  {{ slotProps.data.invoice_number }}
-                </Link>
-              </template>
-            </Column>
+            <template #cell-invoice_number="{ data }">
+              <Link :href="route('invoices.show', data.invoice_id)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+                {{ data.invoice_number }}
+              </Link>
+            </template>
 
-            <Column field="customer.name" header="Customer" sortable>
-              <template #body="slotProps">
-                <div>
-                  <div class="font-medium">{{ slotProps.data.customer?.name }}</div>
-                  <div class="text-sm text-gray-500" v-if="slotProps.data.customer?.email">
-                    {{ slotProps.data.customer.email }}
-                  </div>
-                </div>
-              </template>
-            </Column>
+            <template #cell-customer="{ data }">
+              <div>
+                <div class="font-medium">{{ data.customer?.name }}</div>
+                <div class="text-sm text-gray-500" v-if="data.customer?.email">{{ data.customer.email }}</div>
+              </div>
+            </template>
 
-            <Column field="invoice_date" header="Invoice Date" sortable style="width: 120px">
-              <template #body="slotProps">
-                {{ formatDate(slotProps.data.invoice_date) }}
-              </template>
-            </Column>
+            <template #cell-invoice_date="{ data }">{{ formatDate(data.invoice_date) }}</template>
 
-            <Column field="due_date" header="Due Date" sortable style="width: 120px">
-              <template #body="slotProps">
-                <div>
-                  <div>{{ formatDate(slotProps.data.due_date) }}</div>
-                  <div 
-                    v-if="slotProps.data.status !== 'paid' && new Date(slotProps.data.due_date) < new Date()"
-                    class="text-xs text-red-600 dark:text-red-400"
-                  >
-                    Overdue
-                  </div>
-                </div>
-              </template>
-            </Column>
+            <template #cell-due_date="{ data }">
+              <div>
+                <div>{{ formatDate(data.due_date) }}</div>
+                <div v-if="data.status !== 'paid' && new Date(data.due_date) < new Date()" class="text-xs text-red-600 dark:text-red-400">Overdue</div>
+              </div>
+            </template>
 
-            <Column field="total_amount" header="Total Amount" sortable style="width: 120px">
-              <template #body="slotProps">
-                {{ formatCurrency(slotProps.data.total_amount, slotProps.data.currency) }}
-              </template>
-            </Column>
+            <template #cell-total_amount="{ data }">{{ formatCurrency(data.total_amount, data.currency) }}</template>
 
-            <Column field="paid_amount" header="Paid" sortable style="width: 120px">
-              <template #body="slotProps">
-                {{ formatCurrency(slotProps.data.paid_amount, slotProps.data.currency) }}
-              </template>
-            </Column>
+            <template #cell-paid_amount="{ data }">{{ formatCurrency(data.paid_amount, data.currency) }}</template>
 
-            <Column field="balance_due" header="Balance Due" sortable style="width: 120px">
-              <template #body="slotProps">
-                <div :class="slotProps.data.balance_due > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'">
-                  {{ formatCurrency(slotProps.data.balance_due, slotProps.data.currency) }}
-                </div>
-              </template>
-            </Column>
+            <template #cell-balance_due="{ data }">
+              <div :class="data.balance_due > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'">
+                {{ formatCurrency(data.balance_due, data.currency) }}
+              </div>
+            </template>
 
-            <Column field="status" header="Status" sortable style="width: 100px">
-              <template #body="slotProps">
-                <Tag :value="slotProps.data.status" :severity="getStatusSeverity(slotProps.data.status)" />
-              </template>
-            </Column>
+            <template #cell-status="{ data }">
+              <Tag :value="data.status" :severity="getStatusSeverity(data.status)" />
+            </template>
 
-            <Column header="Actions" style="width: 200px">
-              <template #body="slotProps">
+            <template #cell-actions="{ data }">
                 <div class="flex items-center gap-1">
-                  <Link :href="route('invoices.show', slotProps.data.invoice_id)">
+                  <Link :href="route('invoices.show', data.invoice_id)">
                     <Button 
                       icon="pi pi-eye" 
                       size="small" 
@@ -424,8 +370,8 @@ const exportInvoices = () => {
                   </Link>
 
                   <Link 
-                    :href="route('invoices.edit', slotProps.data.invoice_id)"
-                    v-if="slotProps.data.status === 'draft'"
+                    :href="route('invoices.edit', data.invoice_id)"
+                    v-if="data.status === 'draft'"
                   >
                     <Button 
                       icon="pi pi-pencil" 
@@ -436,7 +382,7 @@ const exportInvoices = () => {
                     />
                   </Link>
 
-                  <Link :href="route('invoices.generate-pdf', slotProps.data.invoice_id)" target="_blank">
+                  <Link :href="route('invoices.generate-pdf', data.invoice_id)" target="_blank">
                     <Button 
                       icon="pi pi-file-pdf" 
                       size="small" 
@@ -447,30 +393,29 @@ const exportInvoices = () => {
                   </Link>
 
                   <!-- Status-based actions -->
-                  <template v-if="slotProps.data.status === 'draft'">
+                  <template v-if="data.status === 'draft'">
                     <Button 
                       icon="pi pi-send" 
                       size="small" 
                       severity="warning" 
                       outlined 
                       v-tooltip="'Mark as Sent'"
-                      @click="router.post(route('invoices.send', slotProps.data.invoice_id))"
+                      @click="router.post(route('invoices.send', data.invoice_id))"
                     />
                   </template>
 
-                  <template v-else-if="slotProps.data.status === 'sent'">
+                  <template v-else-if="data.status === 'sent'">
                     <Button 
                       icon="pi pi-check" 
                       size="small" 
                       severity="success" 
                       outlined 
                       v-tooltip="'Post to Ledger'"
-                      @click="router.post(route('invoices.post', slotProps.data.invoice_id))"
+                      @click="router.post(route('invoices.post', data.invoice_id))"
                     />
                   </template>
                 </div>
-              </template>
-            </Column>
+            </template>
 
             <template #empty>
               <div class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -485,7 +430,7 @@ const exportInvoices = () => {
                 Loading invoices...
               </div>
             </template>
-          </DataTable>
+          </DataTablePro>
         </template>
       </Card>
     </div>

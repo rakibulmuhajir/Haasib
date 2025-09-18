@@ -558,6 +558,84 @@ location / {
 * ✅ Complex model statuses managed by a dedicated **State Machine** class
 * ✅ Long-running data sync operations (e.g., A/R updates from invoices) are offloaded to **queued jobs**
 * ✅ **Audit trail** for create/update/void actions on financial entities; immutable docs with credit notes
+
+---
+
+## 18) Reusable DataTable + Filters DSL (frontend + backend)
+
+This section standardizes a reusable, opt‑in advanced table experience across modules while keeping small views simple by default.
+
+### 18.1 Goals
+
+- Simple tables stay simple (paging/sorting only). Advanced tables (Payments, Invoices, Customers) get column‑menu filters, “Between” support, and chips.
+- One implementation: `DataTablePro` + a normalized filters DSL + a backend `FilterBuilder`.
+- Clean URLs (omit empty params), server‑side correctness, minimal per‑table config.
+
+### 18.2 Frontend: `DataTablePro` (Vue 3)
+
+- Inputs:
+  - `columns`: [{ field, header, filter?: { type: 'text'|'number'|'date'|'select'|'multiselect', matchMode? }, filterField?, style, sortable?, ... }]
+  - `v-model:filters`: PrimeVue filter model (only when advanced enabled).
+  - `:sortField`, `:sortOrder` and events `@page`, `@sort`, `@filter` (Inertia router hook).
+  - Optional features (opt‑in per table): chips (rendered in page), virtual scroll.
+
+- Behaviors:
+  - Column menu filters (`filterDisplay="menu"`) with labeled rule options per type:
+    - text: Contains, Starts with, Equals
+    - number: ≥, ≤, =, <, >, Between (Between shows two inputs)
+    - date: After, Before, On, Between (Between shows range calendar)
+    - select: Equals; multiselect: In
+  - Defaults: number → ≥, date → After, text → Contains, select → Equals.
+  - Cell slots: `#cell-<field>` for custom rendering; no mixing with `<Column>` outside of `DataTablePro`.
+
+- Utilities (resources/js/Utils/filters.ts):
+  - `buildDefaultTableFiltersFromColumns(columns)` → PrimeVue filter model with sensible defaults.
+  - `buildDslFromTableFilters(filtersModel)` → normalized `{ logic: 'and'|'or', rules: [{field,operator,value}] }`.
+  - `clearTableFilterField(model, field)` → clears a single field preserving its match mode.
+
+- Chips (in page):
+  - Render active filters with readable labels (e.g., status options), show “Between” ranges nicely.
+  - One‑click clear (uses `clearTableFilterField`) and a “Clear all” (resets model and URL).
+
+### 18.3 Backend: `FilterBuilder` (Laravel)
+
+- Input: decoded DSL and a per‑controller `fieldMap` that whitelists allowed fields and relation paths.
+- Operators supported:
+  - text: `contains`, `starts_with`, `equals`, `in`
+  - number: `eq`, `lt`, `lte`, `gt`, `gte`, `between`
+  - date: `on`, `before`, `after`, `between`
+- Implementation:
+  - Direct columns apply `where` on table.
+  - Relation fields apply `whereHas(<relation>, fn($q) => $q->where(<column> ...))`.
+  - Postgres ILIKE for case‑insensitive text matches.
+
+### 18.4 URL + State
+
+- When advanced filters exist, include `filters=<JSON>` (omit if empty). All other empty params stripped.
+- Sorting/paging preserved; controller returns `filters.dsl` for restore.
+
+### 18.5 Migration plan (done + upcoming)
+
+- Payments: migrated to `DataTablePro` + DSL + chips; date off‑by‑one fixed (local YYYY‑MM‑DD).
+- Invoices: moved to column‑menu filters, chips; controller uses `FilterBuilder`.
+- Customers: advanced filters enabled; Country/Currency left as text “Contains”; chips added.
+- Other tables: keep simple (no DSL, no chips) unless clearly needed.
+
+### 18.6 Dev ergonomics
+
+- Per table implement:
+  1) Define `columns` with filter type/field.
+  2) Initialize `tableFilters = buildDefaultTableFiltersFromColumns(columns)` (advanced only).
+  3) On `@filter` sync model and include `filters=JSON.stringify(buildDslFromTableFilters(tableFilters))` in the router GET.
+  4) Controller applies DSL via `FilterBuilder` with a minimal `fieldMap`.
+  5) Optional: add chips, label resolvers for select options.
+
+### 18.7 QA checklist
+
+- Sort/paging work with filters on and off.
+- Empty values removed from URL; breadcrumbs ignore query strings.
+- “Between” renders correct min/max/date ranges; date uses local day (no UTC shift).
+- Relation field filters produce expected results; field map is locked down.
 * ✅ `/health` reflects module deps; **metrics/alerts** wired (queue depth, p95, DB slow queries)
 * ✅ **Reconciliation** jobs and alerts for payment webhooks; **caching** updated and invalidated correctly
 * ✅ Backup includes new tables; **reporting views** updated; Cloudflare cache rules updated for new assets

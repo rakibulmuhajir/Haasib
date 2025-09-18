@@ -39,8 +39,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/session-test/store', [SessionTestController::class, 'store'])->name('session.test.store');
     Route::get('/session-test/retrieve', [SessionTestController::class, 'retrieve'])->name('session.test.retrieve');
     Route::get('/session-test/company', [SessionTestController::class, 'companySession'])->name('session.test.company');
-    
-    
+
     // API Routes for SPA lookups
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
@@ -61,6 +60,7 @@ Route::middleware('auth')->group(function () {
     // Invoicing Routes
     Route::prefix('invoices')->name('invoices.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])->name('index');
+        Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])->name('export');
         Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])->name('store');
         Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])->name('show');
@@ -75,6 +75,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->name('generate-pdf');
         Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->name('send-email');
         Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->name('duplicate');
+
+        // Bulk operations
+        Route::post('/bulk', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'bulk'])->name('bulk');
     });
 
     // Payment Routes
@@ -97,6 +100,7 @@ Route::middleware('auth')->group(function () {
     // Customer Routes
     Route::prefix('customers')->name('customers.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'index'])->name('index');
+        Route::get('/export', [\App\Http\Controllers\Invoicing\CustomerController::class, 'export'])->name('export');
         Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])->name('store');
         Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])->name('show');
@@ -109,6 +113,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/{customer}/payments', [\App\Http\Controllers\Invoicing\CustomerController::class, 'payments'])->name('payments');
         Route::get('/{customer}/statement', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statement'])->name('statement');
         Route::get('/{customer}/statistics', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statistics'])->name('statistics');
+
+        // Bulk operations
+        Route::post('/bulk', [\App\Http\Controllers\Invoicing\CustomerController::class, 'bulk'])->name('bulk');
     });
 
     // Currency Routes

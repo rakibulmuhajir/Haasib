@@ -4,6 +4,9 @@
 
 namespace App\Providers;
 
+use App\Models\Customer;
+use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\CompanyLookupService;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -11,6 +14,12 @@ use Illuminate\Support\Facades\Gate;
 
 class AuthServiceProvider extends ServiceProvider
 {
+    protected $policies = [
+        Invoice::class => \App\Policies\InvoicePolicy::class,
+        Customer::class => \App\Policies\CustomerPolicy::class,
+        Payment::class => \App\Policies\PaymentPolicy::class,
+    ];
+
     public function boot(): void
     {
         // System-level abilities (outside tenant data)

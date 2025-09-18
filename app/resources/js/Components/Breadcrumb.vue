@@ -31,8 +31,9 @@ const breadcrumbs = computed(() => {
     return [props.home, ...pageBreadcrumbs];
   }
 
-  // Fallback to URL segment generation
-  const segments = page.url.split('/').filter(segment => segment);
+  // Fallback to URL segment generation (strip query/hash first)
+  const cleanUrl = page.url.split('?')[0].split('#')[0]
+  const segments = cleanUrl.split('/').filter(segment => segment);
   const generatedItems: BreadcrumbItem[] = [props.home];
 
   segments.forEach((segment, index) => {

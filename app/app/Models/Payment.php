@@ -80,7 +80,21 @@ class Payment extends Model
 
     public function customer(): BelongsTo
     {
+        // This relationship doesn't work directly due to data type mismatch
+        // Use getCustomerAttribute() method instead
         return $this->belongsTo(Customer::class);
+    }
+
+    public function getCustomerAttribute()
+    {
+        // Get customer through the first invoice's customer
+        return $this->invoices->first()?->customer;
+    }
+
+    public function getCustomerIdAttribute()
+    {
+        // Get customer ID through the first invoice's customer
+        return $this->invoices->first()?->customer_id;
     }
 
     public function currency(): BelongsTo

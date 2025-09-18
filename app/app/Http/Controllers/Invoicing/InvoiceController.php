@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Services\CurrencyService;
 use App\Services\InvoiceService;
+use App\Support\Filtering\FilterBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -27,6 +28,32 @@ class InvoiceController extends Controller
     {
         $query = Invoice::with(['customer', 'currency', 'items'])
             ->where('company_id', $request->user()->current_company_id);
+
+        // Apply normalized DSL filters if provided
+        if ($request->filled('filters')) {
+            $filters = $request->input('filters');
+            if (is_string($filters)) {
+                $decoded = json_decode($filters, true);
+            } else {
+                $decoded = is_array($filters) ? $filters : null;
+            }
+            if (is_array($decoded)) {
+                $builder = new FilterBuilder;
+                $fieldMap = [
+                    'invoice_number' => 'invoice_number',
+                    'status' => 'status',
+                    'invoice_date' => 'invoice_date',
+                    'due_date' => 'due_date',
+                    'total_amount' => 'total_amount',
+                    'paid_amount' => 'paid_amount',
+                    'balance_due' => 'balance_due',
+                    'created_at' => 'created_at',
+                    'customer_name' => ['relation' => 'customer', 'column' => 'name'],
+                    'currency_code' => ['relation' => 'currency', 'column' => 'code'],
+                ];
+                $query = $builder->apply($query, $decoded, $fieldMap);
+            }
+        }
 
         // Apply filters
         if ($request->filled('status')) {
@@ -94,6 +121,7 @@ class InvoiceController extends Controller
         return Inertia::render('Invoicing/Invoices/Index', [
             'invoices' => $invoices,
             'filters' => [
+                'dsl' => $request->input('filters'),
                 'status' => $request->input('status'),
                 'customer_id' => $request->input('customer_id'),
                 'currency_id' => $request->input('currency_id'),
@@ -110,6 +138,75 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Export invoices as CSV using current filters.
+     */
+    public function export(Request $request)
+    {
+        // Reuse base query from index
+        $query = Invoice::with(['customer', 'currency'])
+            ->where('company_id', $request->user()->current_company_id);
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('customer_id')) {
+            $query->where('customer_id', $request->customer_id);
+        }
+        if ($request->filled('currency_id')) {
+            $query->where('currency_id', $request->currency_id);
+        }
+        if ($request->filled('date_from')) {
+            $query->where('invoice_date', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->where('invoice_date', '<=', $request->date_to);
+        }
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $rows = $query->orderBy('created_at', 'desc')->get()->map(function ($inv) {
+            return [
+                'Invoice #' => $inv->invoice_number,
+                'Customer' => $inv->customer?->name,
+                'Status' => $inv->status,
+                'Invoice Date' => $inv->invoice_date,
+                'Due Date' => $inv->due_date,
+                'Total' => $inv->total_amount,
+                'Paid' => $inv->paid_amount,
+                'Balance' => $inv->balance_due,
+                'Currency' => $inv->currency?->code,
+            ];
+        })->all();
+
+        $filename = 'invoices-'.now()->format('Ymd-His').'.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            if (isset($rows[0])) {
+                fputcsv($out, array_keys($rows[0]));
+            }
+            foreach ($rows as $row) {
+                fputcsv($out, array_values($row));
+            }
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
      * Show the form for creating a new invoice.
      */
     public function create(Request $request)
@@ -119,7 +216,8 @@ class InvoiceController extends Controller
             ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('id', $request->user()->current_company_id);
+            // Qualify column to avoid ambiguity across joined tables
+            $query->where('companies.id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name', 'symbol']);
 
         // Get the next invoice number
@@ -394,7 +492,12 @@ class InvoiceController extends Controller
         }
 
         try {
-            $this->invoiceService->cancelInvoice($invoice);
+            // Pass reason; provide a default if not supplied
+            $reason = trim((string) $request->input('reason', ''));
+            if ($reason === '') {
+                $reason = 'Cancelled by user';
+            }
+            $this->invoiceService->markAsCancelled($invoice, $reason);
 
             return back()->with('success', 'Invoice cancelled successfully.');
 
@@ -417,7 +520,8 @@ class InvoiceController extends Controller
         $this->authorize('view', $invoice);
 
         try {
-            $pdfPath = $this->invoiceService->generatePdf($invoice);
+            // Service method name is generatePDF
+            $pdfPath = $this->invoiceService->generatePDF($invoice);
 
             return response()->download($pdfPath, "invoice-{$invoice->invoice_number}.pdf");
 
@@ -495,5 +599,78 @@ class InvoiceController extends Controller
 
             return back()->with('error', 'Failed to duplicate invoice. '.$e->getMessage());
         }
+    }
+
+    /**
+     * Bulk operations on invoices: send, post, cancel, delete, remind
+     */
+    public function bulk(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'action' => 'required|string|in:send,post,cancel,delete,remind',
+            'invoice_ids' => 'required|array|min:1',
+            'invoice_ids.*' => 'integer|exists:invoices,invoice_id',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        $companyId = $request->user()->current_company_id;
+        $action = $request->input('action');
+        $ids = $request->input('invoice_ids', []);
+
+        $processed = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($ids as $invoiceId) {
+            try {
+                $invoice = Invoice::where('invoice_id', $invoiceId)->where('company_id', $companyId)->firstOrFail();
+                $this->authorize('update', $invoice);
+
+                switch ($action) {
+                    case 'send':
+                        $this->invoiceService->markAsSent($invoice);
+                        break;
+                    case 'post':
+                        $this->invoiceService->markAsPosted($invoice);
+                        break;
+                    case 'cancel':
+                        $reason = trim((string) $request->input('reason', ''));
+                        if ($reason === '') {
+                            $reason = 'Bulk cancel';
+                        }
+                        $this->invoiceService->markAsCancelled($invoice, $reason);
+                        break;
+                    case 'delete':
+                        $this->authorize('delete', $invoice);
+                        if ($invoice->status !== 'draft') {
+                            throw new \RuntimeException('Only draft invoices can be deleted');
+                        }
+                        $this->invoiceService->deleteInvoice($invoice);
+                        break;
+                    case 'remind':
+                        // Send a payment reminder email using default recipient
+                        $subject = 'Payment Reminder for Invoice '.$invoice->invoice_number;
+                        $message = 'This is a friendly reminder that your invoice is due. Please contact us if you have any questions.';
+                        $this->invoiceService->sendEmail($invoice, null, $subject, $message);
+                        break;
+                }
+
+                $processed++;
+            } catch (\Throwable $e) {
+                $failed++;
+                $errors[] = ['invoice_id' => $invoiceId, 'error' => $e->getMessage()];
+                Log::warning('Invoice bulk action failed', [
+                    'action' => $action,
+                    'invoice_id' => $invoiceId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return back()->with('success', "Bulk {$action} completed. Processed: {$processed}, Failed: {$failed}")
+            ->with('bulk_result', compact('processed', 'failed', 'errors'));
     }
 }

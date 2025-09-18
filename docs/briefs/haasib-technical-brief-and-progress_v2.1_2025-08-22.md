@@ -298,6 +298,20 @@
 **Why:** Establish secure request context and stable developer ergonomics before Ledger features.
 **What:**
 - Installed Breeze (Vue + Inertia) and Sanctum; added full auth flow (/login, /register, resets).
+
+### 2025-09-18 — Reusable DataTable + Filters DSL rollout (Payments, Invoices, Customers)
+
+* **Why:** Standardize powerful, server‑safe filtering for large lists while keeping small views simple. Avoid duplicate table/filters logic across modules.
+* **What:**
+  - Added a reusable `DataTablePro` component with column‑menu filters, narrow rows, and optional virtual scroll; custom editors for number/date “Between” (two inputs/range calendar).
+  - Introduced a normalized frontend filters DSL `{ logic, rules: [{ field, operator, value }] }` and a backend `FilterBuilder` to apply it safely (supports direct and relation fields via whereHas).
+  - Implemented active filter chips with one‑click clear and “Clear all”; chips render readable labels (e.g., status labels), show ranges cleanly, and keep URLs tidy by omitting empty params.
+  - Migrated Payments and Invoices to `DataTablePro` + DSL + chips; fixed date off‑by‑one by formatting local YYYY‑MM‑DD; constrained select match modes (Equals/In) and removed irrelevant ones for UX clarity.
+  - Enabled advanced filters on Customers (large dataset): switched to `DataTablePro` + DSL + chips; left Country/Currency as text “Contains” by design; removed legacy top filter bars; cleaned duplicated template/script blocks that broke SFC compilation; corrected bad closing tags and attribute bindings.
+* **How:**
+  - Frontend: `resources/js/Components/DataTablePro.vue` (rule menus, default match modes, custom Between UIs); `resources/js/Utils/filters.ts` (build defaults, map PrimeVue model → DSL, clear single field); per-page integration to build DSL and include `filters` in router GET.
+  - Backend: `app/Support/Filtering/FilterBuilder.php` (operators: text contains/starts_with/equals/in; number eq/lt/lte/gt/gte/between; date on/before/after/between). Controllers (Payments/Invoices/Customers) define small `fieldMap` including relation paths (e.g., customer_name, currency_code) and apply the builder when `filters` is present; legacy params remain supported.
+  - DX/QA: URLs remain clean (no empty params); breadcrumbs ignore queries; sorting/paging preserved; chips kept in sync with the filter model.
 - Created PostgreSQL schema 'app'; added RLS helper `app.company_match(company uuid)`.
 - Implemented middleware: SetTenantContext (session for web, X-Company-Id for API) and TransactionPerRequest.
 - Adopted Option A routing: appended tenant/txn to 'web' & 'api' groups in bootstrap/app.php.

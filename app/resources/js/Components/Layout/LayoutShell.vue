@@ -65,13 +65,11 @@ const closeMobileSidebar = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 280px;
-  transition: margin-left 0.3s ease;
+  margin-left: 0;
+  transition: none;
 }
 
-.layout-wrapper.layout-slim .layout-main {
-  margin-left: 4rem;
-}
+.layout-wrapper.layout-slim .layout-main { margin-left: 0; }
 
 .layout-content {
   flex: 1;
@@ -81,8 +79,8 @@ const closeMobileSidebar = () => {
 
 .layout-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid var(--surface-border);
-  background-color: var(--surface-card);
+  border-top: 1px solid var(--p-content-border-color, var(--surface-border));
+  background-color: var(--p-surface-0, var(--surface-card));
 }
 
 .layout-mask {
@@ -105,13 +103,5 @@ const closeMobileSidebar = () => {
   pointer-events: auto;
 }
 
-@media (max-width: 991px) {
-  .layout-main {
-    margin-left: 0;
-  }
-  
-  .layout-wrapper.layout-slim .layout-main {
-    margin-left: 0;
-  }
-}
+@media (max-width: 991px) { }
 </style>

@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\PaymentService;
+use App\Support\Filtering\FilterBuilder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -25,14 +26,46 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Payment::with(['customer', 'invoices', 'allocations'])
+        $query = Payment::with(['invoices.customer', 'allocations', 'currency'])
             ->where('company_id', $request->user()->current_company_id);
 
+        // Apply normalized DSL filters if provided
+        if ($request->filled('filters')) {
+            $filters = $request->input('filters');
+            if (is_string($filters)) {
+                $decoded = json_decode($filters, true);
+            } else {
+                $decoded = is_array($filters) ? $filters : null;
+            }
+            if (is_array($decoded)) {
+                $builder = new FilterBuilder;
+                $fieldMap = [
+                    'payment_number' => 'payment_number',
+                    'payment_method' => 'payment_method',
+                    'status' => 'status',
+                    'amount' => 'amount',
+                    'created_at' => 'created_at',
+                    // Relation path: payments -> invoices -> customer.name
+                    'customer_name' => [
+                        'relation' => 'invoices.customer',
+                        'column' => 'name',
+                    ],
+                ];
+                $query = $builder->apply($query, $decoded, $fieldMap);
+            }
+        }
+
         $query->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
-            ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->customer_id))
+            ->when($request->filled('customer_id'), fn ($q) => $q->whereHas('invoices', fn ($subQ) => $subQ->where('customer_id', $request->customer_id)))
             ->when($request->filled('payment_method'), fn ($q) => $q->where('payment_method', $request->payment_method))
             ->when($request->filled('date_from'), fn ($q) => $q->where('payment_date', '>=', $request->date_from))
-            ->when($request->filled('date_to'), fn ($q) => $q->where('payment_date', '<=', $request->date_to));
+            ->when($request->filled('date_to'), fn ($q) => $q->where('payment_date', '<=', $request->date_to))
+            // Amount range filters (from column menu)
+            ->when($request->filled('amount_min'), fn ($q) => $q->where('amount', '>=', (float) $request->amount_min))
+            ->when($request->filled('amount_max'), fn ($q) => $q->where('amount', '<=', (float) $request->amount_max))
+            // Created_at date range filters (inclusive by date)
+            ->when($request->filled('created_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->created_from))
+            ->when($request->filled('created_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->created_to));
 
         $query->when($request->filled('search'), function ($q) use ($request) {
             $search = $request->search;
@@ -40,7 +73,7 @@ class PaymentController extends Controller
                 $subQuery->where('payment_number', 'like', "%{$search}%")
                     ->orWhere('reference_number', 'like', "%{$search}%")
                     ->orWhere('notes', 'like', "%{$search}%")
-                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                    ->orWhereHas('invoices.customer', function ($customerQuery) use ($search) {
                         $customerQuery->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%");
                     });
@@ -57,6 +90,22 @@ class PaymentController extends Controller
 
         $payments = $query->paginate($request->input('per_page', 15))
             ->withQueryString();
+
+        // Enrich each payment with derived fields for the UI
+        $payments->getCollection()->transform(function ($payment) {
+            // Total allocated amount for this payment
+            $payment->allocated_amount = (float) ($payment->allocations?->sum('allocated_amount') ?? 0);
+
+            // Provide a customer object inferred from related invoices when direct relation is absent
+            if (! $payment->relationLoaded('customer') || ! $payment->customer) {
+                $firstInvoiceCustomer = optional($payment->invoices->first())->customer;
+                if ($firstInvoiceCustomer) {
+                    $payment->setRelation('customer', $firstInvoiceCustomer);
+                }
+            }
+
+            return $payment;
+        });
 
         // Get available filters
         $customers = Customer::where('company_id', $request->user()->current_company_id)
@@ -85,11 +134,16 @@ class PaymentController extends Controller
         return Inertia::render('Invoicing/Payments/Index', [
             'payments' => $payments,
             'filters' => [
+                'dsl' => $request->input('filters'),
                 'status' => $request->input('status'),
                 'customer_id' => $request->input('customer_id'),
                 'payment_method' => $request->input('payment_method'),
                 'date_from' => $request->input('date_from'),
                 'date_to' => $request->input('date_to'),
+                'amount_min' => $request->input('amount_min'),
+                'amount_max' => $request->input('amount_max'),
+                'created_from' => $request->input('created_from'),
+                'created_to' => $request->input('created_to'),
                 'search' => $request->input('search'),
                 'sort_by' => $sortBy,
                 'sort_direction' => $sortDirection,

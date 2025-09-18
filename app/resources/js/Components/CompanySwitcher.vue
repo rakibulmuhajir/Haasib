@@ -62,28 +62,28 @@ async function switchCompany(event) {
 }
 
 .company-switcher :deep(.p-dropdown) {
-  border: 1px solid var(--surface-border);
-  background-color: var(--surface-card);
-  color: var(--text-color);
+  border: 1px solid var(--p-content-border-color, var(--surface-border));
+  background-color: var(--p-content-background, var(--surface-card));
+  color: var(--p-text-color, var(--text-color));
   border-radius: 0.375rem;
   height: 2.5rem;
   padding: 0 0.75rem;
 }
 
 .company-switcher :deep(.p-dropdown:hover) {
-  border-color: var(--primary-color);
+  border-color: var(--p-primary-color, var(--primary-color));
 }
 
 .company-switcher :deep(.p-dropdown:focus) {
   outline: none;
-  box-shadow: 0 0 0 2px var(--primary-color);
+  box-shadow: 0 0 0 2px var(--p-primary-color, var(--primary-color));
 }
 
 .company-switcher :deep(.p-dropdown-label) {
-  color: var(--text-color);
+  color: var(--p-text-color, var(--text-color));
 }
 
 .company-switcher :deep(.p-dropdown-trigger) {
-  color: var(--text-color-secondary);
+  color: var(--p-text-muted-color, var(--text-color-secondary));
 }
 </style>

@@ -172,8 +172,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 0 1rem;
-  background-color: var(--surface-card);
-  border-bottom: 1px solid var(--surface-border);
+  background-color: var(--p-surface-0, var(--surface-card));
+  border-bottom: 1px solid var(--p-content-border-color, var(--surface-border));
   transition: all 0.3s ease;
 }
 
@@ -189,14 +189,14 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  color: var(--text-color);
+  color: var(--p-text-color, var(--text-color));
   font-size: 1.25rem;
   font-weight: 600;
   transition: color 0.2s;
 }
 
 .layout-topbar-logo:hover {
-  color: var(--primary-color);
+  color: var(--p-primary-color, var(--primary-color));
 }
 
 .layout-menu-button {
@@ -211,7 +211,7 @@ onUnmounted(() => {
 }
 
 .layout-menu-button:hover {
-  background-color: var(--surface-hover);
+  background-color: var(--p-content-hover-background, var(--surface-hover));
 }
 
 .layout-topbar-breadcrumb {
@@ -243,8 +243,8 @@ onUnmounted(() => {
 }
 
 .layout-topbar-action:hover {
-  background-color: var(--surface-hover);
-  color: var(--primary-color);
+  background-color: var(--p-content-hover-background, var(--surface-hover));
+  color: var(--p-primary-color, var(--primary-color));
 }
 
 .theme-icon {

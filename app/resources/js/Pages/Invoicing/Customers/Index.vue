@@ -1,115 +1,47 @@
 <template>
-  <LayoutShell :title="pageMeta.title">
-    <template #title>
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-gray-900">Customers</h1>
-        <div class="flex items-center gap-3">
-          <Button 
-            :label="'Export Customers'" 
-            icon="pi pi-download" 
-            outlined 
-            size="small"
-            @click="exportCustomers"
-          />
-          <Button 
-            :label="'Create Customer'" 
-            icon="pi pi-plus" 
-            size="small"
-            @click="router.visit(route('customers.create'))"
-          />
-        </div>
+  <Head title="Customers" />
+
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Invoicing System" />
+    </template>
+
+    <template #topbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
       </div>
     </template>
 
-    <template #filters>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Status</label>
-          <Dropdown 
-            v-model="filterForm.status" 
-            :options="statusOptions" 
-            optionLabel="label" 
-            optionValue="value"
-            placeholder="All Statuses"
-            class="w-full"
-            @change="applyFilters"
-          />
-        </div>
+    <div class="space-y-6">
+      <PageHeader
+        title="Customers"
+        subtitle="Manage your customer relationships"
+        :maxActions="4"
+      />
 
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Customer Type</label>
-          <Dropdown 
-            v-model="filterForm.customer_type" 
-            :options="customerTypeOptions" 
-            optionLabel="label" 
-            optionValue="value"
-            placeholder="All Types"
-            class="w-full"
-            @change="applyFilters"
-          />
-        </div>
+      <!-- Column-menu filters only (header filter card removed) -->
 
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Country</label>
-          <Dropdown 
-            v-model="filterForm.country_id" 
-            :options="countries" 
-            optionLabel="name" 
-            optionValue="id"
-            placeholder="All Countries"
-            class="w-full"
-            @change="applyFilters"
-          />
-        </div>
-
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Date Range</label>
-          <Calendar 
-            v-model="dateRange" 
-            selectionMode="range" 
-            placeholder="Select date range"
-            class="w-full"
-            @date-select="handleDateChange"
-          />
-        </div>
-      </div>
-
-      <div class="p-4 border-t">
-        <div class="flex items-center gap-3">
-          <span class="text-sm text-gray-600">Search:</span>
-          <InputText 
-            v-model="filterForm.search" 
-            placeholder="Search customers..."
-            class="flex-1"
-            @keyup.enter="applyFilters"
-          />
-          <Button 
-            icon="pi pi-refresh" 
-            size="small" 
-            outlined
-            @click="clearFilters"
-            v-tooltip.bottom="'Reset filters'"
-          />
-        </div>
-      </div>
-    </template>
-
-    <template #content>
+      <!-- Customers Table -->
       <Card>
         <template #content>
-          <DataTable
+          <DataTablePro
             :value="customers.data"
             :loading="customers.loading"
             :paginator="true"
             :rows="customers.per_page"
             :totalRecords="customers.total"
             :lazy="true"
-            @sort="handleSort"
             :sortField="filterForm.sort_by"
             :sortOrder="filterForm.sort_direction === 'asc' ? 1 : -1"
-            stripedRows
-            responsiveLayout="scroll"
-            class="w-full"
+            :columns="columns"
+            v-model:filters="tableFilters"
+            v-model:selection="selectedRows"
+            selectionMode="multiple"
+            dataKey="id"
+            :showSelectionColumn="true"
+            @page="onPage"
+            @sort="onSort"
+            @filter="onFilter"
           >
             <Column 
               field="created_at" 
@@ -119,7 +51,7 @@
             >
               <template #body="{ data }">
                 <div class="font-medium text-gray-900">
-                  {{ formatDate(data.created_at) }}
+                  {{ formatCustomerSince(data.created_at) }}
                 </div>
                 <div class="text-xs text-gray-500" v-if="data.is_active">
                   Active
@@ -166,7 +98,10 @@
               style="width: 120px"
             >
               <template #body="{ data }">
-                {{ data.country?.name || '-' }}
+                <div class="flex items-center gap-2">
+                  <span v-if="data.country?.code" class="text-lg">{{ getCountryFlag(data.country.code) }}</span>
+                  <span>{{ data.country?.name || '-' }}</span>
+                </div>
               </template>
             </Column>
 
@@ -174,10 +109,13 @@
               field="currency" 
               header="Currency" 
               sortable
-              style="width: 80px"
+              style="width: 100px"
             >
               <template #body="{ data }">
-                {{ data.currency?.code || '-' }}
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">{{ data.currency?.code || '-' }}</span>
+                  <span class="text-xs text-gray-500">{{ data.currency?.symbol || '' }}</span>
+                </div>
               </template>
             </Column>
 
@@ -200,7 +138,7 @@
               field="outstanding_balance" 
               header="Balance" 
               sortable
-              style="width: 120px; text-align: right"
+              style="width: 140px; text-align: right"
             >
               <template #body="{ data }">
                 <div class="text-right">
@@ -208,7 +146,9 @@
                     {{ formatMoney(data.outstanding_balance, data.currency) }}
                   </div>
                   <div class="text-xs text-gray-500">
-                    {{ data.risk_level || 'low' }} risk
+                    <span :class="getRiskBadgeClass(data.risk_level)">
+                      {{ data.risk_level || 'low' }} risk
+                    </span>
                   </div>
                 </div>
               </template>
@@ -229,7 +169,7 @@
 
             <Column 
               header="Actions" 
-              style="width: 120px; text-align: center"
+              style="width: 160px; text-align: center"
               exportable="false"
             >
               <template #body="{ data }">
@@ -241,6 +181,7 @@
                     rounded
                     @click="viewCustomer(data)"
                     v-tooltip.bottom="'View customer details'"
+                    class="text-blue-600 hover:text-blue-800"
                   />
                   
                   <Button
@@ -250,6 +191,7 @@
                     rounded
                     @click="editCustomer(data)"
                     v-tooltip.bottom="'Edit customer'"
+                    class="text-green-600 hover:text-green-800"
                   />
                   
                   <Button
@@ -259,6 +201,7 @@
                     rounded
                     @click="viewStatistics(data)"
                     v-tooltip.bottom="'View statistics'"
+                    class="text-purple-600 hover:text-purple-800"
                   />
                   
                   <Button
@@ -270,6 +213,7 @@
                     severity="danger"
                     @click="confirmDelete(data)"
                     v-tooltip.bottom="'Delete customer'"
+                    class="text-red-600 hover:text-red-800"
                   />
                 </div>
               </template>
@@ -299,10 +243,10 @@
                 </span>
               </div>
             </template>
-          </DataTable>
+          </DataTablePro>
         </template>
       </Card>
-    </template>
+    </div>
 
     <!-- Delete Confirmation Dialog -->
     <Dialog 
@@ -344,23 +288,33 @@
         />
       </template>
     </Dialog>
+
+    <!-- Toast for notifications -->
+    <Toast position="top-right" />
   </LayoutShell>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
-import Card from 'primevue/card'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Dropdown from 'primevue/dropdown'
-import InputText from 'primevue/inputtext'
-import Button from 'primevue/button'
-import Badge from 'primevue/badge'
-import Dialog from 'primevue/dialog'
-import Calendar from 'primevue/calendar'
+import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3'
+import { ref, watch, reactive, computed, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import PageHeader from '@/Components/PageHeader.vue'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Dropdown from 'primevue/dropdown'
+import Calendar from 'primevue/calendar'
+import DataTablePro from '@/Components/DataTablePro.vue'
+import { FilterMatchMode } from '@primevue/core/api'
+import { buildDefaultTableFiltersFromColumns, buildDslFromTableFilters, clearTableFilterField } from '@/Utils/filters'
+import Badge from 'primevue/badge'
+import Card from 'primevue/card'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
+import SvgIcon from '@/Components/SvgIcon.vue'
+import Dialog from 'primevue/dialog'
 import { formatDate, formatMoney } from '@/Utils/formatting'
+import { usePageActions } from '@/composables/usePageActions'
+import { useToast } from 'primevue/usetoast'
 
 interface Customer {
   id: number
@@ -371,6 +325,10 @@ interface Customer {
   customer_type: string
   status: string
   created_at: string
+  tax_number?: string
+  outstanding_balance?: number
+  risk_level?: string
+  is_active?: boolean
   country?: {
     id: number
     name: string
@@ -384,57 +342,70 @@ interface Customer {
 }
 
 interface FilterForm {
-  status: string | null
-  customer_type: string | null
-  country_id: number | null
-  created_from: string | null
-  created_to: string | null
-  search: string | null
+  status: string
+  customer_type: string
+  country_id: string
+  date_from: string
+  date_to: string
+  search: string
   sort_by: string
   sort_direction: string
 }
 
-const props = defineProps<{
-  customers: any
-  filters: any
-  countries: any[]
-  statusOptions: any[]
-  customerTypeOptions: any[]
-}>()
-
-const filterForm = reactive<FilterForm>({
-  status: props.filters.status || null,
-  customer_type: props.filters.customer_type || null,
-  country_id: props.filters.country_id || null,
-  created_from: props.filters.created_from || null,
-  created_to: props.filters.created_to || null,
-  search: props.filters.search || null,
-  sort_by: props.filters.sort_by || 'created_at',
-  sort_direction: props.filters.sort_direction || 'desc'
+const props = defineProps({
+  customers: Object,
+  filters: Object,
+  countries: Array,
+  statusOptions: Array,
+  customerTypeOptions: Array,
 })
+
+// Filter form
+const filterForm = useForm({
+  status: props.filters?.status || '',
+  customer_type: props.filters?.customer_type || '',
+  country_id: props.filters?.country_id || '',
+  date_from: props.filters?.created_from || '',
+  date_to: props.filters?.created_to || '',
+  search: props.filters?.search || '',
+  sort_by: props.filters?.sort_by || 'created_at',
+  sort_direction: props.filters?.sort_direction || 'desc',
+})
+// Columns for DataTablePro
+const columns = [
+  { field: 'created_at', header: 'Customer Since', filter: { type: 'date', matchMode: FilterMatchMode.DATE_AFTER }, style: 'width: 140px' },
+  { field: 'name', header: 'Customer Name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 250px' },
+  { field: 'tax_number', header: 'Tax ID', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 140px' },
+  { field: 'country', header: 'Country', filterField: 'country_name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 140px' },
+  { field: 'currency', header: 'Currency', filterField: 'currency_code', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 100px' },
+  { field: 'is_active', header: 'Status', filter: { type: 'select', matchMode: FilterMatchMode.EQUALS, options: [{label:'Active', value:'1'},{label:'Inactive', value:'0'}] }, style: 'width: 120px' },
+  { field: 'outstanding_balance', header: 'Balance', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 140px; text-align: right' },
+  { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 140px; text-align: center' },
+]
+
+const tableFilters = ref<Record<string, any>>(buildDefaultTableFiltersFromColumns(columns as any))
+
+const buildQuery = () => {
+  const data = filterForm.data() as Record<string, any>
+  const base = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== '' && v !== null && v !== undefined))
+  const dsl = buildDslFromTableFilters(tableFilters.value)
+  if (dsl.rules.length) base.filters = JSON.stringify(dsl)
+  return base
+}
 
 const deleteDialog = ref({
   visible: false,
   customer: null as Customer | null,
   loading: false
 })
-const dateRange = ref<Date[] | null>(null)
+const page = usePage()
+const toast = page.props.toast || {}
 
-const pageMeta = computed(() => ({
-  title: 'Customers'
-}))
-
-const handleDateChange = (dates: Date[]) => {
-  dateRange.value = dates
-  if (dates && dates.length === 2) {
-    filterForm.created_from = formatDate(dates[0], 'YYYY-MM-DD')
-    filterForm.created_to = formatDate(dates[1], 'YYYY-MM-DD')
-  } else {
-    filterForm.created_from = null
-    filterForm.created_to = null
-  }
-  applyFilters()
-}
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
+  { label: 'Customers', url: '/customers', icon: 'users' },
+])
 
 const viewCustomer = (customer: Customer) => {
   router.visit(route('customers.show', customer.id))
@@ -448,16 +419,9 @@ const viewStatistics = (customer: Customer) => {
   router.visit(route('customers.statistics', customer.id))
 }
 
+// Export functionality
 const exportCustomers = () => {
-  const params = new URLSearchParams()
-  Object.entries(filterForm).forEach(([key, value]) => {
-    if (value !== null && value !== undefined && value !== '') {
-      params.append(key, String(value))
-    }
-  })
-  
-  const url = route('customers.export') + '?' + params.toString()
-  window.open(url, '_blank')
+  window.location.href = route('customers.export', filterForm.data())
 }
 
 const canDelete = (customer: Customer): boolean => {
@@ -470,25 +434,114 @@ const getBalanceClass = (balance: number): string => {
   return 'text-gray-600'
 }
 
+// Apply filters
 const applyFilters = () => {
-  router.get(route('customers.index'), filterForm, {
-    preserveState: true,
-    preserveScroll: true,
-    replace: true
-  })
+  router.get(route('customers.index'), buildQuery(), { preserveState: true, preserveScroll: true })
 }
 
+// Clear filters
 const clearFilters = () => {
-  Object.keys(filterForm).forEach(key => {
-    if (key === 'sort_by' || key === 'sort_direction') return
-    filterForm[key as keyof FilterForm] = null
-  })
+  filterForm.reset()
+  tableFilters.value = buildDefaultTableFiltersFromColumns(columns as any)
+  router.get(route('customers.index'), {}, { preserveState: true, preserveScroll: true })
+}
+
+// Watch for filter changes and auto-apply
+watch(
+  () => [
+    filterForm.status,
+    filterForm.customer_type,
+    filterForm.country_id,
+    filterForm.date_from,
+    filterForm.date_to,
+    filterForm.search,
+    filterForm.sort_by,
+    filterForm.sort_direction
+  ],
+  () => {
+    if (filterForm.recentlySuccessful) return // Skip after form submission
+    applyFilters()
+  },
+  { deep: true }
+)
+
+// Handle sorting
+const onPage = (e: any) => {
+  const params = { ...buildQuery(), page: (e.page || 0) + 1 }
+  router.get(route('customers.index'), params, { preserveState: true, preserveScroll: true })
+}
+
+const onSort = (e: any) => {
+  if (!e.sortField) return
+  const allowed = ['created_at', 'name', 'email', 'tax_number', 'is_active']
+  if (!allowed.includes(e.sortField)) return
+  filterForm.sort_by = e.sortField
+  filterForm.sort_direction = e.sortOrder === 1 ? 'asc' : 'desc'
   applyFilters()
 }
 
-const handleSort = (event: any) => {
-  filterForm.sort_by = event.sortField
-  filterForm.sort_direction = event.sortOrder === 1 ? 'asc' : 'desc'
+const onFilter = (e: any) => {
+  if (e && e.filters) tableFilters.value = e.filters
+  applyFilters()
+}
+
+// Active filter chips derived from tableFilters
+const activeFilters = computed(() => {
+  const chips: Array<{ key: string; display: string; field: string }> = []
+  const f: any = tableFilters.value || {}
+  const first = (k: string) => f[k]?.constraints?.[0]
+  const add = (key: string, field: string, display: string) => chips.push({ key, field, display })
+
+  const name = first('name')
+  if (name?.value) add('name', 'name', `Name: ${name.value}`)
+  const country = first('country_name')
+  if (country?.value) add('country_name', 'country_name', `Country: ${country.value}`)
+  const currency = first('currency_code')
+  if (currency?.value) add('currency_code', 'currency_code', `Currency: ${currency.value}`)
+  const status = first('is_active')
+  const statusLabel = (val: string|number) => {
+    const opts = (props.statusOptions as any[] | undefined) || []
+    const found = opts.find((o:any) => String(o.value) === String(val))
+    return found?.label ?? (String(val) === '1' ? 'Active' : 'Inactive')
+  }
+  if (status?.value !== null && status?.value !== '' && status?.value !== undefined) add('is_active', 'is_active', `Status: ${statusLabel(status.value)}`)
+
+  // Date created_at
+  const dateCs = f.created_at?.constraints || []
+  const toLocal = (d:any)=>{ if(!d) return ''; const dt=new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}` }
+  const dBetween = dateCs.find((c:any)=>String(c.matchMode||'').toLowerCase()==='between')
+  if (dBetween && Array.isArray(dBetween.value)) {
+    const a = toLocal(dBetween.value[0]); const b = toLocal(dBetween.value[1])
+    if (a||b) add('created_at', 'created_at', `Created: ${a||'…'} — ${b||'…'}`)
+  } else {
+    for (const c of dateCs) {
+      const mm = String(c.matchMode||'').toLowerCase(); const d = toLocal(c.value); if (!d) continue
+      if (mm.includes('after')) add('created_at', 'created_at', `Created ≥ ${d}`)
+      else if (mm.includes('before')) add('created_at', 'created_at', `Created ≤ ${d}`)
+      else if (mm.includes('dateis')||mm.includes('equals')) add('created_at', 'created_at', `Created = ${d}`)
+    }
+  }
+
+  // Number outstanding_balance
+  const numCs = f.outstanding_balance?.constraints || []
+  const nBetween = numCs.find((c:any)=>String(c.matchMode||'').toLowerCase()==='between')
+  if (nBetween && Array.isArray(nBetween.value)) {
+    const [a,b] = nBetween.value
+    if (a!=null || b!=null) add('outstanding_balance', 'outstanding_balance', `Balance: ${a ?? '…'} — ${b ?? '…'}`)
+  } else {
+    for (const c of numCs) {
+      const mm = String(c.matchMode||'').toLowerCase(); const v=c.value; if (v===''||v==null) continue
+      if (mm.includes('greater')) add('outstanding_balance','outstanding_balance',`Balance ≥ ${v}`)
+      else if (mm.includes('less')) add('outstanding_balance','outstanding_balance',`Balance ≤ ${v}`)
+      else if (mm.includes('equals')) add('outstanding_balance','outstanding_balance',`Balance = ${v}`)
+    }
+  }
+
+  return chips
+})
+
+const clearFilterChip = (chip: { key: string; field: string }) => {
+  clearTableFilterField(tableFilters.value, chip.field)
   applyFilters()
 }
 
@@ -550,13 +603,67 @@ const getStatusSeverity = (status: string): string => {
   return severityMap[status] || 'secondary'
 }
 
-onMounted(() => {
-  // Initialize tooltips if available
-  if (window.bootstrap && window.bootstrap.Tooltip) {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new window.bootstrap.Tooltip(tooltipTriggerEl)
-    })
+const formatCustomerSince = (dateString: string): string => {
+  const date = new Date(dateString)
+  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const year = date.getFullYear().toString().slice(-2)
+  return `${month.slice(0, 3)}'${year}`
+}
+
+const getCountryFlag = (countryCode: string): string => {
+  const flagMap: Record<string, string> = {
+    'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺', 'DE': '🇩🇪',
+    'FR': '🇫🇷', 'IT': '🇮🇹', 'ES': '🇪🇸', 'JP': '🇯🇵', 'CN': '🇨🇳', 'IN': '🇮🇳'
   }
-})
+  return flagMap[countryCode] || '🌐'
+}
+
+const getRiskBadgeClass = (riskLevel: string): string => {
+  const risk = riskLevel?.toLowerCase() || 'low'
+  switch (risk) {
+    case 'high': return 'text-red-600 font-medium'
+    case 'medium': return 'text-orange-600 font-medium'
+    case 'low': return 'text-green-600 font-medium'
+    default: return 'text-gray-600'
+  }
+}
+// Selection for bulk actions
+const selectedRows = ref<any[]>([])
+
+// Page Actions rendered in page header
+const { setActions, clearActions } = usePageActions()
+const toasty = useToast()
+
+async function bulkDelete() {
+  if (!selectedRows.value.length) return
+  await router.post(route('customers.bulk'), {
+    action: 'delete',
+    customer_ids: selectedRows.value.map((r:any) => r.id)
+  }, { preserveState: true, preserveScroll: true })
+}
+async function bulkDisable() {
+  if (!selectedRows.value.length) return
+  await router.post(route('customers.bulk'), {
+    action: 'disable',
+    customer_ids: selectedRows.value.map((r:any) => r.id)
+  }, { preserveState: true, preserveScroll: true })
+}
+async function bulkEnable() {
+  if (!selectedRows.value.length) return
+  await router.post(route('customers.bulk'), {
+    action: 'enable',
+    customer_ids: selectedRows.value.map((r:any) => r.id)
+  }, { preserveState: true, preserveScroll: true })
+}
+
+setActions([
+  { key: 'add', label: 'Add New', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('customers.create')) },
+  { key: 'delete', label: 'Delete Selected', icon: 'pi pi-trash', severity: 'danger', disabled: () => selectedRows.value.length === 0, click: bulkDelete },
+  { key: 'disable', label: 'Disable', icon: 'pi pi-ban', severity: 'secondary', disabled: () => selectedRows.value.length === 0, click: bulkDisable },
+  { key: 'enable', label: 'Enable', icon: 'pi pi-check', severity: 'success', disabled: () => selectedRows.value.length === 0, click: bulkEnable },
+  { key: 'export', label: 'Export', icon: 'pi pi-download', severity: 'secondary', outlined: true, click: () => exportCustomers() },
+  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => applyFilters() },
+])
+
+onUnmounted(() => clearActions())
 </script>

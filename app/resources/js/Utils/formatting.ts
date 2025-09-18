@@ -1,10 +1,36 @@
-export const formatMoney = (amount: number, currency: { symbol: string }): string => {
+type MoneyCurrency = { code?: string; symbol?: string } | null | undefined
+
+export const formatMoney = (amount?: number | string | null, currency?: MoneyCurrency): string => {
+  let numericAmount: number | null = null
+  if (typeof amount === 'number') {
+    numericAmount = amount
+  } else if (typeof amount === 'string') {
+    const parsed = Number(amount)
+    numericAmount = Number.isFinite(parsed) ? parsed : null
+  }
+  const safeAmount = typeof numericAmount === 'number' && isFinite(numericAmount) ? numericAmount : 0
+
+  // Prefer a provided ISO currency code when available
+  const code = currency && typeof currency === 'object' && currency.code ? currency.code : undefined
+  if (code) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(safeAmount)
+  }
+
+  // Fallback to USD formatting and replace symbol if provided
+  const symbol = currency && typeof currency === 'object' && currency.symbol ? currency.symbol : '$'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount).replace(/\$/g, currency.symbol)
+    maximumFractionDigits: 2,
+  })
+    .format(safeAmount)
+    .replace(/\$/g, symbol)
 }
 
 export const formatDate = (dateString: string): string => {

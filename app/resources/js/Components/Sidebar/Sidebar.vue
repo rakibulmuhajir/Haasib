@@ -206,12 +206,39 @@ const sidebarClass = computed(() => ({
   top: 0;
   height: 100vh;
   width: 280px;
-  background-color: var(--surface-card);
+  /* Fully opaque, readable surface in light mode */
+  background-color: var(--surface-card, #ffffff);
+  color: var(--text-color, #0f172a);
   border-right: 1px solid var(--surface-border);
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
   z-index: 998;
+  transform: translateX(-100%);
+  box-shadow: 2px 0 12px rgba(0,0,0,.08);
+}
+
+/* Also ensure header and scroll area inherit opaque background */
+.layout-sidebar-logo,
+.layout-menu-container,
+.layout-sidebar-footer {
+  background-color: inherit;
+}
+
+/* Explicitly respond to app theme attribute for dark/light */
+:root[data-theme="blue-whale"] .layout-sidebar {
+  /* Prefer theme tokens; fallbacks keep component readable */
+  background-color: var(--p-surface-0, var(--surface-card, #ffffff));
+  color: var(--p-text-color, var(--text-color, #0f172a));
+  border-right-color: var(--p-content-border-color, var(--surface-border, rgba(0,0,0,0.08)));
+}
+
+:root[data-theme="blue-whale-dark"] .layout-sidebar {
+  /* Use opaque-ish background in dark to avoid ground bleed-through */
+  background-color: var(--p-surface-950, var(--surface-card, #0f172a));
+  color: var(--p-text-color, var(--text-color, #e5e7eb));
+  border-right-color: var(--p-content-border-color, rgba(255,255,255,0.12));
+  box-shadow: 2px 0 14px rgba(0,0,0,.35);
 }
 
 .layout-sidebar-slim {
@@ -291,7 +318,8 @@ const sidebarClass = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  /* Square button (no curved borders) */
+  border-radius: 0;
   background-color: transparent;
   border: none;
   color: var(--text-color-secondary);
@@ -300,17 +328,12 @@ const sidebarClass = computed(() => ({
 }
 
 .layout-sidebar-toggle:hover {
-  background-color: var(--surface-hover);
+  /* Align hover surface with theme tokens */
+  background-color: var(--p-content-hover-background, var(--surface-hover, rgba(0,0,0,.04)));
   color: var(--primary-color);
 }
 
-@media (max-width: 991px) {
-  .layout-sidebar {
-    transform: translateX(-100%);
-  }
-  
-  .layout-wrapper.layout-mobile-active .layout-sidebar {
-    transform: translateX(0);
-  }
+.layout-wrapper.layout-mobile-active .layout-sidebar {
+  transform: translateX(0);
 }
 </style>

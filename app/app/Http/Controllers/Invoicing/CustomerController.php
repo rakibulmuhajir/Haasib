@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\CustomerService;
+use App\Support\Filtering\FilterBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -26,6 +27,27 @@ class CustomerController extends Controller
     {
         $query = Customer::with(['currency', 'country'])
             ->where('company_id', $request->user()->current_company_id);
+
+        // Apply normalized DSL filters if provided
+        if ($request->filled('filters')) {
+            $filters = $request->input('filters');
+            $decoded = is_string($filters) ? json_decode($filters, true) : (is_array($filters) ? $filters : null);
+            if (is_array($decoded)) {
+                $builder = new FilterBuilder;
+                $fieldMap = [
+                    'name' => 'name',
+                    'email' => 'email',
+                    'phone' => 'phone',
+                    'tax_number' => 'tax_number',
+                    'created_at' => 'created_at',
+                    'is_active' => 'is_active',
+                    'country_name' => ['relation' => 'country', 'column' => 'name'],
+                    'currency_code' => ['relation' => 'currency', 'column' => 'code'],
+                    'outstanding_balance' => 'outstanding_balance',
+                ];
+                $query = $builder->apply($query, $decoded, $fieldMap);
+            }
+        }
 
         // Apply filters
         if ($request->filled('is_active')) {
@@ -88,6 +110,7 @@ class CustomerController extends Controller
         return Inertia::render('Invoicing/Customers/Index', [
             'customers' => $customers,
             'filters' => [
+                'dsl' => $request->input('filters'),
                 'is_active' => $request->input('is_active'),
                 'country_id' => $request->input('country_id'),
                 'created_from' => $request->input('created_from'),
@@ -100,6 +123,43 @@ class CustomerController extends Controller
             'statusOptions' => $statusOptions,
             'customerTypeOptions' => $customerTypeOptions,
         ]);
+    }
+
+    /**
+     * Export customers as CSV using current filters.
+     */
+    public function export(Request $request)
+    {
+        $company = $request->user()->current_company;
+
+        $rows = $this->customerService->exportCustomers(
+            company: $company,
+            search: $request->input('search'),
+            status: $request->input('status'),
+            customerType: $request->input('customer_type'),
+            countryId: $request->input('country_id'),
+            dateFrom: $request->input('created_from'),
+            dateTo: $request->input('created_to')
+        );
+
+        $filename = 'customers-'.now()->format('Ymd-His').'.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            if (isset($rows[0])) {
+                fputcsv($out, array_keys($rows[0]));
+            }
+            foreach ($rows as $row) {
+                fputcsv($out, array_values($row));
+            }
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**
@@ -416,5 +476,64 @@ class CustomerController extends Controller
             'customer' => $customer,
             'statistics' => $statistics,
         ]);
+    }
+
+    /**
+     * Bulk operations on customers: delete, disable, enable
+     */
+    public function bulk(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'action' => 'required|string|in:delete,disable,enable',
+            'customer_ids' => 'required|array|min:1',
+            'customer_ids.*' => 'integer|exists:customers,id',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        $companyId = $request->user()->current_company_id;
+        $action = $request->input('action');
+        $ids = $request->input('customer_ids', []);
+
+        $processed = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($ids as $id) {
+            try {
+                $customer = Customer::where('id', $id)->where('company_id', $companyId)->firstOrFail();
+
+                if ($action === 'delete') {
+                    // Ensure no invoices or payments and no outstanding balance
+                    $hasInvoices = Invoice::where('customer_id', $customer->id)->exists();
+                    $hasPayments = Payment::where('customer_id', $customer->id)->exists();
+                    if ($hasInvoices || $hasPayments || ($customer->outstanding_balance ?? 0) > 0) {
+                        throw new \RuntimeException('Customer has related records or outstanding balance');
+                    }
+                    $this->customerService->deleteCustomer($customer);
+                } elseif ($action === 'disable') {
+                    $customer->is_active = false;
+                    $customer->save();
+                } elseif ($action === 'enable') {
+                    $customer->is_active = true;
+                    $customer->save();
+                }
+
+                $processed++;
+            } catch (\Throwable $e) {
+                $failed++;
+                $errors[] = ['customer_id' => $id, 'error' => $e->getMessage()];
+                Log::warning('Customer bulk action failed', [
+                    'action' => $action,
+                    'customer_id' => $id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return back()->with('success', "Bulk {$action} completed. Processed: {$processed}, Failed: {$failed}")
+            ->with('bulk_result', compact('processed', 'failed', 'errors'));
     }
 }

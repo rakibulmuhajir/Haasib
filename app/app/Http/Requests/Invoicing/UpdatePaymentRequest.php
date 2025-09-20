@@ -22,7 +22,7 @@ class UpdatePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => 'required|exists:customers,customer_id',
             'payment_number' => 'required|string|max:50',
             'payment_date' => 'required|date',
             'amount' => 'required|numeric|min:0.01',
@@ -32,7 +32,7 @@ class UpdatePaymentRequest extends FormRequest
             'notes' => 'nullable|string|max:1000',
             'auto_allocate' => 'boolean',
             'invoice_allocations' => 'sometimes|array',
-            'invoice_allocations.*.invoice_id' => 'required_with:invoice_allocations|exists:invoices,id',
+            'invoice_allocations.*.invoice_id' => 'required_with:invoice_allocations|exists:invoices,invoice_id',
             'invoice_allocations.*.amount' => 'required_with:invoice_allocations|numeric|min:0.01',
         ];
     }

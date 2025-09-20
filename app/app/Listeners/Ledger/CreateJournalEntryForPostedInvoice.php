@@ -23,15 +23,16 @@ class CreateJournalEntryForPostedInvoice implements ShouldQueue
      */
     public function handle(InvoicePosted $event): void
     {
-        $invoice = $event->invoice;
-        $company = $invoice->company;
+        try {
+            $invoice = $event->invoice;
+            $company = $invoice->company;
 
         // Ensure this process is idempotent. If a journal entry for this invoice already exists, do nothing.
-        if ($invoice->journalEntry()->exists()) {
-            Log::warning('Attempted to create a duplicate journal entry for a posted invoice.', ['invoice_id' => $invoice->invoice_id]);
+            if ($invoice->journalEntry()->exists()) {
+                Log::warning('Attempted to create a duplicate journal entry for a posted invoice.', ['invoice_id' => $invoice->invoice_id]);
 
-            return;
-        }
+                return;
+            }
 
         // Fetch the required ledger accounts from company settings.
         // You should have a robust way to manage these account mappings.
@@ -39,12 +40,10 @@ class CreateJournalEntryForPostedInvoice implements ShouldQueue
         $salesRevenueAccountId = $company->settings['default_sales_revenue_account_id'] ?? null;
         $salesTaxAccountId = $company->settings['default_sales_tax_account_id'] ?? null;
 
-        if (! $accountsReceivableAccountId || ! $salesRevenueAccountId) {
-            Log::error('Missing default ledger account mappings for sales posting.', ['company_id' => $company->id]);
-
-            // Optionally, you could fail the job here to retry later.
-            return;
-        }
+            if (! $accountsReceivableAccountId || ! $salesRevenueAccountId) {
+                Log::error('Missing default ledger account mappings for sales posting.', ['company_id' => $company->id]);
+                return;
+            }
 
         $lines = [];
 
@@ -74,16 +73,23 @@ class CreateJournalEntryForPostedInvoice implements ShouldQueue
             ];
         }
 
-        $journalEntry = $this->ledgerService->createJournalEntry(
-            company: $company,
-            description: "To record sale for Invoice #{$invoice->invoice_number}",
-            lines: $lines,
-            reference: $invoice->invoice_number,
-            date: $invoice->posted_at->toDateString(),
-            sourceType: 'invoice',
-            sourceId: $invoice->invoice_id
-        );
+            $journalEntry = $this->ledgerService->createJournalEntry(
+                company: $company,
+                description: "To record sale for Invoice #{$invoice->invoice_number}",
+                lines: $lines,
+                reference: $invoice->invoice_number,
+                date: optional($invoice->posted_at)->toDateString() ?? now()->toDateString(),
+                sourceType: 'invoice',
+                sourceId: $invoice->invoice_id
+            );
 
-        $this->ledgerService->postJournalEntry($journalEntry);
+            $this->ledgerService->postJournalEntry($journalEntry);
+        } catch (\Throwable $e) {
+            Log::error('Failed to create/post journal entry for invoice', [
+                'invoice_id' => $event->invoice->invoice_id,
+                'error' => $e->getMessage(),
+            ]);
+            // Do not throw to avoid breaking API responses; rely on logs for diagnostics
+        }
     }
 }

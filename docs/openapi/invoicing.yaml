@@ -1,0 +1,1517 @@
+openapi: 3.0.3
+info:
+  title: Haasib Invoicing API
+  version: 1.0.0
+  description: Core endpoints for invoices, payments, customers, and currencies with idempotency and company scoping
+servers:
+  - url: http://localhost
+paths:
+  /api/invoices:
+    get:
+      summary: List invoices
+      parameters:
+        - in: header
+          name: X-Company-Id
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoiceList' }
+    post:
+      summary: Create invoice
+      parameters:
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/invoices/{id}:
+    get:
+      summary: Get invoice
+      parameters:
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+  /api/invoices/{id}/send:
+    post:
+      summary: Mark invoice as sent
+      parameters:
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/invoices/{id}/post:
+    post:
+      summary: Post invoice to ledger
+      parameters:
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/invoices/{id}/cancel:
+    post:
+      summary: Cancel invoice
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/invoices/{id}/generate-pdf:
+    post:
+      summary: Generate invoice PDF
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPdfGenerate' }
+  /api/invoices/{id}/pdf-exists:
+    get:
+      summary: Check if invoice PDF exists
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPdfExists' }
+  /api/invoices/{id}/send-email:
+    post:
+      summary: Send invoice email
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/invoices/{id}/duplicate:
+    post:
+      summary: Duplicate invoice
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoice' }
+  /api/invoices/statistics:
+    get:
+      summary: Get invoice statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoiceStatistics' }
+  /api/invoices/bulk:
+    post:
+      summary: Bulk invoice actions
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string }
+                invoice_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBulk' }
+  /api/payments:
+    get:
+      summary: List payments
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: customer_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: payment_method
+          schema: { type: string }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: currency_id
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPaymentList' }
+    post:
+      summary: Create payment
+      parameters:
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPayment' }
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/payments/{id}:
+    get:
+      summary: Get payment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPayment' }
+    put:
+      summary: Update payment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPayment' }
+    delete:
+      summary: Delete payment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/payments/{id}/auto-allocate:
+    post:
+      summary: Auto-allocate payment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkAutoAllocate' }
+  /api/payments/{id}/void:
+    post:
+      summary: Void payment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ reason ]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPayment' }
+  /api/payments/{id}/refund:
+    post:
+      summary: Refund payment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ amount ]
+              properties:
+                amount: { type: number }
+                reason: { type: string, nullable: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/payments/statistics:
+    get:
+      summary: Get payment statistics
+      parameters:
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPaymentStatistics' }
+  /api/payments/{customerId}/summary:
+    get:
+      summary: Get customer payment summary
+      parameters:
+        - in: path
+          name: customerId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/payments/{id}/allocation-suggestions:
+    get:
+      summary: Get payment allocation suggestions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/payments/bulk:
+    post:
+      summary: Bulk payment actions
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string }
+                payment_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBulk' }
+  /api/payments/{id}/allocations:
+    get:
+      summary: List allocations for a payment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiOk'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Allocation' }
+    post:
+      summary: Allocate payment to an invoice
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ invoice_id, amount ]
+              properties:
+                invoice_id: { type: string, format: uuid }
+                amount: { type: number }
+                allocation_date: { type: string, format: date, nullable: true }
+                notes: { type: string, nullable: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiOk'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Allocation' }
+  /api/payments/{paymentId}/allocations/{allocationId}/void:
+    post:
+      summary: Void an allocation
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: allocationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, nullable: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkAllocation' }
+  /api/payments/{paymentId}/allocations/{allocationId}/refund:
+    post:
+      summary: Refund an allocation
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: allocationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ amount ]
+              properties:
+                amount: { type: number }
+                reason: { type: string, nullable: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkAllocation' }
+  /api/customers:
+    get:
+      summary: List customers
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, inactive, archived] }
+        - in: query
+          name: customer_type
+          schema: { type: string, enum: [individual, business] }
+        - in: query
+          name: currency_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkCustomerList'
+    post:
+      summary: Create customer
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerCreate' }
+            examples:
+              sample:
+                value:
+                  name: "Acme Corp"
+                  email: "billing@acme.test"
+                  phone: "+12025550123"
+                  customer_code: "ACME-001"
+                  customer_type: "business"
+                  currency_id: "5e084a19-7a57-4f2a-9b9b-0a2b029a9d34"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCustomer' }
+  /api/customers/{id}:
+    get:
+      summary: Get customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCustomer' }
+    put:
+      summary: Update customer
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCustomer' }
+    delete:
+      summary: Delete customer
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+        '400':
+          description: Cannot delete due to relations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFail' }
+  /api/customers/{id}/invoices:
+    get:
+      summary: List invoices for customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkInvoiceList' }
+  /api/customers/{id}/payments:
+    get:
+      summary: List payments for customer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkPaymentList' }
+  /api/customers/{id}/statement:
+    get:
+      summary: Get customer statement
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkStatement' }
+  /api/customers/{id}/statistics:
+    get:
+      summary: Get customer statistics
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCustomerStatistics' }
+  /api/customers/search:
+    get:
+      summary: Search customers
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCustomerList' }
+  /api/customers/bulk:
+    post:
+      summary: Bulk customer actions
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerBulk' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBulk' }
+  /api/currencies/company:
+    get:
+      summary: Get company currencies configuration
+      responses:
+        '200': { description: OK }
+  /api/currencies/available:
+    get:
+      summary: List available currencies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCurrencyList' }
+  /api/currencies/exchange-rate:
+    get:
+      summary: Get exchange rate
+      parameters:
+        - in: query
+          name: from_currency
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: to_currency
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkExchangeRate' }
+    post:
+      summary: Update exchange rate
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExchangeRateUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkExchangeRateRecord' }
+  /api/currencies/convert:
+    post:
+      summary: Convert currency amount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CurrencyConvert' }
+            examples:
+              sample:
+                value: { amount: 100, from_currency: "USD", to_currency: "EUR" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCurrencyConversion' }
+  /api/currencies/enable:
+    post:
+      summary: Enable currency for company
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ currency_code ]
+              properties:
+                currency_code: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/disable:
+    post:
+      summary: Disable currency for company
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ currency_code ]
+              properties:
+                currency_code: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/exchange-rate-history:
+    get:
+      summary: Get exchange rate history
+      parameters:
+        - in: query
+          name: from_currency
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: to_currency
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+        - in: query
+          name: start_date
+          schema: { type: string, format: date }
+        - in: query
+          name: end_date
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/latest-exchange-rates:
+    get:
+      summary: Get latest exchange rates
+      parameters:
+        - in: query
+          name: base_currency
+          schema: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/balances:
+    get:
+      summary: Get currency balances for company
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/currency-impact:
+    post:
+      summary: Calculate currency impact for transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CurrencyImpact' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/sync-exchange-rates:
+    post:
+      summary: Sync exchange rates from external provider
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider: { type: string, enum: [fixer, openexchangerates, ecb] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiOk' }
+  /api/currencies/symbol:
+    get:
+      summary: Get currency symbol
+      parameters:
+        - in: query
+          name: currency_code
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 3 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkCurrencySymbol' }
+  /api/currencies/format-money:
+    post:
+      summary: Format money amount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ amount, currency_code ]
+              properties:
+                amount: { type: number }
+                currency_code: { type: string, minLength: 3, maxLength: 3 }
+                locale: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkFormatMoney' }
+components:
+  schemas:
+    ApiOk:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, nullable: true }
+        data: { nullable: true }
+        meta: { type: object, nullable: true }
+    ApiFail:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+        code: { type: string, example: INTERNAL_ERROR }
+        meta: { type: object, nullable: true }
+    # Customers
+    CustomerStatistics:
+      type: object
+      properties:
+        invoice_stats:
+          type: object
+          properties:
+            total_invoices: { type: integer }
+            total_amount: { type: number }
+            paid_invoices: { type: integer }
+            partial_invoices: { type: integer }
+            unpaid_invoices: { type: integer }
+            overdue_invoices: { type: integer }
+        payment_stats:
+          type: object
+          properties:
+            total_payments: { type: integer }
+            total_paid: { type: number }
+            average_payment_amount: { type: number }
+            last_payment_date: { type: string, format: date, nullable: true }
+        aging_analysis: { type: object }
+        payment_history:
+          type: array
+          items: { type: object }
+    OkCustomerStatistics:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/CustomerStatistics' }
+    OkCurrencyList:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Currency' }
+    # Currencies
+    ExchangeRate:
+      type: object
+      properties:
+        from_currency: { type: string }
+        to_currency: { type: string }
+        rate: { type: number }
+        date: { type: string, format: date }
+        inverse_rate: { type: number }
+    OkExchangeRate:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ExchangeRate' }
+    ExchangeRateRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        from_currency: { type: string }
+        to_currency: { type: string }
+        rate: { type: number }
+        effective_date: { type: string, format: date }
+        source: { type: string }
+        updated_at: { type: string, format: date-time }
+    OkExchangeRateRecord:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ExchangeRateRecord' }
+    CurrencyConversionResult:
+      type: object
+      properties:
+        original_amount: { type: number }
+        original_currency: { type: string }
+        converted_amount: { type: number }
+        converted_currency: { type: string }
+        exchange_rate_used: { type: number }
+        date: { type: string, format: date }
+        formatted_original: { type: string }
+        formatted_converted: { type: string }
+    OkCurrencyConversion:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/CurrencyConversionResult' }
+    CurrencySymbol:
+      type: object
+      properties:
+        currency_code: { type: string }
+        symbol: { type: string }
+    OkCurrencySymbol:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/CurrencySymbol' }
+    FormatMoneyResult:
+      type: object
+      properties:
+        amount: { type: number }
+        currency_code: { type: string }
+        formatted: { type: string }
+        locale: { type: string }
+    OkFormatMoney:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/FormatMoneyResult' }
+    # Payments helpers
+    OkAllocation:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/Allocation' }
+    InvoiceItemInput:
+      type: object
+      required: [ description, quantity, unit_price ]
+      properties:
+        item_id: { type: string, format: uuid, nullable: true }
+        description: { type: string }
+        quantity: { type: number }
+        unit_price: { type: number }
+        tax_inclusive: { type: boolean }
+        discount_percentage: { type: number, nullable: true }
+        discount_amount: { type: number, nullable: true }
+    InvoiceCreate:
+      type: object
+      required: [ customer_id, items ]
+      properties:
+        customer_id: { type: string, format: uuid }
+        currency_id: { type: string, format: uuid, nullable: true }
+        invoice_date: { type: string, format: date, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        notes: { type: string, nullable: true }
+        terms: { type: string, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InvoiceItemInput' }
+    PaymentCreate:
+      type: object
+      required: [ customer_id, amount ]
+      properties:
+        customer_id: { type: string, format: uuid }
+        amount: { type: number }
+        currency_id: { type: string, format: uuid, nullable: true }
+        payment_method: { type: string, nullable: true }
+        payment_reference: { type: string, nullable: true }
+        payment_date: { type: string, format: date, nullable: true }
+        notes: { type: string, nullable: true }
+    Payment:
+      type: object
+      properties:
+        payment_id: { type: string, format: uuid }
+        payment_number: { type: string }
+        customer_id: { type: string, format: uuid, nullable: true }
+        amount: { type: number }
+        currency_id: { type: string, format: uuid }
+        exchange_rate: { type: number }
+        payment_method: { type: string }
+        payment_date: { type: string, format: date }
+        status: { type: string, enum: [pending, completed, failed, cancelled] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Allocation:
+      type: object
+      properties:
+        allocation_id: { type: string, format: uuid }
+        payment_id: { type: string, format: uuid }
+        invoice_id: { type: string, format: uuid }
+        allocated_amount: { type: number }
+        allocation_date: { type: string, format: date }
+        status: { type: string, enum: [active, void, refunded] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Customer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        postal_code: { type: string, nullable: true }
+        customer_code: { type: string, nullable: true }
+        customer_type: { type: string, enum: [individual, business] }
+        tax_id: { type: string, nullable: true }
+        registration_number: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        payment_terms: { type: string, nullable: true }
+        credit_limit: { type: number, nullable: true }
+        currency_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CustomerCreate:
+      allOf:
+        - $ref: '#/components/schemas/Customer'
+        - type: object
+          required: [ name ]
+    CustomerUpdate:
+      allOf:
+        - $ref: '#/components/schemas/Customer'
+    CustomerBulk:
+      type: object
+      required: [ action, customer_ids ]
+      properties:
+        action: { type: string, enum: [delete, activate, deactivate] }
+        customer_ids:
+          type: array
+          items: { type: string, format: uuid }
+    OkCustomer:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/Customer' }
+    OkCustomerList:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Customer' }
+            meta:
+              type: object
+              properties:
+                current_page: { type: integer }
+                per_page: { type: integer }
+                total: { type: integer }
+                last_page: { type: integer }
+    StatementSummary:
+      type: object
+      properties:
+        total_invoiced: { type: number }
+        total_paid: { type: number }
+        outstanding_balance: { type: number }
+        overdue_invoices: { type: integer }
+        overdue_amount: { type: number }
+    OkStatement:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                customer:
+                  type: object
+                period:
+                  type: object
+                  properties:
+                    from: { type: string, format: date, nullable: true }
+                    to: { type: string, format: date, nullable: true }
+                invoices: { type: array, items: { type: object } }
+                payments: { type: array, items: { type: object } }
+                summary: { $ref: '#/components/schemas/StatementSummary' }
+    Currency:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        symbol: { type: string }
+        decimal_places: { type: integer }
+        is_active: { type: boolean }
+    ExchangeRateUpdate:
+      type: object
+      required: [ from_currency, to_currency, rate ]
+      properties:
+        from_currency: { type: string, minLength: 3, maxLength: 3 }
+        to_currency: { type: string, minLength: 3, maxLength: 3 }
+        rate: { type: number }
+        effective_date: { type: string, format: date, nullable: true }
+        source: { type: string, nullable: true }
+    CurrencyConvert:
+      type: object
+      required: [ amount, from_currency, to_currency ]
+      properties:
+        amount: { type: number }
+        from_currency: { type: string, minLength: 3, maxLength: 3 }
+        to_currency: { type: string, minLength: 3, maxLength: 3 }
+        date: { type: string, format: date, nullable: true }
+        custom_rate: { type: number, nullable: true }
+    CurrencyImpact:
+      type: object
+      required: [ transactions, target_currency ]
+      properties:
+        target_currency: { type: string, minLength: 3, maxLength: 3 }
+        transactions:
+          type: array
+          items:
+            type: object
+            required: [ id, amount, currency ]
+            properties:
+              id: { type: string }
+              amount: { type: number }
+              currency: { type: string, minLength: 3, maxLength: 3 }
+              date: { type: string, format: date, nullable: true }
+    # Invoices
+    Invoice:
+      type: object
+      properties:
+        invoice_id: { type: string, format: uuid }
+        invoice_number: { type: string }
+        customer_id: { type: string, format: uuid }
+        currency_id: { type: string, format: uuid }
+        invoice_date: { type: string, format: date }
+        due_date: { type: string, format: date }
+        status: { type: string }
+        total_amount: { type: number }
+        balance_due: { type: number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OkInvoice:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/Invoice' }
+    OkInvoiceList:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Invoice' }
+            meta:
+              type: object
+              properties:
+                current_page: { type: integer }
+                per_page: { type: integer }
+                total: { type: integer }
+                last_page: { type: integer }
+    InvoiceStatistics:
+      type: object
+      properties:
+        total_invoices: { type: integer }
+        total_amount: { type: number }
+        paid_invoices: { type: integer }
+        partial_invoices: { type: integer }
+        unpaid_invoices: { type: integer }
+        overdue_invoices: { type: integer }
+    OkInvoiceStatistics:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/InvoiceStatistics' }
+    PdfGenerateResult:
+      type: object
+      properties:
+        pdf_path: { type: string }
+        pdf_url: { type: string, format: uri }
+        generated_at: { type: string, format: date-time }
+    OkPdfGenerate:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/PdfGenerateResult' }
+    PdfExistsResult:
+      type: object
+      properties:
+        exists: { type: boolean }
+        latest: { type: object, nullable: true }
+        all:
+          type: array
+          items: { type: object }
+    OkPdfExists:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/PdfExistsResult' }
+    OkBulk:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                action: { type: string }
+                results:
+                  type: array
+                  items: { type: object }
+                processed_count: { type: integer }
+                success_count: { type: integer }
+    # Payments
+    OkPayment:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/Payment' }
+    OkPaymentList:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Payment' }
+            meta:
+              type: object
+              properties:
+                current_page: { type: integer }
+                per_page: { type: integer }
+                total: { type: integer }
+                last_page: { type: integer }
+    OkAutoAllocate:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                allocations:
+                  type: array
+                  items: { $ref: '#/components/schemas/Allocation' }
+                total_allocated: { type: number }
+                remaining_unallocated: { type: number }
+    PaymentStatistics:
+      type: object
+      properties:
+        total_payments: { type: integer }
+        total_amount: { type: number }
+        average_payment_amount: { type: number }
+    OkPaymentStatistics:
+      allOf:
+        - $ref: '#/components/schemas/ApiOk'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/PaymentStatistics' }

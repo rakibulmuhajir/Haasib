@@ -8,8 +8,10 @@ use App\Http\Requests\Api\Payment\BulkPaymentRequest;
 use App\Http\Requests\Api\Payment\StorePaymentRequest;
 use App\Http\Requests\Api\Payment\UpdatePaymentRequest;
 use App\Models\Customer;
+use App\Models\PaymentAllocation;
 use App\Models\Payment;
 use App\Services\CurrencyService;
+use App\Http\Responses\ApiResponder;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentApiController extends Controller
 {
+    use ApiResponder;
     public function __construct(
         private PaymentService $paymentService,
         private CurrencyService $currencyService
@@ -27,6 +30,7 @@ class PaymentApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        
         $company = $request->user()->company;
 
         $query = Payment::where('company_id', $company->id)
@@ -70,25 +74,25 @@ class PaymentApiController extends Controller
         $payments = $query->orderBy($request->sort_by ?? 'created_at', $request->sort_order ?? 'desc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $payments->items(),
-            'meta' => [
+        return $this->ok(
+            $payments->items(),
+            null,
+            [
                 'current_page' => $payments->currentPage(),
                 'per_page' => $payments->perPage(),
                 'total' => $payments->total(),
                 'last_page' => $payments->lastPage(),
-            ],
-            'filters' => [
-                'search' => $request->search,
-                'status' => $request->status,
-                'customer_id' => $request->customer_id,
-                'payment_method' => $request->payment_method,
-                'date_from' => $request->date_from,
-                'date_to' => $request->date_to,
-                'currency_id' => $request->currency_id,
-            ],
-        ]);
+                'filters' => [
+                    'search' => $request->search,
+                    'status' => $request->status,
+                    'customer_id' => $request->customer_id,
+                    'payment_method' => $request->payment_method,
+                    'date_from' => $request->date_from,
+                    'date_to' => $request->date_to,
+                    'currency_id' => $request->currency_id,
+                ],
+            ]
+        );
     }
 
     /**
@@ -96,12 +100,13 @@ class PaymentApiController extends Controller
      */
     public function store(StorePaymentRequest $request): JsonResponse
     {
+        
         try {
             $company = $request->user()->company;
             $customer = $company->customers()->findOrFail($request->customer_id);
             $currency = $request->currency_id ? $company->currencies()->findOrFail($request->currency_id) : null;
 
-            $payment = $this->paymentService->processPayment(
+            $payment = $this->paymentService->processIncomingPayment(
                 company: $company,
                 customer: $customer,
                 amount: $request->amount,
@@ -115,11 +120,7 @@ class PaymentApiController extends Controller
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $payment->load(['customer', 'currency', 'allocations.invoice']),
-                'message' => 'Payment processed successfully',
-            ], 201);
+            return $this->ok($payment->load(['customer', 'currency', 'allocations.invoice']), 'Payment processed successfully', status: 201);
 
         } catch (\Exception $e) {
             Log::error('Failed to process payment', [
@@ -129,11 +130,7 @@ class PaymentApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to process payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to process payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -146,20 +143,21 @@ class PaymentApiController extends Controller
 
         $payment = Payment::where('company_id', $company->id)
             ->with(['customer', 'currency', 'allocations.invoice', 'allocations.payment'])
-            ->findOrFail($id);
+            ->where('payment_id', $id)
+            ->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'data' => $payment,
-            'metadata' => [
+        return $this->ok(
+            $payment,
+            null,
+            [
                 'unallocated_amount' => $payment->getUnallocatedAmount()->getAmount()->toFloat(),
                 'formatted_unallocated_amount' => $this->currencyService->formatMoney($payment->getUnallocatedAmount()),
                 'allocation_summary' => $payment->getAllocationSummary(),
                 'can_be_voided' => $payment->canBeVoided(),
                 'can_be_refunded' => $payment->canBeRefunded(),
                 'age_in_days' => $payment->getAgeInDays(),
-            ],
-        ]);
+            ]
+        );
     }
 
     /**
@@ -169,7 +167,7 @@ class PaymentApiController extends Controller
     {
         try {
             $company = $request->user()->company;
-            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
             $updatedPayment = $this->paymentService->updatePayment(
                 payment: $payment,
@@ -179,11 +177,10 @@ class PaymentApiController extends Controller
                 notes: $request->notes
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedPayment->load(['customer', 'currency', 'allocations.invoice']),
-                'message' => 'Payment updated successfully',
-            ]);
+            return $this->ok(
+                $updatedPayment->load(['customer', 'currency', 'allocations.invoice']),
+                'Payment updated successfully'
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to update payment', [
@@ -192,11 +189,7 @@ class PaymentApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to update payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to update payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -207,14 +200,11 @@ class PaymentApiController extends Controller
     {
         try {
             $company = $request->user()->company;
-            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
             $this->paymentService->deletePayment($payment, $request->reason);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment deleted successfully',
-            ]);
+            return $this->ok(null, 'Payment deleted successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to delete payment', [
@@ -223,11 +213,7 @@ class PaymentApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to delete payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to delete payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -238,7 +224,7 @@ class PaymentApiController extends Controller
     {
         try {
             $company = $request->user()->company;
-            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
             $allocation = $this->paymentService->allocatePayment(
                 payment: $payment,
@@ -248,11 +234,7 @@ class PaymentApiController extends Controller
                 notes: $request->notes
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $allocation->load(['payment', 'invoice']),
-                'message' => 'Payment allocated successfully',
-            ]);
+            return $this->ok($allocation->load(['payment', 'invoice']), 'Payment allocated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to allocate payment', [
@@ -262,11 +244,7 @@ class PaymentApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to allocate payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to allocate payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -277,19 +255,15 @@ class PaymentApiController extends Controller
     {
         try {
             $company = $request->user()->company;
-            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
             $allocations = $this->paymentService->autoAllocatePayment($payment);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'allocations' => $allocations->load(['payment', 'invoice']),
-                    'total_allocated' => $allocations->sum('amount'),
-                    'remaining_unallocated' => $payment->getUnallocatedAmount()->getAmount()->toFloat(),
-                ],
-                'message' => 'Payment auto-allocated successfully',
-            ]);
+            return $this->ok([
+                'allocations' => $allocations->load(['payment', 'invoice']),
+                'total_allocated' => $allocations->sum('amount'),
+                'remaining_unallocated' => $payment->getUnallocatedAmount()->getAmount()->toFloat(),
+            ], 'Payment auto-allocated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to auto-allocate payment', [
@@ -298,11 +272,7 @@ class PaymentApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to auto-allocate payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to auto-allocate payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -317,23 +287,64 @@ class PaymentApiController extends Controller
             ]);
 
             $company = $request->user()->company;
-            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
             $voidedPayment = $this->paymentService->voidPayment($payment, $request->reason);
 
-            return response()->json([
-                'success' => true,
-                'data' => $voidedPayment,
-                'message' => 'Payment voided successfully',
-            ]);
+            return $this->ok($voidedPayment, 'Payment voided successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to void payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to void payment', 500, ['message' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * List allocations for a payment.
+     */
+    public function allocations(Request $request, string $id): JsonResponse
+    {
+        $company = $request->user()->company;
+        $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+
+        $allocs = $payment->allocations()->with(['invoice'])->orderBy('created_at', 'desc')->get();
+
+        return $this->ok($allocs);
+    }
+
+    /**
+     * Void a single allocation.
+     */
+    public function voidAllocation(Request $request, string $paymentId, string $allocationId): JsonResponse
+    {
+        $request->validate(['reason' => 'nullable|string']);
+
+        $company = $request->user()->company;
+        $payment = Payment::where('company_id', $company->id)->findOrFail($paymentId);
+        $allocation = $payment->allocations()->where('allocation_id', $allocationId)->firstOrFail();
+
+        $allocation->void($request->input('reason'));
+
+        return $this->ok($allocation->fresh(['invoice', 'payment']), 'Allocation voided successfully');
+    }
+
+    /**
+     * Refund a single allocation (partial or full).
+     */
+    public function refundAllocation(Request $request, string $paymentId, string $allocationId): JsonResponse
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'reason' => 'nullable|string',
+        ]);
+
+        $company = $request->user()->company;
+        $payment = Payment::where('company_id', $company->id)->findOrFail($paymentId);
+        $allocation = $payment->allocations()->where('allocation_id', $allocationId)->firstOrFail();
+
+        $amount = \Brick\Money\Money::of($request->input('amount'), $payment->currency->code);
+        $refund = $allocation->refund($amount, $request->input('reason'));
+
+        return $this->ok($refund->load(['payment', 'invoice']), 'Allocation refunded successfully');
     }
 
     /**
@@ -357,18 +368,10 @@ class PaymentApiController extends Controller
                 refundMethod: $request->refund_method
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $refund,
-                'message' => 'Payment refunded successfully',
-            ]);
+            return $this->ok($refund, 'Payment refunded successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to refund payment',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to refund payment', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -384,7 +387,7 @@ class PaymentApiController extends Controller
             switch ($request->action) {
                 case 'delete':
                     $payments = Payment::where('company_id', $company->id)
-                        ->whereIn('id', $request->payment_ids)
+                        ->whereIn('payment_id', $request->payment_ids)
                         ->get();
 
                     foreach ($payments as $payment) {
@@ -404,7 +407,7 @@ class PaymentApiController extends Controller
                 case 'void':
                     foreach ($request->payment_ids as $id) {
                         try {
-                            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+                            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
                             $this->paymentService->voidPayment($payment, $request->reason);
                             $results[] = ['id' => $id, 'success' => true];
                         } catch (\Exception $e) {
@@ -420,7 +423,7 @@ class PaymentApiController extends Controller
                 case 'auto_allocate':
                     foreach ($request->payment_ids as $id) {
                         try {
-                            $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+                            $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
                             $allocations = $this->paymentService->autoAllocatePayment($payment);
                             $results[] = [
                                 'id' => $id,
@@ -442,16 +445,12 @@ class PaymentApiController extends Controller
                     throw new \InvalidArgumentException('Invalid bulk action');
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'action' => $request->action,
-                    'results' => $results,
-                    'processed_count' => count($results),
-                    'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
-                ],
-                'message' => 'Bulk operation completed',
-            ]);
+            return $this->ok([
+                'action' => $request->action,
+                'results' => $results,
+                'processed_count' => count($results),
+                'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
+            ], 'Bulk operation completed');
 
         } catch (\Exception $e) {
             Log::error('Failed to perform bulk operation', [
@@ -460,11 +459,7 @@ class PaymentApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Bulk operation failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Bulk operation failed', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -479,9 +474,7 @@ class PaymentApiController extends Controller
 
         $statistics = $this->paymentService->getPaymentStatistics($company, $startDate, $endDate);
 
-        return response()->json([
-            'success' => true,
-            'data' => $statistics,
+        return $this->ok($statistics, null, [
             'filters' => [
                 'date_from' => $startDate,
                 'date_to' => $endDate,
@@ -499,10 +492,7 @@ class PaymentApiController extends Controller
 
         $summary = $this->paymentService->getCustomerPaymentSummary($customer);
 
-        return response()->json([
-            'success' => true,
-            'data' => $summary,
-        ]);
+        return $this->ok($summary);
     }
 
     /**
@@ -511,13 +501,10 @@ class PaymentApiController extends Controller
     public function allocationSuggestions(Request $request, string $id): JsonResponse
     {
         $company = $request->user()->company;
-        $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+        $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
 
         $suggestions = $this->paymentService->getAllocationSuggestions($payment);
 
-        return response()->json([
-            'success' => true,
-            'data' => $suggestions,
-        ]);
+        return $this->ok($suggestions);
     }
 }

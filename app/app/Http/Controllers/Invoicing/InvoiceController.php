@@ -220,8 +220,10 @@ class InvoiceController extends Controller
             $query->where('companies.id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name', 'symbol']);
 
-        // Get the next invoice number
-        $nextInvoiceNumber = $this->invoiceService->generateNextInvoiceNumber($request->user()->current_company_id);
+        // Get the next invoice number (use model helper via a temporary instance)
+        $temp = new Invoice(['company_id' => $request->user()->current_company_id]);
+        $temp->setRelation('company', $request->user()->current_company); // avoid fetching
+        $nextInvoiceNumber = $temp->generateInvoiceNumber();
 
         return Inertia::render('Invoicing/Invoices/Create', [
             'customers' => $customers,
@@ -236,7 +238,7 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => 'required|exists:customers,customer_id',
             'currency_id' => 'nullable|exists:currencies,id',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
@@ -247,7 +249,9 @@ class InvoiceController extends Controller
             'items.*.description' => 'required|string|max:1000',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
+            'items.*.taxes' => 'nullable|array',
+            'items.*.taxes.*.name' => 'required_with:items.*.taxes|string|max:120',
+            'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -343,7 +347,7 @@ class InvoiceController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => 'required|exists:customers,customer_id',
             'currency_id' => 'nullable|exists:currencies,id',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
@@ -354,7 +358,9 @@ class InvoiceController extends Controller
             'items.*.description' => 'required|string|max:1000',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
+            'items.*.taxes' => 'nullable|array',
+            'items.*.taxes.*.name' => 'required_with:items.*.taxes|string|max:120',
+            'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -386,7 +392,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to update invoice', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -417,7 +423,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to delete invoice', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -445,7 +451,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to mark invoice as sent', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -472,7 +478,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to post invoice to ledger', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -504,7 +510,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to cancel invoice', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -528,7 +534,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to generate PDF', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -568,7 +574,7 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             Log::error('Failed to send invoice email', [
                 'error' => $e->getMessage(),
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $invoice->getKey(),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -609,7 +615,7 @@ class InvoiceController extends Controller
         $validator = Validator::make($request->all(), [
             'action' => 'required|string|in:send,post,cancel,delete,remind',
             'invoice_ids' => 'required|array|min:1',
-            'invoice_ids.*' => 'integer|exists:invoices,invoice_id',
+            'invoice_ids.*' => 'uuid|exists:invoices,invoice_id',
         ]);
 
         if ($validator->fails()) {

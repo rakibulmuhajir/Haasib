@@ -22,7 +22,7 @@ const toast = page.props.toast || {}
 const breadcrumbItems = ref([
   { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
   { label: 'Invoices', url: '/invoices', icon: 'list' },
-  { label: `Invoice ${props.invoice.invoice_number}`, url: `/invoices/${props.invoice.id}`, icon: 'eye' },
+  { label: `Invoice ${props.invoice.invoice_number}`, url: `/invoices/${props.invoice.invoice_id}`, icon: 'eye' },
 ])
 
 // Status badge styling
@@ -82,7 +82,7 @@ const availableActions = computed(() => {
         label: 'Record Payment',
         icon: 'pi pi-plus',
         route: 'payments.create',
-        params: { invoice_id: props.invoice.id },
+        params: { invoice_id: props.invoice.invoice_id },
         severity: 'success'
       })
     }
@@ -102,16 +102,16 @@ const availableActions = computed(() => {
 // Execute action
 const executeAction = (action) => {
   if (action.external) {
-    window.open(route(action.route, props.invoice.id), '_blank')
+    window.open(route(action.route, props.invoice.invoice_id), '_blank')
     return
   }
 
   if (action.route === 'payments.create') {
-    window.location.href = route(action.route) + '?invoice_id=' + props.invoice.id
+    window.location.href = route(action.route) + '?invoice_id=' + props.invoice.invoice_id
     return
   }
 
-  router.post(route(action.route, props.invoice.id), {}, {
+  router.post(route(action.route, props.invoice.invoice_id), {}, {
     onSuccess: () => {
       toast.success = `${action.label} action completed successfully!`
     },
@@ -412,10 +412,10 @@ const paymentSummary = computed(() => {
             </template>
             <template #content>
               <div class="space-y-2">
-                <Link :href="route('invoices.edit', invoice.id)" v-if="invoice.status === 'draft'">
+                <Link :href="route('invoices.edit', invoice.invoice_id)" v-if="invoice.status === 'draft'">
                   <Button label="Edit Invoice" icon="pi pi-pencil" severity="primary" class="w-full" />
                 </Link>
-                <Link :href="route('payments.create') + '?invoice_id=' + invoice.id" v-if="invoice.balance_due > 0">
+                <Link :href="route('payments.create') + '?invoice_id=' + invoice.invoice_id" v-if="invoice.balance_due > 0">
                   <Button label="Record Payment" icon="pi pi-plus" severity="success" class="w-full" />
                 </Link>
                 <Button 

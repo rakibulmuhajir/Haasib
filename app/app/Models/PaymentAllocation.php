@@ -15,17 +15,22 @@ class PaymentAllocation extends Model
     protected $table = 'payment_allocations';
 
     protected $primaryKey = 'allocation_id';
-
-    public $incrementing = true;
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'payment_id',
         'invoice_id',
         'allocated_amount',
+        'status',
+        'allocation_date',
+        'notes',
+        'metadata',
     ];
 
     protected $casts = [
         'allocated_amount' => 'decimal:2',
+        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -37,6 +42,12 @@ class PaymentAllocation extends Model
     protected static function boot(): void
     {
         parent::boot();
+
+        static::creating(function ($allocation) {
+            if (empty($allocation->allocation_id)) {
+                $allocation->allocation_id = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
 
         static::created(function ($allocation) {
             $allocation->updateInvoicePayments();
@@ -208,7 +219,7 @@ class PaymentAllocation extends Model
             ->where('status', 'active')
             ->sum('allocated_amount');
 
-        $invoice->amount_paid = $totalPaid;
+        $invoice->paid_amount = $totalPaid;
         $invoice->calculateTotals();
         $invoice->updatePaymentStatus();
         $invoice->save();

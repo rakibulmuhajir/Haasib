@@ -60,7 +60,7 @@ class UserLookupController extends Controller
         // Last activity from audit logs if available
         $lastActivity = null;
         try {
-            $lastActivity = DB::table('audit.audit_logs')
+        $lastActivity = DB::table('audit_logs')
                 ->where('user_id', $user->id)
                 ->orderByDesc('created_at')
                 ->limit(1)

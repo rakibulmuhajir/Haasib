@@ -43,7 +43,8 @@ class EnsureApiHasCompanyContext
         }
 
         // Verify user has access to this company
-        if (! $user->companies()->where('companies.id', $companyId)->exists()) {
+        // Table is schema-qualified as auth.companies in Company model
+        if (! $user->companies()->where('auth.companies.id', $companyId)->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to access this company.',
@@ -55,10 +56,12 @@ class EnsureApiHasCompanyContext
 
         // Set in config for easy access
         config(['app.current_company_id' => $companyId]);
+        config(['app.current_company' => $companyId]);
 
-        // Set database session variable if using PostgreSQL RLS
+        // Set database session variables if using PostgreSQL RLS
         if (config('database.default') === 'pgsql') {
             DB::statement("SET SESSION app.current_company_id = '{$companyId}'");
+            DB::statement("SET SESSION app.current_company = '{$companyId}'");
         }
 
         return $next($request);

@@ -13,16 +13,44 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('invoice_item_taxes', function (Blueprint $table) {
-            $table->foreignId('invoice_item_id')->constrained('invoice_items', 'invoice_item_id');
-            $table->bigInteger('tax_rate_id'); // Placeholder, will be FK to tax_rates when available
+            $table->uuid('id')->primary();
+            $table->uuid('invoice_item_id');
+            $table->string('tax_id', 64)->nullable();
+            $table->string('tax_name', 120)->nullable();
+            $table->decimal('rate', 7, 4)->default(0);
+            $table->decimal('taxable_amount', 15, 2)->default(0);
             $table->decimal('tax_amount', 15, 2)->default(0);
+            $table->boolean('is_compound')->default(false);
+            $table->integer('compound_order')->default(0);
+            $table->json('metadata')->nullable();
             $table->timestamps();
-
-            $table->primary(['invoice_item_id', 'tax_rate_id']);
+            $table->softDeletes();
         });
 
-        // Add check constraint
+        Schema::table('invoice_item_taxes', function (Blueprint $table) {
+            $table->foreign('invoice_item_id')->references('invoice_item_id')->on('invoice_items')->onDelete('cascade');
+            $table->index('invoice_item_id', 'idx_iit_item');
+        });
+
         DB::statement('ALTER TABLE invoice_item_taxes ADD CONSTRAINT chk_tax_nonneg CHECK (tax_amount >= 0)');
+
+        // Enable RLS and tenant policy via parent invoice_items -> invoices
+        DB::statement('ALTER TABLE invoice_item_taxes ENABLE ROW LEVEL SECURITY');
+        DB::statement(<<<SQL
+            CREATE POLICY invoice_item_taxes_tenant_isolation ON invoice_item_taxes
+            USING (EXISTS (
+                SELECT 1 FROM invoice_items ii
+                JOIN invoices i ON i.invoice_id = ii.invoice_id
+                WHERE ii.invoice_item_id = invoice_item_taxes.invoice_item_id
+                  AND i.company_id = current_setting('app.current_company', true)::uuid
+            ))
+            WITH CHECK (EXISTS (
+                SELECT 1 FROM invoice_items ii
+                JOIN invoices i ON i.invoice_id = ii.invoice_id
+                WHERE ii.invoice_item_id = invoice_item_taxes.invoice_item_id
+                  AND i.company_id = current_setting('app.current_company', true)::uuid
+            ));
+        SQL);
     }
 
     /**

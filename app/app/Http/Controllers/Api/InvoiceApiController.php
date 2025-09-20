@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\Invoice\BulkInvoiceRequest;
-use App\Http\Requests\Api\Invoice\StoreInvoiceRequest;
-use App\Http\Requests\Api\Invoice\UpdateInvoiceRequest;
 use App\Models\Invoice;
+use App\Http\Responses\ApiResponder;
 use App\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,16 +12,25 @@ use Illuminate\Support\Facades\Log;
 
 class InvoiceApiController extends Controller
 {
+    use ApiResponder;
     public function __construct(
         private InvoiceService $invoiceService
     ) {}
 
-    /**
-     * Display a listing of invoices.
-     */
+    private function company(\Illuminate\Http\Request $request): \App\Models\Company
+    {
+        $companyId = $request->input('current_company_id')
+            ?? $request->header('X-Company-Id')
+            ?? $request->user()?->current_company_id;
+        return \App\Models\Company::findOrFail($companyId);
+    }
+
+/**
+ * Display a listing of invoices.
+ */
     public function index(Request $request): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $this->company($request);
 
         $query = Invoice::where('company_id', $company->id)
             ->with(['customer', 'currency', 'items']);
@@ -62,53 +69,74 @@ class InvoiceApiController extends Controller
         $invoices = $query->orderBy($request->sort_by ?? 'created_at', $request->sort_order ?? 'desc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $invoices->items(),
-            'meta' => [
+        return $this->ok(
+            $invoices->items(),
+            null,
+            [
                 'current_page' => $invoices->currentPage(),
                 'per_page' => $invoices->perPage(),
                 'total' => $invoices->total(),
                 'last_page' => $invoices->lastPage(),
-            ],
-            'filters' => [
-                'search' => $request->search,
-                'status' => $request->status,
-                'customer_id' => $request->customer_id,
-                'date_from' => $request->date_from,
-                'date_to' => $request->date_to,
-                'currency_id' => $request->currency_id,
-            ],
-        ]);
+                'filters' => [
+                    'search' => $request->search,
+                    'status' => $request->status,
+                    'customer_id' => $request->customer_id,
+                    'date_from' => $request->date_from,
+                    'date_to' => $request->date_to,
+                    'currency_id' => $request->currency_id,
+                ],
+            ]
+        );
     }
 
     /**
      * Store a newly created invoice.
      */
-    public function store(StoreInvoiceRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $customer = $company->customers()->findOrFail($request->customer_id);
-            $currency = $request->currency_id ? $company->currencies()->findOrFail($request->currency_id) : null;
+            // Validate input since FormRequest classes are not present
+            $validated = $request->validate([
+                'customer_id' => 'required|exists:customers,customer_id',
+                'currency_id' => 'nullable|exists:currencies,id',
+                'invoice_date' => 'nullable|date',
+                'due_date' => 'nullable|date|after_or_equal:invoice_date',
+                'notes' => 'nullable|string|max:1000',
+                'terms' => 'nullable|string|max:2000',
+                'items' => 'required|array|min:1',
+                'items.*.description' => 'required|string|max:1000',
+                'items.*.quantity' => 'required|numeric|min:0.0001',
+                'items.*.unit_price' => 'required|numeric|min:0',
+                'items.*.discount_amount' => 'nullable|numeric|min:0',
+                'items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+                'items.*.taxes' => 'nullable|array',
+                'items.*.taxes.*.name' => 'required_with:items.*.taxes|string|max:120',
+                'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
+            ]);
+
+            $company = $this->company($request);
+            $customer = \App\Models\Customer::where('company_id', $company->id)
+                ->where('customer_id', $validated['customer_id'])
+                ->firstOrFail();
+            $currency = isset($validated['currency_id']) ? \App\Models\Currency::findOrFail($validated['currency_id']) : null;
 
             $invoice = $this->invoiceService->createInvoice(
                 company: $company,
                 customer: $customer,
-                items: $request->items,
+                items: $validated['items'],
                 currency: $currency,
-                invoiceDate: $request->invoice_date,
-                dueDate: $request->due_date,
-                notes: $request->notes,
-                terms: $request->terms,
+                invoiceDate: $validated['invoice_date'] ?? null,
+                dueDate: $validated['due_date'] ?? null,
+                notes: $validated['notes'] ?? null,
+                terms: $validated['terms'] ?? null,
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $invoice->load(['customer', 'currency', 'items']),
-                'message' => 'Invoice created successfully',
-            ], 201);
+            return $this->ok(
+                $invoice->load(['customer', 'currency', 'items']),
+                'Invoice created successfully',
+                status: 201
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to create invoice', [
@@ -118,11 +146,7 @@ class InvoiceApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to create invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to create invoice', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -131,51 +155,71 @@ class InvoiceApiController extends Controller
      */
     public function show(Request $request, string $id): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $this->company($request);
 
         $invoice = Invoice::where('company_id', $company->id)
+            ->where('invoice_id', $id)
             ->with(['customer', 'currency', 'items.taxes', 'paymentAllocations.payment'])
-            ->findOrFail($id);
+            ->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'data' => $invoice,
-            'metadata' => [
+        return $this->ok(
+            $invoice,
+            null,
+            [
                 'workflow_summary' => $invoice->getStatusWorkflowSummary(),
                 'currency_summary' => $invoice->getCurrencySummary(),
                 'payment_status' => $invoice->getPaymentStatusSummary(),
                 'aging_info' => $invoice->getAgingInformation(),
-            ],
-        ]);
+            ]
+        );
     }
 
     /**
      * Update the specified invoice.
      */
-    public function update(UpdateInvoiceRequest $request, string $id): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            // Validate input since FormRequest classes are not present
+            $validated = $request->validate([
+                'customer_id' => 'nullable|exists:customers,customer_id',
+                'currency_id' => 'nullable|exists:currencies,id',
+                'invoice_date' => 'nullable|date',
+                'due_date' => 'nullable|date|after_or_equal:invoice_date',
+                'notes' => 'nullable|string|max:1000',
+                'terms' => 'nullable|string|max:2000',
+                'items' => 'nullable|array|min:1',
+                'items.*.description' => 'required_with:items|string|max:1000',
+                'items.*.quantity' => 'required_with:items|numeric|min:0.0001',
+                'items.*.unit_price' => 'required_with:items|numeric|min:0',
+                'items.*.discount_amount' => 'nullable|numeric|min:0',
+                'items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+                'items.*.taxes' => 'nullable|array',
+                'items.*.taxes.*.name' => 'required_with:items.*.taxes|string|max:120',
+                'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
+            ]);
 
-            $customer = $request->customer_id ? $company->customers()->findOrFail($request->customer_id) : null;
-            $currency = $request->currency_id ? $company->currencies()->findOrFail($request->currency_id) : null;
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+
+            $customer = isset($validated['customer_id'])
+                ? \App\Models\Customer::where('company_id', $company->id)
+                    ->where('customer_id', $validated['customer_id'])
+                    ->firstOrFail()
+                : null;
+            $currency = isset($validated['currency_id']) ? \App\Models\Currency::findOrFail($validated['currency_id']) : null;
 
             $updatedInvoice = $this->invoiceService->updateInvoice(
                 invoice: $invoice,
                 customer: $customer,
-                items: $request->items,
-                invoiceDate: $request->invoice_date,
-                dueDate: $request->due_date,
-                notes: $request->notes,
-                terms: $request->terms
+                items: $validated['items'] ?? null,
+                invoiceDate: $validated['invoice_date'] ?? null,
+                dueDate: $validated['due_date'] ?? null,
+                notes: $validated['notes'] ?? null,
+                terms: $validated['terms'] ?? null
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedInvoice->load(['customer', 'currency', 'items']),
-                'message' => 'Invoice updated successfully',
-            ]);
+            return $this->ok($updatedInvoice->load(['customer', 'currency', 'items']), 'Invoice updated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to update invoice', [
@@ -184,11 +228,7 @@ class InvoiceApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to update invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to update invoice', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -198,15 +238,12 @@ class InvoiceApiController extends Controller
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $this->invoiceService->deleteInvoice($invoice, $request->reason);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Invoice deleted successfully',
-            ]);
+            return $this->ok(null, 'Invoice deleted successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to delete invoice', [
@@ -215,11 +252,7 @@ class InvoiceApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to delete invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to delete invoice', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -229,23 +262,21 @@ class InvoiceApiController extends Controller
     public function markAsSent(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsSent($invoice);
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedInvoice,
-                'message' => 'Invoice marked as sent',
-            ]);
+            return $this->ok($updatedInvoice, 'Invoice marked as sent');
 
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail('VALIDATION_ERROR', $e->getMessage(), 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to mark invoice as sent',
-                'message' => $e->getMessage(),
-            ], 500);
+            \Log::error('Failed to mark invoice as sent', [
+                'invoice_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return $this->fail('INTERNAL_ERROR', 'Failed to mark invoice as sent', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -255,23 +286,21 @@ class InvoiceApiController extends Controller
     public function markAsPosted(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsPosted($invoice);
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedInvoice,
-                'message' => 'Invoice marked as posted',
-            ]);
+            return $this->ok($updatedInvoice, 'Invoice marked as posted');
 
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail('VALIDATION_ERROR', $e->getMessage(), 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to mark invoice as posted',
-                'message' => $e->getMessage(),
-            ], 500);
+            \Log::error('Failed to mark invoice as posted', [
+                'invoice_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return $this->fail('INTERNAL_ERROR', 'Failed to mark invoice as posted', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -285,23 +314,17 @@ class InvoiceApiController extends Controller
                 'reason' => 'required|string|min:3',
             ]);
 
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsCancelled($invoice, $request->reason);
 
-            return response()->json([
-                'success' => true,
-                'data' => $updatedInvoice,
-                'message' => 'Invoice cancelled successfully',
-            ]);
+            return $this->ok($updatedInvoice, 'Invoice cancelled successfully');
 
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail('VALIDATION_ERROR', $e->getMessage(), 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to cancel invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to cancel invoice', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -311,27 +334,21 @@ class InvoiceApiController extends Controller
     public function generatePdf(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)
+                ->where('invoice_id', $id)
+                ->firstOrFail();
 
             $pdfPath = $this->invoiceService->generatePDF($invoice);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'pdf_path' => $pdfPath,
-                    'pdf_url' => asset('storage/invoices/'.basename($pdfPath)),
-                    'generated_at' => now()->toISOString(),
-                ],
-                'message' => 'PDF generated successfully',
-            ]);
+            return $this->ok([
+                'pdf_path' => $pdfPath,
+                'pdf_url' => asset('storage/invoices/'.basename($pdfPath)),
+                'generated_at' => now()->toISOString(),
+            ], 'PDF generated successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to generate PDF',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to generate PDF', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -346,22 +363,17 @@ class InvoiceApiController extends Controller
                 'message' => 'nullable|string',
             ]);
 
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)
+                ->where('invoice_id', $id)
+                ->firstOrFail();
 
             $this->invoiceService->sendInvoiceByEmail($invoice, $request->email, $request->message);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Invoice sent successfully',
-            ]);
+            return $this->ok(null, 'Invoice sent successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to send invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to send invoice', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -371,44 +383,79 @@ class InvoiceApiController extends Controller
     public function duplicate(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
-            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
+            $company = $this->company($request);
+            $invoice = Invoice::where('company_id', $company->id)
+                ->where('invoice_id', $id)
+                ->firstOrFail();
 
             $duplicatedInvoice = $this->invoiceService->duplicateInvoice($invoice, $request->notes);
 
-            return response()->json([
-                'success' => true,
-                'data' => $duplicatedInvoice->load(['customer', 'currency', 'items']),
-                'message' => 'Invoice duplicated successfully',
-            ]);
+            return $this->ok($duplicatedInvoice->load(['customer', 'currency', 'items']), 'Invoice duplicated successfully');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to duplicate invoice',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to duplicate invoice', 500, ['message' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Check if a PDF exists for the given invoice and return its URL if found.
+     */
+    public function pdfExists(Request $request, string $id): JsonResponse
+    {
+        $company = $this->company($request);
+        $invoice = Invoice::where('company_id', $company->id)
+            ->where('invoice_id', $id)
+            ->firstOrFail();
+
+        $dir = storage_path('app/public/invoices');
+        $pattern = sprintf('%s/invoice_%s_*.pdf', $dir, $invoice->invoice_number);
+        $matches = glob($pattern) ?: [];
+
+        $files = array_map(function ($path) {
+            return [
+                'filename' => basename($path),
+                'path' => $path,
+                'url' => asset('storage/invoices/' . basename($path)),
+                'modified_at' => date('c', filemtime($path)),
+            ];
+        }, $matches);
+
+        // Sort by modified time desc to get latest first
+        usort($files, fn ($a, $b) => strcmp($b['modified_at'], $a['modified_at']));
+
+        return $this->ok([
+            'exists' => count($files) > 0,
+            'latest' => $files[0] ?? null,
+            'all' => $files,
+        ]);
     }
 
     /**
      * Bulk operations on invoices.
      */
-    public function bulk(BulkInvoiceRequest $request): JsonResponse
+    public function bulk(Request $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            // Validate input since FormRequest classes are not present
+            $validated = $request->validate([
+                'action' => 'required|string|in:delete,mark_sent,mark_posted,cancel',
+                'invoice_ids' => 'required|array|min:1',
+                'invoice_ids.*' => 'uuid|exists:invoices,invoice_id',
+                'reason' => 'nullable|string|min:3',
+            ]);
+
+            $company = $this->company($request);
             $results = [];
 
-            switch ($request->action) {
+            switch ($validated['action']) {
                 case 'delete':
                     $invoices = Invoice::where('company_id', $company->id)
-                        ->whereIn('id', $request->invoice_ids)
+                        ->whereIn('invoice_id', $validated['invoice_ids'])
                         ->get();
 
                     foreach ($invoices as $invoice) {
                         try {
-                            $this->invoiceService->deleteInvoice($invoice, $request->reason);
+                            $this->invoiceService->deleteInvoice($invoice, $validated['reason'] ?? null);
                             $results[] = ['id' => $invoice->id, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
@@ -422,27 +469,29 @@ class InvoiceApiController extends Controller
 
                 case 'mark_sent':
                     $results = $this->invoiceService->bulkUpdateStatus(
-                        $request->invoice_ids,
+                        $validated['invoice_ids'],
                         'sent'
                     );
                     break;
 
                 case 'mark_posted':
                     $results = $this->invoiceService->bulkUpdateStatus(
-                        $request->invoice_ids,
+                        $validated['invoice_ids'],
                         'posted'
                     );
                     break;
 
                 case 'cancel':
-                    foreach ($request->invoice_ids as $id) {
+                    foreach ($validated['invoice_ids'] as $invoiceId) {
                         try {
-                            $invoice = Invoice::where('company_id', $company->id)->findOrFail($id);
-                            $this->invoiceService->markAsCancelled($invoice, $request->reason);
-                            $results[] = ['id' => $id, 'success' => true];
+                            $invoice = Invoice::where('company_id', $company->id)
+                                ->where('invoice_id', $invoiceId)
+                                ->firstOrFail();
+                            $this->invoiceService->markAsCancelled($invoice, $validated['reason'] ?? null);
+                            $results[] = ['id' => $invoiceId, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
-                                'id' => $id,
+                                'id' => $invoiceId,
                                 'success' => false,
                                 'error' => $e->getMessage(),
                             ];
@@ -454,29 +503,21 @@ class InvoiceApiController extends Controller
                     throw new \InvalidArgumentException('Invalid bulk action');
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'action' => $request->action,
-                    'results' => $results,
-                    'processed_count' => count($results),
-                    'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
-                ],
-                'message' => 'Bulk operation completed',
-            ]);
+            return $this->ok([
+                'action' => $validated['action'],
+                'results' => $results,
+                'processed_count' => count($results),
+                'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
+            ], 'Bulk operation completed');
 
         } catch (\Exception $e) {
             Log::error('Failed to perform bulk operation', [
                 'error' => $e->getMessage(),
-                'action' => $request->action,
+                'action' => $request->input('action'),
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Bulk operation failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Bulk operation failed', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -485,15 +526,13 @@ class InvoiceApiController extends Controller
      */
     public function statistics(Request $request): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $this->company($request);
         $startDate = $request->date_from;
         $endDate = $request->date_to;
 
         $statistics = $this->invoiceService->getInvoiceStatistics($company, $startDate, $endDate);
 
-        return response()->json([
-            'success' => true,
-            'data' => $statistics,
+        return $this->ok($statistics, null, [
             'filters' => [
                 'date_from' => $startDate,
                 'date_to' => $endDate,

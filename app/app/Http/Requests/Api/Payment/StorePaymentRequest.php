@@ -9,7 +9,7 @@ class StorePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => ['required', 'string', 'exists:customers,id'],
+            'customer_id' => ['required', 'string', 'exists:customers,customer_id'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_method' => ['required', 'string', 'in:bank_transfer,cash,check,credit_card,debit_card,other'],
             'payment_reference' => ['nullable', 'string', 'max:100'],

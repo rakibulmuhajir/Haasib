@@ -11,7 +11,7 @@ class BulkCustomerRequest extends FormRequest
         return [
             'action' => ['required', 'string', 'in:delete,activate,deactivate'],
             'customer_ids' => ['required', 'array', 'min:1'],
-            'customer_ids.*' => ['string', 'exists:customers,id'],
+            'customer_ids.*' => ['string', 'exists:customers,customer_id'],
         ];
     }
 

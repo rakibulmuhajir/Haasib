@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -41,7 +42,6 @@ class InvoiceFactory extends Factory
         $balanceDue = $totalAmount - $paidAmount;
 
         return [
-            'id' => fake()->uuid(),
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'currency_id' => $currency->id,
@@ -49,9 +49,9 @@ class InvoiceFactory extends Factory
             'invoice_date' => $invoiceDate,
             'due_date' => $dueDate,
             'subtotal' => $subtotal,
-            'total_tax' => $totalTax,
+            'tax_amount' => $totalTax,
             'total_amount' => $totalAmount,
-            'amount_paid' => $paidAmount,
+            'paid_amount' => $paidAmount,
             'balance_due' => $balanceDue,
             'status' => $status,
             'notes' => fake()->optional()->sentence(),
@@ -67,7 +67,7 @@ class InvoiceFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'draft',
-            'amount_paid' => 0,
+            'paid_amount' => 0,
             'balance_due' => $attributes['total_amount'],
         ]);
     }
@@ -76,7 +76,7 @@ class InvoiceFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'sent',
-            'amount_paid' => 0,
+            'paid_amount' => 0,
             'balance_due' => $attributes['total_amount'],
             'sent_at' => now(),
         ]);
@@ -86,7 +86,7 @@ class InvoiceFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'posted',
-            'amount_paid' => 0,
+            'paid_amount' => 0,
             'balance_due' => $attributes['total_amount'],
             'sent_at' => now()->subDays(1),
             'posted_at' => now(),
@@ -97,11 +97,10 @@ class InvoiceFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'paid',
-            'amount_paid' => $attributes['total_amount'],
+            'paid_amount' => $attributes['total_amount'],
             'balance_due' => 0,
             'sent_at' => now()->subDays(5),
             'posted_at' => now()->subDays(4),
-            'paid_at' => now(),
         ]);
     }
 
@@ -109,8 +108,8 @@ class InvoiceFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'partial',
-            'amount_paid' => fake()->randomFloat(2, 1, $attributes['total_amount'] * 0.9),
-            'balance_due' => fn ($attributes) => $attributes['total_amount'] - $attributes['amount_paid'],
+            'paid_amount' => fake()->randomFloat(2, 1, $attributes['total_amount'] * 0.9),
+            'balance_due' => fn ($attributes) => $attributes['total_amount'] - $attributes['paid_amount'],
         ]);
     }
 
@@ -119,40 +118,52 @@ class InvoiceFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'due_date' => fake()->dateTimeBetween('-60 days', '-1 day'),
             'status' => fake()->randomElement(['sent', 'posted', 'partial']),
-            'amount_paid' => fake()->randomFloat(2, 0, $attributes['total_amount'] * 0.5),
-            'balance_due' => fn ($attributes) => $attributes['total_amount'] - $attributes['amount_paid'],
+            'paid_amount' => fake()->randomFloat(2, 0, $attributes['total_amount'] * 0.5),
+            'balance_due' => fn ($attributes) => $attributes['total_amount'] - $attributes['paid_amount'],
         ]);
     }
 
     public function highValue(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'subtotal' => fake()->randomFloat(2, 5000, 50000),
-            'total_amount' => fn ($attributes) => $attributes['subtotal'] + $attributes['total_tax'],
-        ]);
+        return $this->state(function (array $attributes) {
+            $subtotal = fake()->randomFloat(2, 5000, 50000);
+            $taxAmount = $attributes['tax_amount'] ?? 0;
+            return [
+                'subtotal' => $subtotal,
+                'total_amount' => $subtotal + $taxAmount,
+            ];
+        });
     }
 
     public function lowValue(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'subtotal' => fake()->randomFloat(2, 10, 500),
-            'total_amount' => fn ($attributes) => $attributes['subtotal'] + $attributes['total_tax'],
-        ]);
+        return $this->state(function (array $attributes) {
+            $subtotal = fake()->randomFloat(2, 10, 500);
+            $taxAmount = $attributes['tax_amount'] ?? 0;
+            return [
+                'subtotal' => $subtotal,
+                'total_amount' => $subtotal + $taxAmount,
+            ];
+        });
     }
 
     public function withTax(float $taxRate = 15.0): static
     {
-        return $this->state(fn (array $attributes) => [
-            'total_tax' => $attributes['subtotal'] * ($taxRate / 100),
-            'total_amount' => fn ($attributes) => $attributes['subtotal'] + $attributes['total_tax'],
-        ]);
+        return $this->state(function (array $attributes) use ($taxRate) {
+            $subtotal = $attributes['subtotal'] ?? fake()->randomFloat(2, 100, 10000);
+            $taxAmount = $subtotal * ($taxRate / 100);
+            return [
+                'tax_amount' => $taxAmount,
+                'total_amount' => $subtotal + $taxAmount,
+            ];
+        });
     }
 
     public function withItems(int $count = 3): static
     {
         return $this->afterCreating(function (Invoice $invoice) use ($count) {
-            $items = InvoiceItem::factory()->count($count)->create([
-                'invoice_id' => $invoice->id,
+            InvoiceItem::factory()->count($count)->create([
+                'invoice_id' => $invoice->getKey(),
             ]);
 
             $invoice->calculateTotals();

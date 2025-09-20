@@ -98,7 +98,7 @@ class CommandExecutor
             // Use a nested transaction (savepoint) so a failure here
             // does not poison the outer request transaction.
             DB::transaction(function () use ($action, $params, $user, $companyId, $key) {
-                DB::table('audit.audit_logs')->insert([
+                DB::table('audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user->id,
                     'company_id' => $companyId,

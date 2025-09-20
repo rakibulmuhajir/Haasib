@@ -68,7 +68,7 @@ class CompanyLookupController extends Controller
         // Latest activity from audit logs if available
         $lastActivity = null;
         try {
-            $lastActivity = DB::table('audit.audit_logs')
+        $lastActivity = DB::table('audit_logs')
                 ->where('company_id', $record->id)
                 ->orderByDesc('created_at')
                 ->limit(1)

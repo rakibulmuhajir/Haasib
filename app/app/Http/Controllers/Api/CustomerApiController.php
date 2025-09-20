@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Responses\ApiResponder;
 use App\Http\Requests\Api\Customer\BulkCustomerRequest;
 use App\Http\Requests\Api\Customer\StoreCustomerRequest;
 use App\Http\Requests\Api\Customer\UpdateCustomerRequest;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 
 class CustomerApiController extends Controller
 {
+    use ApiResponder;
     /**
      * Display a listing of customers.
      */
@@ -48,22 +50,22 @@ class CustomerApiController extends Controller
         $customers = $query->orderBy($request->sort_by ?? 'name', $request->sort_order ?? 'asc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $customers->items(),
-            'meta' => [
+        return $this->ok(
+            $customers->items(),
+            null,
+            [
                 'current_page' => $customers->currentPage(),
                 'per_page' => $customers->perPage(),
                 'total' => $customers->total(),
                 'last_page' => $customers->lastPage(),
-            ],
-            'filters' => [
-                'search' => $request->search,
-                'status' => $request->status,
-                'customer_type' => $request->customer_type,
-                'currency_id' => $request->currency_id,
-            ],
-        ]);
+                'filters' => [
+                    'search' => $request->search,
+                    'status' => $request->status,
+                    'customer_type' => $request->customer_type,
+                    'currency_id' => $request->currency_id,
+                ],
+            ]
+        );
     }
 
     /**
@@ -98,11 +100,7 @@ class CustomerApiController extends Controller
 
             $customer->save();
 
-            return response()->json([
-                'success' => true,
-                'data' => $customer->load(['currency', 'contacts']),
-                'message' => 'Customer created successfully',
-            ], 201);
+            return $this->ok($customer->load(['currency', 'contacts']), 'Customer created successfully', status: 201);
 
         } catch (\Exception $e) {
             Log::error('Failed to create customer', [
@@ -112,11 +110,7 @@ class CustomerApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to create customer',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to create customer', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -131,18 +125,14 @@ class CustomerApiController extends Controller
             ->with(['currency', 'contacts', 'invoices', 'payments'])
             ->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'data' => $customer,
-            'metadata' => [
-                'invoice_count' => $customer->invoices()->count(),
-                'payment_count' => $customer->payments()->count(),
-                'total_invoiced' => $customer->invoices()->sum('total_amount'),
-                'total_paid' => $customer->payments()->where('status', 'completed')->sum('amount'),
-                'outstanding_balance' => $customer->getOutstandingBalance(),
-                'payment_status' => $customer->getPaymentStatus(),
-                'customer_age' => $customer->getAgeInDays(),
-            ],
+        return $this->ok($customer, null, [
+            'invoice_count' => $customer->invoices()->count(),
+            'payment_count' => $customer->payments()->count(),
+            'total_invoiced' => $customer->invoices()->sum('total_amount'),
+            'total_paid' => $customer->payments()->where('status', 'completed')->sum('amount'),
+            'outstanding_balance' => $customer->getOutstandingBalance(),
+            'payment_status' => $customer->getPaymentStatus(),
+            'customer_age' => $customer->getAgeInDays(),
         ]);
     }
 
@@ -157,11 +147,7 @@ class CustomerApiController extends Controller
 
             $customer->update($request->validated());
 
-            return response()->json([
-                'success' => true,
-                'data' => $customer->load(['currency', 'contacts']),
-                'message' => 'Customer updated successfully',
-            ]);
+            return $this->ok($customer->load(['currency', 'contacts']), 'Customer updated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to update customer', [
@@ -170,11 +156,7 @@ class CustomerApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to update customer',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to update customer', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -188,19 +170,12 @@ class CustomerApiController extends Controller
             $customer = Customer::where('company_id', $company->id)->findOrFail($id);
 
             if ($customer->invoices()->exists() || $customer->payments()->exists()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Cannot delete customer with existing invoices or payments',
-                    'message' => 'Please archive this customer instead',
-                ], 400);
+                return $this->fail('BUSINESS_RULE', 'Cannot delete customer with existing invoices or payments', 400, ['message' => 'Please archive this customer instead']);
             }
 
             $customer->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Customer deleted successfully',
-            ]);
+            return $this->ok(null, 'Customer deleted successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to delete customer', [
@@ -209,11 +184,7 @@ class CustomerApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to delete customer',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to delete customer', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -243,15 +214,11 @@ class CustomerApiController extends Controller
         $invoices = $query->orderBy($request->sort_by ?? 'created_at', $request->sort_order ?? 'desc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $invoices->items(),
-            'meta' => [
-                'current_page' => $invoices->currentPage(),
-                'per_page' => $invoices->perPage(),
-                'total' => $invoices->total(),
-                'last_page' => $invoices->lastPage(),
-            ],
+        return $this->ok($invoices->items(), null, [
+            'current_page' => $invoices->currentPage(),
+            'per_page' => $invoices->perPage(),
+            'total' => $invoices->total(),
+            'last_page' => $invoices->lastPage(),
         ]);
     }
 
@@ -281,15 +248,11 @@ class CustomerApiController extends Controller
         $payments = $query->orderBy($request->sort_by ?? 'created_at', $request->sort_order ?? 'desc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $payments->items(),
-            'meta' => [
-                'current_page' => $payments->currentPage(),
-                'per_page' => $payments->perPage(),
-                'total' => $payments->total(),
-                'last_page' => $payments->lastPage(),
-            ],
+        return $this->ok($payments->items(), null, [
+            'current_page' => $payments->currentPage(),
+            'per_page' => $payments->perPage(),
+            'total' => $payments->total(),
+            'last_page' => $payments->lastPage(),
         ]);
     }
 
@@ -335,10 +298,7 @@ class CustomerApiController extends Controller
             ],
         ];
 
-        return response()->json([
-            'success' => true,
-            'data' => $statement,
-        ]);
+        return $this->ok($statement);
     }
 
     /**
@@ -368,10 +328,7 @@ class CustomerApiController extends Controller
             'payment_history' => $customer->getPaymentHistory(),
         ];
 
-        return response()->json([
-            'success' => true,
-            'data' => $stats,
-        ]);
+        return $this->ok($stats);
     }
 
     /**
@@ -427,16 +384,12 @@ class CustomerApiController extends Controller
                     throw new \InvalidArgumentException('Invalid bulk action');
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'action' => $request->action,
-                    'results' => $results,
-                    'processed_count' => count($results),
-                    'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
-                ],
-                'message' => 'Bulk operation completed',
-            ]);
+            return $this->ok([
+                'action' => $request->action,
+                'results' => $results,
+                'processed_count' => count($results),
+                'success_count' => count(array_filter($results, fn ($r) => $r['success'])),
+            ], 'Bulk operation completed');
 
         } catch (\Exception $e) {
             Log::error('Failed to perform bulk operation', [
@@ -445,11 +398,7 @@ class CustomerApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Bulk operation failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Bulk operation failed', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -476,14 +425,10 @@ class CustomerApiController extends Controller
             ->limit($limit)
             ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $customers,
-            'meta' => [
-                'query' => $request->query,
-                'limit' => $limit,
-                'total_results' => $customers->count(),
-            ],
+        return $this->ok($customers, null, [
+            'query' => $request->query,
+            'limit' => $limit,
+            'total_results' => $customers->count(),
         ]);
     }
 }

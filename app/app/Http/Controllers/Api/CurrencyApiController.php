@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Responses\ApiResponder;
 use App\Http\Requests\Api\Currency\ConvertCurrencyRequest;
 use App\Http\Requests\Api\Currency\EnableCurrencyRequest;
 use App\Http\Requests\Api\Currency\UpdateExchangeRateRequest;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 
 class CurrencyApiController extends Controller
 {
+    use ApiResponder;
     public function __construct(
         private CurrencyService $currencyService
     ) {}
@@ -28,10 +30,7 @@ class CurrencyApiController extends Controller
 
         $currencies = $this->currencyService->getCompanyCurrencies($company);
 
-        return response()->json([
-            'success' => true,
-            'data' => $currencies,
-        ]);
+        return $this->ok($currencies);
     }
 
     /**
@@ -51,10 +50,7 @@ class CurrencyApiController extends Controller
                 'is_active' => $currency->is_active,
             ]);
 
-        return response()->json([
-            'success' => true,
-            'data' => $currencies,
-        ]);
+        return $this->ok($currencies);
     }
 
     /**
@@ -75,23 +71,16 @@ class CurrencyApiController extends Controller
                 $request->date
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'from_currency' => $request->from_currency,
-                    'to_currency' => $request->to_currency,
-                    'rate' => $rate,
-                    'date' => $request->date ?? now()->toDateString(),
-                    'inverse_rate' => 1 / $rate,
-                ],
+            return $this->ok([
+                'from_currency' => $request->from_currency,
+                'to_currency' => $request->to_currency,
+                'rate' => $rate,
+                'date' => $request->date ?? now()->toDateString(),
+                'inverse_rate' => 1 / $rate,
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to get exchange rate',
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->fail('INTERNAL_ERROR', 'Failed to get exchange rate', 400, ['message' => $e->getMessage()]);
         }
     }
 
@@ -111,22 +100,19 @@ class CurrencyApiController extends Controller
                 $request->custom_rate
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'original_amount' => $request->amount,
-                    'original_currency' => $request->from_currency,
-                    'converted_amount' => $convertedAmount->getAmount()->toFloat(),
-                    'converted_currency' => $request->to_currency,
-                    'exchange_rate_used' => $this->currencyService->getExchangeRate(
-                        $request->from_currency,
-                        $request->to_currency,
-                        $request->date
-                    ),
-                    'date' => $request->date ?? now()->toDateString(),
-                    'formatted_original' => $this->currencyService->formatMoney($amount),
-                    'formatted_converted' => $this->currencyService->formatMoney($convertedAmount),
-                ],
+            return $this->ok([
+                'original_amount' => $request->amount,
+                'original_currency' => $request->from_currency,
+                'converted_amount' => $convertedAmount->getAmount()->toFloat(),
+                'converted_currency' => $request->to_currency,
+                'exchange_rate_used' => $this->currencyService->getExchangeRate(
+                    $request->from_currency,
+                    $request->to_currency,
+                    $request->date
+                ),
+                'date' => $request->date ?? now()->toDateString(),
+                'formatted_original' => $this->currencyService->formatMoney($amount),
+                'formatted_converted' => $this->currencyService->formatMoney($convertedAmount),
             ]);
 
         } catch (\Exception $e) {
@@ -135,11 +121,7 @@ class CurrencyApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Currency conversion failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Currency conversion failed', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -157,19 +139,15 @@ class CurrencyApiController extends Controller
                 $request->source
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $exchangeRate->id,
-                    'from_currency' => $exchangeRate->from_currency,
-                    'to_currency' => $exchangeRate->to_currency,
-                    'rate' => $exchangeRate->rate,
-                    'effective_date' => $exchangeRate->effective_date,
-                    'source' => $exchangeRate->source,
-                    'updated_at' => $exchangeRate->updated_at,
-                ],
-                'message' => 'Exchange rate updated successfully',
-            ]);
+            return $this->ok([
+                'id' => $exchangeRate->id,
+                'from_currency' => $exchangeRate->from_currency,
+                'to_currency' => $exchangeRate->to_currency,
+                'rate' => $exchangeRate->rate,
+                'effective_date' => $exchangeRate->effective_date,
+                'source' => $exchangeRate->source,
+                'updated_at' => $exchangeRate->updated_at,
+            ], 'Exchange rate updated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to update exchange rate', [
@@ -178,11 +156,7 @@ class CurrencyApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to update exchange rate',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to update exchange rate', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -196,10 +170,7 @@ class CurrencyApiController extends Controller
 
             $this->currencyService->enableCurrencyForCompany($company, $request->currency_code);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Currency enabled successfully',
-            ]);
+            return $this->ok(null, 'Currency enabled successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to enable currency', [
@@ -208,11 +179,7 @@ class CurrencyApiController extends Controller
                 'company_id' => $request->user()->company_id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to enable currency',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to enable currency', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -230,10 +197,7 @@ class CurrencyApiController extends Controller
 
             $this->currencyService->disableCurrencyForCompany($company, $request->currency_code);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Currency disabled successfully',
-            ]);
+            return $this->ok(null, 'Currency disabled successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to disable currency', [
@@ -242,11 +206,7 @@ class CurrencyApiController extends Controller
                 'company_id' => $request->user()->company_id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to disable currency',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to disable currency', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -270,23 +230,15 @@ class CurrencyApiController extends Controller
                 $request->end_date
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $history,
-                'filters' => [
-                    'from_currency' => $request->from_currency,
-                    'to_currency' => $request->to_currency,
-                    'start_date' => $request->start_date,
-                    'end_date' => $request->end_date,
-                ],
+            return $this->ok($history, null, [
+                'from_currency' => $request->from_currency,
+                'to_currency' => $request->to_currency,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to get exchange rate history',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to get exchange rate history', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -303,17 +255,10 @@ class CurrencyApiController extends Controller
             $baseCurrency = $request->base_currency ?? 'USD';
             $rates = $this->currencyService->getLatestExchangeRates($baseCurrency);
 
-            return response()->json([
-                'success' => true,
-                'data' => $rates,
-            ]);
+            return $this->ok($rates);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to get latest exchange rates',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to get latest exchange rates', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -326,10 +271,7 @@ class CurrencyApiController extends Controller
             $company = $request->user()->company;
             $balances = $this->currencyService->getCurrencyBalances($company);
 
-            return response()->json([
-                'success' => true,
-                'data' => $balances,
-            ]);
+            return $this->ok($balances);
 
         } catch (\Exception $e) {
             Log::error('Failed to get currency balances', [
@@ -337,11 +279,7 @@ class CurrencyApiController extends Controller
                 'company_id' => $request->user()->company_id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to get currency balances',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to get currency balances', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -367,10 +305,7 @@ class CurrencyApiController extends Controller
                 $request->target_currency
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $impact,
-            ]);
+            return $this->ok($impact);
 
         } catch (\Exception $e) {
             Log::error('Failed to calculate currency impact', [
@@ -379,11 +314,7 @@ class CurrencyApiController extends Controller
                 'request_data' => $request->all(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to calculate currency impact',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to calculate currency impact', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -400,11 +331,7 @@ class CurrencyApiController extends Controller
             $provider = $request->provider ?? 'fixer';
             $result = $this->currencyService->syncExchangeRatesFromAPI($provider);
 
-            return response()->json([
-                'success' => true,
-                'data' => $result,
-                'message' => 'Exchange rates synchronized successfully',
-            ]);
+            return $this->ok($result, 'Exchange rates synchronized successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to sync exchange rates', [
@@ -413,11 +340,7 @@ class CurrencyApiController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to sync exchange rates',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->fail('INTERNAL_ERROR', 'Failed to sync exchange rates', 500, ['message' => $e->getMessage()]);
         }
     }
 
@@ -433,20 +356,13 @@ class CurrencyApiController extends Controller
         try {
             $symbol = $this->currencyService->getCurrencySymbol($request->currency_code);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'currency_code' => $request->currency_code,
-                    'symbol' => $symbol,
-                ],
+            return $this->ok([
+                'currency_code' => $request->currency_code,
+                'symbol' => $symbol,
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to get currency symbol',
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->fail('INTERNAL_ERROR', 'Failed to get currency symbol', 400, ['message' => $e->getMessage()]);
         }
     }
 
@@ -465,22 +381,15 @@ class CurrencyApiController extends Controller
             $money = \Brick\Money\Money::of($request->amount, $request->currency_code);
             $formatted = $this->currencyService->formatMoney($money, $request->locale);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'amount' => $request->amount,
-                    'currency_code' => $request->currency_code,
-                    'formatted' => $formatted,
-                    'locale' => $request->locale ?? app()->getLocale(),
-                ],
+            return $this->ok([
+                'amount' => $request->amount,
+                'currency_code' => $request->currency_code,
+                'formatted' => $formatted,
+                'locale' => $request->locale ?? app()->getLocale(),
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to format money',
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->fail('INTERNAL_ERROR', 'Failed to format money', 400, ['message' => $e->getMessage()]);
         }
     }
 }

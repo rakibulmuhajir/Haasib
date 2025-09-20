@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('journal_entries')) {
+            // Table already created by an earlier migration; skip to avoid duplicates/conflicts
+            return;
+        }
+
         Schema::create('journal_entries', function (Blueprint $table) {
             $table->id('entry_id');
             $table->foreignId('transaction_id')->constrained('transactions', 'transaction_id');

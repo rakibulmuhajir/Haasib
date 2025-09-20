@@ -13,12 +13,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('invoice_items', function (Blueprint $table) {
-            $table->id('invoice_item_id');
-            $table->foreignId('invoice_id')->constrained('invoices', 'invoice_id');
+            $table->uuid('invoice_item_id')->primary();
+            $table->uuid('invoice_id');
             $table->bigInteger('item_id')->nullable(); // Will be FK to inventory.items when available
             $table->string('description', 255);
             $table->decimal('quantity', 10, 3);
             $table->decimal('unit_price', 15, 2);
+            $table->boolean('tax_inclusive')->default(false);
             $table->decimal('discount_percentage', 5, 2)->default(0);
             $table->decimal('discount_amount', 15, 2)->default(0);
             $table->decimal('line_total', 15, 2);
@@ -27,6 +28,7 @@ return new class extends Migration
         });
 
         Schema::table('invoice_items', function (Blueprint $table) {
+            $table->foreign('invoice_id')->references('invoice_id')->on('invoices')->onDelete('cascade');
             $table->index('invoice_id', 'idx_invoice_items_invoice');
         });
 
@@ -36,6 +38,22 @@ return new class extends Migration
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_pct_range CHECK (discount_percentage BETWEEN 0 AND 100)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
         DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_line_total_nonneg CHECK (line_total >= 0)');
+
+        // Enable RLS and tenant policy via parent invoice
+        DB::statement('ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY');
+        DB::statement(<<<SQL
+            CREATE POLICY invoice_items_tenant_isolation ON invoice_items
+            USING (EXISTS (
+                SELECT 1 FROM invoices i
+                WHERE i.invoice_id = invoice_items.invoice_id
+                  AND i.company_id = current_setting('app.current_company', true)::uuid
+            ))
+            WITH CHECK (EXISTS (
+                SELECT 1 FROM invoices i
+                WHERE i.invoice_id = invoice_items.invoice_id
+                  AND i.company_id = current_setting('app.current_company', true)::uuid
+            ));
+        SQL);
     }
 
     /**

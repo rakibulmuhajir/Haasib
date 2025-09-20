@@ -189,7 +189,7 @@ class CustomerService
         $paidInvoices = $customer->invoices()->where('status', 'paid')->count();
         $outstandingInvoices = $customer->invoices()
             ->whereNotIn('status', ['paid', 'cancelled', 'void'])
-            ->where('balance_amount', '>', 0)
+            ->where('balance_due', '>', 0)
             ->count();
 
         $totalPayments = $customer->payments()->count();

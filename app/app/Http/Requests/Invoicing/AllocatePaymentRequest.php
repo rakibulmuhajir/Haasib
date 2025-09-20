@@ -23,7 +23,7 @@ class AllocatePaymentRequest extends FormRequest
     {
         return [
             'invoice_allocations' => 'required|array|min:1',
-            'invoice_allocations.*.invoice_id' => 'required|exists:invoices,id',
+            'invoice_allocations.*.invoice_id' => 'required|exists:invoices,invoice_id',
             'invoice_allocations.*.amount' => 'required|numeric|min:0.01',
         ];
     }

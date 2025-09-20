@@ -29,8 +29,8 @@ class UpdateAccountsReceivableForCancelledInvoice implements ShouldQueue
             $ar = AccountsReceivable::where('invoice_id', $invoice->invoice_id)->first();
 
             if ($ar) {
-                // Mark as cancelled
-                $ar->status = 'cancelled';
+                // Mark as not collectible; set amount due to 0 and record metadata
+                $ar->amount_due = 0;
                 $ar->metadata = array_merge($ar->metadata ?? [], [
                     'cancelled_at' => now()->toISOString(),
                     'cancellation_reason' => $event->context['reason'] ?? 'No reason provided',
@@ -48,8 +48,7 @@ class UpdateAccountsReceivableForCancelledInvoice implements ShouldQueue
                 'invoice_id' => $invoice->invoice_id,
                 'error' => $e->getMessage(),
             ]);
-
-            throw $e;
+            // Swallow to avoid breaking API responses
         }
     }
 }

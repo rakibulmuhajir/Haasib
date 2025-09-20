@@ -122,5 +122,46 @@ class AuthServiceProvider extends ServiceProvider
 
             return $role !== null && in_array($role, $requiredRoles, true);
         });
+
+        // Invoicing permissions
+        Gate::define('invoices.view', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) return false;
+            if ($user->isSuperAdmin()) return true;
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+            return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
+        });
+
+        Gate::define('invoices.create', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) return false;
+            if ($user->isSuperAdmin()) return true;
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+            return in_array($role, ['owner', 'admin', 'accountant']);
+        });
+
+        Gate::define('invoices.edit', fn (User $user) => Gate::forUser($user)->check('invoices.create'));
+        Gate::define('invoices.delete', fn (User $user) => Gate::forUser($user)->check('invoices.create'));
+        Gate::define('invoices.send', fn (User $user) => Gate::forUser($user)->check('invoices.create'));
+        Gate::define('invoices.post', fn (User $user) => Gate::forUser($user)->check('invoices.create'));
+
+        // Payments permissions
+        Gate::define('payments.view', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) return false;
+            if ($user->isSuperAdmin()) return true;
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+            return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
+        });
+        Gate::define('payments.create', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) return false;
+            if ($user->isSuperAdmin()) return true;
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+            return in_array($role, ['owner', 'admin', 'accountant']);
+        });
+        Gate::define('payments.edit', fn (User $user) => Gate::forUser($user)->check('payments.create'));
+        Gate::define('payments.delete', fn (User $user) => Gate::forUser($user)->check('payments.create'));
+        Gate::define('payments.allocate', fn (User $user) => Gate::forUser($user)->check('payments.create'));
     }
 }

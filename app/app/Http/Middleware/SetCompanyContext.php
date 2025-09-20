@@ -20,20 +20,25 @@ class SetCompanyContext
         if ($user && $user->currentCompany) {
             $companyId = $user->currentCompany->id;
 
-            // Set the company context for RLS policies
+            // Set the company context for RLS policies (set both keys for compatibility)
             DB::statement("SET SESSION app.current_company_id = '{$companyId}'");
+            DB::statement("SET SESSION app.current_company = '{$companyId}'");
 
             // Store in config for easy access throughout the application
             config(['app.current_company_id' => $companyId]);
+            config(['app.current_company' => $companyId]);
         } else {
             // Clear company context if no company is selected
             try {
                 DB::statement('RESET app.current_company_id');
+                DB::statement('RESET app.current_company');
             } catch (\Exception $e) {
                 // Fallback if RESET fails
                 DB::statement("SET SESSION app.current_company_id = ''");
+                DB::statement("SET SESSION app.current_company = ''");
             }
             config(['app.current_company_id' => null]);
+            config(['app.current_company' => null]);
         }
 
         return $next($request);

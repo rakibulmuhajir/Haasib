@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Brick\Money\Money;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class InvoiceItem extends Model
 {
@@ -16,8 +18,8 @@ class InvoiceItem extends Model
     protected $table = 'invoice_items';
 
     protected $primaryKey = 'invoice_item_id';
-
-    public $incrementing = true;
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'invoice_id',
@@ -55,6 +57,12 @@ class InvoiceItem extends Model
     {
         parent::boot();
 
+        static::creating(function ($item) {
+            if (empty($item->invoice_item_id)) {
+                $item->invoice_item_id = (string) Str::uuid();
+            }
+        });
+
         static::saving(function ($item) {
             // Only calculate totals if we have the necessary data
             if ($item->invoice_id && ($item->isDirty('quantity') || $item->isDirty('unit_price') || $item->isDirty('discount_percentage') || $item->isDirty('discount_amount'))) {
@@ -82,7 +90,7 @@ class InvoiceItem extends Model
 
     public function taxes(): HasMany
     {
-        return $this->hasMany(InvoiceItemTax::class);
+        return $this->hasMany(InvoiceItemTax::class, 'invoice_item_id', 'invoice_item_id');
     }
 
     public function scopeForInvoice($query, $invoiceId)
@@ -163,7 +171,8 @@ class InvoiceItem extends Model
         $totalTax = $this->getTotalTax();
         $totalAmount = $this->getTotalAmount();
 
-        $this->line_total = $subtotalAfterDiscount->getAmount()->toFloat();
+        // Round to 2 decimals for storage
+        $this->line_total = $subtotalAfterDiscount->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
     }
 
     public function getEffectiveTaxRate(): float
@@ -275,16 +284,28 @@ class InvoiceItem extends Model
 
     public function getDisplaySubtotal(): string
     {
-        return number_format($this->subtotal, 2);
+        try {
+            return number_format($this->getSubtotalAfterDiscount()->getAmount()->toFloat(), 2);
+        } catch (\Throwable $e) {
+            return number_format(0, 2);
+        }
     }
 
     public function getDisplayTotalTax(): string
     {
-        return number_format($this->total_tax, 2);
+        try {
+            return number_format($this->getTotalTax()->getAmount()->toFloat(), 2);
+        } catch (\Throwable $e) {
+            return number_format(0, 2);
+        }
     }
 
     public function getDisplayTotalAmount(): string
     {
-        return number_format($this->total_amount, 2);
+        try {
+            return number_format($this->getTotalAmount()->getAmount()->toFloat(), 2);
+        } catch (\Throwable $e) {
+            return number_format(0, 2);
+        }
     }
 }

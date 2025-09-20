@@ -50,7 +50,7 @@ class SendInvoiceNotification implements ShouldQueue
 
             // Also notify company users who should be alerted
             $companyUsers = User::whereHas('companies', function ($query) use ($invoice) {
-                $query->where('companies.id', $invoice->company_id);
+                $query->where('auth.companies.id', $invoice->company_id);
             })->get();
 
             foreach ($companyUsers as $user) {

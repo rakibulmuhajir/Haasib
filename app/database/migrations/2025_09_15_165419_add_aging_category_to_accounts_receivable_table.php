@@ -12,10 +12,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('accounts_receivable', function (Blueprint $table) {
-            $table->string('aging_category')->default('current')->after('days_overdue');
-            $table->timestamp('last_calculated_at')->nullable()->after('aging_category');
-            $table->json('metadata')->nullable()->after('last_calculated_at');
-            $table->softDeletes()->after('metadata');
+            if (! Schema::hasColumn('accounts_receivable', 'aging_category')) {
+                $table->string('aging_category')->default('current')->after('days_overdue');
+            }
+            if (! Schema::hasColumn('accounts_receivable', 'last_calculated_at')) {
+                $table->timestamp('last_calculated_at')->nullable()->after('aging_category');
+            }
+            if (! Schema::hasColumn('accounts_receivable', 'metadata')) {
+                $table->json('metadata')->nullable()->after('last_calculated_at');
+            }
+            if (! Schema::hasColumn('accounts_receivable', 'deleted_at')) {
+                $table->softDeletes()->after('metadata');
+            }
         });
     }
 
@@ -25,8 +33,18 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('accounts_receivable', function (Blueprint $table) {
-            $table->dropColumn(['aging_category', 'last_calculated_at', 'metadata']);
-            $table->dropSoftDeletes();
+            if (Schema::hasColumn('accounts_receivable', 'aging_category')) {
+                $table->dropColumn('aging_category');
+            }
+            if (Schema::hasColumn('accounts_receivable', 'last_calculated_at')) {
+                $table->dropColumn('last_calculated_at');
+            }
+            if (Schema::hasColumn('accounts_receivable', 'metadata')) {
+                $table->dropColumn('metadata');
+            }
+            if (Schema::hasColumn('accounts_receivable', 'deleted_at')) {
+                $table->dropSoftDeletes();
+            }
         });
     }
 };

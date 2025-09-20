@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('auth.company_user', function (Blueprint $table) {
-            $table->uuid('invited_by_user_id')->nullable();
-            $table->foreign('invited_by_user_id')->references('id')->on('users')->onDelete('set null');
-        });
+        // Only add column if it doesn't already exist
+        if (! Schema::hasColumn('auth.company_user', 'invited_by_user_id')) {
+            Schema::table('auth.company_user', function (Blueprint $table) {
+                $table->uuid('invited_by_user_id')->nullable();
+                $table->foreign('invited_by_user_id')->references('id')->on('users')->onDelete('set null');
+            });
+        }
     }
 
     /**
@@ -22,9 +25,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('auth.company_user', function (Blueprint $table) {
-            $table->dropForeign(['invited_by_user_id']);
-            $table->dropColumn('invited_by_user_id');
-        });
+        if (Schema::hasColumn('auth.company_user', 'invited_by_user_id')) {
+            Schema::table('auth.company_user', function (Blueprint $table) {
+                $table->dropForeign(['invited_by_user_id']);
+                $table->dropColumn('invited_by_user_id');
+            });
+        }
     }
 };

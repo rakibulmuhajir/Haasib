@@ -486,7 +486,7 @@ class CustomerController extends Controller
         $validator = Validator::make($request->all(), [
             'action' => 'required|string|in:delete,disable,enable',
             'customer_ids' => 'required|array|min:1',
-            'customer_ids.*' => 'integer|exists:customers,id',
+            'customer_ids.*' => 'uuid|exists:customers,customer_id',
         ]);
 
         if ($validator->fails()) {

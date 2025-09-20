@@ -20,7 +20,7 @@ class PaymentService
     {
         try {
             DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit.audit_logs')->insert([
+                DB::table('audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user?->id,
                     'company_id' => $companyId,
@@ -43,15 +43,18 @@ class PaymentService
     public function createPayment(
         Company $company,
         Customer $customer,
-        string $paymentMethod,
         Money $amount,
         ?Currency $currency = null,
+        string $paymentMethod = '',
         ?string $paymentDate = null,
+        ?string $paymentNumber = null,
         ?string $paymentReference = null,
         ?string $notes = null,
+        ?bool $autoAllocate = false,
+        ?array $invoiceAllocations = null,
         ?string $idempotencyKey = null
     ): Payment {
-        $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentReference, $notes) {
+        $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentNumber, $paymentReference, $notes, $autoAllocate, $invoiceAllocations) {
             $currency = $currency ?? $customer->currency ?? $company->getDefaultCurrency();
             $exchangeRate = $this->getExchangeRate($currency, $company);
 
@@ -61,14 +64,26 @@ class PaymentService
                 'currency_id' => $currency->id,
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentReference,
+                'payment_number' => $paymentNumber ?? $this->generateNextPaymentNumber($company->id),
                 'amount' => $amount->getAmount()->toFloat(),
                 'exchange_rate' => $exchangeRate,
                 'payment_date' => $paymentDate ?? now()->toDateString(),
                 'status' => 'pending',
-                'notes' => $notes,
             ]);
 
             $payment->save();
+
+            // Handle auto-allocation if requested
+            if ($autoAllocate && $invoiceAllocations) {
+                foreach ($invoiceAllocations as $invoiceId => $allocationAmount) {
+                    if ($allocationAmount > 0) {
+                        $invoice = Invoice::find($invoiceId);
+                        if ($invoice && $invoice->company_id === $company->id && $invoice->customer_id === $customer->id) {
+                            $payment->allocateToInvoice($invoice, Money::of($allocationAmount, $currency->code));
+                        }
+                    }
+                }
+            }
 
             return $payment->fresh(['customer', 'currency']);
         });
@@ -90,12 +105,17 @@ class PaymentService
         ?string $processorReference = null,
         ?array $metadata = null
     ): Payment {
-        $result = DB::transaction(function () use ($payment, $processorReference, $metadata) {
+        $result = DB::transaction(function () use ($payment, $processorReference) {
             $payment->markAsCompleted($processorReference);
 
-            if ($metadata) {
-                $payment->metadata = array_merge($payment->metadata ?? [], $metadata);
-                $payment->save();
+            // Auto-post completed payment to ledger
+            try {
+                app(\App\Services\LedgerIntegrationService::class)->postPaymentToLedger($payment);
+            } catch (\Throwable $e) {
+                Log::error('Auto-post payment to ledger failed (non-fatal)', [
+                    'payment_id' => $payment->payment_id,
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             return $payment->fresh();
@@ -105,9 +125,55 @@ class PaymentService
             'payment_id' => $payment->id,
             'payment_reference' => $payment->payment_reference,
             'processor_reference' => $processorReference,
-        ], auth()->user(), $payment->company_id, result: ['processed_at' => $result->metadata['completed_at']]);
+        ], auth()->user(), $payment->company_id, result: ['processed_at' => now()->toISOString()]);
 
         return $result;
+    }
+
+    /**
+     * Convenience overload: create + complete + optional auto-allocate + auto-post.
+     */
+    public function processIncomingPayment(
+        Company $company,
+        Customer $customer,
+        float $amount,
+        string $paymentMethod,
+        ?string $paymentReference = null,
+        ?string $paymentDate = null,
+        ?Currency $currency = null,
+        ?float $exchangeRate = null,
+        ?string $notes = null,
+        ?bool $autoAllocate = false,
+        ?string $idempotencyKey = null
+    ): Payment {
+        $money = Money::of($amount, ($currency?->code) ?? ($customer->currency?->code) ?? ($company->base_currency ?? 'USD'));
+        $payment = $this->createPayment(
+            company: $company,
+            customer: $customer,
+            amount: $money,
+            currency: $currency,
+            paymentMethod: $paymentMethod,
+            paymentDate: $paymentDate,
+            paymentNumber: null,
+            paymentReference: $paymentReference,
+            notes: $notes,
+            autoAllocate: false,
+            invoiceAllocations: null,
+            idempotencyKey: $idempotencyKey
+        );
+
+        $payment = $this->processPayment($payment);
+
+        if ($autoAllocate) {
+            try { $this->autoAllocatePayment($payment); } catch (\Throwable $e) {
+                Log::warning('Auto-allocate after process failed (non-fatal)', [
+                    'payment_id' => $payment->payment_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $payment->fresh(['allocations.invoice']);
     }
 
     public function allocatePayment(
@@ -125,7 +191,7 @@ class PaymentService
 
             foreach ($allocations as $allocation) {
                 $invoice = Invoice::find($allocation['invoice_id']);
-                if (! $invoice || $invoice->company_id !== $payment->company_id || $invoice->customer_id !== $payment->customer_id) {
+                if (! $invoice || $invoice->company_id !== $payment->company_id) {
                     throw new \InvalidArgumentException("Invalid invoice ID: {$allocation['invoice_id']}");
                 }
 
@@ -458,5 +524,13 @@ class PaymentService
             'stripe' => 'Stripe',
             'other' => 'Other',
         ];
+    }
+
+    public function generateNextPaymentNumber(string $companyId): string
+    {
+        $payment = new Payment;
+        $payment->company_id = $companyId;
+
+        return $payment->generatePaymentNumber();
     }
 }

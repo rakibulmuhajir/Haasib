@@ -13,6 +13,7 @@ use App\Listeners\Invoicing\SendInvoiceNotification;
 use App\Listeners\Invoicing\UpdateAccountsReceivableForCancelledInvoice;
 use App\Listeners\Invoicing\UpdateAccountsReceivableForPaidInvoice;
 use App\Listeners\Invoicing\UpdateAccountsReceivableForPostedInvoice;
+use App\Listeners\Ledger\VoidJournalEntryForCancelledInvoice;
 use App\Listeners\Ledger\CreateJournalEntryForPostedInvoice;
 use App\Listeners\Ledger\ReverseLedgerForVoidedJournalEntry;
 use App\Listeners\Ledger\UpdateLedgerForPostedJournalEntry;
@@ -44,6 +45,7 @@ class EventServiceProvider extends ServiceProvider
         ],
         InvoiceCancelled::class => [
             UpdateAccountsReceivableForCancelledInvoice::class,
+            VoidJournalEntryForCancelledInvoice::class,
         ],
         // Journal entry events
         JournalEntryPosted::class => [

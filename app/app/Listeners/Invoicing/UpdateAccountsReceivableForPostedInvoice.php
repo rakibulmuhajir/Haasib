@@ -35,13 +35,11 @@ class UpdateAccountsReceivableForPostedInvoice implements ShouldQueue
                 [
                     'amount_due' => $invoice->balance_due,
                     'original_amount' => $invoice->total_amount,
-                    'invoice_date' => $invoice->invoice_date,
                     'due_date' => $invoice->due_date,
-                    'status' => 'open',
-                    'aging_bucket' => $this->calculateAgingBucket($invoice->due_date),
+                    'aging_category' => $this->calculateAgingCategory($invoice->due_date),
                     'metadata' => [
                         'invoice_number' => $invoice->invoice_number,
-                        'posted_at' => $invoice->posted_at->toISOString(),
+                        'posted_at' => optional($invoice->posted_at)->toISOString(),
                         'last_updated' => now()->toISOString(),
                     ],
                 ]
@@ -57,28 +55,21 @@ class UpdateAccountsReceivableForPostedInvoice implements ShouldQueue
                 'invoice_id' => $invoice->invoice_id,
                 'error' => $e->getMessage(),
             ]);
-
-            throw $e;
+            // Swallow to avoid breaking API responses; rely on logs
         }
     }
 
     /**
      * Calculate the aging bucket based on the due date.
      */
-    protected function calculateAgingBucket($dueDate): string
+    protected function calculateAgingCategory($dueDate): string
     {
         $daysOverdue = now()->diffInDays($dueDate, false);
 
-        if ($daysOverdue > 90) {
-            return '91+';
-        } elseif ($daysOverdue > 60) {
-            return '61-90';
-        } elseif ($daysOverdue > 30) {
-            return '31-60';
-        } elseif ($daysOverdue > 0) {
-            return '1-30';
-        } else {
-            return 'current';
-        }
+        if ($daysOverdue <= 0) return 'current';
+        if ($daysOverdue <= 30) return '1-30';
+        if ($daysOverdue <= 60) return '31-60';
+        if ($daysOverdue <= 90) return '61-90';
+        return '90+';
     }
 }

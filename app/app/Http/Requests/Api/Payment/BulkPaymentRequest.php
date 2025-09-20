@@ -11,7 +11,7 @@ class BulkPaymentRequest extends FormRequest
         return [
             'action' => ['required', 'string', 'in:delete,void,auto_allocate'],
             'payment_ids' => ['required', 'array', 'min:1'],
-            'payment_ids.*' => ['string', 'exists:payments,id'],
+            'payment_ids.*' => ['string', 'exists:payments,payment_id'],
             'reason' => ['required_if:action,delete,void', 'string', 'min:3', 'max:500'],
         ];
     }

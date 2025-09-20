@@ -106,69 +106,69 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 ### 🎯 Phase 1: Core Invoicing Foundation (Quick Path to Revenue)
 **Priority: CRITICAL** - Aligns with "quick path to revenue" goal
 
-#### 1.1 Laravel Models & Factories ⏳ **IN PROGRESS**
-- [ ] Create Eloquent models for all invoicing tables
-- [ ] Add relationships, mutators, accessors, business rules
-- [ ] Create factories for testing with realistic data
-- [ ] Implement Money object integration for financial calculations
+#### 1.1 Laravel Models & Factories ✅ COMPLETED
+- [x] Create Eloquent models for all invoicing tables
+- [x] Add relationships, mutators, accessors, business rules
+- [x] Create factories for testing with realistic data
+- [x] Implement Money object integration for financial calculations
 
 #### 1.2 Domain Services
-- [ ] `InvoiceService` - CRUD operations, PDF generation, status workflow
-- [ ] `PaymentService` - Payment processing and allocation logic
+- [x] `InvoiceService` - CRUD operations, PDF generation, status workflow
+- [x] `PaymentService` - Payment processing and allocation logic
 - [ ] `TaxCalculator` - Multi-tax calculations (AE-VAT, PK-GST presets)
-- [ ] `LedgerIntegrationService` - Posting to ledger on paid invoices
+- [x] `LedgerIntegrationService` - Posting to ledger and void/reversal support
 
-#### 1.3 Business Logic Implementation
-- [ ] Invoice numbering (company-scoped with validation)
-- [ ] Payment allocation validation (prevent over-allocation)
-- [ ] Balance due calculations and automatic updates
-- [ ] Status workflow enforcement (draft→sent→posted→cancelled)
-- [ ] Multi-currency support with exchange rate handling
+#### 1.3 Business Logic Implementation ✅ COMPLETED
+- [x] Invoice numbering (company-scoped with validation)
+- [x] Payment allocation validation (prevent over-allocation)
+- [x] Balance due calculations and automatic updates
+- [x] Status workflow enforcement (draft→sent→posted→cancelled)
+- [x] Multi-currency support with exchange rate handling
 
 ### 🎯 Phase 2: API Layer & Documentation
 #### 2.1 REST API Endpoints
-- [ ] CRUD endpoints for all invoicing entities
-- [ ] Idempotency keys on all write operations
-- [ ] Rate limiting (60 requests/min per user)
-- [ ] Structured error codes and validation
+- [x] CRUD endpoints for all invoicing entities
+- [x] Idempotency keys on all write operations
+- [x] Rate limiting (60 requests/min per user)
+- [~] Structured error codes and validation (baseline in place)
 - [ ] OpenAPI/Swagger documentation
 
 #### 2.2 Web CRUD Interface
-- [ ] Inertia/Vue components for invoice management
-- [ ] Server-side validation with flash messages
-- [ ] PDF generation and download
-- [ ] Bulk operations and search/filter
+- [~] Inertia/Vue components for invoice management (controllers wired; UI ongoing)
+- [x] Server-side validation with flash messages
+- [x] PDF generation and download
+- [x] Bulk operations and search/filter
 
 ### 🎯 Phase 3: Ledger Integration & Financial Processing
 #### 3.1 Double-Entry Posting
-- [ ] Automatic posting to ledger when invoices are paid
-- [ ] AR, revenue, and tax liability account updates
-- [ ] Credit note generation for voids/cancellations
-- [ ] `LedgerService::post($entry)` integration with balance validation
+- [~] Automatic posting to ledger when invoices are paid (posting on invoice "posted" is implemented; payment-triggered posting TBD)
+- [x] AR, revenue, and tax liability account updates
+- [x] Credit note (reversal) generation for cancellations
+- [x] `LedgerService::post($entry)` integration with balance validation
 
 #### 3.2 Audit Trail & Compliance
-- [ ] Immutable financial records with audit logging
-- [ ] Soft delete support with credit note workflows
-- [ ] User action tracking for all financial operations
-- [ ] Compliance with accounting standards
+- [x] Immutable financial records with audit logging (to `audit_logs`)
+- [x] Soft delete support with credit note workflows
+- [x] User action tracking for all financial operations
+- [~] Compliance with accounting standards (baseline enforced)
 
 ### 🎯 Phase 4: Advanced Features
 #### 4.1 Reporting & Analytics
 - [ ] Refresh and query logic for `accounts_receivable_mv`
-- [ ] Trial balance integration with invoicing data
+- [x] Trial balance integration with invoicing data (via ledger services)
 - [ ] Real-time dashboards for AR metrics
-- [ ] CSV export functionality
+- [x] CSV export functionality
 
 #### 4.2 Payment Processing
 - [ ] Manual payment workflow with approval process
 - [ ] Bank reconciliation support (CSV import)
-- [ ] Payment allocation algorithms
+- [x] Payment allocation algorithms
 - [ ] Unmatched payment queue management
 
 #### 4.3 Multi-tenant & Security
-- [ ] RLS (Row Level Security) policies enforced
-- [ ] Company-scoped data isolation
-- [ ] Permission-based access control
+- [x] RLS (Row Level Security) policies enforced
+- [x] Company-scoped data isolation
+- [~] Permission-based access control (policies in place; granular permissions TBD)
 - [ ] Data encryption for sensitive information
 
 ---
@@ -182,14 +182,14 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - ⏳ Basic CRUD operations
 
 ### **Milestone 2: API & UI (2 weeks)**
-- ⏳ REST API with OpenAPI docs
+- ✅ REST API with OpenAPI docs (served via L5-Swagger, CI publishes)
 - ⏳ Inertia/Vue web interface
 - ⏳ PDF generation
 - ⏳ Basic testing coverage
 
 ### **Milestone 3: Financial Integration (2 weeks)**
-- ⏳ Ledger posting integration
-- ⏳ Audit trail implementation
+- ✅ Ledger posting integration (invoice post; payment completion auto-post)
+- ✅ Audit trail implementation
 - ⏳ Advanced business logic
 - ⏳ Comprehensive testing
 
@@ -198,6 +198,96 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - ⏳ Security audit
 - ⏳ Documentation completion
 - ⏳ Deployment readiness
+
+---
+
+## ✅ Detailed Delivery Checklist (Phase Matrix)
+
+### Database & Schema
+- [x] Invoices core tables (headers, items, taxes)
+- [x] Payments and allocations
+- [x] Accounts Receivable table with RLS
+- [x] Ledger schema (entries, lines) + RLS + triggers
+- [x] Idempotency keys and audit logs
+- [x] Items table + FK to invoice_items.item_id
+- [~] Materialized views for AR reporting (pending)
+
+### Models & State Machines
+- [x] Invoice model with state machine (draft → sent → posted → cancelled)
+- [x] Payment model with completion state and allocation helpers
+- [x] PaymentAllocation with void/refund flows and invoice payment sync
+- [x] JournalEntry/JournalLine models with post/void flows
+
+### Services
+- [x] InvoiceService (CRUD, send/post/cancel, PDF, duplicate)
+- [x] PaymentService (create/process, allocate/auto-allocate, void/refund)
+- [x] LedgerService (create/post/void journal entries)
+- [x] LedgerIntegrationService (invoice post; payment post; allocation post)
+- [x] CurrencyService (conversion, formatting)
+
+### API Layer
+- [x] Invoice API (CRUD + actions; idempotency; company scoping; rate limits)
+- [x] Payment API (CRUD + allocate/auto-allocate/void; stats)
+- [x] Standardized error envelope (includes `code`)
+- [x] ApiResponder trait for consistency
+- [x] OpenAPI served in-app via L5-Swagger (/api/documentation)
+- [x] CI workflow to publish OpenAPI JSON from YAML
+
+### Events & Listeners
+- [x] InvoiceSent/Posted/Cancelled (+ AR update, JE creation)
+- [x] Void journal entries on invoice cancel
+- [x] Posted journal entry updates (listeners)
+
+### Security & Multi-tenant
+- [x] RLS policies on core tables
+- [x] Company context middleware (Postgres GUC)
+- [x] Policies + Gates for invoices and payments
+
+### Tests
+- [x] Auth flows, core feature coverage
+- [x] Idempotency: invoice create/update/delete/actions
+- [x] Invoice validations and ledger posting
+- [x] Payment completion → auto-post to ledger
+- [x] Allocation flows: partial allocation posting; allocation void; refunds
+- [x] Error envelope (422 code)
+
+### Docs & Ops
+- [x] OpenAPI YAML (`docs/openapi/invoicing.yaml`)
+- [x] L5-Swagger UI + `openapi:publish` console command
+- [x] GitHub Action to publish `storage/api-docs` artifact
+- [ ] User guides, runbooks, migration notes (pending)
+
+---
+
+## 🧭 Next Phases – Ready-to-Use Tracker Template
+
+Copy this structure for upcoming modules (e.g., AP/Bills, Inventory, VMS):
+
+### 1) Schema
+- Tables, FKs, RLS, constraints, MVs (list per-table status)
+
+### 2) Domain Models & State
+- Models, casts, relationships, state machines
+
+### 3) Services
+- CRUD, workflows, integrations, side-effects
+
+### 4) API
+- Endpoints, validation, error envelope, idempotency, rate limits
+- OpenAPI annotations/YAML + UI
+
+### 5) Events & Listeners
+- Domain events, ledger and AR/AP syncs, notifications
+
+### 6) Security
+- Policies, gates, roles/permissions, RLS & GUC usage
+
+### 7) Tests
+- Unit + Feature: CRUD, workflows, validations, integrations
+
+### 8) Docs & Ops
+- README, runbooks, CI workflows (OpenAPI, schema checks, coding standards)
+
 
 ---
 

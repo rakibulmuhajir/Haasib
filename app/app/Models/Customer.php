@@ -86,6 +86,11 @@ class Customer extends Model
         });
     }
 
+    public function getRouteKeyName(): string
+    {
+        return 'customer_id';
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

@@ -3,6 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\InvoiceItemTax;
 use App\Models\Item;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -27,7 +29,6 @@ class InvoiceItemFactory extends Factory
         $subtotalAfterDiscount = $subtotalBeforeDiscount - $discount;
 
         return [
-            'id' => fake()->uuid(),
             'invoice_id' => Invoice::factory(),
             'item_id' => fake()->optional(0.8)->randomElement([Item::factory()->create()->id]),
             'description' => fake()->optional()->sentence(8),
@@ -35,9 +36,8 @@ class InvoiceItemFactory extends Factory
             'unit_price' => $unitPrice,
             'discount_amount' => $discountAmount ?? 0,
             'discount_percentage' => $discountPercentage ?? 0,
-            'subtotal' => $subtotalAfterDiscount,
-            'total_tax' => 0,
-            'total_amount' => $subtotalAfterDiscount,
+            # computed in model save: line_total only
+            'line_total' => $subtotalAfterDiscount,
             'tax_inclusive' => fake()->boolean(20),
             'metadata' => [
                 'created_by' => 'factory',
@@ -49,7 +49,7 @@ class InvoiceItemFactory extends Factory
     public function forInvoice(Invoice $invoice): static
     {
         return $this->state(fn (array $attributes) => [
-            'invoice_id' => $invoice->id,
+            'invoice_id' => $invoice->getKey(),
         ]);
     }
 
@@ -215,7 +215,7 @@ class InvoiceItemFactory extends Factory
 
             foreach ($taxes as $tax) {
                 InvoiceItemTax::factory()->create([
-                    'invoice_item_id' => $invoiceItem->id,
+                    'invoice_item_id' => $invoiceItem->getKey(),
                     'tax_name' => $tax['name'],
                     'rate' => $tax['rate'],
                 ]);

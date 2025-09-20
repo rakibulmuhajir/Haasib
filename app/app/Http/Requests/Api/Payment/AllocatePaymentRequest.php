@@ -9,7 +9,7 @@ class AllocatePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'invoice_id' => ['required', 'string', 'exists:invoices,id'],
+            'invoice_id' => ['required', 'string', 'exists:invoices,invoice_id'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'allocation_date' => ['nullable', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:500'],

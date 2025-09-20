@@ -15,7 +15,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 
 ## 1) Architecture Overview
 
-* **App**: Laravel 12, PHP 8.3, Octane (Swoole or RoadRunner), Redis (cache/queue), Horizon, Inertia + Vue 3 + Vite.
+* **App**: Laravel 11, PHP 8.3, Octane (Swoole or RoadRunner), Redis (cache/queue), Horizon, Inertia + Vue 3 + Vite.
 * **DB**: Postgres 16+. Single database. **Schemas per module**: `auth`, `billing`, `crm`, etc.
 * **Tenancy**: single DB table space. Every row has `company_id` (UUID). Enforced by **RLS**.
 * **API**: `/api/v1` in the same app. Auth via **Sanctum** (SPA + token for mobile).
@@ -36,6 +36,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **Double-entry ledger core**: add `ledger.ledger_accounts`, `ledger.journal_entries` (header), `ledger.journal_lines` (debit/credit). All financial features post balanced entries via domain services. Invoices/bills are immutable; changes via credit notes or reversing entries.
 * **Multi-company users**: support `company_user` pivot and an **active company** switcher. Update `SetTenantContext` to derive `app.current_company` from the active company, not just `users.company_id`. Jobs/CLI accept `--company=<uuid>` and set context before work.
 * **Payments driver layer**: strategy pattern for Stripe now, local gateways (JazzCash/Easypaisa) later, with webhook reconciliation and alerts.
+* **RBAC**: roles via `spatie/laravel-permission` — `owner | admin | accountant | member`; guard sensitive routes/actions with policies and permissions.
 
 ---
 
@@ -83,7 +84,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **Columns**: every table that stores tenant data has `company_id uuid not null`.
 * **Keys**: primary keys are UUIDs. Index `(company_id, created_at)` on event-like tables; unique with partial indexes where needed.
 * **Timestamps**: `created_at`, `updated_at`, soft deletes where useful.
-* **Auditability**: tables representing user-creatable resources should have `created_by_user_id uuid nullable` and `updated_by_user_id uuid nullable` columns, with foreign keys to `users.id` and `onDelete('set null')`. This provides a clear audit trail.
+* **Auditability**: tables representing user-creatable resources should have `created_by` and `updated_by` columns (nullable) that FK to `user_accounts.user_id` and `onDelete('set null')`. This provides a clear audit trail.
 
 ### Example Migration (schema + table + RLS)
 
@@ -175,7 +176,7 @@ class TransactionPerRequest
 ### 4A) Constraints & Money Precision
 
 * **DB constraints**: CHECKs for amounts (`>= 0`), valid statuses, and FK integrity. Postgres-first migrations only (purge MySQLisms like `AUTO_INCREMENT`).
-* **Money math**: store minor units per currency (e.g., cents) and use a library such as `brick/money` for calculations and formatting.
+* **Money math**: use `brick/money` for calculations and formatting. Storage can be `DECIMAL(15,2)` (as used by invoices/payments) or minor units per currency — pick consistently per table and document it.
 * **Idempotency**: enforce `Idempotency-Key` on all mutating endpoints touching money.
 
 ---
@@ -323,12 +324,19 @@ Pick one path and ignore the rest.
   * **Sorting**: `?sort=-created_at,amount_cents` (minus for desc).
   * **Errors**: `{ error: { code, message, details } }` with standard HTTP codes.
   * **Idempotency**: Accept `Idempotency-Key` on POST/PUT to avoid double writes.
+  * **Sparse fields**: `?fields[entity]=id,name,updated_at` for bandwidth-aware clients.
+  * **Delta sync**: `/sync?updated_since=ISO8601` for mobile/offline.
 * **Resources**: use Eloquent API Resources; keep responses in `{ data, meta }` envelope.
 * **Rate limits**: default 60 req/min per user/IP; custom buckets for webhooks or internal apps.
 * **Docs**: generate OpenAPI with `l5-swagger` or `scribe` and host `/docs` behind auth.
 * **Security**: Sanctum tokens for first‑party clients; CSRF on web routes; strict CORS for `/api`.
 * **Caching**: `ETag` and `If-None-Match` on common GETs.
 * **Health**: `/health` returns `{ status: 'ok', version, services: { db, redis, queue } }`.
+
+### API Guides
+
+- Idempotency guide: `docs/idempotency.md`
+- Payment allocations quick guide: `docs/api-allocation-guide.md`
 
 ---
 
@@ -340,6 +348,24 @@ Pick one path and ignore the rest.
 ### Webhooks & Reconciliation
 
 * Handle Stripe/local gateway webhooks with retries; reconcile payments daily and flag mismatches.
+
+---
+
+## 7A) Module Order & Why
+
+1. Foundations: Auth + Multi-company + RBAC → everything depends on it.
+2. Ledger Core → source of truth; all money posts here.
+3. Invoicing (Sales) → early business value, simple flow to validate posting.
+4. Payments (Manual Receipts) → cash in, approval workflow, ledger posting.
+5. Bank Reconciliation (CSV) → trust; match bank statements.
+6. Taxes (Calculator + presets) → compliance basics for AE/PK.
+7. Reporting v1 → trial balance, aging, P&L/BS.
+8. API v1 & Mobile Sync → compact/sparse/delta.
+9. Internationalization & Localization → polish for first international users.
+10. Module Registry & Extensibility → enable custom vertical modules.
+11. Observability & Health → alerts dialed-in.
+12. Backups & DR Automation → institutionalize the weekly restore drill.
+13. Onboarding Wizard & SaaS Subscription (Manual) → create company, COA seed, manual sub invoice + activation.
 
 ---
 

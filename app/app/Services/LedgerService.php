@@ -19,7 +19,7 @@ class LedgerService
     {
         try {
             DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit.audit_logs')->insert([
+                DB::table('audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user?->id,
                     'company_id' => $companyId,
@@ -108,7 +108,7 @@ class LedgerService
             }
 
             // 1. Create the reversing entry by swapping debits and credits
-            $reversingLines = $entry->journalLines->map(function (JournalLine $line) {
+            $reversingLines = $entry->journalLines->map(function (JournalLine $line) use ($entry) {
                 return [
                     'account_id' => $line->ledger_account_id,
                     'debit_amount' => $line->credit_amount,

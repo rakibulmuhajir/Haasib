@@ -191,7 +191,7 @@
                     <div class="space-y-2">
                       <div
                         v-for="invoice in outstandingInvoices"
-                        :key="invoice.id"
+                        :key="invoice.invoice_id"
                         class="flex justify-between items-center text-sm"
                       >
                         <span class="font-medium">{{ invoice.invoice_number }}</span>
@@ -246,17 +246,19 @@ import Button from 'primevue/button'
 import { formatMoney, formatDate } from '@/Utils/formatting'
 
 interface Customer {
-  id: number
+  customer_id: number
   name: string
   email?: string
   currency_id?: number
 }
 
 interface Invoice {
-  id: number
+  invoice_id: number
+  customer_id: number
   invoice_number: string
-  due_date: string
-  balance_amount: number
+  invoice_date: string
+  total_amount: number
+  balance_due: number
   currency: {
     id: number
     code: string
@@ -273,13 +275,28 @@ interface Currency {
 const props = defineProps<{
   customers: Customer[]
   invoices: Invoice[]
+  selectedInvoice?: Invoice | null
+  currencies: Currency[]
   nextPaymentNumber: string
 }>()
+
+const page = usePage()
+const urlParams = new URLSearchParams(window.location.search)
+const invoiceIdFromUrl = urlParams.get('invoice_id')
+
+// Page metadata
+const pageMeta = computed(() => ({
+  title: props.selectedInvoice 
+    ? `Record Payment for Invoice ${props.selectedInvoice.invoice_number}`
+    : 'Create Payment'
+}))
 
 
 const customerInvoices = ref<Invoice[]>([])
 const availableCurrencies = ref<Currency[]>([])
 const selectedCurrency = ref<Currency | null>(null)
+const selectedCustomer = ref<Customer | null>(null)
+const outstandingInvoices = ref<Invoice[]>([])
 
 const paymentMethods = [
   { label: 'Cash', value: 'cash' },
@@ -296,19 +313,27 @@ const totalAllocated = computed(() => {
   return Object.values(form.invoice_allocations).reduce((sum, amount) => sum + (amount || 0), 0)
 })
 
+const totalOutstanding = computed(() => {
+  return outstandingInvoices.value.reduce((sum, invoice) => sum + invoice.balance_due, 0)
+})
+
 const handleCustomerChange = () => {
-  const customer = props.customers.find(c => c.id === form.customer_id)
+  const customer = props.customers.find(c => c.customer_id === form.customer_id)
+  selectedCustomer.value = customer
+  
   if (customer) {
     // Filter invoices for this customer
-    customerInvoices.value = props.invoices.filter(invoice => invoice.customer_id === customer.id)
+    customerInvoices.value = props.invoices.filter(invoice => invoice.customer_id === customer.customer_id)
+    outstandingInvoices.value = customerInvoices.value.filter(invoice => invoice.balance_due > 0)
     
     // Set default currency if customer has one
     if (customer.currency_id) {
       form.currency_id = customer.currency_id
-      updateAvailableCurrencies()
+      selectedCurrency.value = props.currencies.find(c => c.id === customer.currency_id) || null
     }
   } else {
     customerInvoices.value = []
+    outstandingInvoices.value = []
   }
   
   // Clear allocations
@@ -316,19 +341,7 @@ const handleCustomerChange = () => {
 }
 
 const handleCurrencyChange = () => {
-  updateAvailableCurrencies()
-}
-
-const updateAvailableCurrencies = () => {
-  // For now, just use all currencies from invoices
-  const currencySet = new Set()
-  props.invoices.forEach(invoice => {
-    currencySet.add(JSON.stringify(invoice.currency))
-  })
-  
-  availableCurrencies.value = Array.from(currencySet).map(currencyStr => JSON.parse(currencyStr))
-  
-  selectedCurrency.value = availableCurrencies.value.find(c => c.id === form.currency_id) || null
+  selectedCurrency.value = props.currencies.find(c => c.id === form.currency_id) || null
 }
 
 const form = useForm({
@@ -356,7 +369,19 @@ onMounted(() => {
   // Set default payment date to today
   form.payment_date = new Date().toISOString().split('T')[0]
   
-  // Initialize available currencies
-  updateAvailableCurrencies()
+  // Pre-select customer if selectedInvoice is provided
+  if (props.selectedInvoice) {
+    form.customer_id = props.selectedInvoice.customer_id
+    handleCustomerChange()
+    
+    // Pre-fill the allocation for the selected invoice
+    if (props.selectedInvoice.balance_due > 0) {
+      form.invoice_allocations[props.selectedInvoice.invoice_id] = props.selectedInvoice.balance_due
+    }
+  }
+  
+  // Set available currencies
+  availableCurrencies.value = props.currencies
+  selectedCurrency.value = props.currencies.find(c => c.id === form.currency_id) || null
 })
 </script>

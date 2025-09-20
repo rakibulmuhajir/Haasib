@@ -132,15 +132,28 @@ class InvoiceStateMachine
         if ($this->invoice->items()->count() === 0) {
             throw new \InvalidArgumentException('Cannot send an invoice with no items.');
         }
-        if ($this->invoice->total_amount <= 0) {
-            throw new \InvalidArgumentException('Cannot send an invoice with a zero or negative total.');
+        // Allow zero-total invoices to be sent (e.g., complimentary invoices).
+        if ($this->invoice->total_amount < 0) {
+            throw new \InvalidArgumentException('Cannot send an invoice with a negative total.');
         }
     }
 
     private function validateCanBePosted(): void
     {
-        if ($this->invoice->balance_due <= 0) {
-            throw new \InvalidArgumentException('Cannot post an invoice with zero balance due.');
+        // Must be transitioning from 'sent' to 'posted'
+        if ($this->invoice->status !== 'sent') {
+            throw new \InvalidArgumentException('Invoice must be sent before it can be posted.');
+        }
+        // Must have items and positive total
+        if ($this->invoice->items()->count() === 0) {
+            throw new \InvalidArgumentException('Cannot post an invoice with no items.');
+        }
+        if ($this->invoice->total_amount <= 0) {
+            throw new \InvalidArgumentException('Cannot post an invoice with a zero or negative total.');
+        }
+        // Cannot have a future sent_at timestamp
+        if (isset($this->invoice->sent_at) && $this->invoice->sent_at->isFuture()) {
+            throw new \InvalidArgumentException('Cannot post an invoice that is scheduled to be sent in the future.');
         }
     }
 

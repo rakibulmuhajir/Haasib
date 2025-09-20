@@ -301,7 +301,7 @@
           <div class="flex items-center space-x-3">
             <div class="text-right">
               <div class="font-medium">
-                {{ formatMoney(invoice.balance_amount, invoice.currency) }}
+                {{ formatMoney(invoice.balance_due, invoice.currency) }}
               </div>
               <div class="text-sm text-gray-500">Balance Due</div>
             </div>
@@ -311,7 +311,7 @@
                 type="number"
                 step="0.01"
                 min="0"
-                :max="Math.min(invoice.balance_amount, unallocatedAmount)"
+                :max="Math.min(invoice.balance_due, unallocatedAmount)"
                 placeholder="0.00"
                 class="w-full"
               />
@@ -488,7 +488,7 @@ interface Invoice {
   id: number
   invoice_number: string
   due_date: string
-  balance_amount: number
+  balance_due: number
   currency: {
     id: number
     code: string

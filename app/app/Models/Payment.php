@@ -16,8 +16,8 @@ class Payment extends Model
     protected $table = 'payments';
 
     protected $primaryKey = 'payment_id';
-
-    public $incrementing = true;
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'company_id',
@@ -52,6 +52,7 @@ class Payment extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     protected $attributes = [
@@ -67,10 +68,18 @@ class Payment extends Model
         parent::boot();
 
         static::creating(function ($payment) {
+            if (empty($payment->payment_id)) {
+                $payment->payment_id = (string) \Illuminate\Support\Str::uuid();
+            }
             if (! $payment->payment_number) {
                 $payment->payment_number = $payment->generatePaymentNumber();
             }
         });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'payment_id';
     }
 
     public function company(): BelongsTo
@@ -288,8 +297,8 @@ class Payment extends Model
         }
 
         return PaymentAllocation::create([
-            'payment_id' => $this->id,
-            'invoice_id' => $invoice->id,
+            'payment_id' => $this->getKey(),
+            'invoice_id' => $invoice->getKey(),
             'allocated_amount' => $amount->getAmount()->toFloat(),
             'notes' => $notes,
         ]);

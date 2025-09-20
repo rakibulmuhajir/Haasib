@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('invoices', function (Blueprint $table) {
-            $table->id('invoice_id');
+            $table->uuid('invoice_id')->primary();
             $table->uuid('company_id');
             $table->uuid('customer_id')->nullable();
             $table->string('invoice_number', 100);
@@ -32,6 +32,11 @@ return new class extends Migration
             $table->string('status', 50)->default('draft'); // draft, sent, posted, cancelled
             $table->string('payment_status', 50)->default('unpaid'); // unpaid, partial, paid, overpaid
             $table->text('notes')->nullable();
+            $table->text('terms')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamp('sent_at')->nullable();
+            $table->timestamp('posted_at')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
 
@@ -60,6 +65,17 @@ return new class extends Migration
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_total_nonneg CHECK (total_amount >= 0)');
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_paid_nonneg CHECK (paid_amount >= 0)');
         DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_balance_nonneg CHECK (balance_due >= 0)');
+        // Enum-like constraints for status fields
+        DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_invoice_status_valid CHECK (status IN ('draft','sent','posted','partial','paid','cancelled'))");
+        DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_payment_status_valid CHECK (payment_status IN ('unpaid','partial','paid','overpaid'))");
+
+        // Enable RLS and tenant policy
+        DB::statement('ALTER TABLE invoices ENABLE ROW LEVEL SECURITY');
+        DB::statement(<<<SQL
+            CREATE POLICY invoices_tenant_isolation ON invoices
+            USING (company_id = current_setting('app.current_company', true)::uuid)
+            WITH CHECK (company_id = current_setting('app.current_company', true)::uuid);
+        SQL);
     }
 
     /**

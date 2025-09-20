@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\StateMachines\InvoiceStateMachine;
 use Brick\Money\Money;
+use Brick\Math\RoundingMode;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,8 +19,8 @@ class Invoice extends Model
     protected $table = 'invoices';
 
     protected $primaryKey = 'invoice_id';
-
-    public $incrementing = true;
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'company_id',
@@ -58,6 +60,10 @@ class Invoice extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+        'sent_at' => 'datetime',
+        'posted_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     protected $attributes = [
@@ -78,6 +84,9 @@ class Invoice extends Model
         parent::boot();
 
         static::creating(function ($invoice) {
+            if (empty($invoice->invoice_id)) {
+                $invoice->invoice_id = (string) \Illuminate\Support\Str::uuid();
+            }
             if (! $invoice->invoice_number) {
                 $invoice->invoice_number = $invoice->generateInvoiceNumber();
             }
@@ -96,6 +105,11 @@ class Invoice extends Model
                 throw new \InvalidArgumentException('Invalid or duplicate invoice number');
             }
         });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'invoice_id';
     }
 
     public function company(): BelongsTo
@@ -118,14 +132,15 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class, 'invoice_id', 'invoice_id');
     }
 
-    public function payments(): HasMany
+    public function payments()
     {
-        return $this->hasMany(Payment::class);
+        return $this->belongsToMany(Payment::class, 'payment_allocations', 'invoice_id', 'payment_id')
+            ->withPivot('allocated_amount', 'created_at', 'updated_at');
     }
 
     public function paymentAllocations(): HasMany
     {
-        return $this->hasMany(PaymentAllocation::class);
+        return $this->hasMany(PaymentAllocation::class, 'invoice_id', 'invoice_id');
     }
 
     public function accountsReceivable(): HasMany
@@ -209,7 +224,9 @@ class Invoice extends Model
             return false;
         }
 
-        if ($this->total_amount <= 0) {
+        // Allow zero-total invoices to be sent (e.g., comped invoices).
+        // Only disallow negative totals.
+        if ($this->total_amount < 0) {
             return false;
         }
 
@@ -329,7 +346,7 @@ class Invoice extends Model
 
     public function generateInvoiceNumber(): string
     {
-        $company = $this->company;
+        $company = $this->company ?? \App\Models\Company::find($this->company_id);
         $year = now()->year;
         $month = now()->format('m');
         $day = now()->format('d');
@@ -346,7 +363,7 @@ class Invoice extends Model
         );
     }
 
-    public function validateInvoiceNumber(string $invoiceNumber, Company $company): bool
+    public function validateInvoiceNumber(string $invoiceNumber, ?Company $company): bool
     {
         if (empty(trim($invoiceNumber))) {
             return false;
@@ -360,7 +377,8 @@ class Invoice extends Model
             return false;
         }
 
-        $existingInvoice = static::where('company_id', $company->id)
+        $companyId = $company?->id ?? $this->company_id;
+        $existingInvoice = static::where('company_id', $companyId)
             ->where('invoice_number', $invoiceNumber)
             ->where('invoice_id', '!=', $this->invoice_id ?? null)
             ->first();
@@ -368,11 +386,12 @@ class Invoice extends Model
         return $existingInvoice === null;
     }
 
-    private function getNextInvoiceSequence(Company $company, int $year, string $month, string $day): int
+    private function getNextInvoiceSequence(?Company $company, int $year, string $month, string $day): int
     {
         $today = now()->toDateString();
 
-        $latestInvoice = static::where('company_id', $company->id)
+        $companyId = $company?->id ?? $this->company_id;
+        $latestInvoice = static::where('company_id', $companyId)
             ->whereDate('created_at', $today)
             ->orderBy('invoice_number', 'desc')
             ->first();
@@ -421,7 +440,7 @@ class Invoice extends Model
         foreach ($items as $item) {
             $itemSubtotal = Money::of($item->quantity * $item->unit_price, $this->currency->code);
             $discountAmount = Money::of($item->discount_amount ?? 0, $this->currency->code);
-            $itemTax = Money::of($item->total_tax, $this->currency->code);
+            $itemTax = $item->getTotalTax();
 
             $subtotal = $subtotal->plus($itemSubtotal->minus($discountAmount));
             $totalTax = $totalTax->plus($itemTax);
@@ -431,18 +450,18 @@ class Invoice extends Model
         $amountPaid = Money::of($this->getTotalPaidAmount(), $this->currency->code);
         $balanceDue = $totalAmount->minus($amountPaid);
 
-        $this->subtotal = $subtotal->getAmount()->toFloat();
-        $this->total_tax = $totalTax->getAmount()->toFloat();
-        $this->total_amount = $totalAmount->getAmount()->toFloat();
-        $this->amount_paid = $amountPaid->getAmount()->toFloat();
-        $this->balance_due = max(0, $balanceDue->getAmount()->toFloat());
+        $this->subtotal = $subtotal->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
+        $this->tax_amount = $totalTax->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
+        $this->total_amount = $totalAmount->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
+        $this->paid_amount = $amountPaid->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
+        $this->balance_due = max(0, $balanceDue->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat());
     }
 
     public function getTotalPaidAmount(): float
     {
         return $this->paymentAllocations()
             ->where('status', 'active')
-            ->sum('amount');
+            ->sum('allocated_amount');
     }
 
     public function getBalanceDue(): Money
@@ -452,7 +471,7 @@ class Invoice extends Model
 
     public function getAmountPaid(): Money
     {
-        return Money::of($this->amount_paid, $this->currency->code);
+        return Money::of($this->paid_amount, $this->currency->code);
     }
 
     public function getRemainingBalance(): Money
@@ -466,7 +485,7 @@ class Invoice extends Model
             return 0;
         }
 
-        return min(100, ($this->amount_paid / $this->total_amount) * 100);
+        return min(100, ($this->paid_amount / $this->total_amount) * 100);
     }
 
     public function isFullyPaid(): bool
@@ -476,19 +495,19 @@ class Invoice extends Model
 
     public function isPartiallyPaid(): bool
     {
-        return $this->amount_paid > 0 && $this->balance_due > 0;
+        return $this->paid_amount > 0 && $this->balance_due > 0;
     }
 
     public function isUnpaid(): bool
     {
-        return $this->amount_paid <= 0;
+        return $this->paid_amount <= 0;
     }
 
     public function getPaymentStatusSummary(): array
     {
         return [
             'total_amount' => $this->total_amount,
-            'amount_paid' => $this->amount_paid,
+            'amount_paid' => $this->paid_amount,
             'balance_due' => $this->balance_due,
             'payment_percentage' => $this->getPaymentPercentage(),
             'is_fully_paid' => $this->isFullyPaid(),
@@ -506,20 +525,20 @@ class Invoice extends Model
     public function recalculateAndSave(): void
     {
         $oldBalanceDue = $this->balance_due;
-        $oldAmountPaid = $this->amount_paid;
+        $oldAmountPaid = $this->paid_amount;
         $oldStatus = $this->status;
 
         $this->calculateTotals();
         $this->save();
 
-        if ($oldBalanceDue != $this->balance_due || $oldAmountPaid != $this->amount_paid || $oldStatus != $this->status) {
+        if ($oldBalanceDue != $this->balance_due || $oldAmountPaid != $this->paid_amount || $oldStatus != $this->status) {
             Log::info('Invoice recalculated', [
                 'invoice_id' => $this->invoice_id,
                 'invoice_number' => $this->invoice_number,
                 'old_balance_due' => $oldBalanceDue,
                 'new_balance_due' => $this->balance_due,
                 'old_amount_paid' => $oldAmountPaid,
-                'new_amount_paid' => $this->amount_paid,
+                'new_amount_paid' => $this->paid_amount,
                 'old_status' => $oldStatus,
                 'new_status' => $this->status,
             ]);
@@ -557,7 +576,7 @@ class Invoice extends Model
                 'payment_id' => $allocation->payment_id,
                 'payment_reference' => $allocation->payment->payment_reference,
                 'payment_date' => $allocation->payment->payment_date,
-                'amount' => $allocation->amount,
+                'amount' => $allocation->allocated_amount,
                 'currency' => $allocation->payment->currency->code,
                 'allocation_date' => $allocation->allocation_date,
                 'status' => $allocation->status,
@@ -658,7 +677,7 @@ class Invoice extends Model
 
     public function getTaxAmount(): Money
     {
-        return Money::of($this->total_tax, $this->currency->code);
+        return Money::of($this->tax_amount, $this->currency->code);
     }
 
     public function getFormattedTotalAmount(?string $locale = null): string
@@ -730,6 +749,26 @@ class Invoice extends Model
     public function stateMachine(): InvoiceStateMachine
     {
         return new InvoiceStateMachine($this);
+    }
+
+    /**
+     * Journal entries created for this invoice (via source_type/source_id linkage).
+     */
+    public function journalEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\JournalEntry::class, 'source_id', 'invoice_id')
+            ->where('source_type', 'invoice');
+    }
+
+    /**
+     * Latest journal entry associated to this invoice (if any).
+     */
+    public function journalEntry(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        // Use posted_at ordering to fetch the latest related journal entry without UUID aggregates
+        return $this->hasOne(\App\Models\JournalEntry::class, 'source_id', 'invoice_id')
+            ->where('source_type', 'invoice')
+            ->orderByDesc('posted_at');
     }
 
     public function getDisplayStatus(): string

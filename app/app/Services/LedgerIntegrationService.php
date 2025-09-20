@@ -21,7 +21,7 @@ class LedgerIntegrationService
     {
         try {
             DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit.audit_logs')->insert([
+                DB::table('audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user?->id,
                     'company_id' => $companyId,
@@ -124,12 +124,6 @@ class LedgerIntegrationService
         $result = DB::transaction(function () use ($allocation) {
             $journalEntry = $this->createPaymentAllocationJournalEntry($allocation);
             $this->postJournalEntry($journalEntry);
-
-            $allocation->metadata = array_merge($allocation->metadata ?? [], [
-                'posted_to_ledger_at' => now()->toISOString(),
-                'posted_by_user_id' => auth()->id(),
-            ]);
-            $allocation->save();
 
             return $journalEntry;
         });
@@ -282,11 +276,11 @@ class LedgerIntegrationService
             ],
         ];
 
-        if ($invoice->total_tax > 0) {
+        if ($invoice->tax_amount > 0) {
             $journalLines[] = [
                 'account_id' => $accounts['tax_payable']->id,
                 'debit_amount' => 0,
-                'credit_amount' => $invoice->total_tax,
+                'credit_amount' => $invoice->tax_amount,
                 'description' => "Tax payable from invoice #{$invoice->invoice_number}",
             ];
         }
@@ -298,7 +292,7 @@ class LedgerIntegrationService
             $invoice->invoice_number,
             $invoice->invoice_date,
             'invoice',
-            $invoice->id,
+            $invoice->getKey(),
             ['customer_id' => $invoice->customer_id]
         );
     }
@@ -342,7 +336,7 @@ class LedgerIntegrationService
         $payment = $allocation->payment;
         $company = $allocation->payment->company;
 
-        $amountInCompanyCurrency = Money::of($allocation->amount, $payment->currency->code)
+        $amountInCompanyCurrency = Money::of($allocation->allocated_amount, $payment->currency->code)
             ->multipliedBy($payment->exchange_rate);
 
         $journalLines = [
@@ -367,7 +361,7 @@ class LedgerIntegrationService
             $payment->payment_reference,
             $allocation->allocation_date,
             'payment_allocation',
-            $allocation->id,
+            $allocation->getKey(),
             [
                 'customer_id' => $payment->customer_id,
                 'invoice_id' => $invoice->id,

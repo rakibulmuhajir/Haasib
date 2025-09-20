@@ -509,3 +509,47 @@ For API support and questions:
 - PDF generation
 - Email integration
 - Comprehensive API documentation
+## Resource IDs and UUIDs
+
+All primary keys for core resources are UUIDs:
+
+- Invoices: `invoice_id`
+- Payments: `payment_id`
+- Customers: `customer_id`
+- Payment Allocations: `allocation_id`
+- Ledger entities (accounts, journal entries, lines): `id` (UUID)
+
+API paths and request validators expect UUID values for all `id` parameters.
+
+- Routes define `whereUuid('id')` (and analogous) to enforce proper format.
+- For DB validations, use the correct PK columns, e.g.:
+  - `exists:invoices,invoice_id`
+  - `exists:payments,payment_id`
+  - `exists:customers,customer_id`
+
+## Invoices: Check PDF Availability
+
+Endpoint: `GET /api/invoices/{id}/pdf-exists`
+
+- Path param `{id}` is `invoice_id` (UUID)
+- Returns whether a generated PDF exists for the invoice number and, if so, the latest file and its URL
+
+Example response:
+
+```
+{
+  "success": true,
+  "data": {
+    "exists": true,
+    "latest": {
+      "filename": "invoice_INV-20250919_2025-09-19.pdf",
+      "url": "https://app.example.com/storage/invoices/invoice_INV-20250919_2025-09-19.pdf",
+      "modified_at": "2025-09-19T12:34:56Z"
+    }
+  }
+}
+```
+
+Notes:
+
+- PDFs are stored under `storage/app/public/invoices`. The app will create the directory and attempt to ensure the `public/storage` symlink exists when generating PDFs.

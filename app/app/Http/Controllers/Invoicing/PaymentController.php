@@ -7,6 +7,7 @@ use App\Http\Requests\Invoicing\AllocatePaymentRequest;
 use App\Http\Requests\Invoicing\RefundPaymentRequest;
 use App\Http\Requests\Invoicing\StorePaymentRequest;
 use App\Http\Requests\Invoicing\UpdatePaymentRequest;
+use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -163,11 +164,22 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get(['customer_id', 'name', 'email', 'currency_id']);
 
-        $invoices = Invoice::where('company_id', $request->user()->current_company_id)
+        $query = Invoice::where('company_id', $request->user()->current_company_id)
             ->whereIn('status', ['sent', 'posted'])
-            ->where('balance_amount', '>', 0)
-            ->orderBy('invoice_date')
-            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
+            ->where('balance_due', '>', 0)
+            ->orderBy('invoice_date');
+
+        // If invoice_id is provided, filter to that specific invoice
+        $selectedInvoice = null;
+        if ($request->filled('invoice_id')) {
+            $selectedInvoice = $query->where('invoice_id', $request->invoice_id)->first();
+            $invoices = $selectedInvoice ? [$selectedInvoice] : [];
+        } else {
+            $invoices = $query->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_due']);
+        }
+
+        // Get currencies
+        $currencies = Currency::orderBy('code')->get();
 
         // Get the next payment number
         $nextPaymentNumber = $this->paymentService->generateNextPaymentNumber($request->user()->current_company_id);
@@ -175,6 +187,8 @@ class PaymentController extends Controller
         return Inertia::render('Invoicing/Payments/Create', [
             'customers' => $customers,
             'invoices' => $invoices,
+            'selectedInvoice' => $selectedInvoice,
+            'currencies' => $currencies,
             'nextPaymentNumber' => $nextPaymentNumber,
         ]);
     }
@@ -254,9 +268,9 @@ class PaymentController extends Controller
 
         $invoices = Invoice::where('company_id', $request->user()->current_company_id)
             ->whereIn('status', ['sent', 'posted'])
-            ->where('balance_amount', '>', 0)
+            ->where('balance_due', '>', 0)
             ->orderBy('invoice_date')
-            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_amount']);
+            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_due']);
 
         return Inertia::render('Invoicing/Payments/Edit', [
             'payment' => $payment,

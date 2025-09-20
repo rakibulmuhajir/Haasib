@@ -67,7 +67,7 @@ class InvoiceItemTax extends Model
 
     public function invoiceItem(): BelongsTo
     {
-        return $this->belongsTo(InvoiceItem::class);
+        return $this->belongsTo(InvoiceItem::class, 'invoice_item_id', 'invoice_item_id');
     }
 
     public function scopeForInvoiceItem($query, $invoiceItemId)

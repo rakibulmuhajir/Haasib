@@ -11,7 +11,7 @@ class JournalLine extends Model
 {
     use HasFactory;
 
-    protected $table = 'ledger.journal_lines';
+    protected $table = 'journal_lines';
 
     protected $keyType = 'string';
 

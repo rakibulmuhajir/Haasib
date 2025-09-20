@@ -63,18 +63,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])->name('export');
         Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])->name('store');
-        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])->name('show');
-        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])->name('edit');
-        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])->name('update');
-        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])->name('destroy');
+        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])->whereUuid('invoice')->name('show');
+        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])->whereUuid('invoice')->name('edit');
+        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])->whereUuid('invoice')->name('update');
+        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])->whereUuid('invoice')->name('destroy');
 
         // Invoice Actions
-        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])->name('send');
-        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])->name('post');
-        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])->name('cancel');
-        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->name('generate-pdf');
-        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->name('send-email');
-        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->name('duplicate');
+        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])->whereUuid('invoice')->name('send');
+        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])->whereUuid('invoice')->name('post');
+        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])->whereUuid('invoice')->name('cancel');
+        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->whereUuid('invoice')->name('generate-pdf');
+        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->whereUuid('invoice')->name('send-email');
+        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->whereUuid('invoice')->name('duplicate');
 
         // Bulk operations
         Route::post('/bulk', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'bulk'])->name('bulk');
@@ -85,16 +85,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'index'])->name('index');
         Route::get('/create', [\App\Http\Controllers\Invoicing\PaymentController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'store'])->name('store');
-        Route::get('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'show'])->name('show');
-        Route::get('/{payment}/edit', [\App\Http\Controllers\Invoicing\PaymentController::class, 'edit'])->name('edit');
-        Route::put('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'update'])->name('update');
-        Route::delete('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'destroy'])->name('destroy');
+        Route::get('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'show'])->whereUuid('payment')->name('show');
+        Route::get('/{payment}/edit', [\App\Http\Controllers\Invoicing\PaymentController::class, 'edit'])->whereUuid('payment')->name('edit');
+        Route::put('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'update'])->whereUuid('payment')->name('update');
+        Route::delete('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'destroy'])->whereUuid('payment')->name('destroy');
 
         // Payment Actions
-        Route::post('/{payment}/allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'allocate'])->name('allocate');
-        Route::post('/{payment}/auto-allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'autoAllocate'])->name('auto-allocate');
-        Route::post('/{payment}/void', [\App\Http\Controllers\Invoicing\PaymentController::class, 'void'])->name('void');
-        Route::post('/{payment}/refund', [\App\Http\Controllers\Invoicing\PaymentController::class, 'refund'])->name('refund');
+        Route::post('/{payment}/allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'allocate'])->whereUuid('payment')->name('allocate');
+        Route::post('/{payment}/auto-allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'autoAllocate'])->whereUuid('payment')->name('auto-allocate');
+        Route::post('/{payment}/void', [\App\Http\Controllers\Invoicing\PaymentController::class, 'void'])->whereUuid('payment')->name('void');
+        Route::post('/{payment}/refund', [\App\Http\Controllers\Invoicing\PaymentController::class, 'refund'])->whereUuid('payment')->name('refund');
     });
 
     // Customer Routes
@@ -103,16 +103,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/export', [\App\Http\Controllers\Invoicing\CustomerController::class, 'export'])->name('export');
         Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])->name('store');
-        Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])->name('show');
-        Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])->name('edit');
-        Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])->name('update');
-        Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])->name('destroy');
+        Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])->whereUuid('customer')->name('show');
+        Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])->whereUuid('customer')->name('edit');
+        Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])->whereUuid('customer')->name('update');
+        Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])->whereUuid('customer')->name('destroy');
 
         // Customer Relations
-        Route::get('/{customer}/invoices', [\App\Http\Controllers\Invoicing\CustomerController::class, 'invoices'])->name('invoices');
-        Route::get('/{customer}/payments', [\App\Http\Controllers\Invoicing\CustomerController::class, 'payments'])->name('payments');
-        Route::get('/{customer}/statement', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statement'])->name('statement');
-        Route::get('/{customer}/statistics', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statistics'])->name('statistics');
+        Route::get('/{customer}/invoices', [\App\Http\Controllers\Invoicing\CustomerController::class, 'invoices'])->whereUuid('customer')->name('invoices');
+        Route::get('/{customer}/payments', [\App\Http\Controllers\Invoicing\CustomerController::class, 'payments'])->whereUuid('customer')->name('payments');
+        Route::get('/{customer}/statement', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statement'])->whereUuid('customer')->name('statement');
+        Route::get('/{customer}/statistics', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statistics'])->whereUuid('customer')->name('statistics');
 
         // Bulk operations
         Route::post('/bulk', [\App\Http\Controllers\Invoicing\CustomerController::class, 'bulk'])->name('bulk');
@@ -137,13 +137,13 @@ Route::middleware('auth')->group(function () {
         // Ledger Accounts Routes - must come before dynamic parameter routes
         Route::prefix('accounts')->name('accounts.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'index'])->name('index');
-            Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'show'])->name('show');
+            Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'show'])->whereUuid('id')->name('show');
         });
 
         // Dynamic parameter routes - must come after specific routes
-        Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])->name('show');
-        Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])->name('post');
-        Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])->name('void');
+        Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])->whereUuid('id')->name('show');
+        Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])->whereUuid('id')->name('post');
+        Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])->whereUuid('id')->name('void');
     });
 
     // Admin Routes

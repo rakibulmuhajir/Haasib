@@ -22,6 +22,56 @@ security:
   - BearerAuth: []
 
 paths:
+  /invoices/{id}/pdf-exists:
+    get:
+      summary: Check if an invoice PDF exists
+      description: Returns whether a generated PDF exists for the invoice number and the latest file information.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Invoice ID (UUID)
+      responses:
+        '200':
+          description: PDF existence response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      exists:
+                        type: boolean
+                      latest:
+                        type: object
+                        nullable: true
+                        properties:
+                          filename:
+                            type: string
+                          url:
+                            type: string
+                          modified_at:
+                            type: string
+                            format: date-time
+                      all:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            filename:
+                              type: string
+                            url:
+                              type: string
+                            modified_at:
+                              type: string
+                              format: date-time
   # Health Check
   /health:
     get:
@@ -77,12 +127,13 @@ paths:
           description: Filter by invoice status
           schema:
             type: string
-            enum: [draft, sent, posted, paid, cancelled, void]
+            enum: [draft, sent, posted, partial, paid, cancelled]
         - name: customer_id
           in: query
           description: Filter by customer ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: currency_id
           in: query
           description: Filter by currency ID
@@ -162,10 +213,12 @@ paths:
                 - items
               properties:
                 customer_id:
-                  type: integer
+                  type: string
+                  format: uuid
                   description: Customer ID
                 currency_id:
-                  type: integer
+                  type: string
+                  format: uuid
                   description: Currency ID (defaults to customer's currency)
                 invoice_date:
                   type: string
@@ -285,7 +338,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         '200':
           description: Invoice details
@@ -313,7 +367,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -329,9 +384,11 @@ paths:
               type: object
               properties:
                 customer_id:
-                  type: integer
+                  type: string
+                  format: uuid
                 currency_id:
-                  type: integer
+                  type: string
+                  format: uuid
                 invoice_date:
                   type: string
                   format: date
@@ -378,7 +435,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -400,6 +458,9 @@ paths:
                   message:
                     type: string
                     example: Invoice deleted successfully
+              example:
+                success: true
+                message: Invoice deleted successfully
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -418,7 +479,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -440,6 +502,15 @@ paths:
                   message:
                     type: string
                     example: Invoice marked as sent
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+               example:
+                 success: true
+                 message: Invoice marked as sent
+                 data:
+                   invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                   status: sent
+                   sent_at: "2025-09-15T10:00:00Z"
 
   /invoices/{id}/post:
     post:
@@ -453,7 +524,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -475,6 +547,15 @@ paths:
                   message:
                     type: string
                     example: Invoice posted to ledger
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+              example:
+                success: true
+                message: Invoice posted to ledger
+                data:
+                  invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                  status: posted
+                  posted_at: "2025-09-15T12:34:56Z"
 
   /invoices/{id}/cancel:
     post:
@@ -488,7 +569,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -499,6 +581,15 @@ paths:
       responses:
         '200':
           description: Invoice cancelled successfully
+          content:
+            application/json:
+              example:
+                success: true
+                message: Invoice cancelled successfully
+                data:
+                  invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                  status: cancelled
+                  cancelled_at: "2025-09-16T09:00:00Z"
           content:
             application/json:
               schema:
@@ -523,7 +614,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -565,7 +657,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -604,6 +697,12 @@ paths:
                   message:
                     type: string
                     example: Invoice email sent successfully
+              example:
+                success: true
+                message: Invoice email sent successfully
+                  message:
+                    type: string
+                    example: Invoice email sent successfully
 
   /invoices/{id}/duplicate:
     post:
@@ -617,7 +716,8 @@ paths:
           required: true
           description: Invoice ID
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           description: Unique key to prevent duplicate processing
@@ -674,7 +774,8 @@ paths:
                 invoice_ids:
                   type: array
                   items:
-                    type: integer
+                    type: string
+                    format: uuid
                   description: Array of invoice IDs
       responses:
         '200':
@@ -705,7 +806,8 @@ paths:
                           type: object
                           properties:
                             invoice_id:
-                              type: integer
+                              type: string
+                              format: uuid
                             error:
                               type: string
 
@@ -733,11 +835,13 @@ paths:
         - name: customer_id
           in: query
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: currency_id
           in: query
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: status
           in: query
           schema:
@@ -799,12 +903,14 @@ paths:
                 - payment_method
               properties:
                 customer_id:
-                  type: integer
+                  type: string
+                  format: uuid
                 amount:
                   type: number
                   format: decimal
                 currency_id:
-                  type: integer
+                  type: string
+                  format: uuid
                 payment_method:
                   type: string
                   enum: [cash, bank_transfer, credit_card, check, other]
@@ -895,7 +1001,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         '200':
           description: Payment details
@@ -922,7 +1029,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           required: true
@@ -940,7 +1048,8 @@ paths:
                   type: number
                   format: decimal
                 currency_id:
-                  type: integer
+                  type: string
+                  format: uuid
                 payment_method:
                   type: string
                   enum: [cash, bank_transfer, credit_card, check, other]
@@ -978,7 +1087,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           required: true
@@ -999,12 +1109,15 @@ paths:
                   message:
                     type: string
                     example: Payment deleted successfully
+              example:
+                success: true
+                message: Payment deleted successfully
 
   # Payment Actions
   /payments/{id}/allocate:
     post:
-      summary: Allocate Payment
-      description: Manually allocate payment to specific invoices
+      summary: Allocate Payment (single)
+      description: Manually allocate a payment amount to a specific invoice
       tags:
         - Payments
       parameters:
@@ -1012,7 +1125,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           required: true
@@ -1025,22 +1139,14 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - allocations
+              required: [invoice_id, amount]
               properties:
-                allocations:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - invoice_id
-                      - amount
-                    properties:
-                      invoice_id:
-                        type: integer
-                      amount:
-                        type: number
-                        format: decimal
+                invoice_id:
+                  type: string
+                  format: uuid
+                amount:
+                  type: number
+                  format: decimal
       responses:
         '200':
           description: Payment allocated successfully
@@ -1067,7 +1173,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           required: true
@@ -1089,27 +1196,12 @@ paths:
                     type: string
                     example: Payment auto-allocated successfully
 
-  /payments/{id}/void:
-    post:
-      summary: Void Payment
-      description: Void a payment and reverse allocations
-      tags:
-        - Payments
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Payment voided successfully
+  
+          content:
+            application/json:
+              example:
+                success: true
+                message: Payment voided successfully
           content:
             application/json:
               schema:
@@ -1133,7 +1225,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: Idempotency-Key
           in: header
           required: true
@@ -1340,7 +1433,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         '200':
           description: Customer details
@@ -1471,7 +1565,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: status
           in: query
           schema:
@@ -1504,7 +1599,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: status
           in: query
           schema:
@@ -1537,7 +1633,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: date_from
           in: query
           schema:
@@ -1586,7 +1683,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         '200':
           description: Customer statistics
@@ -2173,6 +2271,182 @@ paths:
                       symbol:
                         type: string
 
+  /payments/{id}/allocations:
+    get:
+      summary: List Payment Allocations
+      description: Retrieve all allocations for a payment
+      tags:
+        - Payments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Allocations list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - allocation_id: "a7b8c9d0-e1f2-4a5b-9c0d-1e2f3a4b5c6d"
+                    payment_id: "11111111-2222-3333-4444-555555555555"
+                    invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                    allocated_amount: 50.00
+                    allocation_date: "2025-09-15"
+                    status: active
+    post:
+      summary: Create Payment Allocation
+      description: Allocate a payment amount to a specific invoice
+      tags:
+        - Payments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_id, amount]
+              properties:
+                invoice_id:
+                  type: string
+                  format: uuid
+                amount:
+                  type: number
+                  format: decimal
+                allocation_date:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+            example:
+              invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+              amount: 50.00
+              allocation_date: "2025-09-15"
+              notes: "Initial allocation"
+      responses:
+        '200':
+          description: Allocation created
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  allocation_id: "a7b8c9d0-e1f2-4a5b-9c0d-1e2f3a4b5c6d"
+                  payment_id: "11111111-2222-3333-4444-555555555555"
+                  invoice_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                  allocated_amount: 50.00
+                  allocation_date: "2025-09-15"
+                  status: active
+
+  /payments/{paymentId}/allocations/{allocationId}/void:
+    post:
+      summary: Void Payment Allocation
+      tags:
+        - Payments
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: allocationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+            example:
+              reason: "Customer dispute"
+      responses:
+        '200':
+          description: Allocation voided
+          content:
+            application/json:
+              example:
+                success: true
+                message: Allocation voided successfully
+
+  /payments/{paymentId}/allocations/{allocationId}/refund:
+    post:
+      summary: Refund Payment Allocation
+      tags:
+        - Payments
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: allocationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: number
+                  format: decimal
+                reason:
+                  type: string
+            example:
+              amount: 10.00
+              reason: "Partial refund"
+      responses:
+        '200':
+          description: Allocation refunded
+          content:
+            application/json:
+              example:
+                success: true
+                message: Allocation refunded successfully
 components:
   securitySchemes:
     BearerAuth:
@@ -2231,18 +2505,18 @@ components:
     Invoice:
       type: object
       properties:
-        id:
-          type: integer
-          example: 123
+        invoice_id:
+          type: string
+          format: uuid
         company_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         customer_id:
-          type: integer
-          example: 456
+          type: string
+          format: uuid
         currency_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         invoice_number:
           type: string
           example: INV-2025-001
@@ -2256,7 +2530,7 @@ components:
           example: 2025-10-13
         status:
           type: string
-          enum: [draft, sent, posted, paid, cancelled, void]
+          enum: [draft, sent, posted, partial, paid, cancelled]
           example: posted
         subtotal:
           type: number
@@ -2306,8 +2580,8 @@ components:
           type: integer
           example: 789
         invoice_id:
-          type: integer
-          example: 123
+          type: string
+          format: uuid
         description:
           type: string
           example: Web Development Services
@@ -2366,18 +2640,18 @@ components:
     Payment:
       type: object
       properties:
-        id:
-          type: integer
-          example: 456
+        payment_id:
+          type: string
+          format: uuid
         company_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         customer_id:
-          type: integer
-          example: 789
+          type: string
+          format: uuid
         currency_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         amount:
           type: number
           format: decimal
@@ -2426,23 +2700,23 @@ components:
     PaymentAllocation:
       type: object
       properties:
-        id:
-          type: integer
-          example: 789
+        allocation_id:
+          type: string
+          format: uuid
         payment_id:
-          type: integer
-          example: 456
+          type: string
+          format: uuid
         invoice_id:
           type: integer
           example: 123
-        amount:
+        allocated_amount:
           type: number
           format: decimal
           example: 1150.00
-        allocated_at:
+        allocation_date:
           type: string
-          format: date-time
-          example: 2025-09-15T12:00:00Z
+          format: date
+          example: 2025-09-15
         created_at:
           type: string
           format: date-time
@@ -2453,12 +2727,12 @@ components:
     Customer:
       type: object
       properties:
-        id:
-          type: integer
-          example: 123
+        customer_id:
+          type: string
+          format: uuid
         company_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         name:
           type: string
           example: Acme Corporation
@@ -2485,8 +2759,8 @@ components:
           type: string
           example: United States
         currency_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
         payment_terms:
           type: integer
           example: 30

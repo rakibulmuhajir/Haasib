@@ -16,6 +16,7 @@ import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
+import ConfirmationService from 'primevue/confirmationservice'
 import Tooltip from 'primevue/tooltip'
 // PrimeVue preset (static import for reliable styling)
 // Ensure you have installed: npm i @primeuix/themes primevue
@@ -64,6 +65,7 @@ createInertiaApp({
             },
         })
         vue.use(ToastService)
+        vue.use(ConfirmationService)
         vue.directive('tooltip', Tooltip)
         // Global PrimeVue components
         vue.component('Button', Button)

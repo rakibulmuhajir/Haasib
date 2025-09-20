@@ -67,15 +67,22 @@ class CurrencyService
 
         $date = $date ?? now()->toDateString();
 
-        $exchangeRate = ExchangeRate::where('from_currency', $fromCurrency)
-            ->where('to_currency', $toCurrency)
+        $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
+        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+
+        if (! $fromId || ! $toId) {
+            throw new \InvalidArgumentException('Unknown currency code supplied');
+        }
+
+        $exchangeRate = ExchangeRate::where('base_currency_id', $fromId)
+            ->where('target_currency_id', $toId)
             ->where('effective_date', '<=', $date)
             ->orderBy('effective_date', 'desc')
             ->first();
 
         if (! $exchangeRate) {
-            $reverseRate = ExchangeRate::where('from_currency', $toCurrency)
-                ->where('to_currency', $fromCurrency)
+            $reverseRate = ExchangeRate::where('base_currency_id', $toId)
+                ->where('target_currency_id', $fromId)
                 ->where('effective_date', '<=', $date)
                 ->orderBy('effective_date', 'desc')
                 ->first();
@@ -97,22 +104,33 @@ class CurrencyService
         ?string $effectiveDate = null,
         ?string $source = null
     ): ExchangeRate {
-        $result = DB::transaction(function () use ($fromCurrency, $toCurrency, $rate, $effectiveDate, $source) {
+        $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
+        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+
+        if (! $fromId || ! $toId) {
+            throw new \InvalidArgumentException('Unknown currency code supplied');
+        }
+
+        $result = DB::transaction(function () use ($fromId, $toId, $rate, $effectiveDate, $source) {
             $exchangeRate = ExchangeRate::updateOrCreate(
                 [
-                    'from_currency' => $fromCurrency,
-                    'to_currency' => $toCurrency,
+                    'base_currency_id' => $fromId,
+                    'target_currency_id' => $toId,
                     'effective_date' => $effectiveDate ?? now()->toDateString(),
                 ],
                 [
                     'rate' => $rate,
                     'source' => $source ?? 'manual',
-                    'updated_by_user_id' => auth()->id(),
+                    'is_active' => true,
                 ]
             );
 
             return $exchangeRate;
         });
+
+        // Attach transient attributes for API consumers expecting codes
+        $result->setAttribute('from_currency', strtoupper($fromCurrency));
+        $result->setAttribute('to_currency', strtoupper($toCurrency));
 
         $this->logAudit('currency.exchange_rate.update', [
             'from_currency' => $fromCurrency,
@@ -246,8 +264,15 @@ class CurrencyService
         ?string $startDate = null,
         ?string $endDate = null
     ): array {
-        $query = ExchangeRate::where('from_currency', $fromCurrency)
-            ->where('to_currency', $toCurrency);
+        $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
+        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+
+        if (! $fromId || ! $toId) {
+            return [];
+        }
+
+        $query = ExchangeRate::where('base_currency_id', $fromId)
+            ->where('target_currency_id', $toId);
 
         if ($startDate) {
             $query->where('effective_date', '>=', $startDate);
@@ -476,6 +501,53 @@ class CurrencyService
 
     private function fetchExchangeRateFromAPI(string $fromCurrency, string $toCurrency, string $provider): ?float
     {
-        return null;
+        $from = strtoupper($fromCurrency);
+        $to = strtoupper($toCurrency);
+
+        if ($from === $to) {
+            return 1.0;
+        }
+
+        if ($provider !== 'ecb') {
+            return null; // only ECB implemented for now
+        }
+
+        try {
+            $xml = @file_get_contents('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml');
+            if ($xml === false) {
+                return null;
+            }
+            $doc = new \SimpleXMLElement($xml);
+
+            $rates = ['EUR' => 1.0];
+            foreach ($doc->Cube->Cube->Cube as $cube) {
+                $ccy = (string) $cube['currency'];
+                $rate = (float) $cube['rate'];
+                if ($ccy && $rate > 0) {
+                    $rates[$ccy] = $rate;
+                }
+            }
+
+            if (! isset($rates[$from]) && $from !== 'EUR') {
+                return null;
+            }
+            if (! isset($rates[$to]) && $to !== 'EUR') {
+                return null;
+            }
+
+            if ($from === 'EUR') {
+                return $rates[$to] ?? null;
+            }
+            if ($to === 'EUR') {
+                return isset($rates[$from]) ? 1.0 / $rates[$from] : null;
+            }
+
+            return ($rates[$to] ?? null) && ($rates[$from] ?? null)
+                ? $rates[$to] / $rates[$from]
+                : null;
+        } catch (\Throwable $e) {
+            Log::warning('ECB fetch failed', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 }

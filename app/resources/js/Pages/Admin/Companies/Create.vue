@@ -8,6 +8,8 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
+import PageHeader from '@/Components/PageHeader.vue'
+import { useToast } from 'primevue/usetoast'
 import { http, withIdempotency } from '@/lib/http'
 import CurrencyPicker from '@/Components/Pickers/CurrencyPicker.vue'
 import LanguagePicker from '@/Components/Pickers/LanguagePicker.vue'
@@ -16,7 +18,7 @@ import LocalePicker from '@/Components/Pickers/LocalePicker.vue'
 const form = ref({ name: '', base_currency: '', language: '', locale: '' })
 const loading = ref(false)
 const error = ref('')
-const created = ref(null)
+const toast = useToast()
 
 // Breadcrumb items
 const breadcrumbItems = ref([
@@ -32,9 +34,27 @@ async function submit() {
     const { data } = await http.post('/commands', form.value, { 
       headers: withIdempotency({ 'X-Action': 'company.create' })
     })
-    created.value = data.data
+    
+    // Show success toast
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `Company "${form.value.name}" created successfully`,
+      life: 3000
+    })
+    
+    // Redirect to company show page
+    setTimeout(() => {
+      router.visit(route('admin.companies.show', data.data.slug))
+    }, 500)
   } catch (e) {
     error.value = e?.response?.data?.message || 'Failed to create company'
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.value,
+      life: 3000
+    })
   } finally {
     loading.value = false
   }
@@ -50,21 +70,13 @@ async function submit() {
     </template>
 
     <template #topbar>
-      <div class="flex items-center justify-between w-full">
-        <Breadcrumb :items="breadcrumbItems" />
-        <Link :href="route('admin.companies.index')">
-          <Button label="Back to Companies" icon="pi pi-arrow-left" severity="secondary" />
-        </Link>
-      </div>
+      <Breadcrumb :items="breadcrumbItems" />
     </template>
 
     <div class="max-w-2xl">
+      <PageHeader title="Create Company" subtitle="Add a new company to the system" />
       <Card>
         <template #content>
-          <Message v-if="created" severity="success" class="mb-4">
-            Company created: <strong>{{ created.name }}</strong>
-          </Message>
-          
           <Message v-if="error" severity="error" class="mb-4">
             {{ error }}
           </Message>

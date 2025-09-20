@@ -102,7 +102,7 @@ const availableActions = computed(() => {
 // Execute action
 const executeAction = (action) => {
   if (action.external) {
-    window.open(route(action.route, props.invoice.invoice_id), '_blank')
+    window.open(route(action.route, { invoice: String(props.invoice.invoice_id) }), '_blank')
     return
   }
 
@@ -111,7 +111,7 @@ const executeAction = (action) => {
     return
   }
 
-  router.post(route(action.route, props.invoice.invoice_id), {}, {
+  router.post(route(action.route, { invoice: String(props.invoice.invoice_id) }), {}, {
     onSuccess: () => {
       toast.success = `${action.label} action completed successfully!`
     },
@@ -125,7 +125,7 @@ const executeAction = (action) => {
 const paymentSummary = computed(() => {
   const payments = props.invoice.payments || []
   const totalPaid = payments.reduce((sum, payment) => {
-    const allocation = payment.allocations?.find(a => a.invoice_id === props.invoice.id)
+    const allocation = payment.allocations?.find(a => a.invoice_id === props.invoice.invoice_id)
     return sum + (allocation?.amount || 0)
   }, 0)
 
@@ -412,7 +412,7 @@ const paymentSummary = computed(() => {
             </template>
             <template #content>
               <div class="space-y-2">
-                <Link :href="route('invoices.edit', invoice.invoice_id)" v-if="invoice.status === 'draft'">
+                <Link :href="route('invoices.edit', { invoice: String(invoice.invoice_id) })" v-if="invoice.status === 'draft'">
                   <Button label="Edit Invoice" icon="pi pi-pencil" severity="primary" class="w-full" />
                 </Link>
                 <Link :href="route('payments.create') + '?invoice_id=' + invoice.invoice_id" v-if="invoice.balance_due > 0">
@@ -426,7 +426,7 @@ const paymentSummary = computed(() => {
                   class="w-full" 
                   @click="executeAction({ label: 'Download PDF', icon: 'pi pi-file-pdf', route: 'invoices.generate-pdf', severity: 'info', external: true })"
                 />
-                <Link :href="route('customers.show', invoice.customer_id)">
+                <Link :href="route('customers.show', { customer: String(invoice.customer_id) })">
                   <Button label="View Customer" icon="pi pi-user" severity="secondary" outlined class="w-full" />
                 </Link>
               </div>

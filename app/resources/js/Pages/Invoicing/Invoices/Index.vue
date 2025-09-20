@@ -322,7 +322,7 @@ onUnmounted(() => clearActions())
             @filter="onFilter"
           >
             <template #cell-invoice_number="{ data }">
-              <Link :href="route('invoices.show', data.invoice_id)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+              <Link :href="route('invoices.show', { invoice: data.invoice_id })" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
                 {{ data.invoice_number }}
               </Link>
             </template>
@@ -359,7 +359,7 @@ onUnmounted(() => clearActions())
 
             <template #cell-actions="{ data }">
                 <div class="flex items-center gap-1">
-                  <Link :href="route('invoices.show', data.invoice_id)">
+                  <Link :href="route('invoices.show', { invoice: data.invoice_id })">
                     <Button 
                       icon="pi pi-eye" 
                       size="small" 
@@ -370,7 +370,7 @@ onUnmounted(() => clearActions())
                   </Link>
 
                   <Link 
-                    :href="route('invoices.edit', data.invoice_id)"
+                    :href="route('invoices.edit', { invoice: data.invoice_id })"
                     v-if="data.status === 'draft'"
                   >
                     <Button 
@@ -382,7 +382,7 @@ onUnmounted(() => clearActions())
                     />
                   </Link>
 
-                  <Link :href="route('invoices.generate-pdf', data.invoice_id)" target="_blank">
+                  <Link :href="route('invoices.generate-pdf', { invoice: data.invoice_id })" target="_blank">
                     <Button 
                       icon="pi pi-file-pdf" 
                       size="small" 
@@ -400,7 +400,7 @@ onUnmounted(() => clearActions())
                       severity="warning" 
                       outlined 
                       v-tooltip="'Mark as Sent'"
-                      @click="router.post(route('invoices.send', data.invoice_id))"
+                      @click="router.post(route('invoices.send', { invoice: data.invoice_id }))"
                     />
                   </template>
 
@@ -411,7 +411,7 @@ onUnmounted(() => clearActions())
                       severity="success" 
                       outlined 
                       v-tooltip="'Post to Ledger'"
-                      @click="router.post(route('invoices.post', data.invoice_id))"
+                      @click="router.post(route('invoices.post', { invoice: data.invoice_id }))"
                     />
                   </template>
                 </div>

@@ -53,4 +53,30 @@ class CompanyController extends Controller
             'data' => $result,
         ], 201);
     }
+
+    public function activate(string $company)
+    {
+        $user = request()->user();
+        abort_unless($user->isSuperAdmin(), 403);
+
+        $company = Company::where('slug', $company)->orWhere('id', $company)->firstOrFail();
+        $company->activate();
+
+        return response()->json([
+            'message' => 'Company activated successfully',
+        ]);
+    }
+
+    public function deactivate(string $company)
+    {
+        $user = request()->user();
+        abort_unless($user->isSuperAdmin(), 403);
+
+        $company = Company::where('slug', $company)->orWhere('id', $company)->firstOrFail();
+        $company->deactivate();
+
+        return response()->json([
+            'message' => 'Company deactivated successfully',
+        ]);
+    }
 }

@@ -3,6 +3,10 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Database\Seeders\Core\CoreCurrenciesSeeder;
+use Database\Seeders\Core\CoreCountriesSeeder;
+use App\Jobs\SyncExchangeRates;
 
 // Publish OpenAPI YAML into L5-Swagger docs (JSON + YAML)
 Artisan::command('openapi:publish', function () {
@@ -38,3 +42,22 @@ Artisan::command('openapi:publish', function () {
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Seed core reference data (currencies, countries) into core.* schema
+Artisan::command('core:seed-reference', function () {
+    try {
+        (new CoreCurrenciesSeeder())->run();
+        (new CoreCountriesSeeder())->run();
+        $this->info('Core reference data seeded (currencies, countries).');
+        return 0;
+    } catch (\Throwable $e) {
+        $this->error('Failed seeding core reference: '.$e->getMessage());
+        return 1;
+    }
+})->purpose('Seed ISO currencies and countries into core schema');
+
+// Trigger FX sync via job
+Artisan::command('fx:sync {provider=ecb}', function (string $provider) {
+    SyncExchangeRates::dispatchSync($provider);
+    $this->info("FX sync dispatched synchronously using provider: {$provider}");
+})->purpose('Sync exchange rates from external provider');

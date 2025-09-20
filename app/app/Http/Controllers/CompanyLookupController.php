@@ -20,7 +20,7 @@ class CompanyLookupController extends Controller
         $userEmail = $request->query('user_email');
         $limit = (int) $request->query('limit', 10);
 
-        $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale']);
+        $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'is_active']);
 
         if ($q !== '') {
             $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
@@ -59,6 +59,9 @@ class CompanyLookupController extends Controller
             abort_unless($this->lookup->isMember($record->id, $user->id), 403);
         }
 
+        // Load creator relationship
+        $record->load('creator');
+
         $members = $this->lookup->members($record->id, 10);
 
         $owners = $this->lookup->owners($record->id);
@@ -85,6 +88,13 @@ class CompanyLookupController extends Controller
                 'base_currency' => $record->base_currency,
                 'language' => $record->language,
                 'locale' => $record->locale,
+                'created_by' => $record->creator ? [
+                    'id' => $record->creator->id,
+                    'name' => $record->creator->name,
+                    'email' => $record->creator->email,
+                ] : null,
+                'created_at' => $record->created_at,
+                'is_active' => $record->is_active,
                 'members_preview' => $members,
                 'members_count' => $this->lookup->membersCount($record->id),
                 'owners' => $owners,

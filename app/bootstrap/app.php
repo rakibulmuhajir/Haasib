@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function ($schedule): void {
         $schedule->command('ar:update-aging')->daily()->at('23:59');
+        $schedule->command('fx:sync ecb')->daily()->at('02:00');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -25,6 +25,7 @@ return new class extends Migration
                 $t->string('language', 5)->default('en');
                 $t->string('locale', 10)->default('en_AE');
                 $t->jsonb('settings')->nullable();
+                $t->boolean('is_active')->default(true)->index();
                 $t->timestamps();
             });
 

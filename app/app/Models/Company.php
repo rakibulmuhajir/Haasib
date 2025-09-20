@@ -33,6 +33,7 @@ class Company extends Model
         'locale',
         'settings',
         'created_by_user_id',
+        'is_active',
     ];
 
     /**
@@ -45,6 +46,7 @@ class Company extends Model
         'created_by_user_id' => 'string',
         'currency_id' => 'string',
         'exchange_rate_id' => 'integer',
+        'is_active' => 'boolean',
     ];
 
     /**
@@ -177,5 +179,45 @@ class Company extends Model
     public function removeSecondaryCurrency($currencyId)
     {
         return $this->secondaryCurrencies()->where('currency_id', $currencyId)->delete();
+    }
+
+    /**
+     * Scope a query to only include active companies.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope a query to only include inactive companies.
+     */
+    public function scopeInactive($query)
+    {
+        return $query->where('is_active', false);
+    }
+
+    /**
+     * Determine if the company is active.
+     */
+    public function isActive()
+    {
+        return $this->is_active;
+    }
+
+    /**
+     * Deactivate the company.
+     */
+    public function deactivate()
+    {
+        $this->update(['is_active' => false]);
+    }
+
+    /**
+     * Activate the company.
+     */
+    public function activate()
+    {
+        $this->update(['is_active' => true]);
     }
 }

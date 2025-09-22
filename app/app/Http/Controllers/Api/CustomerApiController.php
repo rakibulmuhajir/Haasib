@@ -20,7 +20,7 @@ class CustomerApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
 
         $query = Customer::where('company_id', $company->id)
             ->with(['currency', 'contacts']);
@@ -74,7 +74,7 @@ class CustomerApiController extends Controller
     public function store(StoreCustomerRequest $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
 
             $customer = new Customer([
                 'company_id' => $company->id,
@@ -119,7 +119,7 @@ class CustomerApiController extends Controller
      */
     public function show(Request $request, string $id): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
 
         $customer = Customer::where('company_id', $company->id)
             ->with(['currency', 'contacts', 'invoices', 'payments'])
@@ -142,7 +142,7 @@ class CustomerApiController extends Controller
     public function update(UpdateCustomerRequest $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
             $customer = Customer::where('company_id', $company->id)->findOrFail($id);
 
             $customer->update($request->validated());
@@ -166,7 +166,7 @@ class CustomerApiController extends Controller
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
             $customer = Customer::where('company_id', $company->id)->findOrFail($id);
 
             if ($customer->invoices()->exists() || $customer->payments()->exists()) {
@@ -193,7 +193,7 @@ class CustomerApiController extends Controller
      */
     public function invoices(Request $request, string $id): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
         $customer = $company->customers()->findOrFail($id);
 
         $query = $customer->invoices()
@@ -227,7 +227,7 @@ class CustomerApiController extends Controller
      */
     public function payments(Request $request, string $id): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
         $customer = $company->customers()->findOrFail($id);
 
         $query = $customer->payments()
@@ -266,7 +266,7 @@ class CustomerApiController extends Controller
             'date_to' => ['nullable', 'date'],
         ]);
 
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
         $customer = $company->customers()->findOrFail($id);
 
         $invoices = $customer->invoices()
@@ -306,7 +306,7 @@ class CustomerApiController extends Controller
      */
     public function statistics(Request $request, string $id): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
         $customer = $company->customers()->findOrFail($id);
 
         $stats = [
@@ -337,7 +337,7 @@ class CustomerApiController extends Controller
     public function bulk(BulkCustomerRequest $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
             $results = [];
 
             switch ($request->action) {

@@ -17,20 +17,12 @@ class InvoiceApiController extends Controller
         private InvoiceService $invoiceService
     ) {}
 
-    private function company(\Illuminate\Http\Request $request): \App\Models\Company
-    {
-        $companyId = $request->input('current_company_id')
-            ?? $request->header('X-Company-Id')
-            ?? $request->user()?->current_company_id;
-        return \App\Models\Company::findOrFail($companyId);
-    }
-
 /**
  * Display a listing of invoices.
  */
     public function index(Request $request): JsonResponse
     {
-        $company = $this->company($request);
+        $company = $request->attributes->get('company');
 
         $query = Invoice::where('company_id', $company->id)
             ->with(['customer', 'currency', 'items']);
@@ -114,7 +106,7 @@ class InvoiceApiController extends Controller
                 'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
             ]);
 
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $customer = \App\Models\Customer::where('company_id', $company->id)
                 ->where('customer_id', $validated['customer_id'])
                 ->firstOrFail();
@@ -155,7 +147,7 @@ class InvoiceApiController extends Controller
      */
     public function show(Request $request, string $id): JsonResponse
     {
-        $company = $this->company($request);
+        $company = $request->attributes->get('company');
 
         $invoice = Invoice::where('company_id', $company->id)
             ->where('invoice_id', $id)
@@ -199,7 +191,7 @@ class InvoiceApiController extends Controller
                 'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
             ]);
 
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $customer = isset($validated['customer_id'])
@@ -238,7 +230,7 @@ class InvoiceApiController extends Controller
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $this->invoiceService->deleteInvoice($invoice, $request->reason);
@@ -262,7 +254,7 @@ class InvoiceApiController extends Controller
     public function markAsSent(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsSent($invoice);
@@ -286,7 +278,7 @@ class InvoiceApiController extends Controller
     public function markAsPosted(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsPosted($invoice);
@@ -314,7 +306,7 @@ class InvoiceApiController extends Controller
                 'reason' => 'required|string|min:3',
             ]);
 
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsCancelled($invoice, $request->reason);
@@ -334,7 +326,7 @@ class InvoiceApiController extends Controller
     public function generatePdf(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
@@ -363,7 +355,7 @@ class InvoiceApiController extends Controller
                 'message' => 'nullable|string',
             ]);
 
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
@@ -383,7 +375,7 @@ class InvoiceApiController extends Controller
     public function duplicate(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
@@ -402,7 +394,7 @@ class InvoiceApiController extends Controller
      */
     public function pdfExists(Request $request, string $id): JsonResponse
     {
-        $company = $this->company($request);
+        $company = $request->attributes->get('company');
         $invoice = Invoice::where('company_id', $company->id)
             ->where('invoice_id', $id)
             ->firstOrFail();
@@ -444,7 +436,7 @@ class InvoiceApiController extends Controller
                 'reason' => 'nullable|string|min:3',
             ]);
 
-            $company = $this->company($request);
+            $company = $request->attributes->get('company');
             $results = [];
 
             switch ($validated['action']) {

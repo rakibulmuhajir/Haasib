@@ -26,7 +26,7 @@ class CurrencyApiController extends Controller
      */
     public function companyCurrencies(Request $request): JsonResponse
     {
-        $company = $request->user()->company;
+        $company = $request->attributes->get('company');
 
         $currencies = $this->currencyService->getCompanyCurrencies($company);
 
@@ -166,7 +166,7 @@ class CurrencyApiController extends Controller
     public function enableCurrency(EnableCurrencyRequest $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
 
             $this->currencyService->enableCurrencyForCompany($company, $request->currency_code);
 
@@ -193,7 +193,7 @@ class CurrencyApiController extends Controller
         ]);
 
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
 
             $this->currencyService->disableCurrencyForCompany($company, $request->currency_code);
 
@@ -268,7 +268,7 @@ class CurrencyApiController extends Controller
     public function currencyBalances(Request $request): JsonResponse
     {
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
             $balances = $this->currencyService->getCurrencyBalances($company);
 
             return $this->ok($balances);
@@ -298,7 +298,7 @@ class CurrencyApiController extends Controller
         ]);
 
         try {
-            $company = $request->user()->company;
+            $company = $request->attributes->get('company');
             $impact = $this->currencyService->calculateCurrencyImpact(
                 $company,
                 $request->transactions,

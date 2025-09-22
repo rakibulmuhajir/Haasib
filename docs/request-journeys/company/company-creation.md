@@ -5,7 +5,7 @@ This document outlines the step-by-step process of creating a new company, from 
 ## Flow Diagram
 
 ```
-User (SuperAdmin) -> Admin/Companies/Create.vue -> POST /companies -> CompanyController@store -> Company Model (with relationships) -> Database
+User (SuperAdmin) -> Admin/Companies/Create.vue -> POST /commands -> CommandController -> CompanyCreate Action -> Company Model (with relationships) -> Database
 ```
 
 ---
@@ -19,53 +19,58 @@ User (SuperAdmin) -> Admin/Companies/Create.vue -> POST /companies -> CompanyCon
 ### 2. Client-Side Logic (Frontend)
 
 -   **Action:** The form data is collected and sent via HTTP request.
--   **HTTP Request:** It sends a `POST` request to `/companies`.
+-   **HTTP Request:** It sends a `POST` request to `/commands`.
     -   **Payload:**
         ```json
         {
-            "name": "Company Name",
-            "base_currency": "USD",
-            "language": "en",
-            "locale": "en-US",
-            "settings": {}
+            "command": "company.create",
+            "payload": {
+                "name": "Company Name",
+                "base_currency": "USD",
+                "language": "en",
+                "locale": "en-US",
+                "settings": {}
+            }
         }
         ```
     -   **Headers:**
         -   `Accept: application/json`
+        -   `X-Action: company.create`
         -   `X-CSRF-TOKEN`: Laravel CSRF token
         -   `Content-Type: application/json`
 
 ### 3. API Routing (Backend)
 
 -   **File:** `routes/web.php`
--   **Route:** Implicitly handled by the CommandController at `POST /commands`
+-   **Route:** `Route::post('/commands', [CommandController::class, 'execute']);`
 -   **Middleware:** `auth` and `verified` middleware ensure the user is authenticated and verified
 
-### 4. Command Controller & Validation (Backend)
+### 4. Command Processing (Backend)
 
--   **File:** `app/Http/Controllers/CompanyController.php`
--   **Method:** `store(CompanyStoreRequest $request)`
--   **Validation:** `App\Http\Requests\CompanyStoreRequest` validates the incoming data.
+-   **File:** `app/Actions/DevOps/CompanyCreate.php`
+-   **Method:** `handle(array $payload, User $actor)`
+-   **Validation:** Validates the incoming data from the payload
     -   Required: `name`
-    -   Optional: `base_currency` (defaults to 'AED'), `settings`
+    -   Optional: `base_currency`, `settings`, `language`, `locale`
 
 ### 5. Authorization (Backend)
 
--   **File:** The controller method is protected by auth middleware
+-   **Handled by:** CommandExecutor's `Gate::authorize('command.execute')`
+-   **Additional Checks:** The CompanyCreate action may perform additional authorization
 -   **Action:** Any authenticated user can create companies, but typically only SuperAdmins would have access to the creation form
 
 ### 6. Business Logic (Backend)
 
--   **File:** `app/Http/Controllers/CompanyController.php`
--   **Method:** `store()`
+-   **File:** `app/Actions/DevOps/CompanyCreate.php`
+-   **Method:** `handle()`
 -   **Action (within DB transaction):**
-    1.  Receives validated data
+    1.  Receives validated payload
     2.  Creates new Company model with:
         - `name`, `base_currency`, `language`, `locale`, `settings`
         - `created_by_user_id` set to current user
     3.  Attaches creator as company owner with role 'owner'
     4.  Sets `currency_id` based on `base_currency`
-    5.  Returns JSON response
+    5.  Returns success response
 
 ### 7. Database Interaction (Backend)
 

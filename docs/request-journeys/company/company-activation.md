@@ -1,11 +1,11 @@
 # Request Journey: Company Activation
 
-This document outlines the step-by-step process of activating a company. This flow is triggered by a SuperAdmin user.
+This document outlines the step-by-step process of activating a company using the command pattern. This flow is triggered by a SuperAdmin user.
 
 ## Flow Diagram
 
 ```
-User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/activate -> CompanyController@activate -> Company Model -> Database
+User (SuperAdmin) -> Admin/Companies/Index.vue -> POST /commands -> CommandController -> ActivateCompany Action -> Company Model -> Database
 ```
 
 ---
@@ -20,29 +20,42 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/acti
 ### 2. Client-Side Logic (Frontend)
 
 -   **Action:** A method is called which constructs and sends an HTTP request.
--   **HTTP Request:** It sends a `PATCH` request to `/web/companies/{company_id}/activate`.
-    -   **Payload:** `{ }` (empty body - company ID in URL)
+-   **HTTP Request:** It sends a `POST` request to `/commands`.
+    -   **Payload:**
+        ```json
+        {
+            "command": "company.activate",
+            "payload": {
+                "company": "company-uuid-or-slug"
+            }
+        }
+        ```
     -   **Headers:**
         -   `Accept: application/json`
+        -   `X-Action: company.activate`
         -   `X-CSRF-TOKEN`: Laravel CSRF token
-        -   `Authorization: Bearer {token}` (if using API auth)
+        -   `Content-Type: application/json`
 
 ### 3. API Routing & Authorization (Backend)
 
 -   **File:** `routes/web.php`
--   **Route:** `Route::patch('/web/companies/{company}/activate', [\App\Http\Controllers\CompanyController::class, 'activate']);`
+-   **Route:** `Route::post('/commands', [CommandController::class, 'execute']);`
 -   **Middleware:** `auth` (web authentication)
--   **Authorization:** The controller method checks `$user->isSuperAdmin()` directly.
+-   **Authorization:** The CommandController reads `X-Action: company.activate` and dispatches to appropriate action.
 
-### 4. Business Logic (Backend)
+### 4. Command Processing (Backend)
 
--   **File:** `app/Http/Controllers/CompanyController.php`
--   **Method:** `activate(string $company)`
+-   **File:** `app/Actions/Company/ActivateCompany.php`
+-   **Method:** `handle(array $payload, User $actor)`
+-   **Validation:** Validates the incoming payload
+    -   Required: `company` (string - UUID, slug, or ID)
+-   **Authorization:** Direct SuperAdmin check via `abort_unless($actor->isSuperAdmin(), 403)`
 -   **Action:**
-    1.  Verifies the authenticated user is a SuperAdmin (`abort_unless($user->isSuperAdmin(), 403)`)
-    2.  Finds the company by slug or UUID
-    3.  Calls `$companyModel->activate()` method on the Company model
-    4.  Returns JSON success response
+    1.  Receives validated payload
+    2.  Finds company by UUID, slug, or ID
+    3.  Checks if company is already active (throws validation error if true)
+    4.  Calls `$company->activate()` method
+    5.  Returns success response with company data
 
 ### 5. Model Logic
 
@@ -59,7 +72,11 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/acti
 -   **Backend:** Returns a `200 OK` response:
     ```json
     {
-        "message": "Company activated successfully"
+        "id": "company-uuid",
+        "name": "Company Name",
+        "is_active": true,
+        "activated_at": "2025-01-15T10:30:00Z",
+        "activated_by": "user-uuid"
     }
     ```
 -   **Frontend:**
@@ -72,19 +89,28 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/acti
 
 ### Authorization
 - Only users with `system_role = 'superadmin'` can activate companies
-- Regular users cannot access this endpoint
+- Authorization is handled directly in the ActivateCompany action: `abort_unless($actor->isSuperAdmin(), 403)`
+- The command pattern automatically handles the SuperAdmin check
 
 ### Company Lookup
-- Controller first tries to find company by slug
-- Falls back to UUID if slug not found
+- The action supports multiple identifier types:
+  1. UUID (preferred): Checks via regex pattern
+  2. Slug: URL-friendly identifier
+  3. ID: Numeric fallback for backward compatibility
 - Returns 404 if company doesn't exist
 
 ### State Changes
-- `is_active` boolean field in database
+- `is_active` boolean field set to `true`
 - `activated_at` timestamp set when activated
 - `activated_by` stores which user activated it
 
 ### Error Handling
 - 403 Forbidden: Non-superadmin users
 - 404 Not Found: Company doesn't exist
-- No specific validation for already active companies
+- 422 Unprocessable Entity: Company is already active
+
+### Command Pattern Benefits
+- Automatic idempotency key support
+- Centralized audit logging
+- Consistent error handling format
+- Transaction safety (wrapped in database transaction)

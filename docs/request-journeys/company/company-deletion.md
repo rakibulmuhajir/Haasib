@@ -1,11 +1,11 @@
 # Request Journey: Company Deletion
 
-This document outlines the step-by-step process for deleting a company. This is a destructive action that uses Laravel's soft-delete mechanism.
+This document outlines the step-by-step process for deleting a company using the command pattern. This is a destructive action that uses Laravel's soft-delete mechanism.
 
 ## Flow Diagram
 
 ```
-User (SuperAdmin) -> Admin/Companies/Index.vue -> DELETE /web/companies/{id} -> CompanyController@destroy -> Company Model (Soft Delete) -> Database
+User (SuperAdmin) -> Admin/Companies/Index.vue -> POST /commands -> CommandController -> CompanyDelete Action -> Company Model (Soft Delete) -> Database
 ```
 
 ---
@@ -20,30 +20,41 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> DELETE /web/companies/{id} -> 
 ### 2. Client-Side Logic (Frontend)
 
 -   **Action:** A confirmation modal appears to confirm the deletion. Upon confirmation, an HTTP request is sent.
--   **HTTP Request:** It sends a `DELETE` request to `/web/companies/{company_id}`.
-    -   **Payload:** `{ }` (empty body - company ID in URL)
+-   **HTTP Request:** It sends a `POST` request to `/commands`.
+    -   **Payload:**
+        ```json
+        {
+            "command": "company.delete",
+            "payload": {
+                "company": "company-uuid-or-slug"
+            }
+        }
+        ```
     -   **Headers:**
         -   `Accept: application/json`
+        -   `X-Action: company.delete`
         -   `X-CSRF-TOKEN`: Laravel CSRF token
-        -   `Authorization: Bearer {token}` (if using API auth)
+        -   `Content-Type: application/json`
 
 ### 3. API Routing & Authorization (Backend)
 
 -   **File:** `routes/web.php`
--   **Route:** `Route::delete('/web/companies/{company}', [\App\Http\Controllers\CompanyController::class, 'destroy']);`
+-   **Route:** `Route::post('/commands', [CommandController::class, 'execute']);`
 -   **Middleware:** `auth` (web authentication)
--   **Authorization:** The controller method checks `$user->isSuperAdmin()` directly.
--   **No additional validation** beyond the SuperAdmin check
+-   **Authorization:** The CommandController reads `X-Action: company.delete` and dispatches to appropriate action.
 
-### 4. Business Logic (Backend)
+### 4. Command Processing (Backend)
 
--   **File:** `app/Http/Controllers/CompanyController.php`
--   **Method:** `destroy(string $company)`
+-   **File:** `app/Actions/DevOps/CompanyDelete.php`
+-   **Method:** `handle(array $payload, User $actor)`
+-   **Validation:** Validates the incoming payload
+    -   Required: `company` (string - UUID, slug, or ID)
+-   **Authorization:** Direct SuperAdmin check via `abort_unless($actor->isSuperAdmin(), 403)`
 -   **Action:**
-    1.  Verifies the authenticated user is a SuperAdmin (`abort_unless($user->isSuperAdmin(), 403)`)
-    2.  Finds the company by slug or UUID
-    3.  Calls `$companyModel->delete()` (Laravel's soft delete)
-    4.  Returns JSON success response
+    1.  Receives validated payload
+    2.  Finds company by UUID, slug, or ID within a database transaction
+    3.  Calls `$company->delete()` (Laravel's soft delete)
+    4.  Returns success response
 
 ### 5. Model Behavior
 
@@ -60,7 +71,10 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> DELETE /web/companies/{id} -> 
 -   **Backend:** Returns a `200 OK` response:
     ```json
     {
-        "message": "Company deleted successfully"
+        "message": "Company deleted",
+        "data": {
+            "company": "company-identifier"
+        }
     }
     ```
 -   **Frontend:**
@@ -73,7 +87,15 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> DELETE /web/companies/{id} -> 
 
 ### Authorization
 - Only users with `system_role = 'superadmin'` can delete companies
-- No role-based permissions - strict SuperAdmin-only access
+- Authorization is handled directly in the CompanyDelete action: `abort_unless($actor->isSuperAdmin(), 403)`
+- The command pattern automatically handles the SuperAdmin check
+
+### Company Lookup
+- The action supports multiple identifier types:
+  1. UUID (preferred): Checks via `Str::isUuid()` to avoid PostgreSQL casting issues
+  2. Slug: URL-friendly identifier
+  3. Name: Fallback for backward compatibility
+- Returns 404 if company doesn't exist
 
 ### Soft Delete Behavior
 - Companies are not permanently deleted from database
@@ -82,16 +104,21 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> DELETE /web/companies/{id} -> 
 - Use `onlyTrashed()` to get only deleted companies
 - Call `restore()` to undo deletion
 
-### Company Lookup
-- Controller first tries to find company by slug
-- Falls back to UUID if slug not found
-- Returns 404 if company doesn't exist
+### Database Transaction
+- All operations are wrapped in `DB::transaction()` for data integrity
+- If any step fails, the entire operation rolls back
 
-### No Confirmation Name
-- Unlike the previous flow described, there's no requirement to type the company name
-- Simple confirmation dialog is sufficient
+### Command Pattern Benefits
+- Automatic idempotency key support
+- Centralized audit logging
+- Consistent error handling format
+- Transaction safety
 
 ### Error Handling
 - 403 Forbidden: Non-superadmin users
 - 404 Not Found: Company doesn't exist
 - No additional validation beyond authentication and existence checks
+
+### No Confirmation Name
+- Unlike the previous flow described, there's no requirement to type the company name
+- Simple confirmation dialog is sufficient

@@ -5,6 +5,8 @@ return [
     'user.update' => App\Actions\DevOps\UserUpdate::class,
     'user.delete' => App\Actions\DevOps\UserDelete::class,
     'company.create' => App\Actions\DevOps\CompanyCreate::class,
+    'company.activate' => App\Actions\Company\ActivateCompany::class,
+    'company.deactivate' => App\Actions\Company\DeactivateCompany::class,
     'company.delete' => App\Actions\DevOps\CompanyDelete::class,
     'company.assign' => App\Actions\DevOps\CompanyAssign::class,
     'company.unassign' => App\Actions\DevOps\CompanyUnassign::class,

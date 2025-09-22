@@ -1,11 +1,11 @@
 # Request Journey: Company Deactivation
 
-This document outlines the step-by-step process of deactivating a company. This action is typically performed by a SuperAdmin and temporarily disables the company without deleting it.
+This document outlines the step-by-step process of deactivating a company using the command pattern. This action is typically performed by a SuperAdmin and temporarily disables the company without deleting it.
 
 ## Flow Diagram
 
 ```
-User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/deactivate -> CompanyController@deactivate -> Company Model -> Database
+User (SuperAdmin) -> Admin/Companies/Index.vue -> POST /commands -> CommandController -> DeactivateCompany Action -> Company Model -> Database
 ```
 
 ---
@@ -20,29 +20,42 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/deac
 ### 2. Client-Side Logic (Frontend)
 
 -   **Action:** A confirmation modal appears to confirm the deactivation. Upon confirmation, an HTTP request is sent.
--   **HTTP Request:** It sends a `PATCH` request to `/web/companies/{company_id}/deactivate`.
-    -   **Payload:** `{ }` (empty body - company ID in URL)
+-   **HTTP Request:** It sends a `POST` request to `/commands`.
+    -   **Payload:**
+        ```json
+        {
+            "command": "company.deactivate",
+            "payload": {
+                "company": "company-uuid-or-slug"
+            }
+        }
+        ```
     -   **Headers:**
         -   `Accept: application/json`
+        -   `X-Action: company.deactivate`
         -   `X-CSRF-TOKEN`: Laravel CSRF token
-        -   `Authorization: Bearer {token}` (if using API auth)
+        -   `Content-Type: application/json`
 
 ### 3. API Routing & Authorization (Backend)
 
 -   **File:** `routes/web.php`
--   **Route:** `Route::patch('/web/companies/{company}/deactivate', [\App\Http\Controllers\CompanyController::class, 'deactivate']);`
+-   **Route:** `Route::post('/commands', [CommandController::class, 'execute']);`
 -   **Middleware:** `auth` (web authentication)
--   **Authorization:** The controller method checks `$user->isSuperAdmin()` directly.
+-   **Authorization:** The CommandController reads `X-Action: company.deactivate` and dispatches to appropriate action.
 
-### 4. Business Logic (Backend)
+### 4. Command Processing (Backend)
 
--   **File:** `app/Http/Controllers/CompanyController.php`
--   **Method:** `deactivate(string $company)`
+-   **File:** `app/Actions/Company/DeactivateCompany.php`
+-   **Method:** `handle(array $payload, User $actor)`
+-   **Validation:** Validates the incoming payload
+    -   Required: `company` (string - UUID, slug, or ID)
+-   **Authorization:** Direct SuperAdmin check via `abort_unless($actor->isSuperAdmin(), 403)`
 -   **Action:**
-    1.  Verifies the authenticated user is a SuperAdmin (`abort_unless($user->isSuperAdmin(), 403)`)
-    2.  Finds the company by slug or UUID
-    3.  Calls `$companyModel->deactivate()` method on the Company model
-    4.  Returns JSON success response
+    1.  Receives validated payload
+    2.  Finds company by UUID, slug, or ID
+    3.  Checks if company is already inactive (throws validation error if true)
+    4.  Calls `$company->deactivate()` method
+    5.  Returns success response with company data
 
 ### 5. Model Logic
 
@@ -59,7 +72,11 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/deac
 -   **Backend:** Returns a `200 OK` response:
     ```json
     {
-        "message": "Company deactivated successfully"
+        "id": "company-uuid",
+        "name": "Company Name",
+        "is_active": false,
+        "deactivated_at": "2025-01-15T10:30:00Z",
+        "deactivated_by": "user-uuid"
     }
     ```
 -   **Frontend:**
@@ -72,21 +89,35 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/deac
 
 ### Authorization
 - Only users with `system_role = 'superadmin'` can deactivate companies
-- Regular users cannot access this endpoint
+- Authorization is handled directly in the DeactivateCompany action: `abort_unless($actor->isSuperAdmin(), 403)`
+- The command pattern automatically handles the SuperAdmin check
 
 ### Company Lookup
-- Controller first tries to find company by slug
-- Falls back to UUID if slug not found
+- The action supports multiple identifier types:
+  1. UUID (preferred): Checks via regex pattern
+  2. Slug: URL-friendly identifier
+  3. ID: Numeric fallback for backward compatibility
 - Returns 404 if company doesn't exist
 
 ### State Changes
-- `is_active` boolean field in database (set to false)
+- `is_active` boolean field set to `false`
 - `deactivated_at` timestamp set when deactivated
 - `deactivated_by` stores which user deactivated it
 
+### Error Handling
+- 403 Forbidden: Non-superadmin users
+- 404 Not Found: Company doesn't exist
+- 422 Unprocessable Entity: Company is already inactive
+
+### Command Pattern Benefits
+- Automatic idempotency key support
+- Centralized audit logging
+- Consistent error handling format
+- Transaction safety (wrapped in database transaction)
+
 ### Reversibility
 - Deactivation is temporary
-- Company can be reactivated using the activate endpoint
+- Company can be reactivated using the activate command
 - Unlike deletion, no data is hidden or soft-deleted
 
 ### Effects of Deactivation
@@ -94,16 +125,6 @@ User (SuperAdmin) -> Admin/Companies/Index.vue -> PATCH /web/companies/{id}/deac
 - Users cannot switch to deactivated company
 - Company features become unavailable
 - Company appears in admin list but marked as inactive
-
-### Error Handling
-- 403 Forbidden: Non-superadmin users
-- 404 Not Found: Company doesn't exist
-- No specific validation for already deactivated companies (idempotent operation)
-
-### Audit Trail
-- Deactivation is logged through timestamps and user tracking
-- Can track who deactivated and when
-- Useful for compliance and debugging
 
 ### UI Considerations
 - Deactivated companies should be visually distinct

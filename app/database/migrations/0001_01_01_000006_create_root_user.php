@@ -18,6 +18,7 @@ return new class extends Migration
             'password' => bcrypt('Sup3rAdm1n2025$'),
             'system_role' => 'superadmin',
             'email_verified_at' => now(),
+            'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -28,6 +29,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::table('users')->where('email', 'root@ferasa.org')->delete();
+        // Check if the users table exists before trying to delete from it
+        if (Schema::hasTable('users')) {
+            try {
+                DB::table('users')->where('email', 'root@ferasa.org')->delete();
+            } catch (\Throwable $e) {
+                // User might not exist or table might be in an inconsistent state
+            }
+        }
     }
 };

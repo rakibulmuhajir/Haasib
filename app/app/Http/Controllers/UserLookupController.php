@@ -36,7 +36,7 @@ class UserLookupController extends Controller
             $this->lookup->restrictUsersToCompany($query, $cid);
         }
 
-        $users = $query->limit($limit)->get(['id', 'name', 'email']);
+        $users = $query->limit($limit)->get(['id', 'name', 'email', 'is_active', 'system_role']);
 
         return response()->json(['data' => $users]);
     }
@@ -46,7 +46,7 @@ class UserLookupController extends Controller
         $actor = $request->user();
         $user = User::query()
             ->when(str_contains($userKey, '@'), fn ($q) => $q->where('email', $userKey), fn ($q) => $q->where('id', $userKey))
-            ->firstOrFail(['id', 'name', 'email', 'created_at', 'updated_at']);
+            ->firstOrFail(['id', 'name', 'email', 'is_active', 'system_role', 'created_at', 'updated_at']);
 
         // Access: superadmin OR share at least one company
         if (! $actor->isSuperAdmin()) {
@@ -73,6 +73,8 @@ class UserLookupController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_active' => $user->is_active,
+                'system_role' => $user->system_role,
                 'memberships' => $memberships,
                 'last_activity' => $lastActivity,
             ],

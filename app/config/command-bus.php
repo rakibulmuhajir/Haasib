@@ -4,6 +4,8 @@ return [
     'user.create' => App\Actions\DevOps\UserCreate::class,
     'user.update' => App\Actions\DevOps\UserUpdate::class,
     'user.delete' => App\Actions\DevOps\UserDelete::class,
+    'user.activate' => App\Actions\User\ActivateUser::class,
+    'user.deactivate' => App\Actions\User\DeactivateUser::class,
     'company.create' => App\Actions\DevOps\CompanyCreate::class,
     'company.activate' => App\Actions\Company\ActivateCompany::class,
     'company.deactivate' => App\Actions\Company\DeactivateCompany::class,

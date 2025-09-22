@@ -27,6 +27,7 @@ class User extends Authenticatable
         'email',
         'password',
         'system_role',
+        'is_active',
         'created_by_user_id',
     ];
 
@@ -51,6 +52,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'created_by_user_id' => 'string',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -139,5 +141,25 @@ class User extends Authenticatable
         $company = $this->getCurrentCompanyAttribute();
 
         return $company ? $company->id : null;
+    }
+
+    public function activate(): void
+    {
+        if ($this->is_active) {
+            return;
+        }
+
+        $this->is_active = true;
+        $this->save();
+    }
+
+    public function deactivate(): void
+    {
+        if (! $this->is_active) {
+            return;
+        }
+
+        $this->is_active = false;
+        $this->save();
     }
 }

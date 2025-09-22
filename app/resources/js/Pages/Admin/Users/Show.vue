@@ -370,6 +370,7 @@ const copyToClipboard = async (text) => {
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <Badge :value="user?.is_active ? 'Active' : 'Inactive'" :severity="user?.is_active ? 'success' : 'danger'" />
               <Badge :value="`${user?.memberships?.length || 0} Companies`" severity="info" />
               <Badge :value="user?.system_role || 'User'" severity="secondary" />
             </div>

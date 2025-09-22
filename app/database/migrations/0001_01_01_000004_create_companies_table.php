@@ -43,6 +43,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('auth.companies');
+        try {
+            // Drop foreign key constraints first
+            Schema::table('auth.companies', function (Blueprint $table) {
+                $table->dropForeign(['created_by_user_id']);
+            });
+            
+            Schema::dropIfExists('auth.companies');
+        } catch (\Throwable $e) {
+            // If the table still has dependencies, they'll be cleaned up by the company_relationships migration
+            // This can happen when rolling back multiple migrations
+        }
     }
 };

@@ -73,8 +73,75 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('locales');
-        Schema::dropIfExists('currencies');
-        Schema::dropIfExists('languages');
+        // First drop foreign key constraints from tables that reference currencies
+        // These should be handled by the company_relationships migration, but we'll try to clean up here too
+        try {
+            Schema::table('auth.companies', function (Blueprint $table) {
+                $table->dropForeign(['currency_id']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('company_secondary_currencies', function (Blueprint $table) {
+                $table->dropForeign(['currency_id']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('exchange_rates', function (Blueprint $table) {
+                $table->dropForeign(['base_currency_id']);
+                $table->dropForeign(['target_currency_id']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('locales', function (Blueprint $table) {
+                $table->dropForeign(['language_code']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('country_currency', function (Blueprint $table) {
+                $table->dropForeign(['currency_code']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('country_language', function (Blueprint $table) {
+                $table->dropForeign(['language_code']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        // Drop tables in reverse order of creation
+        // Use try-catch for each drop to handle cases where tables might already be dropped
+        try {
+            Schema::dropIfExists('locales');
+        } catch (\Throwable $e) {
+            // Table might have already been dropped
+        }
+        
+        try {
+            Schema::dropIfExists('currencies');
+        } catch (\Throwable $e) {
+            // Table might have already been dropped
+        }
+        
+        try {
+            Schema::dropIfExists('languages');
+        } catch (\Throwable $e) {
+            // Table might have already been dropped
+        }
     }
 };

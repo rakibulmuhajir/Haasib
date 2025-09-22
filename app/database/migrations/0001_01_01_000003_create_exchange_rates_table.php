@@ -41,6 +41,29 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('exchange_rates');
+        // First drop foreign key constraints from tables that reference exchange_rates
+        // These should be handled by the company_relationships migration, but we'll try to clean up here too
+        try {
+            Schema::table('auth.companies', function (Blueprint $table) {
+                $table->dropForeign(['exchange_rate_id']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        try {
+            Schema::table('company_secondary_currencies', function (Blueprint $table) {
+                $table->dropForeign(['exchange_rate_id']);
+            });
+        } catch (\Throwable $e) {
+            // Table or constraint might not exist
+        }
+        
+        // Use try-catch for the table drop to handle any remaining issues
+        try {
+            Schema::dropIfExists('exchange_rates');
+        } catch (\Throwable $e) {
+            // Table might have already been dropped by our patch migration
+        }
     }
 };

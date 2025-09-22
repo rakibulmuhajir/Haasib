@@ -33,9 +33,16 @@ try {
 
 // Ensure CSRF for mutating requests automatically
 http.interceptors.request.use(async (config: AxiosRequestConfig) => {
+  console.log('🌐 [DEBUG] HTTP Request:', {
+    method: config.method,
+    url: config.url,
+    needsCsrf: ['post', 'put', 'patch', 'delete'].includes((config.method || 'get').toLowerCase())
+  })
+  
   const method = (config.method || 'get').toLowerCase()
   const needsCsrf = method === 'post' || method === 'put' || method === 'patch' || method === 'delete'
   if (needsCsrf && !csrfReady) {
+    console.log('🌐 [DEBUG] Ensuring CSRF token...')
     await ensureCsrf()
   }
   // Attach tenant header from localStorage if present (keeps server context in sync)
@@ -50,6 +57,29 @@ http.interceptors.request.use(async (config: AxiosRequestConfig) => {
   }
   return config
 })
+
+// Add response interceptor
+http.interceptors.response.use(
+  (response) => {
+    console.log('🌐 [DEBUG] HTTP Response:', {
+      method: response.config.method,
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    })
+    return response
+  },
+  (error) => {
+    console.error('🌐 [DEBUG] HTTP Error:', {
+      method: error.config?.method,
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    })
+    return Promise.reject(error)
+  }
+)
 
 // Helper to attach an idempotency key header
 export function withIdempotency(headers: Record<string, string> = {}): Record<string, string> {

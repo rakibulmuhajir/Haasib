@@ -21,6 +21,8 @@ return new class extends Migration
             $table->date('allocation_date')->nullable();
             $table->text('notes')->nullable();
             $table->json('metadata')->nullable();
+            // Idempotency: prevent duplicate allocation on retry
+            $table->string('idempotency_key', 128)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -35,6 +37,11 @@ return new class extends Migration
         // Add check constraint
         DB::statement('ALTER TABLE payment_allocations ADD CONSTRAINT chk_allocated_positive CHECK (allocated_amount > 0)');
         DB::statement("ALTER TABLE payment_allocations ADD CONSTRAINT chk_alloc_status_valid CHECK (status IN ('active','void','refunded'))");
+
+        // Idempotency unique scope within payment
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS payment_allocations_idemp_unique ON payment_allocations (payment_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore */ }
 
         // Enable RLS and tenant policy (via parent payment)
         DB::statement('ALTER TABLE payment_allocations ENABLE ROW LEVEL SECURITY');

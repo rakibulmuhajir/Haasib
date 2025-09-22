@@ -35,7 +35,7 @@ class CompanyLookupService
             });
         }
 
-        return $query->firstOrFail(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'created_at', 'updated_at']);
+        return $query->firstOrFail(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'is_active', 'created_at', 'updated_at']);
     }
 
     public function isMember(string $companyId, string $userId): bool

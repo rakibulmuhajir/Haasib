@@ -15,9 +15,10 @@ class CompanyStoreRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:2', 'max:190'],
-            'base_currency' => ['nullable', 'string', 'size:3', 'exists:currencies,code'],
-            'language' => ['nullable', 'string', 'max:8', 'exists:languages,code'],
-            'locale' => ['nullable', 'string', 'max:35', 'exists:locales,tag'],
+            'base_currency' => ['required', 'string', 'size:3', 'exists:currencies,code'],
+            'country' => ['required', 'string', 'size:2', 'exists:countries,code'],
+            'language' => ['nullable', 'string', 'exists:languages,code'],
+            'locale' => ['nullable', 'string', 'exists:locales,code'],
             'settings' => ['nullable', 'array'],
         ];
     }

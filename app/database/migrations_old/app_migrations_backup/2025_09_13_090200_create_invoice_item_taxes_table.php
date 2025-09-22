@@ -23,6 +23,8 @@ return new class extends Migration
             $table->boolean('is_compound')->default(false);
             $table->integer('compound_order')->default(0);
             $table->json('metadata')->nullable();
+            // Idempotency: prevent duplicate tax component on retry
+            $table->string('idempotency_key', 128)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -33,6 +35,11 @@ return new class extends Migration
         });
 
         DB::statement('ALTER TABLE invoice_item_taxes ADD CONSTRAINT chk_tax_nonneg CHECK (tax_amount >= 0)');
+
+        // Idempotency unique scope within invoice item
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS invoice_item_taxes_idemp_unique ON invoice_item_taxes (invoice_item_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore */ }
 
         // Enable RLS and tenant policy via parent invoice_items -> invoices
         DB::statement('ALTER TABLE invoice_item_taxes ENABLE ROW LEVEL SECURITY');

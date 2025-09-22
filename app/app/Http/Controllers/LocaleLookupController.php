@@ -12,9 +12,9 @@ class LocaleLookupController extends Controller
         $request->user();
 
         $rows = $lookup->suggest('locales', [
-            'select' => ['tag', 'name', 'native_name', 'language_code', 'country_code', 'script', 'variant'],
-            'search' => ['tag', 'name', 'native_name'],
-            'order' => 'tag',
+            'select' => ['code', 'name', 'native_name', 'language_code', 'country_code'],
+            'search' => ['code', 'name', 'native_name'],
+            'order' => 'code',
         ], [
             'language' => 'language_code',
             'country' => 'country_code',

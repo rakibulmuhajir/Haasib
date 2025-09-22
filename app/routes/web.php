@@ -48,6 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/web/companies/{company}', [\App\Http\Controllers\CompanyLookupController::class, 'show']);
     Route::patch('/web/companies/{company}/activate', [\App\Http\Controllers\CompanyController::class, 'activate']);
     Route::patch('/web/companies/{company}/deactivate', [\App\Http\Controllers\CompanyController::class, 'deactivate']);
+    Route::delete('/web/companies/{company}', [\App\Http\Controllers\CompanyController::class, 'destroy']);
 
     // Reference data lookups for pickers
     Route::get('/web/countries/suggest', [\App\Http\Controllers\CountryLookupController::class, 'suggest']);

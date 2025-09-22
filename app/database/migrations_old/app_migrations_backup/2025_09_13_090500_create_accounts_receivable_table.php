@@ -46,7 +46,7 @@ return new class extends Migration
 
         // Enable RLS and tenant policy
         DB::statement('ALTER TABLE accounts_receivable ENABLE ROW LEVEL SECURITY');
-        DB::statement(<<<SQL
+        DB::statement(<<<'SQL'
             CREATE POLICY accounts_receivable_tenant_isolation ON accounts_receivable
             USING (company_id = current_setting('app.current_company', true)::uuid)
             WITH CHECK (company_id = current_setting('app.current_company', true)::uuid);

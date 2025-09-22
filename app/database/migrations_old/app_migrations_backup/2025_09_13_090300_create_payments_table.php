@@ -33,6 +33,8 @@ return new class extends Migration
             $table->timestamp('reconciled_date')->nullable();
             $table->text('notes')->nullable();
             $table->json('metadata')->nullable();
+            // Idempotency: prevent duplicate payment creation on retries
+            $table->string('idempotency_key', 128)->nullable();
             $table->timestamps();
             $table->softDeletes();
 
@@ -51,6 +53,16 @@ return new class extends Migration
 
         // Add check constraints
         DB::statement('ALTER TABLE payments ADD CONSTRAINT chk_amount_positive CHECK (amount > 0)');
+
+        // Idempotency unique scope within company
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS payments_idemp_unique ON payments (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore */ }
+
+        // Optional dedupe for imported bank transactions
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS payments_bank_txn_unique ON payments (company_id, bank_txn_id) WHERE bank_txn_id IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore */ }
 
         // Enable RLS and tenant policy
         DB::statement('ALTER TABLE payments ENABLE ROW LEVEL SECURITY');

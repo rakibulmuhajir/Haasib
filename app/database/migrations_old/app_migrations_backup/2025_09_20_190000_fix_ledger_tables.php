@@ -1,9 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -83,23 +81,23 @@ return new class extends Migration
         DB::statement('CREATE INDEX ledger_accounts_company_id_type_index ON ledger_accounts (company_id, type)');
         DB::statement('CREATE INDEX ledger_accounts_company_id_active_index ON ledger_accounts (company_id, active)');
         DB::statement('CREATE INDEX ledger_accounts_company_id_parent_id_index ON ledger_accounts (company_id, parent_id)');
-        
+
         DB::statement('CREATE INDEX journal_entries_company_id_date_index ON journal_entries (company_id, date)');
         DB::statement('CREATE INDEX journal_entries_company_id_status_index ON journal_entries (company_id, status)');
         DB::statement('CREATE INDEX journal_entries_company_id_reference_index ON journal_entries (company_id, reference)');
         DB::statement('CREATE INDEX journal_entries_source_type_source_id_index ON journal_entries (source_type, source_id)');
-        
+
         DB::statement('CREATE INDEX journal_lines_company_id_journal_entry_id_index ON journal_lines (company_id, journal_entry_id)');
         DB::statement('CREATE INDEX journal_lines_company_id_ledger_account_id_index ON journal_lines (company_id, ledger_account_id)');
 
         // Create foreign keys
         DB::statement('ALTER TABLE ledger_accounts ADD CONSTRAINT ledger_accounts_company_id_foreign FOREIGN KEY (company_id) REFERENCES auth.companies (id) ON DELETE CASCADE');
         DB::statement('ALTER TABLE ledger_accounts ADD CONSTRAINT ledger_accounts_parent_id_foreign FOREIGN KEY (parent_id) REFERENCES ledger_accounts (id) ON DELETE SET NULL');
-        
+
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_company_id_foreign FOREIGN KEY (company_id) REFERENCES auth.companies (id) ON DELETE CASCADE');
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_created_by_user_id_foreign FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL');
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_posted_by_user_id_foreign FOREIGN KEY (posted_by_user_id) REFERENCES users (id) ON DELETE SET NULL');
-        
+
         DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_company_id_foreign FOREIGN KEY (company_id) REFERENCES auth.companies (id) ON DELETE CASCADE');
         DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_journal_entry_id_foreign FOREIGN KEY (journal_entry_id) REFERENCES journal_entries (id) ON DELETE CASCADE');
         DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_ledger_account_id_foreign FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts (id) ON DELETE RESTRICT');

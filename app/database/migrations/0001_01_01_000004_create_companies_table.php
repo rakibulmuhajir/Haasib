@@ -1,0 +1,48 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        DB::statement('CREATE SCHEMA IF NOT EXISTS auth');
+
+        // Create companies table
+        Schema::create('auth.companies', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('created_by_user_id')->nullable()->index();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->string('base_currency', 3)->default('AED');
+            $table->uuid('currency_id')->nullable();
+            $table->uuid('exchange_rate_id')->nullable();
+            $table->string('language', 5)->default('en');
+            $table->string('locale', 10)->default('en_AE');
+            $table->jsonb('settings')->nullable();
+            $table->boolean('is_active')->default(true)->index();
+            $table->timestamps();
+        });
+
+        // Add foreign key constraint for created_by_user_id
+        Schema::table('auth.companies', function (Blueprint $table) {
+            $table->foreign('created_by_user_id')
+                ->references('id')->on('users')
+                ->nullOnDelete();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('auth.companies');
+    }
+};

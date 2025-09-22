@@ -26,6 +26,8 @@ class Company extends Model
     protected $fillable = [
         'name',
         'slug',
+        'country',
+        'country_id',
         'base_currency',
         'currency_id',
         'exchange_rate_id',
@@ -44,6 +46,7 @@ class Company extends Model
     protected $casts = [
         'settings' => 'array',
         'created_by_user_id' => 'string',
+        'country_id' => 'string',
         'currency_id' => 'string',
         'exchange_rate_id' => 'integer',
         'is_active' => 'boolean',
@@ -98,7 +101,7 @@ class Company extends Model
      */
     public function customers()
     {
-        return $this->hasMany(Customer::class, 'company_id', 'company_id');
+        return $this->hasMany(Customer::class, 'company_id', 'id');
     }
 
     /**
@@ -206,18 +209,20 @@ class Company extends Model
     }
 
     /**
-     * Deactivate the company.
-     */
-    public function deactivate()
-    {
-        $this->update(['is_active' => false]);
-    }
-
-    /**
      * Activate the company.
      */
     public function activate()
     {
-        $this->update(['is_active' => true]);
+        $this->is_active = true;
+        $this->save();
+    }
+
+    /**
+     * Deactivate the company.
+     */
+    public function deactivate()
+    {
+        $this->is_active = false;
+        $this->save();
     }
 }

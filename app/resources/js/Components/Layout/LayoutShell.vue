@@ -2,6 +2,8 @@
 import { computed, onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useSidebar } from '@/composables/useSidebar'
+import ConfirmDialog from 'primevue/confirmdialog'
+import Toast from 'primevue/toast'
 import Topbar from './Topbar.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 
@@ -51,6 +53,9 @@ const closeMobileSidebar = () => {
 
     <!-- Toast container for notifications -->
     <Toast position="top-right" />
+    
+    <!-- Confirmation dialog container -->
+    <ConfirmDialog />
   </div>
 </template>
 

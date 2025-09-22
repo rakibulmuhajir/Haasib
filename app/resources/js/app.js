@@ -3,7 +3,7 @@ import '../css/layout/shell.css';
 import '../css/themes/blue-whale.css';
 import './bootstrap';
 
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, Link } from '@inertiajs/vue3';
 // Early theme bootstrap: set data-theme before Vue mounts
 (() => {
   const stored = localStorage.getItem('theme') // 'blue-whale' | 'blue-whale-dark'
@@ -39,6 +39,7 @@ import Menu from 'primevue/menu'
 import Avatar from 'primevue/avatar'
 import InputText from 'primevue/inputtext'
 import Dialog from 'primevue/dialog'
+import ConfirmDialog from 'primevue/confirmdialog'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -67,6 +68,8 @@ createInertiaApp({
         vue.use(ToastService)
         vue.use(ConfirmationService)
         vue.directive('tooltip', Tooltip)
+        // Global components
+        vue.component('Link', Link)
         // Global PrimeVue components
         vue.component('Button', Button)
         vue.component('Card', Card)
@@ -83,6 +86,7 @@ createInertiaApp({
         vue.component('Avatar', Avatar)
         vue.component('InputText', InputText)
         vue.component('Dialog', Dialog)
+        vue.component('ConfirmDialog', ConfirmDialog)
         vue.mount(el)
         return vue
     },

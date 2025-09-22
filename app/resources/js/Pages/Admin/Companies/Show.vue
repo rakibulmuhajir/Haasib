@@ -17,7 +17,7 @@ import CompanyMembersSection from './CompanyMembersSection.vue'
 import CompanyInviteSection from './CompanyInviteSection.vue'
 import CompanyOverview from './CompanyOverview.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 
 const props = defineProps({ company: { type: String, required: true } })
 
@@ -27,25 +27,60 @@ const confirm = useConfirm()
 const toast = useToast()
 const { setActions } = usePageActions()
 
+console.log('🎯 [DEBUG] Confirmation service initialized:', confirm)
+console.log('🎯 [DEBUG] Toast service initialized:', toast)
+
 async function loadCompany() {
+  console.log('📡 [DEBUG] loadCompany called with props.company:', props.company)
   try {
-    const { data } = await http.get(`/web/companies/${encodeURIComponent(props.company)}`)
+    const url = `/web/companies/${encodeURIComponent(props.company)}`
+    console.log('📡 [DEBUG] Fetching company from:', url)
+    const { data } = await http.get(url)
+    console.log('📡 [DEBUG] Company data received:', data.data)
     c.value = data.data
+    // Update page actions when company loads
+    console.log('📡 [DEBUG] Updating page actions after company loaded')
+    updatePageActions()
   } catch (e) {
+    console.error('📡 [ERROR] Failed to load company:', e)
+    console.error('📡 [ERROR] Error response:', e?.response)
     error.value = e?.response?.data?.message || 'Failed to load company'
   }
 }
 
-onMounted(() => {
-  loadCompany()
+function updatePageActions() {
+  console.log('🔧 [DEBUG] updatePageActions called')
+  console.log('🔧 [DEBUG] c.value:', c.value)
+  console.log('🔧 [DEBUG] c.value?.is_active:', c.value?.is_active)
   
-  // Set page actions
-  setActions([
-    { key: 'back', label: 'Back to Companies', icon: 'pi pi-arrow-left', severity: 'secondary', click: () => router.visit(route('admin.companies.index')) },
-    { key: 'deactivate', label: 'Deactivate Company', icon: 'pi pi-ban', severity: 'warning', click: deactivateCompany, disabled: () => !c.value?.is_active },
-    { key: 'activate', label: 'Activate Company', icon: 'pi pi-check', severity: 'success', click: () => http.patch(`/web/companies/${slug.value}/activate`).then(() => loadCompany()), disabled: () => c.value?.is_active },
+  const actions = [
+    { key: 'back', label: 'Back to Companies', icon: 'pi pi-arrow-left', severity: 'secondary', click: () => {
+      console.log('🔧 [DEBUG] Back button clicked')
+      router.visit(route('admin.companies.index'))
+    }},
+    { key: 'deactivate', label: 'Deactivate Company', icon: 'pi pi-ban', severity: 'warning', click: deactivateCompany, disabled: () => {
+      const disabled = !c.value || !c.value.is_active
+      console.log('🔧 [DEBUG] Deactivate button disabled:', disabled, 'c.value:', c.value)
+      return disabled
+    }},
+    { key: 'activate', label: 'Activate Company', icon: 'pi pi-check', severity: 'success', click: activateCompany, disabled: () => {
+      const disabled = !c.value || c.value.is_active
+      console.log('🔧 [DEBUG] Activate button disabled:', disabled, 'c.value:', c.value)
+      return disabled
+    }},
     { key: 'delete', label: 'Delete Company', icon: 'pi pi-trash', severity: 'danger', click: deleteCompany }
-  ])
+  ]
+  
+  console.log('🔧 [DEBUG] Setting actions:', actions)
+  setActions(actions)
+}
+
+onMounted(() => {
+  console.log('🎯 [DEBUG] Component mounted')
+  console.log('🎯 [DEBUG] usePageActions setActions function:', setActions)
+  // Set initial page actions
+  updatePageActions()
+  loadCompany()
 })
 
 const slug = computed(() => c.value?.slug || props.company)
@@ -54,8 +89,68 @@ const tabNames = ['members', 'invite']
 const storageKey = computed(() => `admin.company.tab.${slug.value}`)
 const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
 
+// Watch for company data changes
+watch(c, (newValue, oldValue) => {
+  console.log('👀 [DEBUG] c.value changed:', { 
+    newValue: newValue?.name, 
+    is_active: newValue?.is_active,
+    oldValue: oldValue?.name 
+  })
+  console.log('👀 [DEBUG] Updating page actions due to company data change')
+  updatePageActions()
+}, { deep: true })
+
 // Actions
+async function activateCompany() {
+  console.log('🚀 [DEBUG] activateCompany called')
+  console.log('🚀 [DEBUG] slug.value:', slug.value)
+  console.log('🚀 [DEBUG] Company data:', c.value)
+  console.log('🚀 [DEBUG] confirm object:', confirm)
+  
+  if (!c.value) {
+    console.error('🚀 [ERROR] No company data available!')
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Company data not loaded', life: 3000 })
+    return
+  }
+  
+  confirm.require({
+    message: `Are you sure you want to activate the company "${c.value?.name}"? Users will be able to access this company.`,
+    header: 'Confirm Activate',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Yes, activate it',
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      console.log('🚀 [DEBUG] Activate confirmation accepted')
+      try {
+        const url = `/web/companies/${slug.value}/activate`
+        console.log('🚀 [DEBUG] Sending activate request to:', url)
+        const response = await http.patch(url)
+        console.log('🚀 [DEBUG] Activate response:', response)
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Company activated successfully', life: 3000 })
+        await loadCompany()
+      } catch (e) {
+        console.error('🚀 [ERROR] Activate failed:', e)
+        console.error('🚀 [ERROR] Error response:', e?.response)
+        toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to activate company', life: 3000 })
+      }
+    },
+    reject: () => {
+      console.log('🚀 [DEBUG] Activate confirmation rejected')
+    }
+  })
+}
+
 async function deactivateCompany() {
+  console.log('🚀 [DEBUG] deactivateCompany called')
+  console.log('🚀 [DEBUG] slug.value:', slug.value)
+  console.log('🚀 [DEBUG] Company data:', c.value)
+  
+  if (!c.value) {
+    console.error('🚀 [ERROR] No company data available!')
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Company data not loaded', life: 3000 })
+    return
+  }
+  
   confirm.require({
     message: `Are you sure you want to deactivate the company "${c.value?.name}"? Users will not be able to access this company.`,
     header: 'Confirm Deactivate',
@@ -63,18 +158,37 @@ async function deactivateCompany() {
     acceptLabel: 'Yes, deactivate it',
     rejectLabel: 'Cancel',
     accept: async () => {
+      console.log('🚀 [DEBUG] Deactivate confirmation accepted')
       try {
-        await http.patch(`/web/companies/${slug.value}/deactivate`)
+        const url = `/web/companies/${slug.value}/deactivate`
+        console.log('🚀 [DEBUG] Sending deactivate request to:', url)
+        const response = await http.patch(url)
+        console.log('🚀 [DEBUG] Deactivate response:', response)
         toast.add({ severity: 'success', summary: 'Success', detail: 'Company deactivated successfully', life: 3000 })
         await loadCompany()
       } catch (e) {
+        console.error('🚀 [ERROR] Deactivate failed:', e)
+        console.error('🚀 [ERROR] Error response:', e?.response)
         toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to deactivate company', life: 3000 })
       }
+    },
+    reject: () => {
+      console.log('🚀 [DEBUG] Deactivate confirmation rejected')
     }
   })
 }
 
 async function deleteCompany() {
+  console.log('🚀 [DEBUG] deleteCompany called')
+  console.log('🚀 [DEBUG] slug.value:', slug.value)
+  console.log('🚀 [DEBUG] Company data:', c.value)
+  
+  if (!c.value) {
+    console.error('🚀 [ERROR] No company data available!')
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Company data not loaded', life: 3000 })
+    return
+  }
+  
   confirm.require({
     message: `Are you sure you want to delete the company "${c.value?.name}"? This action cannot be undone and all associated data will be permanently removed.`,
     header: 'Confirm Delete',
@@ -82,13 +196,22 @@ async function deleteCompany() {
     acceptLabel: 'Yes, delete it',
     rejectLabel: 'Cancel',
     accept: async () => {
+      console.log('🚀 [DEBUG] Delete confirmation accepted')
       try {
-        await http.delete(`/web/companies/${slug.value}`)
+        const url = `/web/companies/${slug.value}`
+        console.log('🚀 [DEBUG] Sending delete request to:', url)
+        const response = await http.delete(url)
+        console.log('🚀 [DEBUG] Delete response:', response)
         toast.add({ severity: 'success', summary: 'Success', detail: 'Company deleted successfully', life: 3000 })
         router.visit(route('admin.companies.index'))
       } catch (e) {
+        console.error('🚀 [ERROR] Delete failed:', e)
+        console.error('🚀 [ERROR] Error response:', e?.response)
         toast.add({ severity: 'error', summary: 'Error', detail: e?.response?.data?.message || 'Failed to delete company', life: 3000 })
       }
+    },
+    reject: () => {
+      console.log('🚀 [DEBUG] Delete confirmation rejected')
     }
   })
 }

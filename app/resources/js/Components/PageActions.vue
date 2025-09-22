@@ -8,8 +8,22 @@ import { usePageActions, resolveDisabled, type PageAction } from '@/composables/
 const props = withDefaults(defineProps<{ maxVisible?: number }>(), { maxVisible: 3 })
 const { actions } = usePageActions()
 
+// Debug actions when they change
+watch(actions, (newActions) => {
+  console.log('🔗 [DEBUG] PageActions actions updated:', newActions.map(a => ({
+    label: a.label,
+    disabled: typeof a.disabled === 'function' ? a.disabled() : a.disabled,
+    hasClick: !!a.click
+  })))
+}, { deep: true })
+
 function onClick(a: PageAction) {
-  if (a.click) a.click()
+  console.log('🔗 [DEBUG] PageActions onClick called for action:', a.label)
+  console.log('🔗 [DEBUG] Action has click function:', !!a.click)
+  if (a.click) {
+    console.log('🔗 [DEBUG] Executing click function')
+    a.click()
+  }
 }
 
 // Auto-fit with ResizeObserver
@@ -91,7 +105,8 @@ function toggleMore(e: Event) {
           class="page-action-btn"
           :disabled="resolveDisabled(a)"
           v-tooltip.bottom="a.tooltip || ''"
-          @click="!a.href && !a.routeName ? onClick(a) : null"
+          @click="a.click ? onClick(a) : null"
+      @click.capture="() => console.log('🔗 [DEBUG] Button clicked:', a.label, 'hasClick:', !!a.click)"
           :ref="(el:any) => setBtnRef(el, idx)"
         />
       </component>

@@ -22,6 +22,8 @@ return new class extends Migration
             $table->text('shipping_address')->nullable();
             $table->uuid('currency_id')->nullable();
             $table->boolean('is_active')->default(true);
+            // Idempotency: prevent duplicate customer creation on retry
+            $table->string('idempotency_key', 128)->nullable();
             $table->timestamps();
             $table->softDeletes();
 
@@ -35,6 +37,11 @@ return new class extends Migration
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
             $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('set null');
         });
+
+        // Idempotency unique scope within company
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS customers_idemp_unique ON customers (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore */ }
     }
 
     /**

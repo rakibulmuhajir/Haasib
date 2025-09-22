@@ -14,8 +14,9 @@ import { http, withIdempotency } from '@/lib/http'
 import CurrencyPicker from '@/Components/Pickers/CurrencyPicker.vue'
 import LanguagePicker from '@/Components/Pickers/LanguagePicker.vue'
 import LocalePicker from '@/Components/Pickers/LocalePicker.vue'
+import CountryPicker from '@/Components/Pickers/CountryPicker.vue'
 
-const form = ref({ name: '', base_currency: '', language: '', locale: '' })
+const form = ref({ name: '', base_currency: '', country: '', language: '', locale: '' })
 const loading = ref(false)
 const error = ref('')
 const toast = useToast()
@@ -28,6 +29,40 @@ const breadcrumbItems = ref([
 ])
 
 async function submit() {
+  // Client-side validation
+  if (!form.value.name?.trim()) {
+    error.value = 'Company name is required'
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: error.value,
+      life: 3000
+    })
+    return
+  }
+  
+  if (!form.value.country) {
+    error.value = 'Country is required'
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: error.value,
+      life: 3000
+    })
+    return
+  }
+  
+  if (!form.value.base_currency) {
+    error.value = 'Base currency is required'
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: error.value,
+      life: 3000
+    })
+    return
+  }
+  
   loading.value = true
   error.value = ''
   try {
@@ -48,7 +83,15 @@ async function submit() {
       router.visit(route('admin.companies.show', data.data.slug))
     }, 500)
   } catch (e) {
+    console.error('Company creation error:', e.response?.data)
     error.value = e?.response?.data?.message || 'Failed to create company'
+    
+    // Show validation errors if any
+    if (e?.response?.data?.errors) {
+      const validationErrors = Object.values(e.response.data.errors).flat()
+      error.value = validationErrors.join(', ')
+    }
+    
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -91,20 +134,29 @@ async function submit() {
               />
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium mb-2">Base Currency</label>
-                <CurrencyPicker v-model="form.base_currency" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-2">Language</label>
-                <LanguagePicker v-model="form.language" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-2">Locale</label>
-                <LocalePicker v-model="form.locale" :language="form.language" />
-              </div>
+            <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">Country *</label>
+              <CountryPicker v-model="form.country" />
             </div>
+            
+            <div>
+              <label class="block text-sm font-medium mb-2">Base Currency *</label>
+              <CurrencyPicker v-model="form.base_currency" />
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium mb-2">Language</label>
+              <LanguagePicker v-model="form.language" />
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">Locale</label>
+              <LocalePicker v-model="form.locale" />
+            </div>
+          </div>
 
             <div class="pt-4 flex items-center gap-2">
               <Button 

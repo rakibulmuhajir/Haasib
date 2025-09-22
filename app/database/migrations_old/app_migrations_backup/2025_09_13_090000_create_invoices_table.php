@@ -37,6 +37,8 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamp('posted_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
+            // Idempotency: prevent duplicate creates on retries
+            $table->string('idempotency_key', 128)->nullable();
             $table->timestamps();
             $table->softDeletes();
 
@@ -68,6 +70,11 @@ return new class extends Migration
         // Enum-like constraints for status fields
         DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_invoice_status_valid CHECK (status IN ('draft','sent','posted','partial','paid','cancelled'))");
         DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_payment_status_valid CHECK (payment_status IN ('unpaid','partial','paid','overpaid'))");
+
+        // Idempotency unique scope within company
+        try {
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS invoices_idemp_unique ON invoices (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+        } catch (\\Throwable $e) { /* ignore on unsupported drivers */ }
 
         // Enable RLS and tenant policy
         DB::statement('ALTER TABLE invoices ENABLE ROW LEVEL SECURITY');

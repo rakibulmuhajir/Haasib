@@ -18,6 +18,7 @@ class CompanyLookupController extends Controller
         $q = (string) $request->query('q', '');
         $userId = $request->query('user_id');
         $userEmail = $request->query('user_email');
+        $excludeUserId = $request->query('exclude_user_id');
         $limit = (int) $request->query('limit', 10);
 
         $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'is_active']);
@@ -43,6 +44,11 @@ class CompanyLookupController extends Controller
             if ($userId) {
                 $this->lookup->restrictCompaniesToUser($query, $userId);
             }
+        }
+
+        // Exclude companies that a user is already assigned to (for assignment scenarios)
+        if ($excludeUserId) {
+            $this->lookup->excludeCompaniesFromUser($query, $excludeUserId);
         }
 
         $companies = $query->limit($limit)->get();
@@ -71,7 +77,7 @@ class CompanyLookupController extends Controller
         // Latest activity from audit logs if available
         $lastActivity = null;
         try {
-        $lastActivity = DB::table('audit_logs')
+            $lastActivity = DB::table('audit_logs')
                 ->where('company_id', $record->id)
                 ->orderByDesc('created_at')
                 ->limit(1)

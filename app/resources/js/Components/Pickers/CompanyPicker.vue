@@ -26,12 +26,15 @@ async function search(event) {
     
     // If excludeUserId is provided, filter out companies this user is already assigned to
     if (props.excludeUserId) {
-      params.user_id = props.excludeUserId
+      params.exclude_user_id = props.excludeUserId
     }
     
+    console.log('Searching companies with params:', params)
     const { data } = await http.get('/web/companies', { params })
+    console.log('Company search response:', data)
     suggestions.value = data.data || []
   } catch (e) {
+    console.error('Company search error:', e)
     suggestions.value = []
   } finally {
     loading.value = false

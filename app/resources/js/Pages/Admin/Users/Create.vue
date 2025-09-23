@@ -16,7 +16,7 @@ const form = ref({ name: '', email: '', password: '', system_role: '' })
 const loading = ref(false)
 const error = ref('')
 const ok = ref('')
-const assign = ref({ company: '', role: { value: 'viewer', label: 'Viewer' } })
+const assign = ref({ company: null, role: { value: 'viewer', label: 'Viewer' } })
 
 const roleOptions = [
   { value: 'owner', label: 'Owner' },
@@ -42,6 +42,9 @@ async function submit() {
   ok.value = ''
   const payload = { ...form.value }
   if (!payload.password) payload.password = randomPassword()
+  
+  console.log('Creating user with payload:', payload)
+  
   try {
     const { data } = await http.post('/commands', payload, { headers: withIdempotency({ 'X-Action': 'user.create' }) })
     ok.value = data?.message || 'User created'
@@ -49,7 +52,7 @@ async function submit() {
       try {
         await http.post('/commands', {
           email: form.value.email,
-          company: assign.value.company,
+          company: assign.value.company.id || assign.value.company, // Use ID if available, otherwise use the value as-is
           role: assign.value.role.value,
         }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
         ok.value += ' · Assigned to company'
@@ -59,7 +62,11 @@ async function submit() {
       }
     }
   } catch (e) {
-    error.value = e?.response?.data?.message || 'Failed to create user'
+    console.error('Create user error:', e.response?.data);
+    error.value = e?.response?.data?.message || 'Failed to create user';
+    if (e?.response?.data?.errors) {
+      console.error('Validation errors:', e.response.data.errors);
+    }
   } finally {
     loading.value = false
   }

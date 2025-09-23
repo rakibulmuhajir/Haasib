@@ -46,6 +46,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
     Route::get('/web/companies/{company}/users', [\App\Http\Controllers\CompanyLookupController::class, 'users']);
     Route::get('/web/companies/{company}', [\App\Http\Controllers\CompanyLookupController::class, 'show']);
+    Route::get('/web/customers/suggest', [\App\Http\Controllers\CustomerLookupController::class, 'suggest']);
+    Route::get('/web/customers/{customer}', [\App\Http\Controllers\CustomerLookupController::class, 'show']);
+    Route::get('/web/invoices/suggest', [\App\Http\Controllers\InvoiceLookupController::class, 'suggest']);
+    Route::get('/web/invoices/{invoice}', [\App\Http\Controllers\InvoiceLookupController::class, 'show']);
     Route::patch('/web/companies/{company}/activate', [\App\Http\Controllers\CompanyController::class, 'activate']);
     Route::patch('/web/companies/{company}/deactivate', [\App\Http\Controllers\CompanyController::class, 'deactivate']);
     Route::delete('/web/companies/{company}', [\App\Http\Controllers\CompanyController::class, 'destroy']);

@@ -166,7 +166,7 @@ async function changeRole(m) {
     console.log('📤 Request payload:', payload)
     
     const { data } = await http.post('/commands', payload, { 
-      headers: withIdempotency({ 'X-Action': 'company.assign' }) 
+      headers: withIdempotency({ 'X-Action': 'company.update_role' }) 
     })
     
     console.log('📥 API response received:', data)

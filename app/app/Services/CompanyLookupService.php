@@ -151,6 +151,13 @@ class CompanyLookupService
         });
     }
 
+    public function excludeCompaniesFromUser(Builder $query, string $userId): void
+    {
+        $query->whereNotIn('id', function ($sub) use ($userId) {
+            $sub->from('auth.company_user')->select('company_id')->where('user_id', $userId);
+        });
+    }
+
     public function restrictCompaniesToUserIdOrEmail(Builder $query, ?string $userId, ?string $email): void
     {
         if (! $userId && ! $email) {

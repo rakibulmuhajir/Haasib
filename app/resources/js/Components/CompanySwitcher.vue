@@ -14,9 +14,9 @@ onMounted(async () => {
     // and associated companies for a regular user.
     const { data } = await http.get('/web/companies')
     companies.value = data.data
-    console.log('🔍 [DEBUG] Loaded companies:', companies.value)
-    console.log('🔍 [DEBUG] Current company ID from page props:', currentCompanyId.value)
-    console.log('🔍 [DEBUG] Current company from session:', page.props.auth?.currentCompany)
+    // console.log('🔍 [DEBUG] Loaded companies:', companies.value)
+    // console.log('🔍 [DEBUG] Current company ID from page props:', currentCompanyId.value)
+    // console.log('🔍 [DEBUG] Current company from session:', page.props.auth?.currentCompany)
   } catch (e) {
     console.error('🔍 [DEBUG] Error loading companies:', e)
     companies.value = []
@@ -28,13 +28,13 @@ async function switchCompany(event) {
   console.log('🔍 [DEBUG] Switching to company:', companyId)
   console.log('🔍 [DEBUG] Current company ID:', currentCompanyId.value)
   console.log('🔍 [DEBUG] Available companies:', companies.value)
-  
+
   if (!companyId || companyId === currentCompanyId.value) return
 
   try {
     const response = await http.post(`/company/${companyId}/switch`)
     console.log('🔍 [DEBUG] Switch response:', response.data)
-    
+
     // Use Inertia's router to reload the page with fresh state
     router.reload()
   } catch (e) {

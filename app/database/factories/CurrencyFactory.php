@@ -40,7 +40,7 @@ class CurrencyFactory extends Factory
             'name' => $currency['name'],
             'symbol' => $currency['symbol'],
             'symbol_position' => fake()->randomElement(['before', 'after']),
-            'decimal_places' => in_array($currency['code'], ['JPY', 'KRW']) ? 0 : 2,
+            'minor_unit' => in_array($currency['code'], ['JPY', 'KRW']) ? 0 : 2,
             'thousands_separator' => fake()->randomElement([',', '.', ' ', "'"]),
             'decimal_separator' => fake()->randomElement(['.', ',']),
             'is_active' => true,
@@ -92,7 +92,7 @@ class CurrencyFactory extends Factory
             'code' => 'JPY',
             'name' => 'Japanese Yen',
             'symbol' => '¥',
-            'decimal_places' => 0,
+            'minor_unit' => 0,
             'exchange_rate' => fake()->randomFloat(6, 100, 160),
             'metadata' => array_merge($attributes['metadata'] ?? [], ['currency_type' => 'major']),
         ]);
@@ -195,14 +195,14 @@ class CurrencyFactory extends Factory
     public function withNoDecimals(): static
     {
         return $this->state(fn (array $attributes) => [
-            'decimal_places' => 0,
+            'minor_unit' => 0,
         ]);
     }
 
     public function withThreeDecimals(): static
     {
         return $this->state(fn (array $attributes) => [
-            'decimal_places' => 3,
+            'minor_unit' => 3,
         ]);
     }
 
@@ -233,7 +233,7 @@ class CurrencyFactory extends Factory
             'code' => $crypto['code'],
             'name' => $crypto['name'],
             'symbol' => $crypto['symbol'],
-            'decimal_places' => 8,
+            'minor_unit' => 8,
             'exchange_rate' => fake()->randomFloat(8, 0.00001, 100000),
             'metadata' => array_merge($attributes['metadata'] ?? [], ['currency_type' => 'cryptocurrency']),
         ]);

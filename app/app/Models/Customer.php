@@ -27,7 +27,14 @@ class Customer extends Model
      *
      * @var array
      */
-    protected $appends = ['id'];
+    protected $appends = [
+        'id',
+        'address_line_1',
+        'address_line_2',
+        'city',
+        'state_province',
+        'postal_code',
+    ];
 
     /**
      * Get the id attribute (alias for customer_id).
@@ -51,6 +58,15 @@ class Customer extends Model
         'is_active',
         'created_by',
         'updated_by',
+        'website',
+        'customer_type',
+        'payment_terms',
+        'credit_limit',
+        'customer_number',
+        'tax_exempt',
+        'status',
+        'notes',
+        'primary_contact_id',
     ];
 
     protected $casts = [
@@ -144,6 +160,67 @@ class Customer extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    // Accessors for address fields
+    public function getAddressLine1Attribute(): ?string
+    {
+        return $this->billing_address['address_line_1'] ?? null;
+    }
+
+    public function setAddressLine1Attribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['address_line_1'] = $value;
+        $this->billing_address = $address;
+    }
+
+    public function getAddressLine2Attribute(): ?string
+    {
+        return $this->billing_address['address_line_2'] ?? null;
+    }
+
+    public function setAddressLine2Attribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['address_line_2'] = $value;
+        $this->billing_address = $address;
+    }
+
+    public function getCityAttribute(): ?string
+    {
+        return $this->billing_address['city'] ?? null;
+    }
+
+    public function setCityAttribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['city'] = $value;
+        $this->billing_address = $address;
+    }
+
+    public function getStateProvinceAttribute(): ?string
+    {
+        return $this->billing_address['state_province'] ?? null;
+    }
+
+    public function setStateProvinceAttribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['state_province'] = $value;
+        $this->billing_address = $address;
+    }
+
+    public function getPostalCodeAttribute(): ?string
+    {
+        return $this->billing_address['postal_code'] ?? null;
+    }
+
+    public function setPostalCodeAttribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['postal_code'] = $value;
+        $this->billing_address = $address;
     }
 
     public function generateCustomerNumber(): string

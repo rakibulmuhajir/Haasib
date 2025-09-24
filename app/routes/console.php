@@ -1,12 +1,10 @@
 <?php
 
+use App\Jobs\SyncExchangeRates;
+use Database\Seeders\Core\CoreCountriesSeeder;
+use Database\Seeders\Core\CoreCurrenciesSeeder;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
-use Database\Seeders\Core\CoreCurrenciesSeeder;
-use Database\Seeders\Core\CoreCountriesSeeder;
-use App\Jobs\SyncExchangeRates;
 
 // Publish OpenAPI YAML into L5-Swagger docs (JSON + YAML)
 Artisan::command('openapi:publish', function () {
@@ -21,6 +19,7 @@ Artisan::command('openapi:publish', function () {
     $docsDir = storage_path('api-docs');
     if (! file_exists($yamlPath)) {
         $this->error("YAML not found: {$yamlPath}");
+
         return 1;
     }
     if (! is_dir($docsDir)) {
@@ -32,9 +31,11 @@ Artisan::command('openapi:publish', function () {
         file_put_contents($docsDir.'/api-docs.json', $json);
         copy($yamlPath, $docsDir.'/api-docs.yaml');
         $this->info('OpenAPI published to storage/api-docs (api-docs.json, api-docs.yaml)');
+
         return 0;
     } catch (\Throwable $e) {
         $this->error('Failed to publish OpenAPI: '.$e->getMessage());
+
         return 2;
     }
 })->purpose('Publish docs/openapi/*.yaml for L5-Swagger UI');
@@ -46,12 +47,14 @@ Artisan::command('inspire', function () {
 // Seed core reference data (currencies, countries) into core.* schema
 Artisan::command('core:seed-reference', function () {
     try {
-        (new CoreCurrenciesSeeder())->run();
-        (new CoreCountriesSeeder())->run();
+        (new CoreCurrenciesSeeder)->run();
+        (new CoreCountriesSeeder)->run();
         $this->info('Core reference data seeded (currencies, countries).');
+
         return 0;
     } catch (\Throwable $e) {
         $this->error('Failed seeding core reference: '.$e->getMessage());
+
         return 1;
     }
 })->purpose('Seed ISO currencies and countries into core schema');

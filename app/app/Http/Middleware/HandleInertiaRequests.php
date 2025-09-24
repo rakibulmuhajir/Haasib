@@ -21,10 +21,10 @@ class HandleInertiaRequests extends Middleware
         $hasSession = $request->hasSession();
         $companyId = $hasSession ? $request->session()->get('current_company_id') : null;
 
-        \Log::debug('[HandleInertiaRequests] Request has session: '.($hasSession ? 'yes' : 'no'));
-        \Log::debug('[HandleInertiaRequests] Session ID: '.($hasSession ? $request->session()->getId() : 'none'));
-        \Log::debug('[HandleInertiaRequests] Session data before access: ', $hasSession ? $request->session()->all() : []);
-        \Log::debug('[HandleInertiaRequests] Retrieved company ID from session: '.($companyId ?: 'null'));
+        // \Log::debug('[HandleInertiaRequests] Request has session: '.($hasSession ? 'yes' : 'no'));
+        // \Log::debug('[HandleInertiaRequests] Session ID: '.($hasSession ? $request->session()->getId() : 'none'));
+        // \Log::debug('[HandleInertiaRequests] Session data before access: ', $hasSession ? $request->session()->all() : []);
+        // \Log::debug('[HandleInertiaRequests] Retrieved company ID from session: '.($companyId ?: 'null'));
 
         // Validate that the user has access to the session company
         if ($companyId && $request->user()) {
@@ -91,6 +91,14 @@ class HandleInertiaRequests extends Middleware
             // Expose CSRF token so the SPA can update its meta tag after
             // session regeneration (e.g., after login/logout) to avoid 419s.
             'csrf_token' => csrf_token(),
+
+            // Share flash messages and clear them after sharing
+            'flash' => function () use ($request) {
+                return [
+                    'success' => $request->session()->pull('success'),
+                    'error' => $request->session()->pull('error'),
+                ];
+            },
 
             'ziggy' => fn () => [
                 ...(new Ziggy)->toArray(),

@@ -29,4 +29,3 @@ class SyncExchangeRates implements ShouldQueue
         }
     }
 }
-

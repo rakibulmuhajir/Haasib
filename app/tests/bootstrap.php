@@ -25,4 +25,3 @@ if (! extension_loaded('pdo_sqlite')) {
 
 // Finally, load Composer autoloader
 require __DIR__.'/../vendor/autoload.php';
-

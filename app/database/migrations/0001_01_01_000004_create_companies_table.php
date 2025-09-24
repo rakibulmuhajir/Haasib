@@ -48,7 +48,7 @@ return new class extends Migration
             Schema::table('auth.companies', function (Blueprint $table) {
                 $table->dropForeign(['created_by_user_id']);
             });
-            
+
             Schema::dropIfExists('auth.companies');
         } catch (\Throwable $e) {
             // If the table still has dependencies, they'll be cleaned up by the company_relationships migration

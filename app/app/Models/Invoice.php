@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\StateMachines\InvoiceStateMachine;
-use Brick\Money\Money;
 use Brick\Math\RoundingMode;
-use Illuminate\Support\Facades\Log;
+use Brick\Money\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 
 class Invoice extends Model
 {
@@ -19,7 +19,9 @@ class Invoice extends Model
     protected $table = 'invoices';
 
     protected $primaryKey = 'invoice_id';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -41,8 +43,10 @@ class Invoice extends Model
         'status',
         'payment_status',
         'notes',
+        'terms',
         'created_by',
         'updated_by',
+        'idempotency_key',
     ];
 
     protected $casts = [

@@ -128,6 +128,7 @@ class InvoiceFactory extends Factory
         return $this->state(function (array $attributes) {
             $subtotal = fake()->randomFloat(2, 5000, 50000);
             $taxAmount = $attributes['tax_amount'] ?? 0;
+
             return [
                 'subtotal' => $subtotal,
                 'total_amount' => $subtotal + $taxAmount,
@@ -140,6 +141,7 @@ class InvoiceFactory extends Factory
         return $this->state(function (array $attributes) {
             $subtotal = fake()->randomFloat(2, 10, 500);
             $taxAmount = $attributes['tax_amount'] ?? 0;
+
             return [
                 'subtotal' => $subtotal,
                 'total_amount' => $subtotal + $taxAmount,
@@ -152,6 +154,7 @@ class InvoiceFactory extends Factory
         return $this->state(function (array $attributes) use ($taxRate) {
             $subtotal = $attributes['subtotal'] ?? fake()->randomFloat(2, 100, 10000);
             $taxAmount = $subtotal * ($taxRate / 100);
+
             return [
                 'tax_amount' => $taxAmount,
                 'total_amount' => $subtotal + $taxAmount,

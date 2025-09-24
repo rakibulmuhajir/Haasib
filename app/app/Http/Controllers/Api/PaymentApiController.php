@@ -7,11 +7,10 @@ use App\Http\Requests\Api\Payment\AllocatePaymentRequest;
 use App\Http\Requests\Api\Payment\BulkPaymentRequest;
 use App\Http\Requests\Api\Payment\StorePaymentRequest;
 use App\Http\Requests\Api\Payment\UpdatePaymentRequest;
+use App\Http\Responses\ApiResponder;
 use App\Models\Customer;
-use App\Models\PaymentAllocation;
 use App\Models\Payment;
 use App\Services\CurrencyService;
-use App\Http\Responses\ApiResponder;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 class PaymentApiController extends Controller
 {
     use ApiResponder;
+
     public function __construct(
         private PaymentService $paymentService,
         private CurrencyService $currencyService
@@ -30,7 +30,7 @@ class PaymentApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        
+
         $company = $request->user()->company;
 
         $query = Payment::where('company_id', $company->id)
@@ -100,7 +100,7 @@ class PaymentApiController extends Controller
      */
     public function store(StorePaymentRequest $request): JsonResponse
     {
-        
+
         try {
             $company = $request->user()->company;
             $customer = $company->customers()->findOrFail($request->customer_id);

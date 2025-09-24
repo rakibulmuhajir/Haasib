@@ -126,17 +126,27 @@ class AuthServiceProvider extends ServiceProvider
         // Invoicing permissions
         Gate::define('invoices.view', function (User $user) {
             $companyId = $user->currentCompany?->id;
-            if (! $companyId) return false;
-            if ($user->isSuperAdmin()) return true;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
             $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
             return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
         });
 
         Gate::define('invoices.create', function (User $user) {
             $companyId = $user->currentCompany?->id;
-            if (! $companyId) return false;
-            if ($user->isSuperAdmin()) return true;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
             $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
             return in_array($role, ['owner', 'admin', 'accountant']);
         });
 
@@ -148,16 +158,26 @@ class AuthServiceProvider extends ServiceProvider
         // Payments permissions
         Gate::define('payments.view', function (User $user) {
             $companyId = $user->currentCompany?->id;
-            if (! $companyId) return false;
-            if ($user->isSuperAdmin()) return true;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
             $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
             return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
         });
         Gate::define('payments.create', function (User $user) {
             $companyId = $user->currentCompany?->id;
-            if (! $companyId) return false;
-            if ($user->isSuperAdmin()) return true;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
             $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
             return in_array($role, ['owner', 'admin', 'accountant']);
         });
         Gate::define('payments.edit', fn (User $user) => Gate::forUser($user)->check('payments.create'));

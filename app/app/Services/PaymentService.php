@@ -54,7 +54,7 @@ class PaymentService
         ?array $invoiceAllocations = null,
         ?string $idempotencyKey = null
     ): Payment {
-        $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentNumber, $paymentReference, $notes, $autoAllocate, $invoiceAllocations) {
+        $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentNumber, $paymentReference, $autoAllocate, $invoiceAllocations) {
             $currency = $currency ?? $customer->currency ?? $company->getDefaultCurrency();
             $exchangeRate = $this->getExchangeRate($currency, $company);
 
@@ -165,7 +165,9 @@ class PaymentService
         $payment = $this->processPayment($payment);
 
         if ($autoAllocate) {
-            try { $this->autoAllocatePayment($payment); } catch (\Throwable $e) {
+            try {
+                $this->autoAllocatePayment($payment);
+            } catch (\Throwable $e) {
                 Log::warning('Auto-allocate after process failed (non-fatal)', [
                     'payment_id' => $payment->payment_id,
                     'error' => $e->getMessage(),

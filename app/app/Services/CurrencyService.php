@@ -68,7 +68,7 @@ class CurrencyService
         $date = $date ?? now()->toDateString();
 
         $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
-        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+        $toId = Currency::where('code', strtoupper($toCurrency))->value('id');
 
         if (! $fromId || ! $toId) {
             throw new \InvalidArgumentException('Unknown currency code supplied');
@@ -105,7 +105,7 @@ class CurrencyService
         ?string $source = null
     ): ExchangeRate {
         $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
-        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+        $toId = Currency::where('code', strtoupper($toCurrency))->value('id');
 
         if (! $fromId || ! $toId) {
             throw new \InvalidArgumentException('Unknown currency code supplied');
@@ -265,7 +265,7 @@ class CurrencyService
         ?string $endDate = null
     ): array {
         $fromId = Currency::where('code', strtoupper($fromCurrency))->value('id');
-        $toId   = Currency::where('code', strtoupper($toCurrency))->value('id');
+        $toId = Currency::where('code', strtoupper($toCurrency))->value('id');
 
         if (! $fromId || ! $toId) {
             return [];
@@ -547,6 +547,7 @@ class CurrencyService
                 : null;
         } catch (\Throwable $e) {
             Log::warning('ECB fetch failed', ['error' => $e->getMessage()]);
+
             return null;
         }
     }

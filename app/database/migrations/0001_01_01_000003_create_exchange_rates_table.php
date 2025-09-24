@@ -50,7 +50,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-        
+
         try {
             Schema::table('company_secondary_currencies', function (Blueprint $table) {
                 $table->dropForeign(['exchange_rate_id']);
@@ -58,7 +58,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-        
+
         // Use try-catch for the table drop to handle any remaining issues
         try {
             Schema::dropIfExists('exchange_rates');

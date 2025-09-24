@@ -31,7 +31,7 @@ it('returns standardized code for validation errors', function () {
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoice = $this->withHeaders($headers)->postJson('/api/invoices', [
         'customer_id' => $customer->customer_id,
-        'items' => [ ['description' => 'S', 'quantity' => 1, 'unit_price' => 1] ],
+        'items' => [['description' => 'S', 'quantity' => 1, 'unit_price' => 1]],
     ])->assertStatus(201)->json('data');
 
     // Force future sent_at then attempt post to trigger 422
@@ -40,4 +40,3 @@ it('returns standardized code for validation errors', function () {
     $resp->assertStatus(422);
     $resp->assertJsonPath('code', 'VALIDATION_ERROR');
 });
-

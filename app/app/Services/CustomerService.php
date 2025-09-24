@@ -21,7 +21,7 @@ class CustomerService
         ?string $taxId = null,
         ?array $billingAddress = null,
         ?array $shippingAddress = null,
-        ?int $currencyId = null,
+        ?string $currencyId = null,
         ?int $creditLimit = 0,
         ?int $paymentTerms = 30,
         ?string $notes = null,
@@ -29,84 +29,93 @@ class CustomerService
         ?array $metadata = null,
         ?string $idempotencyKey = null
     ): Customer {
-        return DB::transaction(function () use (
-            $company,
-            $name,
-            $email,
-            $phone,
-            $taxId,
-            $billingAddress,
-            $shippingAddress,
-            $currencyId,
-            $creditLimit,
-            $paymentTerms,
-            $notes,
-            $isActive,
-            $metadata,
-            $idempotencyKey
-        ) {
-            // Check for idempotency
-            if ($idempotencyKey) {
-                $existingCustomer = Customer::where('company_id', $company->id)
-                    ->whereJsonContains('metadata->idempotency_key', $idempotencyKey)
-                    ->first();
+        try {
+            return DB::transaction(function () use (
+                $company,
+                $name,
+                $email,
+                $phone,
+                $taxId,
+                $billingAddress,
+                $shippingAddress,
+                $currencyId,
+                $creditLimit,
+                $paymentTerms,
+                $notes,
+                $isActive,
+                $metadata,
+                $idempotencyKey
+            ) {
+                // Check for idempotency
+                if ($idempotencyKey) {
+                    $existingCustomer = Customer::where('company_id', $company->id)
+                        ->whereJsonContains('metadata->idempotency_key', $idempotencyKey)
+                        ->first();
 
-                if ($existingCustomer) {
-                    Log::info('Customer creation skipped due to idempotency key', [
-                        'customer_id' => $existingCustomer->customer_id,
-                        'idempotency_key' => $idempotencyKey,
-                    ]);
+                    if ($existingCustomer) {
+                        Log::info('Customer creation skipped due to idempotency key', [
+                            'customer_id' => $existingCustomer->customer_id,
+                            'idempotency_key' => $idempotencyKey,
+                        ]);
 
-                    return $existingCustomer;
+                        return $existingCustomer;
+                    }
                 }
-            }
 
-            $customer = Customer::create([
-                'customer_id' => (string) Str::uuid(),
-                'company_id' => $company->id,
-                'name' => $name,
-                'email' => $email,
-                'phone' => $phone,
-                'tax_id' => $taxId,
-                'billing_address' => $billingAddress,
-                'shipping_address' => $shippingAddress,
-                'currency_id' => $currencyId,
-                'credit_limit' => $creditLimit,
-                'payment_terms' => $paymentTerms,
-                'notes' => $notes,
-                'is_active' => $isActive,
-                'metadata' => array_merge($metadata ?? [], [
-                    'idempotency_key' => $idempotencyKey,
-                ]),
-            ]);
+                $customer = Customer::create([
+                    'customer_id' => (string) Str::uuid(),
+                    'company_id' => $company->id,
+                    'name' => $name,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'tax_id' => $taxId,
+                    'billing_address' => $billingAddress,
+                    'shipping_address' => $shippingAddress,
+                    'currency_id' => $currencyId,
+                    'credit_limit' => $creditLimit,
+                    'payment_terms' => $paymentTerms,
+                    'notes' => $notes,
+                    'is_active' => $isActive,
+                    'metadata' => array_merge($metadata ?? [], [
+                        'idempotency_key' => $idempotencyKey,
+                    ]),
+                ]);
 
-            Log::info('Customer created successfully', [
-                'customer_id' => $customer->customer_id,
-                'company_id' => $company->id,
-                'name' => $name,
-            ]);
+                Log::info('Customer created successfully', [
+                    'customer_id' => $customer->customer_id,
+                    'company_id' => $company->id,
+                    'name' => $name,
+                ]);
 
-            return $customer;
-        });
+                return $customer;
+            });
+        } catch (\Throwable $e) {
+            // Re-throw the exception to be handled by the controller
+            throw $e;
+        }
     }
 
     /**
-     * Update an existing customer.
+     * Update the specified customer in storage.
      */
     public function updateCustomer(
         Customer $customer,
         ?string $name = null,
+        ?string $customerType = null,
         ?string $email = null,
         ?string $phone = null,
+        ?string $website = null,
+        ?array $address = null,
+        ?string $currencyId = null,
         ?string $taxId = null,
-        ?array $billingAddress = null,
-        ?array $shippingAddress = null,
-        ?int $currencyId = null,
-        ?int $creditLimit = null,
-        ?int $paymentTerms = null,
+        ?bool $taxExempt = null,
+        ?string $paymentTerms = null,
+        ?float $creditLimit = null,
+        ?string $customerNumber = null,
+        ?string $status = null,
         ?string $notes = null,
-        ?bool $isActive = null,
-        ?array $metadata = null
+        ?array $primaryContact = null,
+        ?string $idempotencyKey = null
     ): Customer {
         return DB::transaction(function () use (
             $customer,
@@ -114,37 +123,66 @@ class CustomerService
             $email,
             $phone,
             $taxId,
-            $billingAddress,
-            $shippingAddress,
+            $address,
             $currencyId,
-            $creditLimit,
+            $customerType,
+            $website,
             $paymentTerms,
+            $creditLimit,
+            $customerNumber,
+            $status,
             $notes,
-            $isActive,
-            $metadata
+            $taxExempt,
+            $primaryContact
         ) {
             $updateData = array_filter([
                 'name' => $name,
                 'email' => $email,
                 'phone' => $phone,
-                'tax_id' => $taxId,
-                'billing_address' => $billingAddress,
-                'shipping_address' => $shippingAddress,
+                'tax_number' => $taxId,
                 'currency_id' => $currencyId,
-                'credit_limit' => $creditLimit,
+                'status' => $status,
+                'website' => $website,
+                'customer_type' => $customerType,
+                'customer_number' => $customerNumber,
                 'payment_terms' => $paymentTerms,
+                'credit_limit' => $creditLimit,
+                'tax_exempt' => $taxExempt,
                 'notes' => $notes,
-                'is_active' => $isActive,
-            ], fn ($value) => $value !== null);
+            ], fn ($value) => $value !== null && $value !== '');
 
-            if ($metadata) {
-                $updateData['metadata'] = array_merge($customer->metadata ?? [], $metadata);
+            // Only update billing_address if address data is provided
+            if ($address) {
+                $billingAddress = is_array($customer->billing_address)
+                    ? $customer->billing_address
+                    : json_decode($customer->billing_address ?: '{}', true);
+
+                $billingAddress = array_filter([
+                    'address_line_1' => $address['address_line_1'] ?? $billingAddress['address_line_1'] ?? null,
+                    'address_line_2' => $address['address_line_2'] ?? $billingAddress['address_line_2'] ?? null,
+                    'city' => $address['city'] ?? $billingAddress['city'] ?? null,
+                    'state_province' => $address['state_province'] ?? $billingAddress['state_province'] ?? null,
+                    'postal_code' => $address['postal_code'] ?? $billingAddress['postal_code'] ?? null,
+                    'country_id' => $address['country_id'] ?? $billingAddress['country_id'] ?? null,
+                ], fn ($value) => $value !== null && $value !== '');
+
+                $updateData['billing_address'] = ! empty($billingAddress) ? json_encode($billingAddress) : null;
+            }
+
+            // Handle primary contact if provided
+            if ($primaryContact) {
+                // Primary contact handling logic would go here
+                // For now, we'll log it for future implementation
+                Log::info('Primary contact update requested', [
+                    'customer_id' => $customer->id,
+                    'primary_contact' => $primaryContact,
+                ]);
             }
 
             $customer->update($updateData);
 
             Log::info('Customer updated successfully', [
-                'customer_id' => $customer->customer_id,
+                'customer_id' => $customer->id,
                 'updated_fields' => array_keys($updateData),
             ]);
 
@@ -260,6 +298,16 @@ class CustomerService
         $query->orderBy($sortBy, $sortDirection);
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * Generate a unique customer number using UUID.
+     */
+    public function generateNextCustomerNumber(int|string $companyId): string
+    {
+        // Use UUID with a prefix for better readability while maintaining uniqueness
+        // The companyId parameter is kept for potential future use but not needed for UUID generation
+        return 'CUST-'.Str::uuid()->toString();
     }
 
     /**

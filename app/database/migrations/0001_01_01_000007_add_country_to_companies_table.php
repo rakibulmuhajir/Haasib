@@ -38,7 +38,7 @@ return new class extends Migration
                 } catch (\Throwable $e) {
                     // Foreign key might not exist
                 }
-                
+
                 try {
                     $table->dropColumn(['country_id', 'country']);
                 } catch (\Throwable $e) {

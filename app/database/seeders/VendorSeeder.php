@@ -2,10 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\Vendor;
 use App\Models\Company;
 use App\Models\Country;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Vendor;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -136,8 +135,8 @@ class VendorSeeder extends Seeder
 
         foreach ($companies as $company) {
             foreach ($vendors as $index => $vendorData) {
-                $vendorNumber = 'VEND-' . str_pad(($index + 1), 4, '0', STR_PAD_LEFT) . '-' . strtoupper(Str::random(4));
-                
+                $vendorNumber = 'VEND-'.str_pad(($index + 1), 4, '0', STR_PAD_LEFT).'-'.strtoupper(Str::random(4));
+
                 Vendor::create([
                     'vendor_id' => (string) Str::uuid(),
                     'company_id' => $company->id,

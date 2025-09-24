@@ -2,14 +2,12 @@
 
 namespace Database\Seeders;
 
-use App\Models\Invoice;
 use App\Models\Company;
-use App\Models\Customer;
 use App\Models\Currency;
+use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class InvoiceSeeder extends Seeder
 {
@@ -20,7 +18,7 @@ class InvoiceSeeder extends Seeder
     {
         $companies = Company::all();
         $currencies = Currency::all();
-        
+
         $invoiceServices = [
             ['name' => 'Web Development', 'description' => 'Custom website development services', 'unit_price' => 5000.00, 'quantity' => 1],
             ['name' => 'UI/UX Design', 'description' => 'User interface and experience design', 'unit_price' => 2500.00, 'quantity' => 1],
@@ -37,27 +35,27 @@ class InvoiceSeeder extends Seeder
         foreach ($companies as $company) {
             $customers = Customer::where('company_id', $company->id)->get();
             $currency = $currencies->random();
-            
+
             // Create 8-12 invoices per company
             $invoiceCount = rand(8, 12);
-            
+
             for ($i = 0; $i < $invoiceCount; $i++) {
                 $customer = $customers->random();
                 $invoiceDate = now()->subDays(rand(0, 365));
                 $dueDate = $invoiceDate->copy()->addDays(rand(15, 60));
                 $status = $statuses[array_rand($statuses)];
-                
+
                 // Generate random services for this invoice
                 $selectedServices = collect($invoiceServices)->random(rand(1, 4))->values();
-                
+
                 $subtotal = $selectedServices->sum(function ($service) {
                     return $service['unit_price'] * $service['quantity'];
                 });
-                
+
                 $taxRate = rand(0, 10) / 100; // 0-10% tax
                 $totalTax = $subtotal * $taxRate;
                 $totalAmount = $subtotal + $totalTax;
-                
+
                 // If status is paid or partially paid, calculate paid amount
                 $amountPaid = 0;
                 if ($status === 'paid') {
@@ -65,9 +63,9 @@ class InvoiceSeeder extends Seeder
                 } elseif ($status === 'sent' && rand(0, 1)) {
                     $amountPaid = $totalAmount * (rand(20, 80) / 100); // Partial payment
                 }
-                
+
                 $balanceDue = $totalAmount - $amountPaid;
-                
+
                 $invoice = Invoice::create([
                     'company_id' => $company->id,
                     'customer_id' => $customer->customer_id,
@@ -87,7 +85,7 @@ class InvoiceSeeder extends Seeder
                     'created_by' => null,
                     'updated_by' => null,
                 ]);
-                
+
                 // Create invoice items
                 foreach ($selectedServices as $service) {
                     InvoiceItem::create([

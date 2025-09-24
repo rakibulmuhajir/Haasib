@@ -11,10 +11,10 @@ use App\Models\InvoiceItemTax;
 use App\Models\Item;
 use App\Models\User;
 use Brick\Money\Money;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use PDF;
 
@@ -55,7 +55,7 @@ class InvoiceService
         ?string $terms = null,
         ?string $idempotencyKey = null
     ): Invoice {
-        $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms) {
+        $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey) {
             $currency = $currency ?? ($customer->currency ?? $company->currency);
             $currencyId = $currency?->id ?? $customer->currency_id ?? $company->currency_id;
 
@@ -68,6 +68,7 @@ class InvoiceService
                 'status' => 'draft',
                 'notes' => $notes,
                 'terms' => $terms,
+                'idempotency_key' => $idempotencyKey,
             ]);
 
             $attempts = 0;
@@ -79,6 +80,7 @@ class InvoiceService
                     if ($e->getCode() === '23505' && $attempts < 5) {
                         $attempts++;
                         $invoice->resetInvoiceNumber();
+
                         continue;
                     }
                     throw $e;
@@ -277,7 +279,10 @@ class InvoiceService
         // Ensure directory exists before saving
         File::ensureDirectoryExists(dirname($path));
         if (! File::exists(public_path('storage'))) {
-            try { Artisan::call('storage:link'); } catch (\Throwable $e) { /* non-fatal */ }
+            try {
+                Artisan::call('storage:link');
+            } catch (\Throwable $e) { /* non-fatal */
+            }
         }
         $pdf->save($path);
 

@@ -16,7 +16,9 @@ class Payment extends Model
     protected $table = 'payments';
 
     protected $primaryKey = 'payment_id';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

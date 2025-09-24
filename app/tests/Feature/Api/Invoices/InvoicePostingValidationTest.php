@@ -8,7 +8,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-function seedCompanyBasic(): array {
+function seedCompanyBasic(): array
+{
     $user = User::factory()->create();
     $currency = Currency::create([
         'id' => (string) Str::uuid(),
@@ -28,6 +29,7 @@ function seedCompanyBasic(): array {
         'updated_at' => now(),
     ]);
     DB::statement("set local app.current_company = '".$company->id."'");
+
     return [$user, $company, $currency];
 }
 
@@ -46,7 +48,7 @@ it('posting a draft invoice returns 422 and is idempotent', function () {
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoice = $this->withHeaders($headers)->postJson('/api/invoices', [
         'customer_id' => $customer->customer_id,
-        'items' => [ ['description' => 'X', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]],
     ])->assertStatus(201)->json('data');
 
     $id = $invoice['invoice_id'];
@@ -71,7 +73,7 @@ it('posting zero-total invoice returns 422', function () {
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoice = $this->withHeaders($headers)->postJson('/api/invoices', [
         'customer_id' => $customer->customer_id,
-        'items' => [ ['description' => 'X', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]],
     ])->assertStatus(201)->json('data');
 
     // Force zero total
@@ -101,7 +103,7 @@ it('posting with future sent_at returns 422', function () {
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoice = $this->withHeaders($headers)->postJson('/api/invoices', [
         'customer_id' => $customer->customer_id,
-        'items' => [ ['description' => 'X', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]],
     ])->json('data');
 
     $id = $invoice['invoice_id'];

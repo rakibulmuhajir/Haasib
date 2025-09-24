@@ -1,4 +1,4 @@
-# Payments Phase Database Tables Tracker
+# Payments Phase Tracker
 
 **Created:** 2025-09-22
 **Module:** Accounts Payable (Payments)
@@ -55,20 +55,20 @@
 8. **Vendor credits** - Credit memo and refund handling
 
 ### Foreign Key Relationships
-- `bills.vendor_id` í `crm.vendors.vendor_id`
-- `bill_items.item_id` í `inv.items.item_id` (if using inventory)
-- `bill_payments.entity_id` í `crm.vendors.vendor_id`
+- `bills.vendor_id` ‚Üí `crm.vendors.vendor_id`
+- `bill_items.item_id` ‚Üí `inv.items.item_id` (if using inventory)
+- `bill_payments.entity_id` ‚Üí `crm.vendors.vendor_id`
 - All tables link to `core.companies.company_id` (multi-tenant)
 
 ### Business Logic
 - Bill numbering (company-scoped)
-- Bill Status Workflow: `draft` í `received` í `approved` í `paid` í `void`
+- Bill Status Workflow: `draft` ‚Üí `received` ‚Üí `approved` ‚Üí `paid` ‚Üí `void`
   - `draft`: Editable, no GL impact
   - `received`: Locked, awaiting approval
   - `approved`: Ready for payment
   - `paid`: Payment processed, GL impact posted
   - `void`: Cancelled, triggers reversing journal entry
-- Payment Status Tracking: `unpaid` í `partial` í `paid` í `overpaid`
+- Payment Status Tracking: `unpaid` ‚Üí `partial` ‚Üí `paid` ‚Üí `overpaid`
   - Calculated automatically based on allocations
 - Payment allocation validation
 - Balance due calculations
@@ -85,24 +85,24 @@
 ### Planned
 - [ ] Analysis of schema requirements
 - [ ] Dependencies identified
-- [ ] Core system migrations (5 tables) 
-- [ ] CRM module migrations (4 tables) 
-- [ ] Accounting module migrations (5 tables) 
+- [ ] Core system migrations (5 tables)
+- [ ] CRM module migrations (4 tables)
+- [ ] Accounting module migrations (5 tables)
 - [ ] Payments (AP) module migrations (10 tables)
 
 ### Migration Status Summary
-- **Core System**: 5 tables 
-- **CRM Module**: 4 tables 
-- **Accounting Module**: 5 tables 
-- **Payments (AP) Module**: 10 tables =
+- **Core System**: 5 tables ‚úÖ
+- **CRM Module**: 4 tables ‚úÖ
+- **Accounting Module**: 5 tables ‚úÖ
+- **Payments (AP) Module**: 10 tables üìã
 
 ---
 
-## =À Development Roadmap
+## üìã Development Roadmap
 
 Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requirements
 
-### <Ø Phase 1: Core Payments Foundation
+### üéØ Phase 1: Core Payments Foundation
 **Priority: HIGH** - Essential for accounts payable management
 
 #### 1.1 Laravel Models & Factories
@@ -121,35 +121,39 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] Bill numbering (company-scoped with validation)
 - [ ] Payment allocation validation (prevent over-allocation)
 - [ ] Balance due calculations and automatic updates
-- [ ] Status workflow enforcement (draftíreceivedíapprovedípaidívoid)
+- [ ] Status workflow enforcement (draft‚Üíreceived‚Üíapproved‚Üípaid‚Üívoid)
 - [ ] Multi-currency support with exchange rate handling
 - [ ] Early payment discount calculations
 - [ ] Recurring bill automation
 
-### <Ø Phase 2: Command Pattern & Documentation
-#### 2.1 Command Implementation
-- [ ] Command handlers for all payments operations
-  - [ ] `bill.create` - Create new bill
-  - [ ] `bill.update` - Update bill details
-  - [ ] `bill.approve` - Approve bill for payment
-  - [ ] `bill.pay` - Process bill payment
-  - [ ] `bill.void` - Void/cancel bill
-  - [ ] `vendor.create` - Create new vendor
-  - [ ] `vendor.update` - Update vendor details
-  - [ ] `payment.allocate` - Allocate payment to bills
-- [ ] Idempotency keys on all commands
+### üéØ Phase 2: CommandBus Integration
+**Priority: HIGH** - Following established pattern from invoicing
+
+#### 2.1 Command Facade Implementation
+- [ ] `App\Actions\Payments\BillCreate` - Create new bill with idempotency
+- [ ] `App\Actions\Payments\BillUpdate` - Update bill details
+- [ ] `App\Actions\Payments\BillApprove` - Approve bill for payment
+- [ ] `App\Actions\Payments\BillPay` - Process bill payment
+- [ ] `App\Actions\Payments\BillVoid` - Void/cancel bill
+- [ ] `App\Actions\Payments\PaymentCreate` - Create payment allocation
+- [ ] `App\Actions\Payments\VendorCreate` - Create new vendor
+- [ ] `App\Actions\Payments\VendorUpdate` - Update vendor details
+
+#### 2.2 CommandBus Features
+- [ ] Idempotency keys on all write operations
 - [ ] Rate limiting (60 requests/min per user)
 - [ ] Structured error codes and validation
-- [ ] Command documentation in request journeys
+- [ ] Standardized response format
+- [ ] Audit logging for all operations
 
-#### 2.2 Web CRUD Interface
+#### 2.3 Web CRUD Interface
 - [ ] Inertia/Vue components for bill and payment management
 - [ ] Server-side validation with flash messages
 - [ ] PDF generation and download for bills
 - [ ] Bulk operations and search/filter
 - [ ] Vendor portal integration (future)
 
-### <Ø Phase 3: Ledger Integration & Financial Processing
+### üéØ Phase 3: Ledger Integration & Financial Processing
 #### 3.1 Double-Entry Posting
 - [ ] Automatic posting to ledger when bills are approved/paid
 - [ ] AP, expense, and tax liability account updates
@@ -162,7 +166,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] User action tracking for all financial operations
 - [ ] Compliance with accounting standards
 
-### <Ø Phase 4: Advanced Features
+### üéØ Phase 4: Advanced Features
 #### 4.1 Reporting & Analytics
 - [ ] Refresh and query logic for `accounts_payable_mv`
 - [ ] Cash flow forecasting based on payment schedules
@@ -186,7 +190,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 
 ---
 
-## =  Timeline & Milestones
+## üìä Timeline & Milestones
 
 ### **Milestone 1: Core Payments (3-4 weeks)**
 - [ ] Database schema
@@ -194,10 +198,9 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] Domain services
 - [ ] Basic CRUD operations
 
-### **Milestone 2: Commands & UI (2-3 weeks)**
-- [ ] Command handlers with idempotency
-- [ ] Request journey documentation
-- [ ] Inertia/Vue web interface
+### **Milestone 2: CommandBus & UI (2-3 weeks)**
+- [ ] Command facades with idempotency
+- [ ] Web interface integration
 - [ ] PDF generation for bills
 - [ ] Basic testing coverage
 
@@ -215,7 +218,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 
 ---
 
-##  Detailed Delivery Checklist (Phase Matrix)
+## ‚úÖ Detailed Delivery Checklist (Phase Matrix)
 
 ### Database & Schema
 - [ ] Payments core tables (bills, items, payments, allocations)
@@ -226,7 +229,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] Materialized views for AP reporting
 
 ### Models & State Machines
-- [ ] Bill model with state machine (draft í received í approved í paid í void)
+- [ ] Bill model with state machine (draft ‚Üí received ‚Üí approved ‚Üí paid ‚Üí void)
 - [ ] BillPayment model with completion state and allocation helpers
 - [ ] PaymentAllocation model with void/refund flows
 - [ ] Vendor model with credit tracking
@@ -240,14 +243,12 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] CurrencyService (conversion, formatting)
 - [ ] RecurringBillService (automation, scheduling)
 
-### Command Pattern
-- [ ] Bill Commands (create, update, approve, pay, void)
-- [ ] Payment Commands (create, allocate, void, refund)
-- [ ] Vendor Commands (create, update, delete, credit)
-- [ ] Command handlers in `app/Actions/Payments/`
-- [ ] Command bus configuration updates
-- [ ] Request journey documentation for all commands
-- [ ] Idempotency key support
+### CommandBus Layer
+- [ ] Bill Actions (create, update, approve, pay, void)
+- [ ] Payment Actions (create, allocate, void, refund)
+- [ ] Vendor Actions (create, update, delete, credit)
+- [ ] Command facades in `app/Actions/Payments/`
+- [ ] Idempotency key support with unique indexes
 - [ ] Standardized error envelope (includes `code`)
 - [ ] Rate limiting and authorization
 
@@ -268,22 +269,60 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] Auth flows, core feature coverage
 - [ ] Idempotency: bill create/update/delete/actions
 - [ ] Bill validations and ledger posting
-- [ ] Payment completion í auto-post to ledger
+- [ ] Payment completion ‚Üí auto-post to ledger
 - [ ] Allocation flows: partial allocation posting; allocation void; refunds
 - [ ] Early payment discount calculations
 - [ ] Recurring bill generation logic
 - [ ] Error envelope (422 code)
 
 ### Docs & Ops
-- [ ] Request journey documentation (`docs/request-journeys/payments/`)
-- [ ] Command migration guide for frontend developers
+- [ ] OpenAPI YAML (`docs/openapi/payments.yaml`)
 - [ ] L5-Swagger UI + `openapi:publish` console command
 - [ ] GitHub Action to publish `storage/api-docs` artifact
 - [ ] User guides, runbooks, migration notes
 
 ---
 
-## >Ì Next Phases  Ready-to-Use Tracker Template
+## üèóÔ∏è CommandBus Integration Plan
+
+### Planned Architecture
+Following the **Command Facade + Domain Service** pattern established in invoicing:
+
+#### Pattern Structure
+```
+Controller ‚Üí Command Facade (Action) ‚Üí Domain Service ‚Üí Models
+```
+
+#### Key Components to Implement
+
+1. **Command Facade Layer (`App\Actions\Payments/`)**
+   - `BillCreate` - Handle bill creation with idempotency
+   - `BillUpdate` - Update bill details through service
+   - `BillApprove` - Approve bill workflow
+   - `BillPay` - Process payment with allocation
+   - `PaymentCreate` - Create payment records
+   - `VendorCreate` - Vendor management actions
+
+2. **Service Layer (`App\Services/`)**
+   - `BillService` - Complex bill operations
+   - `PaymentService` - Payment processing logic
+   - `VendorService` - Vendor management
+   - All services to support both web and API interfaces
+
+3. **Implementation Requirements**
+   - **Idempotency Support**: Unique indexes on idempotency_key + company_id
+   - **Service Integration**: Delegate to existing services while adding HTTP concerns
+   - **Test Coverage**: Feature and unit tests for all actions
+
+#### Expected Benefits
+- **Consistent Architecture**: Same pattern as invoicing
+- **Code Reusability**: Shared patterns and utilities
+- **Maintainability**: Clear separation of concerns
+- **Testability**: Independent layer testing
+
+---
+
+## üß≠ Next Phases ‚Äì Ready-to-Use Tracker Template
 
 Copy this structure for upcoming modules (e.g., Inventory, VMS, Payroll):
 
@@ -296,9 +335,8 @@ Copy this structure for upcoming modules (e.g., Inventory, VMS, Payroll):
 ### 3) Services
 - CRUD, workflows, integrations, side-effects
 
-### 4) Command Pattern
-- Command handlers, request journeys, idempotency, rate limits
-- Migration guides for frontend
+### 4) CommandBus Layer
+- Command facades, idempotency, rate limits, standardized responses
 
 ### 5) Events & Listeners
 - Domain events, ledger and AR/AP syncs, notifications
@@ -310,11 +348,11 @@ Copy this structure for upcoming modules (e.g., Inventory, VMS, Payroll):
 - Unit + Feature: CRUD, workflows, validations, integrations
 
 ### 8) Docs & Ops
-- README, runbooks, CI workflows (schema checks, coding standards)
+- README, runbooks, CI workflows (OpenAPI, schema checks, coding standards)
 
 ---
 
-## =Ä Immediate Next Steps
+## üöÄ Immediate Next Steps
 
 **Start with Phase 1.1: Laravel Models & Factories**
 
@@ -329,7 +367,7 @@ Copy this structure for upcoming modules (e.g., Inventory, VMS, Payroll):
 - [ ] DB schema
 - [ ] Domain services + tests
 - [ ] Web CRUD + validation
-- [ ] Command handlers + request journeys
+- [ ] CommandBus integration
 - [ ] Audit trail for financial entities
 - [ ] Metrics and monitoring
 

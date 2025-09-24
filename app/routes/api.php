@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\CurrencyApiController;
 use App\Http\Controllers\Api\CustomerApiController;
 use App\Http\Controllers\Api\InvoiceApiController;
 use App\Http\Controllers\Api\PaymentApiController;
+use App\Http\Controllers\InlineEditController;
 use Illuminate\Support\Facades\Route;
 
 // API Routes for Invoicing System
@@ -99,6 +100,9 @@ Route::prefix('customers')->name('customers.')->group(function () {
     // Bulk Operations
     Route::post('/bulk', [CustomerApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
 });
+
+// Universal inline edit endpoint
+Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware('web');
 
 // Health check endpoint
 Route::get('/health', function () {

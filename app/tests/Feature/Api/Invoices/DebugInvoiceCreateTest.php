@@ -42,7 +42,7 @@ it('debugs invoice create response', function () {
 
     $payload = [
         'customer_id' => $customer->customer_id,
-        'items' => [ ['description' => 'Item', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'Item', 'quantity' => 1, 'unit_price' => 10]],
     ];
 
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];

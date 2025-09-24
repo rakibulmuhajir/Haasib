@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Responses\ApiResponder;
 use App\Http\Requests\Api\Customer\BulkCustomerRequest;
 use App\Http\Requests\Api\Customer\StoreCustomerRequest;
 use App\Http\Requests\Api\Customer\UpdateCustomerRequest;
+use App\Http\Responses\ApiResponder;
 use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 class CustomerApiController extends Controller
 {
     use ApiResponder;
+
     /**
      * Display a listing of customers.
      */

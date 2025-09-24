@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->uuid('created_by_user_id')->nullable()->after('system_role');
-            
+
             // Add foreign key constraint
             $table->foreign('created_by_user_id')
                 ->references('id')->on('users')

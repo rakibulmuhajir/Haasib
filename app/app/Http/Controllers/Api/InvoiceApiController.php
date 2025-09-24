@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Invoice;
 use App\Http\Responses\ApiResponder;
+use App\Models\Invoice;
 use App\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,13 +13,14 @@ use Illuminate\Support\Facades\Log;
 class InvoiceApiController extends Controller
 {
     use ApiResponder;
+
     public function __construct(
         private InvoiceService $invoiceService
     ) {}
 
-/**
- * Display a listing of invoices.
- */
+    /**
+     * Display a listing of invoices.
+     */
     public function index(Request $request): JsonResponse
     {
         $company = $request->attributes->get('company');
@@ -268,6 +269,7 @@ class InvoiceApiController extends Controller
                 'invoice_id' => $id,
                 'error' => $e->getMessage(),
             ]);
+
             return $this->fail('INTERNAL_ERROR', 'Failed to mark invoice as sent', 500, ['message' => $e->getMessage()]);
         }
     }
@@ -292,6 +294,7 @@ class InvoiceApiController extends Controller
                 'invoice_id' => $id,
                 'error' => $e->getMessage(),
             ]);
+
             return $this->fail('INTERNAL_ERROR', 'Failed to mark invoice as posted', 500, ['message' => $e->getMessage()]);
         }
     }
@@ -407,7 +410,7 @@ class InvoiceApiController extends Controller
             return [
                 'filename' => basename($path),
                 'path' => $path,
-                'url' => asset('storage/invoices/' . basename($path)),
+                'url' => asset('storage/invoices/'.basename($path)),
                 'modified_at' => date('c', filemtime($path)),
             ];
         }, $matches);

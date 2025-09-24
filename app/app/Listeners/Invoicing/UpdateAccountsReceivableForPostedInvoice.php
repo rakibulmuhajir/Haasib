@@ -66,10 +66,19 @@ class UpdateAccountsReceivableForPostedInvoice implements ShouldQueue
     {
         $daysOverdue = now()->diffInDays($dueDate, false);
 
-        if ($daysOverdue <= 0) return 'current';
-        if ($daysOverdue <= 30) return '1-30';
-        if ($daysOverdue <= 60) return '31-60';
-        if ($daysOverdue <= 90) return '61-90';
+        if ($daysOverdue <= 0) {
+            return 'current';
+        }
+        if ($daysOverdue <= 30) {
+            return '1-30';
+        }
+        if ($daysOverdue <= 60) {
+            return '31-60';
+        }
+        if ($daysOverdue <= 90) {
+            return '61-90';
+        }
+
         return '90+';
     }
 }

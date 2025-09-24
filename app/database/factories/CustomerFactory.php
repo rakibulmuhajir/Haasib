@@ -16,7 +16,20 @@ class CustomerFactory extends Factory
     public function definition(): array
     {
         $company = Company::inRandomOrder()->first() ?? Company::factory()->create();
-        $currency = Currency::where('code', 'USD')->first() ?? Currency::factory()->create(['code' => 'USD']);
+        $currency = Currency::where('code', 'USD')->first();
+
+        if (! $currency) {
+            // Create a USD currency manually
+            $currency = Currency::create([
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'code' => 'USD',
+                'name' => 'US Dollar',
+                'symbol' => '$',
+                'minor_unit' => 2,
+                'is_active' => true,
+                'exchange_rate' => 1.0,
+            ]);
+        }
 
         return [
             'id' => fake()->uuid(),

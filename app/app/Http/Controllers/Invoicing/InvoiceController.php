@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Invoicing;
 
+use App\Actions\Invoicing\InvoiceCreate;
 use App\Http\Controllers\Controller;
 use App\Models\Currency;
 use App\Models\Customer;
@@ -18,7 +19,8 @@ class InvoiceController extends Controller
 {
     public function __construct(
         private InvoiceService $invoiceService,
-        private CurrencyService $currencyService
+        private CurrencyService $currencyService,
+        private InvoiceCreate $invoiceCreate
     ) {}
 
     /**
@@ -238,8 +240,8 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,customer_id',
-            'currency_id' => 'nullable|exists:currencies,id',
+            'customer_id' => 'required|uuid|exists:customers,customer_id',
+            'currency_id' => 'nullable|uuid|exists:currencies,id',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
@@ -252,33 +254,35 @@ class InvoiceController extends Controller
             'items.*.taxes' => 'nullable|array',
             'items.*.taxes.*.name' => 'required_with:items.*.taxes|string|max:120',
             'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
+            'idempotency_key' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return back()
                 ->withErrors($validator)
+                ->with('error', 'Validation failed. Please check your input.')
                 ->withInput();
         }
 
         try {
-            $customer = Customer::findOrFail($request->customer_id);
-            $currency = $request->currency_id ? Currency::findOrFail($request->currency_id) : $customer->currency;
+            // Use CommandBus to create invoice
+            $result = $this->invoiceCreate->handle([
+                'customer_id' => $request->customer_id,
+                'currency_id' => $request->currency_id,
+                'invoice_number' => $request->invoice_number,
+                'invoice_date' => $request->invoice_date,
+                'due_date' => $request->due_date,
+                'notes' => $request->notes,
+                'terms' => $request->terms,
+                'items' => $request->items,
+                'idempotency_key' => $request->idempotency_key ?? $request->header('Idempotency-Key'),
+            ], $request->user());
 
-            $invoice = $this->invoiceService->createInvoice(
-                company: $request->user()->current_company,
-                customer: $customer,
-                items: $request->items,
-                currency: $currency,
-                invoiceDate: $request->invoice_date,
-                dueDate: $request->due_date,
-                notes: $request->notes,
-                terms: $request->terms,
-                idempotencyKey: $request->header('Idempotency-Key')
-            );
+            $invoice = Invoice::findOrFail($result['data']['id']);
 
             return redirect()
                 ->route('invoices.show', $invoice)
-                ->with('success', 'Invoice created successfully.');
+                ->with('success', $result['message']);
 
         } catch (\Exception $e) {
             Log::error('Failed to create invoice', [
@@ -347,8 +351,8 @@ class InvoiceController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:customers,customer_id',
-            'currency_id' => 'nullable|exists:currencies,id',
+            'customer_id' => 'required|uuid|exists:customers,customer_id',
+            'currency_id' => 'nullable|uuid|exists:currencies,id',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
@@ -366,6 +370,7 @@ class InvoiceController extends Controller
         if ($validator->fails()) {
             return back()
                 ->withErrors($validator)
+                ->with('error', 'Validation failed. Please check your input.')
                 ->withInput();
         }
 
@@ -558,6 +563,7 @@ class InvoiceController extends Controller
         if ($validator->fails()) {
             return back()
                 ->withErrors($validator)
+                ->with('error', 'Validation failed. Please check your input.')
                 ->withInput();
         }
 

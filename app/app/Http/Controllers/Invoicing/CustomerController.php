@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Invoicing;
 
 use App\Http\Controllers\Controller;
 use App\Models\Country;
+use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -170,12 +171,13 @@ class CustomerController extends Controller
         $countries = Country::orderBy('name')
             ->get(['id', 'name', 'code']);
 
-        // Get the next customer number
-        $nextCustomerNumber = $this->customerService->generateNextCustomerNumber($request->user()->current_company_id);
+        $currencies = Currency::where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'symbol']);
 
         return Inertia::render('Invoicing/Customers/Create', [
             'countries' => $countries,
-            'nextCustomerNumber' => $nextCustomerNumber,
+            'availableCurrencies' => $currencies,
         ]);
     }
 
@@ -186,18 +188,16 @@ class CustomerController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'customer_number' => 'required|string|max:50|unique:customers,customer_number,null,id,company_id,'.$request->user()->current_company_id,
-            'customer_type' => 'required|string|in:individual,business,non_profit,government',
-            'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:50',
+            'customer_type' => 'required|string|in:individual,small_business,medium_business,large_business,non_profit,government',
+            'contact' => 'nullable|string|max:255',
             'website' => 'nullable|url|max:255',
             'address_line_1' => 'nullable|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
             'state_province' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
-            'country_id' => 'nullable|exists:countries,id',
-            'currency_id' => 'nullable|exists:currencies,id',
+            'country_id' => 'nullable|uuid|exists:countries,id',
+            'currency_id' => 'nullable|uuid|exists:currencies,id',
             'tax_id' => 'nullable|string|max:50',
             'tax_exempt' => 'boolean',
             'payment_terms' => 'nullable|string|max:50',
@@ -218,31 +218,48 @@ class CustomerController extends Controller
                 ->withInput();
         }
 
+        $billingAddress = null;
+        if ($request->address_line_1) {
+            $billingAddress = [
+                'address_line_1' => $request->address_line_1,
+                'address_line_2' => $request->address_line_2,
+                'city' => $request->city,
+                'state_province' => $request->state_province,
+                'postal_code' => $request->postal_code,
+                'country_id' => $request->country_id,
+            ];
+        }
+
+        // Parse contact field into email and phone
+        $email = null;
+        $phone = null;
+        if ($request->contact) {
+            $contact = trim($request->contact);
+            if (filter_var($contact, FILTER_VALIDATE_EMAIL)) {
+                $email = $contact;
+            } else {
+                // Remove any non-digit characters for phone
+                $phone = preg_replace('/[^0-9]/', '', $contact);
+            }
+        }
+
         try {
             $customer = $this->customerService->createCustomer(
                 company: $request->user()->current_company,
                 name: $request->name,
-                customerType: $request->customer_type,
-                email: $request->email,
-                phone: $request->phone,
-                website: $request->website,
-                address: [
-                    'address_line_1' => $request->address_line_1,
-                    'address_line_2' => $request->address_line_2,
-                    'city' => $request->city,
-                    'state_province' => $request->state_province,
-                    'postal_code' => $request->postal_code,
-                    'country_id' => $request->country_id,
-                ],
-                currencyId: $request->currency_id,
+                email: $email,
+                phone: $phone,
                 taxId: $request->tax_id,
-                taxExempt: $request->boolean('tax_exempt'),
-                paymentTerms: $request->payment_terms,
+                billingAddress: $billingAddress,
+                currencyId: $request->currency_id,
                 creditLimit: $request->credit_limit,
-                customerNumber: $request->customer_number,
-                status: $request->status,
+                paymentTerms: $request->payment_terms ? (int) $request->payment_terms : 30,
                 notes: $request->notes,
-                primaryContact: $request->primary_contact,
+                isActive: $request->status === 'active',
+                metadata: [
+                    'customer_type' => $request->customer_type,
+                    'contact' => $request->contact,
+                ],
                 idempotencyKey: $request->header('Idempotency-Key')
             );
 
@@ -257,8 +274,15 @@ class CustomerController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
+            // Check if it's a unique constraint violation
+            if ($e instanceof \Illuminate\Database\QueryException && $e->getCode() === '23505') {
+                $errorMessage = 'A customer with this name already exists in your company. Please choose a different name.';
+            } else {
+                $errorMessage = 'Failed to create customer. '.$e->getMessage();
+            }
+
             return back()
-                ->with('error', 'Failed to create customer. '.$e->getMessage())
+                ->with('error', $errorMessage)
                 ->withInput();
         }
     }
@@ -289,9 +313,14 @@ class CustomerController extends Controller
         $countries = Country::orderBy('name')
             ->get(['id', 'name', 'code']);
 
+        $currencies = Currency::where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'symbol']);
+
         return Inertia::render('Invoicing/Customers/Edit', [
             'customer' => $customer,
             'countries' => $countries,
+            'availableCurrencies' => $currencies,
         ]);
     }
 
@@ -303,9 +332,9 @@ class CustomerController extends Controller
         $this->authorize('update', $customer);
 
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'customer_number' => 'required|string|max:50|unique:customers,customer_number,'.$customer->id.',id,company_id,'.$request->user()->current_company_id,
-            'customer_type' => 'required|string|in:individual,business,non_profit,government',
+            'name' => $request->has('name') ? 'required|string|max:255' : 'sometimes|string|max:255',
+            'customer_number' => $request->has('customer_number') ? 'required|string|max:50|unique:customers,customer_number,'.$customer->id.',id,company_id,'.$request->user()->current_company_id : 'sometimes|string|max:50',
+            'customer_type' => $request->has('customer_type') ? 'required|string|in:individual,business,non_profit,government' : 'sometimes|string|in:individual,business,non_profit,government',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'website' => 'nullable|url|max:255',
@@ -314,8 +343,8 @@ class CustomerController extends Controller
             'city' => 'nullable|string|max:100',
             'state_province' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
-            'country_id' => 'nullable|exists:countries,id',
-            'currency_id' => 'nullable|exists:currencies,id',
+            'country_id' => 'nullable|uuid|exists:countries,id',
+            'currency_id' => 'nullable|uuid|exists:currencies,id',
             'tax_id' => 'nullable|string|max:50',
             'tax_exempt' => 'boolean',
             'payment_terms' => 'nullable|string|max:50',
@@ -337,33 +366,50 @@ class CustomerController extends Controller
         }
 
         try {
+            $updateData = $request->only([
+                'name', 'customer_type', 'email', 'phone', 'website',
+                'currency_id', 'tax_id', 'payment_terms', 'credit_limit',
+                'customer_number', 'status', 'notes', 'primary_contact',
+            ]);
+
+            if ($request->has('tax_exempt')) {
+                $updateData['taxExempt'] = $request->boolean('tax_exempt');
+            }
+
+            $addressFields = ['address_line_1', 'address_line_2', 'city', 'state_province', 'postal_code', 'country_id'];
+            if ($request->hasAny($addressFields)) {
+                $updateData['address'] = $request->only($addressFields);
+            }
+
             $updatedCustomer = $this->customerService->updateCustomer(
-                customer: $customer,
-                name: $request->name,
-                customerType: $request->customer_type,
-                email: $request->email,
-                phone: $request->phone,
-                website: $request->website,
-                address: [
-                    'address_line_1' => $request->address_line_1,
-                    'address_line_2' => $request->address_line_2,
-                    'city' => $request->city,
-                    'state_province' => $request->state_province,
-                    'postal_code' => $request->postal_code,
-                    'country_id' => $request->country_id,
-                ],
-                currencyId: $request->currency_id,
-                taxId: $request->tax_id,
-                taxExempt: $request->boolean('tax_exempt'),
-                paymentTerms: $request->payment_terms,
-                creditLimit: $request->credit_limit,
-                customerNumber: $request->customer_number,
-                status: $request->status,
-                notes: $request->notes,
-                primaryContact: $request->primary_contact,
-                idempotencyKey: $request->header('Idempotency-Key')
+                $customer,
+                $updateData['name'] ?? null,
+                $updateData['customer_type'] ?? null,
+                $updateData['email'] ?? null,
+                $updateData['phone'] ?? null,
+                $updateData['website'] ?? null,
+                $updateData['address'] ?? null,
+                $updateData['currency_id'] ?? null,
+                $updateData['tax_id'] ?? null,
+                $updateData['taxExempt'] ?? null,
+                $updateData['payment_terms'] ?? null,
+                $updateData['credit_limit'] ?? null,
+                $updateData['customer_number'] ?? null,
+                $updateData['status'] ?? null,
+                $updateData['notes'] ?? null,
+                $updateData['primary_contact'] ?? null,
+                $request->header('Idempotency-Key')
             );
 
+            // If the request wants JSON (AJAX/API), return JSON response
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Customer updated successfully',
+                    'customer' => $updatedCustomer->fresh(['currency', 'country']),
+                ]);
+            }
+
+            // Otherwise, redirect for web requests
             return redirect()
                 ->route('customers.show', $updatedCustomer)
                 ->with('success', 'Customer updated successfully.');
@@ -374,6 +420,14 @@ class CustomerController extends Controller
                 'customer_id' => $customer->id,
                 'user_id' => $request->user()->id,
             ]);
+
+            // If the request wants JSON, return JSON error response
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Failed to update customer',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
 
             return back()
                 ->with('error', 'Failed to update customer. '.$e->getMessage())

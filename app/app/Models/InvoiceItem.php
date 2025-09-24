@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Brick\Money\Money;
 use Brick\Math\RoundingMode;
+use Brick\Money\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,7 +18,9 @@ class InvoiceItem extends Model
     protected $table = 'invoice_items';
 
     protected $primaryKey = 'invoice_item_id';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

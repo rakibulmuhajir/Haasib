@@ -10,7 +10,8 @@ use App\Services\PaymentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-function seedCompanyWithARAndCash(): array {
+function seedCompanyWithARAndCash(): array
+{
     $user = User::factory()->create();
     $currency = Currency::create([
         'id' => (string) Str::uuid(),
@@ -64,7 +65,7 @@ it('partial allocation updates invoice status to partial and can be posted to le
     $invoice = app(InvoiceService::class)->createInvoice(
         company: $company,
         customer: $customer,
-        items: [ ['description' => 'S', 'quantity' => 1, 'unit_price' => 100] ],
+        items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 100]],
         currency: $currency
     );
     $invoice = app(InvoiceService::class)->markAsSent($invoice);
@@ -115,7 +116,7 @@ it('void allocation sets status and can void ledger entry', function () {
     $invoice = app(InvoiceService::class)->createInvoice(
         company: $company,
         customer: $customer,
-        items: [ ['description' => 'S', 'quantity' => 1, 'unit_price' => 50] ],
+        items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 50]],
         currency: $currency
     );
     $invoice = app(InvoiceService::class)->markAsSent($invoice);
@@ -129,7 +130,7 @@ it('void allocation sets status and can void ledger entry', function () {
         paymentReference: 'PMT-2',
         currency: $currency
     );
-    app(PaymentService::class)->allocatePayment($payment, [ ['invoice_id' => $invoice->invoice_id, 'amount' => 20.00] ]);
+    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 20.00]]);
     $allocation = $payment->allocations()->first();
     app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation);
 
@@ -153,7 +154,7 @@ it('refunds an allocation and records a refund allocation', function () {
     $invoice = app(InvoiceService::class)->createInvoice(
         company: $company,
         customer: $customer,
-        items: [ ['description' => 'S', 'quantity' => 1, 'unit_price' => 80] ],
+        items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 80]],
         currency: $currency
     );
     $invoice = app(InvoiceService::class)->markAsSent($invoice);
@@ -167,7 +168,7 @@ it('refunds an allocation and records a refund allocation', function () {
         paymentReference: 'PMT-3',
         currency: $currency
     );
-    app(PaymentService::class)->allocatePayment($payment, [ ['invoice_id' => $invoice->invoice_id, 'amount' => 50.00] ]);
+    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 50.00]]);
     $allocation = $payment->allocations()->first();
 
     $refund = app(PaymentService::class)->refundAllocation($allocation, \Brick\Money\Money::of(20, 'USD'), 'Partial refund');

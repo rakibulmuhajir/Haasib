@@ -17,7 +17,7 @@ class CoreCurrenciesSeeder extends Seeder
             ['code' => 'GBP', 'name' => 'Pound Sterling', 'symbol' => '£', 'decimal_places' => 2, 'is_active' => true],
             ['code' => 'JPY', 'name' => 'Japanese Yen',   'symbol' => '¥', 'decimal_places' => 0, 'is_active' => true],
             ['code' => 'AED', 'name' => 'UAE Dirham',     'symbol' => 'د.إ', 'decimal_places' => 2, 'is_active' => true],
-            ['code' => 'PKR', 'name' => 'Pakistani Rupee','symbol' => '₨', 'decimal_places' => 2, 'is_active' => true],
+            ['code' => 'PKR', 'name' => 'Pakistani Rupee', 'symbol' => '₨', 'decimal_places' => 2, 'is_active' => true],
         ];
 
         foreach ($rows as $r) {

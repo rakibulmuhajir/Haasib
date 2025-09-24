@@ -15,7 +15,9 @@ class PaymentAllocation extends Model
     protected $table = 'payment_allocations';
 
     protected $primaryKey = 'allocation_id';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

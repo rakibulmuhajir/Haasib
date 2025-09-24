@@ -48,7 +48,7 @@ it('invoice update and delete are idempotent', function () {
         'currency_id' => $currency->id,
         'invoice_date' => now()->toDateString(),
         'due_date' => now()->addDays(7)->toDateString(),
-        'items' => [ ['description' => 'Item', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'Item', 'quantity' => 1, 'unit_price' => 10]],
     ])->assertStatus(201)->json('data');
 
     $id = $invoice['invoice_id'];
@@ -56,7 +56,7 @@ it('invoice update and delete are idempotent', function () {
     // Update idempotency
     $updatePayload = [
         'notes' => 'Updated once',
-        'items' => [ ['description' => 'Item', 'quantity' => 2, 'unit_price' => 10] ],
+        'items' => [['description' => 'Item', 'quantity' => 2, 'unit_price' => 10]],
     ];
     $key = (string) Str::uuid();
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $key];

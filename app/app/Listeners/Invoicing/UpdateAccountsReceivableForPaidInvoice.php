@@ -40,7 +40,7 @@ class UpdateAccountsReceivableForPaidInvoice implements ShouldQueue
                     $ar->metadata['last_payment_date'] = now()->toISOString();
                     $ar->metadata['payment_notes'] = 'Partial payment received';
                 }
-                
+
                 $ar->metadata['last_updated'] = now()->toISOString();
                 $ar->save();
 

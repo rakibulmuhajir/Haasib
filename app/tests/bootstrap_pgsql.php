@@ -7,7 +7,7 @@ $isPgsql = getenv('DB_CONNECTION') === 'pgsql';
 if ($isPgsql) {
     $host = getenv('DB_HOST') ?: '127.0.0.1';
     $port = getenv('DB_PORT') ?: '5432';
-    $db   = getenv('DB_DATABASE') ?: 'postgres';
+    $db = getenv('DB_DATABASE') ?: 'postgres';
     $user = getenv('DB_USERNAME') ?: 'postgres';
     $pass = getenv('DB_PASSWORD') ?: '';
 
@@ -35,4 +35,3 @@ SQL;
 
 // Finally, load the Composer autoloader
 require __DIR__.'/../vendor/autoload.php';
-

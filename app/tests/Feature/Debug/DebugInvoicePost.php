@@ -65,9 +65,9 @@ it('debugs invoice post response', function () {
         'currency_id' => $currency->id,
         'invoice_date' => now()->toDateString(),
         'due_date' => now()->addDays(7)->toDateString(),
-        'items' => [ ['description' => 'Service', 'quantity' => 1, 'unit_price' => 10] ],
+        'items' => [['description' => 'Service', 'quantity' => 1, 'unit_price' => 10]],
     ];
-    $headers = [ 'X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid() ];
+    $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoiceData = $this->withHeaders($headers)->postJson('/api/invoices', $createPayload)->assertStatus(201)->json('data');
 
     $invoiceId = $invoiceData['invoice_id'];
@@ -76,4 +76,3 @@ it('debugs invoice post response', function () {
 
     $this->withHeaders($headers)->postJson("/api/invoices/{$invoiceId}/post")->dump();
 });
-

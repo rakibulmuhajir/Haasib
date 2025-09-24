@@ -36,7 +36,7 @@ class InvoiceItemFactory extends Factory
             'unit_price' => $unitPrice,
             'discount_amount' => $discountAmount ?? 0,
             'discount_percentage' => $discountPercentage ?? 0,
-            # computed in model save: line_total only
+            // computed in model save: line_total only
             'line_total' => $subtotalAfterDiscount,
             'tax_inclusive' => fake()->boolean(20),
             'metadata' => [

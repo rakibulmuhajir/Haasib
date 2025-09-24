@@ -7,7 +7,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-function seedCompanyWithLedgerForIdemp(): array {
+function seedCompanyWithLedgerForIdemp(): array
+{
     $currency = Currency::create([
         'id' => (string) Str::uuid(),
         'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
@@ -37,6 +38,7 @@ function seedCompanyWithLedgerForIdemp(): array {
         'default_sales_tax_account_id' => $taxId,
     ]);
     $company->save();
+
     return [$company, $currency];
 }
 
@@ -68,7 +70,7 @@ it('invoice send/post/cancel endpoints are idempotent', function () {
         'currency_id' => $currency->id,
         'invoice_date' => now()->toDateString(),
         'due_date' => now()->addDays(7)->toDateString(),
-        'items' => [ ['description' => 'Item', 'quantity' => 1, 'unit_price' => 100] ],
+        'items' => [['description' => 'Item', 'quantity' => 1, 'unit_price' => 100]],
     ];
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => (string) Str::uuid()];
     $invoice = $this->withHeaders($headers)->postJson('/api/invoices', $payload)->assertStatus(201)->json('data');

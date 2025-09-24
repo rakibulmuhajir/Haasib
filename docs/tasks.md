@@ -66,37 +66,46 @@ Single source of truth for execution. Pulled from the technical brief, schemas, 
 - [ ] PDF generation and send email flow
 - [ ] OpenAPI docs for invoice endpoints
 
-### 4) Payments (Manual Receipts)
+### 4) Payments (AR Receipts)
 
 - [x] Tables: `payments`, `payment_allocations` (+ soft deletes)
 - [x] Controller: `PaymentController` with store/update/allocate/refund requests
 - [x] Validation requests: `StorePaymentRequest`, `UpdatePaymentRequest`, `AllocatePaymentRequest`, `RefundPaymentRequest`
 - [x] DataTablePro listing with chips and fixed date handling
-- [ ] Approval/posting workflow integrated with ledger
+- [x] Approval/posting workflow integrated with ledger
 - [ ] Receipt upload and attachment storage
 - [ ] Reconciliation reference to bank transactions (when available)
 
-### 5) Bank Reconciliation (CSV)
+### 5) Payables (AP)
+
+- [ ] Tables: `vendors`, `bills`, `bill_items`, `bill_payments`
+- [ ] State machine `BillStateMachine` (draft → received → approved → paid → void)
+- [ ] Accounts payable summary table exists
+- [ ] Jobs: AP aging updates by vendor/company
+- [ ] Events: `BillApproved`, `BillPaid`, `BillVoided`
+- [ ] Controller/UI: Bills listing with DataTablePro + Filters DSL
+
+### 6) Bank Reconciliation (CSV)
 
 - [ ] Schema: `ops.bank_accounts`, `ops.bank_transactions`, `ops.bank_reconciliations`
 - [ ] CSV import pipeline with validation
 - [ ] Matching rules (exact amount+date; then amount+reference; manual override)
 - [ ] Audit every match/unmatch; reconciliation report
 
-### 6) Taxes
+### 7) Taxes
 
 - [ ] Tables: `ops.tax_rates` scoped per company
 - [ ] TaxCalculator service (AE‑VAT, PK‑GST presets)
 - [ ] Hooks into invoice/payment posting
 - [ ] Ledger postings for tax liability and adjustments
 
-### 7) Reporting v1
+### 8) Reporting v1
 
 - [ ] Materialized views `trial_balance_mv`, `aging_report_mv`
 - [x] Application summary tables (e.g., `accounts_receivable`) refreshed by command (`ar:update-aging`)
 - [ ] Scheduled refresh and report endpoints
 
-### 8) API v1 & Mobile Sync
+### 9) API v1 & Mobile Sync
 
 - [x] Route namespace `/api/v1` with Sanctum auth
 - [ ] Sparse fieldsets `?fields[entity]=...` across list endpoints
@@ -105,31 +114,31 @@ Single source of truth for execution. Pulled from the technical brief, schemas, 
 - [ ] Rate limiting buckets and structured error codes
 - [ ] Scribe/OpenAPI docs published
 
-### 9) Internationalization & Localization
+### 10) Internationalization & Localization
 
 - [ ] Company locale/currency preferences applied
 - [ ] RTL support for Arabic; localized PDFs/exports
 - [ ] Translation JSONs and date/number via Intl
 
-### 10) Module Registry & Extensibility
+### 11) Module Registry & Extensibility
 
 - [ ] `config/modules.php` or registry
 - [ ] Service providers register routes/policies/migrations per module
 - [ ] Sample Visitor module posting fees to ledger
 
-### 11) Observability & Health
+### 12) Observability & Health
 
 - [x] Sentry integrated for errors and traces
 - [ ] Metrics: p95/p99, queue depth/latency, DB slow query dashboard
 - [ ] `/health` extended with version/build and dependency checks
 
-### 12) Backups & DR Automation
+### 13) Backups & DR Automation
 
 - [ ] Nightly encrypted `pg_dump` with retention policy
 - [ ] Weekly restore drill; automated RLS isolation validation
 - [ ] Trial balance verification post-restore
 
-### 13) Onboarding Wizard & SaaS Subscription (Manual)
+### 14) Onboarding Wizard & SaaS Subscription (Manual)
 
 - [ ] Create company wizard (base currency/locale)
 - [ ] Seed COA
@@ -151,4 +160,3 @@ Single source of truth for execution. Pulled from the technical brief, schemas, 
 - Brief: `docs/briefs/haasib-technical-brief-and-progress_v2.1_2025-08-22.md`
 - Schemas: `docs/schemas/*.sql`, `docs/schema-v2.sql`
 - Engineering Log: Section 13 in the brief (dated entries used to mark [x])
-

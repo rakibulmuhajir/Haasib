@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class VoidJournalEntryForCancelledInvoice implements ShouldQueue
 {
-    public function __construct(private readonly LedgerService $ledgerService)
-    {
-    }
+    public function __construct(private readonly LedgerService $ledgerService) {}
 
     public function handle(InvoiceCancelled $event): void
     {
@@ -33,4 +31,3 @@ class VoidJournalEntryForCancelledInvoice implements ShouldQueue
         }
     }
 }
-

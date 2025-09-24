@@ -78,4 +78,3 @@ it('returns exchange rate via API after upsert', function () {
     $resp->assertJsonPath('data.to_currency', 'EUR');
     expect((float) $resp->json('data.rate'))->toBeGreaterThan(0.0);
 });
-

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Responses\ApiResponder;
 use App\Http\Requests\Api\Currency\ConvertCurrencyRequest;
 use App\Http\Requests\Api\Currency\EnableCurrencyRequest;
 use App\Http\Requests\Api\Currency\UpdateExchangeRateRequest;
+use App\Http\Responses\ApiResponder;
 use App\Models\Company;
 use App\Models\Currency;
 use App\Services\CurrencyService;
@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 class CurrencyApiController extends Controller
 {
     use ApiResponder;
+
     public function __construct(
         private CurrencyService $currencyService
     ) {}

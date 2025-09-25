@@ -1,22 +1,26 @@
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Tag from 'primevue/tag'
+import Dropdown from 'primevue/dropdown'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import Toast from 'primevue/toast'
+import InlineEditable from '@/Components/InlineEditable.vue'
 
 const props = defineProps({
   invoice: Object,
 })
 
 const page = usePage()
-const toast = page.props.toast || {}
+const toast = useToast()
 
 // Breadcrumb items
 const breadcrumbItems = ref([
@@ -32,6 +36,8 @@ const getStatusSeverity = (status) => {
     sent: 'info',
     posted: 'warning',
     paid: 'success',
+    partially_paid: 'warning',
+    overdue: 'danger',
     cancelled: 'danger',
     void: 'contrast'
   }
@@ -58,6 +64,33 @@ const formatDate = (date) => {
     month: 'long',
     day: 'numeric'
   })
+}
+
+// Get available status transitions based on current status
+const getAvailableStatusOptions = (currentStatus) => {
+  const allOptions = [
+    { label: 'Draft', value: 'draft', icon: 'pi pi-file' },
+    { label: 'Sent', value: 'sent', icon: 'pi pi-send' },
+    { label: 'Posted', value: 'posted', icon: 'pi pi-check' },
+    { label: 'Paid', value: 'paid', icon: 'pi pi-dollar' },
+    { label: 'Cancelled', value: 'cancelled', icon: 'pi pi-times' },
+    { label: 'Void', value: 'void', icon: 'pi pi-ban' }
+  ]
+
+  // Define allowed transitions
+  const transitions = {
+    draft: ['sent', 'cancelled'],
+    sent: ['draft', 'posted', 'cancelled'],
+    posted: ['void'],
+    paid: ['void'],
+    cancelled: ['draft', 'sent'],
+    void: []
+  }
+
+  // Filter options based on allowed transitions
+  return allOptions.filter(option => 
+    option.value === currentStatus || transitions[currentStatus]?.includes(option.value)
+  )
 }
 
 // Available actions based on invoice status
@@ -102,7 +135,7 @@ const availableActions = computed(() => {
 // Execute action
 const executeAction = (action) => {
   if (action.external) {
-    window.open(route(action.route, { invoice: String(props.invoice.invoice_id) }), '_blank')
+    window.open(route(action.route, props.invoice.invoice_id), '_blank')
     return
   }
 
@@ -111,15 +144,71 @@ const executeAction = (action) => {
     return
   }
 
-  router.post(route(action.route, { invoice: String(props.invoice.invoice_id) }), {}, {
+  // Handle GET routes (like edit)
+  if (action.route === 'invoices.edit') {
+    router.visit(route(action.route, props.invoice.invoice_id))
+    return
+  }
+
+  router.post(route(action.route, props.invoice.invoice_id), {}, {
+    preserveScroll: true,
     onSuccess: () => {
-      toast.success = `${action.label} action completed successfully!`
+      toast.add({ severity: 'success', summary: 'Success', detail: `${action.label} action completed successfully!`, life: 3000 })
     },
     onError: () => {
-      toast.error = `Failed to ${action.label.toLowerCase()}. Please try again.`
+      toast.add({ severity: 'error', summary: 'Error', detail: `Failed to ${action.label.toLowerCase()}. Please try again.`, life: 3000 })
     }
   })
 }
+
+// Handle status change
+const handleStatusChange = async (newStatus, additionalData = null) => {
+  if (!newStatus || newStatus === props.invoice.status) return
+  
+  const payload = { status: newStatus }
+  
+  // Include additional info if provided
+  if (additionalData?.additionalInfo) {
+    Object.assign(payload, additionalData.additionalInfo)
+  }
+  
+  router.post(route('invoices.update-status', props.invoice.invoice_id), payload, {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.add({ severity: 'success', summary: 'Success', detail: `Invoice status updated to ${newStatus} successfully!`, life: 3000 })
+      // The page will reload with updated data
+    },
+    onError: (errors) => {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update invoice status. Please try again.', life: 3000 })
+    }
+  })
+}
+
+// Local status for inline editable binding
+const localStatus = ref(props.invoice.status)
+const isEditingStatus = ref(false)
+
+// Watch for prop changes and update local status
+watch(() => props.invoice.status, (newStatus) => {
+  localStatus.value = newStatus
+})
+
+// Effective status (includes computed states like partially paid and overdue)
+const effectiveStatus = computed(() => {
+  const status = props.invoice.status
+  
+  // Check if invoice is posted and has payments
+  if (status === 'posted' && paymentSummary.value.totalPaid > 0) {
+    return paymentSummary.value.balanceDue > 0 ? 'partially_paid' : 'paid'
+  }
+  
+  // Check if invoice is overdue
+  if (status === 'posted' && new Date(props.invoice.due_date) < new Date() && paymentSummary.value.balanceDue > 0) {
+    return 'overdue'
+  }
+  
+  return status
+})
 
 // Payment allocation summary
 const paymentSummary = computed(() => {
@@ -164,7 +253,10 @@ const paymentSummary = computed(() => {
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
               Invoice {{ invoice.invoice_number }}
             </h1>
-            <Tag :value="invoice.status" :severity="getStatusSeverity(invoice.status)" />
+            <Tag 
+              :value="effectiveStatus === 'partially_paid' ? 'Partially Paid' : (effectiveStatus === 'overdue' ? 'Overdue' : invoice.status)" 
+              :severity="getStatusSeverity(effectiveStatus)" 
+            />
           </div>
           <p class="text-gray-600 dark:text-gray-400 mt-1">
             Created on {{ formatDate(invoice.created_at) }}
@@ -382,7 +474,32 @@ const paymentSummary = computed(() => {
               <div class="space-y-3 text-sm">
                 <div class="flex items-center justify-between">
                   <span class="text-gray-600 dark:text-gray-400">Current Status:</span>
-                  <Tag :value="invoice.status" :severity="getStatusSeverity(invoice.status)" />
+                  <div class="flex items-center gap-2">
+                    <InlineEditable
+                      v-model="localStatus"
+                      v-model:editing="isEditingStatus"
+                      :type="'select'"
+                      :options="getAvailableStatusOptions(invoice.status)"
+                      :label="'Status'"
+                      :action-type="'status-change'"
+                      :context="{
+                        entityType: 'invoice',
+                        entityId: invoice.invoice_id,
+                        currentStatus: invoice.status
+                      }"
+                      :api-url="'/api/invoicing-requirements'"
+                      @save="handleStatusChange"
+                      @cancel="isEditingStatus = false"
+                    >
+                      <template #display>
+                        <Tag 
+                          :value="effectiveStatus === 'partially_paid' ? 'Partially Paid' : (effectiveStatus === 'overdue' ? 'Overdue' : displayValue)" 
+                          :severity="getStatusSeverity(effectiveStatus)" 
+                          class="w-full justify-center"
+                        />
+                      </template>
+                    </InlineEditable>
+                  </div>
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-gray-600 dark:text-gray-400">Created:</span>
@@ -412,7 +529,7 @@ const paymentSummary = computed(() => {
             </template>
             <template #content>
               <div class="space-y-2">
-                <Link :href="route('invoices.edit', { invoice: String(invoice.invoice_id) })" v-if="invoice.status === 'draft'">
+                <Link :href="route('invoices.edit', invoice.invoice_id)" v-if="invoice.status === 'draft'">
                   <Button label="Edit Invoice" icon="pi pi-pencil" severity="primary" class="w-full" />
                 </Link>
                 <Link :href="route('payments.create') + '?invoice_id=' + invoice.invoice_id" v-if="invoice.balance_due > 0">
@@ -426,7 +543,7 @@ const paymentSummary = computed(() => {
                   class="w-full" 
                   @click="executeAction({ label: 'Download PDF', icon: 'pi pi-file-pdf', route: 'invoices.generate-pdf', severity: 'info', external: true })"
                 />
-                <Link :href="route('customers.show', { customer: String(invoice.customer_id) })">
+                <Link :href="route('customers.show', invoice.customer_id)" v-if="invoice.customer_id">
                   <Button label="View Customer" icon="pi pi-user" severity="secondary" outlined class="w-full" />
                 </Link>
               </div>

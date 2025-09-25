@@ -281,8 +281,8 @@
                     @cancel="cancelEditing"
                   >
                     <template #display>
-                      <div v-if="customerData.country">
-                        {{ customerData.country.name }}
+                      <div v-if="customerCountry">
+                        {{ customerCountry.name }}
                       </div>
                     </template>
                   </InlineEditable>
@@ -586,7 +586,7 @@ const {
 // Ensure string fields are not null
 const stringFields = [
   'customer_type', 'status', 'email', 'phone', 'website',
-  'address_line_1', 'city', 'state_province', 'postal_code', 'tax_number'
+  'address_line_1', 'city', 'state_province', 'postal_code', 'tax_number', 'notes'
 ]
 stringFields.forEach(field => {
   if (customerData.value[field] === null) {
@@ -645,10 +645,16 @@ const countryOptions = computed(() => {
 })
 
 const countryId = computed({
-  get: () => props.customer.country?.id,
+  get: () => props.customer.country_id || props.customer.billing_address?.country_id,
   set: (value) => {
     // This is just for v-model binding, actual save happens via @save event
   }
+})
+
+// Get country object from countries list
+const customerCountry = computed(() => {
+  const countryIdValue = props.customer.country_id || props.customer.billing_address?.country_id
+  return props.countries?.find(c => c.id === countryIdValue)
 })
 
 // Field validation

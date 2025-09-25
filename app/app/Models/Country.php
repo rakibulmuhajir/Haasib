@@ -41,4 +41,25 @@ class Country extends Model
     {
         return $this->hasMany(Customer::class);
     }
+
+    /**
+     * Get the country flag emoji.
+     */
+    public function getFlag(): string
+    {
+        return $this->emoji ?? $this->getFallbackFlag();
+    }
+
+    /**
+     * Get fallback flag for countries without emoji.
+     */
+    private function getFallbackFlag(): string
+    {
+        $flags = [
+            'US' => '🇺🇸', 'GB' => '🇬🇧', 'CA' => '🇨🇦', 'AU' => '🇦🇺', 'DE' => '🇩🇪',
+            'FR' => '🇫🇷', 'IT' => '🇮🇹', 'ES' => '🇪🇸', 'JP' => '🇯🇵', 'CN' => '🇨🇳', 'IN' => '🇮🇳'
+        ];
+        
+        return $flags[$this->code] ?? '🌐';
+    }
 }

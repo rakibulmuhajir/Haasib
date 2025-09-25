@@ -43,14 +43,6 @@ const breadcrumbItems = ref([
   { label: 'Edit Customer', url: '#', icon: 'edit' }
 ])
 
-// Parse billing address
-const billingAddress = computed(() => {
-  try {
-    return props.customer.billing_address ? JSON.parse(props.customer.billing_address) : {}
-  } catch {
-    return {}
-  }
-})
 
 // Initialize form with customer data
 const form = useForm({

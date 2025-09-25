@@ -329,7 +329,7 @@ class InvoiceController extends Controller
             ->get(['customer_id', 'name', 'email', 'currency_id']);
 
         $currencies = Currency::whereHas('companies', function ($query) use ($request) {
-            $query->where('id', $request->user()->current_company_id);
+            $query->where('auth.companies.id', $request->user()->current_company_id);
         })->orderBy('code')->get(['id', 'code', 'name', 'symbol']);
 
         return Inertia::render('Invoicing/Invoices/Edit', [
@@ -520,6 +520,117 @@ class InvoiceController extends Controller
             ]);
 
             return back()->with('error', 'Failed to cancel invoice. '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Update invoice status.
+     */
+    public function updateStatus(Request $request, Invoice $invoice)
+    {
+        $this->authorize('update', $invoice);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:draft,sent,posted,paid,cancelled,void'],
+            'cancellation_reason' => ['nullable', 'required_if:status,cancelled', 'string', 'min:5'],
+            'void_reason' => ['nullable', 'required_if:status,void', 'string', 'min:5'],
+            'reversal_reference' => ['nullable', 'required_if:status,void', 'string'],
+        ]);
+
+        // Define allowed status transitions
+        $allowedTransitions = [
+            'draft' => ['sent', 'cancelled'],
+            'sent' => ['draft', 'posted', 'cancelled'],
+            'posted' => ['void'],
+            'paid' => ['void'],
+            'cancelled' => ['draft', 'sent'],
+            'void' => [],
+        ];
+
+        $newStatus = $validated['status'];
+
+        // Check if transition is allowed
+        if (! in_array($newStatus, $allowedTransitions[$invoice->status] ?? [])) {
+            $message = match ($invoice->status) {
+                'draft' => 'Draft invoices can only be marked as Sent or Cancelled.',
+                'sent' => 'Sent invoices can be marked as Draft, Posted, or Cancelled.',
+                'posted' => 'Posted invoices can only be Voided.',
+                'paid' => 'Paid invoices can only be Voided.',
+                'cancelled' => 'Cancelled invoices can be restored to Draft or Sent.',
+                'void' => 'Voided invoices cannot be changed.',
+                default => 'Invalid status transition.'
+            };
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => $message,
+                ], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
+        try {
+            $oldStatus = $invoice->status;
+
+            // Special handling for posting
+            if ($newStatus === 'posted') {
+                // Call the post service method
+                $this->invoiceService->postToLedger($invoice);
+            }
+            // Special handling for voiding
+            elseif ($newStatus === 'void') {
+                $invoice->status = 'void';
+                $invoice->cancellation_reason = $validated['void_reason'] ?? 'Voided by user';
+                // TODO: Handle reversal reference for posted/paid invoices
+                // This would typically create reversing journal entries
+            }
+            // Special handling for cancelling
+            elseif ($newStatus === 'cancelled') {
+                $reason = $validated['cancellation_reason'] ?? 'Cancelled by user';
+                $this->invoiceService->markAsCancelled($invoice, $reason);
+            }
+            // Special handling for restoring from cancelled
+            elseif ($oldStatus === 'cancelled' && in_array($newStatus, ['draft', 'sent'])) {
+                // Restore cancelled invoice
+                $invoice->status = $newStatus;
+            } else {
+                $invoice->status = $newStatus;
+            }
+
+            $invoice->save();
+
+            Log::info('Invoice status updated', [
+                'invoice_id' => $invoice->getKey(),
+                'user_id' => $request->user()->id,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Invoice status updated successfully.',
+                    'invoice' => $invoice->fresh(),
+                ]);
+            }
+
+            return back()->with('success', 'Invoice status updated successfully.');
+
+        } catch (\Exception $e) {
+            Log::error('Failed to update invoice status', [
+                'error' => $e->getMessage(),
+                'invoice_id' => $invoice->getKey(),
+                'user_id' => $request->user()->id,
+                'requested_status' => $newStatus,
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Failed to update invoice status. '.$e->getMessage(),
+                ], 500);
+            }
+
+            return back()->with('error', 'Failed to update invoice status. '.$e->getMessage());
         }
     }
 

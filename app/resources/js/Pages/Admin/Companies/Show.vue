@@ -15,6 +15,7 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import CompanyMembersSection from './CompanyMembersSection.vue'
 import CompanyInviteSection from './CompanyInviteSection.vue'
+import CompanyCurrenciesSection from './CompanyCurrenciesSection.vue'
 import CompanyOverview from './CompanyOverview.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, onMounted, computed, watch } from 'vue'
@@ -85,7 +86,7 @@ onMounted(() => {
 
 const slug = computed(() => c.value?.slug || props.company)
 
-const tabNames = ['members', 'invite']
+const tabNames = ['members', 'invite', 'currencies']
 const storageKey = computed(() => `admin.company.tab.${slug.value}`)
 const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
 
@@ -256,6 +257,9 @@ async function deleteCompany() {
               </TabPanel>
               <TabPanel header="Invite">
                 <CompanyInviteSection :company="slug" />
+              </TabPanel>
+              <TabPanel header="Currencies">
+                <CompanyCurrenciesSection :company="slug" />
               </TabPanel>
             </TabView>
           </div>

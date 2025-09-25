@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\CurrencyApiController;
 use App\Http\Controllers\Api\CustomerApiController;
 use App\Http\Controllers\Api\InvoiceApiController;
+use App\Http\Controllers\Api\InvoicingRequirementsController;
 use App\Http\Controllers\Api\PaymentApiController;
 use App\Http\Controllers\InlineEditController;
 use Illuminate\Support\Facades\Route;
@@ -99,6 +100,12 @@ Route::prefix('customers')->name('customers.')->group(function () {
 
     // Bulk Operations
     Route::post('/bulk', [CustomerApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
+});
+
+// Invoicing requirements endpoint
+Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->group(function () {
+    Route::get('/', [InvoicingRequirementsController::class, 'getRequirements'])->name('get');
+    Route::post('/validate', [InvoicingRequirementsController::class, 'validateAdditionalInfo'])->name('validate');
 });
 
 // Universal inline edit endpoint

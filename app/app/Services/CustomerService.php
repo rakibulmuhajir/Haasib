@@ -153,20 +153,25 @@ class CustomerService
 
             // Only update billing_address if address data is provided
             if ($address) {
-                $billingAddress = is_array($customer->billing_address)
+                // Get existing billing address or empty array
+                $existingAddress = is_array($customer->billing_address)
                     ? $customer->billing_address
                     : json_decode($customer->billing_address ?: '{}', true);
 
-                $billingAddress = array_filter([
-                    'address_line_1' => $address['address_line_1'] ?? $billingAddress['address_line_1'] ?? null,
-                    'address_line_2' => $address['address_line_2'] ?? $billingAddress['address_line_2'] ?? null,
-                    'city' => $address['city'] ?? $billingAddress['city'] ?? null,
-                    'state_province' => $address['state_province'] ?? $billingAddress['state_province'] ?? null,
-                    'postal_code' => $address['postal_code'] ?? $billingAddress['postal_code'] ?? null,
-                    'country_id' => $address['country_id'] ?? $billingAddress['country_id'] ?? null,
+                // Merge new address data with existing
+                $mergedAddress = array_filter([
+                    'address_line_1' => $address['address_line_1'] ?? $existingAddress['address_line_1'] ?? null,
+                    'address_line_2' => $address['address_line_2'] ?? $existingAddress['address_line_2'] ?? null,
+                    'city' => $address['city'] ?? $existingAddress['city'] ?? null,
+                    'state_province' => $address['state_province'] ?? $existingAddress['state_province'] ?? null,
+                    'postal_code' => $address['postal_code'] ?? $existingAddress['postal_code'] ?? null,
+                    'country_id' => $address['country_id'] ?? $existingAddress['country_id'] ?? null,
                 ], fn ($value) => $value !== null && $value !== '');
 
-                $updateData['billing_address'] = ! empty($billingAddress) ? json_encode($billingAddress) : null;
+                // Only update if we have address data
+                if (! empty($mergedAddress)) {
+                    $updateData['billing_address'] = $mergedAddress;
+                }
             }
 
             // Handle primary contact if provided

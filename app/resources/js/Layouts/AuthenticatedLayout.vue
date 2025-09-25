@@ -93,6 +93,11 @@ onMounted(() => {
                                             Profile
                                         </DropdownLink>
                                         <DropdownLink
+                                            :href="route('settings.index')"
+                                        >
+                                            Settings
+                                        </DropdownLink>
+                                        <DropdownLink
                                             :href="route('logout')"
                                             method="post"
                                             as="button"

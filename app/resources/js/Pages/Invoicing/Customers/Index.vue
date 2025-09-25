@@ -43,139 +43,137 @@
             @sort="onSort"
             @filter="onFilter"
           >
-            <Column 
-              field="created_at" 
-              header="Customer Since" 
+            <Column
+              field="created_at"
+              header="Customer Since"
               sortable
               style="width: 140px"
             >
               <template #body="{ data }">
-                <div class="font-medium text-gray-900">
-                  {{ formatCustomerSince(data.created_at) }}
-                </div>
-                <div class="text-xs text-gray-500" v-if="data.is_active">
-                  Active
+                <div class="flex items-center gap-2">
+                  <i class="fas fa-calendar-plus text-gray-400"></i>
+                  <div>
+                    <div class="font-medium text-gray-900">
+                      {{ formatCustomerSince(data.created_at) }}
+                    </div>
+                    <div class="text-xs text-gray-500" v-if="data.is_active">
+                      Active
+                    </div>
+                  </div>
                 </div>
               </template>
             </Column>
 
-            <Column 
-              field="name" 
-              header="Customer Name" 
+            <Column
+              field="name"
+              header="Customer Name"
               sortable
               style="width: 250px"
             >
               <template #body="{ data }">
-                <div class="font-medium text-gray-900">
-                  {{ data.name }}
-                </div>
-                <div class="text-xs text-gray-500">
-                  {{ data.email }}
-                </div>
-                <div class="text-xs text-gray-500" v-if="data.phone">
-                  {{ data.phone }}
-                </div>
-              </template>
-            </Column>
-
-            <Column 
-              field="tax_number" 
-              header="Tax ID" 
-              sortable
-              style="width: 120px"
-            >
-              <template #body="{ data }">
-                <span class="text-sm text-gray-600">
-                  {{ data.tax_number || '-' }}
-                </span>
-              </template>
-            </Column>
-
-            <Column 
-              field="country" 
-              header="Country" 
-              sortable
-              style="width: 120px"
-            >
-              <template #body="{ data }">
-                <div class="flex items-center gap-2">
-                  <span v-if="data.country?.code" class="text-lg">{{ getCountryFlag(data.country.code) }}</span>
-                  <span>{{ data.country?.name || '-' }}</span>
-                </div>
-              </template>
-            </Column>
-
-            <Column 
-              field="currency" 
-              header="Currency" 
-              sortable
-              style="width: 100px"
-            >
-              <template #body="{ data }">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium">{{ data.currency?.code || '-' }}</span>
-                  <span class="text-xs text-gray-500">{{ data.currency?.symbol || '' }}</span>
-                </div>
-              </template>
-            </Column>
-
-            <Column 
-              field="status" 
-              header="Status" 
-              sortable
-              style="width: 100px"
-            >
-              <template #body="{ data }">
-                <Badge 
-                  :value="formatStatus(data.is_active ? 'active' : 'inactive')"
-                  :severity="getStatusSeverity(data.is_active ? 'active' : 'inactive')"
-                  size="small"
+                <CustomerInfoDisplay 
+                  :name="data.name" 
+                  :email="data.email" 
+                  :phone="data.phone" 
                 />
               </template>
             </Column>
 
-            <Column 
-              field="outstanding_balance" 
-              header="Balance" 
-              sortable
-              style="width: 140px; text-align: right"
-            >
-              <template #body="{ data }">
-                <div class="text-right">
-                  <div class="font-medium" :class="getBalanceClass(data.outstanding_balance)">
-                    {{ formatMoney(data.outstanding_balance, data.currency) }}
-                  </div>
-                  <div class="text-xs text-gray-500">
-                    <span :class="getRiskBadgeClass(data.risk_level)">
-                      {{ data.risk_level || 'low' }} risk
-                    </span>
-                  </div>
-                </div>
-              </template>
-            </Column>
-
-            <Column 
-              field="created_at" 
-              header="Created" 
+            <Column
+              field="tax_number"
+              header="Tax ID"
               sortable
               style="width: 120px"
             >
               <template #body="{ data }">
-                <div class="text-sm text-gray-600">
-                  {{ formatDate(data.created_at) }}
+                <div class="flex items-center gap-2">
+                  <i class="fas fa-receipt text-gray-400"></i>
+                  <span class="text-sm text-gray-600">
+                    {{ data.tax_number || '-' }}
+                  </span>
                 </div>
               </template>
             </Column>
 
-            <Column 
-              header="Actions" 
+            <Column
+              field="country.name"
+              header="Country"
+              sortable
+              style="width: 120px"
+            >
+              <template #body="{ data }">
+                <CountryDisplay :country="data.country" />
+              </template>
+            </Column>
+
+            <Column
+              field="currency.code"
+              header="Currency"
+              sortable
+              style="width: 100px"
+            >
+              <template #body="{ data }">
+                <div class="flex items-center gap-2">
+                  <i class="fas fa-coins text-gray-500"></i>
+                  <span class="font-medium">
+                    {{ data.currency?.code || '-' }}
+                  </span>
+                </div>
+              </template>
+            </Column>
+
+            <Column
+              field="status"
+              header="Status"
+              sortable
+              style="width: 100px"
+            >
+              <template #body="{ data }">
+                <StatusBadge :is-active="data.is_active" />
+              </template>
+            </Column>
+
+            <Column
+              field="outstanding_balance"
+              header="Balance"
+              sortable
+              style="width: 140px; text-align: right"
+            >
+              <template #body="{ data }">
+                <BalanceDisplay 
+                  :balance="data.outstanding_balance" 
+                  :currencyCode="data.currency?.code"
+                  :riskLevel="data.risk_level"
+                  :showRisk="true"
+                />
+              </template>
+            </Column>
+
+            <Column
+              field="created_at"
+              header="Created"
+              sortable
+              style="width: 120px"
+            >
+              <template #body="{ data }">
+                <div class="flex items-center gap-2">
+                  <i class="fas fa-clock text-gray-400"></i>
+                  <div class="text-sm text-gray-600">
+                    {{ formatDate(data.created_at) }}
+                  </div>
+                </div>
+              </template>
+            </Column>
+
+            <Column
+              header="Actions"
               style="width: 160px; text-align: center"
               exportable="false"
             >
               <template #body="{ data }">
                 <div class="flex items-center justify-center gap-1">
                   <Button
-                    icon="pi pi-eye"
+                    icon="fas fa-eye"
                     size="small"
                     text
                     rounded
@@ -183,9 +181,9 @@
                     v-tooltip.bottom="'View customer details'"
                     class="text-blue-600 hover:text-blue-800"
                   />
-                  
+
                   <Button
-                    icon="pi pi-edit"
+                    icon="fas fa-edit"
                     size="small"
                     text
                     rounded
@@ -193,9 +191,9 @@
                     v-tooltip.bottom="'Edit customer'"
                     class="text-green-600 hover:text-green-800"
                   />
-                  
+
                   <Button
-                    icon="pi pi-chart-line"
+                    icon="fas fa-chart-line"
                     size="small"
                     text
                     rounded
@@ -203,10 +201,10 @@
                     v-tooltip.bottom="'View statistics'"
                     class="text-purple-600 hover:text-purple-800"
                   />
-                  
+
                   <Button
                     v-if="canDelete(data)"
-                    icon="pi pi-trash"
+                    icon="fas fa-trash"
                     size="small"
                     text
                     rounded
@@ -221,11 +219,11 @@
 
             <template #empty>
               <div class="text-center py-8">
-                <i class="pi pi-users text-4xl text-gray-300 mb-3"></i>
+                <i class="fas fa-users text-4xl text-gray-300 mb-3"></i>
                 <p class="text-gray-500">No customers found</p>
-                <Button 
-                  :label="'Create Customer'" 
-                  icon="pi pi-plus" 
+                <Button
+                  :label="'Create Customer'"
+                  icon="fas fa-plus"
                   size="small"
                   class="mt-3"
                   @click="router.visit(route('customers.create'))"
@@ -249,9 +247,9 @@
     </div>
 
     <!-- Delete Confirmation Dialog -->
-    <Dialog 
-      v-model:visible="deleteDialog.visible" 
-      :header="'Delete Customer'" 
+    <Dialog
+      v-model:visible="deleteDialog.visible"
+      :header="'Delete Customer'"
       :style="{ width: '500px' }"
       modal
     >
@@ -259,7 +257,7 @@
         <div class="text-gray-600">
           Are you sure you want to delete customer <strong>{{ deleteDialog.customer?.name }}</strong>?
         </div>
-        
+
         <div v-if="deleteDialog.customer?.outstanding_balance > 0" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <div class="flex items-center gap-2">
             <i class="pi pi-exclamation-triangle text-yellow-600"></i>
@@ -268,21 +266,21 @@
             </span>
           </div>
         </div>
-        
+
         <div class="text-sm text-gray-500">
           This action cannot be undone. All related data including invoices, payments, and contacts will be affected.
         </div>
       </div>
 
       <template #footer>
-        <Button 
-          label="Cancel" 
-          text 
+        <Button
+          label="Cancel"
+          text
           @click="deleteDialog.visible = false"
         />
-        <Button 
-          label="Delete Customer" 
-          severity="danger" 
+        <Button
+          label="Delete Customer"
+          severity="danger"
           :loading="deleteDialog.loading"
           @click="deleteCustomer"
         />
@@ -295,50 +293,48 @@
 </template>
 
 <script setup lang="ts">
-import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3'
-import { ref, watch, reactive, computed, onUnmounted } from 'vue'
+import { Head, useForm, router } from '@inertiajs/vue3'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import PageHeader from '@/Components/PageHeader.vue'
 import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
-import Calendar from 'primevue/calendar'
 import DataTablePro from '@/Components/DataTablePro.vue'
 import { FilterMatchMode } from '@primevue/core/api'
 import { buildDefaultTableFiltersFromColumns, buildDslFromTableFilters, clearTableFilterField } from '@/Utils/filters'
-import Badge from 'primevue/badge'
 import Card from 'primevue/card'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
-import SvgIcon from '@/Components/SvgIcon.vue'
+import CountryDisplay from '@/Components/CountryDisplay.vue'
+import StatusBadge from '@/Components/StatusBadge.vue'
+import BalanceDisplay from '@/Components/BalanceDisplay.vue'
+import CustomerInfoDisplay from '@/Components/CustomerInfoDisplay.vue'
 import Dialog from 'primevue/dialog'
 import { formatDate, formatMoney } from '@/Utils/formatting'
 import { usePageActions } from '@/composables/usePageActions'
-import { useToast } from 'primevue/usetoast'
 
 interface Customer {
-  id: number
+  id: string
   customer_number: string
   name: string
   email?: string
   phone?: string
   customer_type: string
   status: string
-  created_at: string
   tax_number?: string
-  outstanding_balance?: number
+  outstanding_balance: number
   risk_level?: string
-  is_active?: boolean
+  is_active: boolean
   country?: {
-    id: number
-    name: string
     code: string
+    name: string
+    flag: string
   }
   currency?: {
-    id: number
     code: string
+    name: string
     symbol: string
   }
+  created_at: string
 }
 
 interface FilterForm {
@@ -358,6 +354,14 @@ const props = defineProps({
   countries: Array,
   statusOptions: Array,
   customerTypeOptions: Array,
+})
+
+// Log the received data
+onMounted(() => {
+  if (props.customers?.data?.length > 0) {
+    console.log('Customer Data from Backend:', JSON.stringify(props.customers.data[0], null, 2))
+  }
+  console.log('Full Props Structure:', props)
 })
 
 // Filter form
@@ -398,10 +402,7 @@ const deleteDialog = ref({
   customer: null as Customer | null,
   loading: false
 })
-const page = usePage()
-const toast = page.props.toast || {}
 
-// Breadcrumb items
 const breadcrumbItems = ref([
   { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
   { label: 'Customers', url: '/customers', icon: 'users' },
@@ -565,74 +566,11 @@ const deleteCustomer = () => {
   })
 }
 
-const formatCustomerType = (type: string): string => {
-  const typeMap: Record<string, string> = {
-    'individual': 'Individual',
-    'business': 'Business',
-    'non_profit': 'Non-Profit',
-    'government': 'Government'
-  }
-  return typeMap[type] || type
-}
-
-const getTypeSeverity = (type: string): string => {
-  const severityMap: Record<string, string> = {
-    'individual': 'info',
-    'business': 'success',
-    'non_profit': 'warning',
-    'government': 'secondary'
-  }
-  return severityMap[type] || 'secondary'
-}
-
-const formatStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'active': 'Active',
-    'inactive': 'Inactive',
-    'suspended': 'Suspended'
-  }
-  return statusMap[status] || status
-}
-
-const getStatusSeverity = (status: string): string => {
-  const severityMap: Record<string, string> = {
-    'active': 'success',
-    'inactive': 'secondary',
-    'suspended': 'danger'
-  }
-  return severityMap[status] || 'secondary'
-}
-
-const formatCustomerSince = (dateString: string): string => {
-  const date = new Date(dateString)
-  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-  const year = date.getFullYear().toString().slice(-2)
-  return `${month.slice(0, 3)}'${year}`
-}
-
-const getCountryFlag = (countryCode: string): string => {
-  const flagMap: Record<string, string> = {
-    'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺', 'DE': '🇩🇪',
-    'FR': '🇫🇷', 'IT': '🇮🇹', 'ES': '🇪🇸', 'JP': '🇯🇵', 'CN': '🇨🇳', 'IN': '🇮🇳'
-  }
-  return flagMap[countryCode] || '🌐'
-}
-
-const getRiskBadgeClass = (riskLevel: string): string => {
-  const risk = riskLevel?.toLowerCase() || 'low'
-  switch (risk) {
-    case 'high': return 'text-red-600 font-medium'
-    case 'medium': return 'text-orange-600 font-medium'
-    case 'low': return 'text-green-600 font-medium'
-    default: return 'text-gray-600'
-  }
-}
-// Selection for bulk actions
+  // Selection for bulk actions
 const selectedRows = ref<any[]>([])
 
 // Page Actions rendered in page header
 const { setActions, clearActions } = usePageActions()
-const toasty = useToast()
 
 async function bulkDelete() {
   if (!selectedRows.value.length) return
@@ -657,12 +595,12 @@ async function bulkEnable() {
 }
 
 setActions([
-  { key: 'add', label: 'Add New', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('customers.create')) },
-  { key: 'delete', label: 'Delete Selected', icon: 'pi pi-trash', severity: 'danger', disabled: () => selectedRows.value.length === 0, click: bulkDelete },
-  { key: 'disable', label: 'Disable', icon: 'pi pi-ban', severity: 'secondary', disabled: () => selectedRows.value.length === 0, click: bulkDisable },
-  { key: 'enable', label: 'Enable', icon: 'pi pi-check', severity: 'success', disabled: () => selectedRows.value.length === 0, click: bulkEnable },
-  { key: 'export', label: 'Export', icon: 'pi pi-download', severity: 'secondary', outlined: true, click: () => exportCustomers() },
-  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => applyFilters() },
+  { key: 'add', label: 'Add New', icon: 'fas fa-plus', severity: 'primary', click: () => router.visit(route('customers.create')) },
+  { key: 'delete', label: 'Delete Selected', icon: 'fas fa-trash', severity: 'danger', disabled: () => selectedRows.value.length === 0, click: bulkDelete },
+  { key: 'disable', label: 'Disable', icon: 'fas fa-ban', severity: 'secondary', disabled: () => selectedRows.value.length === 0, click: bulkDisable },
+  { key: 'enable', label: 'Enable', icon: 'fas fa-check', severity: 'success', disabled: () => selectedRows.value.length === 0, click: bulkEnable },
+  { key: 'export', label: 'Export', icon: 'fas fa-download', severity: 'secondary', outlined: true, click: () => exportCustomers() },
+  { key: 'refresh', label: 'Refresh', icon: 'fas fa-sync', severity: 'secondary', click: () => applyFilters() },
 ])
 
 onUnmounted(() => clearActions())

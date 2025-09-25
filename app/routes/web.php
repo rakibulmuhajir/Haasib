@@ -31,6 +31,13 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Settings Routes
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', function () {
+            return Inertia::render('Settings/Index');
+        })->name('index');
+    });
+
     // Company Switch Routes
     Route::post('/company/{company}/switch', [CompanySwitchController::class, 'switch'])->name('company.switch');
     Route::post('/company/set-first', [CompanySwitchController::class, 'setFirstCompany'])->name('company.set-first');
@@ -41,6 +48,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/session-test/company', [SessionTestController::class, 'companySession'])->name('session.test.company');
 
     // API Routes for SPA lookups
+
+    // User Settings API Routes
+    Route::prefix('api/settings')->name('settings.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\UserSettingsController::class, 'index'])->name('index');
+        Route::get('/{group}', [App\Http\Controllers\Api\UserSettingsController::class, 'show'])->name('show');
+        Route::patch('/', [App\Http\Controllers\Api\UserSettingsController::class, 'update'])->name('update');
+        Route::patch('/{group}/{key}', [App\Http\Controllers\Api\UserSettingsController::class, 'updateSetting'])->name('update.setting');
+    });
+
+    // Company Currency API Routes
+    Route::prefix('api/companies/{company}/currencies')->name('companies.currencies.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'index'])->name('index');
+        Route::get('/available', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'available'])->name('available');
+        Route::post('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'store'])->name('store');
+        Route::delete('{currency}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'destroy'])->name('destroy');
+        Route::get('{currency}/exchange-rate', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'getExchangeRate'])->name('exchange-rate.get');
+        Route::patch('{currency}/exchange-rate', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateExchangeRate'])->name('exchange-rate');
+        Route::match(['get', 'patch'], '{currency}/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateSpecificRate'])->name('exchange-rate.update');
+    });
     Route::get('/web/users/suggest', [\App\Http\Controllers\UserLookupController::class, 'suggest']);
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
     Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
@@ -79,6 +105,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])->whereUuid('invoice')->name('send');
         Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])->whereUuid('invoice')->name('post');
         Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])->whereUuid('invoice')->name('cancel');
+        Route::post('/{invoice}/update-status', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'updateStatus'])->whereUuid('invoice')->name('update-status');
         Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->whereUuid('invoice')->name('generate-pdf');
         Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->whereUuid('invoice')->name('send-email');
         Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->whereUuid('invoice')->name('duplicate');

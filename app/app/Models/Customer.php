@@ -34,8 +34,14 @@ class Customer extends Model
         'city',
         'state_province',
         'postal_code',
+        'country_id',
+        'country_data',
+        'currency_data',
+        'outstanding_balance',
+        'risk_level',
     ];
-
+    
+    
     /**
      * Get the id attribute (alias for customer_id).
      */
@@ -117,24 +123,61 @@ class Customer extends Model
         return $this->belongsTo(Currency::class);
     }
 
-    public function country(): BelongsTo
+    public function country_relation(): BelongsTo
     {
-        return $this->belongsTo(Country::class);
+        return $this->belongsTo(Country::class, 'country_id', 'id');
+    }
+
+    public function getCountryDataAttribute()
+    {
+        $countryId = $this->billing_address['country_id'] ?? null;
+        if ($countryId) {
+            // For table display, we only need code and name
+            $country = Country::find($countryId, ['id', 'code', 'name']);
+            return $country ? $country->only(['code', 'name']) : null;
+        }
+        return null;
+    }
+
+    public function getCurrencyDataAttribute()
+    {
+        // If the relationship is loaded, use it
+        if ($this->relationLoaded('currency') && $this->currency) {
+            return $this->currency->code;
+        }
+        
+        // Otherwise, query the database
+        if ($this->currency_id) {
+            $currency = Currency::find($this->currency_id, ['id', 'code']);
+            return $currency ? $currency->code : null;
+        }
+        
+        return null;
+    }
+
+    public function getOutstandingBalanceAttribute(): float
+    {
+        return $this->getOutstandingBalance();
+    }
+
+    public function getRiskLevelAttribute(): string
+    {
+        return $this->getRiskLevel();
     }
 
     public function invoices(): HasMany
     {
-        return $this->hasMany(Invoice::class);
+        return $this->hasMany(Invoice::class, 'customer_id', 'customer_id');
     }
 
     public function payments(): HasMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasMany(Payment::class, 'entity_id', 'customer_id')->where('entity_type', 'customer');
     }
 
     public function accountsReceivable(): HasMany
     {
-        return $this->hasMany(AccountsReceivable::class);
+        return $this->hasMany(AccountsReceivable::class, 'customer_id', 'customer_id');
     }
 
     public function contacts(): HasMany
@@ -220,6 +263,18 @@ class Customer extends Model
     {
         $address = $this->billing_address ?? [];
         $address['postal_code'] = $value;
+        $this->billing_address = $address;
+    }
+
+    public function getCountryIdAttribute(): ?string
+    {
+        return $this->billing_address['country_id'] ?? null;
+    }
+
+    public function setCountryIdAttribute(?string $value): void
+    {
+        $address = $this->billing_address ?? [];
+        $address['country_id'] = $value;
         $this->billing_address = $address;
     }
 

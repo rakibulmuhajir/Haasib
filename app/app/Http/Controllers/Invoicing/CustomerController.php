@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Invoicing;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CustomerResource;
 use App\Models\Country;
 use App\Models\Currency;
 use App\Models\Customer;
@@ -26,8 +27,11 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::with(['currency', 'country'])
+        $query = Customer::query()
             ->where('company_id', $request->user()->current_company_id);
+        
+        // Eager load relationships for clean API response
+        $query->with(['currency', 'country_relation']);
 
         // Apply normalized DSL filters if provided
         if ($request->filled('filters')) {
@@ -108,8 +112,15 @@ class CustomerController extends Controller
             ['value' => 'non_profit', 'label' => 'Non-Profit'],
         ];
 
+        // Log the data structure for debugging
+        $customerData = CustomerResource::collection($customers);
+        \Log::info('Customer Data Structure', [
+            'sample_customer' => $customerData->first(),
+            'collection_structure' => $customerData
+        ]);
+        
         return Inertia::render('Invoicing/Customers/Index', [
-            'customers' => $customers,
+            'customers' => $customerData,
             'filters' => [
                 'dsl' => $request->input('filters'),
                 'is_active' => $request->input('is_active'),
@@ -333,7 +344,7 @@ class CustomerController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => $request->has('name') ? 'required|string|max:255' : 'sometimes|string|max:255',
-            'customer_number' => $request->has('customer_number') ? 'required|string|max:50|unique:customers,customer_number,'.$customer->id.',id,company_id,'.$request->user()->current_company_id : 'sometimes|string|max:50',
+            'customer_number' => $request->has('customer_number') ? 'required|string|max:50|unique:customers,customer_number,'.$customer->id.',customer_id,company_id,'.$request->user()->current_company_id : 'sometimes|string|max:50',
             'customer_type' => $request->has('customer_type') ? 'required|string|in:individual,business,non_profit,government' : 'sometimes|string|in:individual,business,non_profit,government',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
@@ -376,9 +387,31 @@ class CustomerController extends Controller
                 $updateData['taxExempt'] = $request->boolean('tax_exempt');
             }
 
+            // Address fields are now handled directly via accessors/mutators
             $addressFields = ['address_line_1', 'address_line_2', 'city', 'state_province', 'postal_code', 'country_id'];
-            if ($request->hasAny($addressFields)) {
-                $updateData['address'] = $request->only($addressFields);
+            foreach ($addressFields as $field) {
+                if ($request->has($field)) {
+                    $updateData[$field] = $request->input($field);
+                }
+            }
+
+            // Extract address fields before passing to service
+            $addressData = null;
+            if (isset($updateData['address_line_1']) || isset($updateData['address_line_2']) ||
+                isset($updateData['city']) || isset($updateData['state_province']) ||
+                isset($updateData['postal_code']) || isset($updateData['country_id'])) {
+                $addressData = [
+                    'address_line_1' => $updateData['address_line_1'] ?? null,
+                    'address_line_2' => $updateData['address_line_2'] ?? null,
+                    'city' => $updateData['city'] ?? null,
+                    'state_province' => $updateData['state_province'] ?? null,
+                    'postal_code' => $updateData['postal_code'] ?? null,
+                    'country_id' => $updateData['country_id'] ?? null,
+                ];
+                // Remove address fields from updateData to avoid confusion
+                unset($updateData['address_line_1'], $updateData['address_line_2'],
+                    $updateData['city'], $updateData['state_province'],
+                    $updateData['postal_code'], $updateData['country_id']);
             }
 
             $updatedCustomer = $this->customerService->updateCustomer(
@@ -388,7 +421,7 @@ class CustomerController extends Controller
                 $updateData['email'] ?? null,
                 $updateData['phone'] ?? null,
                 $updateData['website'] ?? null,
-                $updateData['address'] ?? null,
+                $addressData,
                 $updateData['currency_id'] ?? null,
                 $updateData['tax_id'] ?? null,
                 $updateData['taxExempt'] ?? null,

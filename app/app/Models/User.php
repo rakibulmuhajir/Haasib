@@ -143,6 +143,21 @@ class User extends Authenticatable
         return $company ? $company->id : null;
     }
 
+    public function settings()
+    {
+        return $this->hasMany(UserSetting::class);
+    }
+
+    public function getSetting(string $key, string $group = 'general', $default = null)
+    {
+        return UserSetting::getSetting($this, $key, $group, $default);
+    }
+
+    public function setSetting(string $key, $value, string $group = 'general'): UserSetting
+    {
+        return UserSetting::setSetting($this, $key, $value, $group);
+    }
+
     public function activate(): void
     {
         if ($this->is_active) {

@@ -115,6 +115,24 @@ const menuItems: MenuItem[] = [
         ]
       }
     ]
+  },
+  {
+    label: 'Settings',
+    children: [
+      {
+        label: 'Account Settings',
+        path: '/settings',
+        icon: 'cog',
+        routeName: 'settings.index',
+        children: [
+          { label: 'General', path: '/settings?group=general', icon: 'cog', routeName: 'settings.index' },
+          { label: 'Currency', path: '/settings?group=currency', icon: 'dollar', routeName: 'settings.index' },
+          { label: 'Notifications', path: '/settings?group=notifications', icon: 'bell', routeName: 'settings.index' },
+          { label: 'Appearance', path: '/settings?group=appearance', icon: 'palette', routeName: 'settings.index' },
+          { label: 'Security', path: '/settings?group=security', icon: 'lock', routeName: 'settings.index' }
+        ]
+      }
+    ]
   }
 ]
 
@@ -134,6 +152,10 @@ const menuSections = [
   {
     title: 'Admin', 
     items: menuItems[2].children || []
+  },
+  {
+    title: 'Settings',
+    items: menuItems[3].children || []
   }
 ]
 

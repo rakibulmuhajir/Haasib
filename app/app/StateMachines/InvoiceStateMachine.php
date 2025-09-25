@@ -111,7 +111,10 @@ class InvoiceStateMachine
                 break;
             case 'cancelled':
                 $this->invoice->cancelled_at = now();
-                $metadata['cancellation_reason'] = $context['reason'] ?? 'No reason provided.';
+                $this->invoice->cancelled_by = Auth::id();
+                $this->invoice->cancellation_reason = $context['reason'] ?? 'Cancelled without reason.';
+                // Keep in metadata for backward compatibility
+                $metadata['cancellation_reason'] = $this->invoice->cancellation_reason;
                 $metadata['cancelled_at'] = now()->toISOString();
                 break;
             case 'draft':

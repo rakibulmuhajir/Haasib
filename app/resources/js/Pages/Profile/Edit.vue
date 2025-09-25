@@ -12,6 +12,10 @@ defineProps({
     status: {
         type: String,
     },
+    user: {
+        type: Object,
+        required: true
+    }
 });
 </script>
 

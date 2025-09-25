@@ -294,7 +294,7 @@
 
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import PageHeader from '@/Components/PageHeader.vue'

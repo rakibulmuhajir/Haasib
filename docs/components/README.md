@@ -125,3 +125,43 @@ This file serves as an index for all component documentation.
 - [InputGroup](./components/InputGroup.md)
 - [InputGroupAddon](./components/InputGroupAddon.md)
 - [OverlayBadge](./components/OverlayBadge.md)
+
+### Documented Components ✅
+- PageHeader - Comprehensive documentation with examples
+- DataTablePro - Advanced table with filtering/sorting features  
+- StatusBadge - Status indicator with color coding
+- BalanceDisplay - Monetary value display with risk indicators
+- CustomerInfoDisplay - Customer information with multiple variants
+
+### Pending Documentation
+- LayoutShell, Breadcrumb, CountryDisplay
+- All PrimeVue base components
+- All form and utility components
+
+## Form Components
+- [InputText](./components/InputText.md)
+- [Dropdown](./components/Dropdown.md)
+- [Calendar](./components/Calendar.md)
+- [InputNumber](./components/InputNumber.md)
+- [Textarea](./components/Textarea.md)
+- [RadioButton](./components/RadioButton.md)
+
+## Action Components
+- [Button](./components/Button.md)
+- [PageActions](./components/PageActions.md)
+
+## Dialog Components
+- [Dialog](./components/Dialog.md)
+
+## Navigation Components
+- [Link](./components/Link.md)
+
+## Layout Components
+- [Card](./components/Card.md)
+- [Fieldset](./components/Fieldset.md)
+- [Divider](./components/Divider.md)
+
+## Utility Components
+- [InputGroup](./components/InputGroup.md)
+- [InputGroupAddon](./components/InputGroupAddon.md)
+- [OverlayBadge](./components/OverlayBadge.md)

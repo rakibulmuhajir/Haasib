@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('bills', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
+            $table->foreignUuid('company_id')->constrained('companies')->cascadeOnDelete();
             $table->foreignUuid('vendor_id')->constrained('vendors')->cascadeOnDelete();
 
             $table->string('bill_number');
@@ -25,7 +25,8 @@ return new class extends Migration
             $table->date('bill_date');
             $table->date('due_date');
 
-            $table->foreignUuid('currency_code')->constrained(table: 'currencies', column: 'code');
+            $table->string('currency_code', 3);
+            $table->foreign('currency_code')->references('code')->on('currencies');
             $table->decimal('exchange_rate', 15, 8)->default(1.00);
 
             $table->decimal('subtotal', 15, 4);
@@ -36,7 +37,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->text('terms')->nullable();
 
-            $table->foreignUuid('approved_by')->nullable()->constrained('auth.users')->nullOnDelete();
+            $table->foreignUuid('approved_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('approved_at')->nullable();
 
             $table->timestamps();

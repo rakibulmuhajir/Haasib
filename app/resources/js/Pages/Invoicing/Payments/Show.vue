@@ -18,7 +18,7 @@
         </Link>
         <Link
           v-if="payment.status === 'pending'"
-          :href="route('payments.edit', payment.id)"
+          :href="route('payments.edit', { payment: payment.payment_id })"
         >
           <Button
             icon="fas fa-edit"

@@ -102,8 +102,8 @@ Route::prefix('customers')->name('customers.')->group(function () {
     Route::post('/bulk', [CustomerApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
 });
 
-// Invoicing requirements endpoint
-Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->group(function () {
+// Invoicing requirements endpoint - uses web middleware for session authentication
+Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middleware(['web', 'auth'])->group(function () {
     Route::get('/', [InvoicingRequirementsController::class, 'getRequirements'])->name('get');
     Route::post('/validate', [InvoicingRequirementsController::class, 'validateAdditionalInfo'])->name('validate');
 });

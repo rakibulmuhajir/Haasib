@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use App\Support\Filtering\FilterBuilder;
+use Brick\Money\Money;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -164,18 +165,18 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get(['customer_id', 'name', 'email', 'currency_id']);
 
-        $query = Invoice::where('company_id', $request->user()->current_company_id)
+        // Get all invoices with balance due > 0, but we'll include currency relationship
+        $invoices = Invoice::where('company_id', $request->user()->current_company_id)
             ->whereIn('status', ['sent', 'posted'])
             ->where('balance_due', '>', 0)
-            ->orderBy('invoice_date');
+            ->with(['currency']) // Load currency relationship
+            ->orderBy('invoice_date')
+            ->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_due', 'currency_id']);
 
         // If invoice_id is provided, filter to that specific invoice
         $selectedInvoice = null;
         if ($request->filled('invoice_id')) {
-            $selectedInvoice = $query->where('invoice_id', $request->invoice_id)->first();
-            $invoices = $selectedInvoice ? [$selectedInvoice] : [];
-        } else {
-            $invoices = $query->get(['invoice_id', 'invoice_number', 'customer_id', 'invoice_date', 'total_amount', 'balance_due']);
+            $selectedInvoice = $invoices->firstWhere('invoice_id', $request->invoice_id);
         }
 
         // Get currencies
@@ -202,16 +203,20 @@ class PaymentController extends Controller
 
         try {
             $customer = Customer::findOrFail($validated['customer_id']);
+            $currency = Currency::findOrFail($validated['currency_id']);
+
+            // Convert amount to Money object
+            $amount = Money::ofMinor($validated['amount'], $currency->code);
 
             $payment = $this->paymentService->createPayment(
                 company: $request->user()->current_company,
                 customer: $customer,
-                amount: $validated['amount'],
-                currency: $validated['currency_id'],
+                amount: $amount,
+                currency: $currency,
                 paymentMethod: $validated['payment_method'],
                 paymentDate: $validated['payment_date'],
                 paymentNumber: $validated['payment_number'],
-                referenceNumber: $validated['reference_number'] ?? null,
+                paymentReference: $validated['reference_number'] ?? null,
                 notes: $validated['notes'] ?? null,
                 autoAllocate: $validated['auto_allocate'] ?? false,
                 invoiceAllocations: $validated['invoice_allocations'] ?? [],

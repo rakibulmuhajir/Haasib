@@ -9,46 +9,37 @@
     <template #topbar>
       <div class="flex items-center justify-between w-full">
         <Breadcrumb :items="breadcrumbItems" />
-        <Link :href="route('payments.create')">
-          <Button label="Create Payment" icon="pi pi-plus" severity="primary" />
-        </Link>
       </div>
     </template>
 
     <div class="space-y-6">
       <!-- Page Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Payments</h1>
-          <p class="text-gray-600 dark:text-gray-400">Manage and track your payments</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <Button
-            label="Export"
-            icon="pi pi-download"
-            severity="secondary"
-            outlined
-            @click="exportPayments"
-          />
-          <Button
-            label="Refresh"
-            icon="pi pi-refresh"
-            severity="secondary"
-            @click="applyFilters"
-          />
-        </div>
-      </div>
-
-      <!-- Filters moved into column menus via DataTablePro -->
+      <PageHeader
+        title="Payments"
+        subtitle="Manage and track your payments"
+        :maxActions="5"
+      >
+        <template #actions>
+          <span class="p-input-icon-left">
+            <i class="fas fa-search"></i>
+            <InputText
+              v-model="table.filterForm.search"
+              placeholder="Search payments..."
+              @keyup.enter="table.fetchData()"
+              class="w-64"
+            />
+          </span>
+        </template>
+      </PageHeader>
 
       <!-- Payments Table -->
       <Card>
         <template #content>
           <!-- Active Filters Chips -->
-          <div v-if="activeFilters.length" class="flex flex-wrap items-center gap-2 mb-3">
+          <div v-if="table.activeFilters.value.length" class="flex flex-wrap items-center gap-2 mb-3">
             <span class="text-xs text-gray-500">Filters:</span>
             <span
-              v-for="f in activeFilters"
+              v-for="f in table.activeFilters.value"
               :key="f.key"
               class="inline-flex items-center text-xs bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded"
             >
@@ -56,13 +47,13 @@
               <button
                 type="button"
                 class="ml-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
-                @click="clearFilter(f.key)"
+                @click="table.clearTableFilterField(table.tableFilters.value, f.field)"
                 aria-label="Clear filter"
               >
                 ×
               </button>
             </span>
-            <Button label="Clear all" size="small" text @click="clearFilters" />
+            <Button label="Clear all" size="small" text @click="table.clearFilters()" />
           </div>
           <DataTablePro
             :value="payments.data"
@@ -71,15 +62,14 @@
             :rows="payments.per_page"
             :totalRecords="payments.total"
             :lazy="true"
-            :sortField="filterForm.sort_by"
-            :sortOrder="filterForm.sort_direction === 'asc' ? 1 : -1"
+            :sortField="table.filterForm.sort_by"
+            :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
             :columns="columns"
-            :virtualScroll="payments.total > 200"
-            scrollHeight="500px"
-            v-model:filters="tableFilters"
-            @page="onPage"
-            @sort="onSort"
-            @filter="onFilter"
+            v-model:filters="table.tableFilters.value"
+            v-model:selection="table.selectedRows.value"
+            @page="table.onPage"
+            @sort="table.onSort"
+            @filter="table.onFilter"
           >
             <template #empty>
               <div class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -117,7 +107,7 @@
 
             <template #cell-amount="{ data }">
               <div class="font-medium text-right text-gray-900">
-                {{ formatMoney(data.amount, data.currency) }}
+                {{ formatMoney(data.amount, data.currency?.code) }}
               </div>
               <div class="text-xs text-gray-500 text-right">
                 Allocated: {{ formatMoney(data.allocated_amount, data.currency) }}
@@ -304,31 +294,25 @@
 </template>
 
 <script setup lang="ts">
-import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3'
-import { ref, watch, reactive, computed } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
+import { ref, reactive, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import DataTablePro from '@/Components/DataTablePro.vue'
 import Badge from 'primevue/badge'
 import Card from 'primevue/card'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
+import PageHeader from '@/Components/PageHeader.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import InputNumber from 'primevue/inputnumber'
+import { usePageActions } from '@/composables/usePageActions'
+import { useDataTable } from '@/composables/useDataTable'
+import { useLookups } from '@/composables/useLookups'
 import { formatMoney, formatDate } from '@/Utils/formatting'
-import { FilterMatchMode, FilterOperator } from '@primevue/core/api'
-import { buildDefaultTableFiltersFromColumns, buildDslFromTableFilters, clearTableFilterField } from '@/Utils/filters'
-
-const page = usePage()
-const toast = page.props.toast || {}
-
-// Breadcrumb items
-const breadcrumbItems = ref([
-  { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
-  { label: 'Payments', url: '/payments', icon: 'credit-card' },
-])
 
 interface Payment {
   id: number
@@ -351,21 +335,6 @@ interface Payment {
   created_at: string
 }
 
-interface FilterForm {
-  status: string | null
-  customer_id: number | null
-  payment_method: string | null
-  date_from: string | null
-  date_to: string | null
-  search: string | null
-  sort_by: string
-  sort_direction: string
-  amount_min?: string | number | null
-  amount_max?: string | number | null
-  created_from?: string | null
-  created_to?: string | null
-}
-
 const props = defineProps({
   payments: Object,
   filters: Object,
@@ -373,6 +342,15 @@ const props = defineProps({
   statusOptions: Array,
   paymentMethodOptions: Array,
 })
+
+const { setActions, clearActions } = usePageActions()
+const { formatPaymentMethod, getPaymentMethodSeverity, formatStatus, getStatusSeverity } = useLookups()
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
+  { label: 'Payments', url: '/payments', icon: 'credit-card' },
+])
 
 // DataTablePro columns definition
 const columns = [
@@ -385,25 +363,14 @@ const columns = [
   { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 120px; text-align: center' },
 ]
 
-// Two-way binding for table filter models
-const tableFilters = ref<Record<string, any>>()
-
-const buildDefaultTableFilters = () => buildDefaultTableFiltersFromColumns(columns as any)
-
-// Filter form
-const filterForm = useForm({
-  status: props.filters?.status || '',
-  customer_id: props.filters?.customer_id || '',
-  payment_method: props.filters?.payment_method || '',
-  date_from: props.filters?.date_from || '',
-  date_to: props.filters?.date_to || '',
-  search: props.filters?.search || '',
-  sort_by: props.filters?.sort_by || 'created_at',
-  sort_direction: props.filters?.sort_direction || 'desc',
-  amount_min: props.filters?.amount_min || '',
-  amount_max: props.filters?.amount_max || '',
-  created_from: props.filters?.created_from || '',
-  created_to: props.filters?.created_to || '',
+const table = useDataTable({
+  columns: columns,
+  initialFilters: props.filters,
+  routeName: 'payments.index',
+  filterLookups: {
+    status: { options: props.statusOptions || [] },
+    payment_method: { options: props.paymentMethodOptions || [] },
+  },
 })
 
 // Dialog states
@@ -421,206 +388,6 @@ const refundDialog = reactive({
   reason: '',
   loading: false
 })
-
-// Build query without empty values
-const buildQuery = () => {
-  const data = filterForm.data() as Record<string, any>
-  const base = Object.fromEntries(
-    Object.entries(data).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
-  )
-  // Build normalized DSL filters from current table filters
-  const dsl = buildDslFromTableFilters(tableFilters.value)
-  if (dsl.rules.length) {
-    base.filters = JSON.stringify(dsl)
-  } else {
-    delete base.filters
-  }
-  return base
-}
-
-// Apply filters
-const applyFilters = () => {
-  router.get(route('payments.index'), buildQuery(), {
-    preserveState: true,
-    preserveScroll: true
-  })
-}
-
-// Clear filters
-const clearFilters = () => {
-  filterForm.reset()
-  tableFilters.value = buildDefaultTableFilters()
-  router.get(route('payments.index'), {}, { preserveState: true, preserveScroll: true })
-}
-
-// Watch for filter changes and auto-apply
-watch(
-  () => [
-    filterForm.status,
-    filterForm.customer_id,
-    filterForm.payment_method,
-    filterForm.date_from,
-    filterForm.date_to,
-    filterForm.search,
-    filterForm.sort_by,
-    filterForm.sort_direction
-  ],
-  () => {
-    if (filterForm.recentlySuccessful) return // Skip after form submission
-    applyFilters()
-  },
-  { deep: true }
-)
-
-// Map DataTablePro events to server-side filters
-const onPage = (e: any) => {
-  const params = { ...buildQuery(), page: (e.page || 0) + 1 }
-  router.get(route('payments.index'), params, { preserveState: true, preserveScroll: true })
-}
-
-const onSort = (e: any) => {
-  if (!e.sortField) return
-  const allowed = ['created_at', 'payment_date', 'amount', 'status']
-  if (!allowed.includes(e.sortField)) return
-  filterForm.sort_by = e.sortField
-  filterForm.sort_direction = e.sortOrder === 1 ? 'asc' : 'desc'
-  applyFilters()
-}
-
-const onFilter = (e: any) => {
-  // Sync local model first to avoid stale fallbacks
-  if (e && e.filters) {
-    tableFilters.value = e.filters
-  }
-  const f: any = (e && e.filters) || tableFilters.value || {}
-  const constraints = (key: string) => (f[key]?.constraints || []) as Array<{ value: any; matchMode: string }>
-  const firstVal = (key: string) => f[key]?.constraints?.[0]?.value ?? null
-  const global = f.global?.value ?? null
-
-  // Map search-like fields
-  filterForm.search = global || firstVal('payment_number') || firstVal('customer_name') || ''
-  filterForm.status = firstVal('status') || ''
-  filterForm.payment_method = firstVal('payment_method') || ''
-
-  // Amount min/max
-  let minAmt: number | null = null
-  let maxAmt: number | null = null
-  for (const c of constraints('amount')) {
-    if (c.value === null || c.value === '') continue
-    const n = typeof c.value === 'number' ? c.value : Number(c.value)
-    if (!Number.isFinite(n)) continue
-    const mode = (c.matchMode || '').toString().toLowerCase()
-    if (mode.includes('greater') || mode === 'gt' || mode === 'gte') {
-      minAmt = minAmt == null ? n : Math.min(minAmt, n)
-    } else if (mode.includes('less') || mode === 'lt' || mode === 'lte') {
-      maxAmt = maxAmt == null ? n : Math.max(maxAmt, n)
-    } else if (mode === 'between' && Array.isArray(c.value)) {
-      const [a, b] = c.value.map((v: any) => Number(v))
-      if (Number.isFinite(a)) minAmt = minAmt == null ? a : Math.min(minAmt, a)
-      if (Number.isFinite(b)) maxAmt = maxAmt == null ? b : Math.max(maxAmt, b)
-    } else if (mode === 'equals' || mode === 'eq') {
-      minAmt = maxAmt = n
-    }
-  }
-  filterForm.amount_min = minAmt ?? ''
-  filterForm.amount_max = maxAmt ?? ''
-
-  // Created_at date range
-  const toDateStr = (d: any) => {
-    if (!d) return ''
-    const dt = typeof d === 'string' ? new Date(d) : d
-    if (!dt || isNaN(dt.getTime())) return ''
-    // Format as local date (avoid UTC shift from toISOString)
-    const y = dt.getFullYear()
-    const m = String(dt.getMonth() + 1).padStart(2, '0')
-    const day = String(dt.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
-
-  let createdFrom: string | '' = ''
-  let createdTo: string | '' = ''
-  for (const c of constraints('created_at')) {
-    const mode = (c.matchMode || '').toString().toLowerCase()
-    if (mode === 'dateafter' || mode === 'after' || mode === 'gt' || mode === 'gte') {
-      createdFrom = toDateStr(c.value) || createdFrom
-    } else if (mode === 'datebefore' || mode === 'before' || mode === 'lt' || mode === 'lte') {
-      createdTo = toDateStr(c.value) || createdTo
-    } else if (mode === 'dateis' || mode === 'equals' || mode === 'eq') {
-      const d = toDateStr(c.value)
-      createdFrom = d
-      createdTo = d
-    } else if (mode === 'between' && Array.isArray(c.value)) {
-      const [a, b] = c.value
-      const aS = toDateStr(a)
-      const bS = toDateStr(b)
-      if (aS) createdFrom = aS
-      if (bS) createdTo = bS
-    }
-  }
-  filterForm.created_from = createdFrom
-  filterForm.created_to = createdTo
-
-  applyFilters()
-}
-
-// Build a normalized DSL (rules + logic) from the DataTable filters
-const buildDslFromTableFilters = () => {
-  return buildDslFromTableFilters(tableFilters.value)
-}
-
-
-// Active filter chips derived from filterForm
-const optionLabel = (opts: Array<any>, value: string) => {
-  const found = (opts || []).find((o: any) => (o.value ?? o.id) === value)
-  return found?.label || value
-}
-
-const activeFilters = computed(() => {
-  const chips: Array<{ key: string; display: string }> = []
-  if (filterForm.search) chips.push({ key: 'search', display: `Search: ${filterForm.search}` })
-  if (filterForm.status) chips.push({ key: 'status', display: `Status: ${optionLabel(props.statusOptions as any, filterForm.status as any)}` })
-  if (filterForm.payment_method) chips.push({ key: 'payment_method', display: `Method: ${optionLabel(props.paymentMethodOptions as any, filterForm.payment_method as any)}` })
-  if (filterForm.amount_min) chips.push({ key: 'amount_min', display: `Amount ≥ ${filterForm.amount_min}` })
-  if (filterForm.amount_max) chips.push({ key: 'amount_max', display: `Amount ≤ ${filterForm.amount_max}` })
-  if (filterForm.created_from) chips.push({ key: 'created_from', display: `Created ≥ ${filterForm.created_from}` })
-  if (filterForm.created_to) chips.push({ key: 'created_to', display: `Created ≤ ${filterForm.created_to}` })
-  return chips
-})
-
-const clearFilter = (key: string) => {
-  ;(filterForm as any)[key] = ''
-  // also clear the corresponding table filter UI state
-  if (!tableFilters.value) tableFilters.value = buildDefaultTableFilters()
-  const tf = tableFilters.value
-  const resetField = (field: string) => {
-    if (tf[field]) {
-      const mm = tf[field].constraints?.[0]?.matchMode
-      tf[field] = { operator: FilterOperator.AND, constraints: [{ value: null, matchMode: mm }] }
-    }
-  }
-  switch (key) {
-    case 'status':
-      resetField('status')
-      break
-    case 'payment_method':
-      resetField('payment_method')
-      break
-    case 'amount_min':
-    case 'amount_max':
-      resetField('amount')
-      break
-    case 'created_from':
-    case 'created_to':
-      resetField('created_at')
-      break
-    case 'search':
-      if (tf.global) tf.global.value = null
-      resetField('payment_number')
-      resetField('customer_name')
-      break
-  }
-  applyFilters()
-}
 
 const viewPayment = (payment: Payment) => {
   router.visit(route('payments.show', payment.id))
@@ -654,7 +421,7 @@ const voidPayment = async () => {
   try {
     await router.post(route('payments.void', voidDialog.payment?.id), {
       reason: voidDialog.reason
-    })
+    }, { preserveState: true, preserveScroll: true })
     voidDialog.visible = false
     applyFilters()
   } catch (error) {
@@ -670,7 +437,7 @@ const refundPayment = async () => {
     await router.post(route('payments.refund', refundDialog.payment?.id), {
       amount: refundDialog.amount,
       reason: refundDialog.reason
-    })
+    }, { preserveState: true, preserveScroll: true })
     refundDialog.visible = false
     applyFilters()
   } catch (error) {
@@ -682,60 +449,16 @@ const refundPayment = async () => {
 
 // Export functionality
 const exportPayments = () => {
-  window.location.href = route('payments.export', filterForm.data())
+  window.location.href = route('payments.export', table.filterForm.data())
 }
 
-const formatPaymentMethod = (method: string): string => {
-  const methodMap: Record<string, string> = {
-    'cash': 'Cash',
-    'check': 'Check',
-    'bank_transfer': 'Bank Transfer',
-    'credit_card': 'Credit Card',
-    'debit_card': 'Debit Card',
-    'paypal': 'PayPal',
-    'stripe': 'Stripe',
-    'other': 'Other'
-  }
-  return methodMap[method] || method
-}
+setActions([
+  { key: 'create', label: 'Create Payment', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('payments.create')) },
+  { key: 'export', label: 'Export', icon: 'pi pi-download', severity: 'secondary', outlined: true, click: () => exportPayments() },
+  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => table.fetchData() },
+])
 
-const formatStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'pending': 'Pending',
-    'completed': 'Completed',
-    'failed': 'Failed',
-    'cancelled': 'Cancelled'
-  }
-  return statusMap[status] || status
-}
-
-const getPaymentMethodSeverity = (method: string): string => {
-  const severityMap: Record<string, string> = {
-    cash: 'success',
-    bank_transfer: 'success',
-    credit_card: 'info',
-    debit_card: 'info',
-    paypal: 'warning',
-    stripe: 'warning',
-    check: 'secondary',
-    other: 'secondary'
-  }
-  return severityMap[method] || 'secondary'
-}
-
-const getStatusSeverity = (status: string): string => {
-  const severityMap: Record<string, string> = {
-    pending: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'secondary'
-  }
-  return severityMap[status] || 'secondary'
-}
-
-const navigateTo = (url: string) => {
-  router.visit(url)
-}
+onUnmounted(() => clearActions())
 
 // Permission helpers
 const canEdit = (payment: Payment) => {

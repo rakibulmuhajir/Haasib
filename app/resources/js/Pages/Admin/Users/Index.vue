@@ -1,109 +1,249 @@
-<script setup>
-import { Head, Link } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">
+import { Head, Link, router, onUnmounted } from '@inertiajs/vue3'
+import { ref, computed, watch } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
+import PageHeader from '@/Components/PageHeader.vue'
+import DataTablePro from '@/Components/DataTablePro.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
 import Badge from 'primevue/badge'
-import Breadcrumb from '@/Components/Breadcrumb.vue'
-import { useApiList } from '@/composables/useApiList.js'
-import { useToasts } from '@/composables/useToasts.js'
+import Card from 'primevue/card'
+import { FilterMatchMode } from '@primevue/core/api'
+import { usePageActions } from '@/composables/usePageActions'
+import { useDataTable } from '@/composables/useDataTable'
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import { http, withIdempotency } from '@/lib/http'
 
-const q = ref('')
-const selectedUsers = ref([])
-const { addToast } = useToasts()
-const batchLoading = ref(false)
-const { items, loading, error, fetch: fetchUsers } = useApiList('/web/users/suggest', {
-  query: q,
-  initialParams: { limit: 50 }
+interface User {
+  id: number
+  name: string
+  email: string
+  system_role: 'superadmin' | 'user'
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+const props = defineProps({
+  users: Object,
+  filters: Object,
 })
 
-onMounted(fetchUsers)
+const confirm = useConfirm()
+const toast = useToast()
+const { setActions } = usePageActions()
 
 // Breadcrumb items
 const breadcrumbItems = ref([
   { label: 'Admin', url: '/admin', icon: 'settings' },
-  { label: 'Users', url: '/admin/users', icon: 'users' }
+  { label: 'Users', url: '/admin/users', icon: 'users' },
 ])
 
-// Batch actions
+// DataTablePro columns definition
+const columns = [
+  { field: 'name', header: 'Name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'min-width: 200px' },
+  { field: 'email', header: 'Email', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'min-width: 250px' },
+  { field: 'system_role', header: 'Role', filter: { type: 'select', options: [{label:'Super Admin', value:'superadmin'},{label:'User', value:'user'}] }, style: 'width: 120px' },
+  { field: 'is_active', header: 'Status', filter: { type: 'select', options: [{label:'Active', value:'active'},{label:'Inactive', value:'inactive'}] }, style: 'width: 120px' },
+  { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 200px; text-align: center' },
+]
+
+// Use the useDataTable composable
+const table = useDataTable({
+  columns: columns,
+  initialFilters: props.filters,
+  routeName: 'admin.users.index',
+  filterLookups: {
+    system_role: {
+      options: [{label:'Super Admin', value:'superadmin'},{label:'User', value:'user'}],
+      labelField: 'label',
+      valueField: 'value'
+    },
+    is_active: {
+      options: [{label:'Active', value:'active'},{label:'Inactive', value:'inactive'}],
+      labelField: 'label',
+      valueField: 'value'
+    }
+  }
+})
+
+// Search functionality
+const searchQuery = ref('')
+
+// Computed properties for selection states
+const hasSelected = computed(() => table.selectedRows.value.length > 0)
+const hasInactive = computed(() => table.selectedRows.value.some((u: User) => !u.is_active))
+const hasActive = computed(() => table.selectedRows.value.some((u: User) => u.is_active))
+
+// Format date
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+// Batch operations
 async function activateSelectedUsers() {
-  if (!selectedUsers.value.length) {
-    addToast('No users selected', 'warning')
+  if (!table.selectedRows.value.length) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'No users selected', life: 3000 })
     return
   }
   
-  if (!confirm(`Activate ${selectedUsers.value.length} selected users?`)) return
-  
-  batchLoading.value = true
-  try {
-    await Promise.all(
-      selectedUsers.value.map(user => 
-        http.post('/commands', {
-          user: user.id
-        }, { headers: withIdempotency({ 'X-Action': 'user.activate' }) })
-      )
-    )
-    addToast(`${selectedUsers.value.length} users activated successfully`, 'success')
-    selectedUsers.value = []
-    fetchUsers()
-  } catch (e) {
-    addToast(e?.response?.data?.message || 'Failed to activate users', 'danger')
-  } finally {
-    batchLoading.value = false
-  }
+  confirm.require({
+    message: `Activate ${table.selectedRows.value.length} selected users?`,
+    header: 'Confirm Activation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Yes, activate them',
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      try {
+        await Promise.all(
+          table.selectedRows.value.map((user: User) => 
+            http.post('/commands', {
+              user: user.id
+            }, { headers: withIdempotency({ 'X-Action': 'user.activate' }) })
+          )
+        )
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `${table.selectedRows.value.length} users activated successfully`,
+          life: 3000
+        })
+        table.selectedRows.value = []
+        table.fetchData()
+      } catch (e) {
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: e?.response?.data?.message || 'Failed to activate users',
+          life: 3000
+        })
+      }
+    }
+  })
 }
 
 async function deactivateSelectedUsers() {
-  if (!selectedUsers.value.length) {
-    addToast('No users selected', 'warning')
+  if (!table.selectedRows.value.length) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'No users selected', life: 3000 })
     return
   }
   
-  if (!confirm(`Deactivate ${selectedUsers.value.length} selected users?`)) return
-  
-  batchLoading.value = true
-  try {
-    await Promise.all(
-      selectedUsers.value.map(user => 
-        http.post('/commands', {
-          user: user.id
-        }, { headers: withIdempotency({ 'X-Action': 'user.deactivate' }) })
-      )
-    )
-    addToast(`${selectedUsers.value.length} users deactivated successfully`, 'success')
-    selectedUsers.value = []
-    fetchUsers()
-  } catch (e) {
-    addToast(e?.response?.data?.message || 'Failed to deactivate users', 'danger')
-  } finally {
-    batchLoading.value = false
-  }
+  confirm.require({
+    message: `Deactivate ${table.selectedRows.value.length} selected users?`,
+    header: 'Confirm Deactivation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Yes, deactivate them',
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      try {
+        await Promise.all(
+          table.selectedRows.value.map((user: User) => 
+            http.post('/commands', {
+              user: user.id
+            }, { headers: withIdempotency({ 'X-Action': 'user.deactivate' }) })
+          )
+        )
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `${table.selectedRows.value.length} users deactivated successfully`,
+          life: 3000
+        })
+        table.selectedRows.value = []
+        table.fetchData()
+      } catch (e) {
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: e?.response?.data?.message || 'Failed to deactivate users',
+          life: 3000
+        })
+      }
+    }
+  })
 }
 
-async function toggleUserStatus(user) {
+async function toggleUserStatus(user: User) {
   const action = user.is_active ? 'user.deactivate' : 'user.activate'
   const actionText = user.is_active ? 'deactivate' : 'activate'
   
-  if (!confirm(`${actionText.charAt(0).toUpperCase() + actionText.slice(1)} user ${user.name}?`)) return
+  confirm.require({
+    message: `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} user ${user.name}?`,
+    header: 'Confirm Action',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: `Yes, ${actionText}`,
+    rejectLabel: 'Cancel',
+    accept: async () => {
+      try {
+        await http.post('/commands', {
+          user: user.id
+        }, { headers: withIdempotency({ 'X-Action': action }) })
+        
+        toast.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `User ${actionText}d successfully`,
+          life: 3000
+        })
+        table.fetchData()
+      } catch (e) {
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: e?.response?.data?.message || `Failed to ${actionText} user`,
+          life: 3000
+        })
+      }
+    }
+  })
+}
+
+// Update actions based on selection
+function updateActions() {
+  const actions = [
+    { key: 'create', label: 'Create User', icon: 'pi pi-user-plus', severity: 'primary', click: () => router.visit(route('admin.users.create')) },
+  ]
   
-  batchLoading.value = true
-  try {
-    await http.post('/commands', {
-      user: user.id
-    }, { headers: withIdempotency({ 'X-Action': action }) })
-    
-    addToast(`User ${actionText}d successfully`, 'success')
-    fetchUsers()
-  } catch (e) {
-    addToast(e?.response?.data?.message || `Failed to ${actionText} user`, 'danger')
-  } finally {
-    batchLoading.value = false
+  if (hasSelected.value) {
+    if (hasActive.value) {
+      actions.push({
+        key: 'deactivate', 
+        label: `Deactivate Selected (${table.selectedRows.value.length})`, 
+        icon: 'pi pi-user-minus', 
+        severity: 'warning', 
+        click: deactivateSelectedUsers
+      })
+    }
+    if (hasInactive.value) {
+      actions.push({
+        key: 'activate', 
+        label: `Activate Selected (${table.selectedRows.value.length})`, 
+        icon: 'pi pi-user-plus', 
+        severity: 'success', 
+        click: activateSelectedUsers
+      })
+    }
   }
+  
+  setActions(actions)
+}
+
+// Watch for selection changes
+watch([table.selectedRows, table.items], () => {
+  updateActions()
+})
+
+// Search handler
+const handleSearch = () => {
+  table.filterForm.search = searchQuery.value
+  table.fetchData()
 }
 </script>
 
@@ -125,124 +265,195 @@ async function toggleUserStatus(user) {
     </template>
 
     <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <InputText
-            v-model="q"
-            placeholder="Search users by name or email…"
-            class="w-96"
-            @keyup.enter="fetchUsers"
-          />
-          <Button label="Search" @click="fetchUsers" />
-        </div>
-        
-        <!-- Batch Actions -->
-        <div v-if="selectedUsers.length" class="flex items-center gap-2">
-          <span class="text-sm text-gray-600">{{ selectedUsers.length }} selected</span>
-          <Button 
-            label="Activate" 
-            icon="pi pi-check" 
-            size="small" 
-            severity="success"
-            :loading="batchLoading"
-            :disabled="selectedUsers.every(user => user.is_active)"
-            @click="activateSelectedUsers"
-          />
-          <Button 
-            label="Deactivate" 
-            icon="pi pi-times" 
-            size="small" 
-            severity="warning"
-            :loading="batchLoading"
-            :disabled="selectedUsers.every(user => !user.is_active)"
-            @click="deactivateSelectedUsers"
-          />
-          <Button 
-            label="Clear" 
-            icon="pi pi-times" 
-            size="small" 
-            text
-            @click="selectedUsers = []"
-          />
-        </div>
-      </div>
-
-      <div v-if="error" class="p-3 rounded bg-red-50 text-red-700 border border-red-200">{{ error }}</div>
-
-      <DataTable
-        v-model:selection="selectedUsers"
-        :value="items"
-        :loading="loading"
-        stripedRows
-        class="w-full"
-        :paginator="items.length > 10"
-        :rows="10"
-        :rowsPerPageOptions="[10, 25, 50]"
-        dataKey="id"
+      <PageHeader
+        title="Users"
+        subtitle="Manage system users and their permissions"
+        :maxActions="5"
       >
-        <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-        <Column field="name" header="Name">
-          <template #body="slotProps">
-            <div class="font-medium">{{ slotProps.data.name }}</div>
-          </template>
-        </Column>
-        <Column field="email" header="Email">
-          <template #body="slotProps">
-            <div class="text-sm">{{ slotProps.data.email }}</div>
-          </template>
-        </Column>
-        <Column field="system_role" header="Role">
-          <template #body="slotProps">
-            <Badge
-              v-if="slotProps.data.system_role === 'superadmin'"
-              severity="danger"
-              value="Super Admin"
+        <template #actions>
+          <span class="p-input-icon-left">
+            <i class="fas fa-search"></i>
+            <InputText
+              v-model="searchQuery"
+              placeholder="Search users by name or email..."
+              class="w-96"
+              @keyup.enter="handleSearch"
             />
-            <span v-else class="text-sm text-gray-500">User</span>
-          </template>
-        </Column>
-        <Column field="is_active" header="Status">
-          <template #body="slotProps">
-            <Badge
-              :value="slotProps.data.is_active ? 'Active' : 'Inactive'"
-              :severity="slotProps.data.is_active ? 'success' : 'danger'"
-            />
-          </template>
-        </Column>
-        <Column header="Actions">
-          <template #body="slotProps">
-            <div class="flex items-center gap-2">
-              <Button 
-                v-if="!slotProps.data.is_active"
-                label="Activate" 
-                size="small" 
-                icon="pi pi-check"
-                severity="success"
-                :loading="batchLoading && selectedUsers.some(u => u.id === slotProps.data.id)"
-                @click="toggleUserStatus(slotProps.data)"
-              />
-              <Button 
-                v-if="slotProps.data.is_active"
-                label="Deactivate" 
-                size="small" 
-                icon="pi pi-times"
-                severity="warning"
-                :loading="batchLoading && selectedUsers.some(u => u.id === slotProps.data.id)"
-                @click="toggleUserStatus(slotProps.data)"
-              />
-              <Link :href="route('admin.users.show', slotProps.data.id)">
-                <Button label="Manage" size="small" icon="pi pi-settings" />
-              </Link>
-            </div>
-          </template>
-        </Column>
-        <template #empty>
-          <div class="text-center py-8 text-gray-500">No users found.</div>
+          </span>
         </template>
-        <template #loading>
-          <div class="text-center py-8 text-gray-500">Loading…</div>
+      </PageHeader>
+
+      <!-- Users Table -->
+      <Card>
+        <template #content>
+          <!-- Active Filters Chips -->
+          <div v-if="table.activeFilters.value.length" class="flex flex-wrap items-center gap-2 mb-3">
+            <span class="text-xs text-gray-500">Filters:</span>
+            <span
+              v-for="f in table.activeFilters.value"
+              :key="f.key"
+              class="inline-flex items-center text-xs bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded"
+            >
+              <span class="mr-1">{{ f.display }}</span>
+              <button
+                type="button"
+                class="ml-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
+                @click="table.clearTableFilterField(table.tableFilters.value, f.field)"
+                aria-label="Clear filter"
+              >
+                ×
+              </button>
+            </span>
+            <Button label="Clear all" size="small" text @click="table.clearFilters()" />
+          </div>
+          
+          <DataTablePro
+            :value="users.data"
+            :loading="users.loading"
+            :paginator="true"
+            :rows="users.per_page"
+            :totalRecords="users.total"
+            :lazy="true"
+            :sortField="table.filterForm.sort_by"
+            :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
+            :columns="columns"
+            :virtualScroll="users.total > 200"
+            scrollHeight="500px"
+            responsiveLayout="stack"
+            breakpoint="960px"
+            v-model:filters="table.tableFilters.value"
+            v-model:selection="table.selectedRows.value"
+            selectionMode="multiple"
+            dataKey="id"
+            :showSelectionColumn="true"
+            @page="table.onPage"
+            @sort="table.onSort"
+            @filter="table.onFilter"
+          >
+            <template #cell-name="{ data }">
+              <div class="font-medium text-gray-900 dark:text-white">{{ data.name }}</div>
+            </template>
+
+            <template #cell-email="{ data }">
+              <div class="text-sm">{{ data.email }}</div>
+            </template>
+
+            <template #cell-system_role="{ data }">
+              <Badge
+                v-if="data.system_role === 'superadmin'"
+                severity="danger"
+                value="Super Admin"
+                size="small"
+              />
+              <Badge
+                v-else
+                severity="info"
+                value="User"
+                size="small"
+              />
+            </template>
+
+            <template #cell-is_active="{ data }">
+              <Badge
+                :value="data.is_active ? 'Active' : 'Inactive'"
+                :severity="data.is_active ? 'success' : 'danger'"
+                size="small"
+              />
+            </template>
+
+            <template #cell-actions="{ data }">
+              <div class="flex items-center justify-center gap-2">
+                <!-- View -->
+                <Link :href="route('admin.users.show', data.id)">
+                  <button
+                    class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-all duration-200 transform hover:scale-105"
+                    title="View user details"
+                  >
+                    <i class="fas fa-eye text-blue-600 dark:text-blue-400"></i>
+                  </button>
+                </Link>
+                
+                <!-- Edit -->
+                <Link :href="route('admin.users.edit', data.id)">
+                  <button
+                    class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-100 dark:hover:bg-green-900/20 transition-all duration-200 transform hover:scale-105"
+                    title="Edit user"
+                  >
+                    <i class="fas fa-edit text-green-600 dark:text-green-400"></i>
+                  </button>
+                </Link>
+                
+                <!-- Permissions -->
+                <Link :href="route('admin.users.permissions', data.id)">
+                  <button
+                    class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-all duration-200 transform hover:scale-105"
+                    title="Manage permissions"
+                  >
+                    <i class="fas fa-key text-purple-600 dark:text-purple-400"></i>
+                  </button>
+                </Link>
+                
+                <!-- Activity Log -->
+                <Link :href="route('admin.users.activity', data.id)">
+                  <button
+                    class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/20 transition-all duration-200 transform hover:scale-105"
+                    title="View activity log"
+                  >
+                    <i class="fas fa-history text-orange-600 dark:text-orange-400"></i>
+                  </button>
+                </Link>
+                
+                <!-- Toggle Status -->
+                <button
+                  v-if="data.is_active"
+                  @click="toggleUserStatus(data)"
+                  class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-red-100 dark:hover:bg-red-900/20 transition-all duration-200 transform hover:scale-105"
+                  title="Deactivate user"
+                >
+                  <i class="fas fa-user-slash text-red-600 dark:text-red-400"></i>
+                </button>
+                <button
+                  v-else
+                  @click="toggleUserStatus(data)"
+                  class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-100 dark:hover:bg-green-900/20 transition-all duration-200 transform hover:scale-105"
+                  title="Activate user"
+                >
+                  <i class="fas fa-user-check text-green-600 dark:text-green-400"></i>
+                </button>
+              </div>
+            </template>
+
+            <template #empty>
+              <div class="text-center py-8">
+                <i class="fas fa-users text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                <p class="text-gray-500 dark:text-gray-400">No users found</p>
+                <p class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your filters or create a new user.</p>
+              </div>
+            </template>
+
+            <template #loading>
+              <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                <p class="text-gray-500 dark:text-gray-400">Loading users...</p>
+              </div>
+            </template>
+
+            <template #footer>
+              <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>
+                  Showing {{ users.from }} to {{ users.to }} of {{ users.total }} users
+                </span>
+                <span>
+                  Selected: {{ table.selectedRows.value.length }}
+                </span>
+              </div>
+            </template>
+          </DataTablePro>
         </template>
-      </DataTable>
+      </Card>
     </div>
+
+    <!-- Toast for notifications -->
+    <Toast position="top-right" />
   </LayoutShell>
 </template>

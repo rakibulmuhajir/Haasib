@@ -1,5 +1,6 @@
 <template>
   <LayoutShell>
+    <Head :title="`Customer: ${customerData.name}`" />
     <template #sidebar>
       <Sidebar title="Invoicing" />
     </template>
@@ -10,21 +11,21 @@
 
     <div class="max-w-6xl">
       <PageHeader title="Customer Details" :subtitle="customerData.name" :maxActions="5">
-        <template #actions-left>
-          <Button 
+        <template #actions>
+          <Button
             label="Create Invoice"
             icon="pi pi-file"
             size="small"
             @click="createInvoice"
           />
-          <Button 
+          <Button
             label="Record Payment"
             icon="pi pi-dollar"
             size="small"
             severity="success"
             @click="recordPayment"
           />
-          <Button 
+          <Button
             label="View Statement"
             icon="pi pi-file-pdf"
             size="small"
@@ -32,7 +33,7 @@
             outlined
             @click="viewStatement"
           />
-          <Button 
+          <Button
             label="Edit Customer"
             icon="pi pi-pencil"
             size="small"
@@ -42,7 +43,7 @@
           />
         </template>
       </PageHeader>
-      
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left Column - Customer Information -->
         <div class="lg:col-span-2 space-y-6">
@@ -61,7 +62,7 @@
                     <span class="text-xs text-gray-500">(Read-only)</span>
                   </div>
                 </div>
-                
+
                 <!-- Customer Number -->
                 <div>
                   <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -72,7 +73,7 @@
                     <span class="text-xs text-gray-500">(Auto-generated)</span>
                   </div>
                 </div>
-                
+
                 <!-- Customer Type -->
                 <div>
                   <InlineEditable
@@ -87,13 +88,13 @@
                   >
                     <template #display>
                       <Tag
-                        :value="formatCustomerType(customerData.customer_type)"
-                        :severity="getTypeSeverity(customerData.customer_type)"
+                        :value="formatCustomerType(customerData.customer_type || '')"
+                        :severity="getCustomerTypeSeverity(customerData.customer_type || '')"
                       />
                     </template>
                   </InlineEditable>
                 </div>
-                
+
                 <!-- Status -->
                 <div>
                   <InlineEditable
@@ -108,20 +109,20 @@
                   >
                     <template #display>
                       <Tag
-                        :value="formatStatus(customerData.status)"
-                        :severity="getStatusSeverity(customerData.status)"
+                        :value="formatStatus(customerData.status || '')"
+                        :severity="getStatusSeverity(customerData.status || '')"
                       />
                     </template>
                   </InlineEditable>
                 </div>
-                
+
                 <div>
                   <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                     Created
                   </label>
                   <div>{{ formatDate(customerData.created_at) }}</div>
                 </div>
-                
+
                 <!-- Email -->
                 <div>
                   <InlineEditable
@@ -146,7 +147,7 @@
                     </template>
                   </InlineEditable>
                 </div>
-                
+
                 <!-- Phone -->
                 <div>
                   <InlineEditable
@@ -170,7 +171,7 @@
                     </template>
                   </InlineEditable>
                 </div>
-                
+
                 <!-- Website -->
                 <div class="md:col-span-2">
                   <InlineEditable
@@ -198,7 +199,7 @@
                   </InlineEditable>
                 </div>
               </div>
-              
+
               <div v-if="customerData.notes" class="mt-4">
                 <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Notes
@@ -227,7 +228,7 @@
                     @cancel="cancelEditing"
                   />
                 </div>
-                
+
                 <!-- City -->
                 <div>
                   <InlineEditable
@@ -240,7 +241,7 @@
                     @cancel="cancelEditing"
                   />
                 </div>
-                
+
                 <!-- State/Province -->
                 <div>
                   <InlineEditable
@@ -253,7 +254,7 @@
                     @cancel="cancelEditing"
                   />
                 </div>
-                
+
                 <!-- Postal Code -->
                 <div>
                   <InlineEditable
@@ -266,7 +267,7 @@
                     @cancel="cancelEditing"
                   />
                 </div>
-                
+
                 <!-- Country -->
                 <div>
                   <InlineEditable
@@ -292,121 +293,7 @@
           </Card>
 
           <!-- Contacts Section -->
-          <Card>
-            <template #title>Contacts</template>
-            <template #content>
-              <!-- Add Contact Button -->
-              <div v-if="!addingContact" class="mb-4">
-                <Button
-                  label="+ Add Contact"
-                  icon="pi pi-plus"
-                  severity="secondary"
-                  text
-                  @click="startAddingContact"
-                />
-              </div>
-              
-              <!-- Add Contact Form -->
-              <div v-else class="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      First Name *
-                    </label>
-                    <InputText
-                      v-model="newContact.first_name"
-                      class="w-full"
-                      placeholder="First name"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Last Name *
-                    </label>
-                    <InputText
-                      v-model="newContact.last_name"
-                      class="w-full"
-                      placeholder="Last name"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Position
-                    </label>
-                    <InputText
-                      v-model="newContact.position"
-                      class="w-full"
-                      placeholder="Job title"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email
-                    </label>
-                    <InputText
-                      v-model="newContact.email"
-                      class="w-full"
-                      placeholder="Email address"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Phone
-                    </label>
-                    <InputText
-                      v-model="newContact.phone"
-                      class="w-full"
-                      placeholder="Phone number"
-                    />
-                  </div>
-                </div>
-                <div class="mt-4 flex items-center gap-2">
-                  <button
-                    class="text-xs text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                    @click="saveContact"
-                  >
-                    <i class="fas fa-check text-xs mr-1"></i>
-                    save contact
-                  </button>
-                  <button
-                    class="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                    @click="cancelAddingContact"
-                  >
-                    <i class="fas fa-times text-xs mr-1"></i>
-                    cancel
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Existing Contacts -->
-              <div v-if="customerData.contacts && customerData.contacts.length > 0" class="space-y-4">
-                <div
-                  v-for="contact in customerData.contacts"
-                  :key="contact.id"
-                  class="flex items-center justify-between p-4 border rounded-lg"
-                >
-                  <div class="flex-1">
-                    <div class="font-medium">{{ contact.first_name }} {{ contact.last_name }}</div>
-                    <div v-if="contact.position" class="text-sm text-gray-500">
-                      {{ contact.position }}
-                    </div>
-                    <div v-if="contact.email" class="text-sm text-blue-600">
-                      {{ contact.email }}
-                    </div>
-                    <div v-if="contact.phone" class="text-sm text-gray-600">
-                      {{ contact.phone }}
-                    </div>
-                  </div>
-                  <div v-if="contact.is_primary" class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                    Primary
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-center py-4 text-gray-500">
-                <p>No contacts added yet</p>
-              </div>
-            </template>
-          </Card>
+          <CustomerContacts :customer-id="customerData.id" :contacts="customerData.contacts" />
         </div>
 
         <!-- Right Column - Financial Summary -->
@@ -419,30 +306,30 @@
               <div class="space-y-4">
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-500">Account Balance</span>
-                  <span class="font-medium" :class="accountBalance > 0 ? 'text-red-600' : 'text-green-600'">
+                  <span class="font-medium" :class="(customerData.outstanding_balance || 0) > 0 ? 'text-red-600' : 'text-green-600'">
                     {{ formatMoney(accountBalance, customerData.currency?.code) }}
                   </span>
                 </div>
-                
+
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-500">Available Credit</span>
                   <span class="font-medium">
                     {{ formatMoney(customerData.credit_limit || 0, customerData.currency?.code) }}
                   </span>
                 </div>
-                
+
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-500">Outstanding Invoices</span>
                   <span class="font-medium">
                     {{ customerData.invoices?.filter(i => i.status !== 'paid' && i.status !== 'cancelled').length || 0 }}
                   </span>
                 </div>
-                
+
                 <div class="pt-2 border-t">
                   <div class="flex justify-between items-center">
                     <span class="text-sm text-gray-500">Tax Status</span>
-                    <Tag 
-                      :value="customerData.tax_exempt ? 'Tax Exempt' : 'Taxable'" 
+                    <Tag
+                      :value="customerData.tax_exempt ? 'Tax Exempt' : 'Taxable'"
                       :severity="customerData.tax_exempt ? 'success' : 'info'"
                     />
                   </div>
@@ -486,12 +373,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { ref, computed, reactive } from 'vue'
+import { router, Head } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import PageHeader from '@/Components/PageHeader.vue'
+import CustomerContacts from '@/composables/CustomerContacts.vue'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -499,6 +387,7 @@ import InputText from 'primevue/inputtext'
 import InlineEditable from '@/Components/InlineEditable.vue'
 import { useToast } from 'primevue/usetoast'
 import { formatMoney, formatDate } from '@/Utils/formatting'
+import { useLookups } from '@/composables/useLookups'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { http } from '@/lib/http'
 
@@ -518,12 +407,12 @@ interface Customer {
   state_province?: string
   postal_code?: string
   country?: {
-    id: number
+    id: string
     name: string
     code: string
   }
   currency?: {
-    id: number
+    id: string
     code: string
     symbol: string
   }
@@ -532,7 +421,7 @@ interface Customer {
   payment_terms?: string
   credit_limit?: number
   notes?: string
-  contacts: Array<{
+  contacts?: Array<{
     id: number
     first_name: string
     last_name: string
@@ -541,6 +430,11 @@ interface Customer {
     phone?: string
     is_primary: boolean
   }>
+  invoices?: any[]
+  // This is a temporary fix for the data structure mismatch
+  country_id?: string
+  billing_address?: { country_id?: string }
+  outstanding_balance?: number
 }
 
 interface Activity {
@@ -561,6 +455,13 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const {
+  formatCustomerType,
+  getCustomerTypeSeverity,
+  formatStatus,
+  getStatusSeverity,
+  getActivityIcon,
+} = useLookups()
 
 // Use the inline edit composable
 const {
@@ -605,14 +506,6 @@ const isEditingCity = createEditingComputed('city')
 const isEditingStateProvince = createEditingComputed('state_province')
 const isEditingPostalCode = createEditingComputed('postal_code')
 const isEditingCountry = createEditingComputed('country')
-const addingContact = ref(false)
-const newContact = ref({
-  first_name: '',
-  last_name: '',
-  position: '',
-  email: '',
-  phone: ''
-})
 
 // Breadcrumb items
 const breadcrumbItems = [
@@ -653,7 +546,7 @@ const countryId = computed({
 
 // Get country object from countries list
 const customerCountry = computed(() => {
-  const countryIdValue = props.customer.country_id || props.customer.billing_address?.country_id
+  const countryIdValue = customerData.value.country_id || customerData.value.billing_address?.country_id
   return props.countries?.find(c => c.id === countryIdValue)
 })
 
@@ -672,65 +565,9 @@ const validateUrl = (url: string): string | null => {
   return null
 }
 
-const startAddingContact = () => {
-  addingContact.value = true
-  newContact.value = {
-    first_name: '',
-    last_name: '',
-    position: '',
-    email: '',
-    phone: ''
-  }
-}
-
-const cancelAddingContact = () => {
-  addingContact.value = false
-  newContact.value = {
-    first_name: '',
-    last_name: '',
-    position: '',
-    email: '',
-    phone: ''
-  }
-}
-
-const saveContact = async () => {
-  try {
-    await http.post(route('customers.contacts.store', props.customer.id), newContact.value)
-    
-    // Refresh the page to show updated data
-    router.reload()
-    
-    addingContact.value = false
-    
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Contact added successfully',
-      life: 3000
-    })
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.message || 'Failed to add contact',
-      life: 3000
-    })
-  }
-}
-
-const hasAddress = computed(() => {
-  return props.customer.address_line_1 || 
-         props.customer.city || 
-         props.customer.state_province || 
-         props.customer.postal_code ||
-         props.customer.country
-})
-
 const accountBalance = computed(() => {
-  // This would typically come from the customer's current balance
-  // For now, we'll use a placeholder
-  return 0
+  // Use the outstanding_balance from the customer data if available
+  return customerData.value.outstanding_balance || 0
 })
 
 const recentActivity = computed(() => {
@@ -738,59 +575,6 @@ const recentActivity = computed(() => {
   // For now, we'll use an empty array
   return [] as Activity[]
 })
-
-const formatCustomerType = (type: string): string => {
-  const typeMap: Record<string, string> = {
-    'individual': 'Individual',
-    'small_business': 'Small Business',
-    'medium_business': 'Medium Business',
-    'large_business': 'Large Business',
-    'non_profit': 'Non-Profit',
-    'government': 'Government'
-  }
-  return typeMap[type] || type
-}
-
-const getTypeSeverity = (type: string): string => {
-  const severityMap: Record<string, string> = {
-    'individual': 'info',
-    'small_business': 'success',
-    'medium_business': 'success',
-    'large_business': 'success',
-    'non_profit': 'warning',
-    'government': 'secondary'
-  }
-  return severityMap[type] || 'secondary'
-}
-
-const formatStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'active': 'Active',
-    'inactive': 'Inactive',
-    'suspended': 'Suspended'
-  }
-  return statusMap[status] || status
-}
-
-const getStatusSeverity = (status: string): string => {
-  const severityMap: Record<string, string> = {
-    'active': 'success',
-    'inactive': 'secondary',
-    'suspended': 'danger'
-  }
-  return severityMap[status] || 'secondary'
-}
-
-const getActivityIcon = (type: string): string => {
-  const iconMap: Record<string, string> = {
-    'invoice': 'fas fa-file-invoice',
-    'payment': 'fas fa-money-bill-wave',
-    'credit': 'fas fa-credit-card',
-    'debit': 'fas fa-arrow-down',
-    'adjustment': 'fas fa-edit'
-  }
-  return iconMap[type] || 'fas fa-circle'
-}
 
 const createInvoice = () => {
   // Navigate to create invoice page with customer pre-selected

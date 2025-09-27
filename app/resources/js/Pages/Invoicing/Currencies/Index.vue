@@ -1,268 +1,245 @@
 <template>
-  <LayoutShell :title="pageMeta.title">
-    <template #title>
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold text-gray-900">Currencies</h1>
-        <div class="flex items-center gap-3">
-          <Button 
-            :label="'Export Currencies'" 
-            icon="pi pi-download" 
-            outlined 
-            size="small"
-            @click="exportCurrencies"
-          />
-          <Button 
-            :label="'Exchange Rates'" 
-            icon="pi pi-sync" 
-            size="small"
-            @click="navigateTo(route('currencies.exchange-rates'))"
-          />
-        </div>
+  <Head title="Currencies" />
+
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Invoicing System" />
+    </template>
+
+    <template #topbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
       </div>
     </template>
 
-    <template #filters>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Status</label>
-          <Dropdown 
-            v-model="filterForm.status" 
-            :options="statusOptions" 
-            optionLabel="label" 
-            optionValue="value"
-            placeholder="All Currencies"
-            class="w-full"
-            @change="applyFilters"
-          />
-        </div>
-      </div>
+    <div class="space-y-6">
+      <PageHeader
+        title="Currencies"
+        subtitle="Manage and configure currencies for your company"
+        :maxActions="5"
+      >
+        <template #actions>
+          <span class="p-input-icon-left">
+            <i class="fas fa-search"></i>
+            <InputText
+              v-model="table.filterForm.search"
+              placeholder="Search currencies..."
+              class="w-64"
+            />
+          </span>
+        </template>
+      </PageHeader>
 
-      <div class="p-4 border-t">
-        <div class="flex items-center gap-3">
-          <span class="text-sm text-gray-600">Search:</span>
-          <InputText 
-            v-model="filterForm.search" 
-            placeholder="Search currencies..."
-            class="flex-1"
-            @keyup.enter="applyFilters"
-          />
-          <Button 
-            icon="pi pi-refresh" 
-            size="small" 
-            outlined
-            @click="clearFilters"
-            v-tooltip.bottom="'Reset filters'"
-          />
-        </div>
-      </div>
-    </template>
-
-    <template #content>
+      <!-- Currencies Table -->
       <Card>
         <template #content>
-          <DataTable
+          <!-- Active Filters Chips -->
+          <div v-if="table.activeFilters.value.length" class="flex flex-wrap items-center gap-2 mb-3">
+            <span class="text-xs text-gray-500">Filters:</span>
+            <span
+              v-for="f in table.activeFilters.value"
+              :key="f.key"
+              class="inline-flex items-center text-xs bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded"
+            >
+              <span class="mr-1">{{ f.display }}</span>
+              <button
+                type="button"
+                class="ml-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
+                @click="table.clearTableFilterField(table.tableFilters.value, f.field)"
+                aria-label="Clear filter"
+              >
+                ×
+              </button>
+            </span>
+            <Button label="Clear all" size="small" text @click="table.clearFilters()" />
+          </div>
+          <DataTablePro
             :value="currencies.data"
             :loading="currencies.loading"
             :paginator="true"
             :rows="currencies.per_page"
             :totalRecords="currencies.total"
             :lazy="true"
-            @sort="handleSort"
-            :sortField="filterForm.sort_by"
-            :sortOrder="filterForm.sort_direction === 'asc' ? 1 : -1"
-            stripedRows
-            responsiveLayout="scroll"
-            class="w-full"
+            :sortField="table.filterForm.sort_by"
+            :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
+            :columns="columns"
+            :virtualScroll="currencies.total > 200"
+            scrollHeight="500px"
+            responsiveLayout="stack"
+            breakpoint="960px"
+            v-model:filters="table.tableFilters.value"
+            v-model:selection="table.selectedRows.value"
+            selectionMode="multiple"
+            dataKey="id"
+            :showSelectionColumn="true"
+            @page="table.onPage"
+            @sort="table.onSort"
+            @filter="table.onFilter"
           >
-          <Column
-            field="code"
-            header="Code"
-            :sortable="true"
-            style="width: 80px"
-          >
-            <template #body="{ data }">
+            <template #cell-code="{ data }">
               <div class="font-medium">{{ data.code }}</div>
             </template>
-          </Column>
-          
-          <Column
-            field="name"
-            header="Currency Name"
-            :sortable="true"
-            style="width: 200px"
-          >
-            <template #body="{ data }">
+
+            <template #cell-name="{ data }">
               {{ data.name }}
             </template>
-          </Column>
-          
-          <Column
-            field="symbol"
-            header="Symbol"
-            style="width: 80px"
-          >
-            <template #body="{ data }">
+
+            <template #cell-symbol="{ data }">
               <span class="text-lg">{{ data.symbol }}</span>
             </template>
-          </Column>
-          
-          <Column 
-            field="status" 
-            header="Status" 
-            style="width: 100px"
-          >
-            <template #body="{ data }">
+
+            <template #cell-status="{ data }">
               <Badge 
                 :value="getCurrencyStatus(data)"
                 :severity="getStatusSeverity(data)"
                 size="small"
               />
             </template>
-          </Column>
-          
-          <Column 
-            header="Actions" 
-            style="width: 120px; text-align: center"
-            exportable="false"
-          >
-            <template #body="{ data }">
-              <div class="flex items-center justify-center gap-1">
-                <Button
+
+            <template #cell-actions="{ data }">
+              <div class="flex items-center justify-center gap-2">
+                <!-- Enable/Disable -->
+                <button
                   v-if="!isCurrencyEnabled(data)"
-                  icon="pi pi-plus"
-                  size="small"
-                  text
-                  rounded
                   @click="enableCurrency(data)"
-                  v-tooltip.bottom="'Enable Currency'"
-                  severity="success"
-                />
+                  class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-100 dark:hover:bg-green-900/20 transition-all duration-200 transform hover:scale-105"
+                  title="Enable Currency"
+                >
+                  <i class="fas fa-plus text-green-600 dark:text-green-400"></i>
+                </button>
                 
-                <Button
+                <button
                   v-else
-                  icon="pi pi-minus"
-                  size="small"
-                  text
-                  rounded
                   @click="confirmDisable(data)"
-                  v-tooltip.bottom="'Disable Currency'"
-                  severity="danger"
-                />
+                  class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-red-100 dark:hover:bg-red-900/20 transition-all duration-200 transform hover:scale-105"
+                  title="Disable Currency"
+                >
+                  <i class="fas fa-minus text-red-600 dark:text-red-400"></i>
+                </button>
                 
-                <Button
-                  icon="pi pi-sync"
-                  size="small"
-                  text
-                  rounded
-                  @click="navigateTo(route('currencies.exchange-rates'))"
-                  v-tooltip.bottom="'Exchange Rates'"
-                />
+                <!-- Exchange Rates -->
+                <Link :href="route('currencies.exchange-rates')">
+                  <button
+                    class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-all duration-200 transform hover:scale-105"
+                    title="Exchange Rates"
+                  >
+                    <i class="fas fa-sync text-blue-600 dark:text-blue-400"></i>
+                  </button>
+                </Link>
               </div>
             </template>
-          </Column>
 
-          <template #empty>
-            <div class="text-center py-8">
-              <i class="pi pi-coins text-4xl text-gray-300 mb-3"></i>
-              <p class="text-gray-500">No currencies found</p>
-            </div>
-          </template>
+            <template #empty>
+              <div class="text-center py-8">
+                <i class="fas fa-coins text-4xl text-gray-300 mb-3"></i>
+                <p class="text-gray-500">No currencies found</p>
+                <p class="text-sm">Try adjusting your filters or enable currencies for your company.</p>
+              </div>
+            </template>
 
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-gray-600">
-              <span>
-                Showing {{ currencies.from }} to {{ currencies.to }} of {{ currencies.total }} currencies
-              </span>
-              <span>
-                Enabled: {{ companyCurrencies.length }}
-              </span>
-            </div>
-          </template>
-        </DataTable>
-      </template>
-    </Card>
+            <template #footer>
+              <div class="flex items-center justify-between text-sm text-gray-600">
+                <span>
+                  Showing {{ currencies.from }} to {{ currencies.to }} of {{ currencies.total }} currencies
+                </span>
+                <span>
+                  Enabled: {{ companyCurrencies.length }}
+                </span>
+              </div>
+            </template>
+          </DataTablePro>
+        </template>
+      </Card>
 
-    <!-- Enabled Currencies Summary -->
-    <Card class="mt-6">
-      <template #title>Enabled Currencies Summary</template>
-      <template #content>
-        <div v-if="companyCurrencies.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div
-            v-for="currency in companyCurrencies"
-            :key="currency.id"
-            class="flex items-center justify-between p-3 border rounded-lg bg-green-50"
-          >
-            <div>
-              <div class="font-medium">{{ currency.code }}</div>
-              <div class="text-sm text-gray-600">{{ currency.name }}</div>
+      <!-- Enabled Currencies Summary -->
+      <Card>
+        <template #title>Enabled Currencies Summary</template>
+        <template #content>
+          <div v-if="companyCurrencies.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-for="currency in companyCurrencies"
+              :key="currency.id"
+              class="flex items-center justify-between p-3 border rounded-lg bg-green-50 dark:bg-green-900/20"
+            >
+              <div>
+                <div class="font-medium">{{ currency.code }}</div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">{{ currency.name }}</div>
+              </div>
+              <div class="text-lg">{{ currency.symbol }}</div>
             </div>
-            <div class="text-lg">{{ currency.symbol }}</div>
           </div>
-        </div>
-        <div v-else class="text-center py-8 text-gray-500">
-          <i class="pi pi-coins text-4xl text-gray-300 mb-3"></i>
-          <p>No currencies enabled for your company.</p>
-          <p class="text-sm">Enable currencies from the list above to start using them.</p>
-        </div>
-      </template>
-    </Card>
-  </template>
-
-  <!-- Disable Confirmation Dialog -->
-  <Dialog 
-    v-model:visible="disableDialog.visible" 
-    :header="'Disable Currency'" 
-    :style="{ width: '500px' }"
-    modal
-  >
-    <div class="space-y-4">
-      <div class="text-gray-600">
-        Are you sure you want to disable currency <strong>{{ disableDialog.currency?.name }}</strong> ({{ disableDialog.currency?.code }})?
-      </div>
-      
-      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-        <div class="flex items-center gap-2">
-          <i class="pi pi-exclamation-triangle text-yellow-600"></i>
-          <span class="text-sm text-yellow-800">
-            Disabling this currency will prevent it from being used in new transactions.
-          </span>
-        </div>
-      </div>
-      
-      <div class="text-sm text-gray-500">
-        Existing transactions using this currency will remain unaffected.
-      </div>
+          <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
+            <i class="fas fa-coins text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+            <p>No currencies enabled for your company.</p>
+            <p class="text-sm">Enable currencies from the list above to start using them.</p>
+          </div>
+        </template>
+      </Card>
     </div>
 
-    <template #footer>
-      <Button 
-        label="Cancel" 
-        text 
-        @click="disableDialog = false"
-      />
-      <Button 
-        label="Disable Currency" 
-        severity="danger" 
-        :loading="disableDialog.loading"
-        @click="disableCurrency"
-      />
-    </template>
-  </Dialog>
+    <!-- Disable Confirmation Dialog -->
+    <Dialog 
+      v-model:visible="disableDialog.visible" 
+      :header="'Disable Currency'" 
+      :style="{ width: '500px' }"
+      modal
+    >
+      <div class="space-y-4">
+        <div class="text-gray-600 dark:text-gray-400">
+          Are you sure you want to disable currency <strong>{{ disableDialog.currency?.name }}</strong> ({{ disableDialog.currency?.code }})?
+        </div>
+        
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400"></i>
+            <span class="text-sm text-yellow-800 dark:text-yellow-200">
+              Disabling this currency will prevent it from being used in new transactions.
+            </span>
+          </div>
+        </div>
+        
+        <div class="text-sm text-gray-500 dark:text-gray-400">
+          Existing transactions using this currency will remain unaffected.
+        </div>
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          text 
+          @click="disableDialog.visible = false"
+        />
+        <Button 
+          label="Disable Currency" 
+          severity="danger" 
+          :loading="disableDialog.loading"
+          @click="disableCurrency"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Toast for notifications -->
+    <Toast position="top-right" />
   </LayoutShell>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
+import { computed, ref, reactive, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
+import PageHeader from '@/Components/PageHeader.vue'
 import Card from 'primevue/card'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Dropdown from 'primevue/dropdown'
+import DataTablePro from '@/Components/DataTablePro.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import Badge from 'primevue/badge'
 import Dialog from 'primevue/dialog'
+import { FilterMatchMode } from '@primevue/core/api'
+import { usePageActions } from '@/composables/usePageActions'
+import { useDataTable } from '@/composables/useDataTable'
+import { useToast } from 'primevue/usetoast'
 
 interface Currency {
   id: number
@@ -271,76 +248,57 @@ interface Currency {
   symbol: string
 }
 
-interface FilterForm {
-  status: string | null
-  search: string | null
-  sort_by: string
-  sort_direction: string
-}
-
-const props = defineProps<{
-  currencies: any
-  companyCurrencies: Currency[]
-  filters: any
-}>()
-
-const filterForm = reactive<FilterForm>({
-  status: props.filters.status || null,
-  search: props.filters.search || null,
-  sort_by: props.filters.sort_by || 'name',
-  sort_direction: props.filters.sort_direction || 'asc'
+const props = defineProps({
+  currencies: Object,
+  companyCurrencies: Array<Currency>,
+  filters: Object,
 })
 
+const toasty = useToast()
+const { setActions, clearActions } = usePageActions()
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Invoicing', url: '/invoices', icon: 'file-text' },
+  { label: 'Currencies', url: '/currencies', icon: 'coins' },
+])
+
+// DataTablePro columns definition
+const columns = [
+  { field: 'code', header: 'Code', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 100px' },
+  { field: 'name', header: 'Currency Name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 250px' },
+  { field: 'symbol', header: 'Symbol', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 100px' },
+  { field: 'status', header: 'Status', filter: { type: 'select', options: [{label:'Enabled', value:'enabled'},{label:'Disabled', value:'disabled'}] }, style: 'width: 120px' },
+  { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 140px; text-align: center' },
+]
+
+// Use the useDataTable composable
+const table = useDataTable({
+  columns: columns,
+  initialFilters: props.filters,
+  routeName: 'currencies.index',
+  filterLookups: {
+    status: {
+      options: [{label:'Enabled', value:'enabled'},{label:'Disabled', value:'disabled'}],
+      labelField: 'label',
+      valueField: 'value'
+    }
+  }
+})
+
+// Dialog state
 const disableDialog = reactive({
   visible: false,
   currency: null as Currency | null,
   loading: false
 })
 
-const pageMeta = computed(() => ({
-  title: 'Currencies'
-}))
-
+// Export functionality
 const exportCurrencies = () => {
-  const params = new URLSearchParams()
-  Object.entries(filterForm).forEach(([key, value]) => {
-    if (value !== null && value !== undefined && value !== '') {
-      params.append(key, String(value))
-    }
-  })
-  
-  const url = route('currencies.export') + '?' + params.toString()
-  window.open(url, '_blank')
+  window.location.href = route('currencies.export', table.filterForm.data())
 }
 
-const statusOptions = [
-  { label: 'All Currencies', value: null },
-  { label: 'Enabled', value: 'enabled' },
-  { label: 'Disabled', value: 'disabled' }
-]
-
-const applyFilters = () => {
-  router.get(route('currencies.index'), filterForm, {
-    preserveState: true,
-    preserveScroll: true,
-    replace: true
-  })
-}
-
-const clearFilters = () => {
-  Object.keys(filterForm).forEach(key => {
-    if (key === 'sort_by' || key === 'sort_direction') return
-    filterForm[key as keyof FilterForm] = null
-  })
-  applyFilters()
-}
-
-const handleSort = (event: any) => {
-  filterForm.sort_by = event.sortField
-  filterForm.sort_direction = event.sortOrder === 1 ? 'asc' : 'desc'
-  applyFilters()
-}
-
+// Currency helper functions
 const isCurrencyEnabled = (currency: Currency): boolean => {
   return props.companyCurrencies.some(c => c.id === currency.id)
 }
@@ -358,7 +316,15 @@ const enableCurrency = (currency: Currency) => {
     route('currencies.enable'),
     { currency_id: currency.id },
     {
-      preserveScroll: true
+      preserveScroll: true,
+      onSuccess: () => {
+        toasty.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: `${currency.code} enabled successfully`,
+          life: 3000
+        })
+      }
     }
   )
 }
@@ -379,6 +345,12 @@ const disableCurrency = () => {
       onSuccess: () => {
         disableDialog.visible = false
         disableDialog.currency = null
+        toasty.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Currency disabled successfully',
+          life: 3000
+        })
       },
       onFinish: () => {
         disableDialog.loading = false
@@ -387,13 +359,59 @@ const disableCurrency = () => {
   )
 }
 
-onMounted(() => {
-  // Initialize tooltips if available
-  if (window.bootstrap && window.bootstrap.Tooltip) {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new window.bootstrap.Tooltip(tooltipTriggerEl)
-    })
-  }
-})
+// Bulk operations
+async function bulkEnable() {
+  if (!table.selectedRows.value.length) return
+  if (!confirm(`Enable ${table.selectedRows.value.length} selected currencies?`)) return
+  
+  await router.post(route('currencies.bulk'), { 
+    action: 'enable', 
+    currency_ids: table.selectedRows.value.map((r: Currency) => r.id) 
+  }, { 
+    preserveState: true, 
+    preserveScroll: true,
+    onSuccess: () => {
+      toasty.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: `${table.selectedRows.value.length} currencies enabled successfully`,
+        life: 3000
+      })
+      table.selectedRows.value = []
+    }
+  })
+}
+
+async function bulkDisable() {
+  if (!table.selectedRows.value.length) return
+  if (!confirm(`Disable ${table.selectedRows.value.length} selected currencies?`)) return
+  
+  await router.post(route('currencies.bulk'), { 
+    action: 'disable', 
+    currency_ids: table.selectedRows.value.map((r: Currency) => r.id) 
+  }, { 
+    preserveState: true, 
+    preserveScroll: true,
+    onSuccess: () => {
+      toasty.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: `${table.selectedRows.value.length} currencies disabled successfully`,
+        life: 3000
+      })
+      table.selectedRows.value = []
+    }
+  })
+}
+
+// Page Actions
+setActions([
+  { key: 'exchange', label: 'Exchange Rates', icon: 'pi pi-sync', severity: 'secondary', click: () => router.visit(route('currencies.exchange-rates')) },
+  { key: 'enable', label: 'Enable Selected', icon: 'pi pi-plus', severity: 'success', disabled: () => table.selectedRows.value.length === 0, click: bulkEnable },
+  { key: 'disable', label: 'Disable Selected', icon: 'pi pi-minus', severity: 'danger', disabled: () => table.selectedRows.value.length === 0, click: bulkDisable },
+  { key: 'export', label: 'Export', icon: 'pi pi-download', severity: 'secondary', outlined: true, click: () => exportCurrencies() },
+  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => table.fetchData() },
+])
+
+onUnmounted(() => clearActions())
 </script>

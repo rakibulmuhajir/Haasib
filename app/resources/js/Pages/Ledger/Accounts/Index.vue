@@ -1,26 +1,69 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
+import { computed, ref, onUnmounted } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
+import PageHeader from '@/Components/PageHeader.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
 import Card from 'primevue/card'
 import Badge from 'primevue/badge'
 import TreeTable from 'primevue/treetable'
 import Column from 'primevue/column'
+import { usePageActions } from '@/composables/usePageActions'
+import { useToast } from 'primevue/usetoast'
+import { FilterMatchMode } from '@primevue/core/api'
+
+interface Account {
+  id: number
+  code: string
+  name: string
+  type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'
+  normal_balance: 'debit' | 'credit'
+  active: boolean
+  system_account: boolean
+  description?: string
+  level: number
+  journal_lines_count: number
+  children?: Account[]
+}
+
+interface TreeNode {
+  key: number
+  data: Account
+  children?: TreeNode[]
+}
 
 const page = usePage()
 const filters = ref({
   type: '',
-  active: ''
+  active: '',
+  search: ''
 })
+
+const toasty = useToast()
+const { setActions, clearActions } = usePageActions()
 
 // Permissions
 const canView = computed(() => 
   page.props.auth.permissions?.['ledger.accounts.view'] ?? false
 )
+const canCreate = computed(() => 
+  page.props.auth.permissions?.['ledger.accounts.create'] ?? false
+)
+const canEdit = computed(() => 
+  page.props.auth.permissions?.['ledger.accounts.edit'] ?? false
+)
+
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Ledger', url: '/ledger', icon: 'book' },
+  { label: 'Chart of Accounts', url: '/ledger/accounts', icon: 'sitemap' },
+])
 
 // Filter options
 const typeOptions = [
@@ -37,6 +80,21 @@ const activeOptions = [
   { label: 'Active Only', value: true },
   { label: 'Inactive Only', value: false }
 ]
+
+// Filter and search
+const filteredTreeData = computed(() => {
+  const accounts = page.props.accounts as Account[] || []
+  const filtered = accounts.filter(account => {
+    const matchesType = !filters.value.type || account.type === filters.value.type
+    const matchesActive = filters.value.active === '' || account.active === filters.value.active
+    const matchesSearch = !filters.value.search || 
+      account.name.toLowerCase().includes(filters.value.search.toLowerCase()) ||
+      account.code.toLowerCase().includes(filters.value.search.toLowerCase())
+    
+    return matchesType && matchesActive && matchesSearch
+  })
+  return transformAccountsToTree(filtered)
+})
 
 // Format currency
 const formatCurrency = (amount: number) => {
@@ -74,33 +132,19 @@ const getStatusIndicator = (active: boolean, systemAccount: boolean) => {
 }
 
 // Transform accounts for TreeTable
-const transformAccountsToTree = (accounts: any[]) => {
+const transformAccountsToTree = (accounts: Account[]): TreeNode[] => {
   return accounts.map(account => ({
     key: account.id,
     data: {
-      id: account.id,
-      code: account.code,
-      name: account.name,
-      type: account.type,
-      normal_balance: account.normal_balance,
-      active: account.active,
-      system_account: account.system_account,
-      description: account.description,
-      level: account.level,
-      journal_lines_count: account.journal_lines_count || 0,
-      children: account.children || []
+      ...account,
+      journal_lines_count: account.journal_lines_count || 0
     },
     children: account.children ? transformAccountsToTree(account.children) : []
   }))
 }
 
-const treeData = computed(() => {
-  const accounts = page.props.accounts as any[] || []
-  return transformAccountsToTree(accounts)
-})
-
 // Calculate account balance (simplified for display)
-const calculateAccountBalance = (account: any) => {
+const calculateAccountBalance = (account: Account) => {
   // This would typically come from the backend with actual balance calculations
   const balance = Math.random() * 100000 - 50000 // Mock balance for demo
   return {
@@ -108,70 +152,162 @@ const calculateAccountBalance = (account: any) => {
     type: balance >= 0 ? account.normal_balance : (account.normal_balance === 'debit' ? 'credit' : 'debit')
   }
 }
+
+// Apply filters
+const applyFilters = () => {
+  router.visit(route('ledger.accounts.index', {
+    type: filters.value.type || undefined,
+    active: filters.value.active !== '' ? filters.value.active : undefined,
+    search: filters.value.search || undefined
+  }), {
+    preserveState: true,
+    preserveScroll: true
+  })
+}
+
+// Clear all filters
+const clearFilters = () => {
+  filters.value = {
+    type: '',
+    active: '',
+    search: ''
+  }
+  router.visit(route('ledger.accounts.index'), {
+    preserveState: true,
+    preserveScroll: true
+  })
+}
+
+// Page Actions
+setActions([
+  { key: 'create', label: 'New Account', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('ledger.accounts.create')), disabled: () => !canCreate.value },
+  { key: 'refresh', label: 'Refresh', icon: 'pi pi-refresh', severity: 'secondary', click: () => router.visit(route('ledger.accounts.index')) },
+])
+
+onUnmounted(() => clearActions())
 </script>
 
 <template>
+  <Head title="Chart of Accounts" />
+
   <LayoutShell>
     <template #sidebar>
-      <!-- Sidebar content will be handled by the layout -->
+      <Sidebar title="Chart of Accounts" />
     </template>
     
     <template #topbar>
-      <div class="flex items-center justify-between">
-        <Breadcrumb :items="[{ label: 'Chart of Accounts' }]" />
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
       </div>
     </template>
 
     <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            Chart of Accounts
-          </h1>
-          <p class="text-gray-600 dark:text-gray-400 mt-1">
-            Browse and manage your company's chart of accounts
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Chart of Accounts"
+        subtitle="Browse and manage your company's chart of accounts"
+        :maxActions="5"
+      >
+        <template #actions>
+          <span class="p-input-icon-left">
+            <i class="fas fa-search"></i>
+            <InputText
+              v-model="filters.search"
+              placeholder="Search accounts..."
+              class="w-64"
+              @keyup.enter="applyFilters"
+            />
+          </span>
+        </template>
+      </PageHeader>
 
-      <!-- Filters -->
+      <!-- Filters Card -->
       <Card>
         <template #title>Filters</template>
         <template #content>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Account Type
-              </label>
-              <Select
-                v-model="filters.type"
-                :options="typeOptions"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                placeholder="Select type"
-              />
+          <div class="flex flex-wrap gap-4">
+            <!-- Active Filters Display -->
+            <div v-if="filters.type || filters.active !== '' || filters.search" class="flex flex-wrap items-center gap-2 mb-3 w-full">
+              <span class="text-xs text-gray-500 dark:text-gray-400">Active filters:</span>
+              <span
+                v-if="filters.type"
+                class="inline-flex items-center text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded"
+              >
+                Type: {{ typeOptions.find(t => t.value === filters.type)?.label }}
+                <button
+                  type="button"
+                  class="ml-1 text-blue-500 hover:text-blue-700 dark:hover:text-blue-200"
+                  @click="filters.type = ''; applyFilters()"
+                  aria-label="Clear type filter"
+                >
+                  ×
+                </button>
+              </span>
+              <span
+                v-if="filters.active !== ''"
+                class="inline-flex items-center text-xs bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded"
+              >
+                Status: {{ activeOptions.find(a => a.value === filters.active)?.label }}
+                <button
+                  type="button"
+                  class="ml-1 text-green-500 hover:text-green-700 dark:hover:text-green-200"
+                  @click="filters.active = ''; applyFilters()"
+                  aria-label="Clear status filter"
+                >
+                  ×
+                </button>
+              </span>
+              <span
+                v-if="filters.search"
+                class="inline-flex items-center text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2 py-1 rounded"
+              >
+                Search: "{{ filters.search }}"
+                <button
+                  type="button"
+                  class="ml-1 text-purple-500 hover:text-purple-700 dark:hover:text-purple-200"
+                  @click="filters.search = ''; applyFilters()"
+                  aria-label="Clear search filter"
+                >
+                  ×
+                </button>
+              </span>
+              <Button label="Clear all" size="small" text @click="clearFilters" />
             </div>
             
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Status
-              </label>
-              <Select
-                v-model="filters.active"
-                :options="activeOptions"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                placeholder="Select status"
-              />
-            </div>
-            
-            <div class="flex items-end">
-              <Link :href="route('ledger.accounts.index', filters)" preserve-state>
-                <Button label="Apply Filters" class="w-full" />
-              </Link>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Account Type
+                </label>
+                <Select
+                  v-model="filters.type"
+                  :options="typeOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="w-full"
+                  placeholder="Select type"
+                  @change="applyFilters"
+                />
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Status
+                </label>
+                <Select
+                  v-model="filters.active"
+                  :options="activeOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="w-full"
+                  placeholder="Select status"
+                  @change="applyFilters"
+                />
+              </div>
+              
+              <div class="flex items-end gap-2">
+                <Button label="Apply Filters" @click="applyFilters" />
+                <Button label="Clear" text @click="clearFilters" />
+              </div>
             </div>
           </div>
         </template>
@@ -181,18 +317,21 @@ const calculateAccountBalance = (account: any) => {
       <Card>
         <template #content>
           <TreeTable 
-            :value="treeData"
-            :paginator="true"
+            :value="filteredTreeData"
+            :paginator="filteredTreeData.length > 20"
             :rows="20"
+            :virtualScroll="filteredTreeData.length > 200"
+            scrollHeight="500px"
             stripedRows
             responsiveLayout="scroll"
             sortMode="single"
             sortField="code"
             :sortOrder="1"
+            :loading="!page.props.accounts"
           >
             <Column field="code" header="Code" expander style="width: 100px">
               <template #body="{ node }">
-                <span class="font-mono text-sm">{{ node.data.code }}</span>
+                <span class="font-mono text-sm font-medium">{{ node.data.code }}</span>
               </template>
             </Column>
             
@@ -201,7 +340,7 @@ const calculateAccountBalance = (account: any) => {
                 <div class="flex items-center gap-2">
                   <span 
                     class="text-sm font-medium"
-                    :class="node.data.active ? 'text-gray-900 dark:text-white' : 'text-gray-400'"
+                    :class="node.data.active ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'"
                   >
                     {{ node.data.name }}
                   </span>
@@ -217,7 +356,7 @@ const calculateAccountBalance = (account: any) => {
                     />
                   </div>
                 </div>
-                <div v-if="node.data.description" class="text-xs text-gray-500 mt-1">
+                <div v-if="node.data.description" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {{ node.data.description }}
                 </div>
               </template>
@@ -256,31 +395,77 @@ const calculateAccountBalance = (account: any) => {
                 <div class="text-right">
                   <div 
                     class="text-sm font-medium"
-                    :class="calculateAccountBalance(node.data).type === 'debit' ? 'text-green-600' : 'text-red-600'"
+                    :class="calculateAccountBalance(node.data).type === 'debit' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
                   >
                     {{ formatCurrency(Math.abs(calculateAccountBalance(node.data).amount)) }}
                   </div>
-                  <div class="text-xs text-gray-500">
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
                     {{ calculateAccountBalance(node.data).type }}
                   </div>
                 </div>
               </template>
             </Column>
             
-            <Column field="actions" header="Actions" style="width: 100px">
+            <Column field="actions" header="Actions" style="width: 180px">
               <template #body="{ node }">
                 <div class="flex items-center justify-center gap-2">
+                  <!-- View -->
                   <Link :href="route('ledger.accounts.show', node.data.id)">
-                    <Button
-                      text
-                      icon="eye"
-                      size="small"
-                      v-tooltip.top="'View details'"
-                    />
+                    <button
+                      class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-all duration-200 transform hover:scale-105"
+                      title="View details"
+                    >
+                      <i class="fas fa-eye text-blue-600 dark:text-blue-400"></i>
+                    </button>
+                  </Link>
+                  
+                  <!-- Edit -->
+                  <Link v-if="canEdit && !node.data.system_account" :href="route('ledger.accounts.edit', node.data.id)">
+                    <button
+                      class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-100 dark:hover:bg-green-900/20 transition-all duration-200 transform hover:scale-105"
+                      title="Edit account"
+                    >
+                      <i class="fas fa-edit text-green-600 dark:text-green-400"></i>
+                    </button>
+                  </Link>
+                  
+                  <!-- View Journal -->
+                  <Link :href="route('ledger.accounts.journal', node.data.id)">
+                    <button
+                      class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-all duration-200 transform hover:scale-105"
+                      title="View journal entries"
+                    >
+                      <i class="fas fa-book text-purple-600 dark:text-purple-400"></i>
+                    </button>
+                  </Link>
+                  
+                  <!-- Balance Report -->
+                  <Link :href="route('ledger.accounts.balance', node.data.id)">
+                    <button
+                      class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/20 transition-all duration-200 transform hover:scale-105"
+                      title="View balance report"
+                    >
+                      <i class="fas fa-chart-line text-orange-600 dark:text-orange-400"></i>
+                    </button>
                   </Link>
                 </div>
               </template>
             </Column>
+            
+            <template #empty>
+              <div class="text-center py-8">
+                <i class="fas fa-sitemap text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                <p class="text-gray-500 dark:text-gray-400">No accounts found</p>
+                <p class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your filters.</p>
+              </div>
+            </template>
+            
+            <template #loading>
+              <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                <p class="text-gray-500 dark:text-gray-400">Loading accounts...</p>
+              </div>
+            </template>
           </TreeTable>
         </template>
       </Card>
@@ -290,8 +475,8 @@ const calculateAccountBalance = (account: any) => {
         <Card>
           <template #content>
             <div class="text-center">
-              <div class="text-2xl font-bold text-blue-600">Assets</div>
-              <div class="text-sm text-gray-500">Balance Sheet</div>
+              <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">Assets</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Balance Sheet</div>
             </div>
           </template>
         </Card>
@@ -299,8 +484,8 @@ const calculateAccountBalance = (account: any) => {
         <Card>
           <template #content>
             <div class="text-center">
-              <div class="text-2xl font-bold text-orange-600">Liabilities</div>
-              <div class="text-sm text-gray-500">Balance Sheet</div>
+              <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">Liabilities</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Balance Sheet</div>
             </div>
           </template>
         </Card>
@@ -308,8 +493,8 @@ const calculateAccountBalance = (account: any) => {
         <Card>
           <template #content>
             <div class="text-center">
-              <div class="text-2xl font-bold text-green-600">Equity</div>
-              <div class="text-sm text-gray-500">Balance Sheet</div>
+              <div class="text-2xl font-bold text-green-600 dark:text-green-400">Equity</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Balance Sheet</div>
             </div>
           </template>
         </Card>
@@ -317,8 +502,8 @@ const calculateAccountBalance = (account: any) => {
         <Card>
           <template #content>
             <div class="text-center">
-              <div class="text-2xl font-bold text-green-600">Revenue</div>
-              <div class="text-sm text-gray-500">Income Statement</div>
+              <div class="text-2xl font-bold text-green-600 dark:text-green-400">Revenue</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Income Statement</div>
             </div>
           </template>
         </Card>
@@ -326,13 +511,16 @@ const calculateAccountBalance = (account: any) => {
         <Card>
           <template #content>
             <div class="text-center">
-              <div class="text-2xl font-bold text-red-600">Expenses</div>
-              <div class="text-sm text-gray-500">Income Statement</div>
+              <div class="text-2xl font-bold text-red-600 dark:text-red-400">Expenses</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">Income Statement</div>
             </div>
           </template>
         </Card>
       </div>
     </div>
+
+    <!-- Toast for notifications -->
+    <Toast position="top-right" />
   </LayoutShell>
 </template>
 
@@ -360,5 +548,9 @@ const calculateAccountBalance = (account: any) => {
 :deep(.p-card) {
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+:deep(.p-treetable .p-treetable-toggler) {
+  margin-right: 0.5rem;
 }
 </style>

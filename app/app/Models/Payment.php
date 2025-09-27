@@ -240,10 +240,20 @@ class Payment extends Model
         // For seeder purposes, use a simple sequential number
         $latestPayment = static::where('company_id', $company->id)
             ->whereDate('created_at', today())
-            ->orderBy('payment_id', 'desc')
+            ->orderBy('payment_number', 'desc')
             ->first();
 
-        $sequence = $latestPayment ? ($latestPayment->payment_id % 10000) + 1 : 1;
+        // Extract sequence number from payment_number instead of using UUID
+        $sequence = 1;
+        if ($latestPayment && $latestPayment->payment_number) {
+            // Extract the sequence number from the payment_number
+            // Assuming format like PAY-20241226-0001
+            $parts = explode('-', $latestPayment->payment_number);
+            $lastSequence = end($parts);
+            if (is_numeric($lastSequence)) {
+                $sequence = (int) $lastSequence + 1;
+            }
+        }
 
         return str_replace(
             ['{prefix}', '{year}', '{month}', '{day}', '{sequence:4}', '{sequence:5}', '{sequence:6}'],

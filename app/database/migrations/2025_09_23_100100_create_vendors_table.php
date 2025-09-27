@@ -22,7 +22,8 @@ return new class extends Migration
             $table->text('billing_address')->nullable();
             $table->string('tax_number')->nullable();
 
-            $table->foreignUuid('currency_code')->nullable()->constrained(table: 'currencies', column: 'code')->nullOnDelete();
+            $table->string('currency_code', 3)->nullable();
+            $table->foreign('currency_code')->references('code')->on('currencies')->nullOnDelete();
 
             // For tracking credit notes and balances
             $table->decimal('credit_balance', 15, 4)->default(0);

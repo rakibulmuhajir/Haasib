@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router, onUnmounted } from '@inertiajs/vue3'
+import { Head, Link, router, onUnmounted, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
@@ -407,7 +407,5 @@ const toggleCompanyStatus = async (company: Company, activate: boolean) => {
       </Card>
     </div>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>

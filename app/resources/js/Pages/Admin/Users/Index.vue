@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link, router, onUnmounted } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
@@ -16,6 +16,7 @@ import { useDataTable } from '@/composables/useDataTable'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { http, withIdempotency } from '@/lib/http'
+import { usePageConfig, actionPresets } from '@/composables/usePageLayout'
 
 interface User {
   id: number
@@ -34,13 +35,20 @@ const props = defineProps({
 
 const confirm = useConfirm()
 const toast = useToast()
-const { setActions } = usePageActions()
+const { setActions, clearActions } = usePageActions()
 
-// Breadcrumb items
-const breadcrumbItems = ref([
-  { label: 'Admin', url: '/admin', icon: 'settings' },
-  { label: 'Users', url: '/admin/users', icon: 'users' },
-])
+// Search functionality
+const searchQuery = ref('')
+
+// Page configuration using helper
+const { breadcrumbs, pageHeader } = usePageConfig({
+  module: 'admin',
+  entity: 'users',
+  action: 'index',
+  subtitle: 'Manage system users and their permissions',
+  searchPlaceholder: 'Search users by name or email...',
+  searchQuery
+})
 
 // DataTablePro columns definition
 const columns = [
@@ -69,9 +77,6 @@ const table = useDataTable({
     }
   }
 })
-
-// Search functionality
-const searchQuery = ref('')
 
 // Computed properties for selection states
 const hasSelected = computed(() => table.selectedRows.value.length > 0)
@@ -208,7 +213,7 @@ async function toggleUserStatus(user: User) {
 // Update actions based on selection
 function updateActions() {
   const actions = [
-    { key: 'create', label: 'Create User', icon: 'pi pi-user-plus', severity: 'primary', click: () => router.visit(route('admin.users.create')) },
+    actionPresets.create('Create User', 'admin.users.create', { icon: 'pi pi-user-plus' }),
   ]
   
   if (hasSelected.value) {
@@ -245,6 +250,12 @@ const handleSearch = () => {
   table.filterForm.search = searchQuery.value
   table.fetchData()
 }
+
+// Initialize actions on mount
+updateActions()
+
+// Clean up actions on unmount
+onUnmounted(() => clearActions())
 </script>
 
 <template>
@@ -257,19 +268,13 @@ const handleSearch = () => {
 
     <template #topbar>
       <div class="flex items-center justify-between w-full">
-        <Breadcrumb :items="breadcrumbItems" />
-        <Link :href="route('admin.users.create')">
-          <Button label="Create User" icon="pi pi-user-plus" />
-        </Link>
+        <Breadcrumb :items="breadcrumbs" />
+        <!-- Page actions will be handled by PageActions component -->
       </div>
     </template>
 
     <div class="space-y-4">
-      <PageHeader
-        title="Users"
-        subtitle="Manage system users and their permissions"
-        :maxActions="5"
-      >
+      <PageHeader v-bind="pageHeader">
         <template #actions>
           <span class="p-input-icon-left">
             <i class="fas fa-search"></i>
@@ -453,7 +458,5 @@ const handleSearch = () => {
       </Card>
     </div>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>

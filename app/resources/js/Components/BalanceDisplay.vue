@@ -33,7 +33,7 @@ const balanceClass = computed(() => {
 })
 
 const formattedBalance = computed(() => {
-  return formatMoney(props.balance, props.currencyCode)
+  return formatMoney(props.balance, props.currencyCode ? { code: props.currencyCode } : undefined)
 })
 
 const riskBadgeClass = computed(() => {

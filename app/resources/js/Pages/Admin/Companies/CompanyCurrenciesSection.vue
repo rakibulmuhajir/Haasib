@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { http } from '@/lib/http';
 import InlineEditable from '@/Components/InlineEditable.vue';
@@ -11,25 +11,53 @@ import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import Card from 'primevue/card';
 
+type Currency = {
+    id: string;
+    code: string;
+    name: string;
+    symbol: string;
+};
+
+type ExchangeRate = {
+    exchange_rate: number;
+    effective_date: string;
+    cease_date?: string;
+    notes?: string;
+};
+
+type CompanyCurrency = {
+    id: string;
+    is_base_currency: boolean;
+    currency: Currency;
+    exchange_rates: ExchangeRate[];
+};
+
+interface ExchangeRateForm {
+    exchange_rate: number | null;
+    effective_date: Date | null;
+    cease_date: Date | null;
+    notes: string;
+}
+
 const props = defineProps({
   company: { type: String, required: true }
 });
 
-const currencies = ref([]);
-const availableCurrencies = ref([]);
-const loading = ref(false);
-const saving = ref(false);
-const error = ref(null);
-const showExchangeRateModal = ref(false);
-const selectedCurrency = ref(null);
-const exchangeRateForm = ref({
+const currencies = ref<CompanyCurrency[]>([]);
+const availableCurrencies = ref<Currency[]>([]);
+const loading = ref<boolean>(false);
+const saving = ref<boolean>(false);
+const error = ref<string | null>(null);
+const showExchangeRateModal = ref<boolean>(false);
+const selectedCurrency = ref<CompanyCurrency | null>(null);
+const exchangeRateForm = ref<ExchangeRateForm>({
     exchange_rate: null,
     effective_date: null,
     cease_date: null,
     notes: ''
 });
 
-const fetchCompanyCurrencies = async () => {
+const fetchCompanyCurrencies = async (): Promise<void> => {
     try {
         loading.value = true;
         const response = await http.get(`/api/companies/${props.company}/currencies`);
@@ -42,7 +70,7 @@ const fetchCompanyCurrencies = async () => {
     }
 };
 
-const fetchAvailableCurrencies = async () => {
+const fetchAvailableCurrencies = async (): Promise<void> => {
     try {
         const response = await http.get(`/api/companies/${props.company}/currencies/available`);
         availableCurrencies.value = response.data.data;
@@ -51,7 +79,7 @@ const fetchAvailableCurrencies = async () => {
     }
 };
 
-const addCurrency = async (currencyId) => {
+const addCurrency = async (currencyId: string | number): Promise<void> => {
     try {
         saving.value = true;
         await http.post(`/api/companies/${props.company}/currencies`, {
@@ -67,7 +95,7 @@ const addCurrency = async (currencyId) => {
     }
 };
 
-const removeCurrency = async (currencyId) => {
+const removeCurrency = async (currencyId: string | number): Promise<void> => {
     if (!confirm('Are you sure you want to remove this currency?')) return;
     
     try {
@@ -83,7 +111,7 @@ const removeCurrency = async (currencyId) => {
     }
 };
 
-const setAsBase = async (currencyId) => {
+const setAsBase = async (currencyId: string | number): Promise<void> => {
     try {
         saving.value = true;
         await http.patch(`/api/companies/${props.company}/currencies/${currencyId}/set-base`);
@@ -96,7 +124,7 @@ const setAsBase = async (currencyId) => {
     }
 };
 
-const openExchangeRateModal = (currency) => {
+const openExchangeRateModal = (currency: CompanyCurrency): void => {
     selectedCurrency.value = currency;
     const existingRate = currency.exchange_rates?.[0];
     exchangeRateForm.value = {
@@ -108,7 +136,7 @@ const openExchangeRateModal = (currency) => {
     showExchangeRateModal.value = true;
 };
 
-const saveExchangeRate = async () => {
+const saveExchangeRate = async (): Promise<void> => {
     if (!selectedCurrency.value) return;
     
     try {
@@ -129,22 +157,22 @@ const saveExchangeRate = async () => {
     }
 };
 
-const formatExchangeRate = (rate) => {
+const formatExchangeRate = (rate: number | null): string => {
     if (!rate) return 'N/A';
     return parseFloat(rate).toFixed(6);
 };
 
-const formatDate = (date) => {
+const formatDate = (date: string | null): string => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString();
 };
 
-const getExchangeRateValue = (currency) => {
+const getExchangeRateValue = (currency: CompanyCurrency): number | null => {
     if (!currency.exchange_rates || currency.exchange_rates.length === 0) return null;
     return currency.exchange_rates[0].exchange_rate;
 };
 
-const handleExchangeRateUpdated = () => {
+const handleExchangeRateUpdated = (): Promise<void> => {
     fetchCompanyCurrencies();
 };
 

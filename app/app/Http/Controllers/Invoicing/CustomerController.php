@@ -29,7 +29,7 @@ class CustomerController extends Controller
     {
         $query = Customer::query()
             ->where('company_id', $request->user()->current_company_id);
-        
+
         // Eager load relationships for clean API response
         $query->with(['currency', 'country_relation']);
 
@@ -116,9 +116,9 @@ class CustomerController extends Controller
         $customerData = CustomerResource::collection($customers);
         \Log::info('Customer Data Structure', [
             'sample_customer' => $customerData->first(),
-            'collection_structure' => $customerData
+            'collection_structure' => $customerData,
         ]);
-        
+
         return Inertia::render('Invoicing/Customers/Index', [
             'customers' => $customerData,
             'filters' => [

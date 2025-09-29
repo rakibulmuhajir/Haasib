@@ -1,6 +1,6 @@
-<script setup>
-import { Head, Link, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+<script setup lang="ts">
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { useForm } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import InputText from 'primevue/inputtext'
@@ -10,15 +10,45 @@ import Message from 'primevue/message'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import PageHeader from '@/Components/PageHeader.vue'
 import { useToast } from 'primevue/usetoast'
-import { http, withIdempotency } from '@/lib/http'
 import CurrencyPicker from '@/Components/Pickers/CurrencyPicker.vue'
 import LanguagePicker from '@/Components/Pickers/LanguagePicker.vue'
 import LocalePicker from '@/Components/Pickers/LocalePicker.vue'
 import CountryPicker from '@/Components/Pickers/CountryPicker.vue'
 
-const form = ref({ name: '', base_currency: '', country: '', language: '', locale: '' })
-const loading = ref(false)
-const error = ref('')
+interface Country {
+  id: string
+  name: string
+}
+
+interface FormData {
+  name: string
+  base_currency: string
+  country: string
+  language: string
+  locale: string
+  legal_name?: string
+  tax_id?: string
+  registration_number?: string
+  website?: string
+  phone?: string
+  email?: string
+  address_line_1?: string
+  address_line_2?: string
+  city?: string
+  state_province?: string
+  postal_code?: string
+  fiscal_year_start?: string
+  notes?: string
+}
+
+const form = useForm<FormData>({ 
+  name: '', 
+  base_currency: '', 
+  country: '', 
+  language: '', 
+  locale: '' 
+})
+
 const toast = useToast()
 
 // Breadcrumb items
@@ -29,78 +59,54 @@ const breadcrumbItems = ref([
 ])
 
 async function submit() {
+  // Clear previous errors
+  form.clearErrors()
+  
   // Client-side validation
-  if (!form.value.name?.trim()) {
-    error.value = 'Company name is required'
-    toast.add({
-      severity: 'error',
-      summary: 'Validation Error',
-      detail: error.value,
-      life: 3000
-    })
+  if (!form.name?.trim()) {
+    form.setError('name', 'Company name is required')
     return
   }
   
-  if (!form.value.country) {
-    error.value = 'Country is required'
-    toast.add({
-      severity: 'error',
-      summary: 'Validation Error',
-      detail: error.value,
-      life: 3000
-    })
+  if (!form.country) {
+    form.setError('country', 'Country is required')
     return
   }
   
-  if (!form.value.base_currency) {
-    error.value = 'Base currency is required'
-    toast.add({
-      severity: 'error',
-      summary: 'Validation Error',
-      detail: error.value,
-      life: 3000
-    })
+  if (!form.base_currency) {
+    form.setError('base_currency', 'Base currency is required')
     return
   }
   
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await http.post('/commands', form.value, { 
-      headers: withIdempotency({ 'X-Action': 'company.create' })
-    })
-    
-    // Show success toast
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: `Company "${form.value.name}" created successfully`,
-      life: 3000
-    })
-    
-    // Redirect to company show page
-    setTimeout(() => {
-      router.visit(route('admin.companies.show', data.data.slug))
-    }, 500)
-  } catch (e) {
-    console.error('Company creation error:', e.response?.data)
-    error.value = e?.response?.data?.message || 'Failed to create company'
-    
-    // Show validation errors if any
-    if (e?.response?.data?.errors) {
-      const validationErrors = Object.values(e.response.data.errors).flat()
-      error.value = validationErrors.join(', ')
+  form.transform(data => ({
+    ...data,
+    _action: 'company.create'
+  })).post('/commands', {
+    onSuccess: (page) => {
+      // Show success toast
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: `Company "${form.name}" created successfully`,
+        life: 3000
+      })
+    },
+    onError: (errors) => {
+      // Show validation errors
+      const firstError = Object.values(errors)[0]
+      if (firstError) {
+        toast.add({
+          severity: 'error',
+          summary: 'Validation Error',
+          detail: firstError,
+          life: 3000
+        })
+      }
+    },
+    onFinish: () => {
+      // Form is no longer processing
     }
-    
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.value,
-      life: 3000
-    })
-  } finally {
-    loading.value = false
-  }
+  })
 }
 </script>
 
@@ -120,8 +126,20 @@ async function submit() {
       <PageHeader title="Create Company" subtitle="Add a new company to the system" />
       <Card>
         <template #content>
-          <Message v-if="error" severity="error" class="mb-4">
-            {{ error }}
+          <Message v-if="form.errors.name" severity="error" class="mb-4">
+            {{ form.errors.name }}
+          </Message>
+          <Message v-if="form.errors.country" severity="error" class="mb-4">
+            {{ form.errors.country }}
+          </Message>
+          <Message v-if="form.errors.base_currency" severity="error" class="mb-4">
+            {{ form.errors.base_currency }}
+          </Message>
+          <Message v-if="form.errors.language" severity="error" class="mb-4">
+            {{ form.errors.language }}
+          </Message>
+          <Message v-if="form.errors.locale" severity="error" class="mb-4">
+            {{ form.errors.locale }}
           </Message>
 
           <div class="space-y-4">
@@ -131,6 +149,7 @@ async function submit() {
                 v-model="form.name" 
                 class="w-full" 
                 placeholder="Acme LLC" 
+                :class="{ 'p-invalid': form.errors.name }"
               />
             </div>
             
@@ -161,8 +180,8 @@ async function submit() {
             <div class="pt-4 flex items-center gap-2">
               <Button 
                 @click="submit" 
-                :disabled="loading"
-                :loading="loading"
+                :disabled="form.processing"
+                :loading="form.processing"
                 label="Create Company"
                 icon="pi pi-check"
               />

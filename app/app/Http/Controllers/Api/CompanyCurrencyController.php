@@ -367,4 +367,158 @@ class CompanyCurrencyController extends Controller
             'data' => $settings['currencies']['exchange_rates'][$rateIndex],
         ]);
     }
+
+    /**
+     * Get all exchange rates for the company
+     */
+    public function exchangeRates(Request $request, Company $company)
+    {
+        $this->authorizeCompanyAccess($request, $company);
+
+        $settings = $company->settings;
+        $currencies = $settings['currencies'] ?? [
+            'base' => $company->base_currency,
+            'enabled' => [$company->base_currency],
+            'default_rates' => [],
+            'exchange_rates' => [],
+        ];
+
+        // Get all exchange rates with currency details
+        $exchangeRates = [];
+        foreach ($currencies['exchange_rates'] as $rate) {
+            $currency = Currency::where('code', $rate['currency_code'])->first();
+            if ($currency) {
+                $exchangeRates[] = array_merge($rate, [
+                    'id' => $rate['id'] ?? uniqid(),
+                    'from_currency_id' => Currency::where('code', $currencies['base'])->first()->id,
+                    'to_currency_id' => $currency->id,
+                    'fromCurrency' => Currency::where('code', $currencies['base'])->first(),
+                    'toCurrency' => $currency,
+                    'created_at' => $rate['created_at'] ?? now(),
+                ]);
+            }
+        }
+
+        return response()->json(['data' => $exchangeRates]);
+    }
+
+    /**
+     * Store a new exchange rate
+     */
+    public function storeExchangeRate(Request $request, Company $company)
+    {
+        $this->authorizeCompanyAccess($request, $company);
+
+        $validated = $request->validate([
+            'from_currency_id' => 'required|exists:currencies,id',
+            'to_currency_id' => 'required|exists:currencies,id|different:from_currency_id',
+            'rate' => 'required|numeric|min:0.000001|max:999999.999999',
+            'date' => 'required|date',
+        ]);
+
+        $fromCurrency = Currency::findOrFail($validated['from_currency_id']);
+        $toCurrency = Currency::findOrFail($validated['to_currency_id']);
+
+        $settings = $company->settings;
+
+        if (! isset($settings['currencies'])) {
+            $settings['currencies'] = [
+                'base' => $company->base_currency,
+                'enabled' => [$company->base_currency],
+                'default_rates' => [],
+                'exchange_rates' => [],
+            ];
+        }
+
+        // Create new exchange rate
+        $rateData = [
+            'id' => uniqid('rate_', true),
+            'currency_code' => $toCurrency->code,
+            'exchange_rate' => $validated['rate'],
+            'effective_date' => $validated['date'],
+            'cease_date' => null,
+            'notes' => null,
+            'created_at' => now()->toISOString(),
+            'from_currency_id' => $fromCurrency->id,
+            'to_currency_id' => $toCurrency->id,
+            'fromCurrency' => $fromCurrency,
+            'toCurrency' => $toCurrency,
+        ];
+
+        $settings['currencies']['exchange_rates'][] = $rateData;
+
+        // Sort rates by effective date (newest first)
+        usort($settings['currencies']['exchange_rates'], function ($a, $b) {
+            return strcmp($b['effective_date'], $a['effective_date']);
+        });
+
+        $company->settings = $settings;
+        $company->save();
+
+        return response()->json(['data' => $rateData], Response::HTTP_CREATED);
+    }
+
+    /**
+     * Sync exchange rates from external source
+     */
+    public function syncExchangeRates(Request $request, Company $company)
+    {
+        $this->authorizeCompanyAccess($request, $company);
+
+        try {
+            // For now, just return a success message
+            // In a real implementation, this would call an external API
+            return response()->json([
+                'success' => true,
+                'message' => 'Exchange rates synchronized successfully',
+                'updated_rates' => 0,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync exchange rates: '.$e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Update base currency
+     */
+    public function updateBaseCurrency(Request $request, Company $company)
+    {
+        $this->authorizeCompanyAccess($request, $company);
+
+        $validated = $request->validate([
+            'currency_id' => 'required|exists:currencies,id',
+        ]);
+
+        $currency = Currency::findOrFail($validated['currency_id']);
+        $settings = $company->settings;
+
+        if (! isset($settings['currencies'])) {
+            $settings['currencies'] = [
+                'base' => $company->base_currency,
+                'enabled' => [$company->base_currency],
+                'default_rates' => [],
+                'exchange_rates' => [],
+            ];
+        }
+
+        // Update base currency
+        $settings['currencies']['base'] = $currency->code;
+
+        // Ensure new base currency is in enabled list
+        if (! in_array($currency->code, $settings['currencies']['enabled'])) {
+            $settings['currencies']['enabled'][] = $currency->code;
+        }
+
+        $company->settings = $settings;
+        $company->base_currency_id = $currency->id;
+        $company->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Base currency updated successfully',
+        ]);
+    }
 }

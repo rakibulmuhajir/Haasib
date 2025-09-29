@@ -9,51 +9,50 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\User;
+use App\Support\ServiceContext;
+use App\Traits\AuditLogging;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class PaymentService
 {
-    private function logAudit(string $action, array $params, ?User $user = null, ?string $companyId = null, ?string $idempotencyKey = null, ?array $result = null): void
-    {
-        try {
-            DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit_logs')->insert([
-                    'id' => Str::uuid()->toString(),
-                    'user_id' => $user?->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'params' => json_encode($params),
-                    'result' => $result ? json_encode($result) : null,
-                    'idempotency_key' => $idempotencyKey,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            });
-        } catch (\Throwable $e) {
-            Log::error('Failed to write audit log', [
-                'action' => $action,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    use AuditLogging;
 
+    /**
+     * Create a new payment record
+     *
+     * @param  Company  $company  The company to create the payment for
+     * @param  Customer  $customer  The customer making the payment
+     * @param  Money  $amount  The payment amount
+     * @param  Currency|null  $currency  The payment currency (defaults to customer/company currency)
+     * @param  string  $paymentMethod  The payment method (cash, bank_transfer, etc.)
+     * @param  string|null  $paymentDate  The payment date (defaults to current date)
+     * @param  string|null  $paymentNumber  The payment number (auto-generated if null)
+     * @param  string|null  $paymentReference  External payment reference
+     * @param  string|null  $notes  Additional notes
+     * @param  bool|null  $autoAllocate  Whether to auto-allocate to invoices
+     * @param  array|null  $invoiceAllocations  Specific invoice allocations if autoAllocate is true
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Payment The created payment record
+     *
+     * @throws \Throwable If the payment creation fails
+     */
     public function createPayment(
         Company $company,
         Customer $customer,
         Money $amount,
-        ?Currency $currency = null,
-        string $paymentMethod = '',
-        ?string $paymentDate = null,
-        ?string $paymentNumber = null,
-        ?string $paymentReference = null,
-        ?string $notes = null,
-        ?bool $autoAllocate = false,
-        ?array $invoiceAllocations = null,
-        ?string $idempotencyKey = null
+        ?Currency $currency,
+        string $paymentMethod,
+        ?string $paymentDate,
+        ?string $paymentNumber,
+        ?string $paymentReference,
+        ?string $notes,
+        ?bool $autoAllocate,
+        ?array $invoiceAllocations,
+        ServiceContext $context
     ): Payment {
+        $idempotencyKey = $context->getIdempotencyKey();
         $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentNumber, $paymentReference, $autoAllocate, $invoiceAllocations) {
             $currency = $currency ?? $customer->currency ?? $company->getDefaultCurrency();
             $exchangeRate = $this->getExchangeRate($currency, $company);
@@ -65,7 +64,7 @@ class PaymentService
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentReference,
                 'payment_number' => $paymentNumber ?? $this->generateNextPaymentNumber($company->id),
-                'amount' => $amount->getAmount()->toFloat(),
+                'amount' => $amount->getAmount(),
                 'exchange_rate' => $exchangeRate,
                 'payment_date' => $paymentDate ?? now()->toDateString(),
                 'status' => 'pending',
@@ -75,12 +74,18 @@ class PaymentService
 
             // Handle auto-allocation if requested
             if ($autoAllocate && $invoiceAllocations) {
+                // Pre-load all invoices with locks to prevent race conditions
+                $invoiceIds = array_keys($invoiceAllocations);
+                $invoices = Invoice::whereIn('id', $invoiceIds)
+                    ->where('company_id', $company->id)
+                    ->where('customer_id', $customer->id)
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
                 foreach ($invoiceAllocations as $invoiceId => $allocationAmount) {
-                    if ($allocationAmount > 0) {
-                        $invoice = Invoice::find($invoiceId);
-                        if ($invoice && $invoice->company_id === $company->id && $invoice->customer_id === $customer->id) {
-                            $payment->allocateToInvoice($invoice, Money::of($allocationAmount, $currency->code));
-                        }
+                    if ($allocationAmount > 0 && isset($invoices[$invoiceId])) {
+                        $payment->allocateToInvoice($invoices[$invoiceId], Money::of($allocationAmount, $currency->code));
                     }
                 }
             }
@@ -92,25 +97,37 @@ class PaymentService
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'payment_method' => $paymentMethod,
-            'amount' => $amount->getAmount()->toFloat(),
+            'amount' => $amount->getAmount(),
             'currency_id' => $currency->id,
             'payment_reference' => $result->payment_reference,
-        ], auth()->user(), $company->id, $idempotencyKey, ['payment_id' => $result->id]);
+        ], $context, result: ['payment_id' => $result->id]);
 
         return $result;
     }
 
+    /**
+     * Process a pending payment and mark it as completed
+     *
+     * @param  Payment  $payment  The payment to process
+     * @param  string|null  $processorReference  External processor reference
+     * @param  array|null  $metadata  Additional metadata
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Payment The processed payment
+     *
+     * @throws \Throwable If the payment processing fails
+     */
     public function processPayment(
         Payment $payment,
-        ?string $processorReference = null,
-        ?array $metadata = null
+        ?string $processorReference,
+        ?array $metadata,
+        ServiceContext $context
     ): Payment {
-        $result = DB::transaction(function () use ($payment, $processorReference) {
+        $result = DB::transaction(function () use ($payment, $processorReference, $context) {
             $payment->markAsCompleted($processorReference);
 
             // Auto-post completed payment to ledger
             try {
-                app(\App\Services\LedgerIntegrationService::class)->postPaymentToLedger($payment);
+                app(\App\Services\LedgerIntegrationService::class)->postPaymentToLedger($payment, $context);
             } catch (\Throwable $e) {
                 Log::error('Auto-post payment to ledger failed (non-fatal)', [
                     'payment_id' => $payment->payment_id,
@@ -125,7 +142,7 @@ class PaymentService
             'payment_id' => $payment->id,
             'payment_reference' => $payment->payment_reference,
             'processor_reference' => $processorReference,
-        ], auth()->user(), $payment->company_id, result: ['processed_at' => now()->toISOString()]);
+        ], $context, result: ['processed_at' => now()->toISOString()]);
 
         return $result;
     }
@@ -133,18 +150,38 @@ class PaymentService
     /**
      * Convenience overload: create + complete + optional auto-allocate + auto-post.
      */
+    /**
+     * Convenience method: create + complete + optional auto-allocate + auto-post
+     *
+     * @param  Company  $company  The company to create the payment for
+     * @param  Customer  $customer  The customer making the payment
+     * @param  float  $amount  The payment amount
+     * @param  string  $paymentMethod  The payment method
+     * @param  string|null  $paymentReference  External payment reference
+     * @param  string|null  $paymentDate  The payment date
+     * @param  Currency|null  $currency  The payment currency
+     * @param  float|null  $exchangeRate  The exchange rate (if different from default)
+     * @param  string|null  $notes  Additional notes
+     * @param  bool|null  $autoAllocate  Whether to auto-allocate to invoices
+     * @param  string|null  $idempotencyKey  Unique key for idempotency
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Payment The created and processed payment
+     *
+     * @throws \Throwable If the payment creation or processing fails
+     */
     public function processIncomingPayment(
         Company $company,
         Customer $customer,
         float $amount,
         string $paymentMethod,
-        ?string $paymentReference = null,
-        ?string $paymentDate = null,
-        ?Currency $currency = null,
-        ?float $exchangeRate = null,
-        ?string $notes = null,
-        ?bool $autoAllocate = false,
-        ?string $idempotencyKey = null
+        ?string $paymentReference,
+        ?string $paymentDate,
+        ?Currency $currency,
+        ?float $exchangeRate,
+        ?string $notes,
+        ?bool $autoAllocate,
+        ?string $idempotencyKey,
+        ServiceContext $context
     ): Payment {
         $money = Money::of($amount, ($currency?->code) ?? ($customer->currency?->code) ?? ($company->base_currency ?? 'USD'));
         $payment = $this->createPayment(
@@ -159,14 +196,14 @@ class PaymentService
             notes: $notes,
             autoAllocate: false,
             invoiceAllocations: null,
-            idempotencyKey: $idempotencyKey
+            context: $context
         );
 
-        $payment = $this->processPayment($payment);
+        $payment = $this->processPayment($payment, null, null, $context);
 
         if ($autoAllocate) {
             try {
-                $this->autoAllocatePayment($payment);
+                $this->autoAllocatePayment($payment, $context);
             } catch (\Throwable $e) {
                 Log::warning('Auto-allocate after process failed (non-fatal)', [
                     'payment_id' => $payment->payment_id,
@@ -178,10 +215,23 @@ class PaymentService
         return $payment->fresh(['allocations.invoice']);
     }
 
+    /**
+     * Allocate payment to specific invoices
+     *
+     * @param  Payment  $payment  The payment to allocate
+     * @param  array  $allocations  Array of allocation data with invoice_id and amount
+     * @param  string|null  $notes  Additional notes for allocations
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return array Array of created payment allocations
+     *
+     * @throws \InvalidArgumentException If the payment cannot be allocated or allocations are invalid
+     * @throws \Throwable If the allocation fails
+     */
     public function allocatePayment(
         Payment $payment,
         array $allocations,
-        ?string $notes = null
+        ?string $notes,
+        ServiceContext $context
     ): array {
         $result = DB::transaction(function () use ($payment, $allocations, $notes) {
             if (! $payment->canBeAllocated()) {
@@ -191,9 +241,17 @@ class PaymentService
             $createdAllocations = [];
             $totalAllocationAmount = Money::of(0, $payment->currency->code);
 
+            // Pre-load all invoices with locks to prevent race conditions
+            $invoiceIds = array_column($allocations, 'invoice_id');
+            $invoices = Invoice::whereIn('id', $invoiceIds)
+                ->where('company_id', $payment->company_id)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
             foreach ($allocations as $allocation) {
-                $invoice = Invoice::find($allocation['invoice_id']);
-                if (! $invoice || $invoice->company_id !== $payment->company_id) {
+                $invoice = $invoices[$allocation['invoice_id']] ?? null;
+                if (! $invoice) {
                     throw new \InvalidArgumentException("Invalid invoice ID: {$allocation['invoice_id']}");
                 }
 
@@ -221,12 +279,21 @@ class PaymentService
             'payment_reference' => $payment->payment_reference,
             'allocations_count' => count($result),
             'total_allocated' => array_sum(array_column($result, 'amount')),
-        ], auth()->user(), $payment->company_id, result: ['allocation_ids' => array_column($result, 'id')]);
+        ], $context, result: ['allocation_ids' => array_column($result, 'id')]);
 
         return $result;
     }
 
-    public function autoAllocatePayment(Payment $payment): array
+    /**
+     * Automatically allocate payment to outstanding invoices
+     *
+     * @param  Payment  $payment  The payment to auto-allocate
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return array Array of created payment allocations
+     *
+     * @throws \Throwable If the auto-allocation fails
+     */
+    public function autoAllocatePayment(Payment $payment, ServiceContext $context): array
     {
         $result = DB::transaction(function () use ($payment) {
             return $payment->autoAllocate();
@@ -237,17 +304,24 @@ class PaymentService
             'payment_reference' => $payment->payment_reference,
             'allocations_created' => count($result),
             'total_allocated' => array_sum(array_column($result, 'amount')),
-        ], auth()->user(), $payment->company_id, result: ['allocation_ids' => array_column($result, 'id')]);
+        ], $context, result: ['allocation_ids' => array_column($result, 'id')]);
 
         return $result;
     }
 
-    public function voidPayment(Payment $payment, ?string $reason = null): Payment
+    /**
+     * Void a payment
+     *
+     * @param  Payment  $payment  The payment to void
+     * @param  string|null  $reason  The reason for voiding
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Payment The voided payment
+     *
+     * @throws \InvalidArgumentException If the payment cannot be voided
+     * @throws \Throwable If the void operation fails
+     */
+    public function voidPayment(Payment $payment, ?string $reason, ServiceContext $context): Payment
     {
-        if (! $payment->canBeVoided()) {
-            throw new \InvalidArgumentException('Payment cannot be voided');
-        }
-
         $result = DB::transaction(function () use ($payment, $reason) {
             $payment->markAsCancelled($reason);
 
@@ -258,15 +332,28 @@ class PaymentService
             'payment_id' => $payment->id,
             'payment_reference' => $payment->payment_reference,
             'reason' => $reason,
-        ], auth()->user(), $payment->company_id, result: ['voided_at' => $result->metadata['cancelled_at']]);
+        ], $context, result: ['voided_at' => $result->metadata['cancelled_at']]);
 
         return $result;
     }
 
+    /**
+     * Refund a payment
+     *
+     * @param  Payment  $payment  The payment to refund
+     * @param  Money  $amount  The refund amount
+     * @param  string|null  $reason  The reason for refund
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return array Array of created refunds
+     *
+     * @throws \InvalidArgumentException If the payment cannot be refunded
+     * @throws \Throwable If the refund operation fails
+     */
     public function refundPayment(
         Payment $payment,
         Money $amount,
-        ?string $reason = null
+        ?string $reason,
+        ServiceContext $context
     ): array {
         $result = DB::transaction(function () use ($payment, $amount, $reason) {
             return $payment->refund($amount, $reason);
@@ -275,19 +362,26 @@ class PaymentService
         $this->logAudit('payment.refund', [
             'payment_id' => $payment->id,
             'payment_reference' => $payment->payment_reference,
-            'refund_amount' => $amount->getAmount()->toFloat(),
+            'refund_amount' => $amount->getAmount(),
             'reason' => $reason,
-        ], auth()->user(), $payment->company_id, result: ['refund_ids' => array_column($result, 'id')]);
+        ], $context, result: ['refund_ids' => array_column($result, 'id')]);
 
         return $result;
     }
 
-    public function voidAllocation(PaymentAllocation $allocation, ?string $reason = null): PaymentAllocation
+    /**
+     * Void a payment allocation
+     *
+     * @param  PaymentAllocation  $allocation  The allocation to void
+     * @param  string|null  $reason  The reason for voiding
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return PaymentAllocation The voided allocation
+     *
+     * @throws \InvalidArgumentException If the allocation cannot be voided
+     * @throws \Throwable If the void operation fails
+     */
+    public function voidAllocation(PaymentAllocation $allocation, ?string $reason, ServiceContext $context): PaymentAllocation
     {
-        if (! $allocation->canBeVoided()) {
-            throw new \InvalidArgumentException('Allocation cannot be voided');
-        }
-
         $result = DB::transaction(function () use ($allocation, $reason) {
             $allocation->void($reason);
 
@@ -300,20 +394,29 @@ class PaymentService
             'invoice_id' => $allocation->invoice_id,
             'amount' => $allocation->amount,
             'reason' => $reason,
-        ], auth()->user(), $allocation->payment->company_id, result: ['voided_at' => $result->metadata['voided_at']]);
+        ], $context, result: ['voided_at' => $result->metadata['voided_at']]);
 
         return $result;
     }
 
+    /**
+     * Refund a payment allocation
+     *
+     * @param  PaymentAllocation  $allocation  The allocation to refund
+     * @param  Money  $amount  The refund amount
+     * @param  string|null  $reason  The reason for refund
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return PaymentAllocation The refunded allocation
+     *
+     * @throws \InvalidArgumentException If the allocation cannot be refunded
+     * @throws \Throwable If the refund operation fails
+     */
     public function refundAllocation(
         PaymentAllocation $allocation,
         Money $amount,
-        ?string $reason = null
+        ?string $reason,
+        ServiceContext $context
     ): PaymentAllocation {
-        if (! $allocation->canBeRefunded()) {
-            throw new \InvalidArgumentException('Allocation cannot be refunded');
-        }
-
         $result = DB::transaction(function () use ($allocation, $amount, $reason) {
             return $allocation->refund($amount, $reason);
         });
@@ -322,9 +425,9 @@ class PaymentService
             'allocation_id' => $allocation->id,
             'payment_id' => $allocation->payment_id,
             'invoice_id' => $allocation->invoice_id,
-            'refund_amount' => $amount->getAmount()->toFloat(),
+            'refund_amount' => $amount->getAmount(),
             'reason' => $reason,
-        ], auth()->user(), $allocation->payment->company_id, result: ['refund_id' => $result->id]);
+        ], $context, result: ['refund_id' => $result->id]);
 
         return $result;
     }
@@ -347,8 +450,8 @@ class PaymentService
         return [
             'total_payments' => $payments->count(),
             'total_amount' => $payments->sum('amount'),
-            'total_allocated' => $payments->sum(fn ($p) => $p->getAllocatedAmount()->getAmount()->toFloat()),
-            'total_unallocated' => $payments->sum(fn ($p) => $p->getUnallocatedAmount()->getAmount()->toFloat()),
+            'total_allocated' => $payments->sum(fn ($p) => $p->getAllocatedAmount()->getAmount()),
+            'total_unallocated' => $payments->sum(fn ($p) => $p->getUnallocatedAmount()->getAmount()),
             'status_breakdown' => [
                 'pending' => $payments->where('status', 'pending')->count(),
                 'completed' => $payments->where('status', 'completed')->count(),
@@ -381,8 +484,8 @@ class PaymentService
         return [
             'total_payments' => $payments->count(),
             'total_amount' => $payments->sum('amount'),
-            'total_allocated' => $payments->sum(fn ($p) => $p->getAllocatedAmount()->getAmount()->toFloat()),
-            'total_unallocated' => $payments->sum(fn ($p) => $p->getUnallocatedAmount()->getAmount()->toFloat()),
+            'total_allocated' => $payments->sum(fn ($p) => $p->getAllocatedAmount()->getAmount()),
+            'total_unallocated' => $payments->sum(fn ($p) => $p->getUnallocatedAmount()->getAmount()),
             'average_payment_amount' => $payments->avg('amount'),
             'status_breakdown' => [
                 'pending' => $payments->where('status', 'pending')->count(),
@@ -534,5 +637,110 @@ class PaymentService
         $payment->company_id = $companyId;
 
         return $payment->generatePaymentNumber();
+    }
+
+    /**
+     * Update an existing payment
+     *
+     * @param  Payment  $payment  The payment to update
+     * @param  Customer  $customer  The customer making the payment
+     * @param  float  $amount  The payment amount
+     * @param  int  $currencyId  The currency ID
+     * @param  string  $paymentMethod  The payment method
+     * @param  string  $paymentDate  The payment date
+     * @param  string  $paymentNumber  The payment number
+     * @param  string|null  $referenceNumber  External reference number
+     * @param  string|null  $notes  Additional notes
+     * @param  bool|null  $autoAllocate  Whether to auto-allocate to invoices
+     * @param  array|null  $invoiceAllocations  Specific invoice allocations
+     * @param  string|null  $idempotencyKey  Unique key for idempotency
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Payment The updated payment
+     *
+     * @throws \InvalidArgumentException If the payment cannot be updated or data is invalid
+     * @throws \Throwable If the update operation fails
+     */
+    public function updatePayment(
+        Payment $payment,
+        Customer $customer,
+        float $amount,
+        int $currencyId,
+        string $paymentMethod,
+        string $paymentDate,
+        string $paymentNumber,
+        ?string $referenceNumber,
+        ?string $notes,
+        ?bool $autoAllocate,
+        ?array $invoiceAllocations,
+        ?string $idempotencyKey,
+        ServiceContext $context
+    ): Payment {
+        $result = DB::transaction(function () use ($payment, $customer, $amount, $currencyId, $paymentMethod, $paymentDate, $paymentNumber, $referenceNumber, $notes) {
+            // Only allow updates to pending payments
+            if ($payment->status !== 'pending') {
+                throw new \InvalidArgumentException('Only pending payments can be updated');
+            }
+
+            $currency = Currency::findOrFail($currencyId);
+            $exchangeRate = $this->getExchangeRate($currency, $payment->company);
+
+            $payment->update([
+                'customer_id' => $customer->id,
+                'currency_id' => $currency->id,
+                'payment_method' => $paymentMethod,
+                'payment_date' => $paymentDate,
+                'payment_number' => $paymentNumber,
+                'payment_reference' => $referenceNumber,
+                'notes' => $notes,
+                'amount' => $amount,
+                'exchange_rate' => $exchangeRate,
+            ]);
+
+            return $payment->fresh(['customer', 'currency']);
+        });
+
+        $this->logAudit('payment.update', [
+            'payment_id' => $payment->id,
+            'customer_id' => $customer->id,
+            'payment_method' => $paymentMethod,
+            'amount' => $amount,
+            'currency_id' => $currencyId,
+        ], $context, result: ['payment_id' => $result->id]);
+
+        return $result;
+    }
+
+    /**
+     * Delete a payment
+     *
+     * @param  Payment  $payment  The payment to delete
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return bool True if the payment was successfully deleted
+     *
+     * @throws \InvalidArgumentException If the payment cannot be deleted
+     * @throws \Throwable If the delete operation fails
+     */
+    public function deletePayment(Payment $payment, ServiceContext $context): bool
+    {
+        $result = DB::transaction(function () use ($payment) {
+            // Only allow deletion of pending payments
+            if ($payment->status !== 'pending') {
+                throw new \InvalidArgumentException('Only pending payments can be deleted');
+            }
+
+            $paymentId = $payment->id;
+            $payment->delete();
+
+            return true;
+        });
+
+        $this->logAudit('payment.delete', [
+            'payment_id' => $payment->id,
+            'company_id' => $payment->company_id,
+            'customer_id' => $payment->customer_id,
+            'amount' => $payment->amount,
+        ], $context);
+
+        return $result;
     }
 }

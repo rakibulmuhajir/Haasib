@@ -7,7 +7,6 @@ import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Tag from 'primevue/tag'
-import Dropdown from 'primevue/dropdown'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
@@ -553,7 +552,5 @@ const paymentSummary = computed(() => {
       </div>
     </div>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
   </LayoutShell>
 </template>

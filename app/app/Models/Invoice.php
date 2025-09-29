@@ -457,11 +457,11 @@ class Invoice extends Model
         $amountPaid = Money::of($this->getTotalPaidAmount(), $this->currency->code);
         $balanceDue = $totalAmount->minus($amountPaid);
 
-        $this->subtotal = $subtotal->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
-        $this->tax_amount = $totalTax->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
-        $this->total_amount = $totalAmount->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
-        $this->paid_amount = $amountPaid->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat();
-        $this->balance_due = max(0, $balanceDue->getAmount()->toScale(2, RoundingMode::HALF_UP)->toFloat());
+        $this->subtotal = $subtotal->getAmount()->toScale(2, RoundingMode::HALF_UP);
+        $this->tax_amount = $totalTax->getAmount()->toScale(2, RoundingMode::HALF_UP);
+        $this->total_amount = $totalAmount->getAmount()->toScale(2, RoundingMode::HALF_UP);
+        $this->paid_amount = $amountPaid->getAmount()->toScale(2, RoundingMode::HALF_UP);
+        $this->balance_due = max(0, $balanceDue->getAmount()->toScale(2, RoundingMode::HALF_UP));
     }
 
     public function getTotalPaidAmount(): float

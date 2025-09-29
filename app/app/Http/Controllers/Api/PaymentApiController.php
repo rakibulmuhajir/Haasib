@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\Payment;
 use App\Services\CurrencyService;
 use App\Services\PaymentService;
+use App\Support\ServiceContextHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -105,6 +106,7 @@ class PaymentApiController extends Controller
             $company = $request->user()->company;
             $customer = $company->customers()->findOrFail($request->customer_id);
             $currency = $request->currency_id ? $company->currencies()->findOrFail($request->currency_id) : null;
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
             $payment = $this->paymentService->processIncomingPayment(
                 company: $company,
@@ -117,7 +119,8 @@ class PaymentApiController extends Controller
                 exchangeRate: $request->exchange_rate,
                 notes: $request->notes,
                 autoAllocate: $request->auto_allocate ?? false,
-                idempotencyKey: $request->header('Idempotency-Key')
+                idempotencyKey: $request->header('Idempotency-Key'),
+                context: $context
             );
 
             return $this->ok($payment->load(['customer', 'currency', 'allocations.invoice']), 'Payment processed successfully', status: 201);
@@ -168,13 +171,15 @@ class PaymentApiController extends Controller
         try {
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
             $updatedPayment = $this->paymentService->updatePayment(
                 payment: $payment,
                 paymentMethod: $request->payment_method,
                 paymentReference: $request->payment_reference,
                 paymentDate: $request->payment_date,
-                notes: $request->notes
+                notes: $request->notes,
+                context: $context
             );
 
             return $this->ok(
@@ -201,8 +206,9 @@ class PaymentApiController extends Controller
         try {
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
-            $this->paymentService->deletePayment($payment, $request->reason);
+            $this->paymentService->deletePayment($payment, $request->reason, $context);
 
             return $this->ok(null, 'Payment deleted successfully');
 
@@ -225,13 +231,15 @@ class PaymentApiController extends Controller
         try {
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
             $allocation = $this->paymentService->allocatePayment(
                 payment: $payment,
                 invoiceId: $request->invoice_id,
                 amount: $request->amount,
                 allocationDate: $request->allocation_date,
-                notes: $request->notes
+                notes: $request->notes,
+                context: $context
             );
 
             return $this->ok($allocation->load(['payment', 'invoice']), 'Payment allocated successfully');
@@ -256,8 +264,9 @@ class PaymentApiController extends Controller
         try {
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
-            $allocations = $this->paymentService->autoAllocatePayment($payment);
+            $allocations = $this->paymentService->autoAllocatePayment($payment, $context);
 
             return $this->ok([
                 'allocations' => $allocations->load(['payment', 'invoice']),
@@ -288,8 +297,9 @@ class PaymentApiController extends Controller
 
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
-            $voidedPayment = $this->paymentService->voidPayment($payment, $request->reason);
+            $voidedPayment = $this->paymentService->voidPayment($payment, $request->reason, $context);
 
             return $this->ok($voidedPayment, 'Payment voided successfully');
 
@@ -360,12 +370,14 @@ class PaymentApiController extends Controller
 
             $company = $request->user()->company;
             $payment = Payment::where('company_id', $company->id)->findOrFail($id);
+            $context = ServiceContextHelper::fromRequest($request, $company->id);
 
             $refund = $this->paymentService->refundPayment(
                 payment: $payment,
                 amount: $request->amount,
                 reason: $request->reason,
-                refundMethod: $request->refund_method
+                refundMethod: $request->refund_method,
+                context: $context
             );
 
             return $this->ok($refund, 'Payment refunded successfully');
@@ -392,7 +404,8 @@ class PaymentApiController extends Controller
 
                     foreach ($payments as $payment) {
                         try {
-                            $this->paymentService->deletePayment($payment, $request->reason);
+                            $context = ServiceContextHelper::fromRequest($request, $company->id);
+                            $this->paymentService->deletePayment($payment, $request->reason, $context);
                             $results[] = ['id' => $payment->id, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
@@ -408,7 +421,8 @@ class PaymentApiController extends Controller
                     foreach ($request->payment_ids as $id) {
                         try {
                             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
-                            $this->paymentService->voidPayment($payment, $request->reason);
+                            $context = ServiceContextHelper::fromRequest($request, $company->id);
+                            $this->paymentService->voidPayment($payment, $request->reason, $context);
                             $results[] = ['id' => $id, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
@@ -424,7 +438,8 @@ class PaymentApiController extends Controller
                     foreach ($request->payment_ids as $id) {
                         try {
                             $payment = Payment::where('company_id', $company->id)->where('payment_id', $id)->firstOrFail();
-                            $allocations = $this->paymentService->autoAllocatePayment($payment);
+                            $context = ServiceContextHelper::fromRequest($request, $company->id);
+                            $allocations = $this->paymentService->autoAllocatePayment($payment, $context);
                             $results[] = [
                                 'id' => $id,
                                 'success' => true,

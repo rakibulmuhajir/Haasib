@@ -1,6 +1,6 @@
-<script setup>
-import { Head, Link } from '@inertiajs/vue3'
-import { ref } from 'vue'
+<script setup lang="ts">
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import { useForm } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import InputText from 'primevue/inputtext'
@@ -10,11 +10,15 @@ import Message from 'primevue/message'
 import Dropdown from 'primevue/dropdown'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
-import { http, withIdempotency } from '@/lib/http'
 
-const form = ref({ name: '', email: '', password: '', system_role: '' })
-const loading = ref(false)
-const error = ref('')
+interface FormData {
+  name: string
+  email: string
+  password: string
+  system_role: string
+}
+
+const form = useForm<FormData>({ name: '', email: '', password: '', system_role: '' })
 const ok = ref('')
 const assign = ref({ company: null, role: { value: 'viewer', label: 'Viewer' } })
 
@@ -37,39 +41,45 @@ const breadcrumbItems = ref([
 ])
 
 async function submit() {
-  loading.value = true
-  error.value = ''
+  form.clearErrors()
   ok.value = ''
-  const payload = { ...form.value }
+  
+  const payload = { ...form }
   if (!payload.password) payload.password = randomPassword()
   
-  console.log('Creating user with payload:', payload)
-  
-  try {
-    const { data } = await http.post('/commands', payload, { headers: withIdempotency({ 'X-Action': 'user.create' }) })
-    ok.value = data?.message || 'User created'
-    if (assign.value.company) {
-      try {
-        await http.post('/commands', {
-          email: form.value.email,
-          company: assign.value.company.id || assign.value.company, // Use ID if available, otherwise use the value as-is
+  // First create the user
+  form.transform(data => ({
+    ...data,
+    _action: 'user.create',
+    password: payload.password
+  })).post('/commands', {
+    onSuccess: () => {
+      ok.value = 'User created'
+      
+      // If company assignment is needed, do it separately
+      if (assign.value.company) {
+        const assignForm = useForm({
+          email: form.email,
+          company: assign.value.company.id || assign.value.company,
           role: assign.value.role.value,
-        }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-        ok.value += ' · Assigned to company'
-      } catch (e) {
-        // swallow, surface below
-        throw e
+          _action: 'company.assign'
+        })
+        
+        assignForm.post('/commands', {
+          onSuccess: () => {
+            ok.value += ' · Assigned to company'
+          },
+          onError: () => {
+            // Don't show error for assignment failure, just log it
+            console.error('Company assignment failed')
+          }
+        })
       }
+    },
+    onError: (errors) => {
+      console.error('Create user error:', errors);
     }
-  } catch (e) {
-    console.error('Create user error:', e.response?.data);
-    error.value = e?.response?.data?.message || 'Failed to create user';
-    if (e?.response?.data?.errors) {
-      console.error('Validation errors:', e.response.data.errors);
-    }
-  } finally {
-    loading.value = false
-  }
+  })
 }
 </script>
 
@@ -89,7 +99,10 @@ async function submit() {
 
     <div class="space-y-4">
       <Message v-if="ok" severity="success" :closable="false">{{ ok }}</Message>
-      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+      <Message v-if="form.errors.name" severity="error" :closable="false">{{ form.errors.name }}</Message>
+    <Message v-if="form.errors.email" severity="error" :closable="false">{{ form.errors.email }}</Message>
+    <Message v-if="form.errors.password" severity="error" :closable="false">{{ form.errors.password }}</Message>
+    <Message v-if="form.errors.system_role" severity="error" :closable="false">{{ form.errors.system_role }}</Message>
 
       <Card class="w-full max-w-2xl mx-auto">
         <template #title>Create New User</template>
@@ -97,19 +110,19 @@ async function submit() {
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium mb-2">Name</label>
-              <InputText v-model="form.name" class="w-full" placeholder="Jane Doe" />
+              <InputText v-model="form.name" class="w-full" placeholder="Jane Doe" :class="{ 'p-invalid': form.errors.name }" />
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">Email</label>
-              <InputText v-model="form.email" class="w-full" placeholder="jane@example.com" />
+              <InputText v-model="form.email" class="w-full" placeholder="jane@example.com" :class="{ 'p-invalid': form.errors.email }" />
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">Password (optional)</label>
-              <InputText v-model="form.password" class="w-full" placeholder="Auto-generated if left blank" />
+              <InputText v-model="form.password" class="w-full" placeholder="Auto-generated if left blank" :class="{ 'p-invalid': form.errors.password }" />
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">System Role (optional)</label>
-              <InputText v-model="form.system_role" class="w-full" placeholder="superadmin" />
+              <InputText v-model="form.system_role" class="w-full" placeholder="superadmin" :class="{ 'p-invalid': form.errors.system_role }" />
             </div>
             <div class="border-t pt-4">
               <div class="text-sm font-medium mb-2">Optional: Assign to a company</div>
@@ -125,7 +138,7 @@ async function submit() {
               </div>
             </div>
             <div class="pt-2">
-              <Button @click="submit" :loading="loading" label="Create User" icon="pi pi-user-plus" />
+              <Button @click="submit" :loading="form.processing" label="Create User" icon="pi pi-user-plus" />
             </div>
           </div>
         </template>

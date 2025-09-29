@@ -79,13 +79,40 @@ class HandleInertiaRequests extends Middleware
                 'companyId' => $companyId,
                 'currentCompany' => $request->user() ? $request->user()->currentCompany : null,
                 'isSuperAdmin' => (bool) optional($request->user())->isSuperAdmin(),
-                'permissions' => $request->user() ? [
-                    'ledger.view' => $request->user()->can('ledger.view'),
-                    'ledger.create' => $request->user()->can('ledger.create'),
-                    'ledger.post' => $request->user()->can('ledger.post'),
-                    'ledger.void' => $request->user()->can('ledger.void'),
-                    'ledger.accounts.view' => $request->user()->can('ledger.accounts.view'),
-                ] : [],
+                'can' => $request->user() ? [
+                    'ledger' => [
+                        'view' => $request->user()->can('ledger.view'),
+                        'create' => $request->user()->can('ledger.create'),
+                        'post' => $request->user()->can('ledger.post'),
+                        'void' => $request->user()->can('ledger.void'),
+                        'accounts' => [
+                            'view' => $request->user()->can('ledger.accounts.view'),
+                        ],
+                    ],
+                    'invoices' => [
+                        'view' => $request->user()->can('invoices.view'),
+                        'create' => $request->user()->can('invoices.create'),
+                        'edit' => $request->user()->can('invoices.edit'),
+                        'delete' => $request->user()->can('invoices.delete'),
+                        'send' => $request->user()->can('invoices.send'),
+                        'post' => $request->user()->can('invoices.post'),
+                    ],
+                    'payments' => [
+                        'view' => $request->user()->can('payments.view'),
+                        'create' => $request->user()->can('payments.create'),
+                        'edit' => $request->user()->can('payments.edit'),
+                        'delete' => $request->user()->can('payments.delete'),
+                        'allocate' => $request->user()->can('payments.allocate'),
+                    ],
+                    'currency' => [
+                        'view' => $request->user()->can('currency.view'),
+                        'companyEdit' => $request->user()->can('currency.company.edit'),
+                        'systemManage' => $request->user()->can('currency.system.manage'),
+                        'exchangeEdit' => $request->user()->can('currency.exchange.edit'),
+                        'defaultSet' => $request->user()->can('currency.default.set'),
+                        'crud' => $request->user()->can('currency.crud'),
+                    ],
+                ] : null,
             ],
 
             // Expose CSRF token so the SPA can update its meta tag after

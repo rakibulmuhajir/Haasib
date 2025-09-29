@@ -1,7 +1,13 @@
-<script setup>
-const props = defineProps({
-  company: { type: Object, default: null }
-})
+<script setup lang="ts">
+interface Company {
+  id: string
+  name: string
+  // Add other properties as needed
+}
+
+const props = defineProps<{
+  company: Company | null
+}>()
 </script>
 
 <template>

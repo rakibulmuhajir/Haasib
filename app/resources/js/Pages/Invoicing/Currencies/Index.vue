@@ -218,8 +218,6 @@
       </template>
     </Dialog>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
   </LayoutShell>
 </template>
 

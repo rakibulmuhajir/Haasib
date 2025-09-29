@@ -5,6 +5,7 @@ use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\User;
 use App\Services\PaymentService;
+use App\Support\ServiceContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -72,12 +73,13 @@ it('auto-posts a journal entry when a payment completes', function () {
         currency: $currency,
         notes: 'Test payment',
         autoAllocate: false,
-        idempotencyKey: (string) Str::uuid()
+        idempotencyKey: (string) Str::uuid(),
+        context: ServiceContext::forUser($user, $company->id)
     );
 
     // Ensure posting occurred (call explicitly in case auto-post was skipped by RLS)
     try {
-        app(\App\Services\LedgerIntegrationService::class)->postPaymentToLedger($payment->fresh());
+        app(\App\Services\LedgerIntegrationService::class)->postPaymentToLedger($payment->fresh(), ServiceContext::forUser($user, $company->id));
     } catch (\InvalidArgumentException $e) {
         // Already posted is acceptable for this test
     }

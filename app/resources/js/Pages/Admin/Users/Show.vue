@@ -1,4 +1,48 @@
-<script setup>
+<script setup lang="ts">
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  is_active: boolean;
+  system_role?: string;
+  memberships: Membership[];
+  last_activity?: {
+    action: string;
+    created_at: string;
+  };
+}
+
+interface Membership {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RoleOption {
+  value: string;
+  label: string;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface AssignData {
+  company: Company | null;
+  role: RoleOption;
+}
+
+interface BreadcrumbItem {
+  label: string;
+  url: string;
+  icon: string;
+}
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
@@ -20,20 +64,20 @@ import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { ref, onMounted, computed } from 'vue'
 
-const props = defineProps({ id: { type: String, required: true } })
+const props = defineProps<{ id: string }>()
 const { addToast } = useToasts()
-const loading = ref(false)
-const error = ref('')
-const user = ref(null)
+const loading = ref<boolean>(false)
+const error = ref<string>('')
+const user = ref<User | null>(null)
 
-const roleOptions = [
+const roleOptions: RoleOption[] = [
   { value: 'owner', label: 'Owner' },
   { value: 'admin', label: 'Admin' },
   { value: 'accountant', label: 'Accountant' },
   { value: 'viewer', label: 'Viewer' },
 ]
 
-async function load() {
+async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
@@ -53,11 +97,11 @@ async function load() {
 onMounted(load)
 
 // Assign to company
-const assign = ref({ company: null, role: { value: 'viewer', label: 'Viewer' } })
-const assignLoading = ref(false)
-const assignError = ref('')
+const assign = ref<AssignData>({ company: null, role: { value: 'viewer', label: 'Viewer' } })
+const assignLoading = ref<boolean>(false)
+const assignError = ref<string>('')
 
-async function assignToCompany() {
+async function assignToCompany(): Promise<void> {
   console.log('🔍 assignToCompany called with:', assign.value)
   console.log('🔍 Validation check:', {
     company: assign.value.company,
@@ -140,7 +184,7 @@ async function assignToCompany() {
   }
 }
 
-async function changeRole(m) {
+async function changeRole(m: Membership & { role: string }): Promise<void> {
   console.log('🚀 changeRole FUNCTION CALLED - Users/Show.vue')
   console.log('Input parameter m:', m)
   
@@ -192,7 +236,7 @@ async function changeRole(m) {
   }
 }
 
-async function unassign(m) {
+async function unassign(m: Membership): Promise<void> {
   if (!confirm(`Remove ${user.value.email} from ${m.name}?`)) return
   try {
     await http.post('/commands', {
@@ -220,7 +264,7 @@ const isCompanyAlreadyAssigned = computed(() => {
 })
 
 // Breadcrumb items
-const breadcrumbItems = ref([
+const breadcrumbItems = ref<BreadcrumbItem[]>([
   { label: 'Admin', url: '/admin', icon: 'settings' },
   { label: 'Users', url: '/admin/users', icon: 'users' },
   { label: user?.name || 'User', url: '#' }
@@ -292,7 +336,7 @@ const customStyles = `
 </style>
 `
 
-const copyToClipboard = async (text) => {
+const copyToClipboard = async (text: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(text)
     addToast('Copied to clipboard', 'success')

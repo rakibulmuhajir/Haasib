@@ -40,8 +40,7 @@ class Customer extends Model
         'outstanding_balance',
         'risk_level',
     ];
-    
-    
+
     /**
      * Get the id attribute (alias for customer_id).
      */
@@ -134,8 +133,10 @@ class Customer extends Model
         if ($countryId) {
             // For table display, we only need code and name
             $country = Country::find($countryId, ['id', 'code', 'name']);
+
             return $country ? $country->only(['code', 'name']) : null;
         }
+
         return null;
     }
 
@@ -145,13 +146,14 @@ class Customer extends Model
         if ($this->relationLoaded('currency') && $this->currency) {
             return $this->currency->code;
         }
-        
+
         // Otherwise, query the database
         if ($this->currency_id) {
             $currency = Currency::find($this->currency_id, ['id', 'code']);
+
             return $currency ? $currency->code : null;
         }
-        
+
         return null;
     }
 

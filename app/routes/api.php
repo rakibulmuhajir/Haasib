@@ -111,6 +111,12 @@ Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middle
 // Universal inline edit endpoint
 Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware('web');
 
+// System currencies endpoint
+Route::prefix('currencies')->name('currencies.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Api\CurrencyApiController::class, 'index'])->name('index');
+    Route::patch('{currency}/toggle-active', [\App\Http\Controllers\Api\CurrencyApiController::class, 'toggleActive'])->name('toggle-active');
+});
+
 // Health check endpoint
 Route::get('/health', function () {
     return response()->json([

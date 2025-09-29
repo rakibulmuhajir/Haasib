@@ -33,15 +33,16 @@ class CustomerResource extends JsonResource
             'tax_exempt' => $this->tax_exempt,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            
+
             // Computed attributes
             'outstanding_balance' => $this->getOutstandingBalance(),
             'risk_level' => $this->getRiskLevel(),
-            
+
             // Relationships
             'currency' => $this->whenLoaded('currency', fn () => new CurrencyResource($this->currency)),
-            'country' => $this->whenLoaded('country_relation', function() {
+            'country' => $this->whenLoaded('country_relation', function () {
                 $countryId = $this->billing_address['country_id'] ?? null;
+
                 return $countryId && $this->country_relation ? new CountryResource($this->country_relation) : null;
             }),
         ];

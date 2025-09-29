@@ -23,6 +23,39 @@ class CurrencyApiController extends Controller
     ) {}
 
     /**
+     * Get all system currencies.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $currencies = Currency::orderBy('name')
+            ->get()
+            ->map(fn ($currency) => [
+                'id' => $currency->id,
+                'code' => $currency->code,
+                'name' => $currency->name,
+                'symbol' => $currency->symbol,
+                'active' => $currency->is_active,
+            ]);
+
+        return $this->ok($currencies);
+    }
+
+    /**
+     * Toggle currency active status.
+     */
+    public function toggleActive(Request $request, Currency $currency): JsonResponse
+    {
+        $currency->is_active = ! $currency->is_active;
+        $currency->save();
+
+        return $this->ok([
+            'id' => $currency->id,
+            'active' => $currency->is_active,
+            'message' => sprintf('Currency %s successfully', $currency->is_active ? 'enabled' : 'disabled'),
+        ]);
+    }
+
+    /**
      * Get company currencies configuration.
      */
     public function companyCurrencies(Request $request): JsonResponse

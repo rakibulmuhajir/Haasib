@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\InvoiceService;
+use App\Support\ServiceContextHelper;
 use Illuminate\Support\Facades\Log;
 
 class InvoiceCreate
@@ -63,7 +64,8 @@ class InvoiceCreate
         $currency = $p['currency_id'] ? Currency::findOrFail($p['currency_id']) : null;
 
         // Let the service handle complex logic
-        $invoice = $this->invoiceService->createInvoice($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey);
+        $context = ServiceContextHelper::forUser($actor, $companyId, $idempotencyKey);
+        $invoice = $this->invoiceService->createInvoice($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey, $context);
 
         // Update invoice number if provided
         if ($invoiceNumber && $invoice->invoice_number !== $invoiceNumber) {

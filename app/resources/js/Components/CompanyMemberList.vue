@@ -24,7 +24,7 @@ defineEmits<{
 const { addToast } = useToasts()
 const selectedRoles = ref<Record<string, string>>({})
 
-const copyToClipboard = async (text) => {
+const copyToClipboard = async (text: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(text)
     addToast('Copied to clipboard', 'success')

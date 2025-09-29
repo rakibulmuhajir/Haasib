@@ -10,6 +10,7 @@ use App\Models\Invoice;
 use App\Services\CurrencyService;
 use App\Services\InvoiceService;
 use App\Support\Filtering\FilterBuilder;
+use App\Support\ServiceContextHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -387,7 +388,8 @@ class InvoiceController extends Controller
                 dueDate: $request->due_date,
                 notes: $request->notes,
                 terms: $request->terms,
-                idempotencyKey: $request->header('Idempotency-Key')
+                idempotencyKey: $request->header('Idempotency-Key'),
+                context: ServiceContextHelper::fromRequest($request)
             );
 
             return redirect()
@@ -419,7 +421,7 @@ class InvoiceController extends Controller
         }
 
         try {
-            $this->invoiceService->deleteInvoice($invoice);
+            $this->invoiceService->deleteInvoice($invoice, ServiceContextHelper::fromRequest($request));
 
             return redirect()
                 ->route('invoices.index')
@@ -449,7 +451,7 @@ class InvoiceController extends Controller
         }
 
         try {
-            $this->invoiceService->markAsSent($invoice);
+            $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request));
 
             return back()->with('success', 'Invoice marked as sent successfully.');
 
@@ -476,7 +478,7 @@ class InvoiceController extends Controller
         }
 
         try {
-            $this->invoiceService->postToLedger($invoice);
+            $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request));
 
             return back()->with('success', 'Invoice posted to ledger successfully.');
 
@@ -508,7 +510,7 @@ class InvoiceController extends Controller
             if ($reason === '') {
                 $reason = 'Cancelled by user';
             }
-            $this->invoiceService->markAsCancelled($invoice, $reason);
+            $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request));
 
             return back()->with('success', 'Invoice cancelled successfully.');
 
@@ -576,7 +578,7 @@ class InvoiceController extends Controller
             // Special handling for posting
             if ($newStatus === 'posted') {
                 // Call the post service method
-                $this->invoiceService->postToLedger($invoice);
+                $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request));
             }
             // Special handling for voiding
             elseif ($newStatus === 'void') {
@@ -588,7 +590,7 @@ class InvoiceController extends Controller
             // Special handling for cancelling
             elseif ($newStatus === 'cancelled') {
                 $reason = $validated['cancellation_reason'] ?? 'Cancelled by user';
-                $this->invoiceService->markAsCancelled($invoice, $reason);
+                $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request));
             }
             // Special handling for restoring from cancelled
             elseif ($oldStatus === 'cancelled' && in_array($newStatus, ['draft', 'sent'])) {
@@ -643,7 +645,7 @@ class InvoiceController extends Controller
 
         try {
             // Service method name is generatePDF
-            $pdfPath = $this->invoiceService->generatePDF($invoice);
+            $pdfPath = $this->invoiceService->generatePDF($invoice, ServiceContextHelper::fromRequest($request));
 
             return response()->download($pdfPath, "invoice-{$invoice->invoice_number}.pdf");
 
@@ -683,7 +685,8 @@ class InvoiceController extends Controller
                 $invoice,
                 $request->email,
                 $request->subject,
-                $request->message
+                $request->message,
+                ServiceContextHelper::fromRequest($request)
             );
 
             return back()->with('success', 'Invoice email sent successfully.');
@@ -707,7 +710,7 @@ class InvoiceController extends Controller
         $this->authorize('create', Invoice::class);
 
         try {
-            $newInvoice = $this->invoiceService->duplicateInvoice($invoice);
+            $newInvoice = $this->invoiceService->duplicateInvoice($invoice, ServiceContextHelper::fromRequest($request));
 
             return redirect()
                 ->route('invoices.show', $newInvoice)
@@ -754,30 +757,30 @@ class InvoiceController extends Controller
 
                 switch ($action) {
                     case 'send':
-                        $this->invoiceService->markAsSent($invoice);
+                        $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request));
                         break;
                     case 'post':
-                        $this->invoiceService->markAsPosted($invoice);
+                        $this->invoiceService->markAsPosted($invoice, ServiceContextHelper::fromRequest($request));
                         break;
                     case 'cancel':
                         $reason = trim((string) $request->input('reason', ''));
                         if ($reason === '') {
                             $reason = 'Bulk cancel';
                         }
-                        $this->invoiceService->markAsCancelled($invoice, $reason);
+                        $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request));
                         break;
                     case 'delete':
                         $this->authorize('delete', $invoice);
                         if ($invoice->status !== 'draft') {
                             throw new \RuntimeException('Only draft invoices can be deleted');
                         }
-                        $this->invoiceService->deleteInvoice($invoice);
+                        $this->invoiceService->deleteInvoice($invoice, ServiceContextHelper::fromRequest($request));
                         break;
                     case 'remind':
                         // Send a payment reminder email using default recipient
                         $subject = 'Payment Reminder for Invoice '.$invoice->invoice_number;
                         $message = 'This is a friendly reminder that your invoice is due. Please contact us if you have any questions.';
-                        $this->invoiceService->sendEmail($invoice, null, $subject, $message);
+                        $this->invoiceService->sendEmail($invoice, null, $subject, $message, ServiceContextHelper::fromRequest($request));
                         break;
                 }
 

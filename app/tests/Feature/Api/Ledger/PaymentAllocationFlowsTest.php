@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\InvoiceService;
 use App\Services\LedgerIntegrationService;
 use App\Services\PaymentService;
+use App\Support\ServiceContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -78,13 +79,14 @@ it('partial allocation updates invoice status to partial and can be posted to le
         amount: 30.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-Partial',
-        currency: $currency
+        currency: $currency,
+        context: ServiceContext::forUser($user, $company->id)
     );
 
     // Allocate 30 to the invoice
     $allocs = app(PaymentService::class)->allocatePayment($payment, [
         ['invoice_id' => $invoice->invoice_id, 'amount' => 30.00],
-    ]);
+    ], 'Allocation', ServiceContext::forUser($user, $company->id));
     expect($allocs)->toBeArray();
 
     $invoice->refresh();
@@ -92,7 +94,7 @@ it('partial allocation updates invoice status to partial and can be posted to le
 
     // Post allocation to ledger explicitly
     $allocation = $payment->allocations()->first();
-    app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation);
+    app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation, ServiceContext::forUser($user, $company->id));
 
     $posted = DB::table('journal_entries')
         ->where('company_id', $company->id)
@@ -128,14 +130,15 @@ it('void allocation sets status and can void ledger entry', function () {
         amount: 50.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-2',
-        currency: $currency
+        currency: $currency,
+        context: ServiceContext::forUser($user, $company->id)
     );
-    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 20.00]]);
+    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 20.00]], 'Allocation', ServiceContext::forUser($user, $company->id));
     $allocation = $payment->allocations()->first();
-    app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation);
+    app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation, ServiceContext::forUser($user, $company->id));
 
     // Void allocation (business record)
-    app(PaymentService::class)->voidAllocation($allocation, 'Allocation voided');
+    app(PaymentService::class)->voidAllocation($allocation, 'Allocation voided', ServiceContext::forUser($user, $company->id));
 
     $allocation->refresh();
     expect($allocation->status)->toBe('void');
@@ -166,12 +169,13 @@ it('refunds an allocation and records a refund allocation', function () {
         amount: 80.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-3',
-        currency: $currency
+        currency: $currency,
+        context: ServiceContext::forUser($user, $company->id)
     );
-    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 50.00]]);
+    app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 50.00]], 'Allocation', ServiceContext::forUser($user, $company->id));
     $allocation = $payment->allocations()->first();
 
-    $refund = app(PaymentService::class)->refundAllocation($allocation, \Brick\Money\Money::of(20, 'USD'), 'Partial refund');
+    $refund = app(PaymentService::class)->refundAllocation($allocation, \Brick\Money\Money::of(20, 'USD'), 'Partial refund', ServiceContext::forUser($user, $company->id));
     expect($refund->status)->toBe('refunded');
 
     $invoice->refresh();

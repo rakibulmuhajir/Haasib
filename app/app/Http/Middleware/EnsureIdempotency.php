@@ -28,11 +28,12 @@ class EnsureIdempotency
         $companyId = $user?->current_company_id ?? null;
 
         $action = $request->route()?->getName() ?: ($request->method().' '.$request->path());
-        $payload = [
+        // Store only a hash of the payload to avoid storing sensitive data
+        $payloadHash = hash('sha256', json_encode([
             'method' => $request->method(),
             'path' => $request->path(),
-            'input' => $request->all(),
-        ];
+            'input' => $request->except(['password', 'password_confirmation', 'current_password', 'token', '_token']),
+        ]));
 
         $existing = DB::table('idempotency_keys')
             ->where('user_id', $userId)
@@ -42,11 +43,32 @@ class EnsureIdempotency
             ->first();
 
         if ($existing) {
-            // Return stored response if present, regardless of minor payload differences
+            // Check if payload hash matches to prevent collisions
+            if ($existing->payload_hash !== $payloadHash) {
+                // Different payload for same key - this might be a key reuse
+                Log::warning('Idempotency key reused with different payload', [
+                    'user_id' => $userId,
+                    'key' => $key,
+                    'action' => $action,
+                ]);
+
+                return response()->json(['error' => 'Idempotency key already used with different payload'], 409);
+            }
+
+            // Return stored response if present
             $storedResponse = json_decode($existing->response ?? 'null', true);
             if (is_array($storedResponse)) {
                 $status = $storedResponse['status'] ?? 200;
-                $body = $storedResponse['body'] ?? $storedResponse;
+
+                // For successful responses with resource info, reconstruct minimal response
+                if (($storedResponse['success'] ?? false) && isset($storedResponse['resource_id'])) {
+                    $body = [
+                        'id' => $storedResponse['resource_id'],
+                        'message' => ucfirst($storedResponse['resource_type']).' created successfully',
+                    ];
+                } else {
+                    $body = ['message' => 'Request processed successfully'];
+                }
 
                 return response()->json($body, $status);
             }
@@ -63,7 +85,7 @@ class EnsureIdempotency
                     'key' => $key,
                 ],
                 [
-                    'request' => json_encode($payload),
+                    'payload_hash' => $payloadHash,
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
@@ -76,12 +98,27 @@ class EnsureIdempotency
 
         $response = $next($request);
 
-        // Attempt to store response
+        // Attempt to store minimal response data
         try {
-            $body = null;
-            $contentType = (string) $response->headers->get('Content-Type');
-            if (str_contains($contentType, 'application/json')) {
+            // Store only essential response data to avoid bloat
+            $responseData = [
+                'status' => $response->getStatusCode(),
+                'success' => $response->isSuccessful(),
+            ];
+
+            // For successful responses, store only a reference to the created resource
+            if ($response->isSuccessful()) {
                 $body = json_decode($response->getContent(), true);
+                if (is_array($body)) {
+                    // Extract only IDs from common response patterns
+                    foreach (['id', 'invoice_id', 'payment_id', 'customer_id'] as $idField) {
+                        if (isset($body[$idField])) {
+                            $responseData['resource_id'] = $body[$idField];
+                            $responseData['resource_type'] = rtrim($idField, '_id');
+                            break;
+                        }
+                    }
+                }
             }
 
             DB::table('idempotency_keys')->where([
@@ -90,10 +127,7 @@ class EnsureIdempotency
                 'action' => $action,
                 'key' => $key,
             ])->update([
-                'response' => json_encode([
-                    'status' => $response->getStatusCode(),
-                    'body' => $body,
-                ]),
+                'response' => json_encode($responseData),
                 'updated_at' => now(),
             ]);
         } catch (\Throwable $e) {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
@@ -17,6 +17,8 @@ import Column from 'primevue/column'
 import { usePageActions } from '@/composables/usePageActions'
 import { useToast } from 'primevue/usetoast'
 import { FilterMatchMode } from '@primevue/core/api'
+import { useFormatting } from '@/composables/useFormatting'
+import { useLedgerAccountsFilters } from '@/composables/useLedgerAccountsFilters'
 
 interface Account {
   id: number
@@ -39,11 +41,18 @@ interface TreeNode {
 }
 
 const page = usePage()
-const filters = ref({
-  type: '',
-  active: '',
-  search: ''
-})
+const { formatMoney } = useFormatting()
+const { 
+  filters, 
+  typeOptions, 
+  activeOptions, 
+  activeFilters, 
+  hasActiveFilters,
+  applyFilters,
+  clearFilter,
+  clearFilters,
+  debouncedSearch 
+} = useLedgerAccountsFilters(page.props.initialFilters)
 
 const toasty = useToast()
 const { setActions, clearActions } = usePageActions()
@@ -65,21 +74,6 @@ const breadcrumbItems = ref([
   { label: 'Chart of Accounts', url: '/ledger/accounts', icon: 'sitemap' },
 ])
 
-// Filter options
-const typeOptions = [
-  { label: 'All Types', value: '' },
-  { label: 'Assets', value: 'asset' },
-  { label: 'Liabilities', value: 'liability' },
-  { label: 'Equity', value: 'equity' },
-  { label: 'Revenue', value: 'revenue' },
-  { label: 'Expenses', value: 'expense' }
-]
-
-const activeOptions = [
-  { label: 'All', value: '' },
-  { label: 'Active Only', value: true },
-  { label: 'Inactive Only', value: false }
-]
 
 // Filter and search
 const filteredTreeData = computed(() => {
@@ -96,13 +90,6 @@ const filteredTreeData = computed(() => {
   return transformAccountsToTree(filtered)
 })
 
-// Format currency
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount)
-}
 
 // Get account type badge
 const getTypeBadge = (type: string) => {
@@ -153,31 +140,6 @@ const calculateAccountBalance = (account: Account) => {
   }
 }
 
-// Apply filters
-const applyFilters = () => {
-  router.visit(route('ledger.accounts.index', {
-    type: filters.value.type || undefined,
-    active: filters.value.active !== '' ? filters.value.active : undefined,
-    search: filters.value.search || undefined
-  }), {
-    preserveState: true,
-    preserveScroll: true
-  })
-}
-
-// Clear all filters
-const clearFilters = () => {
-  filters.value = {
-    type: '',
-    active: '',
-    search: ''
-  }
-  router.visit(route('ledger.accounts.index'), {
-    preserveState: true,
-    preserveScroll: true
-  })
-}
-
 // Page Actions
 setActions([
   { key: 'create', label: 'New Account', icon: 'pi pi-plus', severity: 'primary', click: () => router.visit(route('ledger.accounts.create')), disabled: () => !canCreate.value },
@@ -214,7 +176,7 @@ onUnmounted(() => clearActions())
               v-model="filters.search"
               placeholder="Search accounts..."
               class="w-64"
-              @keyup.enter="applyFilters"
+              @keyup.enter="debouncedSearch"
             />
           </span>
         </template>
@@ -226,46 +188,19 @@ onUnmounted(() => clearActions())
         <template #content>
           <div class="flex flex-wrap gap-4">
             <!-- Active Filters Display -->
-            <div v-if="filters.type || filters.active !== '' || filters.search" class="flex flex-wrap items-center gap-2 mb-3 w-full">
+            <div v-if="hasActiveFilters" class="flex flex-wrap items-center gap-2 mb-3 w-full">
               <span class="text-xs text-gray-500 dark:text-gray-400">Active filters:</span>
               <span
-                v-if="filters.type"
+                v-for="filter in activeFilters"
+                :key="filter.key"
                 class="inline-flex items-center text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded"
               >
-                Type: {{ typeOptions.find(t => t.value === filters.type)?.label }}
+                {{ filter.display }}
                 <button
                   type="button"
                   class="ml-1 text-blue-500 hover:text-blue-700 dark:hover:text-blue-200"
-                  @click="filters.type = ''; applyFilters()"
-                  aria-label="Clear type filter"
-                >
-                  ×
-                </button>
-              </span>
-              <span
-                v-if="filters.active !== ''"
-                class="inline-flex items-center text-xs bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded"
-              >
-                Status: {{ activeOptions.find(a => a.value === filters.active)?.label }}
-                <button
-                  type="button"
-                  class="ml-1 text-green-500 hover:text-green-700 dark:hover:text-green-200"
-                  @click="filters.active = ''; applyFilters()"
-                  aria-label="Clear status filter"
-                >
-                  ×
-                </button>
-              </span>
-              <span
-                v-if="filters.search"
-                class="inline-flex items-center text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2 py-1 rounded"
-              >
-                Search: "{{ filters.search }}"
-                <button
-                  type="button"
-                  class="ml-1 text-purple-500 hover:text-purple-700 dark:hover:text-purple-200"
-                  @click="filters.search = ''; applyFilters()"
-                  aria-label="Clear search filter"
+                  @click="clearFilter(filter.field)"
+                  aria-label="Clear filter"
                 >
                   ×
                 </button>
@@ -285,8 +220,7 @@ onUnmounted(() => clearActions())
                   optionValue="value"
                   class="w-full"
                   placeholder="Select type"
-                  @change="applyFilters"
-                />
+                  />
               </div>
               
               <div>
@@ -300,12 +234,11 @@ onUnmounted(() => clearActions())
                   optionValue="value"
                   class="w-full"
                   placeholder="Select status"
-                  @change="applyFilters"
-                />
+                  />
               </div>
               
               <div class="flex items-end gap-2">
-                <Button label="Apply Filters" @click="applyFilters" />
+                <Button label="Apply Filters" @click="debouncedSearch" />
                 <Button label="Clear" text @click="clearFilters" />
               </div>
             </div>
@@ -397,7 +330,7 @@ onUnmounted(() => clearActions())
                     class="text-sm font-medium"
                     :class="calculateAccountBalance(node.data).type === 'debit' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
                   >
-                    {{ formatCurrency(Math.abs(calculateAccountBalance(node.data).amount)) }}
+                    {{ formatMoney(Math.abs(calculateAccountBalance(node.data).amount)) }}
                   </div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
                     {{ calculateAccountBalance(node.data).type }}
@@ -519,9 +452,7 @@ onUnmounted(() => clearActions())
       </div>
     </div>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>
 
 <style scoped>

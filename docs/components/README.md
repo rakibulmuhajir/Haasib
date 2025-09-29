@@ -98,7 +98,20 @@ This file serves as an index for all component documentation.
 - [CustomerInfoDisplay](./components/CustomerInfoDisplay.md)
 - [CountryDisplay](./components/CountryDisplay.md)
 
+## Ledger Components
+- [LedgerEntriesTable](./components/Ledger-Components.md#ledgerentriestable) - Journal entries table with filtering and bulk actions
+- [JournalEntryForm](./components/Ledger-Components.md#journalentryform) - Double-entry journal form with balance validation
+- [JournalEntrySummary](./components/Ledger-Components.md#journalentrysummary) - Entry details and totals display
+- [LinesTable](./components/Ledger-Components.md#linestable) - Journal lines display with account information
+- [LedgerAccountsFilters](./components/Ledger-Components.md#ledgeraccountsfilters) - Account filtering with search and type selection
+
 ## Form Components
+- [EntityPicker](./components/EntityPicker.md) - Generic entity picker for customers, companies, users, vendors
+- [CustomerPicker](./components/CustomerPicker.md) - Customer selection with balance and stats
+- [CompanyPicker](./components/CompanyPicker.md) - Company selection with industry and revenue metrics
+- [UserPicker](./components/UserPicker.md) - User selection with role and department
+- [VendorPicker](./components/VendorPicker.md) - Vendor selection with category and payment history
+- [InvoicePicker](./components/InvoicePicker.md) - Invoice selection with balance and due dates
 - [InputText](./components/InputText.md)
 - [Dropdown](./components/Dropdown.md)
 - [Calendar](./components/Calendar.md)
@@ -132,11 +145,23 @@ This file serves as an index for all component documentation.
 - StatusBadge - Status indicator with color coding
 - BalanceDisplay - Monetary value display with risk indicators
 - CustomerInfoDisplay - Customer information with multiple variants
+- EntityPicker - Generic entity picker with extensive customization
+- CustomerPicker - Customer selection with balance and statistics
+- CompanyPicker - Company selection with industry and metrics
+- UserPicker - User selection with role and department
+- VendorPicker - Vendor selection with category and payment history
+- InvoicePicker - Invoice selection with balance and due dates
+- LineItemEditor - Full-featured line item editor with real-time calculations
+- LedgerEntriesTable - Journal entries table with bulk operations and filtering
+- JournalEntryForm - Double-entry journal form with balance validation
+- JournalEntrySummary - Entry details display with status-specific actions
+- LinesTable - Journal lines display with account information
+- LedgerAccountsFilters - Account filtering with search and type selection
 
 ### Pending Documentation
 - LayoutShell, Breadcrumb, CountryDisplay
 - All PrimeVue base components
-- All form and utility components
+- Remaining form and utility components
 
 ## Form Components
 - [InputText](./components/InputText.md)

@@ -307,14 +307,14 @@
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-500">Account Balance</span>
                   <span class="font-medium" :class="(customerData.outstanding_balance || 0) > 0 ? 'text-red-600' : 'text-green-600'">
-                    {{ formatMoney(accountBalance, customerData.currency?.code) }}
+                    {{ formatMoney(accountBalance, customerData.currency) }}
                   </span>
                 </div>
 
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-500">Available Credit</span>
                   <span class="font-medium">
-                    {{ formatMoney(customerData.credit_limit || 0, customerData.currency?.code) }}
+                    {{ formatMoney(customerData.credit_limit || 0, customerData.currency) }}
                   </span>
                 </div>
 
@@ -355,7 +355,7 @@
                     <p class="text-sm">{{ activity.description }}</p>
                     <p class="text-xs text-gray-500">{{ formatDate(activity.date) }}</p>
                     <p v-if="activity.amount" class="text-sm font-medium">
-                      {{ formatMoney(activity.amount, customerData.currency?.code) }}
+                      {{ formatMoney(activity.amount, customerData.currency) }}
                     </p>
                   </div>
                 </div>
@@ -374,7 +374,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive } from 'vue'
-import { router, Head } from '@inertiajs/vue3'
+import { router, Head, usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'

@@ -183,5 +183,75 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('payments.edit', fn (User $user) => Gate::forUser($user)->check('payments.create'));
         Gate::define('payments.delete', fn (User $user) => Gate::forUser($user)->check('payments.create'));
         Gate::define('payments.allocate', fn (User $user) => Gate::forUser($user)->check('payments.create'));
+
+        // Currency permissions
+        Gate::define('currency.view', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin', 'accountant', 'viewer']);
+        });
+
+        Gate::define('currency.company.edit', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin', 'accountant']);
+        });
+
+        Gate::define('currency.system.manage', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin']);
+        });
+
+        Gate::define('currency.exchange.edit', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin', 'accountant']);
+        });
+
+        Gate::define('currency.default.set', function (User $user) {
+            $companyId = $user->currentCompany?->id;
+            if (! $companyId) {
+                return false;
+            }
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            $role = app(CompanyLookupService::class)->userRole($companyId, $user->id);
+
+            return in_array($role, ['owner', 'admin']);
+        });
+
+        Gate::define('currency.crud', function (User $user) {
+            return $user->isSuperAdmin();
+        });
     }
 }

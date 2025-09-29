@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponder;
 use App\Models\Invoice;
 use App\Services\InvoiceService;
+use App\Support\ServiceContextHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -122,7 +123,8 @@ class InvoiceApiController extends Controller
                 dueDate: $validated['due_date'] ?? null,
                 notes: $validated['notes'] ?? null,
                 terms: $validated['terms'] ?? null,
-                idempotencyKey: $request->header('Idempotency-Key')
+                idempotencyKey: $request->header('Idempotency-Key'),
+                context: ServiceContextHelper::fromRequest($request)
             );
 
             return $this->ok(
@@ -209,7 +211,8 @@ class InvoiceApiController extends Controller
                 invoiceDate: $validated['invoice_date'] ?? null,
                 dueDate: $validated['due_date'] ?? null,
                 notes: $validated['notes'] ?? null,
-                terms: $validated['terms'] ?? null
+                terms: $validated['terms'] ?? null,
+                context: ServiceContextHelper::fromRequest($request)
             );
 
             return $this->ok($updatedInvoice->load(['customer', 'currency', 'items']), 'Invoice updated successfully');
@@ -234,7 +237,7 @@ class InvoiceApiController extends Controller
             $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
-            $this->invoiceService->deleteInvoice($invoice, $request->reason);
+            $this->invoiceService->deleteInvoice($invoice, $request->reason, ServiceContextHelper::fromRequest($request));
 
             return $this->ok(null, 'Invoice deleted successfully');
 
@@ -258,7 +261,7 @@ class InvoiceApiController extends Controller
             $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
-            $updatedInvoice = $this->invoiceService->markAsSent($invoice);
+            $updatedInvoice = $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request));
 
             return $this->ok($updatedInvoice, 'Invoice marked as sent');
 
@@ -283,7 +286,7 @@ class InvoiceApiController extends Controller
             $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
-            $updatedInvoice = $this->invoiceService->markAsPosted($invoice);
+            $updatedInvoice = $this->invoiceService->markAsPosted($invoice, ServiceContextHelper::fromRequest($request));
 
             return $this->ok($updatedInvoice, 'Invoice marked as posted');
 
@@ -312,7 +315,7 @@ class InvoiceApiController extends Controller
             $company = $request->attributes->get('company');
             $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
 
-            $updatedInvoice = $this->invoiceService->markAsCancelled($invoice, $request->reason);
+            $updatedInvoice = $this->invoiceService->markAsCancelled($invoice, $request->reason, ServiceContextHelper::fromRequest($request));
 
             return $this->ok($updatedInvoice, 'Invoice cancelled successfully');
 
@@ -334,7 +337,7 @@ class InvoiceApiController extends Controller
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
-            $pdfPath = $this->invoiceService->generatePDF($invoice);
+            $pdfPath = $this->invoiceService->generatePDF($invoice, ServiceContextHelper::fromRequest($request));
 
             return $this->ok([
                 'pdf_path' => $pdfPath,
@@ -363,7 +366,7 @@ class InvoiceApiController extends Controller
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
-            $this->invoiceService->sendInvoiceByEmail($invoice, $request->email, $request->message);
+            $this->invoiceService->sendInvoiceByEmail($invoice, $request->email, $request->message, ServiceContextHelper::fromRequest($request));
 
             return $this->ok(null, 'Invoice sent successfully');
 
@@ -383,7 +386,7 @@ class InvoiceApiController extends Controller
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
-            $duplicatedInvoice = $this->invoiceService->duplicateInvoice($invoice, $request->notes);
+            $duplicatedInvoice = $this->invoiceService->duplicateInvoice($invoice, $request->notes, ServiceContextHelper::fromRequest($request));
 
             return $this->ok($duplicatedInvoice->load(['customer', 'currency', 'items']), 'Invoice duplicated successfully');
 
@@ -450,7 +453,7 @@ class InvoiceApiController extends Controller
 
                     foreach ($invoices as $invoice) {
                         try {
-                            $this->invoiceService->deleteInvoice($invoice, $validated['reason'] ?? null);
+                            $this->invoiceService->deleteInvoice($invoice, $validated['reason'] ?? null, ServiceContextHelper::fromRequest($request));
                             $results[] = ['id' => $invoice->id, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
@@ -482,7 +485,7 @@ class InvoiceApiController extends Controller
                             $invoice = Invoice::where('company_id', $company->id)
                                 ->where('invoice_id', $invoiceId)
                                 ->firstOrFail();
-                            $this->invoiceService->markAsCancelled($invoice, $validated['reason'] ?? null);
+                            $this->invoiceService->markAsCancelled($invoice, $validated['reason'] ?? null, ServiceContextHelper::fromRequest($request));
                             $results[] = ['id' => $invoiceId, 'success' => true];
                         } catch (\Exception $e) {
                             $results[] = [
@@ -525,7 +528,7 @@ class InvoiceApiController extends Controller
         $startDate = $request->date_from;
         $endDate = $request->date_to;
 
-        $statistics = $this->invoiceService->getInvoiceStatistics($company, $startDate, $endDate);
+        $statistics = $this->invoiceService->getInvoiceStatistics($company, $startDate, $endDate, ServiceContextHelper::fromRequest($request));
 
         return $this->ok($statistics, null, [
             'filters' => [

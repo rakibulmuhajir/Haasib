@@ -1,11 +1,11 @@
 <script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
+import CustomerPicker from '@/Components/UI/Forms/CustomerPicker.vue'
+import CurrencyPicker from '@/Components/UI/Forms/CurrencyPicker.vue'
 import Calendar from 'primevue/calendar'
 import Textarea from 'primevue/textarea'
 import Card from 'primevue/card'
@@ -14,6 +14,8 @@ import Column from 'primevue/column'
 import InputNumber from 'primevue/inputnumber'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import ValidationErrorsDialog from '@/Components/UI/ValidationErrorsDialog.vue'
+import { useInvoiceForm } from '@/composables/useInvoiceForm'
 
 const props = defineProps({
   customers: Array,
@@ -31,83 +33,39 @@ const breadcrumbItems = ref([
   { label: 'Create Invoice', url: '/invoices/create', icon: 'plus' },
 ])
 
-// Form setup
-const form = useForm({
-  customer_id: '',
-  currency_id: '',
-  invoice_number: props.nextInvoiceNumber || '',
-  invoice_date: new Date().toISOString().split('T')[0],
-  due_date: '',
-  notes: '',
-  terms: '',
-  items: [
-    {
-      id: Date.now(),
-      description: '',
-      quantity: 1,
-      unit_price: 0,
-      tax_rate: 0,
-    }
-  ],
-})
+// Validation dialog state
+const showValidationDialog = ref(false)
+const validationErrors = ref<any>([])
 
-// Selected customer for currency default
-const selectedCustomer = computed(() => {
-  return props.customers.find(c => c.id === form.customer_id)
-})
-
-// Auto-set currency based on customer selection
-watch(() => form.customer_id, (newCustomerId) => {
-  if (newCustomerId && !form.currency_id) {
-    const customer = props.customers.find(c => c.id === newCustomerId)
-    if (customer?.currency_id) {
-      form.currency_id = customer.currency_id
-    }
+// Use invoice form composable
+const {
+  form,
+  selectedCustomer,
+  selectedCurrency,
+  calculations,
+  formatCurrency,
+  addItem: addInvoiceItem,
+  removeItem: removeInvoiceItem,
+  updateItem,
+  validateForm,
+  submitForm: submitInvoiceForm,
+  resetForm
+} = useInvoiceForm({
+  isEdit: false,
+  nextInvoiceNumber: props.nextInvoiceNumber,
+  customers: props.customers,
+  currencies: props.currencies,
+  submitRoute: route('invoices.store'),
+  onSuccess: () => {
+    resetForm()
+    toast.success = 'Invoice created successfully!'
+  },
+  onError: () => {
+    toast.error = 'Failed to create invoice. Please check the form and try again.'
   }
 })
 
-// Auto-calculate due date based on customer payment terms
-watch(() => form.customer_id, (newCustomerId) => {
-  if (newCustomerId && !form.due_date) {
-    const customer = props.customers.find(c => c.id === newCustomerId)
-    if (customer?.payment_terms) {
-      const dueDate = new Date(form.invoice_date)
-      dueDate.setDate(dueDate.getDate() + customer.payment_terms)
-      form.due_date = dueDate.toISOString().split('T')[0]
-    }
-  }
-})
-
-// Update due date when invoice date changes
-watch(() => form.invoice_date, (newInvoiceDate) => {
-  if (newInvoiceDate && form.customer_id && form.due_date) {
-    const customer = props.customers.find(c => c.id === form.customer_id)
-    if (customer?.payment_terms) {
-      const dueDate = new Date(newInvoiceDate)
-      dueDate.setDate(dueDate.getDate() + customer.payment_terms)
-      form.due_date = dueDate.toISOString().split('T')[0]
-    }
-  }
-})
-
-// Item management
-const addInvoiceItem = () => {
-  form.items.push({
-    id: Date.now() + Math.random(),
-    description: '',
-    quantity: 1,
-    unit_price: 0,
-    tax_rate: 0,
-  })
-}
-
-const removeInvoiceItem = (index) => {
-  if (form.items.length > 1) {
-    form.items.splice(index, 1)
-  }
-}
-
-// Calculations
+// Helper functions for item calculations
 const calculateSubtotal = (item) => {
   return (item.quantity || 0) * (item.unit_price || 0)
 }
@@ -121,93 +79,31 @@ const calculateItemTotal = (item) => {
   return calculateSubtotal(item) + calculateTaxAmount(item)
 }
 
-const invoiceSubtotal = computed(() => {
-  return form.items.reduce((sum, item) => sum + calculateSubtotal(item), 0)
-})
-
-const invoiceTaxTotal = computed(() => {
-  return form.items.reduce((sum, item) => sum + calculateTaxAmount(item), 0)
-})
-
-const invoiceTotal = computed(() => {
-  return invoiceSubtotal.value + invoiceTaxTotal.value
-})
-
-// Format currency
-const formatCurrency = (amount, currencyCode = 'USD') => {
-  if (!amount) return '$0.00'
-  
-  const currency = props.currencies.find(c => c.id === form.currency_id)
-  const code = currency?.code || currencyCode
-  
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: code,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount)
-}
-
-// Validation
-const validateForm = () => {
-  const errors = []
-
-  if (!form.customer_id) {
-    errors.push('Customer is required')
-  }
-
-  if (!form.invoice_number?.trim()) {
-    errors.push('Invoice number is required')
-  }
-
-  if (!form.invoice_date) {
-    errors.push('Invoice date is required')
-  }
-
-  if (!form.due_date) {
-    errors.push('Due date is required')
-  }
-
-  for (let i = 0; i < form.items.length; i++) {
-    const item = form.items[i]
-    if (!item.description?.trim()) {
-      errors.push(`Item ${i + 1}: Description is required`)
-    }
-    if (!item.quantity || item.quantity <= 0) {
-      errors.push(`Item ${i + 1}: Quantity must be greater than 0`)
-    }
-    if (!item.unit_price || item.unit_price < 0) {
-      errors.push(`Item ${i + 1}: Unit price must be 0 or greater`)
-    }
-    if (item.tax_rate < 0 || item.tax_rate > 100) {
-      errors.push(`Item ${i + 1}: Tax rate must be between 0 and 100`)
-    }
-  }
-
-  return errors
-}
-
-// Submit form
+// Override submit form to handle transform
 const submitForm = () => {
   const errors = validateForm()
-  if (errors.length > 0) {
-    alert('Please fix the following errors:\n\n' + errors.join('\n'))
+  
+  if (Object.keys(errors).length > 0) {
+    validationErrors.value = errors
+    showValidationDialog.value = true
     return
   }
 
-  form.transform((data) => ({
-    ...data,
-    items: data.items.map(item => ({
+  // Transform data for submission
+  const submitData = {
+    ...form,
+    items: form.items.map(item => ({
       description: item.description,
-      quantity: parseFloat(item.quantity),
-      unit_price: parseFloat(item.unit_price),
-      tax_rate: parseFloat(item.tax_rate),
+      quantity: parseFloat(item.quantity.toString()),
+      unit_price: parseFloat(item.unit_price.toString()),
+      tax_rate: parseFloat(item.tax_rate.toString()),
     }))
-  }))
+  }
 
   form.post(route('invoices.store'), {
+    data: submitData,
     onSuccess: () => {
-      form.reset()
+      resetForm()
       toast.success = 'Invoice created successfully!'
     },
     onError: (errors) => {
@@ -219,7 +115,7 @@ const submitForm = () => {
 
 // Cancel and go back
 const cancel = () => {
-  form.reset()
+  resetForm()
   window.location.href = route('invoices.index')
 }
 </script>
@@ -267,16 +163,10 @@ const cancel = () => {
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Customer *
                   </label>
-                  <Dropdown
+                  <CustomerPicker
                     v-model="form.customer_id"
-                    :options="customers"
-                    optionLabel="name"
-                    optionValue="id"
-                    placeholder="Select a customer"
-                    class="w-full"
-                    fluid
-                    filter
-                    :class="{ 'p-invalid': form.errors.customer_id }"
+                    :customers="customers"
+                    :error="form.errors.customer_id"
                   />
                   <small v-if="form.errors.customer_id" class="text-red-600 dark:text-red-400">
                     {{ form.errors.customer_id }}
@@ -287,15 +177,10 @@ const cancel = () => {
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Currency
                   </label>
-                  <Dropdown
+                  <CurrencyPicker
                     v-model="form.currency_id"
-                    :options="currencies"
-                    optionLabel="code"
-                    optionValue="id"
-                    placeholder="Select currency"
-                    class="w-full"
-                    fluid
-                    :class="{ 'p-invalid': form.errors.currency_id }"
+                    :currencies="currencies"
+                    :error="form.errors.currency_id"
                   />
                   <small v-if="form.errors.currency_id" class="text-red-600 dark:text-red-400">
                     {{ form.errors.currency_id }}
@@ -461,7 +346,7 @@ const cancel = () => {
                         :min="0"
                         :step="0.01"
                         mode="currency"
-                        :currency="currencies.find(c => c.id === form.currency_id)?.code || 'USD'"
+                        :currency="selectedCurrency?.code || 'USD'"
                         class="w-full"
                         :class="{ 'p-invalid': form.errors[`items.${index}.unit_price`] }"
                       />
@@ -513,17 +398,17 @@ const cancel = () => {
               <div class="space-y-3">
                 <div class="flex justify-between text-sm">
                   <span class="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                  <span class="font-medium">{{ formatCurrency(invoiceSubtotal) }}</span>
+                  <span class="font-medium">{{ formatCurrency(calculations.subtotal) }}</span>
                 </div>
                 <div class="flex justify-between text-sm">
                   <span class="text-gray-600 dark:text-gray-400">Tax:</span>
-                  <span class="font-medium">{{ formatCurrency(invoiceTaxTotal) }}</span>
+                  <span class="font-medium">{{ formatCurrency(calculations.tax) }}</span>
                 </div>
                 <div class="border-t pt-3">
                   <div class="flex justify-between">
                     <span class="font-medium text-gray-900 dark:text-white">Total:</span>
                     <span class="text-lg font-bold text-blue-600 dark:text-blue-400">
-                      {{ formatCurrency(invoiceTotal) }}
+                      {{ formatCurrency(calculations.total) }}
                     </span>
                   </div>
                 </div>
@@ -596,7 +481,10 @@ const cancel = () => {
       </div>
     </div>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
+    <!-- Validation Errors Dialog -->
+    <ValidationErrorsDialog
+      v-model:visible="showValidationDialog"
+      :errors="validationErrors"
+    />
   </LayoutShell>
 </template>

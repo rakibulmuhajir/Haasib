@@ -93,6 +93,5 @@ const shellRef = ref()
         </Card>
       </div>
 
-      <Toast position="top-right" />
     </LayoutShell>
 </template>

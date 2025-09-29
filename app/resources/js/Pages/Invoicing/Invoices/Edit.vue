@@ -5,7 +5,6 @@ import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
 import Calendar from 'primevue/calendar'
 import Textarea from 'primevue/textarea'
 import Card from 'primevue/card'
@@ -14,6 +13,8 @@ import Column from 'primevue/column'
 import InputNumber from 'primevue/inputnumber'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
+import CustomerPicker from '@/Components/UI/Forms/CustomerPicker.vue'
+import CurrencyPicker from '@/Components/UI/Forms/CurrencyPicker.vue'
 
 const props = defineProps({
   invoice: Object,
@@ -105,6 +106,15 @@ watch(() => form.invoice_date, (newInvoiceDate) => {
     }
   }
 })
+
+// Event handlers for picker components
+const onCustomerChange = (_customer) => {
+  // Customer change logic is handled by watchers
+}
+
+const onCurrencyChange = () => {
+  // Currency change logic is handled by watchers
+}
 
 // Item management
 const addInvoiceItem = () => {
@@ -230,15 +240,11 @@ const submitForm = () => {
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Customer *
                 </label>
-                <Dropdown
+                <CustomerPicker
                   v-model="form.customer_id"
-                  :options="customers"
-                  optionLabel="name"
-                  optionValue="customer_id"
-                  placeholder="Select a customer"
-                  class="w-full"
-                  :class="{ 'p-invalid': form.errors.customer_id }"
-                  filter
+                  :customers="customers"
+                  :error="form.errors.customer_id"
+                  @change="onCustomerChange"
                 />
                 <div v-if="form.errors.customer_id" class="text-red-600 text-sm mt-1">
                   {{ form.errors.customer_id }}
@@ -250,14 +256,11 @@ const submitForm = () => {
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Currency *
                 </label>
-                <Dropdown
+                <CurrencyPicker
                   v-model="form.currency_id"
-                  :options="currencies"
-                  optionLabel="code"
-                  optionValue="id"
-                  placeholder="Select currency"
-                  class="w-full"
-                  :class="{ 'p-invalid': form.errors.currency_id }"
+                  :currencies="currencies"
+                  :error="form.errors.currency_id"
+                  @change="onCurrencyChange"
                 />
                 <div v-if="form.errors.currency_id" class="text-red-600 text-sm mt-1">
                   {{ form.errors.currency_id }}

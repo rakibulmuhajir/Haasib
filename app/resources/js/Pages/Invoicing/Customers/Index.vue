@@ -340,9 +340,7 @@
       </template>
     </Dialog>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>
 
 <script setup lang="ts">

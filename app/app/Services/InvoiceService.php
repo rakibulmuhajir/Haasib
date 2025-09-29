@@ -10,51 +10,46 @@ use App\Models\InvoiceItem;
 use App\Models\InvoiceItemTax;
 use App\Models\Item;
 use App\Models\User;
+use App\Support\ServiceContext;
+use App\Traits\AuditLogging;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use PDF;
 
 class InvoiceService
 {
-    private function logAudit(string $action, array $params, ?User $user = null, ?string $companyId = null, ?string $idempotencyKey = null, ?array $result = null): void
-    {
-        try {
-            DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit_logs')->insert([
-                    'id' => Str::uuid()->toString(),
-                    'user_id' => $user?->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'params' => json_encode($params),
-                    'result' => $result ? json_encode($result) : null,
-                    'idempotency_key' => $idempotencyKey,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            });
-        } catch (\Throwable $e) {
-            Log::error('Failed to write audit log', [
-                'action' => $action,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    use AuditLogging;
 
+    /**
+     * Create a new invoice
+     *
+     * @param  Company  $company  The company to create the invoice for
+     * @param  Customer  $customer  The customer to bill
+     * @param  array  $items  Array of invoice items with description, quantity, unit_price, etc.
+     * @param  Currency|null  $currency  The invoice currency (defaults to customer/company currency)
+     * @param  string|null  $invoiceDate  The invoice date (defaults to current date)
+     * @param  string|null  $dueDate  The due date (defaults based on customer payment terms)
+     * @param  string|null  $notes  Additional notes for the invoice
+     * @param  string|null  $terms  Payment terms
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The created invoice
+     *
+     * @throws \Throwable If the invoice creation fails
+     */
     public function createInvoice(
         Company $company,
         Customer $customer,
         array $items,
-        ?Currency $currency = null,
-        ?string $invoiceDate = null,
-        ?string $dueDate = null,
-        ?string $notes = null,
-        ?string $terms = null,
-        ?string $idempotencyKey = null
+        ?Currency $currency,
+        ?string $invoiceDate,
+        ?string $dueDate,
+        ?string $notes,
+        ?string $terms,
+        ServiceContext $context
     ): Invoice {
+        $idempotencyKey = $context->getIdempotencyKey();
         $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey) {
             $currency = $currency ?? ($customer->currency ?? $company->currency);
             $currencyId = $currency?->id ?? $customer->currency_id ?? $company->currency_id;
@@ -100,19 +95,36 @@ class InvoiceService
             'currency_id' => $result->currency_id,
             'items_count' => count($items),
             'invoice_number' => $result->invoice_number,
-        ], auth()->user(), $company->id, $idempotencyKey, ['invoice_id' => $result->getKey()]);
+        ], $context, result: ['invoice_id' => $result->getKey()]);
 
         return $result;
     }
 
+    /**
+     * Update an existing invoice
+     *
+     * @param  Invoice  $invoice  The invoice to update
+     * @param  Customer|null  $customer  The customer to change to (if different)
+     * @param  array|null  $items  New invoice items (if null, existing items are kept)
+     * @param  string|null  $invoiceDate  New invoice date
+     * @param  string|null  $dueDate  New due date
+     * @param  string|null  $notes  New notes
+     * @param  string|null  $terms  New terms
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The updated invoice
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be edited
+     * @throws \Throwable If the update operation fails
+     */
     public function updateInvoice(
         Invoice $invoice,
-        ?Customer $customer = null,
-        ?array $items = null,
-        ?string $invoiceDate = null,
-        ?string $dueDate = null,
-        ?string $notes = null,
-        ?string $terms = null
+        ?Customer $customer,
+        ?array $items,
+        ?string $invoiceDate,
+        ?string $dueDate,
+        ?string $notes,
+        ?string $terms,
+        ServiceContext $context
     ): Invoice {
         if (! $invoice->canBeEdited()) {
             throw new \InvalidArgumentException('Invoice cannot be edited in current status');
@@ -160,12 +172,22 @@ class InvoiceService
                 'items_updated' => $items !== null,
                 'dates_updated' => $invoiceDate !== null || $dueDate !== null,
             ],
-        ], auth()->user(), $invoice->company_id, result: ['updated_at' => $result->updated_at]);
+        ], $context, result: ['updated_at' => $result->updated_at]);
 
         return $result;
     }
 
-    public function deleteInvoice(Invoice $invoice, ?string $reason = null): void
+    /**
+     * Delete an invoice
+     *
+     * @param  Invoice  $invoice  The invoice to delete
+     * @param  string|null  $reason  The reason for deletion
+     * @param  ServiceContext  $context  The service context containing user and company information
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be deleted
+     * @throws \Throwable If the delete operation fails
+     */
+    public function deleteInvoice(Invoice $invoice, ?string $reason, ServiceContext $context): void
     {
         if (! $invoice->canBeEdited()) {
             throw new \InvalidArgumentException('Invoice cannot be deleted in current status');
@@ -182,10 +204,20 @@ class InvoiceService
             'invoice_id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
             'reason' => $reason,
-        ], auth()->user(), $invoice->company_id);
+        ], $context);
     }
 
-    public function markAsSent(Invoice $invoice): Invoice
+    /**
+     * Mark an invoice as sent
+     *
+     * @param  Invoice  $invoice  The invoice to mark as sent
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The updated invoice
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be sent
+     * @throws \Throwable If the operation fails
+     */
+    public function markAsSent(Invoice $invoice, ServiceContext $context): Invoice
     {
         if (! $invoice->canBeSent()) {
             throw new \InvalidArgumentException('Invoice cannot be sent');
@@ -201,12 +233,22 @@ class InvoiceService
             'invoice_id' => $invoice->getKey(),
             'invoice_number' => $invoice->invoice_number,
             'customer_id' => $invoice->customer_id,
-        ], auth()->user(), $invoice->company_id, result: ['sent_at' => $result->sent_at]);
+        ], $context, result: ['sent_at' => $result->sent_at]);
 
         return $result;
     }
 
-    public function markAsPosted(Invoice $invoice): Invoice
+    /**
+     * Mark an invoice as posted to ledger
+     *
+     * @param  Invoice  $invoice  The invoice to post
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The updated invoice
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be posted
+     * @throws \Throwable If the operation fails
+     */
+    public function markAsPosted(Invoice $invoice, ServiceContext $context): Invoice
     {
         if (! $invoice->canBePosted()) {
             throw new \InvalidArgumentException('Invoice cannot be posted');
@@ -223,7 +265,7 @@ class InvoiceService
             'invoice_number' => $invoice->invoice_number,
             'customer_id' => $invoice->customer_id,
             'total_amount' => $invoice->total_amount,
-        ], auth()->user(), $invoice->company_id, result: ['posted_at' => $result->posted_at]);
+        ], $context, result: ['posted_at' => $result->posted_at]);
 
         return $result;
     }
@@ -236,7 +278,18 @@ class InvoiceService
         return $this->markAsPosted($invoice);
     }
 
-    public function markAsCancelled(Invoice $invoice, ?string $reason = null): Invoice
+    /**
+     * Cancel an invoice
+     *
+     * @param  Invoice  $invoice  The invoice to cancel
+     * @param  string|null  $reason  The reason for cancellation
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The cancelled invoice
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be cancelled
+     * @throws \Throwable If the operation fails
+     */
+    public function markAsCancelled(Invoice $invoice, ?string $reason, ServiceContext $context): Invoice
     {
         if (! $invoice->canBeCancelled()) {
             throw new \InvalidArgumentException('Invoice cannot be cancelled');
@@ -252,12 +305,21 @@ class InvoiceService
             'invoice_id' => $invoice->getKey(),
             'invoice_number' => $invoice->invoice_number,
             'reason' => $reason,
-        ], auth()->user(), $invoice->company_id, result: ['cancelled_at' => $result->cancelled_at]);
+        ], $context, result: ['cancelled_at' => $result->cancelled_at]);
 
         return $result;
     }
 
-    public function generatePDF(Invoice $invoice): string
+    /**
+     * Generate a PDF for the invoice
+     *
+     * @param  Invoice  $invoice  The invoice to generate PDF for
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return string The file path to the generated PDF
+     *
+     * @throws \Throwable If the PDF generation fails
+     */
+    public function generatePDF(Invoice $invoice, ServiceContext $context): string
     {
         $pdfData = [
             'invoice' => $invoice,
@@ -289,44 +351,76 @@ class InvoiceService
         $this->logAudit('invoice.pdf_generated', [
             'invoice_id' => $invoice->getKey(),
             'filename' => $filename,
-        ], auth()->user(), $invoice->company_id);
+        ], $context);
 
         return $path;
     }
 
-    public function sendInvoiceByEmail(Invoice $invoice, string $email, ?string $message = null): void
+    /**
+     * Send an invoice by email
+     *
+     * @param  Invoice  $invoice  The invoice to send
+     * @param  string  $email  The email address to send to
+     * @param  string|null  $message  Additional message to include
+     * @param  ServiceContext  $context  The service context containing user and company information
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be sent
+     * @throws \Throwable If the email sending fails
+     */
+    public function sendInvoiceByEmail(Invoice $invoice, string $email, ?string $message, ServiceContext $context): void
     {
         if (! $invoice->canBeSent()) {
             throw new \InvalidArgumentException('Invoice cannot be sent');
         }
 
-        $pdfPath = $this->generatePDF($invoice);
+        $pdfPath = $this->generatePDF($invoice, $context);
         // Actual mailing integration deferred; mark as sent for now
-        $this->markAsSent($invoice);
+        $this->markAsSent($invoice, $context);
 
         $this->logAudit('invoice.emailed', [
             'invoice_id' => $invoice->getKey(),
             'email' => $email,
             'pdf_path' => $pdfPath,
-        ], auth()->user(), $invoice->company_id);
+        ], $context);
     }
 
     /**
      * Simplified email flow used by controller; generates PDF and marks as sent.
      */
-    public function sendEmail(Invoice $invoice, ?string $email = null, ?string $subject = null, ?string $message = null): void
+    /**
+     * Simplified email flow: generates PDF and marks as sent
+     *
+     * @param  Invoice  $invoice  The invoice to send
+     * @param  string|null  $email  The email address to send to
+     * @param  string|null  $subject  The email subject
+     * @param  string|null  $message  Additional message to include
+     * @param  ServiceContext  $context  The service context containing user and company information
+     *
+     * @throws \Throwable If the operation fails
+     */
+    public function sendEmail(Invoice $invoice, ?string $email, ?string $subject, ?string $message, ServiceContext $context): void
     {
-        $this->generatePDF($invoice);
-        $this->markAsSent($invoice);
+        $this->generatePDF($invoice, $context);
+        $this->markAsSent($invoice, $context);
 
         $this->logAudit('invoice.email_requested', [
             'invoice_id' => $invoice->getKey(),
             'email' => $email,
             'subject' => $subject,
-        ], auth()->user(), $invoice->company_id);
+        ], $context);
     }
 
-    public function duplicateInvoice(Invoice $originalInvoice, ?string $newNotes = null): Invoice
+    /**
+     * Duplicate an existing invoice
+     *
+     * @param  Invoice  $originalInvoice  The invoice to duplicate
+     * @param  string|null  $newNotes  New notes for the duplicated invoice
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return Invoice The duplicated invoice
+     *
+     * @throws \Throwable If the duplication fails
+     */
+    public function duplicateInvoice(Invoice $originalInvoice, ?string $newNotes, ServiceContext $context): Invoice
     {
         $result = DB::transaction(function () use ($originalInvoice, $newNotes) {
             $newInvoice = $originalInvoice->replicate([
@@ -366,7 +460,7 @@ class InvoiceService
             'new_invoice_id' => $result->getKey(),
             'original_invoice_number' => $originalInvoice->invoice_number,
             'new_invoice_number' => $result->invoice_number,
-        ], auth()->user(), $originalInvoice->company_id, result: ['new_invoice_id' => $result->getKey()]);
+        ], $context, result: ['new_invoice_id' => $result->getKey()]);
 
         return $result;
     }
@@ -495,7 +589,15 @@ class InvoiceService
         ];
     }
 
-    public function bulkUpdateStatus(array $invoiceIds, string $newStatus): array
+    /**
+     * Bulk update invoice statuses
+     *
+     * @param  array  $invoiceIds  Array of invoice IDs to update
+     * @param  string  $newStatus  The new status (sent, posted, cancelled)
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return array Array of results with success/failure status for each invoice
+     */
+    public function bulkUpdateStatus(array $invoiceIds, string $newStatus, ServiceContext $context): array
     {
         $results = [];
 
@@ -505,13 +607,13 @@ class InvoiceService
 
                 switch ($newStatus) {
                     case 'sent':
-                        $invoice = $this->markAsSent($invoice);
+                        $invoice = $this->markAsSent($invoice, $context);
                         break;
                     case 'posted':
-                        $invoice = $this->markAsPosted($invoice);
+                        $invoice = $this->markAsPosted($invoice, $context);
                         break;
                     case 'cancelled':
-                        $invoice = $this->markAsCancelled($invoice);
+                        $invoice = $this->markAsCancelled($invoice, null, $context);
                         break;
                     default:
                         throw new \InvalidArgumentException("Unsupported status transition: {$newStatus}");

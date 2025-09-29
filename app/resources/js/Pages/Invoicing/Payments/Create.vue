@@ -38,30 +38,14 @@
                   <label class="block text-sm font-semibold text-gray-700">
                     Customer <span class="text-red-500">*</span>
                   </label>
-                  <Dropdown
-                    name="customer_id"
+                  <CustomerPicker
                     v-model="form.customer_id"
-                    :options="propsCustomers"
-                    optionLabel="name"
+                    :customers="propsCustomers"
+                    :error="form.errors.customer_id"
                     optionValue="customer_id"
                     placeholder="Search and select customer..."
-                    filter
-                    class="w-full"
-                    :class="{ 'p-invalid': form.errors.customer_id }"
-                    aria-label="Customer"
-                  >
-                    <template #option="{ option }">
-                      <div class="flex items-center space-x-3 p-2">
-                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                          <span class="text-gray-600 font-medium text-sm">{{ option.name.charAt(0) }}</span>
-                        </div>
-                        <div>
-                          <div class="font-medium">{{ option.name }}</div>
-                          <div class="text-xs text-gray-500">{{ option.email }}</div>
-                        </div>
-                      </div>
-                    </template>
-                  </Dropdown>
+                    @change="onCustomerChange"
+                  />
                   <div v-if="form.errors.customer_id" class="text-sm text-red-600 flex items-center">
                     <i class="pi pi-exclamation-triangle mr-1"></i>
                     {{ form.errors.customer_id }}
@@ -99,27 +83,15 @@
                         aria-label="Payment amount"
                       />
                       <InputGroupAddon>
-                        <Dropdown
+                        <CurrencyPicker
                           v-model="form.currency_id"
-                          :options="availableCurrencies"
-                          optionLabel="code"
-                          optionValue="id"
+                          :currencies="availableCurrencies"
                           :showClear="false"
                           class="w-24"
                           :class="{ 'p-invalid': form.errors.currency_id }"
                           @change="onCurrencyChange"
                           aria-label="Currency"
-                        >
-                          <template #option="{ option }">
-                            <div class="flex items-center gap-2">
-                              <span class="font-medium">{{ option.code }}</span>
-                              <span class="text-gray-500">{{ option.symbol }}</span>
-                            </div>
-                          </template>
-                          <template #value>
-                            <span class="font-medium">{{ selectedCurrency?.code || 'USD' }}</span>
-                          </template>
-                        </Dropdown>
+                        />
                       </InputGroupAddon>
                     </InputGroup>
                     <div v-if="form.errors.amount" class="text-sm text-red-600 flex items-center">
@@ -228,35 +200,16 @@
                           Apply to specific invoice
                         </label>
                         <div class="mt-3">
-                          <Dropdown
-                            name="invoice_id"
+                          <InvoicePicker
                             v-model="form.invoice_id"
-                            :options="customerInvoices"
-                            optionLabel="invoice_number"
-                            optionValue="invoice_id"
+                            :invoices="customerInvoices"
                             :optionDisabled="invoice => invoice.balance_due <= 0"
                             placeholder="Select invoice..."
-                            class="w-full"
-                            :class="{ 'p-invalid': form.errors.invoice_id && !form.auto_allocate }"
-                            aria-label="Invoice"
-                            :showClear="true"
-                            @click.stop
-                          >
-                            <template #option="{ option }">
-                              <div class="flex justify-between items-center w-full py-2">
-                                <div>
-                                  <div class="font-medium">• {{ option.invoice_number }}</div>
-                                  <div class="text-xs text-gray-500">{{ formatDate(option.invoice_date) }}</div>
-                                </div>
-                                <div class="text-right">
-                                  <div class="font-bold text-gray-900">
-                                    {{ formatMoney(option.balance_due, option.currency?.code || companyBaseCurrency) }}
-                                  </div>
-                                  <div class="text-xs text-gray-400">due</div>
-                                </div>
-                              </div>
-                            </template>
-                          </Dropdown>
+                            :show-clear="true"
+                            :error="form.errors.invoice_id && !form.auto_allocate ? form.errors.invoice_id : undefined"
+                            :customer-filter="selectedCustomer?.customer_id"
+                            @change="onInvoiceChange"
+                          />
                           <div v-if="form.errors.invoice_id && !form.auto_allocate" class="text-sm text-red-600 flex items-center mt-1">
                             <i class="pi pi-exclamation-triangle mr-1"></i>
                             {{ form.errors.invoice_id }}
@@ -471,7 +424,7 @@
                           <div class="text-xs text-gray-500">{{ formatDate(invoice.invoice_date) }}</div>
                         </div>
                         <div class="text-right ml-2">
-                          <div class="text-xs font-bold text-red-600">{{ formatMoney(invoice.balance_due, invoice.currency?.code || companyBaseCurrency) }}</div>
+                          <div class="text-xs font-bold text-red-600">{{ formatMoney(invoice.balance_due, invoice.currency || { code: companyBaseCurrency }) }}</div>
                         </div>
                       </div>
                       <div v-if="outstandingInvoices.length > 5" class="text-xs text-gray-500 text-center py-1">
@@ -597,7 +550,7 @@
             <h4 class="font-medium text-orange-900">Overpayment Detected</h4>
             <p class="text-sm text-orange-700 mt-1">
               You've entered {{ formatMoney(form.amount || 0, previewCurrency) }} but {{ selectedInvoice?.invoice_number }} only has 
-              {{ formatMoney(selectedInvoice?.balance_due || 0, { code: selectedInvoice?.currency?.code || companyBaseCurrency }) }} due.
+              {{ formatMoney(selectedInvoice?.balance_due || 0, selectedInvoice?.currency || { code: companyBaseCurrency }) }} due.
             </p>
           </div>
         </div>
@@ -677,7 +630,7 @@
         <h5 class="text-sm font-medium text-gray-700 mb-2">Preview:</h5>
         <div class="text-sm text-gray-600 space-y-1">
           <div v-if="overpaymentOption === 'auto_allocate'">
-            • {{ formatMoney(selectedInvoice?.balance_due || 0, selectedInvoice?.currency?.code || companyBaseCurrency) }} applied to {{ selectedInvoice?.invoice_number }}
+            • {{ formatMoney(selectedInvoice?.balance_due || 0, selectedInvoice?.currency || { code: companyBaseCurrency }) }} applied to {{ selectedInvoice?.invoice_number }}
             • {{ formatMoney(remainingForOtherInvoices, previewCurrency) }} distributed to other invoices
             • {{ formatMoney(remainingAfterAllocation, previewCurrency) }} created as Customer Credit
           </div>
@@ -716,7 +669,9 @@ import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import PageHeader from '@/Components/PageHeader.vue'
-import Dropdown from 'primevue/dropdown'
+import CustomerPicker from '@/Components/UI/Forms/CustomerPicker.vue'
+import CurrencyPicker from '@/Components/UI/Forms/CurrencyPicker.vue'
+import InvoicePicker from '@/Components/UI/Forms/InvoicePicker.vue'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -732,7 +687,7 @@ import { usePageActions } from '@/composables/usePageActions'
 
 interface Customer { customer_id: number; name: string; email?: string; currency_id?: number }
 interface Invoice { invoice_id: number; customer_id: number; invoice_number: string; invoice_date: string; total_amount: number; balance_due: number; currency?: { id: number; code: string; symbol: string } }
-interface Currency { id: number; code: string; symbol: string }
+interface Currency { id: number; code: string; symbol: string; name?: string }
 
 const props = defineProps<{
   customers: Customer[]
@@ -741,6 +696,18 @@ const props = defineProps<{
   currencies: Currency[]
   nextPaymentNumber: string
 }>()
+
+// Handle customer change event
+const onCustomerChange = (_customer: Customer) => {
+  // Add any customer change logic here
+  // The existing watchers will handle invoice filtering
+}
+
+// Handle invoice change event
+const onInvoiceChange = (_invoice: Invoice | null) => {
+  // Add any invoice change logic here
+  // The existing watchers will handle amount and allocation logic
+}
 
 // Lightweight aliases so template is tidy
 const propsCustomers = props.customers
@@ -780,7 +747,6 @@ const showOverpaymentModal = ref(false)
 const overpaymentAmount = ref(0)
 const selectedInvoice = ref<Invoice | null>(null)
 const remainderStrategy = ref<'credit' | 'leave_unapplied'>('credit')
-const showAdvancedOptions = ref(false)
 const overpaymentOption = ref<'auto_allocate' | 'credit_only' | 'manual'>('auto_allocate')
 
 const paymentMethods = [
@@ -804,7 +770,8 @@ const form = useForm({
   payment_method: '',
   reference_number: '',
   notes: '',
-  auto_allocate: true
+  auto_allocate: true,
+  invoice_allocations: []
 })
 
 // Computed helpers
@@ -1091,8 +1058,7 @@ const submit = () => {
     return
   }
 
-  // Prepare payload with allocations
-  const payload = {
+  form.post(route('payments.store'), {
     ...form,
     auto_allocate: form.auto_allocate && allocations.value.length === 0,
     invoice_allocations: allocations.value.map(a => ({
@@ -1103,10 +1069,7 @@ const submit = () => {
     })),
     remainder_handling: {
       strategy: remainingPayment.value > 0 ? remainderStrategy.value : 'credit'
-    }
-  }
-
-  form.post(route('payments.store'), {
+    },
     onSuccess: () => {},
     onError: () => {}
   })

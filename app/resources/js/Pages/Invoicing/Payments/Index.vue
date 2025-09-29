@@ -107,7 +107,7 @@
 
             <template #cell-amount="{ data }">
               <div class="font-medium text-right text-gray-900">
-                {{ formatMoney(data.amount, data.currency?.code) }}
+                {{ formatMoney(data.amount, data.currency) }}
               </div>
               <div class="text-xs text-gray-500 text-right">
                 Allocated: {{ formatMoney(data.allocated_amount, data.currency) }}
@@ -288,13 +288,11 @@
       </template>
     </Dialog>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>
 
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, reactive, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
@@ -303,6 +301,7 @@ import InputText from 'primevue/inputtext'
 import DataTablePro from '@/Components/DataTablePro.vue'
 import Badge from 'primevue/badge'
 import Card from 'primevue/card'
+import { FilterMatchMode } from '@primevue/core/api'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 import PageHeader from '@/Components/PageHeader.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
@@ -423,7 +422,7 @@ const voidPayment = async () => {
       reason: voidDialog.reason
     }, { preserveState: true, preserveScroll: true })
     voidDialog.visible = false
-    applyFilters()
+    table.fetchData()
   } catch (error) {
     console.error('Error voiding payment:', error)
   } finally {
@@ -439,7 +438,7 @@ const refundPayment = async () => {
       reason: refundDialog.reason
     }, { preserveState: true, preserveScroll: true })
     refundDialog.visible = false
-    applyFilters()
+    table.fetchData()
   } catch (error) {
     console.error('Error refunding payment:', error)
   } finally {

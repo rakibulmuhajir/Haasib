@@ -35,6 +35,11 @@ const statusOptions = [
   { label: 'Suspended', value: 'suspended' },
 ]
 
+// Get selected currency
+const selectedCurrency = computed(() => {
+  return props.availableCurrencies.find((c: any) => c.id === form.currency_id)
+})
+
 // Breadcrumb items
 const breadcrumbItems = ref([
   { label: 'Invoicing', url: '/invoicing', icon: 'invoice' },
@@ -446,7 +451,7 @@ onMounted(() => {
                 <InputNumber
                   v-model="form.credit_limit"
                   mode="currency"
-                  currency="USD"
+                  :currency="selectedCurrency?.code || 'USD'"
                   :class="{ 'p-invalid': form.errors.credit_limit }"
                   class="w-full"
                 />

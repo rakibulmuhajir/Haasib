@@ -46,15 +46,25 @@ return new class extends Migration
             $table->unique(['company_id', 'bill_number']);
         });
 
-        DB::statement("ALTER TABLE bills ADD CONSTRAINT bills_status_check CHECK (status IN ('draft', 'received', 'approved', 'paid', 'void'))");
-        DB::statement('ALTER TABLE bills ADD CONSTRAINT bills_amounts_check CHECK (subtotal >= 0 AND tax_total >= 0 AND total >= 0 AND amount_paid >= 0)');
-        DB::statement('ALTER TABLE bills ADD CONSTRAINT bills_date_check CHECK (due_date >= bill_date)');
+        // Add Postgres-specific constraints only for Postgres
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE bills ADD CONSTRAINT bills_status_check CHECK (status IN ('draft', 'received', 'approved', 'paid', 'void'))");
+            DB::statement('ALTER TABLE bills ADD CONSTRAINT bills_amounts_check CHECK (subtotal >= 0 AND tax_total >= 0 AND total >= 0 AND amount_paid >= 0)');
+            DB::statement('ALTER TABLE bills ADD CONSTRAINT bills_date_check CHECK (due_date >= bill_date)');
 
-        // Add indexes for better query performance
-        DB::statement('CREATE INDEX idx_bills_company_vendor ON bills(company_id, vendor_id) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_bills_company_status ON bills(company_id, status) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_bills_company_dates ON bills(company_id, bill_date, due_date) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_bills_vendor_currency ON bills(vendor_id, currency_code) WHERE deleted_at IS NULL');
+            // Add indexes for better query performance
+            DB::statement('CREATE INDEX idx_bills_company_vendor ON bills(company_id, vendor_id) WHERE deleted_at IS NULL');
+            DB::statement('CREATE INDEX idx_bills_company_status ON bills(company_id, status) WHERE deleted_at IS NULL');
+            DB::statement('CREATE INDEX idx_bills_company_dates ON bills(company_id, bill_date, due_date) WHERE deleted_at IS NULL');
+            DB::statement('CREATE INDEX idx_bills_vendor_currency ON bills(vendor_id, currency_code) WHERE deleted_at IS NULL');
+        } else {
+            // For other databases, add basic indexes
+            Schema::table('bills', function (Blueprint $table) {
+                $table->index(['company_id', 'vendor_id']);
+                $table->index(['company_id', 'status']);
+                $table->index(['vendor_id', 'currency_code']);
+            });
+        }
     }
 
     /**

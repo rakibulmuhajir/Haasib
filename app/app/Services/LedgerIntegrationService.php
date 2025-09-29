@@ -10,39 +10,30 @@ use App\Models\LedgerAccount;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\User;
+use App\Support\ServiceContext;
+use App\Traits\AuditLogging;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class LedgerIntegrationService
 {
-    private function logAudit(string $action, array $params, ?User $user = null, ?string $companyId = null, ?string $idempotencyKey = null, ?array $result = null): void
-    {
-        try {
-            DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit_logs')->insert([
-                    'id' => Str::uuid()->toString(),
-                    'user_id' => $user?->id,
-                    'company_id' => $companyId,
-                    'action' => $action,
-                    'params' => json_encode($params),
-                    'result' => $result ? json_encode($result) : null,
-                    'idempotency_key' => $idempotencyKey,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            });
-        } catch (\Throwable $e) {
-            Log::error('Failed to write audit log', [
-                'action' => $action,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    use AuditLogging;
 
-    public function postInvoiceToLedger(Invoice $invoice, bool $forceRepost = false): JournalEntry
+    /**
+     * Post an invoice to the ledger
+     *
+     * @param  Invoice  $invoice  The invoice to post
+     * @param  bool  $forceRepost  Whether to force repost even if already posted
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return JournalEntry The created journal entry
+     *
+     * @throws \InvalidArgumentException If the invoice cannot be posted or is already posted
+     * @throws \Throwable If the posting operation fails
+     */
+    public function postInvoiceToLedger(Invoice $invoice, bool $forceRepost, ServiceContext $context): JournalEntry
     {
+
         if (! $invoice->canBePosted()) {
             throw new \InvalidArgumentException('Invoice cannot be posted to ledger');
         }
@@ -52,16 +43,16 @@ class LedgerIntegrationService
             throw new \InvalidArgumentException('Invoice already posted to ledger');
         }
 
-        $result = DB::transaction(function () use ($invoice, $existingEntry) {
+        $result = DB::transaction(function () use ($invoice, $existingEntry, $context) {
             if ($existingEntry && $forceRepost) {
-                $this->voidExistingEntry($existingEntry, 'Force repost of invoice');
+                $this->voidExistingEntry($existingEntry, 'Force repost of invoice', $context);
             }
 
             $journalEntry = $this->createInvoiceJournalEntry($invoice);
-            $this->postJournalEntry($journalEntry);
+            $this->postJournalEntry($journalEntry, $context);
 
             $invoice->posted_at = now();
-            $invoice->posted_by_user_id = auth()->id();
+            $invoice->posted_by_user_id = $context->getActingUser()?->id;
             $invoice->save();
 
             return $journalEntry;
@@ -72,13 +63,24 @@ class LedgerIntegrationService
             'invoice_number' => $invoice->invoice_number,
             'total_amount' => $invoice->total_amount,
             'force_repost' => $forceRepost,
-        ], auth()->user(), $invoice->company_id, result: ['journal_entry_id' => $result->id]);
+        ], $context, result: ['journal_entry_id' => $result->id]);
 
         return $result;
     }
 
-    public function postPaymentToLedger(Payment $payment): JournalEntry
+    /**
+     * Post a payment to the ledger
+     *
+     * @param  Payment  $payment  The payment to post
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return JournalEntry The created journal entry
+     *
+     * @throws \InvalidArgumentException If the payment is not completed or is already posted
+     * @throws \Throwable If the posting operation fails
+     */
+    public function postPaymentToLedger(Payment $payment, ServiceContext $context): JournalEntry
     {
+
         if (! $payment->isCompleted()) {
             throw new \InvalidArgumentException('Payment must be completed before posting to ledger');
         }
@@ -88,13 +90,13 @@ class LedgerIntegrationService
             throw new \InvalidArgumentException('Payment already posted to ledger');
         }
 
-        $result = DB::transaction(function () use ($payment) {
+        $result = DB::transaction(function () use ($payment, $context) {
             $journalEntry = $this->createPaymentJournalEntry($payment);
-            $this->postJournalEntry($journalEntry);
+            $this->postJournalEntry($journalEntry, $context);
 
             $payment->metadata = array_merge($payment->metadata ?? [], [
                 'posted_to_ledger_at' => now()->toISOString(),
-                'posted_by_user_id' => auth()->id(),
+                'posted_by_user_id' => $context->getActingUser()?->id,
             ]);
             $payment->save();
 
@@ -105,13 +107,24 @@ class LedgerIntegrationService
             'payment_id' => $payment->id,
             'payment_reference' => $payment->payment_reference,
             'amount' => $payment->amount,
-        ], auth()->user(), $payment->company_id, result: ['journal_entry_id' => $result->id]);
+        ], $context, result: ['journal_entry_id' => $result->id]);
 
         return $result;
     }
 
-    public function postPaymentAllocationToLedger(PaymentAllocation $allocation): JournalEntry
+    /**
+     * Post a payment allocation to the ledger
+     *
+     * @param  PaymentAllocation  $allocation  The payment allocation to post
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return JournalEntry The created journal entry
+     *
+     * @throws \InvalidArgumentException If the allocation is not active or is already posted
+     * @throws \Throwable If the posting operation fails
+     */
+    public function postPaymentAllocationToLedger(PaymentAllocation $allocation, ServiceContext $context): JournalEntry
     {
+
         if (! $allocation->isActive()) {
             throw new \InvalidArgumentException('Only active payment allocations can be posted to ledger');
         }
@@ -121,9 +134,9 @@ class LedgerIntegrationService
             throw new \InvalidArgumentException('Payment allocation already posted to ledger');
         }
 
-        $result = DB::transaction(function () use ($allocation) {
+        $result = DB::transaction(function () use ($allocation, $context) {
             $journalEntry = $this->createPaymentAllocationJournalEntry($allocation);
-            $this->postJournalEntry($journalEntry);
+            $this->postJournalEntry($journalEntry, $context);
 
             return $journalEntry;
         });
@@ -133,20 +146,32 @@ class LedgerIntegrationService
             'payment_id' => $allocation->payment_id,
             'invoice_id' => $allocation->invoice_id,
             'amount' => $allocation->amount,
-        ], auth()->user(), $allocation->payment->company_id, result: ['journal_entry_id' => $result->id]);
+        ], $context, result: ['journal_entry_id' => $result->id]);
 
         return $result;
     }
 
-    public function voidInvoiceLedgerEntry(Invoice $invoice, string $reason): JournalEntry
+    /**
+     * Void an invoice ledger entry
+     *
+     * @param  Invoice  $invoice  The invoice whose ledger entry to void
+     * @param  string  $reason  The reason for voiding
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return JournalEntry The voided journal entry
+     *
+     * @throws \InvalidArgumentException If no ledger entry is found
+     * @throws \Throwable If the void operation fails
+     */
+    public function voidInvoiceLedgerEntry(Invoice $invoice, string $reason, ServiceContext $context): JournalEntry
     {
+
         $existingEntry = $this->findExistingInvoiceEntry($invoice);
         if (! $existingEntry) {
             throw new \InvalidArgumentException('No ledger entry found for this invoice');
         }
 
-        $result = DB::transaction(function () use ($existingEntry, $reason) {
-            $voidedEntry = $this->voidExistingEntry($existingEntry, $reason);
+        $result = DB::transaction(function () use ($existingEntry, $reason, $context) {
+            $voidedEntry = $this->voidExistingEntry($existingEntry, $reason, $context);
 
             $invoice->posted_at = null;
             $invoice->posted_by_user_id = null;
@@ -159,7 +184,7 @@ class LedgerIntegrationService
             'invoice_id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
             'reason' => $reason,
-        ], auth()->user(), $invoice->company_id, result: ['voided_entry_id' => $result->id]);
+        ], $context, result: ['voided_entry_id' => $result->id]);
 
         return $result;
     }
@@ -409,7 +434,16 @@ class LedgerIntegrationService
         return $entry->fresh(['journalLines.ledgerAccount']);
     }
 
-    private function postJournalEntry(JournalEntry $entry): void
+    /**
+     * Post a journal entry to the ledger
+     *
+     * @param  JournalEntry  $entry  The journal entry to post
+     * @param  ServiceContext  $context  The service context containing user and company information
+     *
+     * @throws \InvalidArgumentException If the journal entry is not balanced
+     * @throws \Throwable If the posting operation fails
+     */
+    private function postJournalEntry(JournalEntry $entry, ServiceContext $context): void
     {
         if (! $entry->isBalanced()) {
             throw new \InvalidArgumentException('Journal entry is not balanced');
@@ -417,7 +451,7 @@ class LedgerIntegrationService
 
         $entry->status = 'posted';
         $entry->posted_at = now();
-        $entry->posted_by_user_id = auth()->id();
+        $entry->posted_by_user_id = $context->getActingUser()?->id;
         $entry->save();
 
         Log::info('Journal entry posted to ledger', [
@@ -454,8 +488,19 @@ class LedgerIntegrationService
             ->first();
     }
 
-    private function voidExistingEntry(JournalEntry $entry, string $reason): JournalEntry
+    /**
+     * Void an existing journal entry
+     *
+     * @param  JournalEntry  $entry  The journal entry to void
+     * @param  string  $reason  The reason for voiding
+     * @param  ServiceContext  $context  The service context containing user and company information
+     * @return JournalEntry The created voiding entry
+     *
+     * @throws \Throwable If the void operation fails
+     */
+    private function voidExistingEntry(JournalEntry $entry, string $reason, ServiceContext $context): JournalEntry
     {
+
         $voidEntry = new JournalEntry([
             'company_id' => $entry->company_id,
             'reference' => "VOID-{$entry->reference}",
@@ -467,7 +512,7 @@ class LedgerIntegrationService
                 'voided_entry_id' => $entry->id,
                 'void_reason' => $reason,
                 'voided_at' => now()->toISOString(),
-                'voided_by_user_id' => auth()->id(),
+                'voided_by_user_id' => $context->getActingUser()?->id,
             ],
         ]);
 
@@ -485,13 +530,13 @@ class LedgerIntegrationService
             ]);
         }
 
-        $this->postJournalEntry($voidEntry);
+        $this->postJournalEntry($voidEntry, $context);
 
         $entry->status = 'void';
         $entry->metadata = array_merge($entry->metadata ?? [], [
             'voided_at' => now()->toISOString(),
             'void_reason' => $reason,
-            'voided_by_user_id' => auth()->id(),
+            'voided_by_user_id' => $context->getActingUser()?->id,
         ]);
         $entry->save();
 

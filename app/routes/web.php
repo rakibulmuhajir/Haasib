@@ -50,7 +50,7 @@ Route::middleware('auth')->group(function () {
     // API Routes for SPA lookups
 
     // User Settings API Routes
-    Route::prefix('api/settings')->name('settings.')->group(function () {
+    Route::prefix('api/settings')->name('api.settings.')->group(function () {
         Route::get('/', [App\Http\Controllers\Api\UserSettingsController::class, 'index'])->name('index');
         Route::get('/{group}', [App\Http\Controllers\Api\UserSettingsController::class, 'show'])->name('show');
         Route::patch('/', [App\Http\Controllers\Api\UserSettingsController::class, 'update'])->name('update');
@@ -63,6 +63,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/available', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'available'])->name('available');
         Route::post('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'store'])->name('store');
         Route::delete('{currency}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'destroy'])->name('destroy');
+
+        // Exchange Rate Routes
+        Route::get('/exchange-rates', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'exchangeRates'])->name('exchange-rates');
+        Route::post('/exchange-rates', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'storeExchangeRate'])->name('exchange-rates.store');
+        Route::get('/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'getExchangeRate'])->name('exchange-rates.show');
+        Route::patch('/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateExchangeRate'])->name('exchange-rates.update');
+        Route::post('/exchange-rates/sync', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'syncExchangeRates'])->name('exchange-rates.sync');
+        Route::patch('/base-currency', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateBaseCurrency'])->name('base-currency.update');
+
+        // Legacy route for backward compatibility
         Route::get('{currency}/exchange-rate', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'getExchangeRate'])->name('exchange-rate.get');
         Route::patch('{currency}/exchange-rate', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateExchangeRate'])->name('exchange-rate');
         Route::match(['get', 'patch'], '{currency}/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateSpecificRate'])->name('exchange-rate.update');
@@ -152,14 +162,20 @@ Route::middleware('auth')->group(function () {
         Route::post('/bulk', [\App\Http\Controllers\Invoicing\CustomerController::class, 'bulk'])->name('bulk');
     });
 
-    // Currency Routes
+    // Legacy Currency Routes - Redirect to Settings
     Route::prefix('currencies')->name('currencies.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'index'])->name('index');
-        Route::get('/exchange-rates', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'exchangeRates'])->name('exchange-rates');
-        Route::post('/enable', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'enable'])->name('enable');
-        Route::post('/disable', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'disable'])->name('disable');
-        Route::post('/update-rate', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'updateRate'])->name('update-rate');
-        Route::post('/sync-rates', [\App\Http\Controllers\Invoicing\CurrencyController::class, 'syncRates'])->name('sync-rates');
+        Route::get('/', function () {
+            return redirect()->route('settings.index', ['group' => 'currency']);
+        })->name('index');
+
+        Route::get('/exchange-rates', function () {
+            return redirect()->route('settings.index', ['group' => 'currency']);
+        })->name('exchange-rates');
+
+        // All other currency routes redirect to settings with currency tab
+        Route::any('{any}', function () {
+            return redirect()->route('settings.index', ['group' => 'currency']);
+        })->where('any', '.*');
     });
 
     // Ledger Routes

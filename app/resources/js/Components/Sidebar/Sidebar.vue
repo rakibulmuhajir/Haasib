@@ -50,18 +50,7 @@ const menuItems: MenuItem[] = [
           { label: 'Add Customer', path: '/customers/create', icon: 'plus', routeName: 'customers.create', permission: 'customers.create' }
         ]
       },
-      {
-        label: 'Currencies',
-        path: '/currencies',
-        icon: 'globe',
-        routeName: 'currencies.index',
-        permission: 'currencies.view',
-        children: [
-          { label: 'Currency Settings', path: '/currencies', icon: 'settings', routeName: 'currencies.index', permission: 'currencies.view' },
-          { label: 'Exchange Rates', path: '/currencies/exchange-rates', icon: 'refresh-cw', routeName: 'currencies.exchange-rates', permission: 'currencies.manage' }
-        ]
-      }
-    ]
+      ]
   },
   {
     label: 'Ledger',

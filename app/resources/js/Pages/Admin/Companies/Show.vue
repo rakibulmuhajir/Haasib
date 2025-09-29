@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
@@ -17,12 +18,17 @@ import CompanyMembersSection from './CompanyMembersSection.vue'
 import CompanyInviteSection from './CompanyInviteSection.vue'
 import CompanyCurrenciesSection from './CompanyCurrenciesSection.vue'
 import CompanyOverview from './CompanyOverview.vue'
-import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, onMounted, computed, watch } from 'vue'
 
-const props = defineProps({ company: { type: String, required: true } })
+interface CompanyData {
+  id: string
+  name: string
+  // Add other company properties as needed
+}
 
-const c = ref(null)
+const props = defineProps<{ company: string }>()
+
+const c = ref<CompanyData | null>(null)
 const error = ref('')
 const confirm = useConfirm()
 const toast = useToast()

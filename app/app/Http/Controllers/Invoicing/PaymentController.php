@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use App\Support\Filtering\FilterBuilder;
+use App\Support\ServiceContextHelper;
 use Brick\Money\Money;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -208,6 +209,8 @@ class PaymentController extends Controller
             // Convert amount to Money object
             $amount = Money::ofMinor($validated['amount'], $currency->code);
 
+            $context = ServiceContextHelper::fromRequest($request, $request->user()->current_company_id);
+
             $payment = $this->paymentService->createPayment(
                 company: $request->user()->current_company,
                 customer: $customer,
@@ -220,7 +223,7 @@ class PaymentController extends Controller
                 notes: $validated['notes'] ?? null,
                 autoAllocate: $validated['auto_allocate'] ?? false,
                 invoiceAllocations: $validated['invoice_allocations'] ?? [],
-                idempotencyKey: $request->header('Idempotency-Key')
+                context: $context
             );
 
             return redirect()
@@ -298,6 +301,8 @@ class PaymentController extends Controller
         try {
             $customer = Customer::findOrFail($validated['customer_id']);
 
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+
             $updatedPayment = $this->paymentService->updatePayment(
                 payment: $payment,
                 customer: $customer,
@@ -310,7 +315,8 @@ class PaymentController extends Controller
                 notes: $validated['notes'] ?? null,
                 autoAllocate: $validated['auto_allocate'] ?? false,
                 invoiceAllocations: $validated['invoice_allocations'] ?? [],
-                idempotencyKey: $request->header('Idempotency-Key')
+                idempotencyKey: $request->header('Idempotency-Key'),
+                context: $context
             );
 
             return redirect()
@@ -342,7 +348,8 @@ class PaymentController extends Controller
         }
 
         try {
-            $this->paymentService->deletePayment($payment);
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+            $this->paymentService->deletePayment($payment, $context);
 
             return redirect()
                 ->route('payments.index')
@@ -371,11 +378,21 @@ class PaymentController extends Controller
         $validated = $request->validated();
 
         try {
-            // The authorize method is handled by the Form Request
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+
+            // Convert invoice allocations to expected format
+            $allocations = array_map(function ($allocation) {
+                return [
+                    'invoice_id' => $allocation['invoice_id'],
+                    'amount' => $allocation['amount'],
+                ];
+            }, $validated['invoice_allocations']);
+
             $this->paymentService->allocatePayment(
                 payment: $payment,
-                invoiceAllocations: $validated['invoice_allocations'],
-                idempotencyKey: $request->header('Idempotency-Key')
+                allocations: $allocations,
+                notes: $validated['notes'] ?? null,
+                context: $context
             );
 
             return back()->with('success', 'Payment allocated successfully.');
@@ -403,7 +420,8 @@ class PaymentController extends Controller
         }
 
         try {
-            $this->paymentService->autoAllocatePayment($payment);
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+            $this->paymentService->autoAllocatePayment($payment, $context);
 
             return back()->with('success', 'Payment auto-allocated successfully.');
 
@@ -430,7 +448,8 @@ class PaymentController extends Controller
         }
 
         try {
-            $this->paymentService->voidPayment($payment);
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+            $this->paymentService->voidPayment($payment, 'Voided by user', $context);
 
             return back()->with('success', 'Payment voided successfully.');
 
@@ -457,12 +476,17 @@ class PaymentController extends Controller
         $validated = $request->validated();
 
         try {
-            // The authorize method is handled by the Form Request
+            $context = ServiceContextHelper::fromRequest($request, $payment->company_id);
+
+            // Convert refund amount to Money
+            $currency = $payment->currency;
+            $refundAmount = Money::ofMinor($validated['refund_amount'], $currency->code);
+
             $this->paymentService->refundPayment(
                 payment: $payment,
-                refundAmount: $validated['refund_amount'],
-                refundReason: $validated['refund_reason'] ?? null,
-                idempotencyKey: $request->header('Idempotency-Key')
+                amount: $refundAmount,
+                reason: $validated['refund_reason'] ?? 'Refunded by customer',
+                context: $context
             );
 
             return back()->with('success', 'Payment refunded successfully.');

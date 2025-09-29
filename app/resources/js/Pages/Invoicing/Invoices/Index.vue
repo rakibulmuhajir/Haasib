@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, onUnmounted } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
@@ -43,6 +43,7 @@ const columns = [
   { field: 'invoice_date', header: 'Invoice Date', filter: { type: 'date', matchMode: FilterMatchMode.DATE_AFTER }, style: 'width: 140px' },
   { field: 'due_date', header: 'Due Date', filter: { type: 'date', matchMode: FilterMatchMode.DATE_AFTER }, style: 'width: 140px' },
   { field: 'total_amount', header: 'Total', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 120px; text-align: right' },
+  { field: 'paid_amount', header: 'Paid', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 120px; text-align: right' },
   { field: 'balance_due', header: 'Balance', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 120px; text-align: right' },
   { field: 'status', header: 'Status', filter: { type: 'select', matchMode: FilterMatchMode.EQUALS, options: props.statusOptions }, style: 'width: 120px' },
   { field: 'actions', header: 'Actions', filterable: false, sortable: false, style: 'width: 200px; text-align: center' },
@@ -186,13 +187,13 @@ onUnmounted(() => clearActions())
               </div>
             </template>
 
-            <template #cell-total_amount="{ data }">{{ formatMoney(data.total_amount, data.currency?.code) }}</template>
+            <template #cell-total_amount="{ data }">{{ formatMoney(data.total_amount, data.currency) }}</template>
 
-            <template #cell-paid_amount="{ data }">{{ formatMoney(data.paid_amount, data.currency?.code) }}</template>
+            <template #cell-paid_amount="{ data }">{{ formatMoney(data.paid_amount, data.currency) }}</template>
 
             <template #cell-balance_due="{ data }">
               <div :class="data.balance_due > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'">
-                {{ formatMoney(data.balance_due, data.currency?.code) }}
+                {{ formatMoney(data.balance_due, data.currency) }}
               </div>
             </template>
 
@@ -320,7 +321,5 @@ onUnmounted(() => clearActions())
       </template>
     </Dialog>
 
-    <!-- Toast for notifications -->
-    <Toast position="top-right" />
-  </LayoutShell>
+    </LayoutShell>
 </template>

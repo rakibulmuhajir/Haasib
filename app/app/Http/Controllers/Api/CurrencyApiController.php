@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Currency\ConvertCurrencyRequest;
 use App\Http\Requests\Api\Currency\EnableCurrencyRequest;
+use App\Http\Requests\Api\Currency\StoreCurrencyRequest;
 use App\Http\Requests\Api\Currency\UpdateExchangeRateRequest;
 use App\Http\Responses\ApiResponder;
 use App\Models\Company;
 use App\Models\Currency;
 use App\Services\CurrencyService;
+use App\Services\ExternalCurrencyImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +21,8 @@ class CurrencyApiController extends Controller
     use ApiResponder;
 
     public function __construct(
-        private CurrencyService $currencyService
+        private CurrencyService $currencyService,
+        private ExternalCurrencyImportService $importService
     ) {}
 
     /**
@@ -38,6 +41,34 @@ class CurrencyApiController extends Controller
             ]);
 
         return $this->ok($currencies);
+    }
+
+    /**
+     * Store a new system currency.
+     */
+    public function store(StoreCurrencyRequest $request): JsonResponse
+    {
+        $currency = Currency::create([
+            'code' => $request->code,
+            'numeric_code' => $request->numeric_code,
+            'name' => $request->name,
+            'symbol' => $request->symbol,
+            'symbol_position' => $request->symbol_position,
+            'minor_unit' => $request->minor_unit,
+            'thousands_separator' => $request->thousands_separator,
+            'decimal_separator' => $request->decimal_separator,
+            'exchange_rate' => $request->exchange_rate,
+            'is_active' => true,
+        ]);
+
+        return $this->created([
+            'id' => $currency->id,
+            'code' => $currency->code,
+            'name' => $currency->name,
+            'symbol' => $currency->symbol,
+            'numeric_code' => $currency->numeric_code,
+            'active' => $currency->is_active,
+        ]);
     }
 
     /**
@@ -424,6 +455,206 @@ class CurrencyApiController extends Controller
 
         } catch (\Exception $e) {
             return $this->fail('INTERNAL_ERROR', 'Failed to format money', 400, ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Get available import sources.
+     */
+    public function getImportSources(): JsonResponse
+    {
+        try {
+            $sources = $this->importService->getAvailableSources();
+
+            return $this->ok($sources);
+        } catch (\Exception $e) {
+            Log::error('Failed to get import sources', ['error' => $e->getMessage()]);
+
+            return $this->fail('INTERNAL_ERROR', 'Failed to get import sources', 500);
+        }
+    }
+
+    /**
+     * Search currencies from external source.
+     */
+    public function searchExternalCurrencies(Request $request): JsonResponse
+    {
+        $request->validate([
+            'query' => ['required', 'string', 'min:2'],
+            'source' => ['sometimes', 'string', 'in:ecb,fixer,exchangerate'],
+        ]);
+
+        try {
+            $source = $request->source ?? 'ecb';
+
+            // Get the company's base currency
+            $company = $request->user()->currentCompany;
+            $baseCurrency = $company->base_currency ?? 'USD';
+
+            $currencies = $this->importService->importCurrencies($source, $baseCurrency);
+
+            // Filter currencies based on search query
+            $queryString = strtolower($request->input('query'));
+            $filteredCurrencies = collect($currencies)->filter(function ($currency) use ($queryString) {
+                return str_contains(strtolower($currency['name']), $queryString) ||
+                       str_contains(strtolower($currency['code']), $queryString) ||
+                       str_contains(strtolower($currency['symbol']), $queryString);
+            })->values()->all();
+
+            return $this->ok([
+                'source' => $source,
+                'query' => $request->input('query'),
+                'currencies' => array_slice($filteredCurrencies, 0, 20), // Limit results
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to search external currencies', [
+                'source' => $request->source ?? 'ecb',
+                'query' => $request->input('query'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fail('SEARCH_ERROR', 'Failed to search currencies', 400, ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Preview currencies from external source.
+     */
+    public function previewImport(Request $request): JsonResponse
+    {
+        $request->validate([
+            'source' => ['required', 'string', 'in:ecb,fixer,exchangerate'],
+        ]);
+
+        try {
+            $currencies = $this->importService->importCurrencies($request->source);
+
+            // Format for preview - show which currencies are new vs existing
+            $existingCodes = Currency::pluck('code')->toArray();
+            $preview = collect($currencies)->map(function ($currency) use ($existingCodes) {
+                return [
+                    'code' => $currency['code'],
+                    'name' => $currency['name'],
+                    'symbol' => $currency['symbol'],
+                    'numeric_code' => $currency['numeric_code'],
+                    'exchange_rate' => $currency['exchange_rate'],
+                    'status' => in_array($currency['code'], $existingCodes) ? 'existing' : 'new',
+                ];
+            });
+
+            return $this->ok([
+                'source' => $request->source,
+                'total_currencies' => count($currencies),
+                'new_currencies' => $preview->where('status', 'new')->count(),
+                'existing_currencies' => $preview->where('status', 'existing')->count(),
+                'currencies' => $preview,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to preview import', [
+                'source' => $request->source,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fail('IMPORT_ERROR', 'Failed to preview currencies', 400, ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Import currencies from external source.
+     */
+    public function importCurrencies(Request $request): JsonResponse
+    {
+        $request->validate([
+            'source' => ['required', 'string', 'in:ecb,fixer,exchangerate'],
+            'update_existing' => ['sometimes', 'boolean'],
+        ]);
+
+        try {
+            $currencies = $this->importService->importCurrencies($request->source);
+            $options = [
+                'update_existing' => $request->boolean('update_existing', false),
+            ];
+
+            $result = $this->importService->saveImportedCurrencies($currencies, $options);
+
+            Log::info('Currency import completed', [
+                'source' => $request->source,
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'skipped' => $result['skipped'],
+            ]);
+
+            return $this->ok([
+                'source' => $request->source,
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'skipped' => $result['skipped'],
+                'errors' => $result['errors'],
+            ], 'Currencies imported successfully');
+        } catch (\Exception $e) {
+            Log::error('Failed to import currencies', [
+                'source' => $request->source,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fail('IMPORT_ERROR', 'Failed to import currencies', 400, ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Import specific currencies from external source.
+     */
+    public function importSpecificCurrencies(Request $request): JsonResponse
+    {
+        $request->validate([
+            'currency_codes' => ['required', 'array'],
+            'currency_codes.*' => ['required', 'string', 'size:3'],
+            'source' => ['sometimes', 'string', 'in:ecb,fixer,exchangerate'],
+            'update_existing' => ['sometimes', 'boolean'],
+        ]);
+
+        try {
+            $source = $request->source ?? 'ecb';
+
+            // Get the company's base currency
+            $company = $request->user()->currentCompany;
+            $baseCurrency = $company->base_currency ?? 'USD';
+
+            $currencies = $this->importService->importSpecificCurrencies(
+                $request->currency_codes,
+                $source,
+                $baseCurrency
+            );
+
+            $options = [
+                'update_existing' => $request->boolean('update_existing', false),
+            ];
+
+            $result = $this->importService->saveImportedCurrencies($currencies, $options);
+
+            Log::info('Specific currency import completed', [
+                'source' => $source,
+                'currencies' => $request->currency_codes,
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'skipped' => $result['skipped'],
+            ]);
+
+            return $this->ok([
+                'source' => $source,
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'skipped' => $result['skipped'],
+                'errors' => $result['errors'],
+            ], 'Currencies imported successfully');
+        } catch (\Exception $e) {
+            Log::error('Failed to import specific currencies', [
+                'source' => $request->source ?? 'ecb',
+                'currency_codes' => $request->currency_codes,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fail('IMPORT_ERROR', 'Failed to import currencies', 400, ['message' => $e->getMessage()]);
         }
     }
 }

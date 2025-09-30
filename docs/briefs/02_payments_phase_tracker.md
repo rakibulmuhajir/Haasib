@@ -3,23 +3,23 @@
 **Created:** 2025-09-22
 **Module:** Accounts Payable (Payments)
 **Schema File:** `docs/schemas/12_ap.sql`
-**Status:** Development Phase
+**Status:** Phase 002 Planning — public schema rollout in progress
 
 ## Tables to Create for Payments Phase
 
-### Core Payments Tables
-- [ ] `vendors` - Vendor/supplier management
-- [ ] `bills` - Bills received from vendors
-- [ ] `bill_items` - Bill line items
-- [ ] `bill_payments` - Bill payment records
-- [ ] `payment_allocations` - Payment to bill allocations
-- [ ] `accounts_payable_mv` - AP summary/aging materialized view
+### Core Payments Tables (all `public.*`)
+- [ ] `public.vendors` - Vendor/supplier management
+- [ ] `public.bills` - Bills received from vendors
+- [ ] `public.bill_items` - Bill line items
+- [ ] `public.bill_payments` - Bill payment records
+- [ ] `public.payment_allocations` - Payment to bill allocations
+- [ ] `public.accounts_payable_mv` - AP summary/aging materialized view
 
-### Payment Processing Tables
-- [ ] `payment_methods` - Payment method configuration
-- [ ] `payment_terms` - Payment terms and conditions
-- [ ] `recurring_bills` - Recurring bill templates
-- [ ] `vendor_credits` - Vendor credit notes/refunds
+### Payment Processing Tables (future-ready, `public.*`)
+- [ ] `public.payment_methods` - Payment method configuration
+- [ ] `public.payment_terms` - Payment terms and conditions
+- [ ] `public.recurring_bills` - Recurring bill templates
+- [ ] `public.vendor_credits` - Vendor credit notes/refunds
 
 ## Dependencies (Must exist first)
 
@@ -46,13 +46,14 @@
 
 ### Key Features to Implement
 1. **Multi-currency support** - Exchange rate handling for vendor bills
-2. **Multi-tax per line item** - Support for various tax regimes
-3. **Payment allocation** - Apply payments to multiple bills
-4. **Aging reports** - Based on `accounts_payable_mv` materialized view
-5. **Audit trail** - Created/updated by tracking
-6. **Soft deletes** - `deleted_at` columns for data preservation
-7. **Recurring bills** - Automated bill generation
-8. **Vendor credits** - Credit memo and refund handling
+2. **Idempotent payments & bills** - Company-scoped `idempotency_key` columns for all mutating flows
+3. **Multi-tax per line item** - Support for various tax regimes
+4. **Payment allocation** - Apply payments to multiple bills
+5. **Aging reports** - Based on `accounts_payable_mv` materialized view
+6. **Audit trail & attachments** - `created_by/updated_by`, document uploads, and event logging
+7. **Soft deletes** - `deleted_at` columns for data preservation
+8. **Recurring bills** - Automated bill generation (phase follow-up)
+9. **Vendor credits** - Credit memo and refund handling
 
 ### Foreign Key Relationships
 - `bills.vendor_id` → `crm.vendors.vendor_id`
@@ -70,21 +71,23 @@
   - `void`: Cancelled, triggers reversing journal entry
 - Payment Status Tracking: `unpaid` → `partial` → `paid` → `overpaid`
   - Calculated automatically based on allocations
-- Payment allocation validation
-- Balance due calculations
-- Early payment discounts
-- Late payment penalties
+- Payment allocation validation (partial/over payments guarded by totals)
+- Balance due calculations and automatic status transitions
+- Early payment discounts and late payment penalties
+- Attachment handling for bills, approvals, and payment receipts
+- Reconciliation metadata for bank CSV matching
 
 ### RBAC Permissions (to be created)
 - `bills.view`, `bills.create`, `bills.edit`, `bills.delete`, `bills.approve`, `bills.pay`
-- `payments.view`, `payments.create`, `payments.edit`, `payments.delete`, `payments.allocate`
+- `payments.view`, `payments.create`, `payments.edit`, `payments.delete`, `payments.allocate`, `payments.reconcile`
 - `vendors.view`, `vendors.create`, `vendors.edit`, `vendors.delete`
 
 ## Progress Tracking
 
-### Planned
-- [ ] Analysis of schema requirements
-- [ ] Dependencies identified
+### Planned / In Progress
+- [x] Analysis of schema requirements (Phase 002 brief updated)
+- [x] Dependencies identified (core, CRM, ledger prerequisites)
+- [ ] Recast SQL to `public.*` (update `12_ap.sql` + migrations)
 - [ ] Core system migrations (5 tables)
 - [ ] CRM module migrations (4 tables)
 - [ ] Accounting module migrations (5 tables)
@@ -100,133 +103,94 @@
 
 ## 📋 Development Roadmap
 
-Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requirements
+Based on **Definition of Done** (dev-plan.md) and **Technical Brief** Section 9.4 update
 
-### 🎯 Phase 1: Core Payments Foundation
-**Priority: HIGH** - Essential for accounts payable management
+### 🎯 Phase 002.A: Schema & Data Layer
+**Priority: Critical** — unblock downstream work
 
-#### 1.1 Laravel Models & Factories
-- [ ] Create Eloquent models for all payments tables
-- [ ] Add relationships, mutators, accessors, business rules
-- [ ] Create factories for testing with realistic data
-- [ ] Implement Money object integration for financial calculations
+- [ ] Rewrite `docs/schemas/12_ap.sql` for `public.*` tables (drop `acct_ap` schema usage)
+- [ ] Mirror the schema updates in Laravel migrations (2025_09_23_* files)
+- [ ] Add company-scoped idempotency columns + unique indexes for bills and payments
+- [ ] Apply CHECK constraints for monetary/tax fields and ensure defaults match DoD
+- [ ] Enable RLS on every tenant table using `app.current_company`
+- [ ] Define supporting lookup tables (`public.payment_methods`, `public.payment_terms`)
+- [ ] Create/refresh materialized view definition for `public.accounts_payable_mv`
+- [ ] Document seed/factory expectations for vendors, bills, and payments
 
-#### 1.2 Domain Services
-- [ ] `BillService` - CRUD operations, PDF generation, status workflow
-- [ ] `PaymentService` - Payment processing and allocation logic
-- [ ] `VendorService` - Vendor management and credit tracking
-- [ ] `LedgerIntegrationService` - Posting to ledger and void/reversal support
+### 🎯 Phase 002.B: Domain Services & Command Facades
+**Priority: High** — match invoicing architecture
 
-#### 1.3 Business Logic Implementation
-- [ ] Bill numbering (company-scoped with validation)
-- [ ] Payment allocation validation (prevent over-allocation)
-- [ ] Balance due calculations and automatic updates
-- [ ] Status workflow enforcement (draft→received→approved→paid→void)
-- [ ] Multi-currency support with exchange rate handling
-- [ ] Early payment discount calculations
-- [ ] Recurring bill automation
+- [ ] Implement `BillService`, `PaymentService`, `VendorService`, `LedgerIntegrationService`
+- [ ] Ship command facades (`BillCreate|Update|Approve|Pay|Void`, `PaymentCreate|Void`, `VendorCreate|Update`)
+- [ ] Guarantee per-request transactions + idempotency guards in facades
+- [ ] Integrate Money value objects for calculations and rounding
+- [ ] Cover factories + seeders to unlock unit/service tests
 
-### 🎯 Phase 2: CommandBus Integration
-**Priority: HIGH** - Following established pattern from invoicing
+### 🎯 Phase 002.C: Workflow, UI & API
+**Priority: High** — deliver operator tooling
 
-#### 2.1 Command Facade Implementation
-- [ ] `App\Actions\Payments\BillCreate` - Create new bill with idempotency
-- [ ] `App\Actions\Payments\BillUpdate` - Update bill details
-- [ ] `App\Actions\Payments\BillApprove` - Approve bill for payment
-- [ ] `App\Actions\Payments\BillPay` - Process bill payment
-- [ ] `App\Actions\Payments\BillVoid` - Void/cancel bill
-- [ ] `App\Actions\Payments\PaymentCreate` - Create payment allocation
-- [ ] `App\Actions\Payments\VendorCreate` - Create new vendor
-- [ ] `App\Actions\Payments\VendorUpdate` - Update vendor details
+- [ ] Build Inertia screens for vendors, bills, approvals, and payments (reuse `DataTablePro`)
+- [ ] Expose `/api/v1/payables` endpoints with OpenAPI docs + structured errors
+- [ ] Support attachment uploads, approval gating, and partial/over payment allocation UI
+- [ ] Wire lookup composables for payment methods/terms and bank references
+- [ ] Provide idempotent public API example + Postman snippet for QA
 
-#### 2.2 CommandBus Features
-- [ ] Idempotency keys on all write operations
-- [ ] Rate limiting (60 requests/min per user)
-- [ ] Structured error codes and validation
-- [ ] Standardized response format
-- [ ] Audit logging for all operations
+### 🎯 Phase 002.D: Ledger & Reconciliation
+**Priority: High** — maintain accounting integrity
 
-#### 2.3 Web CRUD Interface
-- [ ] Inertia/Vue components for bill and payment management
-- [ ] Server-side validation with flash messages
-- [ ] PDF generation and download for bills
-- [ ] Bulk operations and search/filter
-- [ ] Vendor portal integration (future)
+- [ ] Post balanced entries on bill approval and payment completion (AP ↔ expense/cash)
+- [ ] Handle voids/credits with reversing entries and domain events
+- [ ] Store reconciliation metadata for bank CSV matching (ties into Section 9.5)
+- [ ] Surface reconciliation state in UI/API and restrict to `payments.reconcile`
+- [ ] Add monitoring (metrics + Sentry breadcrumbs) for posting failures
 
-### 🎯 Phase 3: Ledger Integration & Financial Processing
-#### 3.1 Double-Entry Posting
-- [ ] Automatic posting to ledger when bills are approved/paid
-- [ ] AP, expense, and tax liability account updates
-- [ ] Credit note (reversal) generation for cancellations
-- [ ] `LedgerService::post($entry)` integration with balance validation
+### 🎯 Phase 002.E: Quality, Tests & Ops
+**Priority: Sustaining**
 
-#### 3.2 Audit Trail & Compliance
-- [ ] Immutable financial records with audit logging (to `audit_logs`)
-- [ ] Soft delete support with credit note workflows
-- [ ] User action tracking for all financial operations
-- [ ] Compliance with accounting standards
-
-### 🎯 Phase 4: Advanced Features
-#### 4.1 Reporting & Analytics
-- [ ] Refresh and query logic for `accounts_payable_mv`
-- [ ] Cash flow forecasting based on payment schedules
-- [ ] Real-time dashboards for AP metrics
-- [ ] Vendor performance analytics
-- [ ] CSV export functionality
-
-#### 4.2 Payment Processing
-- [ ] Bank integration for ACH/wire transfers
-- [ ] Credit card processing integration
-- [ ] Payment approval workflows
-- [ ] Bank reconciliation support (CSV import)
-- [ ] Payment scheduling automation
-
-#### 4.3 Multi-tenant & Security
-- [ ] RLS (Row Level Security) policies enforced
-- [ ] Company-scoped data isolation
-- [ ] Permission-based access control
-- [ ] Data encryption for sensitive information
-- [ ] Vendor self-service portal (future)
-
----
+- [ ] Unit + feature coverage for services, facades, posting flows
+- [ ] Scenario tests for multi-currency, partial payments, discounts, credits
+- [ ] OpenAPI (`docs/openapi/payments.yaml`) + runbook updates
+- [ ] CI hooks for schema drift detection + `accounts_payable_mv` refresh test
+- [ ] Production readiness checklist (RLS validation, permission audit, backups)
 
 ## 📊 Timeline & Milestones
 
-### **Milestone 1: Core Payments (3-4 weeks)**
-- [ ] Database schema
-- [ ] Laravel models & factories
-- [ ] Domain services
-- [ ] Basic CRUD operations
+### **Milestone A: Public Schema & Constraints (1–1.5 weeks)**
+- [ ] `12_ap.sql` + migrations rewritten for `public.*`
+- [ ] Idempotency columns/indexes in place
+- [ ] CHECK constraints + RLS verified locally
 
-### **Milestone 2: CommandBus & UI (2-3 weeks)**
-- [ ] Command facades with idempotency
-- [ ] Web interface integration
-- [ ] PDF generation for bills
-- [ ] Basic testing coverage
+### **Milestone B: Services & Command Facades (1.5–2 weeks)**
+- [ ] Core services implemented with tests
+- [ ] Command facades wired with idempotency + transactions
+- [ ] Factories/seed data supporting service tests
 
-### **Milestone 3: Financial Integration (2-3 weeks)**
-- [ ] Ledger posting integration
-- [ ] Audit trail implementation
-- [ ] Advanced business logic
-- [ ] Comprehensive testing
+### **Milestone C: UI & API Delivery (2 weeks)**
+- [ ] Inertia screens for vendors/bills/payments
+- [ ] `/api/v1/payables` endpoints + OpenAPI
+- [ ] Attachment + approval workflows operational
 
-### **Milestone 4: Production Ready (1-2 weeks)**
-- [ ] Performance optimization
-- [ ] Security audit
-- [ ] Documentation completion
-- [ ] Deployment readiness
+### **Milestone D: Posting & Reconciliation (1–1.5 weeks)**
+- [ ] Ledger postings for bills/payments + reversing flows
+- [ ] Reconciliation metadata surfaced + permissioned
+- [ ] Monitoring hooks for posting/recon failures
+
+### **Milestone E: Quality & Launch Readiness (1 week)**
+- [ ] Scenario + integration tests green
+- [ ] Runbooks, docs, and CI checks updated
+- [ ] Production readiness checklist signed off
 
 ---
 
 ## ✅ Detailed Delivery Checklist (Phase Matrix)
 
 ### Database & Schema
-- [ ] Payments core tables (bills, items, payments, allocations)
-- [ ] Vendor management tables
-- [ ] Accounts Payable table with RLS
-- [ ] Recurring bills and payment terms
-- [ ] Idempotency keys and audit logs
-- [ ] Materialized views for AP reporting
+- [ ] `public` core tables (bills, items, payments, allocations)
+- [ ] `public.vendors` + lookup tables (methods, terms)
+- [ ] Accounts payable MV + summary tables with RLS
+- [ ] Recurring bills and payment terms scaffolding
+- [ ] Company-scoped idempotency keys and audit columns
+- [ ] Materialized view refresh strategy for AP reporting
 
 ### Models & State Machines
 - [ ] Bill model with state machine (draft → received → approved → paid → void)
@@ -244,8 +208,8 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 - [ ] RecurringBillService (automation, scheduling)
 
 ### CommandBus Layer
-- [ ] Bill Actions (create, update, approve, pay, void)
-- [ ] Payment Actions (create, allocate, void, refund)
+- [ ] Bill Actions (create, update, approve, pay, void, credit)
+- [ ] Payment Actions (create, allocate, reconcile, void, refund)
 - [ ] Vendor Actions (create, update, delete, credit)
 - [ ] Command facades in `app/Actions/Payments/`
 - [ ] Idempotency key support with unique indexes
@@ -254,7 +218,7 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 
 ### Events & Listeners
 - [ ] BillReceived/Approved/Paid/Voided (+ AP update, JE creation)
-- [ ] PaymentProcessed/Allocated/Voided
+- [ ] PaymentProcessed/Allocated/Reconciled/Voided
 - [ ] Void journal entries on bill void
 - [ ] Posted journal entry updates (listeners)
 - [ ] RecurringBillGenerated event
@@ -262,7 +226,8 @@ Based on **Definition of Done** (dev-plan.md) and **Technical Brief** requiremen
 ### Security & Multi-tenant
 - [ ] RLS policies on core tables
 - [ ] Company context middleware (Postgres GUC)
-- [ ] Policies + Gates for bills, payments, and vendors
+- [ ] Policies + Gates for bills, payments, and vendors (incl. `payments.reconcile`)
+- [ ] Attachment permission and storage hardening
 - [ ] Vendor access controls (if implementing vendor portal)
 
 ### Tests

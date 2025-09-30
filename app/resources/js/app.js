@@ -22,8 +22,89 @@ import Tooltip from 'primevue/tooltip'
 // Ensure you have installed: npm i @primeuix/themes primevue
 import blueWhale from './theme/bluewhale';
 // PrimeVue v4 styled mode injects CSS from the preset JS; no direct CSS file is required
-// Optional icons (install with: npm i primeicons)
-// import 'primeicons/primeicons.css'
+// FontAwesome icons
+import { library } from '@fortawesome/fontawesome-svg-core'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { 
+  faPlus, 
+  faTrash, 
+  faRotate, 
+  faArrowsRotate, 
+  faPenToSquare, 
+  faGear, 
+  faTriangleExclamation,
+  faCheck,
+  faXmark,
+  faFloppyDisk,
+  faPaperPlane,
+  faFilePdf,
+  faEye,
+  faPencil,
+  faBan,
+  faArrowLeft,
+  faUserPlus,
+  faUsers,
+  faBuilding,
+  faTruck,
+  faMagnifyingGlass,
+  faGlobe,
+  faMoneyBill,
+  faCoins,
+  faCalendar,
+  faEnvelope,
+  faCopy,
+  faDownload,
+  faBell,
+  faArrowUpRightFromSquare,
+  faArrowRotateLeft,
+  faLink,
+  faUser,
+  faDollarSign,
+  faFile,
+  faMinus,
+  faHistory
+} from '@fortawesome/free-solid-svg-icons'
+
+// Add icons to library
+library.add(
+  faPlus,
+  faTrash,
+  faRotate,
+  faArrowsRotate,
+  faPenToSquare,
+  faGear,
+  faTriangleExclamation,
+  faCheck,
+  faXmark,
+  faFloppyDisk,
+  faPaperPlane,
+  faFilePdf,
+  faEye,
+  faPencil,
+  faBan,
+  faArrowLeft,
+  faUserPlus,
+  faUsers,
+  faBuilding,
+  faTruck,
+  faMagnifyingGlass,
+  faGlobe,
+  faMoneyBill,
+  faCoins,
+  faCalendar,
+  faEnvelope,
+  faCopy,
+  faDownload,
+  faBell,
+  faArrowUpRightFromSquare,
+  faArrowRotateLeft,
+  faLink,
+  faUser,
+  faDollarSign,
+  faFile,
+  faMinus,
+  faHistory
+)
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Toolbar from 'primevue/toolbar'
@@ -87,6 +168,7 @@ createInertiaApp({
         vue.component('InputText', InputText)
         vue.component('Dialog', Dialog)
         vue.component('ConfirmDialog', ConfirmDialog)
+        vue.component('FontAwesomeIcon', FontAwesomeIcon)
         vue.mount(el)
         return vue
     },

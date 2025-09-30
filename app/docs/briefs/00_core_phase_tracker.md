@@ -109,12 +109,22 @@ Implemented a universal inline editing system to resolve inconsistent field savi
 
 ## Upcoming Phases
 
-### Phase 3: Payments Module Integration
+### Phase 3: Role-Based Access Control (RBAC) System Implementation
+- [ ] Define comprehensive permission matrix for all system actions
+- [ ] Implement role-based middleware for API endpoints
+- [ ] Create permission management UI for super admins
+- [ ] Add role inheritance and permission escalation controls
+- [ ] Implement company-level permissions (owner, admin, manager, employee, viewer)
+- [ ] Add audit logging for permission changes and access denials
+- [ ] Create permission caching layer for performance
+- [ ] Implement dynamic permission checks in frontend components
+
+### Phase 4: Payments Module Integration
 - [ ] Integrate currency settings with payment processing
 - [ ] Multi-currency payment support
 - [ ] Exchange rate integration for payment conversions
 
-### Phase 4: Base Currency Migration Wizard
+### Phase 5: Base Currency Migration Wizard
 - [ ] Comprehensive migration wizard for changing base currency
 - [ ] Data conversion utilities for:
   - Historical financial records
@@ -124,20 +134,47 @@ Implemented a universal inline editing system to resolve inconsistent field savi
 - [ ] Audit trail for currency migrations
 - [ ] Rollback capabilities for failed migrations
 
-### Phase 5: Advanced Features
+### Phase 6: Advanced Features
 - [ ] Field-level permissions for inline editing
 - [ ] Auto-save functionality with debouncing
 - [ ] Batch updates for multiple fields
 - [ ] Audit logging for all inline changes
 
-### Phase 6: Enhanced Reporting
+### Phase 7: Enhanced Reporting
 - [ ] Multi-currency financial reports
 - [ ] Historical exchange rate reporting
 - [ ] Company-specific currency analytics
 
 ---
 
-*Last Updated: 2025-09-25*
+*Last Updated: 2025-09-30*
+
+---
+
+## Current Issues Identified (2025-09-30)
+
+### RBAC System Gap
+**Issue**: The application currently lacks a comprehensive Role-Based Access Control (RBAC) system, leading to inconsistent permission checks and potential security vulnerabilities.
+
+**Specific Problems Identified**:
+1. **Currency Management Permissions**: Users with admin roles cannot add currencies to companies despite having company admin privileges
+2. **System Currency Management**: Non-super-admin users can access system-level currency management features
+3. **Inconsistent Permission Checks**: Different modules use different approaches to authorization
+4. **Missing Permission Matrix**: No centralized definition of what each role can do
+5. **Frontend Permission Hydration**: Missing `canManageCompany` and other permission props on frontend
+
+**Impact**:
+- Users cannot perform actions they should be authorized for
+- Potential security gaps where unauthorized access might be possible
+- Poor user experience with permission-related errors
+- Difficult to maintain and audit permission logic
+
+**Proposed Solution**: Implement Phase 3 RBAC system with:
+- Centralized permission definitions
+- Role-based middleware
+- Company-level permission inheritance
+- Frontend permission hydration
+- Comprehensive audit logging
 
 ---
 

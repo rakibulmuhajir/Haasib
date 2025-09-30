@@ -27,8 +27,12 @@
         "vue": "^3.4.0"
     },
     "dependencies": {
+        "@fortawesome/fontawesome-svg-core": "^7.0.1",
+        "@fortawesome/free-solid-svg-icons": "^7.0.1",
+        "@fortawesome/vue-fontawesome": "^3.1.2",
         "@primeuix/themes": "^1.2.3",
         "date-fns": "^4.1.0",
+        "primeicons": "^7.0.0",
         "primevue": "^4.3.9"
     }
 }

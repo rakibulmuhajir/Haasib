@@ -168,14 +168,17 @@
 * API + UI with idempotent writes and server validation.
 * DoD: OpenAPI docs; audit trail; unit + feature tests.
 
-### 9.4 Payments (Manual Receipts)
+### 9.4 Payments (Phase 002 — Accounts Payable)
 
-**What:** `billing.payments` with method/reference/receipt attachment; approval posts to ledger.
-**Why:** manual bank/wire first; no gateways.
-**How:**
+**What:** `public.vendors`, `public.bills`, `public.bill_items`, `public.bill_payments`, `public.payment_allocations`, `public.accounts_payable_mv` + supporting enums/views; manual vendor disbursement workflow with document storage and audit fields.
+**Why:** close the payables loop once invoices/AR are stable; enable controlled cash outflows, vendor visibility, and ledger parity before introducing gateways.
+**How (Phase 002 Plan):**
 
-* Upload + approve workflow; idempotency to avoid duplicates.
-* Reconciliation references link to bank CSV lines where matched.
+* **Schema & Data Layer** — Recast `docs/schemas/12_ap.sql` into the `public` schema (per tracker decision to drop module schemas); align table names/columns with `02_payments_phase_tracker.md`; add idempotency keys, tenant indexes (`company_id, bill_number` etc.), `CHECK` constraints, and enable RLS policies using `app.current_company` for all tenant tables.
+* **Domain Services & Command Facades** — Ship `BillService`, `PaymentService`, `VendorService`, and `LedgerIntegrationService` with mirrored command facades (`BillCreate|Approve|Pay`, `PaymentCreate`, `VendorCreate`) following the invoicing pattern. Guarantee idempotent writes, per-request transactions, and Money value objects for calculations.
+* **Workflow & UX** — Deliver Inertia UI + `/api/v1` endpoints for vendors, bills, approvals, and payments. Support multi-currency entry, attachments, approval gating, and allocation UI against partial/over payments. Hook into lookups for payment methods/terms and reuse `useDataTable` patterns.
+* **Ledger & Reconciliation** — On bill approval/posting, create balanced journal entries (AP, expense, tax) and mirror payments (cash/bank vs accounts payable). Expose reconciliation metadata for bank-import matches and respect the CSV reconciliation rules from Section 9.5. Ensure voids/credits trigger reversing entries.
+* **Definition of Done** — Automated tests (unit + feature + posting backstops), OpenAPI docs, RLS + policy coverage, seed/factory support, monitoring hooks (Sentry breadcrumbs, metrics), and updated runbooks. Update trackers (`00_core`, `01_invoicing`, `02_payments`) and dev-plan milestones as deliverables land.
 
 ### 9.5 Bank Reconciliation (CSV)
 

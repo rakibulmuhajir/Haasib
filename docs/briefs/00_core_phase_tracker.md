@@ -33,7 +33,7 @@
 
 ### Key Features to Implement
 1. **Multi-company tenants** — `auth.companies` as system of record; `user_accounts.company_id` links users to a company.
-2. **Role & permissions seed** — bootstrap roles (`owner|admin|accountant|member`) and default permissions structure into `user_accounts.permissions` (JSONB) until full RBAC module lands.
+2. **Role & permissions seed** — bootstrap roles (`owner|admin|accountant|member`) and default permissions structure using Spatie's laravel-permission package with dedicated tables (`permissions`, `roles`, `model_has_permissions`, `model_has_roles`, `role_has_permissions`) and team-aware scoping for company-level permissions.
 3. **Currency catalog + formatting** — `currencies` drives money precision and display; integrate with Money library.
 4. **Exchange rates** — `exchange_rates` used by services; unique per `(base, target, effective_date)`; source tagging and audit columns present.
 5. **Audit trail hooks** — `created_by/updated_by` FKs and timestamps present across tables; wire from authenticated user.

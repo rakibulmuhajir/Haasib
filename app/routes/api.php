@@ -63,8 +63,10 @@ Route::prefix('payments')->name('payments.')->group(function () {
     Route::post('/bulk', [PaymentApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
 });
 
-// Currency Routes
-Route::prefix('currencies')->name('currencies.')->group(function () {
+// Currency Routes - uses web middleware for session authentication
+Route::prefix('currencies')->name('api.currencies.')->middleware(['web', 'auth'])->group(function () {
+    Route::get('/', [CurrencyApiController::class, 'index'])->name('index');
+    Route::post('/', [CurrencyApiController::class, 'store'])->name('store');
     Route::get('/company', [CurrencyApiController::class, 'companyCurrencies'])->name('company');
     Route::get('/available', [CurrencyApiController::class, 'availableCurrencies'])->name('available');
     Route::get('/exchange-rate', [CurrencyApiController::class, 'exchangeRate'])->name('exchange-rate');
@@ -79,6 +81,14 @@ Route::prefix('currencies')->name('currencies.')->group(function () {
     Route::post('/sync-exchange-rates', [CurrencyApiController::class, 'syncExchangeRates'])->name('sync-exchange-rates')->middleware('idempotent');
     Route::get('/symbol', [CurrencyApiController::class, 'currencySymbol'])->name('symbol');
     Route::post('/format-money', [CurrencyApiController::class, 'formatMoney'])->name('format-money');
+    Route::patch('/{currency}/toggle-active', [CurrencyApiController::class, 'toggleActive'])->name('toggle-active');
+
+    // Currency import routes
+    Route::get('/import/sources', [CurrencyApiController::class, 'getImportSources'])->name('import.sources');
+    Route::get('/import/search', [CurrencyApiController::class, 'searchExternalCurrencies'])->name('import.search');
+    Route::post('/import/specific', [CurrencyApiController::class, 'importSpecificCurrencies'])->name('import.specific')->middleware('idempotent');
+    Route::post('/import/preview', [CurrencyApiController::class, 'previewImport'])->name('import.preview')->middleware('idempotent');
+    Route::post('/import', [CurrencyApiController::class, 'importCurrencies'])->name('import')->middleware('idempotent');
 });
 
 // Customer Routes
@@ -110,12 +120,6 @@ Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middle
 
 // Universal inline edit endpoint
 Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware('web');
-
-// System currencies endpoint
-Route::prefix('currencies')->name('currencies.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\Api\CurrencyApiController::class, 'index'])->name('index');
-    Route::patch('{currency}/toggle-active', [\App\Http\Controllers\Api\CurrencyApiController::class, 'toggleActive'])->name('toggle-active');
-});
 
 // Health check endpoint
 Route::get('/health', function () {

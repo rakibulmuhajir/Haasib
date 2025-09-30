@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, computed } from 'vue'
-import { usePage, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Head, usePage, router } from '@inertiajs/vue3'
 import { format } from 'date-fns'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'

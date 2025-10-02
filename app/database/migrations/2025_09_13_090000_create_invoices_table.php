@@ -49,11 +49,31 @@ return new class extends Migration
         });
 
         Schema::table('acct.invoices', function (Blueprint $table) {
-            $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('customer_id')->references('customer_id')->on('hrm.customers')->onDelete('set null');
-            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
-            $table->foreign('created_by')->references('user_id')->on('auth.user_accounts')->onDelete('set null');
-            $table->foreign('updated_by')->references('user_id')->on('auth.user_accounts')->onDelete('set null');
+            $table->foreign('company_id', 'invoices_company_fk')
+                ->references('id')
+                ->on('auth.companies')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
+            $table->foreign('customer_id', 'invoices_customer_fk')
+                ->references('customer_id')
+                ->on('hrm.customers')
+                ->nullOnDelete()
+                ->cascadeOnUpdate();
+            $table->foreign('currency_id', 'invoices_currency_fk')
+                ->references('id')
+                ->on('public.currencies')
+                ->restrictOnDelete()
+                ->cascadeOnUpdate();
+            $table->foreign('created_by', 'invoices_created_by_fk')
+                ->references('user_id')
+                ->on('auth.user_accounts')
+                ->nullOnDelete()
+                ->cascadeOnUpdate();
+            $table->foreign('updated_by', 'invoices_updated_by_fk')
+                ->references('user_id')
+                ->on('auth.user_accounts')
+                ->nullOnDelete()
+                ->cascadeOnUpdate();
             $table->index(['company_id', 'invoice_date'], 'idx_invoices_dates');
             $table->index(['company_id', 'status'], 'idx_invoices_status');
         });
@@ -74,7 +94,7 @@ return new class extends Migration
         // Idempotency unique scope within company
         try {
             DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoices_idemp_unique ON acct.invoices (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
-        } catch (Throwable $e) { /* ignore on unsupported drivers */
+        } catch (\Throwable $e) { /* ignore on unsupported drivers */
         }
 
         // Enable RLS and tenant policy
@@ -91,6 +111,38 @@ return new class extends Migration
      */
     public function down(): void
     {
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DISABLE ROW LEVEL SECURITY');
+        DB::statement("DROP POLICY IF EXISTS invoices_tenant_isolation ON acct.invoices");
+
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_due_date');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_subtotal_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_tax_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_discount_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_shipping_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_total_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_paid_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_balance_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_invoice_status_valid');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoices DROP CONSTRAINT IF EXISTS chk_payment_status_valid');
+
+        try {
+            DB::statement('DROP INDEX IF EXISTS acct.invoices_idemp_unique');
+        } catch (\Throwable $e) {
+            // Ignore driver-specific errors when dropping partial indexes.
+        }
+
+        if (Schema::hasTable('acct.invoices')) {
+            Schema::table('acct.invoices', function (Blueprint $table) {
+                $table->dropForeign('invoices_company_fk');
+                $table->dropForeign('invoices_customer_fk');
+                $table->dropForeign('invoices_currency_fk');
+                $table->dropForeign('invoices_created_by_fk');
+                $table->dropForeign('invoices_updated_by_fk');
+                $table->dropIndex('idx_invoices_dates');
+                $table->dropIndex('idx_invoices_status');
+            });
+        }
+
         Schema::dropIfExists('acct.invoices');
     }
 };

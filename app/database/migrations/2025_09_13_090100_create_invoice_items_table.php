@@ -30,7 +30,11 @@ return new class extends Migration
         });
 
         Schema::table('acct.invoice_items', function (Blueprint $table) {
-            $table->foreign('invoice_id')->references('invoice_id')->on('acct.invoices')->onDelete('cascade');
+            $table->foreign('invoice_id', 'invoice_items_invoice_fk')
+                ->references('invoice_id')
+                ->on('acct.invoices')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
             $table->index('invoice_id', 'idx_invoice_items_invoice');
         });
 
@@ -44,7 +48,8 @@ return new class extends Migration
         // Idempotency unique scope within invoice
         try {
             DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoice_items_idemp_unique ON acct.invoice_items (invoice_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
-        } catch (Throwable $e) { /* ignore */
+        } catch (\Throwable $e) {
+            // Ignore driver-specific errors when creating partial indexes.
         }
 
         // Enable RLS and tenant policy via parent invoice
@@ -69,6 +74,28 @@ return new class extends Migration
      */
     public function down(): void
     {
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DISABLE ROW LEVEL SECURITY');
+        DB::statement("DROP POLICY IF EXISTS invoice_items_tenant_isolation ON acct.invoice_items");
+
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_quantity_positive');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_unit_price_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_discount_pct_range');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_discount_nonneg');
+        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_line_total_nonneg');
+
+        try {
+            DB::statement('DROP INDEX IF EXISTS acct.invoice_items_idemp_unique');
+        } catch (\Throwable $e) {
+            // Ignore driver-specific errors when dropping partial indexes.
+        }
+
+        if (Schema::hasTable('acct.invoice_items')) {
+            Schema::table('acct.invoice_items', function (Blueprint $table) {
+                $table->dropForeign('invoice_items_invoice_fk');
+                $table->dropIndex('idx_invoice_items_invoice');
+            });
+        }
+
         Schema::dropIfExists('acct.invoice_items');
     }
 };

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('acct.user_accounts', function (Blueprint $table) {
+        Schema::create('user_accounts', function (Blueprint $table) {
             $table->id('user_id');
             $table->uuid('company_id');
             $table->string('username', 100)->unique();
@@ -31,7 +31,7 @@ return new class extends Migration
             $table->unique(['company_id', 'username']);
         });
 
-        Schema::table('acct.user_accounts', function (Blueprint $table) {
+        Schema::table('user_accounts', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
         });
     }
@@ -41,6 +41,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('acct.user_accounts');
+        Schema::dropIfExists('user_accounts');
     }
 };

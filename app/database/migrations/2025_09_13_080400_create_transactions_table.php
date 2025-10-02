@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('acct.transactions', function (Blueprint $table) {
+        Schema::create('transactions', function (Blueprint $table) {
             $table->id('transaction_id');
             $table->uuid('company_id');
             $table->string('transaction_number', 100);
@@ -31,21 +31,21 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreignId('created_by')->nullable()->constrained('acct.user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('acct.user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
 
             $table->unique(['company_id', 'transaction_number']);
         });
 
-        Schema::table('acct.transactions', function (Blueprint $table) {
+        Schema::table('transactions', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
             $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
         });
 
         // Add check constraints
-        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_totals_equal CHECK (total_debit = total_credit)');
-        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_debit_positive CHECK (total_debit >= 0)');
-        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_credit_positive CHECK (total_credit >= 0)');
+        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_totals_equal CHECK (total_debit = total_credit)');
+        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_debit_positive CHECK (total_debit >= 0)');
+        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_credit_positive CHECK (total_credit >= 0)');
     }
 
     /**
@@ -53,6 +53,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('acct.transactions');
+        Schema::dropIfExists('transactions');
     }
 };

@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('acct.invoice_items', function (Blueprint $table) {
+        Schema::create('invoice_items', function (Blueprint $table) {
             $table->uuid('invoice_item_id')->primary();
             $table->uuid('invoice_id');
             $table->bigInteger('item_id')->nullable(); // Will be FK to inventory.items when available
@@ -29,40 +29,35 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::table('acct.invoice_items', function (Blueprint $table) {
-            $table->foreign('invoice_id', 'invoice_items_invoice_fk')
-                ->references('invoice_id')
-                ->on('acct.invoices')
-                ->cascadeOnUpdate()
-                ->cascadeOnDelete();
+        Schema::table('invoice_items', function (Blueprint $table) {
+            $table->foreign('invoice_id')->references('invoice_id')->on('invoices')->onDelete('cascade');
             $table->index('invoice_id', 'idx_invoice_items_invoice');
         });
 
         // Add check constraints
-        DB::statement('ALTER TABLE acct.invoice_items ADD CONSTRAINT chk_quantity_positive CHECK (quantity > 0)');
-        DB::statement('ALTER TABLE acct.invoice_items ADD CONSTRAINT chk_unit_price_nonneg CHECK (unit_price >= 0)');
-        DB::statement('ALTER TABLE acct.invoice_items ADD CONSTRAINT chk_discount_pct_range CHECK (discount_percentage BETWEEN 0 AND 100)');
-        DB::statement('ALTER TABLE acct.invoice_items ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
-        DB::statement('ALTER TABLE acct.invoice_items ADD CONSTRAINT chk_line_total_nonneg CHECK (line_total >= 0)');
+        DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_quantity_positive CHECK (quantity > 0)');
+        DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_unit_price_nonneg CHECK (unit_price >= 0)');
+        DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_pct_range CHECK (discount_percentage BETWEEN 0 AND 100)');
+        DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
+        DB::statement('ALTER TABLE invoice_items ADD CONSTRAINT chk_line_total_nonneg CHECK (line_total >= 0)');
 
         // Idempotency unique scope within invoice
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoice_items_idemp_unique ON acct.invoice_items (invoice_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
-        } catch (\Throwable $e) {
-            // Ignore driver-specific errors when creating partial indexes.
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoice_items_idemp_unique ON invoice_items (invoice_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+        } catch (Throwable $e) { /* ignore */
         }
 
         // Enable RLS and tenant policy via parent invoice
-        DB::statement('ALTER TABLE acct.invoice_items ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY');
         DB::statement(<<<'SQL'
-            CREATE POLICY invoice_items_tenant_isolation ON acct.invoice_items
+            CREATE POLICY invoice_items_tenant_isolation ON invoice_items
             USING (EXISTS (
-                SELECT 1 FROM acct.invoices i
+                SELECT 1 FROM invoices i
                 WHERE i.invoice_id = invoice_items.invoice_id
                   AND i.company_id = current_setting('app.current_company', true)::uuid
             ))
             WITH CHECK (EXISTS (
-                SELECT 1 FROM acct.invoices i
+                SELECT 1 FROM invoices i
                 WHERE i.invoice_id = invoice_items.invoice_id
                   AND i.company_id = current_setting('app.current_company', true)::uuid
             ));
@@ -74,28 +69,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DISABLE ROW LEVEL SECURITY');
-        DB::statement("DROP POLICY IF EXISTS invoice_items_tenant_isolation ON acct.invoice_items");
-
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_quantity_positive');
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_unit_price_nonneg');
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_discount_pct_range');
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_discount_nonneg');
-        DB::statement('ALTER TABLE IF EXISTS acct.invoice_items DROP CONSTRAINT IF EXISTS chk_line_total_nonneg');
-
-        try {
-            DB::statement('DROP INDEX IF EXISTS acct.invoice_items_idemp_unique');
-        } catch (\Throwable $e) {
-            // Ignore driver-specific errors when dropping partial indexes.
-        }
-
-        if (Schema::hasTable('acct.invoice_items')) {
-            Schema::table('acct.invoice_items', function (Blueprint $table) {
-                $table->dropForeign('invoice_items_invoice_fk');
-                $table->dropIndex('idx_invoice_items_invoice');
-            });
-        }
-
-        Schema::dropIfExists('acct.invoice_items');
+        Schema::dropIfExists('invoice_items');
     }
 };

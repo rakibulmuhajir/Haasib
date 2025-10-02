@@ -12,13 +12,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('acct.payments', function (Blueprint $table) {
+        Schema::create('payments', function (Blueprint $table) {
             $table->uuid('payment_id')->primary();
             $table->uuid('company_id');
             $table->string('payment_number', 100);
             $table->string('payment_type', 50)->default('customer_payment');
             $table->string('entity_type', 50)->default('customer');
-            $table->uuid('entity_id')->nullable(); // Will be FK to hrm.customers when available
+            $table->uuid('entity_id')->nullable(); // Will be FK to crm.customers when available
             $table->bigInteger('bank_account_id')->nullable(); // Will be FK to bank.company_bank_accounts when available
             $table->string('payment_method', 50); // cash, bank_transfer, card
             $table->date('payment_date');
@@ -38,43 +38,43 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreignId('created_by')->nullable()->constrained('auth.users', 'id');
-            $table->foreignId('updated_by')->nullable()->constrained('auth.users', 'id');
-            $table->foreignId('reconciled_by')->nullable()->constrained('auth.users', 'id');
+            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('reconciled_by')->nullable()->constrained('user_accounts', 'user_id');
 
             $table->unique(['company_id', 'payment_number']);
         });
 
-        Schema::table('acct.payments', function (Blueprint $table) {
+        Schema::table('payments', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
             $table->index(['company_id', 'payment_date'], 'idx_payments_date');
         });
 
         // Add check constraints
-        DB::statement('ALTER TABLE acct.payments ADD CONSTRAINT chk_amount_positive CHECK (amount > 0)');
+        DB::statement('ALTER TABLE payments ADD CONSTRAINT chk_amount_positive CHECK (amount > 0)');
 
         // Idempotency unique scope within company
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payments_idemp_unique ON acct.payments (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payments_idemp_unique ON payments (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
         } catch (Throwable $e) { /* ignore */
         }
 
         // Optional dedupe for imported bank transactions
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payments_bank_txn_unique ON acct.payments (company_id, bank_txn_id) WHERE bank_txn_id IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payments_bank_txn_unique ON payments (company_id, bank_txn_id) WHERE bank_txn_id IS NOT NULL');
         } catch (Throwable $e) { /* ignore */
         }
 
         // Enable RLS and tenant policy
-        DB::statement('ALTER TABLE acct.payments ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE payments ENABLE ROW LEVEL SECURITY');
         DB::statement(<<<'SQL'
-            CREATE POLICY payments_tenant_isolation ON acct.payments
+            CREATE POLICY payments_tenant_isolation ON payments
             USING (company_id = current_setting('app.current_company', true)::uuid)
             WITH CHECK (company_id = current_setting('app.current_company', true)::uuid);
         SQL);
         // Enum-like constraint for status
-        DB::statement("ALTER TABLE acct.payments ADD CONSTRAINT chk_payment_status_valid CHECK (status IN ('pending','completed','failed','cancelled'))");
+        DB::statement("ALTER TABLE payments ADD CONSTRAINT chk_payment_status_valid CHECK (status IN ('pending','completed','failed','cancelled'))");
     }
 
     /**
@@ -82,6 +82,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('acct.payments');
+        Schema::dropIfExists('payments');
     }
 };

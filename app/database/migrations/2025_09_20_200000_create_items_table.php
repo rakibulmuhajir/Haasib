@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('acct.items', function (Blueprint $table) {
+        Schema::create('items', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->string('item_code', 64)->nullable();
@@ -30,7 +30,7 @@ return new class extends Migration
             $table->index(['company_id', 'item_code']);
         });
 
-        Schema::table('acct.items', function (Blueprint $table) {
+        Schema::table('items', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
             $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('set null');
         });
@@ -38,6 +38,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('acct.items');
+        Schema::dropIfExists('items');
     }
 };

@@ -12,8 +12,8 @@ return new class extends Migration
     {
         // Enable RLS on ledger tables
         DB::statement('ALTER TABLE ledger_accounts ENABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE acct.journal_entries ENABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE acct.journal_lines ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policies for ledger_accounts
         DB::statement("
@@ -145,7 +145,7 @@ return new class extends Migration
 
         // Disable RLS
         DB::statement('ALTER TABLE ledger_accounts DISABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE acct.journal_entries DISABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE acct.journal_lines DISABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE journal_entries DISABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE journal_lines DISABLE ROW LEVEL SECURITY');
     }
 };

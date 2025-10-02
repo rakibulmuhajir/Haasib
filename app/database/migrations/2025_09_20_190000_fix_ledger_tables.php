@@ -98,9 +98,9 @@ return new class extends Migration
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_created_by_user_id_foreign FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL');
         DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_posted_by_user_id_foreign FOREIGN KEY (posted_by_user_id) REFERENCES users (id) ON DELETE SET NULL');
 
-        DB::statement('ALTER TABLE acct.journal_lines ADD CONSTRAINT journal_lines_company_id_foreign FOREIGN KEY (company_id) REFERENCES auth.companies (id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE acct.journal_lines ADD CONSTRAINT journal_lines_journal_entry_id_foreign FOREIGN KEY (journal_entry_id) REFERENCES journal_entries (id) ON DELETE CASCADE');
-        DB::statement('ALTER TABLE acct.journal_lines ADD CONSTRAINT journal_lines_ledger_account_id_foreign FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts (id) ON DELETE RESTRICT');
+        DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_company_id_foreign FOREIGN KEY (company_id) REFERENCES auth.companies (id) ON DELETE CASCADE');
+        DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_journal_entry_id_foreign FOREIGN KEY (journal_entry_id) REFERENCES journal_entries (id) ON DELETE CASCADE');
+        DB::statement('ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_ledger_account_id_foreign FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts (id) ON DELETE RESTRICT');
     }
 
     /**

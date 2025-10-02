@@ -17,7 +17,7 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
-     *
+     * 
      * This migration should be run FIRST during rollback to clean up
      * all foreign key constraints before dropping any tables.
      */
@@ -25,7 +25,7 @@ return new class extends Migration
     {
         // Drop all foreign key constraints in the correct order
         // to avoid circular dependency issues during rollback
-
+        
         try {
             // Drop company_secondary_currencies foreign keys
             Schema::table('company_secondary_currencies', function (Blueprint $table) {
@@ -36,7 +36,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop auth.company_user foreign keys
             Schema::table('auth.company_user', function (Blueprint $table) {
@@ -47,7 +47,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop auth.companies foreign keys
             Schema::table('auth.companies', function (Blueprint $table) {
@@ -58,7 +58,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop exchange_rates foreign keys
             Schema::table('exchange_rates', function (Blueprint $table) {
@@ -68,7 +68,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop country_currency foreign keys
             Schema::table('country_currency', function (Blueprint $table) {
@@ -78,7 +78,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop country_language foreign keys
             Schema::table('country_language', function (Blueprint $table) {
@@ -88,7 +88,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop locales foreign keys
             Schema::table('locales', function (Blueprint $table) {
@@ -97,7 +97,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         try {
             // Drop sessions foreign keys
             Schema::table('sessions', function (Blueprint $table) {
@@ -106,11 +106,11 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table might not exist
         }
-
+        
         // Check if auth schema exists and drop it
         try {
             $schemaExists = DB::select("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'auth'");
-            if (! empty($schemaExists)) {
+            if (!empty($schemaExists)) {
                 DB::statement('DROP SCHEMA IF EXISTS auth CASCADE');
             }
         } catch (\Throwable $e) {

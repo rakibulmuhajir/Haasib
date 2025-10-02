@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('acct.chart_of_accounts', function (Blueprint $table) {
+        Schema::create('chart_of_accounts', function (Blueprint $table) {
             $table->id('account_id');
             $table->uuid('company_id');
             $table->foreignId('parent_account_id')->nullable()->constrained('chart_of_accounts', 'account_id');
@@ -27,18 +27,18 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreignId('created_by')->nullable()->constrained('acct.user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('acct.user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
 
             $table->unique(['company_id', 'account_code']);
         });
 
-        Schema::table('acct.chart_of_accounts', function (Blueprint $table) {
+        Schema::table('chart_of_accounts', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
         });
 
         // Add check constraint for opening_balance >= 0
-        DB::statement('ALTER TABLE acct.chart_of_accounts ADD CONSTRAINT chk_opening_balance CHECK (opening_balance >= 0)');
+        DB::statement('ALTER TABLE chart_of_accounts ADD CONSTRAINT chk_opening_balance CHECK (opening_balance >= 0)');
     }
 
     /**
@@ -46,6 +46,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('acct.chart_of_accounts');
+        Schema::dropIfExists('chart_of_accounts');
     }
 };

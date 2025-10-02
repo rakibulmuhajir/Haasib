@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         // Create exchange_rates table
-        Schema::create('public.exchange_rates', function (Blueprint $table) {
+        Schema::create('exchange_rates', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('base_currency_id');
             $table->uuid('target_currency_id');
@@ -27,13 +27,13 @@ return new class extends Migration
         });
 
         // Add foreign key constraints
-        Schema::table('public.exchange_rates', function (Blueprint $table) {
-            $table->foreign('base_currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
-            $table->foreign('target_currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
+        Schema::table('exchange_rates', function (Blueprint $table) {
+            $table->foreign('base_currency_id')->references('id')->on('currencies')->onDelete('restrict');
+            $table->foreign('target_currency_id')->references('id')->on('currencies')->onDelete('restrict');
         });
 
         // Add check constraint using raw SQL
-        DB::statement('ALTER TABLE public.exchange_rates ADD CONSTRAINT chk_diff_ccy CHECK (base_currency_id <> target_currency_id)');
+        DB::statement('ALTER TABLE exchange_rates ADD CONSTRAINT chk_diff_ccy CHECK (base_currency_id <> target_currency_id)');
     }
 
     /**
@@ -50,7 +50,7 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
             Schema::table('company_secondary_currencies', function (Blueprint $table) {
                 $table->dropForeign(['exchange_rate_id']);
@@ -58,10 +58,10 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         // Use try-catch for the table drop to handle any remaining issues
         try {
-            Schema::dropIfExists('public.exchange_rates');
+            Schema::dropIfExists('exchange_rates');
         } catch (\Throwable $e) {
             // Table might have already been dropped by our patch migration
         }

@@ -3,7 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -12,10 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create HRM schema if it doesn't exist
-        DB::statement('CREATE SCHEMA IF NOT EXISTS hrm');
-
-        Schema::create('hrm.customers', function (Blueprint $table) {
+        Schema::create('customers', function (Blueprint $table) {
             $table->uuid('customer_id')->primary();
             $table->uuid('company_id');
             $table->string('name', 255);
@@ -35,17 +31,16 @@ return new class extends Migration
             $table->uuid('updated_by')->nullable();
 
             $table->unique(['company_id', 'name']);
+        });
 
-            // Add foreign keys
+        Schema::table('customers', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('set null');
-            $table->foreign('created_by')->references('id')->on('auth.users')->onDelete('set null');
-            $table->foreign('updated_by')->references('id')->on('auth.users')->onDelete('set null');
+            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('set null');
         });
 
         // Idempotency unique scope within company
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS customers_idemp_unique ON hrm.customers (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS customers_idemp_unique ON customers (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
         } catch (\Throwable $e) { /* ignore */
         }
     }
@@ -55,6 +50,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hrm.customers');
+        Schema::dropIfExists('customers');
     }
 };

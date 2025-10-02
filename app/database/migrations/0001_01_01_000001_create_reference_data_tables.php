@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create languages table in public schema (general reference data)
-        Schema::create('public.languages', function (Blueprint $table) {
+        // Create languages table
+        Schema::create('languages', function (Blueprint $table) {
             $table->uuid('id')->primary();
             // ISO 639-1/2 codes (e.g., en, zh, etc.)
             $table->char('code', 10)->unique();
@@ -23,8 +23,8 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        // Create currencies table in public schema (general reference data)
-        Schema::create('public.currencies', function (Blueprint $table) {
+        // Create currencies table
+        Schema::create('currencies', function (Blueprint $table) {
             $table->uuid('id')->primary();
             // ISO 4217 alpha code (e.g., USD)
             $table->string('code', 3)->unique();
@@ -50,8 +50,8 @@ return new class extends Migration
             $table->index('is_active');
         });
 
-        // Create locales table in public schema (general reference data)
-        Schema::create('public.locales', function (Blueprint $table) {
+        // Create locales table
+        Schema::create('locales', function (Blueprint $table) {
             $table->uuid('id')->primary();
             // e.g., en_US, en_AE, etc.
             $table->string('code', 10)->unique();
@@ -64,7 +64,7 @@ return new class extends Migration
             $table->softDeletes();
 
             // Foreign key to languages
-            $table->foreign('language_code')->references('code')->on('public.languages')->onDelete('cascade');
+            $table->foreign('language_code')->references('code')->on('languages')->onDelete('cascade');
         });
     }
 
@@ -82,64 +82,64 @@ return new class extends Migration
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
-            Schema::table('auth.company_secondary_currencies', function (Blueprint $table) {
+            Schema::table('company_secondary_currencies', function (Blueprint $table) {
                 $table->dropForeign(['currency_id']);
             });
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
-            Schema::table('public.exchange_rates', function (Blueprint $table) {
+            Schema::table('exchange_rates', function (Blueprint $table) {
                 $table->dropForeign(['base_currency_id']);
                 $table->dropForeign(['target_currency_id']);
             });
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
-            Schema::table('public.locales', function (Blueprint $table) {
+            Schema::table('locales', function (Blueprint $table) {
                 $table->dropForeign(['language_code']);
             });
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
-            Schema::table('public.country_currency', function (Blueprint $table) {
+            Schema::table('country_currency', function (Blueprint $table) {
                 $table->dropForeign(['currency_code']);
             });
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         try {
-            Schema::table('public.country_language', function (Blueprint $table) {
+            Schema::table('country_language', function (Blueprint $table) {
                 $table->dropForeign(['language_code']);
             });
         } catch (\Throwable $e) {
             // Table or constraint might not exist
         }
-
+        
         // Drop tables in reverse order of creation
         // Use try-catch for each drop to handle cases where tables might already be dropped
         try {
-            Schema::dropIfExists('public.locales');
+            Schema::dropIfExists('locales');
         } catch (\Throwable $e) {
             // Table might have already been dropped
         }
-
+        
         try {
-            Schema::dropIfExists('public.currencies');
+            Schema::dropIfExists('currencies');
         } catch (\Throwable $e) {
             // Table might have already been dropped
         }
-
+        
         try {
-            Schema::dropIfExists('public.languages');
+            Schema::dropIfExists('languages');
         } catch (\Throwable $e) {
             // Table might have already been dropped
         }

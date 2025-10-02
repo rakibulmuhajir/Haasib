@@ -14,18 +14,13 @@ return new class extends Migration
         // Check if the table exists before trying to modify it
         if (Schema::hasTable('auth.companies')) {
             Schema::table('auth.companies', function (Blueprint $table) {
-                // Check if columns exist before adding
-                if (!Schema::hasColumn('auth.companies', 'country')) {
-                    $table->string('country', 2)->nullable()->after('name');
-                }
-                if (!Schema::hasColumn('auth.companies', 'country_id')) {
-                    $table->uuid('country_id')->nullable()->after('country');
+                $table->string('country', 2)->nullable()->after('name');
+                $table->uuid('country_id')->nullable()->after('country');
 
-                    // Add foreign key constraint for country_id
-                    $table->foreign('country_id')
-                        ->references()->on('public.countries')
-                        ->nullOnDelete();
-                }
+                // Add foreign key constraint for country_id
+                $table->foreign('country_id')
+                    ->references('id')->on('countries')
+                    ->nullOnDelete();
             });
         }
     }
@@ -43,7 +38,7 @@ return new class extends Migration
                 } catch (\Throwable $e) {
                     // Foreign key might not exist
                 }
-
+                
                 try {
                     $table->dropColumn(['country_id', 'country']);
                 } catch (\Throwable $e) {

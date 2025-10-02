@@ -11,13 +11,13 @@ it('returns standardized code for validation errors', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $currency = Currency::create([
+    $currency = Currency::firstOrCreate(['code' => 'EUR'], [
         'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        'name' => 'Euro', 'symbol' => '€', 'minor_unit' => 2,
     ]);
     $company = Company::create([
         'id' => (string) Str::uuid(),
-        'name' => 'Err Co', 'slug' => 'err-co', 'base_currency' => 'USD', 'currency_id' => $currency->id,
+        'name' => 'Err Co ' . Str::random(5), 'slug' => 'err-co-' . Str::random(5), 'base_currency' => 'EUR', 'currency_id' => $currency->id,
         'language' => 'en', 'locale' => 'en_US',
     ]);
     \DB::table('auth.company_user')->insert([

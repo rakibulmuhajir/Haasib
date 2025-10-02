@@ -20,6 +20,13 @@ class User extends Authenticatable
     protected $keyType = 'string';
 
     /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.users';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

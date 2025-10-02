@@ -13,7 +13,7 @@ class Currency extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'currencies';
+    protected $table = 'public.currencies';
 
     protected $keyType = 'string';
 

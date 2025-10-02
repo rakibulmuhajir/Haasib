@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             // Add unique index for idempotency_key and company_id
             $table->unique(['idempotency_key', 'company_id'], 'invoices_idempotency_key_company_unique');
         });
@@ -22,7 +22,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             $table->dropUnique('invoices_idempotency_key_company_unique');
         });
     }

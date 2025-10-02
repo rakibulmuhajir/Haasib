@@ -40,6 +40,7 @@ class RbacSeeder extends Seeder
             'companies.currencies.enable',
             'companies.currencies.disable',
             'companies.currencies.set-base',
+            'companies.currencies.manage',
             'companies.currencies.exchange-rates.view',
             'companies.currencies.exchange-rates.update',
 
@@ -252,7 +253,7 @@ class RbacSeeder extends Seeder
                     // Full company access
                     'companies.view', 'companies.update', 'companies.settings.view', 'companies.settings.update',
                     'companies.currencies.view', 'companies.currencies.enable', 'companies.currencies.disable',
-                    'companies.currencies.set-base', 'companies.currencies.exchange-rates.view', 'companies.currencies.exchange-rates.update',
+                    'companies.currencies.set-base', 'companies.currencies.manage', 'companies.currencies.exchange-rates.view', 'companies.currencies.exchange-rates.update',
 
                     // User management
                     'users.invite', 'users.view', 'users.update', 'users.deactivate', 'users.roles.assign', 'users.roles.revoke',

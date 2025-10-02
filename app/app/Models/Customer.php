@@ -14,7 +14,7 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'customers';
+    protected $table = 'hrm.customers';
 
     protected $primaryKey = 'customer_id';
 

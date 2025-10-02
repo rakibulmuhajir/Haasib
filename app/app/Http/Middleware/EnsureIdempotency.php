@@ -35,7 +35,7 @@ class EnsureIdempotency
             'input' => $request->except(['password', 'password_confirmation', 'current_password', 'token', '_token']),
         ]));
 
-        $existing = DB::table('idempotency_keys')
+        $existing = DB::table('public.idempotency_keys')
             ->where('user_id', $userId)
             ->where('company_id', $companyId)
             ->where('action', $action)
@@ -77,7 +77,7 @@ class EnsureIdempotency
 
         // Create a record (upsert to avoid races)
         try {
-            DB::table('idempotency_keys')->updateOrInsert(
+            DB::table('public.idempotency_keys')->updateOrInsert(
                 [
                     'user_id' => $userId,
                     'company_id' => $companyId,
@@ -121,7 +121,7 @@ class EnsureIdempotency
                 }
             }
 
-            DB::table('idempotency_keys')->where([
+            DB::table('public.idempotency_keys')->where([
                 'user_id' => $userId,
                 'company_id' => $companyId,
                 'action' => $action,

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_currency_exchange_rates', function (Blueprint $table) {
+        Schema::create('public.user_currency_exchange_rates', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('user_id');
             $table->uuid('from_currency_id');
@@ -24,9 +24,9 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('from_currency_id')->references('id')->on('currencies')->onDelete('cascade');
-            $table->foreign('to_currency_id')->references('id')->on('currencies')->onDelete('cascade');
+            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
+            $table->foreign('from_currency_id')->references()->on('public.currencies')->onDelete('cascade');
+            $table->foreign('to_currency_id')->references()->on('public.currencies')->onDelete('cascade');
 
             // Unique constraint - user can only have one active rate between two currencies at a time
             $table->unique(['user_id', 'from_currency_id', 'to_currency_id'], 'unique_active_exchange_rate');
@@ -44,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_currency_exchange_rates');
+        Schema::dropIfExists('public.user_currency_exchange_rates');
     }
 };

@@ -13,7 +13,7 @@ class LedgerAccount extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'ledger_accounts';
+    protected $table = 'acct.ledger_accounts';
 
     protected $keyType = 'string';
 

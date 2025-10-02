@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_currency_preferences', function (Blueprint $table) {
+        Schema::create('auth.user_currency_preferences', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('user_id');
             $table->uuid('currency_id');
@@ -20,8 +20,8 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('cascade');
+            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
+            $table->foreign('currency_id')->references()->on('public.currencies')->onDelete('cascade');
 
             // Unique constraint - user can only have a currency once
             $table->unique(['user_id', 'currency_id']);
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_currency_preferences');
+        Schema::dropIfExists('auth.user_currency_preferences');
     }
 };

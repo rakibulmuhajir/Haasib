@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('hrm.customers', function (Blueprint $table) {
             $table->string('customer_number')->nullable()->after('name');
             $table->string('customer_type')->default('individual')->after('customer_number');
             $table->string('status')->default('active')->after('customer_type');
@@ -32,7 +32,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('hrm.customers', function (Blueprint $table) {
             $table->dropColumn([
                 'customer_number',
                 'customer_type',

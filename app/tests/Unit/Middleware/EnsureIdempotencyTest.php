@@ -21,7 +21,7 @@ test('idempotency middleware stores payload hash instead of full payload', funct
 
     $response = $middleware->handle($request, fn () => response()->json(['id' => 'inv-123']));
 
-    $record = DB::table('idempotency_keys')->first();
+    $record = DB::table('public.idempotency_keys')->first();
     expect($record)->not->toBeNull();
     expect($record->payload_hash)->not->toBeNull();
     expect($record->payload_hash)->not->toContain('secret'); // Hash shouldn't contain plaintext
@@ -68,7 +68,7 @@ test('idempotency middleware stores minimal response data', function () {
 
     $middleware->handle($request, fn () => $fullResponse);
 
-    $record = DB::table('idempotency_keys')->first();
+    $record = DB::table('public.idempotency_keys')->first();
     $storedResponse = json_decode($record->response, true);
 
     expect($storedResponse)->toEqual([
@@ -95,7 +95,7 @@ test('idempotency middleware filters sensitive fields from hash', function () {
 
     $middleware->handle($request1, fn () => response()->json(['success' => true]));
 
-    $record1 = DB::table('idempotency_keys')->first();
+    $record1 = DB::table('public.idempotency_keys')->first();
     $hash1 = $record1->payload_hash;
 
     // Request without sensitive fields should have different hash
@@ -107,7 +107,7 @@ test('idempotency middleware filters sensitive fields from hash', function () {
 
     $middleware->handle($request2, fn () => response()->json(['success' => true]));
 
-    $record2 = DB::table('idempotency_keys')->where('key', 'login-key-2')->first();
+    $record2 = DB::table('public.idempotency_keys')->where('key', 'login-key-2')->first();
     $hash2 = $record2->payload_hash;
 
     expect($hash1)->not->toBe($hash2);

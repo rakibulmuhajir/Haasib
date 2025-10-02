@@ -42,7 +42,7 @@ it('auto-posts a journal entry when a payment completes', function () {
     $receivableId = (string) Str::uuid();
     $cashId = (string) Str::uuid();
 
-    DB::table('ledger_accounts')->insert([
+    DB::table('acct.ledger_accounts')->insert([
         ['id' => $receivableId, 'company_id' => $company->id, 'code' => '1200', 'name' => 'Accounts Receivable', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $cashId, 'company_id' => $company->id, 'code' => '1010', 'name' => 'Cash', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
     ]);
@@ -85,7 +85,7 @@ it('auto-posts a journal entry when a payment completes', function () {
     }
 
     // Assert a journal entry was created and posted for this payment
-    $count = DB::table('journal_entries')
+    $count = DB::table('acct.journal_entries')
         ->where('company_id', $company->id)
         ->where('source_type', 'payment')
         ->where('status', 'posted')

@@ -12,7 +12,7 @@ class Interaction extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'interactions';
+    protected $table = 'hrm.interactions';
 
     protected $keyType = 'string';
 

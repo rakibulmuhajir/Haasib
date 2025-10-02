@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('accounts_receivable', function (Blueprint $table) {
+        Schema::table('acct.accounts_receivable', function (Blueprint $table) {
             $table->softDeletes();
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('accounts_receivable', function (Blueprint $table) {
+        Schema::table('acct.accounts_receivable', function (Blueprint $table) {
             $table->dropSoftDeletes();
         });
     }

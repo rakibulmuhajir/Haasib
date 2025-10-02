@@ -14,7 +14,7 @@ class JournalEntry extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'journal_entries';
+    protected $table = 'acct.journal_entries';
 
     protected $keyType = 'string';
 

@@ -12,7 +12,7 @@ class StockMovement extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'stock_movements';
+    protected $table = 'acct.stock_movements';
 
     protected $keyType = 'string';
 

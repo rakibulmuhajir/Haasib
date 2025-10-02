@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('fiscal_years', function (Blueprint $table) {
+        Schema::create('acct.fiscal_years', function (Blueprint $table) {
             $table->id('fiscal_year_id');
             $table->uuid('company_id');
             $table->string('name', 100);
@@ -23,18 +23,18 @@ return new class extends Migration
             $table->string('status', 50)->default('open');
             $table->timestamps();
 
-            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('acct.user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('acct.user_accounts', 'user_id');
 
             $table->unique(['company_id', 'name']);
         });
 
-        Schema::table('fiscal_years', function (Blueprint $table) {
+        Schema::table('acct.fiscal_years', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
         });
 
         // Add check constraint for end_date > start_date
-        DB::statement('ALTER TABLE fiscal_years ADD CONSTRAINT chk_fiscal_year_dates CHECK (end_date > start_date)');
+        DB::statement('ALTER TABLE acct.fiscal_years ADD CONSTRAINT chk_fiscal_year_dates CHECK (end_date > start_date)');
     }
 
     /**
@@ -42,6 +42,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('fiscal_years');
+        Schema::dropIfExists('acct.fiscal_years');
     }
 };

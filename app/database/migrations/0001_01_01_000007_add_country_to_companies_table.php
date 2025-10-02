@@ -23,7 +23,7 @@ return new class extends Migration
 
                     // Add foreign key constraint for country_id
                     $table->foreign('country_id')
-                        ->references('id')->on('countries')
+                        ->references()->on('public.countries')
                         ->nullOnDelete();
                 }
             });

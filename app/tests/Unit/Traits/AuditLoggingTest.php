@@ -25,14 +25,14 @@ test('audit logging trait logs with service context', function () {
 
     $tester->testLog('test.action', ['foo' => 'bar'], $context);
 
-    $this->assertDatabaseHas('audit_logs', [
+    $this->assertDatabaseHas('acct.audit_logs', [
         'user_id' => $user->id,
         'company_id' => 'company-123',
         'action' => 'test.action',
         'idempotency_key' => 'key-456',
     ]);
 
-    $log = DB::table('audit_logs')->where('action', 'test.action')->first();
+    $log = DB::table('acct.audit_logs')->where('action', 'test.action')->first();
     expect(json_decode($log->params))->toEqual(['foo' => 'bar']);
 });
 
@@ -42,7 +42,7 @@ test('audit logging trait works with legacy parameters', function () {
 
     $tester->testLog('legacy.action', ['old' => 'way']);
 
-    $this->assertDatabaseHas('audit_logs', [
+    $this->assertDatabaseHas('acct.audit_logs', [
         'action' => 'legacy.action',
         'user_id' => null,
         'company_id' => null,
@@ -58,7 +58,7 @@ test('audit logging trait prioritizes context over legacy parameters', function 
     // Pass both context and legacy parameters - context should win
     $tester->testLog('mixed.action', ['test' => 'data'], $context);
 
-    $this->assertDatabaseHas('audit_logs', [
+    $this->assertDatabaseHas('acct.audit_logs', [
         'user_id' => $user->id,
         'company_id' => 'from-context',
         'idempotency_key' => 'from-context-key',
@@ -70,7 +70,7 @@ test('audit logging trait includes result data when provided', function () {
 
     $tester->testLog('with.result', ['input' => 'value'], result: ['id' => '123']);
 
-    $log = DB::table('audit_logs')->where('action', 'with.result')->first();
+    $log = DB::table('acct.audit_logs')->where('action', 'with.result')->first();
     expect(json_decode($log->result))->toEqual(['id' => '123']);
 });
 

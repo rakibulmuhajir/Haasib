@@ -9,11 +9,11 @@ use Illuminate\Support\Str;
 
 it('syncs ECB rates and persists USD/EUR pair', function () {
     // Arrange: ensure USD and EUR exist and active
-    $usd = Currency::updateOrCreate(['code' => 'USD'], [
+    $usd = Currency::firstOrCreate(['code' => 'USD'], [
         'id' => (string) Str::uuid(),
         'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2, 'is_active' => true,
     ]);
-    $eur = Currency::updateOrCreate(['code' => 'EUR'], [
+    $eur = Currency::firstOrCreate(['code' => 'EUR'], [
         'id' => (string) Str::uuid(),
         'name' => 'Euro', 'symbol' => '€', 'minor_unit' => 2, 'is_active' => true,
     ]);
@@ -22,11 +22,10 @@ it('syncs ECB rates and persists USD/EUR pair', function () {
     $svc = app(CurrencyService::class);
     $result = $svc->syncExchangeRatesFromAPI('ecb');
 
-    // Assert: an exchange rate exists for USD->EUR as of today
-    $today = now()->toDateString();
+    // Assert: an exchange rate exists for USD->EUR
     $rate = ExchangeRate::where('base_currency_id', $usd->id)
         ->where('target_currency_id', $eur->id)
-        ->where('effective_date', $today)
+        ->orderBy('effective_date', 'desc')
         ->first();
 
     expect($result)->toBeArray();
@@ -38,19 +37,19 @@ it('returns exchange rate via API after upsert', function () {
     // Arrange: user + company + currencies
     $user = User::factory()->create();
 
-    $usd = Currency::updateOrCreate(['code' => 'USD'], [
+    $usd = Currency::firstOrCreate(['code' => 'USD'], [
         'id' => (string) Str::uuid(),
         'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2, 'is_active' => true,
     ]);
-    $eur = Currency::updateOrCreate(['code' => 'EUR'], [
+    $eur = Currency::firstOrCreate(['code' => 'EUR'], [
         'id' => (string) Str::uuid(),
         'name' => 'Euro', 'symbol' => '€', 'minor_unit' => 2, 'is_active' => true,
     ]);
 
     $company = Company::create([
         'id' => (string) Str::uuid(),
-        'name' => 'FX Test Co',
-        'slug' => 'fx-test-co',
+        'name' => 'FX Test Co ' . Str::random(5),
+        'slug' => 'fx-test-co-' . Str::random(5),
         'base_currency' => 'USD',
         'currency_id' => $usd->id,
         'language' => 'en',

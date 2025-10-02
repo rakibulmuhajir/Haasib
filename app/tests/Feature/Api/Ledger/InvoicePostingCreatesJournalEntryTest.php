@@ -42,7 +42,7 @@ it('creates a journal entry when posting an invoice (via API)', function () {
     $salesId = (string) Str::uuid();
     $taxId = (string) Str::uuid();
 
-    DB::table('ledger_accounts')->insert([
+    DB::table('acct.ledger_accounts')->insert([
         ['id' => $receivableId, 'company_id' => $company->id, 'code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $salesId, 'company_id' => $company->id, 'code' => '4000', 'name' => 'Sales Revenue', 'type' => 'revenue', 'normal_balance' => 'credit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $taxId, 'company_id' => $company->id, 'code' => '2100', 'name' => 'Sales Tax Payable', 'type' => 'liability', 'normal_balance' => 'credit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
@@ -95,7 +95,7 @@ it('creates a journal entry when posting an invoice (via API)', function () {
         ->assertStatus(200);
 
     // Assert a journal entry was created and posted
-    $entry = DB::table('journal_entries')
+    $entry = DB::table('acct.journal_entries')
         ->where('company_id', $company->id)
         ->where('source_type', 'invoice')
         ->where('source_id', $invoiceId)

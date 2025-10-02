@@ -62,7 +62,7 @@ it('invoice update and delete are idempotent', function () {
     $headers = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $key];
     $this->withHeaders($headers)->putJson("/api/invoices/{$id}", $updatePayload)->assertStatus(200);
     $this->withHeaders($headers)->putJson("/api/invoices/{$id}", $updatePayload)->assertStatus(200);
-    $notes = DB::table('invoices')->where('invoice_id', $id)->value('notes');
+    $notes = DB::table('acct.invoices')->where('invoice_id', $id)->value('notes');
     expect($notes)->toBe('Updated once');
 
     // Delete idempotency
@@ -70,6 +70,6 @@ it('invoice update and delete are idempotent', function () {
     $delHeaders = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $delKey];
     $this->withHeaders($delHeaders)->deleteJson("/api/invoices/{$id}")->assertStatus(200);
     $this->withHeaders($delHeaders)->deleteJson("/api/invoices/{$id}")->assertStatus(200);
-    $exists = DB::table('invoices')->where('invoice_id', $id)->whereNull('deleted_at')->exists();
+    $exists = DB::table('acct.invoices')->where('invoice_id', $id)->whereNull('deleted_at')->exists();
     expect($exists)->toBeFalse();
 });

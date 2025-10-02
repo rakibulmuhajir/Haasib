@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('hrm.customers', function (Blueprint $table) {
             $table->string('website')->nullable()->after('phone');
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('hrm.customers', function (Blueprint $table) {
             $table->dropColumn('website');
         });
     }

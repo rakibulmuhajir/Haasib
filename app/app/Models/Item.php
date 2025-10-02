@@ -13,7 +13,7 @@ class Item extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'items';
+    protected $table = 'acct.items';
 
     protected $keyType = 'string';
 

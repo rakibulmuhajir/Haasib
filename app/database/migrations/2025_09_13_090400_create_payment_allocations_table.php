@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_allocations', function (Blueprint $table) {
+        Schema::create('acct.payment_allocations', function (Blueprint $table) {
             $table->uuid('allocation_id')->primary();
             $table->uuid('payment_id');
             $table->uuid('invoice_id');
@@ -27,34 +27,34 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        Schema::table('payment_allocations', function (Blueprint $table) {
-            $table->foreign('payment_id')->references('payment_id')->on('payments')->onDelete('cascade');
-            $table->foreign('invoice_id')->references('invoice_id')->on('invoices')->onDelete('cascade');
+        Schema::table('acct.payment_allocations', function (Blueprint $table) {
+            $table->foreign('payment_id')->references('payment_id')->on('acct.payments')->onDelete('cascade');
+            $table->foreign('invoice_id')->references('invoice_id')->on('acct.invoices')->onDelete('cascade');
             $table->index('payment_id', 'idx_alloc_payment');
             $table->index('invoice_id', 'idx_alloc_invoice');
         });
 
         // Add check constraint
-        DB::statement('ALTER TABLE payment_allocations ADD CONSTRAINT chk_allocated_positive CHECK (allocated_amount > 0)');
-        DB::statement("ALTER TABLE payment_allocations ADD CONSTRAINT chk_alloc_status_valid CHECK (status IN ('active','void','refunded'))");
+        DB::statement('ALTER TABLE acct.payment_allocations ADD CONSTRAINT chk_allocated_positive CHECK (allocated_amount > 0)');
+        DB::statement("ALTER TABLE acct.payment_allocations ADD CONSTRAINT chk_alloc_status_valid CHECK (status IN ('active','void','refunded'))");
 
         // Idempotency unique scope within payment
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payment_allocations_idemp_unique ON payment_allocations (payment_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS payment_allocations_idemp_unique ON acct.payment_allocations (payment_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
         } catch (Throwable $e) { /* ignore */
         }
 
         // Enable RLS and tenant policy (via parent payment)
-        DB::statement('ALTER TABLE payment_allocations ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.payment_allocations ENABLE ROW LEVEL SECURITY');
         DB::statement(<<<'SQL'
-            CREATE POLICY payment_allocations_tenant_isolation ON payment_allocations
+            CREATE POLICY payment_allocations_tenant_isolation ON acct.payment_allocations
             USING (EXISTS (
-                SELECT 1 FROM payments p
+                SELECT 1 FROM acct.payments p
                 WHERE p.payment_id = payment_allocations.payment_id
                   AND p.company_id = current_setting('app.current_company', true)::uuid
             ))
             WITH CHECK (EXISTS (
-                SELECT 1 FROM payments p
+                SELECT 1 FROM acct.payments p
                 WHERE p.payment_id = payment_allocations.payment_id
                   AND p.company_id = current_setting('app.current_company', true)::uuid
             ));
@@ -66,6 +66,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payment_allocations');
+        Schema::dropIfExists('acct.payment_allocations');
     }
 };

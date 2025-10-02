@@ -15,11 +15,15 @@ beforeEach(function () {
     
     $this->owner = User::factory()->create();
     $this->owner->companies()->attach($this->company->id, ['role' => 'owner']);
-    $this->owner->assignRole('owner', $this->company);
-    
+    setPermissionsTeamId($this->company->id);
+    $this->owner->assignRole('owner');
+    setPermissionsTeamId(null);
+
     $this->viewer = User::factory()->create();
     $this->viewer->companies()->attach($this->company->id, ['role' => 'viewer']);
-    $this->viewer->assignRole('viewer', $this->company);
+    setPermissionsTeamId($this->company->id);
+    $this->viewer->assignRole('viewer');
+    setPermissionsTeamId(null);
 });
 
 // Test Permission Composable Logic

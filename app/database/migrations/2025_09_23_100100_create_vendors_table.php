@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('vendors', function (Blueprint $table) {
+        Schema::create('hrm.vendors', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
 
@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('tax_number')->nullable();
 
             $table->string('currency_code', 3)->nullable();
-            $table->foreign('currency_code')->references('code')->on('currencies')->nullOnDelete();
+            $table->foreign('currency_code')->references('code')->on('public.currencies')->nullOnDelete();
 
             // For tracking credit notes and balances
             $table->decimal('credit_balance', 15, 4)->default(0);
@@ -34,11 +34,11 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        DB::statement('ALTER TABLE vendors ADD CONSTRAINT vendors_credit_balance_check CHECK (credit_balance >= 0)');
+        DB::statement('ALTER TABLE hrm.vendors ADD CONSTRAINT vendors_credit_balance_check CHECK (credit_balance >= 0)');
 
         // Add indexes for better query performance
-        DB::statement('CREATE INDEX idx_vendors_company_active ON vendors(company_id, is_active) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_vendors_company_currency ON vendors(company_id, currency_code) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX idx_vendors_company_active ON hrm.vendors(company_id, is_active) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX idx_vendors_company_currency ON hrm.vendors(company_id, currency_code) WHERE deleted_at IS NULL');
     }
 
     /**
@@ -46,6 +46,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('vendors');
+        Schema::dropIfExists('hrm.vendors');
     }
 };

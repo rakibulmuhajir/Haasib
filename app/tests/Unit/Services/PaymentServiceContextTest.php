@@ -73,14 +73,14 @@ describe('PaymentService ServiceContext Integration', function () {
             context: $context
         );
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.create',
             'idempotency_key' => 'audit-test-key',
         ]);
 
-        $auditLog = DB::table('audit_logs')
+        $auditLog = DB::table('acct.audit_logs')
             ->where('action', 'payment.create')
             ->first();
 
@@ -141,7 +141,7 @@ describe('PaymentService ServiceContext Integration', function () {
             context: $context
         );
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.update',
@@ -179,14 +179,14 @@ describe('PaymentService ServiceContext Integration', function () {
 
         $this->paymentService->deletePayment($payment, $context);
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.delete',
             'idempotency_key' => 'delete-audit-key',
         ]);
 
-        $auditLog = DB::table('audit_logs')
+        $auditLog = DB::table('acct.audit_logs')
             ->where('action', 'payment.delete')
             ->first();
 
@@ -252,14 +252,14 @@ describe('PaymentService ServiceContext Integration', function () {
 
         $this->paymentService->allocatePayment($payment, $allocations, 'Test allocation', $context);
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.allocate',
             'idempotency_key' => 'allocate-audit-key',
         ]);
 
-        $auditLog = DB::table('audit_logs')
+        $auditLog = DB::table('acct.audit_logs')
             ->where('action', 'payment.allocate')
             ->first();
 
@@ -299,14 +299,14 @@ describe('PaymentService ServiceContext Integration', function () {
 
         $this->paymentService->voidPayment($payment, 'Test void reason', $context);
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.void',
             'idempotency_key' => 'void-audit-key',
         ]);
 
-        $auditLog = DB::table('audit_logs')
+        $auditLog = DB::table('acct.audit_logs')
             ->where('action', 'payment.void')
             ->first();
 
@@ -348,14 +348,14 @@ describe('PaymentService ServiceContext Integration', function () {
         $refundAmount = Money::of(25, $this->currency->code);
         $this->paymentService->refundPayment($payment, $refundAmount, 'Test refund reason', $context);
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => $this->user->id,
             'company_id' => $this->company->id,
             'action' => 'payment.refund',
             'idempotency_key' => 'refund-audit-key',
         ]);
 
-        $auditLog = DB::table('audit_logs')
+        $auditLog = DB::table('acct.audit_logs')
             ->where('action', 'payment.refund')
             ->first();
 
@@ -385,7 +385,7 @@ describe('PaymentService ServiceContext Integration', function () {
         $this->paymentService->voidPayment($payment, 'Test void', $context);
 
         // Check that all audit logs have the same idempotency key
-        $auditLogs = DB::table('audit_logs')
+        $auditLogs = DB::table('acct.audit_logs')
             ->where('idempotency_key', 'idempotency-test-key')
             ->get();
 
@@ -413,7 +413,7 @@ describe('PaymentService ServiceContext Integration', function () {
             ->and($payment->amount)->toBe('200.00');
 
         // Check audit log has null user_id but proper company_id
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('acct.audit_logs', [
             'user_id' => null,
             'company_id' => $this->company->id,
             'action' => 'payment.create',
@@ -540,7 +540,7 @@ describe('PaymentService ServiceContext Integration', function () {
         expect($refundResult)->toHaveCount(1);
 
         // Verify all operations were logged with the same idempotency key
-        $auditLogs = DB::table('audit_logs')
+        $auditLogs = DB::table('acct.audit_logs')
             ->where('idempotency_key', 'comprehensive-test-key')
             ->get();
 

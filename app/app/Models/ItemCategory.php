@@ -12,7 +12,7 @@ class ItemCategory extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'item_categories';
+    protected $table = 'acct.item_categories';
 
     protected $keyType = 'string';
 

@@ -18,7 +18,7 @@ class CurrencyService
     {
         try {
             DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit_logs')->insert([
+                DB::table('acct.audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user?->id,
                     'company_id' => $companyId,
@@ -469,14 +469,24 @@ class CurrencyService
         $currencies = Currency::where('is_active', true)->pluck('code');
         $baseCurrency = 'USD';
         $results = [];
+        $rateDate = null;
 
         try {
             foreach ($currencies as $currency) {
                 if ($currency !== $baseCurrency) {
-                    $rate = $this->fetchExchangeRateFromAPI($baseCurrency, $currency, $provider);
+                    $rateData = $this->fetchExchangeRateFromAPI($baseCurrency, $currency, $provider);
 
-                    if ($rate) {
-                        $this->updateExchangeRate($baseCurrency, $currency, $rate, now()->toDateString(), $provider);
+                    if ($rateData !== null) {
+                        // If rateData is an array, it contains rate and date
+                        if (is_array($rateData)) {
+                            $rate = $rateData['rate'];
+                            $rateDate = $rateData['date'];
+                        } else {
+                            $rate = $rateData;
+                            $rateDate = $rateDate ?? now()->toDateString();
+                        }
+
+                        $this->updateExchangeRate($baseCurrency, $currency, $rate, $rateDate, $provider);
                         $results[$currency] = ['success' => true, 'rate' => $rate];
                     } else {
                         $results[$currency] = ['success' => false, 'error' => 'Failed to fetch rate'];
@@ -499,13 +509,13 @@ class CurrencyService
         ];
     }
 
-    private function fetchExchangeRateFromAPI(string $fromCurrency, string $toCurrency, string $provider): ?float
+    private function fetchExchangeRateFromAPI(string $fromCurrency, string $toCurrency, string $provider)
     {
         $from = strtoupper($fromCurrency);
         $to = strtoupper($toCurrency);
 
         if ($from === $to) {
-            return 1.0;
+            return ['rate' => 1.0, 'date' => now()->toDateString()];
         }
 
         if ($provider !== 'ecb') {
@@ -518,6 +528,12 @@ class CurrencyService
                 return null;
             }
             $doc = new \SimpleXMLElement($xml);
+
+            // Extract the date from the Cube element
+            $date = (string) $doc->Cube->Cube['time'];
+            if (!$date) {
+                $date = now()->toDateString();
+            }
 
             $rates = ['EUR' => 1.0];
             foreach ($doc->Cube->Cube->Cube as $cube) {
@@ -536,15 +552,18 @@ class CurrencyService
             }
 
             if ($from === 'EUR') {
-                return $rates[$to] ?? null;
+                return ['rate' => $rates[$to] ?? null, 'date' => $date];
             }
             if ($to === 'EUR') {
-                return isset($rates[$from]) ? 1.0 / $rates[$from] : null;
+                $rate = isset($rates[$from]) ? 1.0 / $rates[$from] : null;
+                return ['rate' => $rate, 'date' => $date];
             }
 
-            return ($rates[$to] ?? null) && ($rates[$from] ?? null)
+            $rate = ($rates[$to] ?? null) && ($rates[$from] ?? null)
                 ? $rates[$to] / $rates[$from]
                 : null;
+
+            return ['rate' => $rate, 'date' => $date];
         } catch (\Throwable $e) {
             Log::warning('ECB fetch failed', ['error' => $e->getMessage()]);
 

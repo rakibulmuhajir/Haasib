@@ -11,7 +11,7 @@ class Contact extends Model
 {
     use HasFactory;
 
-    protected $table = 'contacts';
+    protected $table = 'hrm.contacts';
 
     protected $primaryKey = 'contact_id';
 

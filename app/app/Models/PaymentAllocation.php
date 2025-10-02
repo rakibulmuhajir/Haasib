@@ -12,7 +12,7 @@ class PaymentAllocation extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'payment_allocations';
+    protected $table = 'acct.payment_allocations';
 
     protected $primaryKey = 'allocation_id';
 

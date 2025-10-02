@@ -11,7 +11,7 @@ class CompanySecondaryCurrency extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'company_secondary_currencies';
+    protected $table = 'auth.company_secondary_currencies';
 
     protected $fillable = [
         'company_id',

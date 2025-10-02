@@ -10,7 +10,7 @@ class UserSetting extends Model
 {
     use HasFactory;
 
-    protected $table = 'user_settings';
+    protected $table = 'auth.user_settings';
 
     protected $primaryKey = 'id';
 

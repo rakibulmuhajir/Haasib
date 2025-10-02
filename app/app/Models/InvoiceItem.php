@@ -15,7 +15,7 @@ class InvoiceItem extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'invoice_items';
+    protected $table = 'acct.invoice_items';
 
     protected $primaryKey = 'invoice_item_id';
 

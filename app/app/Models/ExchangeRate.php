@@ -5,16 +5,22 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class ExchangeRate extends Model
 {
     use HasFactory;
 
-    protected $table = 'exchange_rates';
+    protected $table = 'public.exchange_rates';
 
-    protected $primaryKey = 'exchange_rate_id';
+    protected $primaryKey = 'id';
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'base_currency_id',
         'target_currency_id',
         'rate',
@@ -22,6 +28,17 @@ class ExchangeRate extends Model
         'source',
         'is_active',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->{$model->getKeyName()})) {
+                $model->{$model->getKeyName()} = (string) Str::uuid();
+            }
+        });
+    }
 
     protected $casts = [
         'rate' => 'decimal:10',

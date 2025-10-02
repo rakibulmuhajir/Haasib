@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('bill_payments', function (Blueprint $table) {
+        Schema::create('acct.bill_payments', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
 
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        DB::statement('ALTER TABLE bill_payments ADD CONSTRAINT bill_payments_amounts_check CHECK (amount >= 0 AND unallocated_amount >= 0)');
+        DB::statement('ALTER TABLE acct.bill_payments ADD CONSTRAINT bill_payments_amounts_check CHECK (amount >= 0 AND unallocated_amount >= 0)');
 
         // Add indexes for better query performance
         DB::statement('CREATE INDEX idx_bill_payments_company_date ON bill_payments(company_id, payment_date) WHERE deleted_at IS NULL');
@@ -42,6 +42,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('bill_payments');
+        Schema::dropIfExists('acct.bill_payments');
     }
 };

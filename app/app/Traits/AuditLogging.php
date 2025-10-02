@@ -27,7 +27,7 @@ trait AuditLogging
 
         try {
             DB::transaction(function () use ($action, $params, $user, $companyId, $idempotencyKey, $result) {
-                DB::table('audit_logs')->insert([
+                DB::table('acct.audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user?->id,
                     'company_id' => $companyId,

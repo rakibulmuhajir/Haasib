@@ -37,7 +37,7 @@ function seedCompanyWithARAndCash(): array
 
     $receivableId = (string) Str::uuid();
     $cashId = (string) Str::uuid();
-    DB::table('ledger_accounts')->insert([
+    DB::table('acct.ledger_accounts')->insert([
         ['id' => $receivableId, 'company_id' => $company->id, 'code' => '1200', 'name' => 'Accounts Receivable', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $cashId, 'company_id' => $company->id, 'code' => '1010', 'name' => 'Cash', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
     ]);
@@ -96,7 +96,7 @@ it('partial allocation updates invoice status to partial and can be posted to le
     $allocation = $payment->allocations()->first();
     app(LedgerIntegrationService::class)->postPaymentAllocationToLedger($allocation, ServiceContext::forUser($user, $company->id));
 
-    $posted = DB::table('journal_entries')
+    $posted = DB::table('acct.journal_entries')
         ->where('company_id', $company->id)
         ->where('source_type', 'payment_allocation')
         ->where('source_id', $allocation->allocation_id)

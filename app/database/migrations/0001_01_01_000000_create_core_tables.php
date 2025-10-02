@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create users table
-        Schema::create('users', function (Blueprint $table) {
+        // Create auth tables
+        Schema::create('auth.users', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('name');
             $table->string('email')->unique();
@@ -24,22 +24,41 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Create cache table
-        Schema::create('cache', function (Blueprint $table) {
+        // Create password reset tokens table in auth schema
+        Schema::create('auth.password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        // Create sessions table in auth schema
+        Schema::create('auth.sessions', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->foreignUuid('user_id')->nullable()->index();
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->longText('payload');
+            $table->integer('last_activity')->index();
+
+            $table->foreign('user_id')->references('id')->on('auth.users')->onDelete('cascade');
+        });
+
+        // Create public infrastructure tables
+        Schema::create('public.cache', function (Blueprint $table) {
             $table->string('key')->primary();
             $table->mediumText('value');
             $table->integer('expiration');
             $table->timestamps();
         });
 
-        Schema::create('cache_locks', function (Blueprint $table) {
+        Schema::create('public.cache_locks', function (Blueprint $table) {
             $table->string('key')->primary();
             $table->string('owner');
             $table->integer('expiration');
         });
 
-        // Create jobs table
-        Schema::create('jobs', function (Blueprint $table) {
+        // Create jobs tables in public schema
+        Schema::create('public.jobs', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->string('queue')->index();
             $table->longText('payload');
@@ -49,7 +68,7 @@ return new class extends Migration
             $table->unsignedInteger('created_at');
         });
 
-        Schema::create('job_batches', function (Blueprint $table) {
+        Schema::create('public.job_batches', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('name');
             $table->integer('total_jobs');
@@ -62,7 +81,7 @@ return new class extends Migration
             $table->integer('finished_at')->nullable();
         });
 
-        Schema::create('failed_jobs', function (Blueprint $table) {
+        Schema::create('public.failed_jobs', function (Blueprint $table) {
             $table->id();
             $table->string('uuid')->unique();
             $table->text('connection');
@@ -71,23 +90,6 @@ return new class extends Migration
             $table->longText('exception');
             $table->timestamp('failed_at')->useCurrent();
         });
-
-        // Create password reset tokens table
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
-        });
-
-        // Create sessions table
-        Schema::create('sessions', function (Blueprint $table) {
-            $table->string('id')->primary();
-            $table->foreignUuid('user_id')->nullable()->index();
-            $table->string('ip_address', 45)->nullable();
-            $table->text('user_agent')->nullable();
-            $table->longText('payload');
-            $table->integer('last_activity')->index();
-        });
     }
 
     /**
@@ -95,13 +97,14 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('sessions');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('failed_jobs');
-        Schema::dropIfExists('job_batches');
-        Schema::dropIfExists('jobs');
-        Schema::dropIfExists('cache_locks');
-        Schema::dropIfExists('cache');
-        Schema::dropIfExists('users');
+        // Drop in reverse order of creation
+        Schema::dropIfExists('public.failed_jobs');
+        Schema::dropIfExists('public.job_batches');
+        Schema::dropIfExists('public.jobs');
+        Schema::dropIfExists('public.cache_locks');
+        Schema::dropIfExists('public.cache');
+        Schema::dropIfExists('auth.sessions');
+        Schema::dropIfExists('auth.password_reset_tokens');
+        Schema::dropIfExists('auth.users');
     }
 };

@@ -13,7 +13,7 @@ class Payment extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'payments';
+    protected $table = 'acct.payments';
 
     protected $primaryKey = 'payment_id';
 

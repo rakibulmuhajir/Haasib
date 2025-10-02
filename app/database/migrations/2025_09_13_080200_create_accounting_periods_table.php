@@ -12,10 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('accounting_periods', function (Blueprint $table) {
+        Schema::create('acct.accounting_periods', function (Blueprint $table) {
             $table->id('period_id');
             $table->uuid('company_id');
-            $table->foreignId('fiscal_year_id')->constrained('fiscal_years', 'fiscal_year_id');
+            $table->foreignId('fiscal_year_id')->constrained('acct.fiscal_years', 'fiscal_year_id');
             $table->string('name', 100);
             $table->date('start_date');
             $table->date('end_date');
@@ -24,19 +24,19 @@ return new class extends Migration
             $table->timestamp('closed_at')->nullable();
             $table->timestamps();
 
-            $table->foreignId('closed_by')->nullable()->constrained('user_accounts', 'user_id');
-            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('closed_by')->nullable()->constrained('acct.user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('acct.user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('acct.user_accounts', 'user_id');
 
             $table->unique(['company_id', 'fiscal_year_id', 'name']);
         });
 
-        Schema::table('accounting_periods', function (Blueprint $table) {
+        Schema::table('acct.accounting_periods', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
         });
 
         // Add check constraint for end_date > start_date
-        DB::statement('ALTER TABLE accounting_periods ADD CONSTRAINT chk_period_dates CHECK (end_date > start_date)');
+        DB::statement('ALTER TABLE acct.accounting_periods ADD CONSTRAINT chk_period_dates CHECK (end_date > start_date)');
     }
 
     /**
@@ -44,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('accounting_periods');
+        Schema::dropIfExists('acct.accounting_periods');
     }
 };

@@ -12,9 +12,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('bill_items', function (Blueprint $table) {
+        Schema::create('acct.bill_items', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('bill_id')->constrained('bills')->cascadeOnDelete();
+            $table->foreignUuid('bill_id')->constrained('acct.bills')->cascadeOnDelete();
             $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
 
             $table->string('description');
@@ -28,11 +28,11 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        DB::statement('ALTER TABLE bill_items ADD CONSTRAINT bill_items_amounts_check CHECK (quantity >= 0 AND unit_price >= 0 AND total >= 0)');
+        DB::statement('ALTER TABLE acct.bill_items ADD CONSTRAINT bill_items_amounts_check CHECK (quantity >= 0 AND unit_price >= 0 AND total >= 0)');
 
         // Add indexes for better query performance
-        DB::statement('CREATE INDEX idx_bill_items_bill_order ON bill_items(bill_id, display_order)');
-        DB::statement('CREATE INDEX idx_bill_items_company_bill ON bill_items(company_id, bill_id)');
+        DB::statement('CREATE INDEX idx_bill_items_bill_order ON acct.bill_items(bill_id, display_order)');
+        DB::statement('CREATE INDEX idx_bill_items_company_bill ON acct.bill_items(company_id, bill_id)');
     }
 
     /**
@@ -40,6 +40,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('bill_items');
+        Schema::dropIfExists('acct.bill_items');
     }
 };

@@ -13,7 +13,7 @@ class InvoiceItemTax extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'invoice_item_taxes';
+    protected $table = 'acct.invoice_item_taxes';
 
     protected $keyType = 'string';
 

@@ -27,7 +27,7 @@ function seedCompanyWithLedgerForIdemp(): array
     $receivableId = (string) Str::uuid();
     $salesId = (string) Str::uuid();
     $taxId = (string) Str::uuid();
-    DB::table('ledger_accounts')->insert([
+    DB::table('acct.ledger_accounts')->insert([
         ['id' => $receivableId, 'company_id' => $company->id, 'code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'normal_balance' => 'debit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $salesId, 'company_id' => $company->id, 'code' => '4000', 'name' => 'Sales Revenue', 'type' => 'revenue', 'normal_balance' => 'credit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
         ['id' => $taxId, 'company_id' => $company->id, 'code' => '2100', 'name' => 'Sales Tax Payable', 'type' => 'liability', 'normal_balance' => 'credit', 'active' => true, 'system_account' => true, 'level' => 1, 'created_at' => now(), 'updated_at' => now()],
@@ -81,7 +81,7 @@ it('invoice send/post/cancel endpoints are idempotent', function () {
     $h = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $key];
     $this->withHeaders($h)->postJson("/api/invoices/{$id}/send")->assertStatus(200);
     $this->withHeaders($h)->postJson("/api/invoices/{$id}/send")->assertStatus(200);
-    $status = DB::table('invoices')->where('invoice_id', $id)->value('status');
+    $status = DB::table('acct.invoices')->where('invoice_id', $id)->value('status');
     expect($status)->toBe('sent');
 
     // POST
@@ -89,10 +89,10 @@ it('invoice send/post/cancel endpoints are idempotent', function () {
     $h2 = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $key2];
     $this->withHeaders($h2)->postJson("/api/invoices/{$id}/post")->assertStatus(200);
     $this->withHeaders($h2)->postJson("/api/invoices/{$id}/post")->assertStatus(200);
-    $status = DB::table('invoices')->where('invoice_id', $id)->value('status');
+    $status = DB::table('acct.invoices')->where('invoice_id', $id)->value('status');
     expect($status)->toBe('posted');
     // Ensure single journal entry
-    $jeCount = DB::table('journal_entries')->where('source_type', 'invoice')->where('source_id', $id)->count();
+    $jeCount = DB::table('acct.journal_entries')->where('source_type', 'invoice')->where('source_id', $id)->count();
     expect($jeCount)->toBe(1);
 
     // CANCEL
@@ -100,6 +100,6 @@ it('invoice send/post/cancel endpoints are idempotent', function () {
     $h3 = ['X-Company-Id' => $company->id, 'Idempotency-Key' => $key3];
     $this->withHeaders($h3)->postJson("/api/invoices/{$id}/cancel", ['reason' => 'test'])->assertStatus(200);
     $this->withHeaders($h3)->postJson("/api/invoices/{$id}/cancel", ['reason' => 'test'])->assertStatus(200);
-    $status = DB::table('invoices')->where('invoice_id', $id)->value('status');
+    $status = DB::table('acct.invoices')->where('invoice_id', $id)->value('status');
     expect($status)->toBe('cancelled');
 });

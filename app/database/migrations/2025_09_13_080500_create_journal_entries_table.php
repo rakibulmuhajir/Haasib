@@ -17,7 +17,7 @@ return new class extends Migration
             return;
         }
 
-        Schema::create('journal_entries', function (Blueprint $table) {
+        Schema::create('acct.journal_entries', function (Blueprint $table) {
             $table->id('entry_id');
             $table->foreignId('transaction_id')->constrained('transactions', 'transaction_id');
             $table->foreignId('account_id')->constrained('chart_of_accounts', 'account_id');
@@ -34,16 +34,16 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::table('journal_entries', function (Blueprint $table) {
+        Schema::table('acct.journal_entries', function (Blueprint $table) {
             $table->foreign('functional_currency_id')->references('id')->on('currencies')->onDelete('set null');
         });
 
         // Add check constraint: either debit or credit must be positive, not both
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_debit_credit_xor CHECK ((debit_amount > 0 AND credit_amount = 0) OR (credit_amount > 0 AND debit_amount = 0))');
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_debit_positive CHECK (debit_amount >= 0)');
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_credit_positive CHECK (credit_amount >= 0)');
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_functional_debit_positive CHECK (functional_debit >= 0)');
-        DB::statement('ALTER TABLE journal_entries ADD CONSTRAINT chk_functional_credit_positive CHECK (functional_credit >= 0)');
+        DB::statement('ALTER TABLE acct.journal_entries ADD CONSTRAINT chk_debit_credit_xor CHECK ((debit_amount > 0 AND credit_amount = 0) OR (credit_amount > 0 AND debit_amount = 0))');
+        DB::statement('ALTER TABLE acct.journal_entries ADD CONSTRAINT chk_debit_positive CHECK (debit_amount >= 0)');
+        DB::statement('ALTER TABLE acct.journal_entries ADD CONSTRAINT chk_credit_positive CHECK (credit_amount >= 0)');
+        DB::statement('ALTER TABLE acct.journal_entries ADD CONSTRAINT chk_functional_debit_positive CHECK (functional_debit >= 0)');
+        DB::statement('ALTER TABLE acct.journal_entries ADD CONSTRAINT chk_functional_credit_positive CHECK (functional_credit >= 0)');
     }
 
     /**
@@ -51,6 +51,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('journal_entries');
+        Schema::dropIfExists('acct.journal_entries');
     }
 };

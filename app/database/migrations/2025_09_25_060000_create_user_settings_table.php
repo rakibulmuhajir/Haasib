@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_settings', function (Blueprint $table) {
+        Schema::create('auth.user_settings', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('user_id');
             $table->string('group')->default('general'); // general, currency, notifications, etc.
@@ -20,7 +20,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign key
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
 
             // Unique constraint - user can only have one setting per group/key
             $table->unique(['user_id', 'group', 'key'], 'unique_user_setting');
@@ -36,6 +36,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_settings');
+        Schema::dropIfExists('auth.user_settings');
     }
 };

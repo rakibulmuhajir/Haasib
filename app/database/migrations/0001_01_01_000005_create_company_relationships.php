@@ -12,18 +12,21 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Clean up any invalid data first
+        DB::statement('DELETE FROM auth.companies WHERE created_by_user_id IS NOT NULL AND created_by_user_id NOT IN (SELECT id FROM auth.users)');
+
         // Add currency foreign key constraints to companies table
         if (Schema::hasTable('auth.companies')) {
             Schema::table('auth.companies', function (Blueprint $table) {
                 // Check if foreign keys exist before adding them
                 if (! $this->hasForeignKey($table->getTable(), 'auth_companies_created_by_user_id_foreign')) {
-                    $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
+                    $table->foreign('created_by_user_id')->references('id')->on('auth.users')->nullOnDelete();
                 }
                 if (! $this->hasForeignKey($table->getTable(), 'auth_companies_currency_id_foreign')) {
-                    $table->foreign('currency_id')->references('id')->on('currencies')->nullOnDelete();
+                    $table->foreign('currency_id')->references('id')->on('public.currencies')->nullOnDelete();
                 }
                 if (! $this->hasForeignKey($table->getTable(), 'auth_companies_exchange_rate_id_foreign')) {
-                    $table->foreign('exchange_rate_id')->references('id')->on('exchange_rates')->nullOnDelete();
+                    $table->foreign('exchange_rate_id')->references('id')->on('public.exchange_rates')->nullOnDelete();
                 }
 
                 // Check if indexes exist before adding them
@@ -47,8 +50,8 @@ return new class extends Migration
 
                 $table->primary(['company_id', 'user_id']);
                 $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-                $table->foreign('invited_by_user_id')->references('id')->on('users')->onDelete('set null');
+                $table->foreign('user_id')->references('id')->on('auth.users')->onDelete('cascade');
+                $table->foreign('invited_by_user_id')->references('id')->on('auth.users')->onDelete('set null');
 
                 $table->index(['company_id', 'user_id']);
                 $table->index('invited_by_user_id');
@@ -79,16 +82,16 @@ return new class extends Migration
                     ->references('id')->on('auth.companies')
                     ->onDelete('cascade');
                 $table->foreign('currency_id')
-                    ->references('id')->on('currencies')
+                    ->references('id')->on('public.currencies')
                     ->onDelete('restrict');
                 $table->foreign('exchange_rate_id')
-                    ->references('id')->on('exchange_rates')
+                    ->references('id')->on('public.exchange_rates')
                     ->onDelete('set null');
             });
         }
 
         // Backfill currency_id for existing companies based on base_currency
-        DB::statement('UPDATE auth.companies SET currency_id = currencies.id FROM currencies WHERE auth.companies.base_currency = currencies.code');
+        DB::statement('UPDATE auth.companies SET currency_id = public.currencies.id FROM public.currencies WHERE auth.companies.base_currency = public.currencies.code');
     }
 
     /**

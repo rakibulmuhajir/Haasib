@@ -24,7 +24,7 @@ class ReferenceDataSeeder extends Seeder
             ['code' => 'ur', 'name' => 'Urdu', 'native_name' => 'اردو'],
         ];
         foreach ($languages as $l) {
-            DB::table('languages')->updateOrInsert(['code' => $l['code']], $l + [
+            DB::table('public.languages')->updateOrInsert(['code' => $l['code']], $l + [
                 'id' => \Illuminate\Support\Str::uuid(),
                 'is_active' => true,
                 'created_at' => now(),
@@ -35,6 +35,7 @@ class ReferenceDataSeeder extends Seeder
         // Currencies
         $currencies = [
             [
+                'id' => \Illuminate\Support\Str::uuid(),
                 'code' => 'USD',
                 'numeric_code' => '840',
                 'name' => 'US Dollar',
@@ -178,8 +179,11 @@ class ReferenceDataSeeder extends Seeder
             ],
         ];
         foreach ($currencies as $c) {
-            DB::table('currencies')->updateOrInsert(['code' => $c['code']], $c + [
-                'id' => \Illuminate\Support\Str::uuid(),
+            // Only generate ID if not already present
+            if (!isset($c['id'])) {
+                $c['id'] = \Illuminate\Support\Str::uuid();
+            }
+            DB::table('public.currencies')->updateOrInsert(['code' => $c['code']], $c + [
                 'last_updated_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -200,8 +204,11 @@ class ReferenceDataSeeder extends Seeder
             ['code' => 'CA', 'alpha3' => 'CAN', 'name' => 'Canada', 'native_name' => 'Canada', 'region' => 'Americas', 'subregion' => 'Northern America', 'emoji' => '🇨🇦', 'capital' => 'Ottawa', 'calling_code' => '+1', 'eea_member' => false],
         ];
         foreach ($countries as $c) {
-            DB::table('countries')->updateOrInsert(['code' => $c['code']], $c + [
-                'id' => \Illuminate\Support\Str::uuid(),
+            // Only generate ID if not already present
+            if (!isset($c['id'])) {
+                $c['id'] = \Illuminate\Support\Str::uuid();
+            }
+            DB::table('public.countries')->updateOrInsert(['code' => $c['code']], $c + [
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -223,8 +230,11 @@ class ReferenceDataSeeder extends Seeder
             ['code' => 'ur-PK', 'name' => 'Urdu (Pakistan)', 'native_name' => 'اردو (پاکستان)', 'language_code' => 'ur', 'country_code' => 'PK'],
         ];
         foreach ($locales as $loc) {
-            DB::table('locales')->updateOrInsert(['code' => $loc['code']], $loc + [
-                'id' => \Illuminate\Support\Str::uuid(),
+            // Only generate ID if not already present
+            if (!isset($loc['id'])) {
+                $loc['id'] = \Illuminate\Support\Str::uuid();
+            }
+            DB::table('public.locales')->updateOrInsert(['code' => $loc['code']], $loc + [
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -249,7 +259,7 @@ class ReferenceDataSeeder extends Seeder
             ['country_code' => 'CA', 'language_code' => 'fr', 'official' => true, 'primary' => false, 'order' => 1],
         ];
         foreach ($countryLanguages as $cl) {
-            DB::table('country_language')->updateOrInsert(
+            DB::table('public.country_language')->updateOrInsert(
                 ['country_code' => $cl['country_code'], 'language_code' => $cl['language_code']],
                 $cl + ['created_at' => now(), 'updated_at' => now()]
             );
@@ -269,7 +279,7 @@ class ReferenceDataSeeder extends Seeder
             ['country_code' => 'CA', 'currency_code' => 'CAD', 'official' => true],
         ];
         foreach ($countryCurrencies as $cc) {
-            DB::table('country_currency')->updateOrInsert(
+            DB::table('public.country_currency')->updateOrInsert(
                 ['country_code' => $cc['country_code'], 'currency_code' => $cc['currency_code']],
                 $cc + ['created_at' => now(), 'updated_at' => now()]
             );

@@ -9,7 +9,7 @@ class Country extends Model
 {
     use HasFactory;
 
-    protected $table = 'countries';
+    protected $table = 'public.countries';
 
     protected $keyType = 'string';
 

@@ -5,7 +5,7 @@ use App\Models\Company;
 
 test('debug permissions', function () {
     // Clean slate
-    \DB::table('model_has_roles')->where('model_type', User::class)->delete();
+    \DB::table('auth.model_has_roles')->where('model_type', User::class)->delete();
     
     // Seed permissions
     $this->artisan('db:seed', ['--class' => 'RbacSeeder', '--env' => 'testing']);
@@ -20,7 +20,7 @@ test('debug permissions', function () {
     setPermissionsTeamId(null);
     
     // Check database
-    $roleAssignment = \DB::table('model_has_roles')
+    $roleAssignment = \DB::table('auth.model_has_roles')
         ->where('model_id', $user->id)
         ->where('model_type', User::class)
         ->first();
@@ -32,18 +32,18 @@ test('debug permissions', function () {
     ]);
     
     // Check role details
-    $role = \DB::table('roles')->where('id', $roleAssignment->role_id)->first();
+    $role = \DB::table('auth.roles')->where('id', $roleAssignment->role_id)->first();
     dump([
         'role_name' => $role->name,
         'role_team_id' => $role->team_id,
     ]);
     
     // Check permission exists
-    $permission = \DB::table('permissions')->where('name', 'invoices.view')->first();
+    $permission = \DB::table('auth.permissions')->where('name', 'invoices.view')->first();
     dump(['permission_id' => $permission->id]);
     
     // Check role has permission
-    $rolePermission = \DB::table('role_has_permissions')
+    $rolePermission = \DB::table('auth.role_has_permissions')
         ->where('role_id', $roleAssignment->role_id)
         ->where('permission_id', $permission->id)
         ->first();

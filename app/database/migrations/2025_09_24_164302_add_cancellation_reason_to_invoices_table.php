@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             // Check if column exists before adding
             if (!Schema::hasColumn('invoices', 'cancellation_reason')) {
                 $table->text('cancellation_reason')->nullable()->after('status');
@@ -32,7 +32,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             if ($this->hasIndex('invoices', 'idx_invoices_status_cancelled')) {
                 $table->dropIndex('idx_invoices_status_cancelled');
             }

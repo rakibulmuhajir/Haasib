@@ -41,6 +41,20 @@ Route::middleware('auth')->group(function () {
     // Company Switch Routes
     Route::post('/company/{company}/switch', [CompanySwitchController::class, 'switch'])->name('company.switch');
     Route::post('/company/set-first', [CompanySwitchController::class, 'setFirstCompany'])->name('company.set-first');
+    Route::post('/company/clear-context', [CompanySwitchController::class, 'clearContext'])->name('company.clear-context');
+
+    // Company Role Management Routes
+    Route::prefix('companies/{company}/roles')->name('companies.roles.')->group(function () {
+        Route::get('/', [CompanyRoleController::class, 'index'])
+            ->middleware('permission:users.roles.assign')
+            ->name('index');
+        Route::put('/users/{user}', [CompanyRoleController::class, 'updateRole'])
+            ->middleware('permission:users.roles.assign')
+            ->name('update');
+        Route::delete('/users/{user}', [CompanyRoleController::class, 'removeUser'])
+            ->middleware('permission:users.deactivate')
+            ->name('remove');
+    });
 
     // Session Test Routes
     Route::post('/session-test/store', [SessionTestController::class, 'store'])->name('session.test.store');
@@ -61,16 +75,22 @@ Route::middleware('auth')->group(function () {
     Route::prefix('api/companies/{company}/currencies')->name('companies.currencies.')->group(function () {
         Route::get('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'index'])->name('index');
         Route::get('/available', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'available'])->name('available');
-        Route::post('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'store'])->name('store');
-        Route::delete('{currency}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'destroy'])->name('destroy');
+        Route::post('/', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'store'])
+            ->middleware('permission:companies.currencies.enable')->name('store');
+        Route::delete('{currency}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'destroy'])
+            ->middleware('permission:companies.currencies.disable')->name('destroy');
 
         // Exchange Rate Routes
         Route::get('/exchange-rates', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'exchangeRates'])->name('exchange-rates');
-        Route::post('/exchange-rates', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'storeExchangeRate'])->name('exchange-rates.store');
+        Route::post('/exchange-rates', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'storeExchangeRate'])
+            ->middleware('permission:companies.currencies.exchange-rates.update')->name('exchange-rates.store');
         Route::get('/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'getExchangeRate'])->name('exchange-rates.show');
-        Route::patch('/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateExchangeRate'])->name('exchange-rates.update');
-        Route::post('/exchange-rates/sync', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'syncExchangeRates'])->name('exchange-rates.sync');
-        Route::patch('/base-currency', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateBaseCurrency'])->name('base-currency.update');
+        Route::patch('/exchange-rates/{rateId}', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateExchangeRate'])
+            ->middleware('permission:companies.currencies.exchange-rates.update')->name('exchange-rates.update');
+        Route::post('/exchange-rates/sync', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'syncExchangeRates'])
+            ->middleware('permission:companies.currencies.exchange-rates.update')->name('exchange-rates.sync');
+        Route::patch('/base-currency', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'updateBaseCurrency'])
+            ->middleware('permission:companies.currencies.set-base')->name('base-currency.update');
 
         // Legacy route for backward compatibility
         Route::get('{currency}/exchange-rate', [App\Http\Controllers\Api\CompanyCurrencyController::class, 'getExchangeRate'])->name('exchange-rate.get');
@@ -102,23 +122,38 @@ Route::middleware('auth')->group(function () {
 
     // Invoicing Routes
     Route::prefix('invoices')->name('invoices.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])->name('index');
-        Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])->name('export');
-        Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])->name('create');
-        Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])->name('store');
-        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])->whereUuid('invoice')->name('show');
-        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])->whereUuid('invoice')->name('edit');
-        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])->whereUuid('invoice')->name('update');
-        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])->whereUuid('invoice')->name('destroy');
+        Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])
+            ->middleware('permission:invoices.view')->name('index');
+        Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])
+            ->middleware('permission:invoices.export')->name('export');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])
+            ->middleware('permission:invoices.create')->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])
+            ->middleware('permission:invoices.create')->name('store');
+        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])
+            ->whereUuid('invoice')->middleware('permission:invoices.view')->name('show');
+        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])
+            ->whereUuid('invoice')->middleware('permission:invoices.update')->name('edit');
+        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])
+            ->whereUuid('invoice')->middleware('permission:invoices.update')->name('update');
+        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])
+            ->whereUuid('invoice')->middleware('permission:invoices.delete')->name('destroy');
 
         // Invoice Actions
-        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])->whereUuid('invoice')->name('send');
-        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])->whereUuid('invoice')->name('post');
-        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])->whereUuid('invoice')->name('cancel');
-        Route::post('/{invoice}/update-status', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'updateStatus'])->whereUuid('invoice')->name('update-status');
-        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])->whereUuid('invoice')->name('generate-pdf');
-        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])->whereUuid('invoice')->name('send-email');
-        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])->whereUuid('invoice')->name('duplicate');
+        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])
+            ->whereUuid('invoice')->middleware('permission:invoices.send')->name('send');
+        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])
+            ->whereUuid('invoice')->middleware('permission:invoices.post')->name('post');
+        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])
+            ->whereUuid('invoice')->middleware('permission:invoices.delete')->name('cancel');
+        Route::post('/{invoice}/update-status', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'updateStatus'])
+            ->whereUuid('invoice')->middleware('permission:invoices.update')->name('update-status');
+        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])
+            ->whereUuid('invoice')->middleware('permission:invoices.view')->name('generate-pdf');
+        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])
+            ->whereUuid('invoice')->middleware('permission:invoices.send')->name('send-email');
+        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])
+            ->whereUuid('invoice')->middleware('permission:invoices.create')->name('duplicate');
 
         // Bulk operations
         Route::post('/bulk', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'bulk'])->name('bulk');
@@ -126,31 +161,50 @@ Route::middleware('auth')->group(function () {
 
     // Payment Routes
     Route::prefix('payments')->name('payments.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'index'])->name('index');
-        Route::get('/create', [\App\Http\Controllers\Invoicing\PaymentController::class, 'create'])->name('create');
-        Route::post('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'store'])->name('store');
-        Route::get('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'show'])->whereUuid('payment')->name('show');
-        Route::get('/{payment}/edit', [\App\Http\Controllers\Invoicing\PaymentController::class, 'edit'])->whereUuid('payment')->name('edit');
-        Route::put('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'update'])->whereUuid('payment')->name('update');
-        Route::delete('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'destroy'])->whereUuid('payment')->name('destroy');
+        Route::get('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'index'])
+            ->middleware('permission:payments.view')->name('index');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\PaymentController::class, 'create'])
+            ->middleware('permission:payments.create')->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\PaymentController::class, 'store'])
+            ->middleware('permission:payments.create')->name('store');
+        Route::get('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'show'])
+            ->whereUuid('payment')->middleware('permission:payments.view')->name('show');
+        Route::get('/{payment}/edit', [\App\Http\Controllers\Invoicing\PaymentController::class, 'edit'])
+            ->whereUuid('payment')->middleware('permission:payments.update')->name('edit');
+        Route::put('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'update'])
+            ->whereUuid('payment')->middleware('permission:payments.update')->name('update');
+        Route::delete('/{payment}', [\App\Http\Controllers\Invoicing\PaymentController::class, 'destroy'])
+            ->whereUuid('payment')->middleware('permission:payments.delete')->name('destroy');
 
         // Payment Actions
-        Route::post('/{payment}/allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'allocate'])->whereUuid('payment')->name('allocate');
-        Route::post('/{payment}/auto-allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'autoAllocate'])->whereUuid('payment')->name('auto-allocate');
-        Route::post('/{payment}/void', [\App\Http\Controllers\Invoicing\PaymentController::class, 'void'])->whereUuid('payment')->name('void');
-        Route::post('/{payment}/refund', [\App\Http\Controllers\Invoicing\PaymentController::class, 'refund'])->whereUuid('payment')->name('refund');
+        Route::post('/{payment}/allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'allocate'])
+            ->whereUuid('payment')->middleware('permission:payments.allocate')->name('allocate');
+        Route::post('/{payment}/auto-allocate', [\App\Http\Controllers\Invoicing\PaymentController::class, 'autoAllocate'])
+            ->whereUuid('payment')->middleware('permission:payments.allocate')->name('auto-allocate');
+        Route::post('/{payment}/void', [\App\Http\Controllers\Invoicing\PaymentController::class, 'void'])
+            ->whereUuid('payment')->middleware('permission:payments.delete')->name('void');
+        Route::post('/{payment}/refund', [\App\Http\Controllers\Invoicing\PaymentController::class, 'refund'])
+            ->whereUuid('payment')->middleware('permission:payments.refund')->name('refund');
     });
 
     // Customer Routes
     Route::prefix('customers')->name('customers.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'index'])->name('index');
-        Route::get('/export', [\App\Http\Controllers\Invoicing\CustomerController::class, 'export'])->name('export');
-        Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])->name('create');
-        Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])->name('store');
-        Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])->whereUuid('customer')->name('show');
-        Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])->whereUuid('customer')->name('edit');
-        Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])->whereUuid('customer')->name('update');
-        Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])->whereUuid('customer')->name('destroy');
+        Route::get('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'index'])
+            ->middleware('permission:customers.view')->name('index');
+        Route::get('/export', [\App\Http\Controllers\Invoicing\CustomerController::class, 'export'])
+            ->middleware('permission:customers.export')->name('export');
+        Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])
+            ->middleware('permission:customers.create')->name('create');
+        Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])
+            ->middleware('permission:customers.create')->name('store');
+        Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])
+            ->whereUuid('customer')->middleware('permission:customers.view')->name('show');
+        Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])
+            ->whereUuid('customer')->middleware('permission:customers.update')->name('edit');
+        Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])
+            ->whereUuid('customer')->middleware('permission:customers.update')->name('update');
+        Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])
+            ->whereUuid('customer')->middleware('permission:customers.delete')->name('destroy');
 
         // Customer Relations
         Route::get('/{customer}/invoices', [\App\Http\Controllers\Invoicing\CustomerController::class, 'invoices'])->whereUuid('customer')->name('invoices');
@@ -180,20 +234,28 @@ Route::middleware('auth')->group(function () {
 
     // Ledger Routes
     Route::prefix('ledger')->name('ledger.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'index'])->name('index');
-        Route::get('/create', [\App\Http\Controllers\Ledger\LedgerController::class, 'create'])->name('create');
-        Route::post('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'store'])->name('store');
+        Route::get('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'index'])
+            ->middleware('permission:ledger.view')->name('index');
+        Route::get('/create', [\App\Http\Controllers\Ledger\LedgerController::class, 'create'])
+            ->middleware('permission:ledger.entries.create')->name('create');
+        Route::post('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'store'])
+            ->middleware('permission:ledger.entries.create')->name('store');
 
         // Ledger Accounts Routes - must come before dynamic parameter routes
         Route::prefix('accounts')->name('accounts.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'index'])->name('index');
-            Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'show'])->whereUuid('id')->name('show');
+            Route::get('/', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'index'])
+                ->middleware('permission:ledger.view')->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'show'])
+                ->whereUuid('id')->middleware('permission:ledger.view')->name('show');
         });
 
         // Dynamic parameter routes - must come after specific routes
-        Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])->whereUuid('id')->name('show');
-        Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])->whereUuid('id')->name('post');
-        Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])->whereUuid('id')->name('void');
+        Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])
+            ->whereUuid('id')->middleware('permission:ledger.view')->name('show');
+        Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])
+            ->whereUuid('id')->middleware('permission:ledger.entries.post')->name('post');
+        Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])
+            ->whereUuid('id')->middleware('permission:ledger.entries.void')->name('void');
     });
 
     // Admin Routes

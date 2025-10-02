@@ -4,13 +4,13 @@ import { buildDefaultTableFiltersFromColumns, buildDslFromTableFilters, clearTab
 
 interface UseDataTableOptions {
   columns: any[]
-  initialFilters: Record<string, any>
+  initialFilters?: Record<string, any>
   routeName: string
   filterLookups?: Record<string, { options: any[], labelField?: string, valueField?: string }>
 }
 
 export function useDataTable(options: UseDataTableOptions) {
-  const { columns, initialFilters, routeName } = options
+  const { columns, initialFilters = {}, routeName } = options
 
   // Internal state for the data table
   const tableFilters = ref<Record<string, any>>(buildDefaultTableFiltersFromColumns(columns))
@@ -19,8 +19,8 @@ export function useDataTable(options: UseDataTableOptions) {
   // The form that holds simple filter values and sorting/pagination state
   const filterForm = useForm({
     ...initialFilters,
-    sort_by: initialFilters.sort_by || 'created_at',
-    sort_direction: initialFilters.sort_direction || 'desc',
+    sort_by: initialFilters?.sort_by || 'created_at',
+    sort_direction: initialFilters?.sort_direction || 'desc',
   })
 
   // --- Internal Logic ---

@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasPermissions;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, HasUuids, Notifiable;
+    use HasApiTokens, HasFactory, HasPermissions, HasRoles, HasUuids, Notifiable;
 
     public $incrementing = false;
 
@@ -85,7 +87,7 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->system_role === 'superadmin';
+        return $this->system_role === 'superadmin' || $this->hasRole('super_admin');
     }
 
     public function getCurrentCompanyAttribute()
@@ -102,8 +104,15 @@ class User extends Authenticatable
             $companyId = session('current_company_id');
         }
 
+        // Check if super admin is intentionally in global view mode
+        $isGlobalView = false;
+        if ($request && $request->hasSession()) {
+            $isGlobalView = $request->session()->get('super_admin_global_view', false);
+        }
+
         // If no company is selected, get the first company for the user
-        if (! $companyId) {
+        // But NOT if super admin is intentionally in global view mode
+        if (! $companyId && ! $isGlobalView) {
             $firstCompany = $this->companies()->first();
             if ($firstCompany) {
                 $companyId = $firstCompany->id;

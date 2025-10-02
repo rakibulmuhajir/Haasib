@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::statement('CREATE SCHEMA IF NOT EXISTS auth');
-
+if (! Schema::hasTable('auth.companies')) {
         // Create companies table
         Schema::create('auth.companies', function (Blueprint $table) {
             $table->uuid('id')->primary();
@@ -30,12 +30,8 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Add foreign key constraint for created_by_user_id
-        Schema::table('auth.companies', function (Blueprint $table) {
-            $table->foreign('created_by_user_id')
-                ->references('id')->on('users')
-                ->nullOnDelete();
-        });
+        }
+
     }
 
     /**
@@ -44,11 +40,6 @@ return new class extends Migration
     public function down(): void
     {
         try {
-            // Drop foreign key constraints first
-            Schema::table('auth.companies', function (Blueprint $table) {
-                $table->dropForeign(['created_by_user_id']);
-            });
-
             Schema::dropIfExists('auth.companies');
         } catch (\Throwable $e) {
             // If the table still has dependencies, they'll be cleaned up by the company_relationships migration

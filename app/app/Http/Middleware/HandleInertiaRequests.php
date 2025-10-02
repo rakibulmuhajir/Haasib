@@ -21,10 +21,14 @@ class HandleInertiaRequests extends Middleware
         $hasSession = $request->hasSession();
         $companyId = $hasSession ? $request->session()->get('current_company_id') : null;
 
-        // \Log::debug('[HandleInertiaRequests] Request has session: '.($hasSession ? 'yes' : 'no'));
-        // \Log::debug('[HandleInertiaRequests] Session ID: '.($hasSession ? $request->session()->getId() : 'none'));
-        // \Log::debug('[HandleInertiaRequests] Session data before access: ', $hasSession ? $request->session()->all() : []);
-        // \Log::debug('[HandleInertiaRequests] Retrieved company ID from session: '.($companyId ?: 'null'));
+        // Check if super admin is intentionally in global view mode
+        $isGlobalView = $hasSession ? $request->session()->get('super_admin_global_view', false) : false;
+
+        \Log::debug('[HandleInertiaRequests] Request has session: '.($hasSession ? 'yes' : 'no'));
+        \Log::debug('[HandleInertiaRequests] Session ID: '.($hasSession ? $request->session()->getId() : 'none'));
+        \Log::debug('[HandleInertiaRequests] Session data before access: ', $hasSession ? $request->session()->all() : []);
+        \Log::debug('[HandleInertiaRequests] Retrieved company ID from session: '.($companyId ?: 'null'));
+        \Log::debug('[HandleInertiaRequests] Is global view: '.($isGlobalView ? 'yes' : 'no'));
 
         // Validate that the user has access to the session company
         if ($companyId && $request->user()) {
@@ -45,8 +49,8 @@ class HandleInertiaRequests extends Middleware
         }
 
         // Set fallback company if no session company exists and user has companies
-        // For superadmins without companies, use the first company in the system
-        if (! $companyId && $request->user()) {
+        // But NOT if super admin is intentionally in global view mode
+        if (! $companyId && $request->user() && ! $isGlobalView) {
             $firstCompany = $request->user()->companies()->first();
 
             if (! $firstCompany && $request->user()->isSuperAdmin()) {
@@ -58,6 +62,8 @@ class HandleInertiaRequests extends Middleware
                 $companyId = $firstCompany->id;
                 \Log::debug('[HandleInertiaRequests] Set fallback company ID: '.$companyId);
                 $request->session()->put('current_company_id', $companyId);
+                // Ensure session is saved immediately
+                $request->session()->save();
             }
         }
 
@@ -74,46 +80,12 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
 
-            'auth' => [
+            'auth' => array_merge([
                 'user' => $request->user() ? $request->user()->load('companies') : null,
                 'companyId' => $companyId,
                 'currentCompany' => $request->user() ? $request->user()->currentCompany : null,
                 'isSuperAdmin' => (bool) optional($request->user())->isSuperAdmin(),
-                'can' => $request->user() ? [
-                    'ledger' => [
-                        'view' => $request->user()->can('ledger.view'),
-                        'create' => $request->user()->can('ledger.create'),
-                        'post' => $request->user()->can('ledger.post'),
-                        'void' => $request->user()->can('ledger.void'),
-                        'accounts' => [
-                            'view' => $request->user()->can('ledger.accounts.view'),
-                        ],
-                    ],
-                    'invoices' => [
-                        'view' => $request->user()->can('invoices.view'),
-                        'create' => $request->user()->can('invoices.create'),
-                        'edit' => $request->user()->can('invoices.edit'),
-                        'delete' => $request->user()->can('invoices.delete'),
-                        'send' => $request->user()->can('invoices.send'),
-                        'post' => $request->user()->can('invoices.post'),
-                    ],
-                    'payments' => [
-                        'view' => $request->user()->can('payments.view'),
-                        'create' => $request->user()->can('payments.create'),
-                        'edit' => $request->user()->can('payments.edit'),
-                        'delete' => $request->user()->can('payments.delete'),
-                        'allocate' => $request->user()->can('payments.allocate'),
-                    ],
-                    'currency' => [
-                        'view' => $request->user()->can('currency.view'),
-                        'companyEdit' => $request->user()->can('currency.company.edit'),
-                        'systemManage' => $request->user()->can('currency.system.manage'),
-                        'exchangeEdit' => $request->user()->can('currency.exchange.edit'),
-                        'defaultSet' => $request->user()->can('currency.default.set'),
-                        'crud' => $request->user()->can('currency.crud'),
-                    ],
-                ] : null,
-            ],
+            ], $request->user() ? $this->sharePermissions($request) : ['permissions' => [], 'roles' => [], 'canManageCompany' => false]),
 
             // Expose CSRF token so the SPA can update its meta tag after
             // session regeneration (e.g., after login/logout) to avoid 419s.
@@ -132,5 +104,53 @@ class HandleInertiaRequests extends Middleware
                 'location' => $request->url(),
             ],
         ];
+    }
+
+    /**
+     * Share user permissions and roles with the frontend.
+     */
+    protected function sharePermissions(Request $request): array
+    {
+        $user = $request->user();
+        $currentCompany = $user->currentCompany;
+
+        // Snapshot current team context using Spatie's helper
+        $previousTeamId = getPermissionsTeamId();
+
+        try {
+            // Explicitly clear team context to get true system-wide permissions
+            setPermissionsTeamId(null);
+            $systemPermissions = $user->getAllPermissions()->pluck('name');
+            $systemRoles = $user->getRoleNames();
+
+            // Get company-specific permissions by setting team context
+            $companyPermissions = collect();
+            $companyRoles = collect();
+            $canManageCompany = false;
+
+            if ($currentCompany) {
+                // Set team context to get company-specific permissions
+                setPermissionsTeamId($currentCompany->id);
+                $companyPermissions = $user->getAllPermissions()->pluck('name');
+                $companyRoles = $user->getRoleNames();
+
+                // Check management permissions while in company context
+                $canManageCompany = $user->hasRole('owner') || $user->hasRole('admin');
+            }
+
+            return [
+                'permissions' => $systemPermissions,
+                'companyPermissions' => $companyPermissions,
+                'roles' => [
+                    'system' => $systemRoles->toArray(),
+                    'company' => $companyRoles->toArray(),
+                ],
+                'canManageCompany' => $canManageCompany,
+                'currentCompanyId' => $currentCompany?->id,
+            ];
+        } finally {
+            // Always restore original team context
+            setPermissionsTeamId($previousTeamId);
+        }
     }
 }

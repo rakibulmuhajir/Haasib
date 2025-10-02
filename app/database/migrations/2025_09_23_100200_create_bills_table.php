@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('bills', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('company_id')->constrained('companies')->cascadeOnDelete();
+            $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
             $table->foreignUuid('vendor_id')->constrained('vendors')->cascadeOnDelete();
 
             $table->string('bill_number');

@@ -29,8 +29,20 @@ interface User {
 }
 
 const props = defineProps({
-  users: Object,
-  filters: Object,
+  users: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      loading: false
+    })
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
 })
 
 const confirm = useConfirm()
@@ -313,11 +325,11 @@ onUnmounted(() => clearActions())
           </div>
           
           <DataTablePro
-            :value="users.data"
-            :loading="users.loading"
+            :value="users?.data || []"
+            :loading="users?.loading || false"
             :paginator="true"
-            :rows="users.per_page"
-            :totalRecords="users.total"
+            :rows="users?.per_page || 10"
+            :totalRecords="users?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"

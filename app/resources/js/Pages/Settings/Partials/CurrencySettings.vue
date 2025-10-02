@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { debounce } from 'lodash-es';
 import { usePage } from '@inertiajs/vue3';
 import { http } from '@/lib/http';
+import { usePermissions } from '@/composables/usePermissions';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
@@ -21,10 +22,14 @@ import DataTable from 'primevue/datatable';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import SimpleExchangeRateManager from './SimpleExchangeRateManager.vue';
+import CompanySwitcher from '@/Components/CompanySwitcher.vue';
 
 const page = usePage();
 const toast = useToast();
 const confirm = useConfirm();
+
+// Use new RBAC permission system
+const { can, isSuperAdmin, canManageCompany } = usePermissions();
 
 // Data
 const currencies = ref([]);
@@ -72,26 +77,12 @@ const newCurrencyForm = ref({
     exchange_rate: 1
 });
 
-// Permissions
-const canView = computed(() =>
-    page.props.auth.can?.currency?.view ?? false
-);
-
-const canEditCompany = computed(() =>
-    page.props.auth.can?.currency?.companyEdit ?? false
-);
-
-const canManageSystem = computed(() =>
-    page.props.auth.can?.currency?.systemManage ?? false
-);
-
-const canEditExchange = computed(() =>
-    page.props.auth.can?.currency?.exchangeEdit ?? false
-);
-
-const canCrud = computed(() =>
-    page.props.auth.can?.currency?.crud ?? false
-);
+// Permissions using new RBAC system
+const canView = computed(() => can.viewCurrencies());
+const canEditCompany = computed(() => can.manageCurrencies());
+const canManageSystem = computed(() => isSuperAdmin.value || can.manageSystemCurrencies());
+const canEditExchange = computed(() => can.manageCurrencies());
+const canCrud = computed(() => isSuperAdmin.value);
 
 // Company data
 const currentCompany = computed(() => page.props.auth?.currentCompany);
@@ -130,6 +121,11 @@ const currenciesWithRates = computed(() => {
     });
 });
 
+// Currency precision for formatting
+const currencyPrecision = computed(() => {
+    return currentCompany.value?.currency_decimal_places || 2;
+});
+
 // Fetch company currencies
 const fetchCompanyCurrencies = async () => {
     if (!currentCompany.value?.id || !canView.value) return;
@@ -160,13 +156,16 @@ const fetchCompanyCurrencies = async () => {
 
 // Fetch available currencies
 const fetchAvailableCurrencies = async () => {
-    if (!currentCompany.value?.id || !canEditCompany.value) return;
+    if (!currentCompany.value?.id || !canEditCompany.value) {
+        return;
+    }
 
     try {
         const response = await http.get(`/api/companies/${currentCompany.value.id}/currencies/available`);
         availableCurrencies.value = response.data.data;
     } catch (err) {
-      }
+        console.error('Error fetching available currencies:', err);
+    }
 };
 
 // Fetch exchange rates
@@ -587,13 +586,31 @@ onMounted(async () => {
             <ProgressSpinner />
         </div>
 
+        <!-- Company Selection Notice for Super Admin -->
+        <Message v-if="isSuperAdmin && !currentCompany?.id" severity="info" :closable="false">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h4 class="font-medium mb-1">No Company Selected</h4>
+                    <p class="text-sm opacity-90">As a Super Admin, you can manage currencies for any company. Please select a company to manage its specific currencies.</p>
+                </div>
+                <div class="ml-4">
+                    <CompanySwitcher />
+                </div>
+            </div>
+        </Message>
+
         <!-- Company Currencies Section -->
-        <Card v-if="canView">
+        <Card v-if="canView && (currentCompany?.id || !isSuperAdmin)">
             <template #title>
                 <div class="flex items-center justify-between">
-                    <span>Company Currencies</span>
+                    <div>
+                        <span>Company Currencies</span>
+                        <span v-if="currentCompany" class="text-sm font-normal text-gray-500 ml-2">
+                            ({{ currentCompany.name }})
+                        </span>
+                    </div>
                     <Button
-                        v-if="canEditCompany"
+                        v-if="canEditCompany && currentCompany"
                         label="Add Currency"
                         size="small"
                         @click="showAddCurrencyModal = true"
@@ -613,16 +630,25 @@ onMounted(async () => {
                         />
                     </div>
                     <h3 class="text-lg font-medium text-gray-700 mb-2">
-                        No currencies configured for your company
+                        <span v-if="currentCompany">No currencies configured for {{ currentCompany.name }}</span>
+                        <span v-else>No currencies configured</span>
                     </h3>
                     <p class="text-gray-500 mb-6">
-                        Add currencies to manage transactions and view exchange rates
+                        <span v-if="currentCompany">Add currencies to manage transactions and view exchange rates for {{ currentCompany.name }}</span>
+                        <span v-else-if="isSuperAdmin">Select a company to manage its currencies</span>
+                        <span v-else>Add currencies to manage transactions and view exchange rates</span>
                     </p>
                     <Button
-                        v-if="canEditCompany"
+                        v-if="canEditCompany && currentCompany"
                         label="Add Your First Currency"
                         icon="pi pi-plus"
                         @click="showAddCurrencyModal = true"
+                    />
+                    <Button
+                        v-else-if="isSuperAdmin && !currentCompany"
+                        label="Select a Company"
+                        icon="pi pi-building"
+                        @click="$refs.companySwitcher.$el.click()"
                     />
                 </div>
 
@@ -720,7 +746,12 @@ onMounted(async () => {
                 </div>
             </template>
             <template #subtitle>
-                Manage all available currencies in the system
+                <span v-if="!currentCompany && isSuperAdmin">
+                    Manage global currency database (available to all companies)
+                </span>
+                <span v-else>
+                    Manage all available currencies in the system
+                </span>
             </template>
             <template #content>
                 <div class="text-sm text-gray-600">

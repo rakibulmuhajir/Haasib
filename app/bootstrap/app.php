@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'idempotent' => \App\Http\Middleware\EnsureIdempotency::class,
+            'permission' => \App\Http\Middleware\RequirePermission::class,
         ]);
     })
     ->withSchedule(function ($schedule): void {

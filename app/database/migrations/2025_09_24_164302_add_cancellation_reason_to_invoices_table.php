@@ -12,12 +12,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            $table->text('cancellation_reason')->nullable()->after('status');
-            $table->timestamp('cancelled_at')->nullable()->after('cancellation_reason');
-            $table->uuid('cancelled_by')->nullable()->after('cancelled_at');
+            // Check if column exists before adding
+            if (!Schema::hasColumn('invoices', 'cancellation_reason')) {
+                $table->text('cancellation_reason')->nullable()->after('status');
+            }
+            if (!Schema::hasColumn('invoices', 'cancelled_by')) {
+                $table->uuid('cancelled_by')->nullable()->after('cancelled_at');
+            }
 
             // Add index for faster queries on cancelled invoices
-            $table->index(['status', 'cancelled_at'], 'idx_invoices_status_cancelled');
+            if (!$this->hasIndex('invoices', 'idx_invoices_status_cancelled')) {
+                $table->index(['status', 'cancelled_at'], 'idx_invoices_status_cancelled');
+            }
         });
     }
 
@@ -27,8 +33,21 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            $table->dropIndex('idx_invoices_status_cancelled');
-            $table->dropColumn(['cancellation_reason', 'cancelled_at', 'cancelled_by']);
+            if ($this->hasIndex('invoices', 'idx_invoices_status_cancelled')) {
+                $table->dropIndex('idx_invoices_status_cancelled');
+            }
+            $table->dropColumn(['cancellation_reason', 'cancelled_by']);
         });
+    }
+
+    private function hasIndex(string $table, string $name): bool
+    {
+        $result = DB::select("
+            SELECT COUNT(*) as count
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = ? AND indexname = ?
+        ", [$table, $name]);
+
+        return $result[0]->count > 0;
     }
 };

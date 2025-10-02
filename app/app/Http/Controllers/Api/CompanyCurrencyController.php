@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\AuthenticatedController;
 use App\Models\Company;
 use App\Models\Currency;
 use App\Services\CompanyLookupService;
@@ -10,7 +10,7 @@ use App\Services\CurrencyService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
-class CompanyCurrencyController extends Controller
+class CompanyCurrencyController extends AuthenticatedController
 {
     public function __construct(
         private CurrencyService $currencyService,
@@ -22,12 +22,7 @@ class CompanyCurrencyController extends Controller
      */
     private function authorizeCompanyAccess(Request $request, Company $company): void
     {
-        $user = $request->user();
-
-        // Superadmin can access any company
-        if (! $user->isSuperAdmin()) {
-            abort_unless($this->companyLookup->isMember($company->id, $user->id), 403);
-        }
+        $this->requireCompanyPermission($request, $company, 'companies.view');
     }
 
     /**

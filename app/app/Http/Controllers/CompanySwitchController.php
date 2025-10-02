@@ -24,6 +24,9 @@ class CompanySwitchController extends Controller
         // Store the company ID in session
         Session::put('current_company_id', $company->id);
 
+        // Clear the global view flag when switching to a company
+        Session::forget('super_admin_global_view');
+
         // Ensure session is saved
         Session::save();
 
@@ -64,5 +67,37 @@ class CompanySwitchController extends Controller
 
         return redirect()->route('dashboard')
             ->with('success', "Welcome! You're now logged into {$firstCompany->name}.");
+    }
+
+    public function clearContext(Request $request)
+    {
+        $user = $request->user();
+
+        // Only allow super admins to clear company context
+        if (! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized');
+        }
+
+        // Remove company ID from session
+        Session::forget('current_company_id');
+
+        // Set a flag to indicate super admin intentionally cleared company context
+        Session::put('super_admin_global_view', true);
+
+        Session::save();
+
+        \Log::debug('[CompanySwitchController] Cleared company context for super admin');
+        \Log::debug('[CompanySwitchController] Set global view flag for super admin');
+
+        // If the request expects JSON, return success response
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Company context cleared successfully',
+                'company_id' => null,
+            ]);
+        }
+
+        return redirect()->route('dashboard')
+            ->with('success', 'Now operating in Global View mode');
     }
 }

@@ -1,6 +1,9 @@
 <?php
 
 use App\Actions\Invoicing\InvoiceCreate;
+use App\Models\Company;
+use App\Models\Currency;
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\InvoiceService;
@@ -8,10 +11,17 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
+    // Seed permissions
+    $this->artisan('db:seed', ['--class' => 'RbacSeeder', '--env' => 'testing']);
+    
+    // Create test data
+    $this->company = Company::factory()->create();
+    $this->customer = Customer::factory()->create(['company_id' => $this->company->id]);
+    $this->currency = Currency::factory()->create();
+    
     // Create a simple test user object
-    $this->user = new User;
-    $this->user->id = 'test-user-id';
-    $this->user->current_company_id = 'test-company-id';
+    $this->user = User::factory()->create();
+    $this->user->current_company_id = $this->company->id;
 
     // Mock the InvoiceService
     $this->invoiceService = mock(InvoiceService::class);
@@ -21,8 +31,8 @@ beforeEach(function () {
 test('it creates invoice successfully', function () {
     // Arrange
     $invoiceData = [
-        'customer_id' => 'test-customer-id',
-        'currency_id' => 'test-currency-id',
+        'customer_id' => $this->customer->id,
+        'currency_id' => $this->currency->id,
         'invoice_date' => '2025-01-01',
         'due_date' => '2025-01-15',
         'notes' => 'Test invoice',
@@ -35,28 +45,35 @@ test('it creates invoice successfully', function () {
         ],
     ];
 
-    // Mock Invoice query to return null (no existing invoice)
-    Invoice::shouldReceive('where->first')->andReturnNull();
-
-    $expectedInvoice = mock(Invoice::class);
-    $expectedInvoice->invoice_id = (string) Str::uuid();
-    $expectedInvoice->invoice_number = 'INV-2025-001';
-    $expectedInvoice->status = 'draft';
-    $expectedInvoice->total_amount = 100.00;
-
+    // Mock the InvoiceService
+    $expectedInvoice = Invoice::factory()->make([
+        'company_id' => $this->company->id,
+        'customer_id' => $this->customer->id,
+        'invoice_id' => (string) Str::uuid(),
+        'invoice_number' => 'INV-2025-001',
+        'status' => 'draft',
+        'total_amount' => 100.00,
+    ]);
+    
     $this->invoiceService->shouldReceive('createInvoice')
         ->once()
         ->with(
             \Mockery::on(function ($arg) {
-                return is_array($arg) || $arg->id === $this->company->id;
+                return $arg instanceof Company && $arg->id === $this->company->id;
             }),
-            \Mockery::on(function ($arg) use ($invoiceData) {
-                return is_array($arg) &&
-                       $arg['customer_id'] === $invoiceData['customer_id'] &&
-                       $arg['currency_id'] === $invoiceData['currency_id'] &&
-                       $arg['items'] === $invoiceData['items'] &&
-                       $arg['idempotency_key'] === null;
-            })
+            \Mockery::on(function ($arg) {
+                return $arg instanceof Customer && $arg->id === $this->customer->id;
+            }),
+            $invoiceData['items'],
+            \Mockery::on(function ($arg) {
+                return $arg instanceof Currency && $arg->id === $this->currency->id;
+            }),
+            $invoiceData['invoice_date'],
+            $invoiceData['due_date'],
+            $invoiceData['notes'],
+            null,
+            null,
+            \Mockery::type('array')
         )
         ->andReturn($expectedInvoice);
 
@@ -80,7 +97,7 @@ test('it handles idempotency key', function () {
     // Arrange
     $idempotencyKey = 'test-key-123';
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'currency_id' => $this->currency->id,
         'invoice_date' => '2025-01-01',
         'due_date' => '2025-01-15',
@@ -94,11 +111,14 @@ test('it handles idempotency key', function () {
         ],
     ];
 
-    $expectedInvoice = new \App\Models\Invoice;
-    $expectedInvoice->invoice_id = (string) \Illuminate\Support\Str::uuid();
-    $expectedInvoice->invoice_number = 'INV-2025-001';
-    $expectedInvoice->status = 'draft';
-    $expectedInvoice->total_amount = 100.00;
+    $expectedInvoice = Invoice::factory()->make([
+        'company_id' => $this->company->id,
+        'customer_id' => $this->customer->id,
+        'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+        'invoice_number' => 'INV-2025-001',
+        'status' => 'draft',
+        'total_amount' => 100.00,
+    ]);
 
     $this->invoiceService->shouldReceive('createInvoice')
         ->once()
@@ -117,16 +137,16 @@ test('it returns existing invoice for duplicate idempotency key', function () {
     $idempotencyKey = 'test-key-123';
 
     // Create an existing invoice with the idempotency key
-    $existingInvoice = \App\Models\Invoice::factory()->create([
+    $existingInvoice = Invoice::factory()->create([
         'company_id' => $this->company->id,
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'idempotency_key' => $idempotencyKey,
         'status' => 'draft',
         'total_amount' => 100.00,
     ]);
 
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'currency_id' => $this->currency->id,
         'invoice_date' => '2025-01-01',
         'due_date' => '2025-01-15',
@@ -164,14 +184,14 @@ test('it logs duplicate request detection', function () {
     $idempotencyKey = 'test-key-123';
 
     // Create an existing invoice with the idempotency key
-    $existingInvoice = \App\Models\Invoice::factory()->create([
+    $existingInvoice = Invoice::factory()->create([
         'company_id' => $this->company->id,
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'idempotency_key' => $idempotencyKey,
     ]);
 
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'currency_id' => $this->currency->id,
         'idempotency_key' => $idempotencyKey,
         'items' => [
@@ -185,7 +205,7 @@ test('it logs duplicate request detection', function () {
 
     Log::shouldReceive('info')
         ->once()
-        ->with('Duplicate invoice request detected', \Mockery::on(function ($arg) use ($idempotencyKey) {
+        ->with('Duplicate invoice request detected', \Mockery::on(function ($arg) use ($idempotencyKey, $existingInvoice) {
             return $arg['idempotency_key'] === $idempotencyKey &&
                    $arg['company_id'] === $this->company->id &&
                    $arg['existing_invoice_id'] === $existingInvoice->invoice_id &&
@@ -202,7 +222,7 @@ test('it logs duplicate request detection', function () {
 test('it uses user company_id when not provided', function () {
     // Arrange
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'currency_id' => $this->currency->id,
         'items' => [
             [
@@ -213,19 +233,34 @@ test('it uses user company_id when not provided', function () {
         ],
     ];
 
-    $expectedInvoice = new \App\Models\Invoice;
-    $expectedInvoice->invoice_id = (string) \Illuminate\Support\Str::uuid();
-    $expectedInvoice->invoice_number = 'INV-2025-001';
+    $expectedInvoice = Invoice::factory()->make([
+        'company_id' => $this->company->id,
+        'customer_id' => $this->customer->id,
+        'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+        'invoice_number' => 'INV-2025-001',
+        'status' => 'draft',
+        'total_amount' => 100.00,
+    ]);
 
     $this->invoiceService->shouldReceive('createInvoice')
         ->once()
         ->with(
             \Mockery::on(function ($arg) {
-                return $arg->id === $this->company->id;
+                return $arg instanceof Company && $arg->id === $this->company->id;
             }),
             \Mockery::on(function ($arg) {
-                return is_array($arg) && $arg['customer_id'] === $this->customer->customer_id;
-            })
+                return $arg instanceof Customer && $arg->id === $this->customer->id;
+            }),
+            $invoiceData['items'],
+            \Mockery::on(function ($arg) {
+                return $arg instanceof Currency && $arg->id === $this->currency->id;
+            }),
+            null,
+            null,
+            null,
+            null,
+            null,
+            \Mockery::type('array')
         )
         ->andReturn($expectedInvoice);
 
@@ -239,7 +274,7 @@ test('it uses user company_id when not provided', function () {
 test('it handles nullable fields gracefully', function () {
     // Arrange
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'items' => [
             [
                 'description' => 'Test Item',
@@ -250,9 +285,14 @@ test('it handles nullable fields gracefully', function () {
         // Optional fields omitted
     ];
 
-    $expectedInvoice = new \App\Models\Invoice;
-    $expectedInvoice->invoice_id = (string) \Illuminate\Support\Str::uuid();
-    $expectedInvoice->invoice_number = 'INV-2025-001';
+    $expectedInvoice = Invoice::factory()->make([
+        'company_id' => $this->company->id,
+        'customer_id' => $this->customer->id,
+        'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+        'invoice_number' => 'INV-2025-001',
+        'status' => 'draft',
+        'total_amount' => 100.00,
+    ]);
 
     $this->invoiceService->shouldReceive('createInvoice')
         ->once()
@@ -269,7 +309,7 @@ test('it passes idempotency_key to service', function () {
     // Arrange
     $idempotencyKey = 'test-key-456';
     $invoiceData = [
-        'customer_id' => $this->customer->customer_id,
+        'customer_id' => $this->customer->id,
         'idempotency_key' => $idempotencyKey,
         'items' => [
             [
@@ -280,16 +320,28 @@ test('it passes idempotency_key to service', function () {
         ],
     ];
 
-    $expectedInvoice = new \App\Models\Invoice;
-    $expectedInvoice->invoice_id = (string) \Illuminate\Support\Str::uuid();
+    $expectedInvoice = Invoice::factory()->make([
+        'company_id' => $this->company->id,
+        'customer_id' => $this->customer->id,
+        'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+        'invoice_number' => 'INV-2025-001',
+        'status' => 'draft',
+        'total_amount' => 100.00,
+    ]);
 
     $this->invoiceService->shouldReceive('createInvoice')
         ->once()
         ->with(
             \Mockery::any(),
-            \Mockery::on(function ($arg) use ($idempotencyKey) {
-                return is_array($arg) && $arg['idempotency_key'] === $idempotencyKey;
-            })
+            \Mockery::any(),
+            \Mockery::any(),
+            \Mockery::any(),
+            \Mockery::any(),
+            \Mockery::any(),
+            \Mockery::any(),
+            \Mockery::any(),
+            $idempotencyKey,
+            \Mockery::type('array')
         )
         ->andReturn($expectedInvoice);
 

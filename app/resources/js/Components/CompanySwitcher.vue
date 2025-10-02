@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watchEffect } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { http } from '@/lib/http'
 import Dropdown from 'primevue/dropdown'
@@ -7,6 +7,37 @@ import Dropdown from 'primevue/dropdown'
 const page = usePage()
 const companies = ref([])
 const currentCompanyId = computed(() => page.props.auth.companyId)
+const isSuperAdmin = computed(() => page.props.auth?.isSuperAdmin || false)
+const selectedCompany = ref(null)
+
+// Prepare options for the dropdown
+const dropdownOptions = computed(() => {
+  const options = [...companies.value]
+  
+  // Add option to remove company context for super admins
+  if (isSuperAdmin.value) {
+    options.unshift({
+      id: null,
+      name: '🌐 Global View (Super Admin)',
+      description: 'Remove company context to perform system-wide duties'
+    })
+  }
+  
+  return options
+})
+
+// Find the current selection
+const currentValue = computed(() => {
+  if (!currentCompanyId.value && isSuperAdmin.value) {
+    return dropdownOptions.value.find(opt => opt.id === null)
+  }
+  return dropdownOptions.value.find(opt => opt.id === currentCompanyId.value)
+})
+
+// Update selectedCompany when currentValue changes
+watchEffect(() => {
+  selectedCompany.value = currentValue.value?.id ?? null
+})
 
 onMounted(async () => {
   try {
@@ -29,14 +60,40 @@ async function switchCompany(event) {
   console.log('🔍 [DEBUG] Current company ID:', currentCompanyId.value)
   console.log('🔍 [DEBUG] Available companies:', companies.value)
 
+  // If removing company context
+  if (companyId === null && isSuperAdmin.value) {
+    console.log('🔍 [DEBUG] Attempting to clear company context')
+    try {
+      const response = await http.post('/company/clear-context')
+      console.log('🔍 [DEBUG] Clear context response:', response.data)
+
+      router.visit(window.location.pathname, {
+        method: 'get',
+        preserveState: false,
+        preserveScroll: false,
+        only: ['auth']
+      })
+    } catch (e) {
+      console.error('🔍 [DEBUG] Error clearing company context:', e)
+      console.error('🔍 [DEBUG] Error response:', e.response?.data)
+    }
+    return
+  }
+
   if (!companyId || companyId === currentCompanyId.value) return
 
   try {
     const response = await http.post(`/company/${companyId}/switch`)
     console.log('🔍 [DEBUG] Switch response:', response.data)
 
-    // Use Inertia's router to reload the page with fresh state
-    router.reload()
+    // Use Inertia's router to visit the current page with fresh data
+    // This will trigger a fresh server request and update all props
+    router.visit(window.location.pathname, {
+      method: 'get',
+      preserveState: false,
+      preserveScroll: false,
+      only: ['auth'] // Only refresh the auth data
+    })
   } catch (e) {
     console.error('🔍 [DEBUG] Error switching company:', e)
     console.error('🔍 [DEBUG] Error response:', e.response?.data)
@@ -46,19 +103,42 @@ async function switchCompany(event) {
 
 <template>
   <Dropdown
-    :model-value="currentCompanyId"
-    :options="companies"
+    v-model="selectedCompany"
+    :options="dropdownOptions"
     optionLabel="name"
     optionValue="id"
-    placeholder="Select Company"
-    @change="switchCompany"
+    :placeholder="isSuperAdmin ? 'Select Company or Global View' : 'Select Company'"
+    @update:model-value="switchCompany({ value: $event })"
     class="company-switcher"
-  />
+  >
+    <template #option="slotProps">
+      <div v-if="slotProps.option.id === null" class="flex items-center">
+        <span class="text-lg mr-2">🌐</span>
+        <div>
+          <div class="font-medium">{{ slotProps.option.name }}</div>
+          <div class="text-xs text-gray-500">{{ slotProps.option.description }}</div>
+        </div>
+      </div>
+      <div v-else>
+        {{ slotProps.option.name }}
+      </div>
+    </template>
+    <template #value="slotProps">
+      <div v-if="slotProps.value && slotProps.value.id === null" class="flex items-center">
+        <span class="text-lg mr-2">🌐</span>
+        <span>Global View</span>
+      </div>
+      <div v-else-if="slotProps.value">
+        {{ slotProps.value.name }}
+      </div>
+      <span v-else>{{ isSuperAdmin ? 'Select Company or Global View' : 'Select Company' }}</span>
+    </template>
+  </Dropdown>
 </template>
 
 <style scoped>
 .company-switcher {
-  min-width: 200px;
+  min-width: 280px;
 }
 
 .company-switcher :deep(.p-dropdown) {

@@ -57,11 +57,11 @@
             <Button label="Clear all" size="small" text @click="table.clearFilters()" />
           </div>
           <DataTablePro
-            :value="customers.data"
-            :loading="customers.loading"
+            :value="customers?.data || []"
+            :loading="customers?.loading || false"
             :paginator="true"
-            :rows="customers.per_page"
-            :totalRecords="customers.total"
+            :rows="customers?.per_page || 10"
+            :totalRecords="customers?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
@@ -71,7 +71,7 @@
             selectionMode="multiple"
             dataKey="id"
             :showSelectionColumn="true"
-            :virtualScroll="customers.total > 200"
+            :virtualScroll="(customers?.total || 0) > 200"
             scrollHeight="500px"
             responsiveLayout="stack"
             breakpoint="960px"
@@ -287,10 +287,10 @@
             <template #footer>
               <div class="flex items-center justify-between text-sm text-gray-600">
                 <span>
-                  Showing {{ customers.from }} to {{ customers.to }} of {{ customers.total }} customers
+                  Showing {{ customers?.from || 0 }} to {{ customers?.to || 0 }} of {{ customers?.total || 0 }} customers
                 </span>
                 <span>
-                  Active: {{ customers.total_active }} | Inactive: {{ customers.total_inactive }}
+                  Active: {{ customers?.total_active || 0 }} | Inactive: {{ customers?.total_inactive || 0 }}
                 </span>
               </div>
             </template>
@@ -392,11 +392,36 @@ interface Customer {
 }
 
 const props = defineProps({
-  customers: Object,
-  filters: Object,
-  countries: Array,
-  statusOptions: Array,
-  customerTypeOptions: Array,
+  customers: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      from: 0,
+      to: 0,
+      total_active: 0,
+      total_inactive: 0,
+      loading: false
+    })
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
+  countries: {
+    type: Array,
+    default: () => []
+  },
+  statusOptions: {
+    type: Array,
+    default: () => []
+  },
+  customerTypeOptions: {
+    type: Array,
+    default: () => []
+  },
 })
 
 // Columns for DataTablePro
@@ -417,7 +442,7 @@ const table = useDataTable({
   routeName: 'customers.index',
   filterLookups: {
     is_active: {
-      options: props.statusOptions || [],
+      options: props.statusOptions,
     }
   }
 })

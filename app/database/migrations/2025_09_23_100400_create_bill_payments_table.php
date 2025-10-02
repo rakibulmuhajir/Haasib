@@ -20,7 +20,8 @@ return new class extends Migration
             $table->string('payment_method')->nullable(); // e.g., 'bank_transfer', 'cheque', 'cash'
             $table->string('reference')->nullable();
 
-            $table->foreignUuid('currency_code')->constrained(table: 'currencies', column: 'code');
+            $table->string('currency_code', 3);
+            $table->foreign('currency_code')->references('code')->on('currencies');
             $table->decimal('amount', 15, 4);
             $table->decimal('unallocated_amount', 15, 4);
 

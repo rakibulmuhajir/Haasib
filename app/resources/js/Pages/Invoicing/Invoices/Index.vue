@@ -20,11 +20,32 @@ import { useDeleteConfirmation } from '@/composables/useDeleteConfirmation'
 import { formatMoney, formatDate } from '@/Utils/formatting'
 
 const props = defineProps({
-  invoices: Object,
-  filters: Object,
-  customers: Array,
-  currencies: Array,
-  statusOptions: Array,
+  invoices: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      loading: false
+    })
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
+  customers: {
+    type: Array,
+    default: () => []
+  },
+  currencies: {
+    type: Array,
+    default: () => []
+  },
+  statusOptions: {
+    type: Array,
+    default: () => []
+  },
 })
 
 const { setActions, clearActions } = usePageActions()
@@ -147,11 +168,11 @@ onUnmounted(() => clearActions())
             <Button label="Clear all" size="small" text @click="table.clearFilters()" />
           </div>
           <DataTablePro
-            :value="invoices.data"
-            :loading="invoices.loading"
+            :value="invoices?.data || []"
+            :loading="invoices?.loading || false"
             :paginator="true"
-            :rows="invoices.per_page"
-            :totalRecords="invoices.total"
+            :rows="invoices?.per_page || 10"
+            :totalRecords="invoices?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"

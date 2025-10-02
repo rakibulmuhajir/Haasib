@@ -86,10 +86,10 @@ const menuItems: MenuItem[] = [
         path: '/admin/companies',
         icon: 'building',
         routeName: 'admin.companies.index',
-        permission: 'admin.companies.view',
+        permission: ['system.companies.view', 'companies.view'],
         children: [
-          { label: 'All Companies', path: '/admin/companies', icon: 'list', routeName: 'admin.companies.index', permission: 'admin.companies.view' },
-          { label: 'Create Company', path: '/admin/companies/create', icon: 'plus', routeName: 'admin.companies.create', permission: 'admin.companies.create' }
+          { label: 'All Companies', path: '/admin/companies', icon: 'list', routeName: 'admin.companies.index', permission: ['system.companies.view', 'companies.view'] },
+          { label: 'Create Company', path: '/admin/companies/create', icon: 'plus', routeName: 'admin.companies.create', permission: 'system.companies.create' }
         ]
       },
       {
@@ -97,10 +97,10 @@ const menuItems: MenuItem[] = [
         path: '/admin/users',
         icon: 'users',
         routeName: 'admin.users.index',
-        permission: 'admin.users.view',
+        permission: ['system.users.manage', 'users.view'],
         children: [
-          { label: 'All Users', path: '/admin/users', icon: 'list', routeName: 'admin.users.index', permission: 'admin.users.view' },
-          { label: 'Create User', path: '/admin/users/create', icon: 'plus', routeName: 'admin.users.create', permission: 'admin.users.create' }
+          { label: 'All Users', path: '/admin/users', icon: 'list', routeName: 'admin.users.index', permission: ['system.users.manage', 'users.view'] },
+          { label: 'Create User', path: '/admin/users/create', icon: 'plus', routeName: 'admin.users.create', permission: 'system.users.manage' }
         ]
       }
     ]

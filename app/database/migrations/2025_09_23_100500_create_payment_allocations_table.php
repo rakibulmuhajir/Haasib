@@ -12,24 +12,24 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_allocations', function (Blueprint $table) {
+        Schema::create('bill_payment_allocations', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('company_id')->constrained('auth.companies')->cascadeOnDelete();
             $table->foreignUuid('bill_payment_id')->constrained('bill_payments')->cascadeOnDelete();
             $table->foreignUuid('bill_id')->constrained('bills')->cascadeOnDelete();
-            $table->foreignUuid('allocated_by')->nullable()->constrained('auth.users')->nullOnDelete();
+            $table->foreignUuid('allocated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->decimal('amount', 15, 4);
             $table->date('allocated_at');
             $table->timestamps();
         });
 
-        DB::statement('ALTER TABLE payment_allocations ADD CONSTRAINT payment_allocations_amount_check CHECK (amount > 0)');
+        DB::statement('ALTER TABLE bill_payment_allocations ADD CONSTRAINT bill_payment_allocations_amount_check CHECK (amount > 0)');
 
         // Add indexes for better query performance
-        DB::statement('CREATE INDEX idx_payment_allocations_company_bill ON payment_allocations(company_id, bill_id)');
-        DB::statement('CREATE INDEX idx_payment_allocations_payment_bill ON payment_allocations(bill_payment_id, bill_id)');
-        DB::statement('CREATE INDEX idx_payment_allocations_allocated_by ON payment_allocations(allocated_by)');
-        DB::statement('CREATE INDEX idx_payment_allocations_allocated_date ON payment_allocations(allocated_at)');
+        DB::statement('CREATE INDEX idx_bill_payment_allocations_company_bill ON bill_payment_allocations(company_id, bill_id)');
+        DB::statement('CREATE INDEX idx_bill_payment_allocations_payment_bill ON bill_payment_allocations(bill_payment_id, bill_id)');
+        DB::statement('CREATE INDEX idx_bill_payment_allocations_allocated_by ON bill_payment_allocations(allocated_by)');
+        DB::statement('CREATE INDEX idx_bill_payment_allocations_allocated_date ON bill_payment_allocations(allocated_at)');
     }
 
     /**
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payment_allocations');
+        Schema::dropIfExists('bill_payment_allocations');
     }
 };

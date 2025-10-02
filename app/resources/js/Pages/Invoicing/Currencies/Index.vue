@@ -54,16 +54,16 @@
             <Button label="Clear all" size="small" text @click="table.clearFilters()" />
           </div>
           <DataTablePro
-            :value="currencies.data"
-            :loading="currencies.loading"
+            :value="currencies?.data || []"
+            :loading="currencies?.loading || false"
             :paginator="true"
-            :rows="currencies.per_page"
-            :totalRecords="currencies.total"
+            :rows="currencies?.per_page || 10"
+            :totalRecords="currencies?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
             :columns="columns"
-            :virtualScroll="currencies.total > 200"
+            :virtualScroll="(currencies?.total || 0) > 200"
             scrollHeight="500px"
             responsiveLayout="stack"
             breakpoint="960px"
@@ -140,10 +140,10 @@
             <template #footer>
               <div class="flex items-center justify-between text-sm text-gray-600">
                 <span>
-                  Showing {{ currencies.from }} to {{ currencies.to }} of {{ currencies.total }} currencies
+                  Showing {{ currencies?.from || 0 }} to {{ currencies?.to || 0 }} of {{ currencies?.total || 0 }} currencies
                 </span>
                 <span>
-                  Enabled: {{ companyCurrencies.length }}
+                  Enabled: {{ companyCurrencies?.length || 0 }}
                 </span>
               </div>
             </template>
@@ -247,9 +247,26 @@ interface Currency {
 }
 
 const props = defineProps({
-  currencies: Object,
-  companyCurrencies: Array<Currency>,
-  filters: Object,
+  currencies: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      from: 0,
+      to: 0,
+      loading: false
+    })
+  },
+  companyCurrencies: {
+    type: Array,
+    default: () => []
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
 })
 
 const toasty = useToast()

@@ -5,10 +5,10 @@ use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTransactions::class);
 
 beforeEach(function () {
     // Create test user and company

@@ -56,11 +56,11 @@
             <Button label="Clear all" size="small" text @click="table.clearFilters()" />
           </div>
           <DataTablePro
-            :value="payments.data"
-            :loading="payments.loading"
+            :value="payments?.data || []"
+            :loading="payments?.loading || false"
             :paginator="true"
-            :rows="payments.per_page"
-            :totalRecords="payments.total"
+            :rows="payments?.per_page || 10"
+            :totalRecords="payments?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"
@@ -82,7 +82,7 @@
             <template #footer>
               <div class="flex items-center justify-between text-sm text-gray-600">
                 <span>
-                  Showing {{ payments.from }} to {{ payments.to }} of {{ payments.total }} payments
+                  Showing {{ payments?.from || 0 }} to {{ payments?.to || 0 }} of {{ payments?.total || 0 }} payments
                 </span>
               </div>
             </template>
@@ -335,11 +335,34 @@ interface Payment {
 }
 
 const props = defineProps({
-  payments: Object,
-  filters: Object,
-  customers: Array,
-  statusOptions: Array,
-  paymentMethodOptions: Array,
+  payments: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      from: 0,
+      to: 0,
+      loading: false
+    })
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
+  customers: {
+    type: Array,
+    default: () => []
+  },
+  statusOptions: {
+    type: Array,
+    default: () => []
+  },
+  paymentMethodOptions: {
+    type: Array,
+    default: () => []
+  },
 })
 
 const { setActions, clearActions } = usePageActions()
@@ -367,8 +390,8 @@ const table = useDataTable({
   initialFilters: props.filters,
   routeName: 'payments.index',
   filterLookups: {
-    status: { options: props.statusOptions || [] },
-    payment_method: { options: props.paymentMethodOptions || [] },
+    status: { options: props.statusOptions },
+    payment_method: { options: props.paymentMethodOptions },
   },
 })
 

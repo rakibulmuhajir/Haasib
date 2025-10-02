@@ -30,8 +30,20 @@ interface Company {
 }
 
 const props = defineProps({
-  companies: Object,
-  filters: Object,
+  companies: {
+    type: Object,
+    default: () => ({
+      data: [],
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      loading: false
+    })
+  },
+  filters: {
+    type: Object,
+    default: () => ({})
+  },
 })
 
 const confirm = useConfirm()
@@ -261,11 +273,11 @@ const toggleCompanyStatus = async (company: Company, activate: boolean) => {
           </div>
           
           <DataTablePro
-            :value="companies.data"
-            :loading="companies.loading"
+            :value="companies?.data || []"
+            :loading="companies?.loading || false"
             :paginator="true"
-            :rows="companies.per_page"
-            :totalRecords="companies.total"
+            :rows="companies?.per_page || 10"
+            :totalRecords="companies?.total || 0"
             :lazy="true"
             :sortField="table.filterForm.sort_by"
             :sortOrder="table.filterForm.sort_direction === 'asc' ? 1 : -1"

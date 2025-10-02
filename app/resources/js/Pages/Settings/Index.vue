@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import LayoutShell from '@/Components/Layout/LayoutShell.vue';
 import Sidebar from '@/Components/Sidebar/Sidebar.vue';
@@ -7,14 +7,16 @@ import Breadcrumb from '@/Components/Breadcrumb.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import CurrencySettings from './Partials/CurrencySettings.vue';
 import { usePageActions } from '@/composables/usePageActions.js';
+import { usePermissions } from '@/composables/usePermissions';
 import TabMenu from 'primevue/tabmenu';
 
 const page = usePage();
 const activeTab = ref(0);
 const { setActions } = usePageActions();
+const { can, hasRole, currentCompanyId } = usePermissions();
 
-// Define tabs
-const tabs = ref([
+// Define base tabs
+const baseTabs = [
     { 
         label: 'General', 
         icon: 'fas fa-cog',
@@ -45,7 +47,23 @@ const tabs = ref([
         route: route('settings.index', { group: 'security' }),
         key: 'security'
     }
-]);
+];
+
+// Add role management tab if user has permission
+const tabs = computed(() => {
+    const allTabs = [...baseTabs];
+    
+    if (can.assignRoles() && currentCompanyId.value) {
+        allTabs.push({
+            label: 'Roles & Permissions',
+            icon: 'fas fa-user-shield',
+            route: route('companies.roles.index', currentCompanyId.value),
+            key: 'roles'
+        });
+    }
+    
+    return allTabs;
+});
 
 // Breadcrumb items
 const breadcrumbItems = ref([

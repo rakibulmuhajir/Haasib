@@ -30,6 +30,11 @@ class CurrencyApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        // Check if user has system permission
+        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+            abort(403, 'Unauthorized');
+        }
+
         $currencies = Currency::orderBy('name')
             ->get()
             ->map(fn ($currency) => [
@@ -312,6 +317,11 @@ class CurrencyApiController extends Controller
      */
     public function latestExchangeRates(Request $request): JsonResponse
     {
+        // Check if user has system permission
+        if (! $request->user()->hasPermissionTo('system.fx.view')) {
+            abort(403, 'Unauthorized');
+        }
+
         $request->validate([
             'base_currency' => ['nullable', 'string', 'size:3'],
         ]);
@@ -461,8 +471,13 @@ class CurrencyApiController extends Controller
     /**
      * Get available import sources.
      */
-    public function getImportSources(): JsonResponse
+    public function getImportSources(Request $request): JsonResponse
     {
+        // Check if user has system permission
+        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+            abort(403, 'Unauthorized');
+        }
+
         try {
             $sources = $this->importService->getAvailableSources();
 
@@ -479,6 +494,11 @@ class CurrencyApiController extends Controller
      */
     public function searchExternalCurrencies(Request $request): JsonResponse
     {
+        // Check if user has system permission
+        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+            abort(403, 'Unauthorized');
+        }
+
         $request->validate([
             'query' => ['required', 'string', 'min:2'],
             'source' => ['sometimes', 'string', 'in:ecb,fixer,exchangerate'],

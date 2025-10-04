@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('reference')->nullable();
 
             $table->string('currency_code', 3);
-            $table->foreign('currency_code')->references('code')->on('currencies');
+            $table->foreign('currency_code')->references('code')->on('public.currencies');
             $table->decimal('amount', 15, 4);
             $table->decimal('unallocated_amount', 15, 4);
 
@@ -32,9 +32,9 @@ return new class extends Migration
         DB::statement('ALTER TABLE acct.bill_payments ADD CONSTRAINT bill_payments_amounts_check CHECK (amount >= 0 AND unallocated_amount >= 0)');
 
         // Add indexes for better query performance
-        DB::statement('CREATE INDEX idx_bill_payments_company_date ON bill_payments(company_id, payment_date) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_bill_payments_company_currency ON bill_payments(company_id, currency_code) WHERE deleted_at IS NULL');
-        DB::statement('CREATE INDEX idx_bill_payments_payment_method ON bill_payments(payment_method) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX idx_bill_payments_company_date ON acct.bill_payments(company_id, payment_date) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX idx_bill_payments_company_currency ON acct.bill_payments(company_id, currency_code) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX idx_bill_payments_payment_method ON acct.bill_payments(payment_method) WHERE deleted_at IS NULL');
     }
 
     /**

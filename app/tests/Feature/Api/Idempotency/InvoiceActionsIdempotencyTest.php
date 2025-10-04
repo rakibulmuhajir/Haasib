@@ -9,14 +9,17 @@ use Illuminate\Support\Str;
 
 function seedCompanyWithLedgerForIdemp(): array
 {
-    $currency = Currency::create([
-        'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
-    ]);
+    $currency = Currency::where('code', 'USD')->first();
+    if (! $currency) {
+        $currency = Currency::create([
+            'id' => (string) Str::uuid(),
+            'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        ]);
+    }
     $company = Company::create([
         'id' => (string) Str::uuid(),
         'name' => 'Idemp Actions Co',
-        'slug' => 'idemp-actions-co',
+        'slug' => 'idemp-actions-co-'.Str::random(4),
         'base_currency' => 'USD',
         'currency_id' => $currency->id,
         'language' => 'en',

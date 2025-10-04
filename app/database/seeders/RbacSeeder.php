@@ -226,6 +226,15 @@ class RbacSeeder extends Seeder
         // Add missing system permissions
         $additionalSystemPermissions = [
             'system.companies.manage',
+            'system.users.manage',           // Manage regular users (but not system users)
+            'system.maintenance.mode',       // Toggle maintenance mode
+            'system.monitoring.access',      // Access system monitoring
+            'system.audit.view',            // View audit logs
+            'system.settings.view',         // View system settings
+            'system.settings.update',       // Update system settings (non-critical)
+            'system.backups.create',        // Create system backups
+            'system.backups.restore',       // Restore from backups
+            'system.announcements.manage',  // Manage system announcements
         ];
 
         foreach ($additionalSystemPermissions as $permission) {
@@ -235,14 +244,33 @@ class RbacSeeder extends Seeder
             ]);
         }
 
-        // Create system roles (team_id = null)
+        // Create system roles (using special UUIDs for system-wide permissions)
         $allPermissions = array_merge($permissions, $additionalSystemPermissions);
+
+        // Define permissions that system_admin should NOT have
+        $systemAdminRestrictedPermissions = [
+            'system.users.admin.manage',    // Cannot add/delete/enable/disable other system admins
+            'system.permissions.modify',    // Cannot modify system-wide permissions
+            'system.schema.modify',         // Cannot modify database schema
+            'system.security.keys',         // Cannot access security keys
+            'system.super.override',        // Cannot override super_admin actions
+        ];
+
+        // System admin gets all permissions EXCEPT the restricted ones
+        $systemAdminPermissions = array_diff($allPermissions, $systemAdminRestrictedPermissions);
+
         $systemRoles = [
             'super_admin' => [
                 'name' => 'super_admin',
                 'guard_name' => 'web',
-                'team_id' => null,
-                'permissions' => $allPermissions, // All permissions
+                'team_id' => '00000000-0000-0000-0000-000000000000', // Super admin UUID
+                'permissions' => $allPermissions, // All permissions without restriction
+            ],
+            'systemadmin' => [
+                'name' => 'systemadmin',
+                'guard_name' => 'web',
+                'team_id' => '00000000-0000-0000-0000-000000000001', // System admin UUID (incrementing)
+                'permissions' => $systemAdminPermissions, // All permissions except restricted ones
             ],
         ];
 
@@ -557,7 +585,13 @@ class RbacSeeder extends Seeder
 
         $this->command->info('RBAC seeder completed successfully!');
         $this->command->info('Created '.count(array_merge($permissions, $additionalSystemPermissions)).' permissions');
-        $this->command->info('Created 1 system role: super_admin');
+        $this->command->info('Created 2 system roles: super_admin (shared role - 00000000-0000-0000-0000-000000000000), systemadmin (00000000-0000-0000-0000-000000000001)');
         $this->command->info('Created 6 company roles: owner, admin, manager, accountant, employee, viewer');
+        $this->command->info('');
+        $this->command->info('System Users Guidelines:');
+        $this->command->info('- Multiple super admins can be created with unique user UUIDs');
+        $this->command->info('- Activities should be tracked by user_id, not role team_id');
+        $this->command->info('- systemadmin role has restrictions on managing other system users');
+        $this->command->info('- See /docs/system-users-design.md for detailed implementation guide');
     }
 }

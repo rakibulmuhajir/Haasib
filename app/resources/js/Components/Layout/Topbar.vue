@@ -9,6 +9,8 @@ import Breadcrumb from '@/Components/Breadcrumb.vue'
 import SvgIcon from '@/Components/SvgIcon.vue'
 import Avatar from 'primevue/avatar'
 import Menu from 'primevue/menu'
+import LocaleSwitcher from '@/Components/LocaleSwitcher.vue'
+import { useI18n } from 'vue-i18n'
 
 const { toggleTheme, isDarkTheme } = useTheme()
 const { isSlim, toggleSlim } = useSidebar()
@@ -16,15 +18,16 @@ const page = usePage()
 
 const user = computed(() => page.props.auth?.user)
 const userMenu = ref()
+const { t } = useI18n()
 
-const userMenuItems = ref([
+const userMenuItems = computed(() => ([
   {
-    label: 'Profile',
+    label: t('navigation.profile'),
     icon: 'pi pi-user',
     command: () => router.visit('/profile')
   },
   {
-    label: 'Settings',
+    label: t('navigation.settings'),
     icon: 'pi pi-cog',
     command: () => router.visit('/settings')
   },
@@ -32,13 +35,17 @@ const userMenuItems = ref([
     separator: true
   },
   {
-    label: 'Logout',
+    label: t('navigation.logout'),
     icon: 'pi pi-sign-out',
     command: () => {
       router.post('/logout')
     }
   }
-])
+]))
+
+const themeTooltip = computed(() =>
+  isDarkTheme.value ? t('navigation.lightModeTooltip') : t('navigation.darkModeTooltip'),
+)
 
 const toggleUserMenu = (event) => {
   userMenu.value.toggle(event)
@@ -104,7 +111,7 @@ onUnmounted(() => {
         type="button" 
         class="layout-topbar-action"
         @click="toggleTheme"
-        v-tooltip.bottom="isDarkTheme ? 'Light Mode' : 'Dark Mode'"
+        v-tooltip.bottom="themeTooltip"
       >
         <span class="theme-icon">
           <svg 
@@ -125,6 +132,9 @@ onUnmounted(() => {
           </svg>
         </span>
       </button>
+
+      <!-- Locale Switcher -->
+      <LocaleSwitcher class="hidden sm:block" />
 
       <!-- Company Switcher (always show) -->
       <CompanySwitcher />

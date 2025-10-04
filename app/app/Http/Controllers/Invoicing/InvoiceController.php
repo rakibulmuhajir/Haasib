@@ -29,8 +29,15 @@ class InvoiceController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Invoice::with(['customer', 'currency', 'items'])
-            ->where('company_id', $request->user()->current_company_id);
+        $user = $request->user();
+
+        // Super admin can see all invoices
+        if ($user->isSuperAdmin()) {
+            $query = Invoice::with(['customer', 'currency', 'items']);
+        } else {
+            $query = Invoice::with(['customer', 'currency', 'items'])
+                ->where('company_id', $user->current_company_id);
+        }
 
         // Apply normalized DSL filters if provided
         if ($request->filled('filters')) {
@@ -241,8 +248,8 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|uuid|exists:customers,customer_id',
-            'currency_id' => 'nullable|uuid|exists:currencies,id',
+            'customer_id' => 'required|uuid|exists_customer',
+            'currency_id' => 'nullable|uuid|exists_currency',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
@@ -301,11 +308,25 @@ class InvoiceController extends Controller
     /**
      * Display the specified invoice.
      */
-    public function show(Request $request, Invoice $invoice)
+    public function show(Request $request, $id)
     {
-        $this->authorize('view', $invoice);
+        $this->authorize('invoices.view');
 
-        $invoice->load(['customer', 'currency', 'items', 'payments', 'payments.allocations']);
+        $user = $request->user();
+
+        // Super admin can view any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::with(['customer', 'currency', 'items', 'payments', 'payments.allocations'])
+                ->findOrFail($id);
+        } else {
+            // First find the invoice to ensure it exists, then check company access
+            $invoice = Invoice::with(['customer', 'currency', 'items', 'payments', 'payments.allocations'])
+                ->find($id);
+
+            if (!$invoice || $invoice->company_id !== $user->current_company_id) {
+                abort(403, 'You do not have permission to view this invoice.');
+            }
+        }
 
         return Inertia::render('Invoicing/Invoices/Show', [
             'invoice' => $invoice,
@@ -315,9 +336,19 @@ class InvoiceController extends Controller
     /**
      * Show the form for editing the specified invoice.
      */
-    public function edit(Request $request, Invoice $invoice)
+    public function edit(Request $request, $id)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can edit any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($id);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($id);
+        }
 
         if ($invoice->status !== 'draft') {
             return back()->with('error', 'Only draft invoices can be edited.');
@@ -325,7 +356,8 @@ class InvoiceController extends Controller
 
         $invoice->load(['customer', 'currency', 'items']);
 
-        $customers = Customer::where('company_id', $request->user()->current_company_id)
+        // Get customers from the invoice's company
+        $customers = Customer::where('company_id', $invoice->company_id)
             ->orderBy('name')
             ->get(['customer_id', 'name', 'email', 'currency_id']);
 
@@ -343,17 +375,27 @@ class InvoiceController extends Controller
     /**
      * Update the specified invoice in storage.
      */
-    public function update(Request $request, Invoice $invoice)
+    public function update(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         if ($invoice->status !== 'draft') {
             return back()->with('error', 'Only draft invoices can be updated.');
         }
 
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|uuid|exists:customers,customer_id',
-            'currency_id' => 'nullable|uuid|exists:currencies,id',
+            'customer_id' => 'required|uuid|exists_customer',
+            'currency_id' => 'nullable|uuid|exists_currency',
             'invoice_number' => 'required|string|max:50',
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
@@ -379,6 +421,9 @@ class InvoiceController extends Controller
             $customer = Customer::findOrFail($request->customer_id);
             $currency = $request->currency_id ? Currency::findOrFail($request->currency_id) : $customer->currency;
 
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+
             $updatedInvoice = $this->invoiceService->updateInvoice(
                 invoice: $invoice,
                 customer: $customer,
@@ -389,7 +434,7 @@ class InvoiceController extends Controller
                 notes: $request->notes,
                 terms: $request->terms,
                 idempotencyKey: $request->header('Idempotency-Key'),
-                context: ServiceContextHelper::fromRequest($request)
+                context: ServiceContextHelper::fromRequest($request, $company)
             );
 
             return redirect()
@@ -412,16 +457,28 @@ class InvoiceController extends Controller
     /**
      * Remove the specified invoice from storage.
      */
-    public function destroy(Request $request, Invoice $invoice)
+    public function destroy(Request $request, $invoice)
     {
-        $this->authorize('delete', $invoice);
+        $this->authorize('invoices.delete');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         if ($invoice->status !== 'draft') {
             return back()->with('error', 'Only draft invoices can be deleted.');
         }
 
         try {
-            $this->invoiceService->deleteInvoice($invoice, ServiceContextHelper::fromRequest($request));
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+            $this->invoiceService->deleteInvoice($invoice, null, ServiceContextHelper::fromRequest($request, $company));
 
             return redirect()
                 ->route('invoices.index')
@@ -442,16 +499,28 @@ class InvoiceController extends Controller
     /**
      * Mark invoice as sent.
      */
-    public function send(Request $request, Invoice $invoice)
+    public function send(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         if ($invoice->status !== 'draft') {
             return back()->with('error', 'Only draft invoices can be marked as sent.');
         }
 
         try {
-            $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request));
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+            $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request, $company));
 
             return back()->with('success', 'Invoice marked as sent successfully.');
 
@@ -469,16 +538,28 @@ class InvoiceController extends Controller
     /**
      * Post invoice to ledger.
      */
-    public function post(Request $request, Invoice $invoice)
+    public function post(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         if (! in_array($invoice->status, ['draft', 'sent'])) {
             return back()->with('error', 'Only draft or sent invoices can be posted.');
         }
 
         try {
-            $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request));
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+            $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request, $company));
 
             return back()->with('success', 'Invoice posted to ledger successfully.');
 
@@ -496,21 +577,34 @@ class InvoiceController extends Controller
     /**
      * Cancel invoice.
      */
-    public function cancel(Request $request, Invoice $invoice)
+    public function cancel(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         if (! in_array($invoice->status, ['draft', 'sent'])) {
             return back()->with('error', 'Only draft or sent invoices can be cancelled.');
         }
 
         try {
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+
             // Pass reason; provide a default if not supplied
             $reason = trim((string) $request->input('reason', ''));
             if ($reason === '') {
                 $reason = 'Cancelled by user';
             }
-            $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request));
+            $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request, $company));
 
             return back()->with('success', 'Invoice cancelled successfully.');
 
@@ -528,12 +622,35 @@ class InvoiceController extends Controller
     /**
      * Update invoice status.
      */
-    public function updateStatus(Request $request, Invoice $invoice)
+    public function updateStatus(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        // Check specific permission based on the status being updated
+        $status = $request->input('status');
+
+        // Map statuses to required permissions
+        $statusPermissions = [
+            'approved' => 'invoices.approve',
+            'sent' => 'invoices.send',
+            'posted' => 'invoices.post',
+            'cancelled' => 'invoices.void',
+            'void' => 'invoices.void',
+        ];
+
+        $permission = $statusPermissions[$status] ?? 'invoices.update';
+        $this->authorize($permission);
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         $validated = $request->validate([
-            'status' => ['required', 'string', 'in:draft,sent,posted,paid,cancelled,void'],
+            'status' => ['required', 'string', 'in:draft,sent,posted,paid,cancelled,void,approved'],
             'cancellation_reason' => ['nullable', 'required_if:status,cancelled', 'string', 'min:5'],
             'void_reason' => ['nullable', 'required_if:status,void', 'string', 'min:5'],
             'reversal_reference' => ['nullable', 'required_if:status,void', 'string'],
@@ -541,7 +658,7 @@ class InvoiceController extends Controller
 
         // Define allowed status transitions
         $allowedTransitions = [
-            'draft' => ['sent', 'cancelled'],
+            'draft' => ['sent', 'cancelled', 'approved'],
             'sent' => ['draft', 'posted', 'cancelled'],
             'posted' => ['void'],
             'paid' => ['void'],
@@ -554,7 +671,7 @@ class InvoiceController extends Controller
         // Check if transition is allowed
         if (! in_array($newStatus, $allowedTransitions[$invoice->status] ?? [])) {
             $message = match ($invoice->status) {
-                'draft' => 'Draft invoices can only be marked as Sent or Cancelled.',
+                'draft' => 'Draft invoices can be marked as Sent, Cancelled, or Approved.',
                 'sent' => 'Sent invoices can be marked as Draft, Posted, or Cancelled.',
                 'posted' => 'Posted invoices can only be Voided.',
                 'paid' => 'Paid invoices can only be Voided.',
@@ -575,10 +692,13 @@ class InvoiceController extends Controller
         try {
             $oldStatus = $invoice->status;
 
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+
             // Special handling for posting
             if ($newStatus === 'posted') {
                 // Call the post service method
-                $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request));
+                $this->invoiceService->postToLedger($invoice, ServiceContextHelper::fromRequest($request, $company));
             }
             // Special handling for voiding
             elseif ($newStatus === 'void') {
@@ -590,7 +710,7 @@ class InvoiceController extends Controller
             // Special handling for cancelling
             elseif ($newStatus === 'cancelled') {
                 $reason = $validated['cancellation_reason'] ?? 'Cancelled by user';
-                $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request));
+                $this->invoiceService->markAsCancelled($invoice, $reason, ServiceContextHelper::fromRequest($request, $company));
             }
             // Special handling for restoring from cancelled
             elseif ($oldStatus === 'cancelled' && in_array($newStatus, ['draft', 'sent'])) {
@@ -639,13 +759,26 @@ class InvoiceController extends Controller
     /**
      * Generate PDF for invoice.
      */
-    public function generatePdf(Request $request, Invoice $invoice)
+    public function generatePdf(Request $request, $invoice)
     {
-        $this->authorize('view', $invoice);
+        $this->authorize('invoices.view');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         try {
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+
             // Service method name is generatePDF
-            $pdfPath = $this->invoiceService->generatePDF($invoice, ServiceContextHelper::fromRequest($request));
+            $pdfPath = $this->invoiceService->generatePDF($invoice, ServiceContextHelper::fromRequest($request, $company));
 
             return response()->download($pdfPath, "invoice-{$invoice->invoice_number}.pdf");
 
@@ -663,9 +796,19 @@ class InvoiceController extends Controller
     /**
      * Send invoice via email.
      */
-    public function sendEmail(Request $request, Invoice $invoice)
+    public function sendEmail(Request $request, $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('invoices.update');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($invoice);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($invoice);
+        }
 
         $validator = Validator::make($request->all(), [
             'email' => 'nullable|email',
@@ -681,12 +824,15 @@ class InvoiceController extends Controller
         }
 
         try {
+            // Get the company for service context (invoice's company for super admin, current company otherwise)
+            $company = $user->isSuperAdmin() ? $invoice->company : $user->current_company;
+
             $this->invoiceService->sendEmail(
                 $invoice,
                 $request->email,
                 $request->subject,
                 $request->message,
-                ServiceContextHelper::fromRequest($request)
+                ServiceContextHelper::fromRequest($request, $company)
             );
 
             return back()->with('success', 'Invoice email sent successfully.');
@@ -705,12 +851,22 @@ class InvoiceController extends Controller
     /**
      * Duplicate invoice.
      */
-    public function duplicate(Request $request, Invoice $invoice)
+    public function duplicate(Request $request, $id)
     {
-        $this->authorize('create', Invoice::class);
+        $this->authorize('invoices.duplicate');
+
+        $user = $request->user();
+
+        // Super admin can access any invoice
+        if ($user->isSuperAdmin()) {
+            $invoice = Invoice::findOrFail($id);
+        } else {
+            $invoice = Invoice::where('company_id', $user->current_company_id)
+                ->findOrFail($id);
+        }
 
         try {
-            $newInvoice = $this->invoiceService->duplicateInvoice($invoice, ServiceContextHelper::fromRequest($request));
+            $newInvoice = $this->invoiceService->duplicateInvoice($invoice, null, ServiceContextHelper::fromRequest($request));
 
             return redirect()
                 ->route('invoices.show', $newInvoice)
@@ -774,7 +930,7 @@ class InvoiceController extends Controller
                         if ($invoice->status !== 'draft') {
                             throw new \RuntimeException('Only draft invoices can be deleted');
                         }
-                        $this->invoiceService->deleteInvoice($invoice, ServiceContextHelper::fromRequest($request));
+                        $this->invoiceService->deleteInvoice($invoice, null, ServiceContextHelper::fromRequest($request));
                         break;
                     case 'remind':
                         // Send a payment reminder email using default recipient

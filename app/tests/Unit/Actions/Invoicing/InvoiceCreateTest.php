@@ -11,14 +11,13 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
-    // Seed permissions
-    $this->artisan('db:seed', ['--class' => 'RbacSeeder', '--env' => 'testing']);
-    
+    // Don't re-seed permissions - assume they exist from initial setup
+
     // Create test data
     $this->company = Company::factory()->create();
     $this->customer = Customer::factory()->create(['company_id' => $this->company->id]);
     $this->currency = Currency::factory()->create();
-    
+
     // Create a simple test user object
     $this->user = User::factory()->create();
     $this->user->current_company_id = $this->company->id;

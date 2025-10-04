@@ -11,11 +11,14 @@ use App\Models\InvoiceItemTax;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\ServiceContext;
+use App\Support\ServiceContextHelper;
 use App\Traits\AuditLogging;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Request;
 use PDF;
 
 class InvoiceService
@@ -50,44 +53,65 @@ class InvoiceService
         ServiceContext $context
     ): Invoice {
         $idempotencyKey = $context->getIdempotencyKey();
-        $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey) {
-            $currency = $currency ?? ($customer->currency ?? $company->currency);
-            $currencyId = $currency?->id ?? $customer->currency_id ?? $company->currency_id;
 
-            $invoice = new Invoice([
-                'company_id' => $company->id,
-                'customer_id' => $customer->getKey(),
-                'currency_id' => $currencyId,
-                'invoice_date' => $invoiceDate ?? now()->toDateString(),
-                'due_date' => $dueDate ?? now()->addDays((int) ($customer->payment_terms ?? 0))->toDateString(),
-                'status' => 'draft',
-                'notes' => $notes,
-                'terms' => $terms,
-                'idempotency_key' => $idempotencyKey,
-            ]);
+        try {
+            $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey) {
+                $currency = $currency ?? ($customer->currency ?? $company->currency);
+                $currencyId = $currency?->id ?? $customer->currency_id ?? $company->currency_id;
 
-            $attempts = 0;
-            do {
-                try {
-                    $invoice->save();
-                    break;
-                } catch (\Illuminate\Database\QueryException $e) {
-                    if ($e->getCode() === '23505' && $attempts < 5) {
-                        $attempts++;
-                        $invoice->resetInvoiceNumber();
+                $invoice = new Invoice([
+                    'company_id' => $company->id,
+                    'customer_id' => $customer->getKey(),
+                    'currency_id' => $currencyId,
+                    'invoice_date' => $invoiceDate ?? now()->toDateString(),
+                    'due_date' => $dueDate ?? now()->addDays((int) ($customer->payment_terms ?? 0))->toDateString(),
+                    'status' => 'draft',
+                    'notes' => $notes,
+                    'terms' => $terms,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
 
-                        continue;
+                $attempts = 0;
+                do {
+                    try {
+                        if (! $invoice->save()) {
+                            Log::error('Failed to save invoice', [
+                                'errors' => method_exists($invoice, 'getErrors') ? $invoice->getErrors() : 'No errors method',
+                                'attributes' => $invoice->getAttributes(),
+                            ]);
+                            throw new \RuntimeException('Failed to save invoice: validation failed');
+                        }
+                        break;
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        if ($e->getCode() === '23505' && $attempts < 5) {
+                            $attempts++;
+                            $invoice->resetInvoiceNumber();
+
+                            continue;
+                        }
+                        throw $e;
                     }
-                    throw $e;
-                }
-            } while ($attempts < 5);
+                } while ($attempts < 5);
 
-            $this->createInvoiceItems($invoice, $items);
-            $invoice->calculateTotals();
-            $invoice->save();
+                $this->createInvoiceItems($invoice, $items);
+                $invoice->calculateTotals();
+                $invoice->save();
 
-            return $invoice->fresh(['items', 'customer', 'currency']);
-        });
+                return $invoice->fresh(['items', 'customer', 'currency']);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Transaction failed in createInvoice', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+            ]);
+            throw $e;
+        }
+
+        if (! $result) {
+            throw new \RuntimeException('DB transaction returned null');
+        }
 
         $this->logAudit('invoice.create', [
             'company_id' => $company->id,
@@ -273,9 +297,13 @@ class InvoiceService
     /**
      * Back-compat wrapper for controllers expecting postToLedger().
      */
-    public function postToLedger(Invoice $invoice): Invoice
+    public function postToLedger(Invoice $invoice, ?ServiceContext $context = null): Invoice
     {
-        return $this->markAsPosted($invoice);
+        // If no context provided, try to get it from the current request
+        if ($context === null) {
+            $context = ServiceContextHelper::fromRequest(Request::Facade());
+        }
+        return $this->markAsPosted($invoice, $context);
     }
 
     /**

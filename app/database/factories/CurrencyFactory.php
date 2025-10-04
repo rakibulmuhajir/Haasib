@@ -9,10 +9,13 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class CurrencyFactory extends Factory
 {
-    protected $model = Currency::class;
+    protected $model = \App\Models\Currency::class;
 
     public function definition(): array
     {
+        // Generate unique currency codes to avoid conflicts
+        $existingCodes = \App\Models\Currency::pluck('code')->toArray();
+
         $currencies = [
             ['code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$'],
             ['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€'],
@@ -32,7 +35,34 @@ class CurrencyFactory extends Factory
             ['code' => 'BHD', 'name' => 'Bahraini Dinar', 'symbol' => 'د.ب'],
         ];
 
-        $currency = fake()->randomElement($currencies);
+        // Filter out existing currencies
+        $availableCurrencies = array_filter($currencies, function($currency) use ($existingCodes) {
+            return !in_array($currency['code'], $existingCodes);
+        });
+
+        // If all major currencies exist, create unique test currencies
+        if (empty($availableCurrencies)) {
+            $uniqueCode = 'TEST' . fake()->unique()->numerify('###');
+            return [
+                'id' => fake()->uuid(),
+                'code' => $uniqueCode,
+                'name' => "Test Currency {$uniqueCode}",
+                'symbol' => 'T$',
+                'symbol_position' => fake()->randomElement(['before', 'after']),
+                'minor_unit' => 2,
+                'thousands_separator' => fake()->randomElement([',', '.', ' ', "'"]),
+                'decimal_separator' => fake()->randomElement(['.', ',']),
+                'is_active' => true,
+                'exchange_rate' => fake()->randomFloat(6, 0.1, 10),
+                'last_updated_at' => now(),
+                'metadata' => [
+                    'created_by' => 'factory',
+                    'currency_type' => 'test',
+                ],
+            ];
+        }
+
+        $currency = fake()->randomElement($availableCurrencies);
 
         return [
             'id' => fake()->uuid(),

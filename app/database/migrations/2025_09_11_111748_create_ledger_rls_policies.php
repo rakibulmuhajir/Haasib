@@ -11,33 +11,60 @@ return new class extends Migration
     public function up(): void
     {
         // Enable RLS on ledger tables
-        DB::statement('ALTER TABLE ledger_accounts ENABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE journal_lines ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.ledger_accounts ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.journal_entries ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.journal_lines ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policies for ledger_accounts
-        DB::statement("
-            CREATE POLICY company_isolation_ledger_accounts ON ledger_accounts
-            FOR ALL TO PUBLIC
-            USING (company_id = current_setting('app.current_company_id', true)::uuid)
-            WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
-        ");
+        $policyExists = DB::select("
+            SELECT COUNT(*) as count
+            FROM pg_policies
+            WHERE tablename = 'ledger_accounts'
+            AND policyname = 'company_isolation_ledger_accounts'
+        ")[0]->count > 0;
+
+        if (!$policyExists) {
+            DB::statement("
+                CREATE POLICY company_isolation_ledger_accounts ON acct.ledger_accounts
+                FOR ALL TO PUBLIC
+                USING (company_id = current_setting('app.current_company_id', true)::uuid)
+                WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
+            ");
+        }
 
         // Create RLS policies for journal_entries
-        DB::statement("
-            CREATE POLICY company_isolation_journal_entries ON journal_entries
-            FOR ALL TO PUBLIC
-            USING (company_id = current_setting('app.current_company_id', true)::uuid)
-            WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
-        ");
+        $policyExists = DB::select("
+            SELECT COUNT(*) as count
+            FROM pg_policies
+            WHERE tablename = 'journal_entries'
+            AND policyname = 'company_isolation_journal_entries'
+        ")[0]->count > 0;
+
+        if (!$policyExists) {
+            DB::statement("
+                CREATE POLICY company_isolation_journal_entries ON acct.journal_entries
+                FOR ALL TO PUBLIC
+                USING (company_id = current_setting('app.current_company_id', true)::uuid)
+                WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
+            ");
+        }
 
         // Create RLS policies for journal_lines
-        DB::statement("
-            CREATE POLICY company_isolation_journal_lines ON journal_lines
-            FOR ALL TO PUBLIC
-            USING (company_id = current_setting('app.current_company_id', true)::uuid)
-            WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
-        ");
+        $policyExists = DB::select("
+            SELECT COUNT(*) as count
+            FROM pg_policies
+            WHERE tablename = 'journal_lines'
+            AND policyname = 'company_isolation_journal_lines'
+        ")[0]->count > 0;
+
+        if (!$policyExists) {
+            DB::statement("
+                CREATE POLICY company_isolation_journal_lines ON acct.journal_lines
+                FOR ALL TO PUBLIC
+                USING (company_id = current_setting('app.current_company_id', true)::uuid)
+                WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid);
+            ");
+        }
 
         // Create validation function for additional security
         DB::unprepared("
@@ -76,19 +103,19 @@ return new class extends Migration
         // Add triggers for additional security
         DB::unprepared('
             CREATE TRIGGER validate_ledger_accounts_access
-            BEFORE INSERT OR UPDATE OR DELETE ON ledger_accounts
+            BEFORE INSERT OR UPDATE OR DELETE ON acct.ledger_accounts
             FOR EACH ROW EXECUTE FUNCTION validate_company_access();
         ');
 
         DB::unprepared('
             CREATE TRIGGER validate_journal_entries_access
-            BEFORE INSERT OR UPDATE OR DELETE ON journal_entries
+            BEFORE INSERT OR UPDATE OR DELETE ON acct.journal_entries
             FOR EACH ROW EXECUTE FUNCTION validate_company_access();
         ');
 
         DB::unprepared('
             CREATE TRIGGER validate_journal_lines_access
-            BEFORE INSERT OR UPDATE OR DELETE ON journal_lines
+            BEFORE INSERT OR UPDATE OR DELETE ON acct.journal_lines
             FOR EACH ROW EXECUTE FUNCTION validate_company_access();
         ');
 
@@ -96,21 +123,21 @@ return new class extends Migration
         DB::unprepared("
             CREATE OR REPLACE VIEW company_ledger_accounts AS
             SELECT la.*
-            FROM ledger_accounts la
+            FROM acct.ledger_accounts la
             WHERE la.company_id = current_setting('app.current_company_id', true)::uuid;
         ");
 
         DB::unprepared("
             CREATE OR REPLACE VIEW company_journal_entries AS
             SELECT je.*
-            FROM journal_entries je
+            FROM acct.journal_entries je
             WHERE je.company_id = current_setting('app.current_company_id', true)::uuid;
         ");
 
         DB::unprepared("
             CREATE OR REPLACE VIEW company_journal_lines AS
             SELECT jl.*
-            FROM journal_lines jl
+            FROM acct.journal_lines jl
             WHERE jl.company_id = current_setting('app.current_company_id', true)::uuid;
         ");
 
@@ -126,17 +153,17 @@ return new class extends Migration
     public function down(): void
     {
         // Drop triggers
-        DB::unprepared('DROP TRIGGER IF EXISTS validate_ledger_accounts_access ON ledger_accounts');
-        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_entries_access ON journal_entries');
-        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_lines_access ON journal_lines');
+        DB::unprepared('DROP TRIGGER IF EXISTS validate_ledger_accounts_access ON acct.ledger_accounts');
+        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_entries_access ON acct.journal_entries');
+        DB::unprepared('DROP TRIGGER IF EXISTS validate_journal_lines_access ON acct.journal_lines');
 
         // Drop functions
         DB::unprepared('DROP FUNCTION IF EXISTS validate_company_access()');
 
         // Drop policies
-        DB::unprepared('DROP POLICY IF EXISTS company_isolation_ledger_accounts ON ledger_accounts');
-        DB::unprepared('DROP POLICY IF EXISTS company_isolation_journal_entries ON journal_entries');
-        DB::unprepared('DROP POLICY IF EXISTS company_isolation_journal_lines ON journal_lines');
+        DB::unprepared('DROP POLICY IF EXISTS company_isolation_ledger_accounts ON acct.ledger_accounts');
+        DB::unprepared('DROP POLICY IF EXISTS company_isolation_journal_entries ON acct.journal_entries');
+        DB::unprepared('DROP POLICY IF EXISTS company_isolation_journal_lines ON acct.journal_lines');
 
         // Drop views
         DB::unprepared('DROP VIEW IF EXISTS company_ledger_accounts');
@@ -144,8 +171,8 @@ return new class extends Migration
         DB::unprepared('DROP VIEW IF EXISTS company_journal_lines');
 
         // Disable RLS
-        DB::statement('ALTER TABLE ledger_accounts DISABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE journal_entries DISABLE ROW LEVEL SECURITY');
-        DB::statement('ALTER TABLE journal_lines DISABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.ledger_accounts DISABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.journal_entries DISABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.journal_lines DISABLE ROW LEVEL SECURITY');
     }
 };

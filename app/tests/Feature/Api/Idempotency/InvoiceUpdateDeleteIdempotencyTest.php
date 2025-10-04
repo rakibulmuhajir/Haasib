@@ -11,14 +11,17 @@ it('invoice update and delete are idempotent', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $currency = Currency::create([
-        'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
-    ]);
+    $currency = Currency::where('code', 'USD')->first();
+    if (! $currency) {
+        $currency = Currency::create([
+            'id' => (string) Str::uuid(),
+            'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        ]);
+    }
     $company = Company::create([
         'id' => (string) Str::uuid(),
         'name' => 'Idemp Update Co',
-        'slug' => 'idemp-update-co',
+        'slug' => 'idemp-update-co-'.Str::random(4),
         'base_currency' => 'USD',
         'currency_id' => $currency->id,
         'language' => 'en',

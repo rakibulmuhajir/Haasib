@@ -65,7 +65,32 @@ class InvoiceCreate
 
         // Let the service handle complex logic
         $context = ServiceContextHelper::forUser($actor, $companyId, $idempotencyKey);
-        $invoice = $this->invoiceService->createInvoice($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey, $context);
+
+        try {
+            $invoice = $this->invoiceService->createInvoice($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $context);
+        } catch (\Throwable $e) {
+            Log::error('Invoice service threw exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'company_id' => $companyId,
+                'customer_id' => $p['customer_id'],
+                'currency_id' => $p['currency_id'],
+                'items' => $items,
+                'actor_id' => $actor->id,
+            ]);
+            throw $e;
+        }
+
+        if (! $invoice) {
+            Log::error('Invoice service returned null', [
+                'company_id' => $companyId,
+                'customer_id' => $p['customer_id'],
+                'currency_id' => $p['currency_id'],
+                'items' => $items,
+                'actor_id' => $actor->id,
+            ]);
+            throw new \RuntimeException('Failed to create invoice: service returned null');
+        }
 
         // Update invoice number if provided
         if ($invoiceNumber && $invoice->invoice_number !== $invoiceNumber) {

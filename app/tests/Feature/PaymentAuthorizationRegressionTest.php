@@ -6,8 +6,9 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Concerns\WithTeamRoles;
 
-uses(DatabaseTransactions::class);
+uses(WithTeamRoles::class);
 
 beforeEach(function () {
     // Create test companies
@@ -31,36 +32,36 @@ beforeEach(function () {
     
     // Create users with different roles
     $this->superAdmin = User::factory()->create(['system_role' => 'superadmin']);
-    $this->superAdmin->assignRole('super_admin');
-    
+    $this->assignSystemRole($this->superAdmin, 'super_admin');
+
     $this->owner = User::factory()->create();
     $this->owner->companies()->attach($this->company->id, ['role' => 'owner']);
-    $this->owner->assignRole('owner', $this->company);
-    
+    $this->assignCompanyRole($this->owner, 'owner', $this->company);
+
     $this->admin = User::factory()->create();
     $this->admin->companies()->attach($this->company->id, ['role' => 'admin']);
-    $this->admin->assignRole('admin', $this->company);
-    
+    $this->assignCompanyRole($this->admin, 'admin', $this->company);
+
     $this->manager = User::factory()->create();
     $this->manager->companies()->attach($this->company->id, ['role' => 'manager']);
-    $this->manager->assignRole('manager', $this->company);
-    
+    $this->assignCompanyRole($this->manager, 'manager', $this->company);
+
     $this->accountant = User::factory()->create();
     $this->accountant->companies()->attach($this->company->id, ['role' => 'accountant']);
-    $this->accountant->assignRole('accountant', $this->company);
-    
+    $this->assignCompanyRole($this->accountant, 'accountant', $this->company);
+
     $this->employee = User::factory()->create();
     $this->employee->companies()->attach($this->company->id, ['role' => 'employee']);
-    $this->employee->assignRole('employee', $this->company);
-    
+    $this->assignCompanyRole($this->employee, 'employee', $this->company);
+
     $this->viewer = User::factory()->create();
     $this->viewer->companies()->attach($this->company->id, ['role' => 'viewer']);
-    $this->viewer->assignRole('viewer', $this->company);
-    
+    $this->assignCompanyRole($this->viewer, 'viewer', $this->company);
+
     // User from other company
     $this->otherUser = User::factory()->create();
     $this->otherUser->companies()->attach($this->otherCompany->id, ['role' => 'owner']);
-    $this->otherUser->assignRole('owner', $this->otherCompany);
+    $this->assignCompanyRole($this->otherUser, 'owner', $this->otherCompany);
 });
 
 // Payment Index Tests

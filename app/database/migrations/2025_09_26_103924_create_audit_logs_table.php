@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('acct.audit_logs', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->nullable()->constrained('auth.users')->nullOnDelete();
-            $table->unsignedBigInteger('company_id')->nullable();
+            $table->foreignUuid('company_id')->nullable()->constrained('auth.companies')->nullOnDelete();
             $table->string('action');
             $table->json('params')->nullable();
             $table->json('result')->nullable();

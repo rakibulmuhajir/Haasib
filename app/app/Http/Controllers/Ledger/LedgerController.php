@@ -33,7 +33,7 @@ class LedgerController extends Controller
             ->latest()
             ->paginate(20);
 
-        return Inertia::render('Ledger/Index', [
+        return Inertia::render('Ledger/LedgerIndex', [
             'entries' => $entries,
             'filters' => $request->only(['status', 'date_from', 'date_to']),
         ]);
@@ -51,7 +51,7 @@ class LedgerController extends Controller
             ->orderBy('code')
             ->get();
 
-        return Inertia::render('Ledger/Create', [
+        return Inertia::render('Ledger/LedgerCreate', [
             'accounts' => $accounts,
         ]);
     }
@@ -81,29 +81,156 @@ class LedgerController extends Controller
     {
         $this->authorize('ledger.view');
 
-        $company = Auth::user()->currentCompany;
+        $user = Auth::user();
 
-        $entry = JournalEntry::query()
-            ->where('company_id', $company->id)
-            ->where('id', $id)
-            ->with(['journalLines.ledgerAccount', 'createdBy', 'postedBy'])
-            ->firstOrFail();
+        // Super admin can view any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->with(['journalLines.ledgerAccount', 'createdBy', 'postedBy'])
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->with(['journalLines.ledgerAccount', 'createdBy', 'postedBy'])
+                ->firstOrFail();
+        }
 
-        return Inertia::render('Ledger/Show', [
+        return Inertia::render('Ledger/LedgerShow', [
             'entry' => $entry,
         ]);
+    }
+
+    public function edit($id)
+    {
+        $this->authorize('ledger.entries.update');
+
+        $user = Auth::user();
+
+        // Super admin can edit any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->with(['journalLines.ledgerAccount', 'createdBy', 'postedBy'])
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->with(['journalLines.ledgerAccount', 'createdBy', 'postedBy'])
+                ->firstOrFail();
+        }
+
+        // Check if entry is posted
+        if ($entry->status === 'posted') {
+            abort(403, 'Cannot edit posted entries');
+        }
+
+        // Get accounts for the entry's company
+        $entryCompanyId = $entry->company_id;
+        $accounts = LedgerAccount::query()
+            ->where('company_id', $entryCompanyId)
+            ->where('active', true)
+            ->orderBy('code')
+            ->get();
+
+        return Inertia::render('Ledger/LedgerEdit', [
+            'entry' => $entry,
+            'accounts' => $accounts,
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $this->authorize('ledger.entries.update');
+
+        $user = Auth::user();
+
+        // Super admin can update any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->firstOrFail();
+        }
+
+        // Check if entry is posted - check before validation
+        if ($entry->status === 'posted') {
+            abort(403, 'Cannot update posted entries');
+        }
+
+        // Now validate
+        $validated = $request->validate([
+            'description' => 'required|string',
+            'date' => 'required|date',
+            'lines' => 'required|array|min:2',
+            'lines.*.account_id' => 'required|uuid|exists:acct.ledger_accounts,id',
+            'lines.*.debit_amount' => 'required|numeric|min:0',
+            'lines.*.credit_amount' => 'required|numeric|min:0',
+        ]);
+
+        $entry = $this->ledgerService->updateJournalEntry($entry, $validated);
+
+        return redirect()->route('ledger.show', $entry->id)
+            ->with('success', 'Journal entry updated successfully.');
+    }
+
+    public function destroy($id)
+    {
+        $this->authorize('ledger.entries.delete');
+
+        $user = Auth::user();
+
+        // Super admin can delete any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->firstOrFail();
+        }
+
+        // Check if entry is posted
+        if ($entry->status === 'posted') {
+            abort(403, 'Cannot delete posted entries');
+        }
+
+        $this->ledgerService->deleteJournalEntry($entry);
+
+        return redirect()->route('ledger.index')
+            ->with('success', 'Journal entry deleted successfully.');
     }
 
     public function post(Request $request, $id)
     {
         $this->authorize('ledger.post');
 
-        $company = Auth::user()->currentCompany;
+        $user = Auth::user();
 
-        $entry = JournalEntry::query()
-            ->where('company_id', $company->id)
-            ->where('id', $id)
-            ->firstOrFail();
+        // Super admin can post any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->firstOrFail();
+        }
 
         $entry = $this->ledgerService->postJournalEntry($entry);
 
@@ -118,12 +245,25 @@ class LedgerController extends Controller
             'reason' => 'required|string|min:10',
         ]);
 
-        $company = Auth::user()->currentCompany;
+        $user = Auth::user();
 
-        $entry = JournalEntry::query()
-            ->where('company_id', $company->id)
-            ->where('id', $id)
-            ->firstOrFail();
+        // Super admin can void any entry
+        if ($user->isSuperAdmin()) {
+            $entry = JournalEntry::query()
+                ->where('id', $id)
+                ->firstOrFail();
+        } else {
+            $company = $user->currentCompany;
+            $entry = JournalEntry::query()
+                ->where('company_id', $company->id)
+                ->where('id', $id)
+                ->firstOrFail();
+        }
+
+        // Check if entry is not posted
+        if ($entry->status !== 'posted') {
+            abort(403, 'Cannot void unposted entries');
+        }
 
         $entry = $this->ledgerService->voidJournalEntry($entry, $validated['reason']);
 

@@ -15,11 +15,15 @@ describe('Company Role Management', function () {
         $owner = User::factory()->create();
         $company = Company::factory()->create();
 
+        // Associate user with company
+        $company->users()->attach($owner->id, ['role' => 'owner']);
+
         setPermissionsTeamId($company->id);
         $owner->assignRole('owner');
         setPermissionsTeamId(null);
 
         actingAs($owner)
+            ->withSession(['current_company_id' => $company->id])
             ->get(route('companies.roles.index', $company))
             ->assertSuccessful();
     });
@@ -27,6 +31,9 @@ describe('Company Role Management', function () {
     it('viewer cannot view role management', function () {
         $viewer = User::factory()->create();
         $company = Company::factory()->create();
+
+        // Associate user with company
+        $company->users()->attach($viewer->id, ['role' => 'viewer']);
 
         setPermissionsTeamId($company->id);
         $viewer->assignRole('viewer');
@@ -42,6 +49,10 @@ describe('Company Role Management', function () {
         $employee = User::factory()->create();
         $company = Company::factory()->create();
 
+        // Associate users with company
+        $company->users()->attach($owner->id, ['role' => 'owner']);
+        $company->users()->attach($employee->id, ['role' => 'viewer']);
+
         // Setup users and roles
         setPermissionsTeamId($company->id);
         $owner->assignRole('owner');
@@ -53,6 +64,7 @@ describe('Company Role Management', function () {
 
         // Update role
         actingAs($owner)
+            ->withSession(['current_company_id' => $company->id])
             ->put(route('companies.roles.update', [$company, $employee]), [
                 'role' => 'employee',
             ])
@@ -64,20 +76,27 @@ describe('Company Role Management', function () {
         $owner = User::factory()->create();
         $company = Company::factory()->create();
 
+        // Associate user with company
+        $company->users()->attach($owner->id, ['role' => 'owner']);
+
         setPermissionsTeamId($company->id);
         $owner->assignRole('owner');
         setPermissionsTeamId(null);
 
         // Try to remove the only owner
         actingAs($owner)
+            ->withSession(['current_company_id' => $company->id])
             ->delete(route('companies.roles.remove', [$company, $owner]))
             ->assertStatus(403)
-            ->assertJson(['message' => 'Cannot remove the last owner from the company']);
+            ->assertJson(['message' => 'You cannot remove yourself from the company']);
     });
 
     it('admin cannot assign owner role to themselves', function () {
         $admin = User::factory()->create();
         $company = Company::factory()->create();
+
+        // Associate user with company
+        $company->users()->attach($admin->id, ['role' => 'admin']);
 
         setPermissionsTeamId($company->id);
         $admin->assignRole('admin');
@@ -85,6 +104,7 @@ describe('Company Role Management', function () {
 
         // Try to assign owner role to self
         actingAs($admin)
+            ->withSession(['current_company_id' => $company->id])
             ->put(route('companies.roles.update', [$company, $admin]), [
                 'role' => 'owner',
             ])

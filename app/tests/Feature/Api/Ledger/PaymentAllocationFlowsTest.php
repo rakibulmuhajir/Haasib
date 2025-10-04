@@ -14,13 +14,16 @@ use Illuminate\Support\Str;
 function seedCompanyWithARAndCash(): array
 {
     $user = User::factory()->create();
-    $currency = Currency::create([
-        'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
-    ]);
+    $currency = Currency::where('code', 'USD')->first();
+    if (! $currency) {
+        $currency = Currency::create([
+            'id' => (string) Str::uuid(),
+            'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        ]);
+    }
     $company = Company::create([
         'id' => (string) Str::uuid(),
-        'name' => 'Alloc Co', 'slug' => 'alloc-co',
+        'name' => 'Alloc Co', 'slug' => 'alloc-co-'.Str::random(4),
         'base_currency' => 'USD', 'currency_id' => $currency->id,
         'language' => 'en', 'locale' => 'en_US',
         'settings' => [],
@@ -63,14 +66,20 @@ it('partial allocation updates invoice status to partial and can be posted to le
     ]);
 
     // Create and post invoice of 100
+    $context = new ServiceContext($user, $company);
     $invoice = app(InvoiceService::class)->createInvoice(
         company: $company,
         customer: $customer,
         items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 100]],
-        currency: $currency
+        currency: $currency,
+        invoiceDate: now()->toDateString(),
+        dueDate: now()->addDays(30)->toDateString(),
+        notes: null,
+        terms: null,
+        context: $context
     );
-    $invoice = app(InvoiceService::class)->markAsSent($invoice);
-    $invoice = app(InvoiceService::class)->markAsPosted($invoice);
+    $invoice = app(InvoiceService::class)->markAsSent($invoice, $context);
+    $invoice = app(InvoiceService::class)->markAsPosted($invoice, $context);
 
     // Payment of 30
     $payment = app(PaymentService::class)->processIncomingPayment(
@@ -79,7 +88,12 @@ it('partial allocation updates invoice status to partial and can be posted to le
         amount: 30.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-Partial',
+        paymentDate: now()->toDateString(),
         currency: $currency,
+        exchangeRate: null,
+        notes: null,
+        autoAllocate: false,
+        idempotencyKey: null,
         context: ServiceContext::forUser($user, $company->id)
     );
 
@@ -109,6 +123,8 @@ it('void allocation sets status and can void ledger entry', function () {
     [$user, $company, $currency] = seedCompanyWithARAndCash();
     $this->actingAs($user);
 
+    $context = new ServiceContext($user, $company);
+
     $customer = Customer::create([
         'customer_id' => (string) Str::uuid(),
         'company_id' => $company->id,
@@ -119,10 +135,15 @@ it('void allocation sets status and can void ledger entry', function () {
         company: $company,
         customer: $customer,
         items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 50]],
-        currency: $currency
+        currency: $currency,
+        invoiceDate: now()->toDateString(),
+        dueDate: now()->addDays(30)->toDateString(),
+        notes: null,
+        terms: null,
+        context: $context
     );
-    $invoice = app(InvoiceService::class)->markAsSent($invoice);
-    $invoice = app(InvoiceService::class)->markAsPosted($invoice);
+    $invoice = app(InvoiceService::class)->markAsSent($invoice, $context);
+    $invoice = app(InvoiceService::class)->markAsPosted($invoice, $context);
 
     $payment = app(PaymentService::class)->processIncomingPayment(
         company: $company,
@@ -130,7 +151,12 @@ it('void allocation sets status and can void ledger entry', function () {
         amount: 50.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-2',
+        paymentDate: now()->toDateString(),
         currency: $currency,
+        exchangeRate: null,
+        notes: null,
+        autoAllocate: false,
+        idempotencyKey: null,
         context: ServiceContext::forUser($user, $company->id)
     );
     app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 20.00]], 'Allocation', ServiceContext::forUser($user, $company->id));
@@ -148,6 +174,8 @@ it('refunds an allocation and records a refund allocation', function () {
     [$user, $company, $currency] = seedCompanyWithARAndCash();
     $this->actingAs($user);
 
+    $context = new ServiceContext($user, $company);
+
     $customer = Customer::create([
         'customer_id' => (string) Str::uuid(),
         'company_id' => $company->id,
@@ -158,10 +186,15 @@ it('refunds an allocation and records a refund allocation', function () {
         company: $company,
         customer: $customer,
         items: [['description' => 'S', 'quantity' => 1, 'unit_price' => 80]],
-        currency: $currency
+        currency: $currency,
+        invoiceDate: now()->toDateString(),
+        dueDate: now()->addDays(30)->toDateString(),
+        notes: null,
+        terms: null,
+        context: $context
     );
-    $invoice = app(InvoiceService::class)->markAsSent($invoice);
-    $invoice = app(InvoiceService::class)->markAsPosted($invoice);
+    $invoice = app(InvoiceService::class)->markAsSent($invoice, $context);
+    $invoice = app(InvoiceService::class)->markAsPosted($invoice, $context);
 
     $payment = app(PaymentService::class)->processIncomingPayment(
         company: $company,
@@ -169,7 +202,12 @@ it('refunds an allocation and records a refund allocation', function () {
         amount: 80.00,
         paymentMethod: 'cash',
         paymentReference: 'PMT-3',
+        paymentDate: now()->toDateString(),
         currency: $currency,
+        exchangeRate: null,
+        notes: null,
+        autoAllocate: false,
+        idempotencyKey: null,
         context: ServiceContext::forUser($user, $company->id)
     );
     app(PaymentService::class)->allocatePayment($payment, [['invoice_id' => $invoice->invoice_id, 'amount' => 50.00]], 'Allocation', ServiceContext::forUser($user, $company->id));

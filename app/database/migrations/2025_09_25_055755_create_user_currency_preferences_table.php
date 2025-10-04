@@ -20,8 +20,8 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
-            $table->foreign('currency_id')->references()->on('public.currencies')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('auth.users')->onDelete('cascade');
+            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('cascade');
 
             // Unique constraint - user can only have a currency once
             $table->unique(['user_id', 'currency_id']);

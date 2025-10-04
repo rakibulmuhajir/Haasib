@@ -99,6 +99,16 @@ class CompanyRoleController extends AuthenticatedController
                 }
             }
 
+            // Prevent user from assigning owner role to themselves (unless they're already an owner)
+            if ($request->user()->id === $user->id && $validated['role'] === 'owner') {
+                $currentRole = $user->getRoleNames()->first();
+                if ($currentRole !== 'owner') {
+                    return response()->json([
+                        'message' => 'You cannot assign owner role to yourself',
+                    ], 403);
+                }
+            }
+
             try {
                 // Remove existing company roles
                 $user->syncRoles([]);

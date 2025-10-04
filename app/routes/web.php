@@ -3,6 +3,7 @@
 use App\Http\Controllers\CapabilitiesController;
 use App\Http\Controllers\CommandController;
 use App\Http\Controllers\CommandOverlayController;
+use App\Http\Controllers\CompanyRoleController;
 use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SessionTestController;
@@ -129,7 +130,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])
             ->middleware('permission:invoices.create')->name('create');
         Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])
-            ->middleware('permission:invoices.create')->name('store');
+            ->middleware('permission:invoices.create')->middleware('idempotent')->name('store');
         Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])
             ->whereUuid('invoice')->middleware('permission:invoices.view')->name('show');
         Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])
@@ -249,9 +250,33 @@ Route::middleware('auth')->group(function () {
                 ->whereUuid('id')->middleware('permission:ledger.view')->name('show');
         });
 
+        // Ledger Reports Routes
+        Route::prefix('reports')->name('reports.')->group(function () {
+            Route::get('/trial-balance', [\App\Http\Controllers\Ledger\LedgerReportController::class, 'trialBalance'])
+                ->middleware('permission:ledger.reports.view')->name('trial-balance');
+            Route::get('/balance-sheet', [\App\Http\Controllers\Ledger\LedgerReportController::class, 'balanceSheet'])
+                ->middleware('permission:ledger.reports.view')->name('balance-sheet');
+            Route::get('/income-statement', [\App\Http\Controllers\Ledger\LedgerReportController::class, 'incomeStatement'])
+                ->middleware('permission:ledger.reports.view')->name('income-statement');
+        });
+
+        // Journal Routes
+        Route::prefix('journal')->name('journal.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Ledger\JournalController::class, 'index'])
+                ->middleware('permission:ledger.view')->name('index');
+            Route::get('/create', [\App\Http\Controllers\Ledger\JournalController::class, 'create'])
+                ->middleware('permission:ledger.entries.create')->name('create');
+        });
+
         // Dynamic parameter routes - must come after specific routes
         Route::get('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'show'])
             ->whereUuid('id')->middleware('permission:ledger.view')->name('show');
+        Route::get('/{id}/edit', [\App\Http\Controllers\Ledger\LedgerController::class, 'edit'])
+            ->whereUuid('id')->middleware('permission:ledger.entries.update')->name('edit');
+        Route::put('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'update'])
+            ->whereUuid('id')->middleware('permission:ledger.entries.update')->name('update');
+        Route::delete('/{id}', [\App\Http\Controllers\Ledger\LedgerController::class, 'destroy'])
+            ->whereUuid('id')->middleware('permission:ledger.entries.delete')->name('destroy');
         Route::post('/{id}/post', [\App\Http\Controllers\Ledger\LedgerController::class, 'post'])
             ->whereUuid('id')->middleware('permission:ledger.entries.post')->name('post');
         Route::post('/{id}/void', [\App\Http\Controllers\Ledger\LedgerController::class, 'void'])

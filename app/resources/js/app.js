@@ -4,6 +4,7 @@ import '../css/themes/blue-whale.css';
 import './bootstrap';
 
 import { createInertiaApp, Link } from '@inertiajs/vue3';
+import { createI18nInstance } from './services/i18n';
 // Early theme bootstrap: set data-theme before Vue mounts
 (() => {
   const stored = localStorage.getItem('theme') // 'blue-whale' | 'blue-whale-dark'
@@ -131,10 +132,14 @@ createInertiaApp({
             `./Pages/${name}.vue`,
             import.meta.glob('./Pages/**/*.vue'),
         ),
-    setup({ el, App, props, plugin }) {
+    async setup({ el, App, props, plugin }) {
         const vue = createApp({ render: () => h(App, props) })
+        const pageProps = props.initialPage?.props ?? {}
+        const initialLocale = pageProps.userLocale ?? pageProps.tenantLocale ?? pageProps.appLocale ?? undefined
+        const i18n = await createI18nInstance(initialLocale)
         vue.use(plugin)
         vue.use(ZiggyVue)
+        vue.use(i18n)
         vue.use(PrimeVue, {
             ripple: true,
             unstyled: false,

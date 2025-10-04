@@ -24,9 +24,9 @@ class InvoiceApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $company = $request->attributes->get('company');
+        $companyId = $request->input('current_company_id');
 
-        $query = Invoice::where('company_id', $company->id)
+        $query = Invoice::where('company_id', $companyId)
             ->with(['customer', 'currency', 'items']);
 
         if ($request->filled('search')) {
@@ -91,8 +91,8 @@ class InvoiceApiController extends Controller
         try {
             // Validate input since FormRequest classes are not present
             $validated = $request->validate([
-                'customer_id' => 'required|exists:customers,customer_id',
-                'currency_id' => 'nullable|exists:currencies,id',
+                'customer_id' => 'required|exists_customer',
+                'currency_id' => 'nullable|exists_currency',
                 'invoice_date' => 'nullable|date',
                 'due_date' => 'nullable|date|after_or_equal:invoice_date',
                 'notes' => 'nullable|string|max:1000',
@@ -108,36 +108,55 @@ class InvoiceApiController extends Controller
                 'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
             ]);
 
-            $company = $request->attributes->get('company');
-            $customer = \App\Models\Customer::where('company_id', $company->id)
+            $companyId = $request->input('current_company_id');
+            $company = \App\Models\Company::findOrFail($companyId);
+            $customer = \App\Models\Customer::where('company_id', $companyId)
                 ->where('customer_id', $validated['customer_id'])
                 ->firstOrFail();
             $currency = isset($validated['currency_id']) ? \App\Models\Currency::findOrFail($validated['currency_id']) : null;
 
-            $invoice = $this->invoiceService->createInvoice(
-                company: $company,
-                customer: $customer,
-                items: $validated['items'],
-                currency: $currency,
-                invoiceDate: $validated['invoice_date'] ?? null,
-                dueDate: $validated['due_date'] ?? null,
-                notes: $validated['notes'] ?? null,
-                terms: $validated['terms'] ?? null,
-                idempotencyKey: $request->header('Idempotency-Key'),
-                context: ServiceContextHelper::fromRequest($request)
-            );
+            try {
+                $context = ServiceContextHelper::fromRequest($request, $companyId);
 
-            return $this->ok(
-                $invoice->load(['customer', 'currency', 'items']),
-                'Invoice created successfully',
-                status: 201
-            );
+                $invoice = $this->invoiceService->createInvoice(
+                    company: $company,
+                    customer: $customer,
+                    items: $validated['items'],
+                    currency: $currency,
+                    invoiceDate: $validated['invoice_date'] ?? null,
+                    dueDate: $validated['due_date'] ?? null,
+                    notes: $validated['notes'] ?? null,
+                    terms: $validated['terms'] ?? null,
+                    context: $context
+                );
+
+                if (! $invoice) {
+                    throw new \RuntimeException('Invoice service returned null');
+                }
+
+                return $this->ok(
+                    $invoice->load(['customer', 'currency', 'items']),
+                    'Invoice created successfully',
+                    status: 201
+                );
+            } catch (\Throwable $e) {
+                Log::error('Invoice service threw exception', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'company_id' => $companyId,
+                    'customer_id' => $validated['customer_id'],
+                    'currency_id' => $validated['currency_id'] ?? null,
+                    'items' => $validated['items'],
+                    'user_id' => $request->user()->id,
+                ]);
+                throw $e;
+            }
 
         } catch (\Exception $e) {
             Log::error('Failed to create invoice', [
                 'error' => $e->getMessage(),
                 'user_id' => $request->user()->id,
-                'company_id' => $request->user()->company_id,
+                'company_id' => $request->input('current_company_id') ?? $request->user()->current_company_id,
                 'request_data' => $request->all(),
             ]);
 
@@ -150,9 +169,9 @@ class InvoiceApiController extends Controller
      */
     public function show(Request $request, string $id): JsonResponse
     {
-        $company = $request->attributes->get('company');
+        $companyId = $request->input('current_company_id');
 
-        $invoice = Invoice::where('company_id', $company->id)
+        $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_id', $id)
             ->with(['customer', 'currency', 'items.taxes', 'paymentAllocations.payment'])
             ->firstOrFail();
@@ -194,11 +213,11 @@ class InvoiceApiController extends Controller
                 'items.*.taxes.*.rate' => 'required_with:items.*.taxes|numeric|min:0|max:100',
             ]);
 
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)->where('invoice_id', $id)->firstOrFail();
 
             $customer = isset($validated['customer_id'])
-                ? \App\Models\Customer::where('company_id', $company->id)
+                ? \App\Models\Customer::where('company_id', $companyId)
                     ->where('customer_id', $validated['customer_id'])
                     ->firstOrFail()
                 : null;
@@ -234,8 +253,8 @@ class InvoiceApiController extends Controller
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)->where('invoice_id', $id)->firstOrFail();
 
             $this->invoiceService->deleteInvoice($invoice, $request->reason, ServiceContextHelper::fromRequest($request));
 
@@ -258,8 +277,8 @@ class InvoiceApiController extends Controller
     public function markAsSent(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsSent($invoice, ServiceContextHelper::fromRequest($request));
 
@@ -283,8 +302,8 @@ class InvoiceApiController extends Controller
     public function markAsPosted(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsPosted($invoice, ServiceContextHelper::fromRequest($request));
 
@@ -312,8 +331,8 @@ class InvoiceApiController extends Controller
                 'reason' => 'required|string|min:3',
             ]);
 
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)->where('invoice_id', $id)->firstOrFail();
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)->where('invoice_id', $id)->firstOrFail();
 
             $updatedInvoice = $this->invoiceService->markAsCancelled($invoice, $request->reason, ServiceContextHelper::fromRequest($request));
 
@@ -332,8 +351,8 @@ class InvoiceApiController extends Controller
     public function generatePdf(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
@@ -361,8 +380,8 @@ class InvoiceApiController extends Controller
                 'message' => 'nullable|string',
             ]);
 
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
@@ -381,8 +400,8 @@ class InvoiceApiController extends Controller
     public function duplicate(Request $request, string $id): JsonResponse
     {
         try {
-            $company = $request->attributes->get('company');
-            $invoice = Invoice::where('company_id', $company->id)
+            $companyId = $request->input('current_company_id');
+            $invoice = Invoice::where('company_id', $companyId)
                 ->where('invoice_id', $id)
                 ->firstOrFail();
 
@@ -400,8 +419,8 @@ class InvoiceApiController extends Controller
      */
     public function pdfExists(Request $request, string $id): JsonResponse
     {
-        $company = $request->attributes->get('company');
-        $invoice = Invoice::where('company_id', $company->id)
+        $companyId = $request->input('current_company_id');
+        $invoice = Invoice::where('company_id', $companyId)
             ->where('invoice_id', $id)
             ->firstOrFail();
 
@@ -442,12 +461,12 @@ class InvoiceApiController extends Controller
                 'reason' => 'nullable|string|min:3',
             ]);
 
-            $company = $request->attributes->get('company');
+            $companyId = $request->input('current_company_id');
             $results = [];
 
             switch ($validated['action']) {
                 case 'delete':
-                    $invoices = Invoice::where('company_id', $company->id)
+                    $invoices = Invoice::where('company_id', $companyId)
                         ->whereIn('invoice_id', $validated['invoice_ids'])
                         ->get();
 
@@ -482,7 +501,7 @@ class InvoiceApiController extends Controller
                 case 'cancel':
                     foreach ($validated['invoice_ids'] as $invoiceId) {
                         try {
-                            $invoice = Invoice::where('company_id', $company->id)
+                            $invoice = Invoice::where('company_id', $companyId)
                                 ->where('invoice_id', $invoiceId)
                                 ->firstOrFail();
                             $this->invoiceService->markAsCancelled($invoice, $validated['reason'] ?? null, ServiceContextHelper::fromRequest($request));

@@ -76,12 +76,12 @@ class PaymentService
             if ($autoAllocate && $invoiceAllocations) {
                 // Pre-load all invoices with locks to prevent race conditions
                 $invoiceIds = array_keys($invoiceAllocations);
-                $invoices = Invoice::whereIn('id', $invoiceIds)
+                $invoices = Invoice::whereIn('invoice_id', $invoiceIds)
                     ->where('company_id', $company->id)
                     ->where('customer_id', $customer->id)
                     ->lockForUpdate()
                     ->get()
-                    ->keyBy('id');
+                    ->keyBy('invoice_id');
 
                 foreach ($invoiceAllocations as $invoiceId => $allocationAmount) {
                     if ($allocationAmount > 0 && isset($invoices[$invoiceId])) {
@@ -243,11 +243,11 @@ class PaymentService
 
             // Pre-load all invoices with locks to prevent race conditions
             $invoiceIds = array_column($allocations, 'invoice_id');
-            $invoices = Invoice::whereIn('id', $invoiceIds)
+            $invoices = Invoice::whereIn('invoice_id', $invoiceIds)
                 ->where('company_id', $payment->company_id)
                 ->lockForUpdate()
                 ->get()
-                ->keyBy('id');
+                ->keyBy('invoice_id');
 
             foreach ($allocations as $allocation) {
                 $invoice = $invoices[$allocation['invoice_id']] ?? null;

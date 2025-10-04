@@ -3,9 +3,8 @@
 use App\Models\User;
 use App\Models\Company;
 beforeEach(function () {
-    // Seed permissions
-    $this->artisan('db:seed', ['--class' => 'RbacSeeder', '--env' => 'testing']);
-    
+    // Don't re-seed permissions - assume they exist from initial setup
+
     // Create test company
     $this->company = Company::factory()->create();
     

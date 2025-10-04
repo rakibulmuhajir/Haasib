@@ -712,3 +712,178 @@ public function viewer_cannot_create_contacts()
 **Document Version**: 1.0  
 **Last Updated**: 2025-09-30  
 **Next Review**: 2025-10-07
+
+## 12. System & Company Permission Catalog (September 2025)
+The September 2025 RBAC hardening pass introduced a canonical catalog for system-wide and tenant-scoped permissions. These live in `RbacSeeder.php` and should be treated as source of truth when adding new capabilities or auditing role scope.
+
+### 12.1 System-Level Permissions (`team_id = null`)
+**Company Management**
+- `system.companies.view`
+- `system.companies.create`
+- `system.companies.update`
+- `system.companies.deactivate`
+- `system.companies.manage`
+
+**Currency & FX**
+- `system.currencies.manage`
+- `system.fx.view`
+- `system.fx.update`
+- `system.fx.sync`
+
+**User Operations**
+- `system.users.manage`
+- `users.roles.assign`
+- `users.deactivate`
+
+**Monitoring & Audit**
+- `system.audit.view`
+- `system.reports.view`
+- `logs.view`
+- `logs.export`
+- `monitoring.view`
+- `monitoring.alerts.view`
+- `monitoring.alerts.manage`
+
+**Data Pipelines**
+- `import.view`
+- `import.execute`
+- `export.view`
+- `export.execute`
+- `export.schedule`
+
+**Backups & DR**
+- `backup.create`
+- `backup.download`
+- `backup.restore`
+- `backup.schedule`
+
+### 12.2 Company-Level Permissions (available to tenant roles & super admins)
+**Company Operations**
+- `companies.view`
+- `companies.update`
+- `companies.settings.view`
+- `companies.settings.update`
+
+**Currencies**
+- `companies.currencies.view`
+- `companies.currencies.enable`
+- `companies.currencies.disable`
+- `companies.currencies.set-base`
+- `companies.currencies.exchange-rates.view`
+- `companies.currencies.exchange-rates.update`
+
+**Users**
+- `users.invite`
+- `users.view`
+- `users.update`
+- `users.roles.revoke`
+
+**CRM & Customers**
+- `customers.view`
+- `customers.create`
+- `customers.update`
+- `customers.delete`
+- `customers.merge`
+- `customers.export`
+- `customers.import`
+
+**Vendors**
+- `vendors.view`
+- `vendors.create`
+- `vendors.update`
+- `vendors.delete`
+- `vendors.merge`
+- `vendors.export`
+- `vendors.import`
+- `vendors.credits.view`
+- `vendors.credits.create`
+
+**Invoices & Items**
+- `invoices.view`
+- `invoices.create`
+- `invoices.update`
+- `invoices.delete`
+- `invoices.send`
+- `invoices.post`
+- `invoices.void`
+- `invoices.duplicate`
+- `invoices.export`
+- `invoices.import`
+- `invoices.approve`
+- `invoice-items.view`
+- `invoice-items.create`
+- `invoice-items.update`
+- `invoice-items.delete`
+
+**Payments (AR/AP)**
+- `payments.view`
+- `payments.create`
+- `payments.update`
+- `payments.delete`
+- `payments.allocate`
+- `payments.unallocate`
+- `payments.reconcile`
+- `payments.refund`
+- `payments.void`
+- `payments.export`
+- `payments.import`
+
+**Bills & Credits**
+- `bills.view`
+- `bills.create`
+- `bills.update`
+- `bills.delete`
+- `bills.approve`
+- `bill-items.view`
+- `bill-items.create`
+- `bill-items.update`
+- `bill-items.delete`
+- `vendor-credits.view`
+- `vendor-credits.create`
+
+> _Super admins inherit all permissions implicitly across contexts; tenant roles receive scoped subsets per the permission matrix below._
+
+## 13. Permission Matrix & Usage Guidance
+
+| Category | Total | super_admin | owner | admin | manager | accountant | employee | viewer |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| api | 5 | ✓ | ✓ | 4 | - | - | - | - |
+| attachments | 4 | ✓ | ✓ | ✓ | 3 | 3 | 3 | 2 |
+| backup | 4 | ✓ | ✓ | - | - | - | - | - |
+| bill-items | 4 | ✓ | ✓ | ✓ | 3 | 3 | 2 | 1 |
+| bills | 10 | ✓ | ✓ | 8 | 6 | 7 | 3 | 1 |
+| companies | 10 | ✓ | ✓ | 9 | 4 | 4 | 2 | 3 |
+| customers | 7 | ✓ | ✓ | 6 | 4 | 2 | 1 | 1 |
+| dashboard | 2 | ✓ | ✓ | ✓ | 1 | 1 | 1 | 1 |
+| export | 3 | ✓ | ✓ | 2 | 2 | 2 | - | - |
+| import | 2 | ✓ | ✓ | ✓ | 1 | ✓ | - | - |
+| invoice-items | 4 | ✓ | ✓ | ✓ | 3 | 3 | 3 | 1 |
+| invoices | 11 | ✓ | ✓ | 9 | 5 | 5 | 4 | 1 |
+| ledger | 12 | ✓ | ✓ | 6 | 3 | 11 | 2 | 2 |
+| logs | 2 | ✓ | ✓ | 1 | - | 1 | - | - |
+| monitoring | 3 | ✓ | ✓ | 2 | - | - | - | - |
+| notes | 4 | ✓ | ✓ | ✓ | 3 | 3 | 2 | 1 |
+| payments | 11 | ✓ | ✓ | 8 | 5 | 6 | 2 | 1 |
+| reports | 8 | ✓ | ✓ | 7 | 6 | ✓ | 4 | 4 |
+| settings | 8 | ✓ | ✓ | 7 | 2 | - | - | 1 |
+| system | 12 | ✓ | - | - | - | - | - | - |
+| tax | 9 | ✓ | ✓ | 5 | 3 | 7 | - | 3 |
+| users | 6 | ✓ | ✓ | ✓ | 2 | - | - | 1 |
+| vendors | 9 | ✓ | ✓ | 8 | 4 | 2 | 1 | 1 |
+| widgets | 4 | ✓ | ✓ | 3 | 2 | 2 | - | - |
+| **Total permissions** | **154** | **154 (100%)** | **142 (92%)** | **111 (72%)** | **62 (40%)** | **72 (47%)** | **30 (19%)** | **25 (16%)** |
+
+**How to apply this matrix**
+- **Security reviews**: verify proposed changes stay within intended categories and expose privilege creep.
+- **Automated tests**: seed the relevant role, hit protected routes, and confirm allows/denies match the table.
+- **UI gating**: conditionally render buttons/menus per role coverage.
+- **Support & onboarding**: share with customer admins to clarify role capabilities.
+
+Super-admin-only behaviours retained from the prior appendix:
+1. Global context operations without company affiliation
+2. Cross-company access for support tasks
+3. Implicit permission inheritance without explicit assignment
+4. System-only actions (user provisioning, feature flags) restricted to global context
+
+All future RBAC enhancements must extend this catalog and matrix, updating the seeder and documentation simultaneously.
+

@@ -138,17 +138,15 @@ class VendorSeeder extends Seeder
                 $vendorNumber = 'VEND-'.str_pad(($index + 1), 4, '0', STR_PAD_LEFT).'-'.strtoupper(Str::random(4));
 
                 Vendor::create([
-                    'vendor_id' => (string) Str::uuid(),
+                    'id' => (string) Str::uuid(),
                     'company_id' => $company->id,
                     'name' => $vendorData['name'],
                     'email' => $vendorData['email'],
                     'phone' => $vendorData['phone'],
                     'tax_number' => $vendorData['tax_id'],
-                    'address' => json_encode($vendorData['billing_address']),
-                    'currency_id' => null,
+                    'billing_address' => json_encode($vendorData['billing_address']),
+                    'currency_code' => null,
                     'is_active' => true,
-                    'created_by' => null,
-                    'updated_by' => null,
                 ]);
             }
         }

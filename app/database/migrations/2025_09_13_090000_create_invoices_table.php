@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoices', function (Blueprint $table) {
+        Schema::create('acct.invoices', function (Blueprint $table) {
             $table->uuid('invoice_id')->primary();
             $table->uuid('company_id');
             $table->uuid('customer_id')->nullable();
@@ -48,39 +48,39 @@ return new class extends Migration
             $table->unique(['company_id', 'invoice_number']);
         });
 
-        Schema::table('invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('customer_id')->references('customer_id')->on('customers')->onDelete('set null');
-            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
-            $table->foreign('created_by')->references('user_id')->on('user_accounts')->onDelete('set null');
-            $table->foreign('updated_by')->references('user_id')->on('user_accounts')->onDelete('set null');
+            $table->foreign('customer_id')->references('customer_id')->on('hrm.customers')->onDelete('set null');
+            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
+            $table->foreign('created_by')->references('user_id')->on('auth.user_accounts')->onDelete('set null');
+            $table->foreign('updated_by')->references('user_id')->on('auth.user_accounts')->onDelete('set null');
             $table->index(['company_id', 'invoice_date'], 'idx_invoices_dates');
             $table->index(['company_id', 'status'], 'idx_invoices_status');
         });
 
         // Add check constraints
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_due_date CHECK (due_date >= invoice_date)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_subtotal_nonneg CHECK (subtotal >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_tax_nonneg CHECK (tax_amount >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_shipping_nonneg CHECK (shipping_amount >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_total_nonneg CHECK (total_amount >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_paid_nonneg CHECK (paid_amount >= 0)');
-        DB::statement('ALTER TABLE invoices ADD CONSTRAINT chk_balance_nonneg CHECK (balance_due >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_due_date CHECK (due_date >= invoice_date)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_subtotal_nonneg CHECK (subtotal >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_tax_nonneg CHECK (tax_amount >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_discount_nonneg CHECK (discount_amount >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_shipping_nonneg CHECK (shipping_amount >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_total_nonneg CHECK (total_amount >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_paid_nonneg CHECK (paid_amount >= 0)');
+        DB::statement('ALTER TABLE acct.invoices ADD CONSTRAINT chk_balance_nonneg CHECK (balance_due >= 0)');
         // Enum-like constraints for status fields
-        DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_invoice_status_valid CHECK (status IN ('draft','sent','posted','partial','paid','cancelled'))");
-        DB::statement("ALTER TABLE invoices ADD CONSTRAINT chk_payment_status_valid CHECK (payment_status IN ('unpaid','partial','paid','overpaid'))");
+        DB::statement("ALTER TABLE acct.invoices ADD CONSTRAINT chk_invoice_status_valid CHECK (status IN ('draft','sent','posted','partial','paid','cancelled'))");
+        DB::statement("ALTER TABLE acct.invoices ADD CONSTRAINT chk_payment_status_valid CHECK (payment_status IN ('unpaid','partial','paid','overpaid'))");
 
         // Idempotency unique scope within company
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoices_idemp_unique ON invoices (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS invoices_idemp_unique ON acct.invoices (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
         } catch (Throwable $e) { /* ignore on unsupported drivers */
         }
 
         // Enable RLS and tenant policy
-        DB::statement('ALTER TABLE invoices ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.invoices ENABLE ROW LEVEL SECURITY');
         DB::statement(<<<'SQL'
-            CREATE POLICY invoices_tenant_isolation ON invoices
+            CREATE POLICY invoices_tenant_isolation ON acct.invoices
             USING (company_id = current_setting('app.current_company', true)::uuid)
             WITH CHECK (company_id = current_setting('app.current_company', true)::uuid);
         SQL);
@@ -91,6 +91,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoices');
+        Schema::dropIfExists('acct.invoices');
     }
 };

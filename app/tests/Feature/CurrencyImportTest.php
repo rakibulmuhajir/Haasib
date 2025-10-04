@@ -50,8 +50,14 @@ test('currency import with base currency conversion works correctly', function (
 });
 
 test('currency search returns results with base currency exchange rates', function () {
-    // Create a user and company with GBP as base currency
-    $user = User::factory()->create();
+    // Reset cached permissions
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+    // Seed RBAC
+    $this->seed(\Database\Seeders\RbacSeeder::class);
+
+    // Create a super admin user who has system permissions
+    $user = User::factory()->create(['system_role' => 'superadmin']);
     $company = Company::factory()->create([
         'base_currency' => 'GBP',
     ]);
@@ -59,12 +65,12 @@ test('currency search returns results with base currency exchange rates', functi
     // Associate user with company
     $user->companies()->attach($company->id, ['role' => 'admin']);
 
-    // Act as user and set current company
+    // Act as user and set current company (superadmin bypasses permission checks)
     $this->actingAs($user);
     session(['current_company_id' => $company->id]);
 
     // Test searching currencies
-    $response = $this->getJson('/api/currencies/import/search', [
+    $response = $this->json('GET', '/api/currencies/import/search', [
         'query' => 'Euro',
         'source' => 'ecb',
     ]);

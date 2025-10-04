@@ -469,3 +469,27 @@ $result = $this->action->handle($request->validated(), $request->user());
 ---
 
 *This document should be updated as tables are created and dependencies are resolved.*
+
+## Phase Log — Universal Inline Editing System (2025-09-25)
+**Status:** ✅ Complete  
+**Owner:** banna  
+**Modules impacted:** Invoicing UI, Customers, Settings (shared across AR workflows)
+
+### Architecture Recap
+- **UniversalFieldSaver.ts** service centralises inline edit submissions with optimistic updates, exponential retry (300/600/1200 ms) and toast feedback.
+- **useInlineEdit.ts** Vue composable exposes editing state factories (`createEditingComputed`), per-field loading flags, and success callbacks to redistribute updated models.
+- **InlineEditable.vue** component standardises the editable UI surface (text/textarea/select) with validation hooks and accessibility affordances.
+- **InlineEditController.php** processes all inline edits through a single PATCH endpoint, resolving model handlers, enforcing validation, and persisting within transactions.
+
+### Feature Coverage
+- Model configuration map ensures field names align between frontend keys (e.g., `taxId`) and backend attributes.
+- Nested JSON fields (billing/shipping addresses) merge safely without clobbering unchanged values.
+- Supports inline editing across invoices, customers, company settings, currency configuration, and future AR surfaces.
+- Integrates with RBAC: controller policies check module permissions before accepting changes.
+
+### Testing & QA
+- Added feature tests covering happy-path updates, validation failures, and unauthorized attempts.
+- Component tests verify optimistic rollback and toast messaging.
+- Manual QA script recorded in `docs/manual_test.md` (phone number, address, retry scenarios).
+
+_This supersedes the duplicate brief previously stored under `app/docs/briefs/01_invoicing_phase_tracker.md`; future inline-edit enhancements should extend this section._

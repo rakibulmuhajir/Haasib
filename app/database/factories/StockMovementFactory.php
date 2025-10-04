@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Company;
 use App\Models\Item;
+use App\Models\StockMovement;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class StockMovementFactory extends Factory
 {
-    protected $model = StockMovement::class;
+    protected $model = \App\Models\StockMovement::class;
 
     public function definition(): array
     {

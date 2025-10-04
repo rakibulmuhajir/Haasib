@@ -1,0 +1,401 @@
+
+   FAIL  Tests\Unit\Actions\Invoicing\InvoiceCreateTest
+  ⨯ it creates invoice successfully                                      0.17s  
+  ⨯ it handles idempotency key                                           0.05s  
+  ⨯ it returns existing invoice for duplicate idempotency key            0.05s  
+  ⨯ it logs duplicate request detection                                  0.05s  
+  ⨯ it uses user company_id when not provided                            0.05s  
+  ⨯ it handles nullable fields gracefully                                0.04s  
+  ⨯ it passes idempotency_key to service                                 0.04s  
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                    0.03s  
+
+   FAIL  Tests\Unit\Middleware\EnsureIdempotencyTest
+  ⨯ idempotency middleware stores payload hash instead of full payload
+  ⨯ idempotency middleware rejects key reuse with different payload
+  ⨯ idempotency middleware stores minimal response data
+  ⨯ idempotency middleware filters sensitive fields from hash
+  ⨯ idempotency middleware reconstructs minimal response from stored data
+
+   FAIL  Tests\Unit\PermissionComposableTest
+  ⨯ Permission Composable Logic → usePermissions composable returns correct structure
+  ⨯ Permission Composable Logic → super admin has all can methods returning true
+  ⨯ Permission Composable Logic → viewer has limited can methods
+  ⨯ Permission Composable Logic → owner has most can methods
+  ⨯ Role-based Helper Methods → role helpers return correct values
+  ⨯ Permission Inheritance → super admin inherits all permissions
+  ⨯ Permission Inheritance → regular users need explicit permissions
+  ⨯ Currency Permission Logic → super admin can manage currencies anywhere
+  ⨯ Currency Permission Logic → regular users need company currency permissions
+  ⨯ Company Management Permissions → canManageCompany reflects role correctly
+  ⨯ Company Management Permissions → super admin can manage any company
+
+   FAIL  Tests\Unit\RbacTest
+  ⨯ RBAC Permission Tests → it owner can manage company currencies       0.63s  
+  ✓ RBAC Permission Tests → it admin cannot assign owner role            0.56s  
+  ✓ RBAC Permission Tests → it employee cannot assign roles              0.58s  
+  ⨯ RBAC Permission Tests → it permissions are isolated between compani… 0.55s  
+  ⨯ RBAC Permission Tests → it super_admin has system permissions        0.49s  
+  ✓ RBAC Route Protection Tests → it unauthorized user cannot access pr… 0.63s  
+  ⨯ RBAC Route Protection Tests → it authorized user can access protect… 0.89s  
+  ✓ RBAC Role Management Tests → it can assign roles to users in compan… 0.61s  
+
+   FAIL  Tests\Unit\Services\PaymentServiceAllocationTest
+  ⨯ payment allocation locks invoices to prevent race conditions
+  ⨯ payment allocation with autoallocate uses locked invoices
+  ⨯ payment allocation prevents overspending with concurrent requests
+  ⨯ payment allocation validates invoice ownership within locked query
+
+   FAIL  Tests\Unit\Services\PaymentServiceContextTest
+  ⨯ PaymentService ServiceContext Integration → createPayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → createPayment requires ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → createPayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → updatePayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → updatePayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → deletePayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → deletePayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → allocatePayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → allocatePayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → voidPayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → voidPayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → refundPayment works correctly with ServiceContext parameter
+  ⨯ PaymentService ServiceContext Integration → refundPayment audit logging captures user context properly
+  ⨯ PaymentService ServiceContext Integration → ServiceContext idempotency key is properly used in all operations
+  ⨯ PaymentService ServiceContext Integration → ServiceContext without user (system context) works correctly
+  ⨯ PaymentService ServiceContext Integration → ServiceContext is required for all PaymentService methods
+  ⨯ PaymentService ServiceContext Integration → All PaymentService methods accept ServiceContext parameter
+
+   FAIL  Tests\Unit\Traits\AuditLoggingTest
+  ⨯ audit logging trait logs with service context
+  ⨯ audit logging trait works with legacy parameters
+  ⨯ audit logging trait prioritizes context over legacy parameters
+  ⨯ audit logging trait includes result data when provided
+  ⨯ audit logging trait gracefully handles failures
+
+   FAIL  Tests\Feature\Api\Currencies\EcbSyncAndLookupTest
+  ⨯ it syncs ECB rates and persists USD/EUR pair                         1.47s  
+  ⨯ it returns exchange rate via API after upsert                        0.04s  
+
+   FAIL  Tests\Feature\Api\Errors\ApiErrorEnvelopeTest
+  ⨯ it returns standardized code for validation errors                   0.07s  
+
+   FAIL  Tests\Feature\Api\Idempotency\DebugIdempotencyMiddlewareTest
+  ⨯ it debugs idempotency replay                                         0.06s  
+
+   FAIL  Tests\Feature\Api\Idempotency\InvoiceActionsIdempotencyTest
+  ⨯ it invoice send/post/cancel endpoints are idempotent                 0.07s  
+
+   FAIL  Tests\Feature\Api\Idempotency\InvoiceIdempotencyTest
+  ⨯ it reuses response for same Idempotency-Key on invoice create        0.05s  
+
+   FAIL  Tests\Feature\Api\Idempotency\InvoiceUpdateDeleteIdempotencyTest
+  ⨯ it invoice update and delete are idempotent                          0.06s  
+
+   FAIL  Tests\Feature\Api\Invoices\DebugInvoiceCreateTest
+  ⨯ it debugs invoice create response                                    0.05s  
+
+   FAIL  Tests\Feature\Api\Invoices\InvoicePostingValidationTest
+  ⨯ it posting a draft invoice returns 422 and is idempotent             0.06s  
+  ⨯ it posting zero-total invoice returns 422                            0.06s  
+  ⨯ it posting with future sent_at returns 422                           0.05s  
+
+   FAIL  Tests\Feature\Api\Ledger\InvoicePostingCreatesJournalEntryTest
+  ⨯ it creates a journal entry when posting an invoice (via API)         0.08s  
+
+   FAIL  Tests\Feature\Api\Ledger\PaymentAllocationFlowsTest
+  ⨯ it partial allocation updates invoice status to partial and can be…  0.04s  
+  ⨯ it void allocation sets status and can void ledger entry             0.04s  
+  ⨯ it refunds an allocation and records a refund allocation             0.04s  
+
+   FAIL  Tests\Feature\Api\Ledger\PaymentPostingCreatesJournalEntryTest
+  ⨯ it auto-posts a journal entry when a payment completes               0.04s  
+
+   PASS  Tests\Feature\Auth\AuthenticationTest
+  ✓ login screen can be rendered                                         0.06s  
+  ✓ users can authenticate using the login screen                        0.04s  
+  ✓ users can not authenticate with invalid password                     0.24s  
+  ✓ users can logout                                                     0.04s  
+
+   PASS  Tests\Feature\Auth\EmailVerificationTest
+  ✓ email verification screen can be rendered                            0.05s  
+  ✓ email can be verified                                                0.05s  
+  ✓ email is not verified with invalid hash                              0.04s  
+
+   PASS  Tests\Feature\Auth\PasswordConfirmationTest
+  ✓ confirm password screen can be rendered                              0.06s  
+  ✓ password can be confirmed                                            0.04s  
+  ✓ password is not confirmed with invalid password                      0.24s  
+
+   PASS  Tests\Feature\Auth\PasswordResetTest
+  ✓ reset password link screen can be rendered                           0.03s  
+  ✓ reset password link can be requested                                 0.24s  
+  ✓ reset password screen can be rendered                                0.25s  
+  ✓ password can be reset with valid token                               0.25s  
+
+   PASS  Tests\Feature\Auth\PasswordUpdateTest
+  ✓ password can be updated                                              0.06s  
+  ✓ correct password must be provided to update password                 0.04s  
+
+   PASS  Tests\Feature\Auth\RegistrationTest
+  ✓ registration screen can be rendered                                  0.03s  
+  ✓ new users can register                                               0.04s  
+
+   PASS  Tests\Feature\CompanyRoleManagementTest
+  ✓ Company Role Management → it owner can view and manage roles         0.57s  
+  ✓ Company Role Management → it viewer cannot view role management      0.59s  
+  ✓ Company Role Management → it can update user role                    0.59s  
+  ✓ Company Role Management → it cannot remove last owner from company   0.62s  
+  ✓ Company Role Management → it admin cannot assign owner role to them… 0.56s  
+
+   PASS  Tests\Feature\CurrencyImportTest
+  ✓ currency import with base currency conversion works correctly        1.99s  
+  ✓ currency search returns results with base currency exchange rates    2.75s  
+"Viewer permissions:" // tests/Feature/DebugViewerPermissionsTest.php:24
+"  invoices.view: YES" // tests/Feature/DebugViewerPermissionsTest.php:26
+"  payments.view: YES" // tests/Feature/DebugViewerPermissionsTest.php:26
+"  customers.view: YES" // tests/Feature/DebugViewerPermissionsTest.php:26
+"  ledger.view: YES" // tests/Feature/DebugViewerPermissionsTest.php:26
+"  companies.currencies.enable: NO" // tests/Feature/DebugViewerPermissionsTest.php:26
+"Total permissions count:" // tests/Feature/DebugViewerPermissionsTest.php:29
+0 // tests/Feature/DebugViewerPermissionsTest.php:29
+"All permissions:" // tests/Feature/DebugViewerPermissionsTest.php:30
+[] // tests/Feature/DebugViewerPermissionsTest.php:30
+
+   WARN  Tests\Feature\DebugViewerPermissionsTest
+  ! debug viewer permissions from seeder → This test did not perform an… 0.53s  
+
+   PASS  Tests\Feature\ExampleTest
+  ✓ it returns a successful response                                     0.03s  
+
+   FAIL  Tests\Feature\Features\Invoicing\InvoiceControllerTest
+  ⨯ store method creates invoice successfully                            0.23s  
+  ⨯ store method handles idempotency key                                 0.56s  
+  ⨯ store method handles idempotency key from header                     0.08s  
+  ⨯ store method validates required fields                               0.08s  
+  ⨯ store method validates items array                                   0.08s  
+  ⨯ store method validates item fields                                   0.08s  
+  ⨯ store method validates date fields                                   0.09s  
+  ⨯ store method validates due_date is after invoice_date                0.10s  
+  ⨯ store method validates customer exists                               0.09s  
+  ⨯ store method validates currency exists when provided                 0.08s  
+  ⨯ store method handles missing idempotency key                         0.19s  
+  ⨯ store method maintains company isolation with idempotency            0.31s  
+  ⨯ store method logs errors on failure                                  0.09s  
+
+   FAIL  Tests\Feature\InvoicingAuthorizationRegressionTest
+  ⨯ Invoice Index Authorization → super admin can access invoices index
+  ⨯ Invoice Index Authorization → owner can access company invoices
+  ⨯ Invoice Index Authorization → viewer can access invoices list
+  ⨯ Invoice Index Authorization → user from other company cannot access invoices
+  ⨯ Invoice Create Authorization → super admin can create invoices in any company
+  ⨯ Invoice Create Authorization → owner can create invoices
+  ⨯ Invoice Create Authorization → admin can create invoices
+  ⨯ Invoice Create Authorization → manager can create invoices
+  ⨯ Invoice Create Authorization → employee can create invoices
+  ⨯ Invoice Create Authorization → viewer cannot create invoices
+  ⨯ Invoice Store Authorization → super admin can store invoices
+  ⨯ Invoice Store Authorization → owner can store invoices
+  ⨯ Invoice Store Authorization → viewer cannot store invoices
+  ⨯ Invoice View Authorization → super admin can view any invoice
+  ⨯ Invoice View Authorization → owner can view company invoice
+  ⨯ Invoice View Authorization → viewer can view invoice
+  ⨯ Invoice View Authorization → user from other company cannot view invoice
+  ⨯ Invoice Edit Authorization → super admin can edit any invoice
+  ⨯ Invoice Edit Authorization → owner can edit invoice
+  ⨯ Invoice Edit Authorization → admin can edit invoice
+  ⨯ Invoice Edit Authorization → manager can edit invoice
+  ⨯ Invoice Edit Authorization → employee can edit invoice
+  ⨯ Invoice Edit Authorization → viewer cannot edit invoice
+  ⨯ Invoice Update Authorization → super admin can update any invoice
+  ⨯ Invoice Update Authorization → owner can update invoice
+  ⨯ Invoice Update Authorization → viewer cannot update invoice
+  ⨯ Invoice Delete Authorization → super admin can delete any invoice
+  ⨯ Invoice Delete Authorization → owner can delete invoice
+  ⨯ Invoice Delete Authorization → admin can delete invoice
+  ⨯ Invoice Delete Authorization → manager cannot delete invoice
+  ⨯ Invoice Delete Authorization → employee cannot delete invoice
+  ⨯ Invoice Delete Authorization → viewer cannot delete invoice
+  ⨯ Invoice Send Authorization → super admin can send any invoice
+  ⨯ Invoice Send Authorization → owner can send invoice
+  ⨯ Invoice Send Authorization → manager can send invoice
+  ⨯ Invoice Send Authorization → employee can send invoice
+  ⨯ Invoice Send Authorization → viewer cannot send invoice
+  ⨯ Invoice Post Authorization → super admin can post any invoice
+  ⨯ Invoice Post Authorization → owner can post invoice
+  ⨯ Invoice Post Authorization → admin can post invoice
+  ⨯ Invoice Post Authorization → accountant can post invoice
+  ⨯ Invoice Post Authorization → manager cannot post invoice
+  ⨯ Invoice Post Authorization → employee cannot post invoice
+  ⨯ Invoice Export Authorization → super admin can export invoices
+  ⨯ Invoice Export Authorization → owner can export invoices
+  ⨯ Invoice Export Authorization → admin can export invoices
+  ⨯ Invoice Export Authorization → manager cannot export invoices
+  ⨯ Invoice Duplicate Authorization → super admin can duplicate any invoice
+  ⨯ Invoice Duplicate Authorization → owner can duplicate invoice
+  ⨯ Invoice Duplicate Authorization → admin can duplicate invoice
+  ⨯ Invoice Duplicate Authorization → manager can duplicate invoice
+  ⨯ Invoice Duplicate Authorization → employee cannot duplicate invoice
+  ⨯ Invoice Duplicate Authorization → viewer cannot duplicate invoice
+  ⨯ Invoice Update Status Authorization → super admin can update invoice status
+  ⨯ Invoice Update Status Authorization → owner can update invoice status
+  ⨯ Invoice Update Status Authorization → admin can update invoice status
+  ⨯ Invoice Update Status Authorization → manager can update invoice status
+  ⨯ Invoice Update Status Authorization → employee cannot update invoice status
+  ⨯ Invoice Update Status Authorization → viewer cannot update invoice status
+  ⨯ Invoice UI Permission Props → invoice page includes correct permissions for super admin
+  ⨯ Invoice UI Permission Props → invoice page includes correct permissions for viewer
+  ⨯ Invoice UI Permission Props → invoice list page includes company permissions
+  ⨯ Invoice Cross-Company Access → super admin can access invoice from any company
+  ⨯ Invoice Cross-Company Access → regular user cannot access invoice from other company
+
+   FAIL  Tests\Feature\LedgerAuthorizationRegressionTest
+  ⨯ Ledger Index Authorization → super admin can access ledger index
+  ⨯ Ledger Index Authorization → owner can access company ledger
+  ⨯ Ledger Index Authorization → viewer can access ledger list
+  ⨯ Ledger Index Authorization → user from other company sees only their ledger entries
+  ⨯ Ledger Create Authorization → super admin can create ledger entries in any company
+  ⨯ Ledger Create Authorization → owner can create ledger entries
+  ⨯ Ledger Create Authorization → accountant can create ledger entries
+  ⨯ Ledger Create Authorization → manager cannot create ledger entries
+  ⨯ Ledger Create Authorization → employee cannot create ledger entries
+  ⨯ Ledger Create Authorization → viewer cannot create ledger entries
+  ⨯ Ledger Store Authorization → super admin can store ledger entries
+  ⨯ Ledger Store Authorization → accountant can store ledger entries
+  ⨯ Ledger Store Authorization → viewer cannot store ledger entries
+  ⨯ Ledger View Authorization → super admin can view any ledger entry
+  ⨯ Ledger View Authorization → owner can view company ledger entry
+  ⨯ Ledger View Authorization → viewer can view ledger entry
+  ⨯ Ledger View Authorization → user from other company cannot view ledger entry
+  ⨯ Ledger Edit Authorization → super admin can edit any unposted ledger entry
+  ⨯ Ledger Edit Authorization → accountant can edit unposted ledger entry
+  ⨯ Ledger Edit Authorization → owner can edit unposted ledger entry
+  ⨯ Ledger Edit Authorization → manager cannot edit ledger entry
+  ⨯ Ledger Edit Authorization → viewer cannot edit ledger entry
+  ⨯ Ledger Update Authorization → super admin can update any unposted ledger entry
+  ⨯ Ledger Update Authorization → accountant can update unposted ledger entry
+  ⨯ Ledger Update Authorization → viewer cannot update ledger entry
+  ⨯ Ledger Delete Authorization → super admin can delete any unposted ledger entry
+  ⨯ Ledger Delete Authorization → accountant can delete unposted ledger entry
+  ⨯ Ledger Delete Authorization → owner can delete unposted ledger entry
+  ⨯ Ledger Delete Authorization → manager cannot delete ledger entry
+  ⨯ Ledger Delete Authorization → viewer cannot delete ledger entry
+  ⨯ Ledger Post Authorization → super admin can post any ledger entry
+  ⨯ Ledger Post Authorization → accountant can post ledger entry
+  ⨯ Ledger Post Authorization → owner can post ledger entry
+  ⨯ Ledger Post Authorization → admin cannot post ledger entry
+  ⨯ Ledger Post Authorization → manager cannot post ledger entry
+  ⨯ Ledger Post Authorization → employee cannot post ledger entry
+  ⨯ Ledger Void Authorization → super admin can void any posted ledger entry
+  ⨯ Ledger Void Authorization → accountant can void posted ledger entry
+  ⨯ Ledger Void Authorization → manager cannot void ledger entry
+  ⨯ Ledger Void Authorization → viewer cannot void ledger entry
+  ⨯ Ledger Accounts Authorization → super admin can view all ledger accounts
+  ⨯ Ledger Accounts Authorization → viewer can view ledger accounts
+  ⨯ Ledger Accounts Authorization → super admin can view specific ledger account
+  ⨯ Ledger Accounts Authorization → user from other company cannot view ledger account
+  ⨯ Ledger Reports Authorization → super admin can access trial balance
+  ⨯ Ledger Reports Authorization → accountant can access trial balance
+  ⨯ Ledger Reports Authorization → viewer cannot access trial balance
+  ⨯ Ledger Reports Authorization → super admin can access balance sheet
+  ⨯ Ledger Reports Authorization → accountant can access income statement
+  ⨯ Ledger Reports Authorization → manager cannot access income statement
+  ⨯ Ledger UI Permission Props → ledger page includes correct permissions for super admin
+  ⨯ Ledger UI Permission Props → ledger page includes correct permissions for viewer
+  ⨯ Ledger UI Permission Props → ledger page includes correct permissions for manager
+  ⨯ Ledger UI Permission Props → ledger page includes correct permissions for accountant
+  ⨯ Ledger Cross-Company Access → super admin can access ledger entry from any company
+  ⨯ Ledger Cross-Company Access → regular user cannot access ledger entry from other company
+  ⨯ Ledger Cross-Company Access → super admin can create ledger entry for any company
+  ⨯ Ledger Cross-Company Access → super admin can post ledger entry in any company
+  ⨯ Journal View Authorization → super admin can view journal
+  ⨯ Journal View Authorization → accountant can view journal
+  ⨯ Journal View Authorization → viewer can view journal
+  ⨯ Journal View Authorization → employee can view journal
+  ⨯ Journal Create Authorization → super admin can create journal entries
+  ⨯ Journal Create Authorization → accountant can create journal entries
+  ⨯ Journal Create Authorization → manager cannot create journal entries
+  ⨯ Posted Entry Restrictions → cannot edit posted ledger entry
+  ⨯ Posted Entry Restrictions → cannot update posted ledger entry
+  ⨯ Posted Entry Restrictions → cannot delete posted ledger entry
+  ⨯ Posted Entry Restrictions → cannot void unposted ledger entry
+  ⨯ Ledger Date Restrictions → cannot create entry in closed period
+  ⨯ Ledger Date Restrictions → cannot post entry in closed period
+
+   FAIL  Tests\Feature\PaymentAuthorizationRegressionTest
+  ⨯ Payment Index Authorization → super admin can access payments index
+  ⨯ Payment Index Authorization → owner can access company payments
+  ⨯ Payment Index Authorization → viewer can access payments list
+  ⨯ Payment Index Authorization → user from other company sees only their payments
+  ⨯ Payment Create Authorization → super admin can create payments in any company
+  ⨯ Payment Create Authorization → owner can create payments
+  ⨯ Payment Create Authorization → admin can create payments
+  ⨯ Payment Create Authorization → manager can create payments
+  ⨯ Payment Create Authorization → accountant can create payments
+  ⨯ Payment Create Authorization → employee can create payments
+  ⨯ Payment Create Authorization → viewer cannot create payments
+  ⨯ Payment Store Authorization → super admin can store payments
+  ⨯ Payment Store Authorization → accountant can store payments
+  ⨯ Payment Store Authorization → viewer cannot store payments
+  ⨯ Payment View Authorization → super admin can view any payment
+  ⨯ Payment View Authorization → owner can view company payment
+  ⨯ Payment View Authorization → viewer can view payment
+  ⨯ Payment View Authorization → user from other company cannot view payment
+  ⨯ Payment Edit Authorization → super admin can edit any payment
+  ⨯ Payment Edit Authorization → owner can edit payment
+  ⨯ Payment Edit Authorization → admin can edit payment
+  ⨯ Payment Edit Authorization → accountant can edit payment
+  ⨯ Payment Edit Authorization → manager cannot edit payment
+  ⨯ Payment Edit Authorization → employee cannot edit payment
+  ⨯ Payment Edit Authorization → viewer cannot edit payment
+  ⨯ Payment Update Authorization → super admin can update any payment
+  ⨯ Payment Update Authorization → accountant can update payment
+  ⨯ Payment Update Authorization → viewer cannot update payment
+  ⨯ Payment Delete Authorization → super admin can delete any payment
+  ⨯ Payment Delete Authorization → owner can delete payment
+  ⨯ Payment Delete Authorization → admin can delete payment
+  ⨯ Payment Delete Authorization → manager cannot delete payment
+  ⨯ Payment Delete Authorization → viewer cannot delete payment
+  ⨯ Payment Allocate Authorization → super admin can allocate payments
+  ⨯ Payment Allocate Authorization → owner can allocate payments
+  ⨯ Payment Allocate Authorization → admin can allocate payments
+  ⨯ Payment Allocate Authorization → manager can allocate payments
+  ⨯ Payment Allocate Authorization → accountant can allocate payments
+  ⨯ Payment Allocate Authorization → employee cannot allocate payments
+  ⨯ Payment Allocate Authorization → viewer cannot allocate payments
+  ⨯ Payment Auto-Allocate Authorization → super admin can auto-allocate payments
+  ⨯ Payment Auto-Allocate Authorization → owner can auto-allocate payments
+  ⨯ Payment Auto-Allocate Authorization → accountant can auto-allocate payments
+  ⨯ Payment Auto-Allocate Authorization → manager cannot auto-allocate payments
+  ⨯ Payment Refund Authorization → super admin can refund payments
+  ⨯ Payment Refund Authorization → owner can refund payments
+  ⨯ Payment Refund Authorization → admin can refund payments
+  ⨯ Payment Refund Authorization → manager can refund payments
+  ⨯ Payment Refund Authorization → accountant can refund payments
+  ⨯ Payment Refund Authorization → employee cannot refund payments
+  ⨯ Payment Refund Authorization → viewer cannot refund payments
+  ⨯ Payment Void Authorization → super admin can void payments
+  ⨯ Payment Void Authorization → owner can void payments
+  ⨯ Payment Void Authorization → admin can void payments
+  ⨯ Payment Void Authorization → accountant can void payments
+  ⨯ Payment Void Authorization → manager cannot void payments
+  ⨯ Payment Void Authorization → employee cannot void payments
+  ⨯ Payment Void Authorization → viewer cannot void payments
+  ⨯ Payment Reconcile Authorization → super admin can reconcile payments
+  ⨯ Payment Reconcile Authorization → accountant can reconcile payments
+  ⨯ Payment Reconcile Authorization → manager cannot reconcile payments
+  ⨯ Payment UI Permission Props → payment page includes correct permissions for super admin
+  ⨯ Payment UI Permission Props → payment page includes correct permissions for viewer
+  ⨯ Payment UI Permission Props → payment page includes correct permissions for manager
+  ⨯ Payment UI Permission Props → payment list page includes company permissions
+  ⨯ Payment Cross-Company Access → super admin can access payment from any company
+  ⨯ Payment Cross-Company Access → regular user cannot access payment from other company
+  ⨯ Payment Cross-Company Access → super admin can create payment for any company
+  ⨯ Payment Export Authorization → super admin can export payments
+  ⨯ Payment Export Authorization → owner can export payments
+  ⨯ Payment Export Authorization → admin can export payments
+  ⨯ Payment Export Authorization → manager cannot export payments
+  ⨯ Payment Export Authorization → accountant can export payments
+  ⨯ Payment API Authorization → super admin can access payment API endpoints
+  ⨯ Payment API Authorization → unauthorized user cannot access payment API
+  ⨯ Payment API Authorization → super admin can auto-allocate via API

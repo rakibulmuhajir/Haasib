@@ -17,38 +17,58 @@ if ($isPgsql) {
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ]);
 
-        // Drop and recreate schemas to avoid duplicate-table errors across runs
-        $sql = <<<'SQL'
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
-DROP SCHEMA IF EXISTS auth CASCADE;
-CREATE SCHEMA auth;
-DROP SCHEMA IF EXISTS app CASCADE;
-CREATE SCHEMA app;
+        // Check if schemas exist, only create if missing
+        $checkSchemaSql = <<<'SQL'
+SELECT schema_name FROM information_schema.schemata
+WHERE schema_name IN ('public', 'auth', 'app');
 SQL;
-        $pdo->exec($sql);
-        
-        // Run migrations after schema reset
-        $workingDir = dirname(__DIR__);
-        $oldCwd = getcwd();
-        chdir($workingDir);
-        
-        // Set environment for test database
-        $_ENV['DB_DATABASE'] = 'haasib_test3';
-        $_SERVER['DB_DATABASE'] = 'haasib_test3';
-        putenv("DB_DATABASE=haasib_test3");
-        
-        // Run migrations silently
-        $migrateOutput = [];
-        $migrateReturnCode = 0;
-        exec('./artisan migrate --force 2>&1', $migrateOutput, $migrateReturnCode);
-        
-        if ($migrateReturnCode !== 0) {
-            fwrite(STDERR, "[bootstrap_pgsql] Migration failed: " . implode("\n", $migrateOutput) . "\n");
+        $stmt = $pdo->query($checkSchemaSql);
+        $existingSchemas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $missingSchemas = array_diff(['public', 'auth', 'app'], $existingSchemas);
+
+        if (!empty($missingSchemas)) {
+            // Create only missing schemas
+            foreach ($missingSchemas as $schema) {
+                $pdo->exec("CREATE SCHEMA $schema");
+            }
+
+            // Run migrations only once when schemas are created
+            $workingDir = dirname(__DIR__);
+            $oldCwd = getcwd();
+            chdir($workingDir);
+
+            // Set environment for test database
+            $_ENV['DB_DATABASE'] = 'haasib_test3';
+            $_SERVER['DB_DATABASE'] = 'haasib_test3';
+            putenv("DB_DATABASE=haasib_test3");
+
+            // Run migrations silently
+            $migrateOutput = [];
+            $migrateReturnCode = 0;
+            exec('./artisan migrate --force 2>&1', $migrateOutput, $migrateReturnCode);
+
+            if ($migrateReturnCode !== 0) {
+                fwrite(STDERR, "[bootstrap_pgsql] Migration failed: " . implode("\n", $migrateOutput) . "\n");
+            }
+
+            // Run basic seeders once (non-destructive)
+            $seedOutput = [];
+            $seedReturnCode = 0;
+            exec('./artisan db:seed --class=RbacSeeder --force 2>&1', $seedOutput, $seedReturnCode);
+
+            if ($seedReturnCode !== 0) {
+                fwrite(STDERR, "[bootstrap_pgsql] RbacSeeder failed: " . implode("\n", $seedOutput) . "\n");
+            }
+
+            chdir($oldCwd);
+        } else {
+            // Set environment for test database
+            $_ENV['DB_DATABASE'] = 'haasib_test3';
+            $_SERVER['DB_DATABASE'] = 'haasib_test3';
+            putenv("DB_DATABASE=haasib_test3");
         }
-        
-        chdir($oldCwd);
-    } catch (Throwable $e) {
+      } catch (Throwable $e) {
         // Non-fatal: allow tests to proceed; failures will surface clearly
         fwrite(STDERR, "[bootstrap_pgsql] Schema reset skipped: {$e->getMessage()}\n");
     }

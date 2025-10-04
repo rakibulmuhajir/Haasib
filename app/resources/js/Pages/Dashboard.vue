@@ -1,97 +1,110 @@
 <script setup>
+import { computed, ref } from 'vue'
 import { Head } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
-import ThemeSwitcher from '@/Components/ThemeSwitcher.vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
-import Sidebar from '@/Components/Sidebar/Sidebar.vue'
-import SvgIcon from '@/Components/SvgIcon.vue'
+import PageHeader from '@/Components/PageHeader.vue'
 import Breadcrumb from '@/Components/Breadcrumb.vue'
 
-import Toast from 'primevue/toast'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Divider from 'primevue/divider'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 
+const { t } = useI18n()
 const toast = useToast()
+
 const rows = ref([
   { id: 'C-1021', company: 'Blue Ocean LLC', users: 12, status: 'Active' },
   { id: 'C-1022', company: 'Coral Reef Inc.', users: 7, status: 'Invited' },
   { id: 'C-1023', company: 'Kelp Labs', users: 3, status: 'Active' }
 ])
 
-// Breadcrumb items
-const breadcrumbItems = ref([
-  { label: 'Dashboard', url: '/dashboard', icon: 'dashboard' }
-])
+const breadcrumbItems = computed(() => ([
+  { label: t('dashboard.breadcrumb.dashboard'), url: '/dashboard' }
+]))
+
+const tableColumns = computed(() => ([
+  { field: 'id', header: t('dashboard.cards.companies.columns.id'), style: 'width: 120px' },
+  { field: 'company', header: t('dashboard.cards.companies.columns.company') },
+  { field: 'users', header: t('dashboard.cards.companies.columns.users'), style: 'width: 120px' },
+  { field: 'status', header: t('dashboard.cards.companies.columns.status'), style: 'width: 140px' }
+]))
 
 function notify() {
-  toast.add({ severity: 'info', summary: 'Welcome', detail: 'Blue Whale is active', life: 18000 })
+  toast.add({
+    severity: 'info',
+    summary: t('dashboard.toast.summary'),
+    detail: t('dashboard.toast.detail'),
+    life: 18000,
+  })
 }
-const shellRef = ref()
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head :title="t('dashboard.pageTitle')" />
 
-    <LayoutShell ref="shellRef">
-      <template #sidebar>
-        <Sidebar title="Blue Whale" />
-      </template>
-
-      <template #topbar>
-        <div class="flex items-center justify-between w-full">
-          <div class="flex items-center gap-2">
-            <Button text @click="shellRef?.toggleMobile?.()">
-              <SvgIcon name="menu" />
-            </Button>
-            <Button text @click="shellRef?.toggleSlim?.()" class="hidden md:inline-flex">Sidebar</Button>
-            <Breadcrumb :items="breadcrumbItems" />
-          </div>
-          <div class="flex items-center gap-2">
-            <ThemeSwitcher />
-            <Button label="Show Toast" @click="notify" />
-          </div>
-        </div>
-      </template>
-
-      <!-- content widgets as translucent cards -->
+    <LayoutShell>
       <div class="mx-auto max-w-7xl space-y-6">
+        <PageHeader
+          :title="t('dashboard.header.title')"
+          :subtitle="t('dashboard.header.subtitle')"
+        >
+          <template #below-title>
+            <Breadcrumb
+              :items="breadcrumbItems"
+              :home="{ label: t('dashboard.breadcrumb.home'), url: '/' }"
+            />
+          </template>
+          <template #actions-right>
+            <Button
+              :label="t('dashboard.actions.toast')"
+              severity="secondary"
+              outlined
+              @click="notify"
+            />
+          </template>
+        </PageHeader>
+
         <Card>
           <template #title>
-            <span class="text-[color:var(--p-text-color)]">Welcome</span>
+            <span class="text-[color:var(--p-text-color)]">{{ t('dashboard.cards.welcome.title') }}</span>
           </template>
           <template #content>
-            <p class="mb-3 text-sm" style="color: var(--p-text-muted-color)">You’re logged in. Cards render as overlays on the canvas.</p>
-            <Button label="Primary Action" />
+            <p class="mb-3 text-sm" style="color: var(--p-text-muted-color)">
+              {{ t('dashboard.cards.welcome.body') }}
+            </p>
+            <Button :label="t('dashboard.cards.welcome.primaryAction')" />
           </template>
         </Card>
 
         <Card>
           <template #title>
-            <span class="text-[color:var(--p-text-color)]">Companies</span>
+            <span class="text-[color:var(--p-text-color)]">{{ t('dashboard.cards.companies.title') }}</span>
           </template>
           <template #content>
             <DataTable :value="rows" size="small" class="w-full">
-              <Column field="id" header="ID" style="width: 120px" />
-              <Column field="company" header="Company" />
-              <Column field="users" header="Users" style="width: 120px" />
-              <Column field="status" header="Status" style="width: 140px" />
+              <Column
+                v-for="column in tableColumns"
+                :key="column.field"
+                :field="column.field"
+                :header="column.header"
+                :style="column.style"
+              />
             </DataTable>
             <Divider />
             <div class="flex gap-2">
               <Link :href="route('admin.companies.create')">
-              <Button label="New Company" severity="primary" />
-            </Link>
+                <Button :label="t('dashboard.cards.companies.actions.newCompany')" severity="primary" />
+              </Link>
               <Link :href="route('admin.users.create')">
-                <Button label="Invite User" severity="secondary" outlined />
+                <Button :label="t('dashboard.cards.companies.actions.inviteUser')" severity="secondary" outlined />
               </Link>
             </div>
           </template>
         </Card>
       </div>
-
     </LayoutShell>
 </template>

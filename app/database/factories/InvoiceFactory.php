@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class InvoiceFactory extends Factory
 {
-    protected $model = Invoice::class;
+    protected $model = \App\Models\Invoice::class;
 
     public function definition(): array
     {

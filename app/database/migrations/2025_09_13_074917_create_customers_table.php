@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('customers', function (Blueprint $table) {
+        Schema::create('hrm.customers', function (Blueprint $table) {
             $table->uuid('customer_id')->primary();
             $table->uuid('company_id');
             $table->string('name', 255);
@@ -33,14 +33,14 @@ return new class extends Migration
             $table->unique(['company_id', 'name']);
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('hrm.customers', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('set null');
+            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('set null');
         });
 
         // Idempotency unique scope within company
         try {
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS customers_idemp_unique ON customers (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS customers_idemp_unique ON hrm.customers (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
         } catch (\Throwable $e) { /* ignore */
         }
     }
@@ -50,6 +50,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('customers');
+        Schema::dropIfExists('hrm.customers');
     }
 };

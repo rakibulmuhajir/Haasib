@@ -103,6 +103,11 @@ class HandleInertiaRequests extends Middleware
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
             ],
+
+            'appLocale' => $this->formatLocale(app()->getLocale()),
+            'supportedLocales' => ['en-US', 'fr-FR'],
+            'userLocale' => $this->formatLocale(optional($request->user())->locale),
+            'tenantLocale' => $this->formatLocale(optional(optional($request->user())->currentCompany)->locale),
         ];
     }
 
@@ -152,5 +157,20 @@ class HandleInertiaRequests extends Middleware
             // Always restore original team context
             setPermissionsTeamId($previousTeamId);
         }
+    }
+
+    protected function formatLocale(?string $locale): ?string
+    {
+        if (! $locale) {
+            return null;
+        }
+
+        $normalized = str_replace('_', '-', $locale);
+
+        return match ($normalized) {
+            'en' => 'en-US',
+            'fr' => 'fr-FR',
+            default => $normalized,
+        };
     }
 }

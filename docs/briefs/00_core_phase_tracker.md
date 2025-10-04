@@ -197,3 +197,28 @@ Based on dev-plan (Architecture 1A, 4/4A) and Technical Brief (Sections 1–4, 9
 - Ledger relies on: `auth.companies`, `currencies`, `exchange_rates`, and `user_accounts` for auditing.
 - Ensure: Money precision consistent with `minor_unit`; conversion rules finalized before posting goes live.
 - Next schema step: apply `docs/schemas/10_accounting.sql` for `acct.*` (periods, chart_of_accounts, transactions, journal_entries) with RLS.
+
+## Phase Log — Company-Based Currency Settings (2025-09-25)
+**Status:** ✅ Complete  
+**Focus:** Move currency preferences from user scope to company scope and harden multi-company currency tooling.
+
+### Highlights
+- Deprecated user-scoped currency models (`UserCurrencyPreference`, `UserCurrencyExchangeRate`, related controllers/services) in favour of company-level storage.
+- Added `CompanyCurrencyController` APIs and `CompanyCurrenciesSection.vue` UI tied to the active company context.
+- Centralised company currency state inside `companies.settings.currencies` JSON (base currency, enabled list, exchange rate configs).
+- Protected base currency from casual edits; noted migration requirements (bulk conversion, audit trail) if future base changes are needed.
+- Enforced ServiceContext-aware authorization via `CompanyLookupService` to respect multi-company membership and RLS.
+
+### Feature Capabilities
+- Multi-historical exchange rate support with effective/cease dates and automatic selection logic.
+- Session-aware company switching keeps currency UI in sync; jobs respect tenant context when recalculating rates.
+- Exchange rate management now validates monotonic effective dates and blocks overlapping windows.
+- Added background job hooks for caching FX rates and invalidating stale company-level currency caches.
+
+### Implementation Notes
+- Updated Vue components (`CurrencySettings.vue`, `CompanyCurrenciesSection.vue`) to rely on the shared inline editing system and provide optimistic UX.
+- Added dedicated policies and permission checks (e.g., `companies.currencies.update`) to guard new endpoints.
+- Refactored seeds/tests to create company currency fixtures instead of user fixtures; documented manual QA for base currency + rate edge cases.
+- Logged work in `docs/engineering-log.md` (2025-09-25) with passing test suites covering API + UI flows.
+
+_This log replaces the duplicate brief previously stored under `app/docs/briefs/00_core_phase_tracker.md`; keep future core-phase completions recorded here._

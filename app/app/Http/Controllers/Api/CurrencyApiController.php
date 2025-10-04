@@ -30,8 +30,10 @@ class CurrencyApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        // Check if user has system permission
-        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+        // Super admins can access everything
+        if ($request->user()->isSuperAdmin()) {
+            // Continue
+        } elseif (! $request->user()->hasPermissionTo('system.currencies.manage')) {
             abort(403, 'Unauthorized');
         }
 
@@ -473,8 +475,10 @@ class CurrencyApiController extends Controller
      */
     public function getImportSources(Request $request): JsonResponse
     {
-        // Check if user has system permission
-        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+        // Super admins can access everything
+        if ($request->user()->isSuperAdmin()) {
+            // Continue
+        } elseif (! $request->user()->hasPermissionTo('system.currencies.manage')) {
             abort(403, 'Unauthorized');
         }
 
@@ -494,8 +498,10 @@ class CurrencyApiController extends Controller
      */
     public function searchExternalCurrencies(Request $request): JsonResponse
     {
-        // Check if user has system permission
-        if (! $request->user()->hasPermissionTo('system.currencies.manage')) {
+        // Super admins can access everything
+        if ($request->user()->isSuperAdmin()) {
+            // Continue
+        } elseif (! $request->user()->hasPermissionTo('system.currencies.manage')) {
             abort(403, 'Unauthorized');
         }
 

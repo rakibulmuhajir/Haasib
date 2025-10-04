@@ -3,7 +3,7 @@ import { useTheme } from '@/composables/useTheme' // Adjust the import path if n
 
 const { isDark, toggleTheme, initializeTheme } = useTheme()
 
-// The theme should be initialized in your main layout component (e.g., App.vue or AuthenticatedLayout.vue)
+// The theme should be initialized in your main layout component (e.g., App.vue or LayoutShell.vue)
 // by calling initializeTheme() in its onMounted hook.
 // If this ThemeSwitcher is the only component that needs to do it, you can call it here.
 // import { onMounted } from 'vue'

@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->uuid('created_by_user_id')->nullable()->after('system_role');
-            
-            // Add foreign key constraint
-            $table->foreign('created_by_user_id')
-                ->references('id')->on('users')
-                ->nullOnDelete();
-        });
+        if (!Schema::hasColumn('auth.users', 'created_by_user_id')) {
+            Schema::table('auth.users', function (Blueprint $table) {
+                $table->uuid('created_by_user_id')->nullable()->after('system_role');
+
+                // Add foreign key constraint
+                $table->foreign('created_by_user_id')
+                    ->references('id')->on('auth.users')
+                    ->nullOnDelete();
+            });
+        }
     }
 
     /**
@@ -26,7 +28,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        Schema::table('auth.users', function (Blueprint $table) {
             $table->dropForeign(['created_by_user_id']);
             $table->dropColumn('created_by_user_id');
         });

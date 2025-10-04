@@ -11,15 +11,18 @@ it('debugs invoice post response', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $currency = Currency::create([
-        'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
-    ]);
+    $currency = Currency::where('code', 'USD')->first();
+    if (! $currency) {
+        $currency = Currency::create([
+            'id' => (string) Str::uuid(),
+            'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        ]);
+    }
 
     $company = Company::create([
         'id' => (string) Str::uuid(),
         'name' => 'Debug Co',
-        'slug' => 'debug-co',
+        'slug' => 'debug-co-'.Str::random(4),
         'base_currency' => 'USD',
         'currency_id' => $currency->id,
         'language' => 'en',

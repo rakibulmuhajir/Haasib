@@ -13,14 +13,17 @@ it('auto-posts a journal entry when a payment completes', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $currency = Currency::create([
-        'id' => (string) Str::uuid(),
-        'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
-    ]);
+    $currency = Currency::where('code', 'USD')->first();
+    if (! $currency) {
+        $currency = Currency::create([
+            'id' => (string) Str::uuid(),
+            'code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'minor_unit' => 2,
+        ]);
+    }
 
     $company = Company::create([
         'id' => (string) Str::uuid(),
-        'name' => 'Pay Co', 'slug' => 'pay-co',
+        'name' => 'Pay Co', 'slug' => 'pay-co-'.Str::random(4),
         'base_currency' => 'USD', 'currency_id' => $currency->id,
         'language' => 'en', 'locale' => 'en_US',
         'settings' => [],
@@ -71,6 +74,7 @@ it('auto-posts a journal entry when a payment completes', function () {
         paymentReference: 'PMT-1',
         paymentDate: now()->toDateString(),
         currency: $currency,
+        exchangeRate: null,
         notes: 'Test payment',
         autoAllocate: false,
         idempotencyKey: (string) Str::uuid(),

@@ -1,9 +1,14 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { computed } from 'vue';
+import { Head } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
+import LayoutShell from '@/Components/Layout/LayoutShell.vue';
+import Sidebar from '@/Components/Sidebar/Sidebar.vue';
+import Breadcrumb from '@/Components/Breadcrumb.vue';
+import PageHeader from '@/Components/PageHeader.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
-import { Head } from '@inertiajs/vue3';
 
 defineProps({
     mustVerifyEmail: {
@@ -17,44 +22,48 @@ defineProps({
         required: true
     }
 });
+
+const { t } = useI18n();
+
+const breadcrumbItems = computed(() => [
+    { label: t('profile.breadcrumb.home'), url: '/dashboard', icon: 'home' },
+    { label: t('profile.breadcrumb.profile'), url: '/profile', icon: 'user' },
+]);
 </script>
 
 <template>
-    <Head title="Profile" />
+    <Head :title="t('profile.pageTitle')" />
 
-    <AuthenticatedLayout>
-        <template #header>
-            <h2
-                class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200"
-            >
-                Profile
-            </h2>
+    <LayoutShell>
+        <template #sidebar>
+            <Sidebar :title="t('profile.pageTitle')" />
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
-                    <UpdateProfileInformationForm
-                        :must-verify-email="mustVerifyEmail"
-                        :status="status"
-                        class="max-w-xl"
-                    />
-                </div>
+        <template #topbar>
+            <Breadcrumb :items="breadcrumbItems" />
+        </template>
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
-                    <UpdatePasswordForm class="max-w-xl" />
-                </div>
+        <div class="max-w-4xl space-y-6">
+            <PageHeader
+                :title="t('profile.header.title')"
+                :subtitle="t('profile.header.subtitle')"
+            />
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
-                    <DeleteUserForm class="max-w-xl" />
-                </div>
+            <div class="bg-white p-6 shadow rounded-lg dark:bg-gray-800 dark:border dark:border-surface-700">
+                <UpdateProfileInformationForm
+                    :must-verify-email="mustVerifyEmail"
+                    :status="status"
+                    class="max-w-xl"
+                />
+            </div>
+
+            <div class="bg-white p-6 shadow rounded-lg dark:bg-gray-800 dark:border dark:border-surface-700">
+                <UpdatePasswordForm class="max-w-xl" />
+            </div>
+
+            <div class="bg-white p-6 shadow rounded-lg dark:bg-gray-800 dark:border dark:border-surface-700">
+                <DeleteUserForm class="max-w-xl" />
             </div>
         </div>
-    </AuthenticatedLayout>
+    </LayoutShell>
 </template>

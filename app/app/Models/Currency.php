@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -69,7 +70,7 @@ class Currency extends Model
 
     public function companies(): BelongsToMany
     {
-        return $this->belongsToMany(Company::class, 'company_secondary_currencies', 'currency_id', 'company_id')
+        return $this->belongsToMany(Company::class, 'auth.company_secondary_currencies', 'currency_id', 'company_id')
             ->withPivot('is_active', 'settings')
             ->withTimestamps();
     }
@@ -240,5 +241,13 @@ class Currency extends Model
     public static function getCryptocurrencies()
     {
         return static::active()->whereIn('code', ['BTC', 'ETH', 'LTC'])->get();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\CurrencyFactory::new();
     }
 }

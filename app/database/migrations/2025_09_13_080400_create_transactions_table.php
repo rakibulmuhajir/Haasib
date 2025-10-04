@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('transactions', function (Blueprint $table) {
+        Schema::create('acct.transactions', function (Blueprint $table) {
             $table->id('transaction_id');
             $table->uuid('company_id');
             $table->string('transaction_number', 100);
@@ -26,26 +26,26 @@ return new class extends Migration
             $table->decimal('total_debit', 15, 2)->default(0);
             $table->decimal('total_credit', 15, 2)->default(0);
             $table->string('status', 50)->default('posted');
-            $table->foreignId('reversal_transaction_id')->nullable()->constrained('transactions', 'transaction_id');
-            $table->foreignId('period_id')->nullable()->constrained('accounting_periods', 'period_id');
+            $table->foreignId('reversal_transaction_id')->nullable()->constrained('acct.transactions', 'transaction_id');
+            $table->foreignId('period_id')->nullable()->constrained('acct.accounting_periods', 'period_id');
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreignId('created_by')->nullable()->constrained('user_accounts', 'user_id');
-            $table->foreignId('updated_by')->nullable()->constrained('user_accounts', 'user_id');
+            $table->foreignId('created_by')->nullable()->constrained('auth.user_accounts', 'user_id');
+            $table->foreignId('updated_by')->nullable()->constrained('auth.user_accounts', 'user_id');
 
             $table->unique(['company_id', 'transaction_number']);
         });
 
-        Schema::table('transactions', function (Blueprint $table) {
+        Schema::table('acct.transactions', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('currency_id')->references('id')->on('currencies')->onDelete('restrict');
+            $table->foreign('currency_id')->references('id')->on('public.currencies')->onDelete('restrict');
         });
 
         // Add check constraints
-        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_totals_equal CHECK (total_debit = total_credit)');
-        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_debit_positive CHECK (total_debit >= 0)');
-        DB::statement('ALTER TABLE transactions ADD CONSTRAINT chk_credit_positive CHECK (total_credit >= 0)');
+        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_totals_equal CHECK (total_debit = total_credit)');
+        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_debit_positive CHECK (total_debit >= 0)');
+        DB::statement('ALTER TABLE acct.transactions ADD CONSTRAINT chk_credit_positive CHECK (total_credit >= 0)');
     }
 
     /**
@@ -53,6 +53,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('transactions');
+        Schema::dropIfExists('acct.transactions');
     }
 };

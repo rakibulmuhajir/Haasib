@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class InvoiceItemTaxFactory extends Factory
 {
-    protected $model = InvoiceItemTax::class;
+    protected $model = \App\Models\InvoiceItemTax::class;
 
     public function definition(): array
     {

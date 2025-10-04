@@ -30,7 +30,7 @@ class InvoiceSeeder extends Seeder
             ['name' => 'E-commerce Integration', 'description' => 'Payment gateway and shopping cart setup', 'unit_price' => 4000.00, 'quantity' => 1],
         ];
 
-        $statuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+        $statuses = ['draft', 'sent', 'paid', 'cancelled'];
 
         foreach ($companies as $company) {
             $customers = Customer::where('company_id', $company->id)->get();

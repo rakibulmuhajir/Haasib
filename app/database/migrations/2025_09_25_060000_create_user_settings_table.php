@@ -20,7 +20,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign key
-            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('auth.users')->onDelete('cascade');
 
             // Unique constraint - user can only have one setting per group/key
             $table->unique(['user_id', 'group', 'key'], 'unique_user_setting');

@@ -27,5 +27,10 @@ return new class extends Migration
         DB::statement('DROP SCHEMA IF EXISTS hrm CASCADE;');
         DB::statement('DROP SCHEMA IF EXISTS acct CASCADE;');
         // Note: Don't drop public schema as it's the default
+
+        // Recreate empty schemas in case we need to rollback further
+        DB::statement('CREATE SCHEMA IF NOT EXISTS auth;');
+        DB::statement('CREATE SCHEMA IF NOT EXISTS hrm;');
+        DB::statement('CREATE SCHEMA IF NOT EXISTS acct;');
     }
 };

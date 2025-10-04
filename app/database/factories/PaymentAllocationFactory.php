@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class PaymentAllocationFactory extends Factory
 {
-    protected $model = PaymentAllocation::class;
+    protected $model = \App\Models\PaymentAllocation::class;
 
     public function definition(): array
     {

@@ -24,9 +24,9 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('user_id')->references()->on('auth.users')->onDelete('cascade');
-            $table->foreign('from_currency_id')->references()->on('public.currencies')->onDelete('cascade');
-            $table->foreign('to_currency_id')->references()->on('public.currencies')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('auth.users')->onDelete('cascade');
+            $table->foreign('from_currency_id')->references('id')->on('public.currencies')->onDelete('cascade');
+            $table->foreign('to_currency_id')->references('id')->on('public.currencies')->onDelete('cascade');
 
             // Unique constraint - user can only have one active rate between two currencies at a time
             $table->unique(['user_id', 'from_currency_id', 'to_currency_id'], 'unique_active_exchange_rate');

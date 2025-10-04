@@ -23,6 +23,7 @@ Consult these documents before coding:
 - **Module Trackers**: `docs/briefs/00_core_phase_tracker.md`, `docs/briefs/01_invoicing_phase_tracker.md`, `docs/briefs/02_payments_phase_tracker.md`
 - **Narrative QA**: `docs/briefs/target-mvp.md`
 - **Frontend Patterns**: `docs/development-guide.md`, `docs/components/*.md`, `docs/specs/tables/*`
+- **Module System**: `docs/modules-architecture.md` for command-bus-friendly module scaffolding and registry usage
 
 ## 3. Operating Rhythm for Each AI Session
 1. **Environment prep**
@@ -56,6 +57,7 @@ Consult these documents before coding:
 3. **Bootstrap scaffolding**:
    - Folders: `domain/<Module>/Models`, `domain/<Module>/Actions`, `domain/<Module>/Services`, `domain/<Module>/Policies`.
    - Service providers to register routes, policies, migrations per module.
+   - Prefer generating scaffolding via `php artisan module:make` (see `docs/modules-architecture.md`) to ensure registry entries, CLI stubs, and command-bus hooks are created.
 4. **Migration strategy**: mirror SQL from `/docs/schemas/*.sql`; limit new tables to the approved schemas (`public`, `auth`, `hrm`, obfuscated `acct`); enable schemas via `DB::statement('create schema if not exists ...')`; add RLS policies and `CHECK` constraints per brief.
 5. **Testing baseline**: stub Pest tests for migrations, services, and HTTP flows before writing implementations to lock expectations.
 

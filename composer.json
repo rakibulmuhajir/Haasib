@@ -1,5 +1,0 @@
-{
-    "require": {
-        "spatie/laravel-permission": "^6.21"
-    }
-}

@@ -2,6 +2,21 @@
 
 _A practical walkthrough of the Haasib accounting schemas for non-accountants._
 
+## Guided Intro – “Create Haasib” Scenario
+
+Build **Haasib**, a multi-company accounting platform designed for accountants and operators. In this first milestone—call it **“Create Haasib”**—ship a working experience that treats the whole stack (web UI, CLI palette, APIs) as one product.
+
+- **Users & Roles**: Predefine a system owner, company owner, accountant, and two regular members. No self-signup yet; users select their profile at launch.
+- **Companies & Context**: Seed three sample companies (Hospitality, Retail, Professional Services). Switching companies should flip tenant context everywhere (routes, CLI, command bus).
+- **Modules Enabled**: Start with Core + Ledger + Invoicing. Each module registers via `module:make`, declares permissions, and exposes CLI verbs (e.g., `invoice.create`).
+- **UI Blueprint**: Inertia + Vue 3 UI built on PrimeVue v4 with synchronized light/dark themes and FontAwesome 5 icons. Landing screen shows the five demo users; picking one reveals an organization switcher and module dashboard.
+- **Feature Boards**: Each company ships an Accounts Receivable board that mirrors the lifecycle of invoices (Draft → Sent → Posted → Paid). Cards use PrimeVue DataTable + Kanban styling; CLI palette commands can move invoices between states.
+- **Command Palette**: Keyboard-first command bus interface—`invoice create`, `payment record`, `customer view`. GUI buttons call the same command actions. Command feedback shows audit logs and references to the ledger entries created.
+- **Permissions & Auditing**: Actions respect the seeded RBAC matrix; owners can post and void, members only draft. Every command writes an audit entry with idempotency keys.
+- **Testing Shell**: No external auth yet, but implement smoke tests (Pest) for invoice creation, payment allocation, and multi-company RLS. Include CLI parity tests to ensure commands mirror the UI.
+
+The goal of “Create Haasib” is to verify the foundational loop: create a company, issue invoices, record payments, and see every mutation reflected in the ledger—through both the GUI and the shared CLI.
+
 ---
 
 ## 1. Meet the World

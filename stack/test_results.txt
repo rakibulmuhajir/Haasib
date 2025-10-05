@@ -1,0 +1,463 @@
+
+   FAIL  Tests\Unit\Actions\Invoicing\InvoiceCreateTest
+  ⨯ it creates invoice successfully                                      0.69s  
+  ⨯ it handles idempotency key                                           0.17s  
+  ⨯ it returns existing invoice for duplicate idempotency key            0.18s  
+  ⨯ it logs duplicate request detection                                  0.18s  
+  ⨯ it uses user company_id when not provided                            0.17s  
+  ⨯ it handles nullable fields gracefully                                0.17s  
+  ⨯ it passes idempotency_key to service                                 0.17s  
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                    0.16s  
+
+   FAIL  Tests\Unit\Middleware\EnsureIdempotencyTest
+  ⨯ idempotency middleware stores payload hash instead of full payload
+  ⨯ idempotency middleware rejects key reuse with different payload
+  ⨯ idempotency middleware stores minimal response data
+  ⨯ idempotency middleware filters sensitive fields from hash
+  ⨯ idempotency middleware reconstructs minimal response from stored data
+
+   FAIL  Tests\Unit\PermissionComposableTest
+  ⨯ Permission Composable Logic → usePermissions composable returns correct structure
+  ⨯ Permission Composable Logic → super admin has all can methods returning true
+  ⨯ Permission Composable Logic → viewer has limited can methods
+  ⨯ Permission Composable Logic → owner has most can methods
+  ⨯ Role-based Helper Methods → role helpers return correct values
+  ⨯ Permission Inheritance → super admin inherits all permissions
+  ⨯ Permission Inheritance → regular users need explicit permissions
+  ⨯ Currency Permission Logic → super admin can manage currencies anywhere
+  ⨯ Currency Permission Logic → regular users need company currency permissions
+  ⨯ Company Management Permissions → canManageCompany reflects role correctly
+  ⨯ Company Management Permissions → super admin can manage any company
+
+   FAIL  Tests\Unit\RbacTest
+  ⨯ RBAC Permission Tests → it owner can manage company currencies       3.05s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it create…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:48
+     44▕         ],
+     45▕     ];
+     46▕ 
+     47▕     // Mock the InvoiceService
+  ➜  48▕     $expectedInvoice = Invoice::factory()->make([
+     49▕         'company_id' => $this->company->id,
+     50▕         'customer_id' => $this->customer->id,
+     51▕         'invoice_id' => (string) Str::uuid(),
+     52▕         'invoice_number' => 'INV-2025-001',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:48
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it handle…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:113
+    109▕             ],
+    110▕         ],
+    111▕     ];
+    112▕ 
+  ➜ 113▕     $expectedInvoice = Invoice::factory()->make([
+    114▕         'company_id' => $this->company->id,
+    115▕         'customer_id' => $this->customer->id,
+    116▕         'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+    117▕         'invoice_number' => 'INV-2025-001',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:113
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it return…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:139
+    135▕     // Arrange
+    136▕     $idempotencyKey = 'test-key-123';
+    137▕ 
+    138▕     // Create an existing invoice with the idempotency key
+  ➜ 139▕     $existingInvoice = Invoice::factory()->create([
+    140▕         'company_id' => $this->company->id,
+    141▕         'customer_id' => $this->customer->id,
+    142▕         'idempotency_key' => $idempotencyKey,
+    143▕         'status' => 'draft',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:139
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it logs d…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:186
+    182▕     // Arrange
+    183▕     $idempotencyKey = 'test-key-123';
+    184▕ 
+    185▕     // Create an existing invoice with the idempotency key
+  ➜ 186▕     $existingInvoice = Invoice::factory()->create([
+    187▕         'company_id' => $this->company->id,
+    188▕         'customer_id' => $this->customer->id,
+    189▕         'idempotency_key' => $idempotencyKey,
+    190▕     ]);
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:186
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it uses u…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:235
+    231▕             ],
+    232▕         ],
+    233▕     ];
+    234▕ 
+  ➜ 235▕     $expectedInvoice = Invoice::factory()->make([
+    236▕         'company_id' => $this->company->id,
+    237▕         'customer_id' => $this->customer->id,
+    238▕         'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+    239▕         'invoice_number' => 'INV-2025-001',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:235
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it handle…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:287
+    283▕         ],
+    284▕         // Optional fields omitted
+    285▕     ];
+    286▕ 
+  ➜ 287▕     $expectedInvoice = Invoice::factory()->make([
+    288▕         'company_id' => $this->company->id,
+    289▕         'customer_id' => $this->customer->id,
+    290▕         'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+    291▕         'invoice_number' => 'INV-2025-001',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:287
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Actions\Invoicing\InvoiceCreateTest > it passes…  Error   
+  Class "App\Models\Invoice" not found
+
+  at tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:322
+    318▕             ],
+    319▕         ],
+    320▕     ];
+    321▕ 
+  ➜ 322▕     $expectedInvoice = Invoice::factory()->make([
+    323▕         'company_id' => $this->company->id,
+    324▕         'customer_id' => $this->customer->id,
+    325▕         'invoice_id' => (string) \Illuminate\Support\Str::uuid(),
+    326▕         'invoice_number' => 'INV-2025-001',
+
+  1   tests/Unit/Actions/Invoicing/InvoiceCreateTest.php:322
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Middleware\EnsureIdempotencyTest > ide…  QueryException   
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "customers" already exists (Connection: pgsql, SQL: create table "hrm"."customers" ("customer_id" uuid not null, "company_id" uuid not null, "name" varchar(255) not null, "email" varchar(255) null, "phone" varchar(50) null, "tax_number" varchar(100) null, "billing_address" text null, "shipping_address" text null, "currency_id" uuid null, "is_active" boolean not null default '1', "idempotency_key" varchar(128) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null, "deleted_at" timestamp(0) without time zone null, "created_by" uuid null, "updated_by" uuid null))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:570
+    566▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    567▕ 
+    568▕             $this->recordsHaveBeenModified();
+    569▕ 
+  ➜ 570▕             return $statement->execute();
+    571▕         });
+    572▕     }
+    573▕ 
+    574▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_09_13_074917_create_customers_table.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Middleware\EnsureIdempotencyTest > ide…  QueryException   
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "customers" already exists (Connection: pgsql, SQL: create table "hrm"."customers" ("customer_id" uuid not null, "company_id" uuid not null, "name" varchar(255) not null, "email" varchar(255) null, "phone" varchar(50) null, "tax_number" varchar(100) null, "billing_address" text null, "shipping_address" text null, "currency_id" uuid null, "is_active" boolean not null default '1', "idempotency_key" varchar(128) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null, "deleted_at" timestamp(0) without time zone null, "created_by" uuid null, "updated_by" uuid null))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:570
+    566▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    567▕ 
+    568▕             $this->recordsHaveBeenModified();
+    569▕ 
+  ➜ 570▕             return $statement->execute();
+    571▕         });
+    572▕     }
+    573▕ 
+    574▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_09_13_074917_create_customers_table.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Middleware\EnsureIdempotencyTest > ide…  QueryException   
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "customers" already exists (Connection: pgsql, SQL: create table "hrm"."customers" ("customer_id" uuid not null, "company_id" uuid not null, "name" varchar(255) not null, "email" varchar(255) null, "phone" varchar(50) null, "tax_number" varchar(100) null, "billing_address" text null, "shipping_address" text null, "currency_id" uuid null, "is_active" boolean not null default '1', "idempotency_key" varchar(128) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null, "deleted_at" timestamp(0) without time zone null, "created_by" uuid null, "updated_by" uuid null))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:570
+    566▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    567▕ 
+    568▕             $this->recordsHaveBeenModified();
+    569▕ 
+  ➜ 570▕             return $statement->execute();
+    571▕         });
+    572▕     }
+    573▕ 
+    574▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_09_13_074917_create_customers_table.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Middleware\EnsureIdempotencyTest > ide…  QueryException   
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "customers" already exists (Connection: pgsql, SQL: create table "hrm"."customers" ("customer_id" uuid not null, "company_id" uuid not null, "name" varchar(255) not null, "email" varchar(255) null, "phone" varchar(50) null, "tax_number" varchar(100) null, "billing_address" text null, "shipping_address" text null, "currency_id" uuid null, "is_active" boolean not null default '1', "idempotency_key" varchar(128) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null, "deleted_at" timestamp(0) without time zone null, "created_by" uuid null, "updated_by" uuid null))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:570
+    566▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    567▕ 
+    568▕             $this->recordsHaveBeenModified();
+    569▕ 
+  ➜ 570▕             return $statement->execute();
+    571▕         });
+    572▕     }
+    573▕ 
+    574▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_09_13_074917_create_customers_table.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\Middleware\EnsureIdempotencyTest > ide…  QueryException   
+  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "customers" already exists (Connection: pgsql, SQL: create table "hrm"."customers" ("customer_id" uuid not null, "company_id" uuid not null, "name" varchar(255) not null, "email" varchar(255) null, "phone" varchar(50) null, "tax_number" varchar(100) null, "billing_address" text null, "shipping_address" text null, "currency_id" uuid null, "is_active" boolean not null default '1', "idempotency_key" varchar(128) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null, "deleted_at" timestamp(0) without time zone null, "created_by" uuid null, "updated_by" uuid null))
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:570
+    566▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    567▕ 
+    568▕             $this->recordsHaveBeenModified();
+    569▕ 
+  ➜ 570▕             return $statement->execute();
+    571▕         });
+    572▕     }
+    573▕ 
+    574▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_09_13_074917_create_customers_table.php:14
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Role-bas…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Permissi…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Currency…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Currency…  RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Company…   RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\PermissionComposableTest > `Company…   RoleDoesNotExist   
+  There is no role named `super_admin` for guard `web`.
+
+  at vendor/spatie/laravel-permission/src/Exceptions/RoleDoesNotExist.php:11
+      7▕ class RoleDoesNotExist extends InvalidArgumentException
+      8▕ {
+      9▕     public static function named(string $roleName, ?string $guardName)
+     10▕     {
+  ➜  11▕         return new static(__('There is no role named `:role` for guard `:guard`.', [
+     12▕             'role' => $roleName,
+     13▕             'guard' => $guardName,
+     14▕         ]));
+     15▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/Unit/PermissionComposableTest.php:13
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\RbacTest > `RBAC Permission Tests` → it owner can mana…   
+  Failed asserting that false is true.
+
+  at tests/Unit/RbacTest.php:30
+     26▕         // Test permission within team context
+     27▕         expect($owner->hasPermissionTo('companies.currencies.manage'))->toBeFalse();
+     28▕ 
+     29▕         setPermissionsTeamId($company->id);
+  ➜  30▕         expect($owner->hasPermissionTo('companies.currencies.manage'))->toBeTrue();
+     31▕         expect($owner->hasPermissionTo('companies.settings.update'))->toBeTrue();
+     32▕         expect($owner->hasPermissionTo('users.roles.assign'))->toBeTrue();
+     33▕ 
+     34▕         // Clear context for clean state
+
+  1   tests/Unit/RbacTest.php:30
+
+
+  Tests:    24 failed, 1 passed, [2m324 pending[22m (3 assertions)
+  Duration: 17.78s
+

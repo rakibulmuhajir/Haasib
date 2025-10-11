@@ -7,5 +7,12 @@ PGPASSWORD=AcctP@ss psql -h 127.0.0.1 -U superadmin -d postgres -c "SELECT pg_te
 PGPASSWORD=AcctP@ss dropdb -h 127.0.0.1 -U superadmin haasib_test3 2>/dev/null
 PGPASSWORD=AcctP@ss createdb -h 127.0.0.1 -U superadmin haasib_test3
 
-# Run migrations
+# Run migrations against the testing database
+APP_ENV=testing \
+DB_CONNECTION=pgsql \
+DB_HOST=127.0.0.1 \
+DB_PORT=5432 \
+DB_DATABASE=haasib_test3 \
+DB_USERNAME=superadmin \
+DB_PASSWORD=AcctP@ss \
 php artisan migrate --force

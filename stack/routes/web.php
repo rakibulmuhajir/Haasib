@@ -12,12 +12,26 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
+    // Check if system is initialized
+    $setupService = app(\App\Services\SetupService::class);
+    if (! $setupService->isInitialized()) {
+        return redirect()->route('setup.page');
+    }
+    
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
     ]);
+});
+
+
+// Setup routes - no authentication required
+Route::prefix('setup')->name('setup.')->group(function () {
+    Route::get('/page', function () {
+        return Inertia::render('Setup/UserSelection');
+    })->name('page');
 });
 
 Route::get('/dashboard', function () {

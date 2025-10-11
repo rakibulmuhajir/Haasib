@@ -1,0 +1,63 @@
+{
+    "auth": {
+        "login": "Login",
+        "logout": "Logout",
+        "email": "Email",
+        "password": "Password",
+        "remember_me": "Remember Me",
+        "login_failed": "Login failed",
+        "login_success": "Login successful"
+    },
+    "setup": {
+        "title": "Welcome to Haasib",
+        "subtitle": "Select your account to get started",
+        "no_accounts": "No accounts found",
+        "select_company": "Select Company",
+        "switch_company": "Switch Company",
+        "create_company": "Create Company",
+        "welcome_back": "Welcome back, {name}",
+        "select_user": "Select User Account"
+    },
+    "dashboard": {
+        "title": "Dashboard",
+        "overview": "Overview",
+        "recent_activity": "Recent Activity",
+        "quick_actions": "Quick Actions",
+        "financial_summary": "Financial Summary"
+    },
+    "companies": {
+        "switch": "Switch Company",
+        "current": "Current Company",
+        "no_companies": "No companies available"
+    },
+    "modules": {
+        "title": "Modules",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "toggle": "Toggle Module",
+        "no_modules": "No modules available"
+    },
+    "invoicing": {
+        "invoices": "Invoices",
+        "create_invoice": "Create Invoice",
+        "invoice_list": "Invoice List",
+        "invoice_number": "Invoice #",
+        "customer": "Customer",
+        "amount": "Amount",
+        "status": "Status",
+        "due_date": "Due Date"
+    },
+    "common": {
+        "loading": "Loading...",
+        "error": "Error",
+        "success": "Success",
+        "cancel": "Cancel",
+        "save": "Save",
+        "delete": "Delete",
+        "edit": "Edit",
+        "view": "View",
+        "search": "Search",
+        "filter": "Filter",
+        "actions": "Actions"
+    }
+}

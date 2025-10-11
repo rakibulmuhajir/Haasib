@@ -121,6 +121,12 @@ Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middle
 // Universal inline edit endpoint
 Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware('web');
 
+// Public invitation routes (no authentication required)
+Route::prefix('invitations')->name('invitations.')->group(function () {
+    Route::post('/{token}/accept', [\App\Http\Controllers\CompanyInvitationController::class, 'accept'])->name('accept');
+    Route::post('/{token}/reject', [\App\Http\Controllers\CompanyInvitationController::class, 'reject'])->name('reject');
+});
+
 // Health check endpoint
 Route::get('/health', function () {
     return response()->json([
@@ -130,3 +136,46 @@ Route::get('/health', function () {
         'storage_symlink' => file_exists(public_path('storage')),
     ]);
 })->name('health');
+
+// API v1 Routes - Core system endpoints
+Route::prefix('v1')->group(function () {
+    // Setup routes - no authentication required for initialization
+    Route::prefix('setup')->name('setup.')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\SetupController::class, 'status'])->name('status');
+        Route::post('/initialize', [\App\Http\Controllers\SetupController::class, 'initialize'])->name('initialize')->middleware('idempotent');
+    });
+
+    // Public authentication routes - use web middleware for session auth
+    Route::prefix('users')->name('users.')->middleware(['web'])->group(function () {
+        Route::post('/login', [\App\Http\Controllers\Auth\AuthController::class, 'login'])->name('login')->middleware('idempotent');
+    });
+
+    // Authenticated routes - use session authentication like the old system
+    Route::middleware(['web', 'auth', 'company.context'])->group(function () {
+        // User routes (except login)
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');
+        });
+
+        // Company routes
+        Route::prefix('companies')->name('companies.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\CompanyController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\CompanyController::class, 'store'])->name('store')->middleware('idempotent');
+            Route::get('/{id}', [\App\Http\Controllers\CompanyController::class, 'show'])->whereUuid('id')->name('show');
+            Route::post('/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('switch')->middleware('idempotent');
+            
+            // Company invitations
+            Route::get('/{companyId}/invitations', [\App\Http\Controllers\CompanyInvitationController::class, 'index'])->name('invitations.index');
+            Route::post('/{companyId}/invitations', [\App\Http\Controllers\CompanyInvitationController::class, 'store'])->name('invitations.store')->middleware('idempotent');
+            Route::get('/{companyId}/invitations/{invitationId}', [\App\Http\Controllers\CompanyInvitationController::class, 'show'])->name('invitations.show');
+            Route::delete('/{companyId}/invitations/{invitationId}', [\App\Http\Controllers\CompanyInvitationController::class, 'destroy'])->name('invitations.destroy');
+        });
+
+        // Module routes
+        Route::prefix('modules')->name('modules.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ModuleController::class, 'index'])->name('index');
+            Route::post('/{id}/enable', [\App\Http\Controllers\ModuleController::class, 'enable'])->name('enable')->middleware('idempotent');
+            Route::post('/{id}/disable', [\App\Http\Controllers\ModuleController::class, 'disable'])->name('disable')->middleware('idempotent');
+        });
+    });
+});

@@ -1,13 +1,13 @@
 <!--
 Sync Impact Report:
-Version change: 1.0.0 → 2.0.0 (major overhaul - added comprehensive AI coder binding rules)
-List of modified principles: Expanded from 5 to 10 non-negotiable rules
-Added sections: AI Coder Binding (primary section), Technical Integrity Rules
-Removed sections: N/A (restructured existing content)
+Version change: 2.0.0 → 2.0.1 (minor amendment - added legacy code salvage clause and template alignment)
+List of modified principles: No changes to core principles
+Added sections: Added legacy code salvage clause to Salvage & Heritage section
+Removed sections: N/A
 Templates requiring updates:
-  ✅ plan-template.md (already references constitution correctly)
+  ✅ plan-template.md (updated to include specific constitutional gates from v2.0.0)
   ✅ spec-template.md (already aligned with constitutional principles)
-  ✅ tasks-template.md (already reflects TDD and task organization principles)
+  ✅ tasks-template.md (updated to reference constitutional principles in task rules)
 Follow-up TODOs: N/A
 -->
 
@@ -60,6 +60,12 @@ If requirements conflict or clarity is missing, stop and ask. Acting on guesswor
 ### Decompose & Align
 Before executing significant work, break tasks into clear sub-steps (naming conventions, migration column choices, service boundaries, testing strategy) and surface them to the human for confirmation. Never assume silent approval for structural decisions.
 
+### Best-Practices Consultation
+Before creating or modifying any file, consult the relevant guidance under `docs/dosdonts/`. Align the planned change with the appropriate best-practices memo (migrations, services, controllers, CLI, etc.) and incorporate those rules into the implementation plan.
+
+### Eloquent-First Persistence
+Favor Laravel Eloquent models, relationships, and factories for all data access in application code and tests. Raw database queries (\`DB::table\`, manual SQL) are allowed only in migrations or when a documented performance constraint requires it. Any exception must be justified in the plan and mirrored by updated tests.
+
 ## Architecture Standards
 
 ### Technology Stack
@@ -67,6 +73,15 @@ Before executing significant work, break tasks into clear sub-steps (naming conv
 **Frontend**: Vue 3 with Inertia.js v2, PrimeVue v4, Tailwind CSS
 **Testing**: Pest v4 for backend, Playwright for E2E
 **Performance**: Laravel Octane with Swoole, <200ms p95 response times
+
+### Database Schema Structure
+The application uses a multi-schema PostgreSQL database with the following schemas:
+- **auth**: Authentication, authorization, multi-tenant core
+- **public**: General reference data, system infrastructure
+- **hrm**: Human Resource Management entities
+- **acct**: Accounting and financial data
+
+All tables must be created in their appropriate schema according to this structure.
 
 ### Code Quality
 - Laravel Pint for code formatting
@@ -104,8 +119,9 @@ This constitution supersedes all other practices and guidelines. Amendments requ
 All PRs and reviews must verify compliance with constitutional principles. Complexity beyond simple patterns must be explicitly justified in the PR description. For runtime development guidance, refer to project-specific documentation in the docs/ directory.
 
 ### Salvage & Heritage Clause
-- Preserve and reuse the CLI architecture established in the `main` branch’s latest commit; it remains the canonical pattern for command bus + palette integration.
+- Preserve and reuse the CLI architecture established in the `main` branch's latest commit; it remains the canonical pattern for command bus + palette integration.
 - The `rebootstrap-primevue` branch contains vetted core and invoicing implementations—treat them as reference implementations when rebuilding modules; import logic rather than rewriting blindly.
 - Schemas under `/docs/schemas/` are the authoritative data backbone. Adjustments may be applied for practical reasons, but these files are the primary blueprint for table structure, constraints, and RLS strategies.
+- The `/home/banna/projects/Haasib/app` directory contains valuable legacy code and implementations that should be considered for reuse after thoughtful analysis instead of reinventing solutions.
 
-**Version**: 2.0.0 | **Ratified**: 2025-01-16 | **Last Amended**: 2025-01-16
+**Version**: 2.0.1 | **Ratified**: 2025-01-16 | **Last Amended**: 2025-10-07

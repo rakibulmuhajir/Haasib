@@ -1,8 +1,8 @@
 
-# Implementation Plan: Create Haasib - Initial Platform Setup
+# Implementation Plan: [FEATURE]
 
-**Branch**: `001-create-haasib-initial` | **Date**: 2025-01-16 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/001-create-haasib-initial/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
@@ -31,40 +31,49 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-Initial platform setup creates a fully functional Haasib instance with 5 predefined users, 3 industry-specific demo companies, and a consolidated Accounting module (covering ledger, invoicing, payments) enabled. The technical approach reuses the existing CLI architecture from `main`, ports the mature accounting code from `rebootstrap-primevue`, and aligns migrations with `/docs/schemas`. Laravel's modular architecture with RLS for multi-tenancy, Spatie for RBAC, and factory-augmented seeders provide realistic demo data spanning 3 months of business activity.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
-**Language/Version**: PHP 8.2+, Laravel 12
-**Primary Dependencies**: Vue 3, Inertia.js v2, PrimeVue v4, PostgreSQL 16, Spatie Laravel Permission
-**Storage**: PostgreSQL 16 with RLS (Row Level Security)
-**Testing**: Pest v4 for backend, Playwright for E2E
-**Target Platform**: Linux server (web application)
-**Project Type**: web (frontend + backend)
-**Performance Goals**: <200ms p95 response times, <5 second seeding time for demo data
-**Constraints**: Must handle 3 companies x 3 months of demo data efficiently
-**Scale/Scope**: Initial demo setup for 5 users, 3 companies, Core+Ledger+Invoicing modules
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [single/web/mobile - determines source structure]  
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-### Mandatory Requirements (from Constitution v2.0.0)
-- [ ] **Single Source Doctrine**: All implementation must follow canonical docs in `/docs/`
-- [ ] **Command-Bus Supremacy**: All setup actions must dispatch through command bus
-- [ ] **CLI-GUI Parity**: User selection and module setup must have equivalent CLI commands
-- [ ] **Tenancy & RLS Safety**: All demo data must include company_id with proper RLS policies
-- [ ] **RBAC Integrity**: Predefined roles must follow Spatie permission pattern
-- [ ] **Translation & Accessibility**: All UI strings must use locale files (EN + AR baseline)
-- [ ] **PrimeVue v4 Compliance**: Must use PrimeVue components for UI
-- [ ] **Module Governance**: Must use php artisan module:make for module creation
-- [ ] **Tests Before Triumph**: TDD required - tests must be written first
-- [ ] **Audit & Idempotency**: All setup actions must be auditable with idempotency keys
-- [ ] **Single Responsibility**: Actions/services remain focused; orchestrators stay thin; reuse existing implementations to avoid god classes
+### Constitutional Gates (based on Haasib Constitution v2.0.0)
 
-### Initial Assessment
-- ✓ Project structure follows Laravel standards
-- ✓ Technology stack matches constitutional requirements
-- ⚠️ Need to ensure module compliance during creation
-- ⚠️ Need to verify CLI commands for all GUI operations
+**AI Coder Binding Principles:**
+- [ ] Single Source Doctrine: All work aligns with canonical docs in `/docs/`
+- [ ] Command-Bus Supremacy: All write flows use registered command actions
+- [ ] CLI-GUI Parity: Every GUI capability has equal CLI path
+- [ ] Tenancy & RLS Safety: All tenant operations include company_id and RLS
+- [ ] RBAC Integrity: All features declare precise permissions and role guards
+- [ ] Translation & Accessibility: All user-facing strings use locale files
+- [ ] PrimeVue v4 & FontAwesome 5 Compliance: UI follows component standards
+- [ ] Module Governance: Modules use proper structure and are independently testable
+- [ ] Tests Before Triumph: TDD approach with failing tests written first
+- [ ] Audit, Idempotency & Observability: All writes are auditable and idempotent
+
+**Architecture Standards:**
+- [ ] Technology Stack: Uses Laravel 12 + PHP 8.2+, PostgreSQL 16, Vue 3 + Inertia.js v2, PrimeVue v4
+- [ ] Code Quality: Follows Pint, ServiceContext, Command Bus, RBAC patterns
+- [ ] Single Responsibility: Small focused classes, no god classes
+
+**Documentation & Workflow:**
+- [ ] Documentation Fidelity: Briefs and trackers updated with changes
+- [ ] No Undocumented Dependencies: All packages declared in composer.json
+- [ ] Phase Gates: Specification → Planning → Task Generation → Implementation → Validation
+
+### Constitution Status
+- [ ] Initial Constitution Check: PASS
+- [ ] Post-Design Constitution Check: PASS
 
 ## Project Structure
 
@@ -80,42 +89,50 @@ specs/[###-feature]/
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 ```
-modules/
-├── Core/
-│   ├── Domain/Actions/
-│   ├── Domain/Services/
-│   ├── CLI/
-│   ├── Providers/
-│   ├── Database/migrations/  ← port from rebootstrap-primevue
-│   └── Resources/
-├── Ledger/               ← reuse legacy journal/invoice posting logic
-└── Invoicing/
-
-app/
-├── Actions/Setup/        ← thin orchestrators dispatching command bus actions
-├── Console/Commands/     ← reuse CLI scaffolding from main
-├── Http/
-└── Providers/
-
-database/
-├── migrations/           ← populated by imported legacy migrations
-├── seeders/
-└── schemas/ (reference SQL from docs/)
-
-resources/
-└── js/
-    ├── Pages/Setup/
-    ├── Components/Setup/
-    └── Layouts/
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
 
 tests/
-├── Feature/Setup/
-├── Unit/Setup/
-└── CLI/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
-**Structure Decision**: Web application with Laravel backend using the in-repo `modules/<Name>/` architecture (scaffolded via `php artisan module:make`) for Core, Ledger, and Invoicing. Setup orchestration remains thin inside `app/Actions/Setup/` but reuses existing command bus + CLI layers from the `main` branch. Legacy migrations/seeders are imported from `rebootstrap-primevue` and `/docs/schemas` rather than rewritten.
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
@@ -178,11 +195,9 @@ tests/
 - Load `.specify/templates/tasks-template.md` as base
 - Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
 - Each contract → contract test task [P]
-- Each entity → model creation task [P]
+- Each entity → model creation task [P] 
 - Each user story → integration test task
-- Explicit tasks to port legacy migrations/seeders from `rebootstrap-primevue` + align with `/docs/schemas`
-- Tasks to ensure CLI palette reuse from `main` branch
-- Implementation tasks to make tests pass, keeping actions/services small per SRP mandate
+- Implementation tasks to make tests pass
 
 **Ordering Strategy**:
 - TDD order: Tests before implementation 
@@ -213,18 +228,18 @@ tests/
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [x] Phase 0: Research complete (/plan command)
-- [x] Phase 1: Design complete (/plan command)
-- [x] Phase 2: Task planning complete (/plan command - describe approach only)
+- [ ] Phase 0: Research complete (/plan command)
+- [ ] Phase 1: Design complete (/plan command)
+- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [x] Initial Constitution Check: PASS
-- [x] Post-Design Constitution Check: PASS
-- [x] All NEEDS CLARIFICATION resolved
-- [x] Complexity deviations documented
+- [ ] Initial Constitution Check: PASS
+- [ ] Post-Design Constitution Check: PASS
+- [ ] All NEEDS CLARIFICATION resolved
+- [ ] Complexity deviations documented
 
 ---
 *Based on Constitution v2.1.1 - See `/memory/constitution.md`*

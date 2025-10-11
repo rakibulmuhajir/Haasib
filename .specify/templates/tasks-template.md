@@ -21,7 +21,10 @@
 4. Apply task rules:
    → Different files = mark [P] for parallel
    → Same file = sequential (no [P])
-   → Tests before implementation (TDD)
+   → Tests before implementation (TDD) - per Constitution Principle IX
+   → Include CLI parity tasks for GUI features - per Constitution Principle III
+   → Include audit/logging tasks for mutations - per Constitution Principle X
+   → Include permission/RBAC tasks - per Constitution Principle V
 5. Number tasks sequentially (T001, T002...)
 6. Generate dependency graph
 7. Create parallel execution examples

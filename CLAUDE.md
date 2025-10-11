@@ -26,3 +26,6 @@ PHP 8.2+, Laravel 12: Follow standard conventions
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
+- /stack is the working and active laravel installation
+- look back what's already there plus there is an old working directory /app with /stack.
+- app is old. stack is new and current

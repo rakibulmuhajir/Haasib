@@ -47,7 +47,33 @@
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+### Constitutional Gates (based on Haasib Constitution v2.0.0)
+
+**AI Coder Binding Principles:**
+- [ ] Single Source Doctrine: All work aligns with canonical docs in `/docs/`
+- [ ] Command-Bus Supremacy: All write flows use registered command actions
+- [ ] CLI-GUI Parity: Every GUI capability has equal CLI path
+- [ ] Tenancy & RLS Safety: All tenant operations include company_id and RLS
+- [ ] RBAC Integrity: All features declare precise permissions and role guards
+- [ ] Translation & Accessibility: All user-facing strings use locale files
+- [ ] PrimeVue v4 & FontAwesome 5 Compliance: UI follows component standards
+- [ ] Module Governance: Modules use proper structure and are independently testable
+- [ ] Tests Before Triumph: TDD approach with failing tests written first
+- [ ] Audit, Idempotency & Observability: All writes are auditable and idempotent
+
+**Architecture Standards:**
+- [ ] Technology Stack: Uses Laravel 12 + PHP 8.2+, PostgreSQL 16, Vue 3 + Inertia.js v2, PrimeVue v4
+- [ ] Code Quality: Follows Pint, ServiceContext, Command Bus, RBAC patterns
+- [ ] Single Responsibility: Small focused classes, no god classes
+
+**Documentation & Workflow:**
+- [ ] Documentation Fidelity: Briefs and trackers updated with changes
+- [ ] No Undocumented Dependencies: All packages declared in composer.json
+- [ ] Phase Gates: Specification → Planning → Task Generation → Implementation → Validation
+
+### Constitution Status
+- [ ] Initial Constitution Check: PASS
+- [ ] Post-Design Constitution Check: PASS
 
 ## Project Structure
 

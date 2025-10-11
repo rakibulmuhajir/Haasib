@@ -21,14 +21,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->api(append: [
-            \Illuminate\Auth\Middleware\Authenticate::class,
-            \App\Http\Middleware\ApiRateLimit::class,
-            \App\Http\Middleware\EnsureApiHasCompanyContext::class,
+            \App\Http\Middleware\SetCompanyContext::class,
         ]);
 
         $middleware->alias([
-            'idempotent' => \App\Http\Middleware\EnsureIdempotency::class,
+            'idempotent' => \App\Http\Middleware\Idempotency::class,
             'permission' => \App\Http\Middleware\RequirePermission::class,
+            'company.role' => \App\Http\Middleware\RequireCompanyRole::class,
+            'require.setup' => \App\Http\Middleware\RequireSetup::class,
+            'audit.trail' => \App\Http\Middleware\AuditTrail::class,
+            'company.context' => \App\Http\Middleware\SetCompanyContext::class,
+            'performance.monitor' => \App\Http\Middleware\PerformanceMonitor::class,
         ]);
     })
     ->withSchedule(function ($schedule): void {

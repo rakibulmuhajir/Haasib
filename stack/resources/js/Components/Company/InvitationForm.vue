@@ -47,7 +47,7 @@ const toast = ref()
 // Form setup
 const invitationForm = useForm({
     email: '',
-    role: 'member',
+    role: 'employee',
     message: '',
     expires_in_days: 7
 })

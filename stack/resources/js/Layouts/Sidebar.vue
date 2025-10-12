@@ -392,7 +392,7 @@ const getSubMenuItemClasses = (item) => {
                             {{ user?.name || 'User' }}
                         </p>
                         <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {{ user?.system_role || 'member' }}
+                            {{ user?.system_role || 'employee' }}
                         </p>
                     </div>
                     <i v-if="!collapsed" class="pi pi-chevron-down text-gray-400"></i>

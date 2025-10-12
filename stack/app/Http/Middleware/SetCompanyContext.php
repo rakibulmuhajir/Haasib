@@ -22,31 +22,32 @@ class SetCompanyContext
     {
         // Get authenticated user
         $user = Auth::user();
-        
+
         if (! $user) {
             return $next($request);
         }
 
         // Determine active company from request, session, or user's default
         $company = $this->resolveActiveCompany($request, $user);
-        
+
         if (! $company) {
             // Clear any existing company context
             $this->clearRlsContext();
+
             return $next($request);
         }
 
         // Set RLS context for database queries
         $this->setRlsContext($company, $user);
-        
+
         // Store company in request context for controllers
         $request->attributes->set('company', $company);
-        
+
         // Share company context with Inertia if it's a web request
         if ($request->inertia()) {
             $this->shareCompanyContext($company, $user);
         }
-        
+
         return $next($request);
     }
 
@@ -61,8 +62,9 @@ class SetCompanyContext
                 Log::info('Company context set from header', [
                     'user_id' => $user->id,
                     'company_id' => $company->id,
-                    'company_name' => $company->name
+                    'company_name' => $company->name,
                 ]);
+
                 return $company;
             }
         }
@@ -76,8 +78,9 @@ class SetCompanyContext
                 Log::info('Company context set from parameter', [
                     'user_id' => $user->id,
                     'company_id' => $company->id,
-                    'company_name' => $company->name
+                    'company_name' => $company->name,
                 ]);
+
                 return $company;
             }
         }
@@ -92,8 +95,9 @@ class SetCompanyContext
                     Log::info('Company context switched', [
                         'user_id' => $user->id,
                         'company_id' => $company->id,
-                        'company_name' => $company->name
+                        'company_name' => $company->name,
                     ]);
+
                     return $company;
                 }
             }
@@ -124,33 +128,34 @@ class SetCompanyContext
         // Set PostgreSQL session variables for RLS policies
         DB::statement("SET app.current_company_id = '{$company->id}'");
         DB::statement("SET app.current_user_id = '{$user->id}'");
-        
+
         // Set user's role in this specific company
         $companyUser = $company->users()->where('user_id', $user->id)->first();
         $roleInCompany = $companyUser?->role ?? 'member';
-        
+
         DB::statement("SET app.user_role = '{$roleInCompany}'");
-        
+
         // Set super admin status if applicable
         $isSuperAdmin = $user->system_role === 'system_owner' || $user->system_role === 'super_admin';
-        DB::statement("SET app.is_super_admin = " . ($isSuperAdmin ? 'true' : 'false'));
+        DB::statement('SET app.is_super_admin = '.($isSuperAdmin ? 'true' : 'false'));
     }
 
     private function clearRlsContext(): void
     {
         // Clear PostgreSQL session variables
-        DB::statement("RESET app.current_company_id");
-        DB::statement("RESET app.current_user_id");
-        DB::statement("RESET app.user_role");
-        DB::statement("RESET app.is_super_admin");
+        DB::statement('RESET app.current_company_id');
+        DB::statement('RESET app.current_user_id');
+        DB::statement('RESET app.user_role');
+        DB::statement('RESET app.is_super_admin');
     }
 
     private function shareCompanyContext(Company $company, User $user): void
     {
         // Share company context with Inertia for frontend components
         $companyUser = $company->users()->where('user_id', $user->id)->first();
-        
-        request()->inertia()->share([
+
+        // Use the Inertia facade to share data
+        \Inertia\Inertia::share(array_filter([
             'currentCompany' => [
                 'id' => $company->id,
                 'name' => $company->name,
@@ -159,9 +164,11 @@ class SetCompanyContext
                 'currency' => $company->currency ?? 'USD',
                 'userRole' => $companyUser?->role ?? 'member',
                 'isActive' => $companyUser?->is_active ?? false,
+                'permissions' => $this->getUserCompanyPermissions($company, $user),
             ],
             'userCompanies' => $user->companies()->get()->map(function ($comp) use ($user) {
                 $compUser = $comp->users()->where('user_id', $user->id)->first();
+
                 return [
                     'id' => $comp->id,
                     'name' => $comp->name,
@@ -170,8 +177,62 @@ class SetCompanyContext
                     'currency' => $comp->currency ?? 'USD',
                     'userRole' => $compUser?->role ?? 'member',
                     'isActive' => $compUser?->is_active ?? false,
+                    'permissions' => $this->getUserCompanyPermissions($comp, $user),
                 ];
             }),
-        ]);
+        ]));
+    }
+
+    private function getUserCompanyPermissions(Company $company, User $user): array
+    {
+        // Get user's role in this company
+        $companyUser = $company->users()->where('user_id', $user->id)->first();
+        $role = $companyUser?->role ?? 'member';
+
+        // Define permissions based on role
+        $permissions = match ($role) {
+            'owner' => [
+                'company.manage',
+                'company.invite',
+                'company.users.view',
+                'company.users.manage',
+                'settings.manage',
+                'invoices.view',
+                'invoices.manage',
+                'accounting.view',
+                'accounting.manage',
+                'reports.view',
+            ],
+            'admin' => [
+                'company.invite',
+                'company.users.view',
+                'company.users.manage',
+                'settings.manage',
+                'invoices.view',
+                'invoices.manage',
+                'accounting.view',
+                'accounting.manage',
+                'reports.view',
+            ],
+            'manager' => [
+                'company.users.view',
+                'invoices.view',
+                'invoices.manage',
+                'accounting.view',
+                'reports.view',
+            ],
+            'employee' => [
+                'invoices.view',
+                'accounting.view',
+            ],
+            default => []
+        };
+
+        // Add system-wide permissions for super admins
+        if ($user->system_role === 'system_owner' || $user->system_role === 'super_admin') {
+            $permissions[] = 'company.manage';
+        }
+
+        return $permissions;
     }
 }

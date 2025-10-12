@@ -179,7 +179,7 @@ class UserService
     public function inviteToCompany(string $email, Company $company, string $role, ServiceContext $context): array
     {
         // Validate role
-        $validRoles = ['owner', 'admin', 'accountant', 'viewer', 'member'];
+        $validRoles = ['owner', 'admin', 'manager', 'accountant', 'employee', 'viewer'];
         if (! in_array($role, $validRoles)) {
             throw new \InvalidArgumentException("Invalid role: {$role}");
         }
@@ -304,7 +304,7 @@ class UserService
     public function changeCompanyRole(User $user, Company $company, string $newRole, ServiceContext $context): bool
     {
         // Validate role
-        $validRoles = ['owner', 'admin', 'accountant', 'viewer', 'member'];
+        $validRoles = ['owner', 'admin', 'manager', 'accountant', 'employee', 'viewer'];
         if (! in_array($newRole, $validRoles)) {
             throw new \InvalidArgumentException("Invalid role: {$newRole}");
         }

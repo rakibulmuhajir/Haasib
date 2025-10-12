@@ -46,13 +46,14 @@ class RequireCompanyRole
 
     private function hasRequiredRole(string $userRole, string $requiredRole): bool
     {
-        // Role hierarchy: owner > admin > accountant > member > viewer
+        // Role hierarchy: owner > admin > accountant > manager > employee > viewer
         $roleHierarchy = [
             'viewer' => 0,
-            'member' => 1,
-            'accountant' => 2,
-            'admin' => 3,
-            'owner' => 4,
+            'employee' => 1,
+            'manager' => 2,
+            'accountant' => 3,
+            'admin' => 4,
+            'owner' => 5,
         ];
 
         $userLevel = $roleHierarchy[$userRole] ?? 0;

@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
-import { useForm } from '@inertiajs/inertia-vue3'
+import { useForm } from '@inertiajs/vue3'
 
 export function useCompanyContext() {
     const page = usePage()

@@ -14,9 +14,60 @@
 - Centralize audit hooks in observers or events to avoid repeating request/auth checks across models.
 - Prefer value objects or DTOs for complex state changes; models should stay thin and persistence-focused.
 
+## Spatie Laravel Permission Requirements
+
+### HasRoles Trait - MANDATORY
+
+**CRITICAL**: Any User model that uses permission checking (`$user->hasPermissionTo()`) MUST include the `HasRoles` trait:
+
+```php
+use Spatie\Permission\Traits\HasRoles;
+
+class User extends Authenticatable
+{
+    use HasRoles, /* other traits */;
+}
+```
+
+**Common Error**: `BadMethodCallException: Call to undefined method App\Models\User::hasPermissionTo()`
+**Solution**: Add the `HasRoles` trait to the User model.
+
+### Permission System Dependencies
+
+Before using permission checking, verify these exist:
+
+1. **Database Tables**: `permissions`, `roles`, `model_has_permissions`, `model_has_roles`, `role_has_permissions`
+2. **Configuration**: `config/permission.php` table names match actual schema
+3. **Custom Models**: If using UUIDs, create custom Permission/Role models extending Spatie base classes
+
+### Setup Workflow
+
+```php
+// 1. Create permissions first
+use Spatie\Permission\Models\Permission;
+
+Permission::firstOrCreate(['name' => 'customers.create', 'guard_name' => 'web']);
+
+// 2. Test permission checking (should return false, not error)
+$user = new User();
+$canCreate = $user->hasPermissionTo('customers.create');
+```
+
+### Troubleshooting Pattern
+
+| Error | Cause | Fix |
+|-------|--------|-----|
+| `hasPermissionTo()` undefined | Missing `HasRoles` trait | Add trait to User model |
+| `Undefined table: auth.permissions` | Wrong table names in config | Update `config/permission.php` |
+| `UUID operator does not exist` | Permission models lack UUID config | Create custom models with UUID support |
+| `column team_id does not exist` | Teams feature enabled | Set `'teams' => false` in config |
+
 ## Quick Checklist
 - [ ] Traits match actual columns (UUIDs, timestamps, soft deletes).
 - [ ] Accessors/mutators correspond to real database fields.
 - [ ] No direct reliance on global helpers inside jobs/CLI without guards.
 - [ ] Pivot models stay free of conflicting primary-key traits.
 - [ ] Domain rules live in actions/services, not inside Eloquent events.
+- [ ] **User models have `HasRoles` trait if using `hasPermissionTo()`**.
+- [ ] **Permission tables exist before using permission checking**.
+- [ ] **Config table names match actual database schema**.

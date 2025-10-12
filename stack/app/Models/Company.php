@@ -71,8 +71,16 @@ class Company extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'auth.company_user')
-            ->withPivot('role', 'joined_at')
+            ->withPivot('role', 'is_active', 'joined_at', 'left_at')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the invitations for this company.
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(CompanyInvitation::class, 'company_id');
     }
 
     /**

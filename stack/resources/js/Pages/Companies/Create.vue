@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import { useForm, Link, router } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
+import { usePageActions } from '@/composables/usePageActions'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import PageHeader from '@/Components/PageHeader.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -12,6 +15,9 @@ import Toast from 'primevue/toast'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Divider from 'primevue/divider'
+
+// Initialize page actions
+const { setActions } = usePageActions()
 
 const { t } = useI18n()
 
@@ -226,29 +232,26 @@ setFiscalYearDefaults()
 </script>
 
 <template>
-    <div class="company-create">
+    <LayoutShell>
         <Toast ref="toast" />
         
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-                    Create New Company
-                </h1>
-                <p class="text-gray-600 dark:text-gray-400 mt-1">
-                    Set up a new company with accounting and management features
-                </p>
-            </div>
-            
-            <Link href="/companies">
-                <Button
-                    icon="pi pi-arrow-left"
-                    label="Back to Companies"
-                    severity="secondary"
-                    outlined
-                />
-            </Link>
-        </div>
+        <!-- Page Header -->
+        <PageHeader 
+            title="Create New Company" 
+            subtitle="Set up a new company with accounting and management features"
+        >
+            <template #actionsLeft>
+                <Link href="/companies">
+                    <Button
+                        severity="secondary"
+                        outlined
+                    >
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back to Companies</span>
+                    </Button>
+                </Link>
+            </template>
+        </PageHeader>
 
         <!-- Form -->
         <form @submit.prevent="submitForm">

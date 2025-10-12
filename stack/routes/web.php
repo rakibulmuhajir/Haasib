@@ -17,7 +17,7 @@ Route::get('/', function () {
     if (! $setupService->isInitialized()) {
         return redirect()->route('setup.page');
     }
-    
+
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
@@ -25,7 +25,6 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
 
 // Setup routes - no authentication required
 Route::prefix('setup')->name('setup.')->group(function () {
@@ -297,23 +296,40 @@ Route::middleware('auth')->group(function () {
             ->whereUuid('id')->middleware('permission:ledger.entries.void')->name('void');
     });
 
-    // Admin Routes
-    Route::prefix('admin')->name('admin.')->group(function () {
-        // Companies Routes
-        Route::prefix('companies')->name('companies.')->group(function () {
-            Route::get('/', function () {
-                return Inertia::render('Admin/Companies/Index');
-            })->name('index');
+    // Company Routes (Primary Navigation)
+    Route::prefix('companies')->name('companies.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CompanyController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\CompanyController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\CompanyController::class, 'store'])->name('store')->middleware('idempotent');
+        Route::post('/bulk', [\App\Http\Controllers\CompanyController::class, 'bulk'])->name('bulk');
+        Route::get('/{company}', [\App\Http\Controllers\CompanyController::class, 'show'])->whereUuid('company')->name('show');
 
-            Route::get('/create', function () {
-                return Inertia::render('Admin/Companies/Create');
-            })->name('create');
+        // Company Management
+        Route::get('/{company}/edit', [\App\Http\Controllers\CompanyController::class, 'edit'])->whereUuid('company')->name('edit');
+        Route::patch('/{company}', [\App\Http\Controllers\CompanyController::class, 'update'])->whereUuid('company')->name('update')->middleware('idempotent');
+        Route::delete('/{company}', [\App\Http\Controllers\CompanyController::class, 'destroy'])->whereUuid('company')->name('destroy')->middleware('idempotent');
 
-            Route::get('/{company}', function ($company) {
-                return Inertia::render('Admin/Companies/Show', ['company' => $company]);
-            })->name('show');
-        });
+        // Company Users
+        Route::get('/{company}/users', [\App\Http\Controllers\CompanyController::class, 'users'])->whereUuid('company')->name('users');
+        Route::post('/{company}/users/{user}/role', [\App\Http\Controllers\CompanyController::class, 'updateUserRole'])->whereUuid('company')->whereUuid('user')->name('users.update.role');
+        Route::delete('/{company}/users/{user}', [\App\Http\Controllers\CompanyController::class, 'removeUser'])->whereUuid('company')->whereUuid('user')->name('users.remove');
+        Route::post('/{company}/users/{user}/status', [\App\Http\Controllers\CompanyController::class, 'toggleUserStatus'])->whereUuid('company')->whereUuid('user')->name('users.toggle.status');
 
+        // Company Invitations
+        Route::get('/{company}/invitations', [\App\Http\Controllers\CompanyController::class, 'invitations'])->whereUuid('company')->name('invitations');
+        Route::post('/{company}/invitations', [\App\Http\Controllers\CompanyController::class, 'sendInvitation'])->whereUuid('company')->name('invitations.send')->middleware('idempotent');
+        Route::get('/{company}/invitations/{invitation}', [\App\Http\Controllers\CompanyController::class, 'showInvitation'])->whereUuid('company')->whereUuid('invitation')->name('invitations.show');
+        Route::post('/{company}/invitations/{invitation}/resend', [\App\Http\Controllers\CompanyController::class, 'resendInvitation'])->whereUuid('company')->whereUuid('invitation')->name('invitations.resend');
+        Route::post('/{company}/invitations/{invitation}/revoke', [\App\Http\Controllers\CompanyController::class, 'revokeInvitation'])->whereUuid('company')->whereUuid('invitation')->name('invitations.revoke');
+
+        // Company Settings
+        Route::get('/{company}/settings', [\App\Http\Controllers\CompanyController::class, 'settings'])->whereUuid('company')->name('settings');
+        Route::get('/{company}/modules', [\App\Http\Controllers\CompanyController::class, 'modules'])->whereUuid('company')->name('modules');
+        Route::get('/{company}/audit', [\App\Http\Controllers\CompanyController::class, 'audit'])->whereUuid('company')->name('audit');
+    });
+
+    // Admin Routes (Super Admin Only)
+    Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin.access'])->group(function () {
         // Users Routes
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', function () {

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\CompanyUser;
 use App\Models\Company;
+use App\Models\CompanyUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -209,7 +209,7 @@ it('validates role values', function () {
     $company = Company::factory()->create();
     $users = User::factory()->count(3)->create();
 
-    foreach (['owner', 'accountant', 'member'] as $index => $role) {
+    foreach (['owner', 'manager', 'employee'] as $index => $role) {
         $companyUser = CompanyUser::create([
             'company_id' => $company->id,
             'user_id' => $users[$index]->id,

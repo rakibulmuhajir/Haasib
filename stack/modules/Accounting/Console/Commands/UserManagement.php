@@ -20,7 +20,7 @@ class UserManagement extends Command
                             {--email= : User email address}
                             {--name= : User name}
                             {--password= : User password}
-                            {--role=member : User role}
+                            {--role=employee : User role}
                             {--company= : Company ID or slug}
                             {--force : Force action without confirmation}
                             {--all-companies : Show users from all companies}';
@@ -198,7 +198,7 @@ class UserManagement extends Command
             if ($this->confirm('Add user to a company?')) {
                 $company = $this->selectCompany();
                 if ($company) {
-                    $role = $this->choice('Select company role', ['member', 'viewer', 'accountant', 'admin', 'owner'], 0);
+                    $role = $this->choice('Select company role', ['employee', 'viewer', 'manager', 'accountant', 'admin', 'owner'], 0);
                     $company->addUser($user, $role);
                     $this->info("✓ Added user to company '{$company->name}' with role '{$role}'");
                 }
@@ -330,8 +330,8 @@ class UserManagement extends Command
         }
 
         $role = $this->option('role');
-        if ($role === 'member') {
-            $role = $this->choice('Select company role', ['member', 'viewer', 'accountant', 'admin', 'owner'], 0);
+        if ($role === 'employee') {
+            $role = $this->choice('Select company role', ['employee', 'viewer', 'manager', 'accountant', 'admin', 'owner'], 0);
         }
 
         try {

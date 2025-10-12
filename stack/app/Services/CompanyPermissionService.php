@@ -20,12 +20,12 @@ class CompanyPermissionService
 
         // Get user's role in this company
         $companyUser = $company->users()->where('user_id', $user->id)->first();
-        if (! $companyUser || ! $companyUser->is_active) {
+        if (! $companyUser || ! $companyUser->pivot->is_active) {
             return false;
         }
 
         // Check permissions based on company role
-        return $this->checkRolePermission($companyUser->role, $permission, $user, $company);
+        return $this->checkRolePermission($companyUser->pivot->role, $permission, $user, $company);
     }
 
     /**
@@ -34,11 +34,11 @@ class CompanyPermissionService
     public function userHasAccessToCompany(User $user, Company $company): bool
     {
         $cacheKey = "user_{$user->id}_company_access_{$company->id}";
-        
+
         return Cache::remember($cacheKey, 300, function () use ($user, $company) {
             return $company->users()
                 ->where('user_id', $user->id)
-                ->where('is_active', true)
+                ->where('company_user.is_active', true)
                 ->exists();
         });
     }
@@ -49,7 +49,8 @@ class CompanyPermissionService
     public function getUserRoleInCompany(User $user, Company $company): ?string
     {
         $companyUser = $company->users()->where('user_id', $user->id)->first();
-        return $companyUser?->role;
+
+        return $companyUser?->pivot?->role;
     }
 
     /**
@@ -150,7 +151,8 @@ class CompanyPermissionService
 
         if (str_ends_with($pattern, '.*')) {
             $prefix = str_replace('.*', '', $pattern);
-            return str_starts_with($permission, $prefix . '.');
+
+            return str_starts_with($permission, $prefix.'.');
         }
 
         return false;
@@ -180,7 +182,7 @@ class CompanyPermissionService
 
         // Add native Laravel permissions
         $nativePermissions = $user->getAllPermissions()->pluck('name')->toArray();
-        
+
         return array_unique(array_merge($permissions, $nativePermissions));
     }
 

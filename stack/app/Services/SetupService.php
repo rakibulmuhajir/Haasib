@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\AuditEntry;
 use App\Models\Company;
 use App\Models\Module;
 use App\Models\User;
@@ -10,13 +9,14 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class SetupService
 {
     private const CACHE_KEY_INITIALIZED = 'system:initialized';
+
     private const CACHE_KEY_STATUS = 'system:status';
+
     private const CACHE_TTL_STATUS = 300; // 5 minutes
 
     /**
@@ -126,7 +126,7 @@ class SetupService
             'user.email' => 'required|email|unique:users,email',
             'user.username' => 'required|string|min:3|max:255|unique:users,username',
             'user.password' => 'required|string|min:8',
-            'user.system_role' => 'sometimes|in:system_owner,company_owner,accountant,member',
+            'user.system_role' => 'sometimes|in:system_owner,company_owner,manager,employee',
             'companies' => 'required|array|min:1',
             'companies.*.name' => 'required|string|min:3|max:255',
             'companies.*.industry' => 'required|string|in:technology,hospitality,retail,professional_services,other',
@@ -196,6 +196,7 @@ class SetupService
                 'is_active' => true,
             ]);
         }
+
         return $companies;
     }
 

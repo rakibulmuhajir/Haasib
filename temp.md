@@ -59,3 +59,256 @@ Based on my systematic review of the Laravel application codebase (focusing on t
 4. **Compliance**: Implement translations, audit logging, and accessibility features
 
 The codebase shows good foundational work on multi-tenancy and RBAC seeding, but requires significant refactoring to fully comply with constitutional principles. The `stack/` directory appears to represent a more advanced implementation with proper module structure that should be adopted.
+
+Based on my comprehensive examination of the entire haasib/stack codebase, I've now covered all major components. Here are the **additional issues** I discovered that weren't in my initial analysis:
+
+## **ADDITIONAL ISSUES FOUND**
+
+### **Issues in Database Seeders**
+
+#### 11. **Hardcoded Test Credentials in SetupSeeder.php**
+**Location:** `stack/database/seeders/SetupSeeder.php:66-107`
+```php
+'password' => Hash::make('admin123'),  // Weak default password
+'password' => Hash::make('hotel123'),  // Predictable passwords
+```
+**Issue:** Test/demo accounts with hardcoded, weak passwords that could be exploited if seeders run in production.
+**Risk:** Credential stuffing attacks, unauthorized access.
+
+#### 12. **Inconsistent User Role Mapping**
+**Location:** `stack/database/seeders/SetupSeeder.php:68-97`
+**Issue:** Seeder uses `'role' => 'company_owner'` but actual model uses `'system_role' => 'superadmin'`. Inconsistent field naming.
+**Risk:** User role confusion, authentication bypasses.
+
+#### 13. **Missing Data Validation in Seeders**
+**Location:** `stack/database/seeders/SetupSeeder.php:119-156`
+**Issue:** No validation of company data before creation (duplicate names, invalid currencies, etc.).
+**Risk:** Corrupt seed data, application crashes.
+
+#### 14. **Unsafe Module Dependency Logic**
+**Location:** `stack/database/seeders/ModuleSeeder.php:204-233`
+**Issue:** Recursive dependency enabling without cycle detection.
+**Risk:** Infinite loops, stack overflow in seeding.
+
+### **Issues in Console Commands**
+
+#### 15. **Weak Password Generation in Setup Command**
+**Location:** `stack/app/Console/Commands/SetupInitialize.php:32`
+```php
+$password = $this->option('password') ?: Str::random(16);
+```
+**Issue:** Uses `Str::random(16)` which includes special characters that may not be URL-safe or user-friendly.
+**Risk:** Generated passwords may contain characters that break authentication flows.
+
+#### 16. **No Password Confirmation in Setup**
+**Location:** `stack/app/Console/Commands/SetupInitialize.php:24-30`
+**Issue:** Only asks for confirmation if data exists, but doesn't validate the generated password meets security requirements.
+**Risk:** Weak initial passwords for admin accounts.
+
+### **Configuration Issues**
+
+#### 17. **Insecure Default Environment Settings**
+**Location:** `stack/.env.example:4,32`
+```php
+APP_DEBUG=true  # Should be false in production
+SESSION_ENCRYPT=false  # Should be true for security
+```
+**Issue:** Debug mode enabled and session encryption disabled by default.
+**Risk:** Information disclosure, session hijacking.
+
+#### 18. **Missing Security Headers Configuration**
+**Location:** Configuration files
+**Issue:** No CSP, HSTS, or other security headers configured.
+**Risk:** XSS, clickjacking, and other client-side attacks.
+
+### **Additional Business Logic Issues**
+
+#### 19. **Race Condition in Invoice Number Generation**
+**Location:** `stack/app/Models/Invoice.php:252-262`
+```php
+$sequence = static::where('company_id', $companyId)
+    ->whereYear('created_at', $year)
+    ->withTrashed()
+    ->count() + 1;
+```
+**Issue:** Count-based sequence generation can create duplicates under high concurrency.
+**Fix:** Use database sequences or proper locking.
+
+#### 20. **Missing Foreign Key Constraints**
+**Location:** Various migrations
+**Issue:** Some relationships lack proper foreign key constraints in the database schema.
+**Risk:** Data integrity issues, orphaned records.
+
+## **AREAS NOT FULLY TESTED**
+
+While I've examined the core application code extensively, here are areas I haven't fully analyzed:
+
+1. **Frontend Code**: JavaScript/Vue.js components, if any
+2. **Test Files**: Unit and feature tests (though I saw the test structure)
+3. **Package Dependencies**: Third-party packages in composer.json
+4. **Docker/Kubernetes Configs**: Containerization and deployment configs
+5. **CI/CD Pipelines**: Build and deployment scripts
+6. **External API Integrations**: Payment gateways, email services, etc.
+7. **Queue Jobs and Event Listeners**: Background processing logic
+8. **File Upload Handling**: Document and attachment processing
+9. **Email Templates and Notifications**: Communication logic
+
+## **SUMMARY OF ALL ISSUES BY SEVERITY**
+
+### **🔴 CRITICAL (Immediate Fix Required)**
+1. SQL Injection in SetCompanyContext middleware
+2. Hardcoded weak passwords in seeders
+3. Missing audit logging
+4. Race condition in company slug generation
+
+### **🟡 HIGH (Fix Soon)**
+5. Inconsistent authentication across API routes
+6. Missing rate limiting on critical endpoints
+7. Permission logic vulnerabilities
+8. Session management issues
+
+### **🟠 MEDIUM (Address in Next Sprint)**
+9. Code quality issues (large methods, inconsistent naming)
+10. Missing input validation
+11. Performance concerns (N+1 queries)
+12. Business logic race conditions
+
+### **🟢 LOW (Technical Debt)**
+13. Documentation gaps
+14. Test coverage issues
+15. Configuration security defaults
+
+The codebase has a solid architectural foundation with multi-tenancy and security features, but requires immediate attention to critical security vulnerabilities before production deployment.
+
+
+Based on my comprehensive examination of the haasib/stack codebase, I've identified several issues, security concerns, and areas for improvement. Here's my detailed analysis:
+
+## 🔴 **CRITICAL SECURITY ISSUES**
+
+### 1. **SQL Injection Vulnerability in SetCompanyContext Middleware**
+**Location:** `stack/app/Http/Middleware/SetCompanyContext.php:125-136`
+```php
+DB::statement("SET app.current_company_id = '{$company->id}'");
+DB::statement("SET app.current_user_id = '{$user->id}'");
+DB::statement("SET app.user_role = '{$roleInCompany}'");
+DB::statement("SET app.is_super_admin = " . ($isSuperAdmin ? 'true' : 'false'));
+```
+**Issue:** Direct string interpolation in SQL statements without proper escaping. UUIDs should be parameterized.
+**Risk:** Potential SQL injection if UUIDs contain malicious characters.
+**Fix:** Use parameterized queries:
+```php
+DB::selectOne("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+```
+
+### 2. **Inconsistent Authentication in API Routes**
+**Location:** `stack/routes/api.php`
+- Some routes use `middleware(['web', 'auth'])` (session-based)
+- Others use Sanctum token authentication
+- Mixed authentication strategies create confusion and potential bypasses
+
+### 3. **Missing Rate Limiting on Critical Endpoints**
+**Location:** Company creation, user registration, and invitation endpoints lack rate limiting.
+**Risk:** Brute force attacks, spam account creation.
+
+### 4. **Audit Logging Disabled**
+**Location:** `stack/app/Services/AuthService.php:41-45`
+```php
+// TODO: Fix audit logging when audit_entries table schema is properly aligned
+// $this->logAudit('user_login', $user, [
+```
+**Issue:** Login auditing is completely disabled, creating security blind spots.
+
+## 🟡 **HIGH PRIORITY ISSUES**
+
+### 5. **Race Condition in Company Creation**
+**Location:** `stack/app/Http/Controllers/CompanyController.php:54-62`
+**Issue:** Slug generation doesn't handle concurrent requests properly. Multiple companies could get the same slug.
+**Fix:** Use database constraints and retry logic.
+
+### 6. **Inconsistent Error Handling**
+**Location:** Throughout controllers
+**Issue:** Some controllers return JSON errors, others throw exceptions. Inconsistent API responses.
+
+### 7. **Missing Input Validation**
+**Location:** `stack/app/Http/Controllers/CompanyController.php:43-50`
+**Issue:** Company creation validation is incomplete:
+- No validation for industry field
+- Missing validation for country codes
+- No business logic validation (e.g., duplicate company names)
+
+### 8. **Hardcoded Database Queries**
+**Location:** `stack/app/Http/Controllers/CompanyController.php:169-217`
+**Issue:** Direct DB queries instead of using Eloquent models. Bypasses model events, validation, and relationships.
+
+### 9. **Permission Logic Flaws**
+**Location:** `stack/app/Services/AuthService.php:299-347`
+**Issue:** Complex permission logic with potential for privilege escalation. Role hierarchy is checked in middleware but not consistently enforced.
+
+### 10. **Session Management Issues**
+**Location:** `stack/app/Services/ContextService.php:16-31`
+**Issue:** Company context switching doesn't validate if user still has access to the company. Stale sessions could maintain access after membership revocation.
+
+## 🟠 **MEDIUM PRIORITY ISSUES**
+
+### 11. **Code Quality Issues**
+- **Inconsistent Naming:** Mix of camelCase and snake_case
+- **Large Controller Methods:** CompanyController::store() is 60+ lines
+- **Missing Type Hints:** Many methods lack proper type declarations
+- **Unused Imports:** Several files have unused imports
+
+### 12. **Performance Concerns**
+- **N+1 Query Issues:** Missing eager loading in several places
+- **Cache Invalidation:** Permission cache clearing could be more granular
+- **Database Indexes:** Some queries might benefit from additional indexes
+
+### 13. **Business Logic Issues**
+- **Invoice Number Generation:** Race condition in `Invoice::generateInvoiceNumber()`
+- **Currency Handling:** Inconsistent currency validation and conversion
+- **Soft Delete Handling:** Not consistently implemented across all models
+
+### 14. **Configuration Issues**
+- **Debug Mode:** `APP_DEBUG` defaults to false but should be environment-specific
+- **Database Defaults:** SQLite as default connection may not be suitable for production
+- **Session Security:** Session configuration could be more secure
+
+## 🟢 **LOW PRIORITY IMPROVEMENTS**
+
+### 15. **Code Organization**
+- Extract business logic from controllers into service classes
+- Implement repository pattern for data access
+- Add more comprehensive model events and observers
+
+### 16. **Testing Coverage**
+- Missing unit tests for critical business logic
+- Integration tests for API endpoints
+- Security-focused tests
+
+### 17. **Documentation**
+- API documentation incomplete
+- Code comments missing in complex business logic
+- Database schema documentation needed
+
+## **RECOMMENDED FIXES**
+
+### Immediate Actions:
+1. **Fix SQL injection vulnerability** in SetCompanyContext middleware
+2. **Enable audit logging** for security events
+3. **Add rate limiting** to critical endpoints
+4. **Implement proper input validation** for all controllers
+5. **Fix race condition** in slug generation
+
+### Medium-term Improvements:
+1. **Standardize authentication** across all API endpoints
+2. **Implement comprehensive error handling**
+3. **Add database constraints** for data integrity
+4. **Improve session management** security
+5. **Add comprehensive logging** and monitoring
+
+### Long-term Enhancements:
+1. **Implement proper testing** coverage
+2. **Add API versioning** strategy
+3. **Improve performance** with caching and optimization
+4. **Add comprehensive documentation**
+5. **Implement security headers** and CSP policies
+
+The codebase shows good architectural decisions with multi-tenancy, RLS, and modular design, but needs immediate attention to security vulnerabilities and code quality issues.

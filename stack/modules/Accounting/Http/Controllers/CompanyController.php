@@ -2,15 +2,15 @@
 
 namespace Modules\Accounting\Http\Controllers;
 
+use App\Services\AuthService;
+use App\Services\ContextService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Modules\Accounting\Models\Company;
 use Modules\Accounting\Models\User;
-use App\Services\AuthService;
 use Modules\Accounting\Services\CompanyService;
-use App\Services\ContextService;
 use Modules\Accounting\Services\UserService;
 
 class CompanyController extends Controller
@@ -321,7 +321,7 @@ class CompanyController extends Controller
 
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email'],
-            'role' => ['required', 'in:owner,admin,accountant,viewer,member'],
+            'role' => ['required', 'in:owner,admin,manager,accountant,employee,viewer'],
         ]);
 
         if ($validator->fails()) {
@@ -409,7 +409,7 @@ class CompanyController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'role' => ['required', 'in:owner,admin,accountant,viewer,member'],
+            'role' => ['required', 'in:owner,admin,manager,accountant,employee,viewer'],
         ]);
 
         if ($validator->fails()) {

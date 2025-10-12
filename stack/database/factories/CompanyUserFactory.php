@@ -16,7 +16,7 @@ class CompanyUserFactory extends Factory
         return [
             'company_id' => Company::factory(),
             'user_id' => User::factory(),
-            'role' => 'member',
+            'role' => 'employee',
             'is_active' => true,
             'joined_at' => now(),
         ];

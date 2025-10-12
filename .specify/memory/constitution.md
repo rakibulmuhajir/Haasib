@@ -66,6 +66,44 @@ Before creating or modifying any file, consult the relevant guidance under `docs
 ### Eloquent-First Persistence
 Favor Laravel Eloquent models, relationships, and factories for all data access in application code and tests. Raw database queries (\`DB::table\`, manual SQL) are allowed only in migrations or when a documented performance constraint requires it. Any exception must be justified in the plan and mirrored by updated tests.
 
+### Spatie Laravel Permission System Compliance
+**CRITICAL**: The application uses Spatie Laravel Permission package for RBAC. All AI coders MUST understand and comply with these requirements:
+
+1. **HasRoles Trait Mandatory**: Any User model requiring permission checking MUST include the `HasRoles` trait:
+   ```php
+   use Spatie\Permission\Traits\HasRoles;
+   class User extends Authenticatable {
+       use HasRoles, /* other traits */;
+   }
+   ```
+
+2. **Permission Method Source**: The `hasPermissionTo()` method comes exclusively from the `HasRoles` trait. If you encounter "Call to undefined method hasPermissionTo()", the User model is missing this trait.
+
+3. **Database Prerequisites**: Permission functionality requires these tables to exist:
+   - `permissions` (stores all available permissions)
+   - `roles` (stores all roles) 
+   - `model_has_permissions` (links users/models to permissions)
+   - `model_has_roles` (links users/models to roles)
+   - `role_has_permissions` (links roles to permissions)
+
+4. **Configuration Requirements**: The `config/permission.php` file must be properly configured:
+   - Table names must match actual database schema (important for multi-schema setups)
+   - Custom model classes must extend Spatie base models with proper UUID configuration
+   - Teams feature must be disabled unless `team_id` columns exist in all tables
+
+5. **Permission Creation Workflow**: Before using any permission in code:
+   - Create the permission in the database first
+   - Use proper naming conventions (e.g., `customers.create`, `users.delete`)
+   - Test permission checking early in development
+
+6. **Common Error Patterns**: These errors indicate permission system setup issues:
+   - `BadMethodCallException: hasPermissionTo()` → Add `HasRoles` trait to User model
+   - `Undefined table: auth.permissions` → Check config table names match actual database tables
+   - `UUID operator does not exist` → Ensure permission models use UUID primary keys correctly
+   - `column team_id does not exist` → Disable teams feature in config or add required columns
+
+**VIOLATION NOTICE**: Bypassing permission checks or creating User models without the `HasRoles` trait when permissions are needed violates constitutional principles and must be corrected immediately.
+
 ## Architecture Standards
 
 ### Technology Stack
@@ -124,4 +162,4 @@ All PRs and reviews must verify compliance with constitutional principles. Compl
 - Schemas under `/docs/schemas/` are the authoritative data backbone. Adjustments may be applied for practical reasons, but these files are the primary blueprint for table structure, constraints, and RLS strategies.
 - The `/home/banna/projects/Haasib/app` directory contains valuable legacy code and implementations that should be considered for reuse after thoughtful analysis instead of reinventing solutions.
 
-**Version**: 2.0.1 | **Ratified**: 2025-01-16 | **Last Amended**: 2025-10-07
+**Version**: 2.1.2 | **Ratified**: 2025-06-13 | **Last Amended**: 2025-10-12

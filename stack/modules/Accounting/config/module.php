@@ -44,7 +44,7 @@ return [
         'view_users' => [
             'name' => 'View Users',
             'description' => 'View user list and details',
-            'roles' => ['owner', 'admin', 'accountant', 'viewer'],
+            'roles' => ['owner', 'admin', 'manager', 'accountant', 'viewer'],
         ],
         'manage_users' => [
             'name' => 'Manage Users',
@@ -66,7 +66,7 @@ return [
         'view_company' => [
             'name' => 'View Company',
             'description' => 'View company details and settings',
-            'roles' => ['owner', 'admin', 'accountant', 'viewer', 'member'],
+            'roles' => ['owner', 'admin', 'manager', 'accountant', 'employee', 'viewer'],
         ],
         'manage_company' => [
             'name' => 'Manage Company',
@@ -100,7 +100,7 @@ return [
         'export_data' => [
             'name' => 'Export Data',
             'description' => 'Export company data and reports',
-            'roles' => ['owner', 'admin', 'accountant'],
+            'roles' => ['owner', 'admin', 'manager', 'accountant'],
         ],
     ],
 
@@ -187,8 +187,8 @@ return [
                 ],
                 'default_role' => [
                     'type' => 'string',
-                    'enum' => ['member', 'viewer'],
-                    'default' => 'member',
+                    'enum' => ['employee', 'viewer'],
+                    'default' => 'employee',
                     'description' => 'Default role for new users',
                 ],
                 'max_users_per_company' => [
@@ -226,7 +226,7 @@ return [
         'users' => [
             'allow_registration' => false,
             'require_email_verification' => true,
-            'default_role' => 'member',
+            'default_role' => 'employee',
             'max_users_per_company' => 100,
         ],
     ],

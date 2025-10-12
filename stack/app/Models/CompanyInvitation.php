@@ -2,12 +2,32 @@
 
 namespace App\Models;
 
-use App\Enums\CompanyRole;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CompanyInvitation extends Model
 {
+    use HasFactory, HasUuids;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.company_invitations';
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     */
+    protected $keyType = 'string';
+
     protected $fillable = [
         'company_id',
         'email',
@@ -53,7 +73,7 @@ class CompanyInvitation extends Model
      */
     public function isValid(): bool
     {
-        return $this->status === 'pending' && !$this->isExpired();
+        return $this->status === 'pending' && ! $this->isExpired();
     }
 
     /**
@@ -79,6 +99,6 @@ class CompanyInvitation extends Model
      */
     public function canBeRevoked(): bool
     {
-        return $this->status === 'pending' && !$this->isExpired();
+        return $this->status === 'pending' && ! $this->isExpired();
     }
 }

@@ -102,19 +102,19 @@
 - [x] T054 Add company context composable in stack/resources/js/composables/useCompanyContext.js
 - [x] T055 Implement company navigation in sidebar in stack/resources/js/Layouts/Sidebar.vue
 
-## Phase 3.6: Polish
-- [ ] T056 [P] Unit tests for Company model validations in stack/tests/Unit/CompanyTest.php
-- [ ] T057 [P] Unit tests for CompanyCreate action in stack/tests/Unit/Actions/CompanyCreateTest.php
-- [ ] T058 [P] Unit tests for CompanyInvite action in stack/tests/Unit/Actions/CompanyInviteTest.php
-- [ ] T059 Performance tests for company listing (<200ms response time)
-- [ ] T060 Database performance tests for company queries with indexes
-- [ ] T061 [P] Update API documentation for company endpoints
-- [ ] T062 [P] Create CLI help documentation and examples
-- [ ] T063 Add company seeding for development in stack/database/seeders/CompanyDemoSeeder.php
-- [ ] T064 Create manual testing scenarios in docs/testing/company-features.md
-- [ ] T065 Error handling validation for company edge cases
-- [ ] T066 Add translation keys for company features in stack/resources/lang/en/companies.php
-- [ ] T067 Add Arabic translations for company features in stack/resources/lang/ar/companies.php
+## Phase 3.6: Polish ✅ COMPLETED
+- [x] T056 [P] Unit tests for Company model validations in stack/tests/Unit/CompanyTest.php
+- [ ] T057 [P] Unit tests for CompanyCreate action in stack/tests/Unit/Actions/CompanyCreateTest.php (NOT NEEDED - using direct controller logic)
+- [x] T058 [P] Unit tests for CompanyInvite action in stack/tests/Unit/Actions/CompanyInviteTest.php
+- [x] T059 Performance tests for company listing (<200ms response time)
+- [x] T060 Database performance tests for company queries with indexes
+- [x] T061 [P] Update API documentation for company endpoints
+- [x] T062 [P] Create CLI help documentation and examples
+- [x] T063 Add company seeding for development in stack/database/seeders/CompanyDemoSeeder.php
+- [x] T064 Create manual testing scenarios in docs/testing/company-features.md
+- [x] T065 Error handling validation for company edge cases
+- [x] T066 Add translation keys for company features in stack/resources/lang/en/companies.php
+- [x] T067 Add Arabic translations for company features in stack/resources/lang/ar/companies.php
 
 ## Dependencies
 - Tests (T010-T018) before implementation (T019-T047)

@@ -1,0 +1,1328 @@
+openapi: 3.0.3
+info:
+  title: Haasib Invoice Management System API - Complete Documentation
+  description: |
+    Comprehensive invoicing and payment management API with multi-currency support, 
+    CLI-GUI parity, invoice templates, credit notes, and enhanced payment allocation features.
+    
+    This API provides complete CRUD operations for invoices, payment allocation across multiple invoices,
+    invoice templates for recurring billing, credit notes for adjustments, and comprehensive CLI commands.
+    
+    All operations support company-based multi-tenancy with proper RBAC permissions.
+  version: 1.1.0
+  contact:
+    name: Haasib API Team
+    email: api@haasib.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.haasib.com/v1
+    description: Production server
+  - url: https://staging-api.haasib.com/v1
+    description: Staging server
+  - url: http://localhost:8000/api
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Common Schemas
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - success
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        from:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        to:
+          type: integer
+        total:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              rule:
+                type: string
+
+    # Invoice Schemas
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        invoice_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        total_amount:
+          type: number
+          format: decimal
+        balance_due:
+          type: number
+          format: decimal
+        total_allocated:
+          type: number
+          format: decimal
+        status:
+          type: string
+          enum: [draft, sent, posted, partial, paid, cancelled]
+        payment_status:
+          type: string
+          enum: [unpaid, partially_paid, paid, overpaid]
+        currency:
+          $ref: '#/components/schemas/Currency'
+        customer:
+          $ref: '#/components/schemas/Customer'
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineItem'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    InvoiceLineItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+        unit_price:
+          type: number
+          format: decimal
+        discount_type:
+          type: string
+          enum: [fixed, percentage]
+        discount_amount:
+          type: number
+          format: decimal
+        tax_rate:
+          type: number
+          format: decimal
+        tax_amount:
+          type: number
+          format: decimal
+        total_amount:
+          type: number
+          format: decimal
+        created_at:
+          type: string
+          format: date-time
+
+    # Payment Schemas
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        payment_number:
+          type: string
+        payment_date:
+          type: string
+          format: date
+        payment_method:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        remaining_amount:
+          type: number
+          format: decimal
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          type: string
+          enum: [pending, completed, failed, cancelled]
+        customer:
+          $ref: '#/components/schemas/Customer'
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaymentAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payment_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        allocated_amount:
+          type: number
+          format: decimal
+        allocation_date:
+          type: string
+          format: date
+        allocation_method:
+          type: string
+          enum: [manual, automatic]
+        allocation_strategy:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        is_reversed:
+          type: boolean
+        reversed_at:
+          type: string
+          format: date-time
+          nullable: true
+        reversal_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # Template Schemas
+    InvoiceTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        currency_id:
+          type: string
+          format: uuid
+        template_data:
+          type: object
+          properties:
+            line_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TemplateLineItem'
+            settings:
+              type: object
+              properties:
+                payment_terms:
+                  type: string
+                notes:
+                  type: string
+                terms:
+                  type: string
+                auto_apply_tax:
+                  type: boolean
+                rounding_preference:
+                  type: string
+                  enum: [up, down, normal]
+        is_active:
+          type: boolean
+        customer:
+          $ref: '#/components/schemas/Customer'
+          nullable: true
+        currency:
+          $ref: # Currency
+          type: object
+        line_items_count:
+          type: integer
+        created_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TemplateLineItem:
+      type: object
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+        unit_price:
+          type: number
+          format: decimal
+        discount_type:
+          type: string
+          enum: [fixed, percentage]
+          nullable: true
+        discount_amount:
+          type: number
+          format: decimal
+          nullable: true
+        tax_rate:
+          type: number
+          format: decimal
+          nullable: true
+        account_code:
+          type: string
+          nullable: true
+        is_taxable:
+          type: boolean
+          default: true
+
+    # Credit Note Schemas
+    CreditNote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        credit_note_number:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: decimal
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          type: string
+          enum: [draft, posted, cancelled]
+        customer:
+          $ref: '#components/schemas/Customer'
+        invoice:
+          $ref: '#/components/schemas/Invoice'
+        credit_note_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNoteItem'
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNoteApplication'
+        created_by_user_id:
+          type: string
+          format: uuid
+        posted_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreditNoteItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        credit_note_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+        unit_price:
+          type: number
+          format: decimal
+        amount:
+          type: number
+          format: decimal
+        tax_rate:
+          type: number
+          format: decimal
+        tax_amount:
+          type: number
+          format: decimal
+        total_amount:
+          type: number
+          format: decimal
+        account_code:
+          type: string
+          nullable: true
+
+    CreditNoteApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        credit_note_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        applied_amount:
+          type: number
+          format: decimal
+        applied_at:
+          type: string
+          format: date-time
+        created_by_user_id:
+          type: string
+          format: uuid
+
+    # Customer Schemas
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        postal_code:
+          type: string
+          nullable: true
+        tax_id:
+          type: string
+          nullable: true
+        payment_terms:
+          type: string
+          nullable: true
+        credit_limit:
+          type: number
+          format: decimal
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # Currency Schemas
+    Currency:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        symbol_position:
+          type: string
+          enum: [before, after]
+        decimal_places:
+          type: integer
+        exchange_rate:
+          type: number
+          format: decimal
+        is_active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+
+paths:
+  # Health Check
+  /health:
+    get:
+      summary: API Health Check
+      description: Check if the API is running and healthy
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  example: true
+                  message:
+                    type: string
+                    example: API is running
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: 2025-10-13T12:00:00Z
+
+  # Invoice Template Endpoints
+  /templates:
+    get:
+      summary: List Invoice Templates
+      description: Retrieve a paginated list of invoice templates for the current company
+      tags:
+        - Templates
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: customer_id
+          in: query
+          description: Filter by customer ID
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search by name or description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of invoice templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvoiceTemplate'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      summary: Create Invoice Template
+      description: Create a new invoice template
+      tags:
+        - Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+          schema:
+            type: object
+            required:
+              - name
+              - template_data
+            properties:
+              name:
+                type: string
+                description: Template name
+              description:
+                type: string
+                description: Template description
+              customer_id:
+                type: string
+                format: uuid
+                description: Default customer for this template
+              currency_id:
+                type: string
+                format: uuid
+                description: Default currency for this template
+              template_data:
+                type: object
+                required:
+                  - line_items
+                properties:
+                  line_items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TemplateLineItem'
+                  settings:
+                    type: object
+                    properties:
+                      payment_terms:
+                        type: string
+                      notes:
+                        type: string
+                      terms:
+                        type: string
+                      auto_apply_tax:
+                        type: boolean
+                      rounding_preference:
+                        type: string
+                      enum: [up, down, normal]
+              is_active:
+                type: boolean
+                default: true
+      responses:
+        '201':
+          description: Template created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /templates/{id}:
+    get:
+      summary: Get Invoice Template
+      description: Retrieve details of a specific invoice template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Template ID (UUID)
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update Invoice Template
+      description: Update an existing invoice template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                customer_id:
+                  type: string
+                  format: uuid
+                template_data:
+                  type: object
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Template updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Invoice Template
+      description: Delete an invoice template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#components/schemas/ErrorResponse'
+
+  # Template Actions
+  /templates/{id}/apply:
+    post:
+      summary: Apply Template to New Invoice
+      description: Create a new invoice using the specified template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer_id:
+                  type: string
+                  format: uuid
+                invoice_date:
+                  type: string
+                  format: date
+                due_date:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+                overrides:
+                  type: object
+                  description: Override specific template data
+      responses:
+        '201':
+          description: Invoice created from template
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+
+  /templates/{id}/duplicate:
+    post:
+      summary: Duplicate Template
+      description: Create a copy of an existing template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: New template name
+      responses:
+        '201':
+          description: Template duplicated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+
+  /templates/{id}/toggle-status:
+    patch:
+      summary: Toggle Template Status
+      description: Activate or deactivate an invoice template
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template status toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+
+  /templates/create-from-invoice:
+    post:
+      summary: Create Template from Invoice
+      description: Create a template from an existing invoice
+      tags:
+        - Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invoice_id
+                - name
+              properties:
+                invoice_id:
+                  type: string
+                  format: uuid
+                  description: Source invoice ID
+                name:
+                  type: string
+                  description: Template name
+                description:
+                  type: string
+                  description: Template description
+      responses:
+        '201':
+          description: Template created from invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvoiceTemplate'
+
+  # Template Statistics
+  /templates/statistics:
+    get:
+      summary: Template Statistics
+      description: Get statistics for invoice templates
+      tags:
+        - Templates
+      responses:
+        '200':
+          description: Template statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      total_templates:
+                        type: integer
+                      active_templates:
+                        type: integer
+                      templates_by_customer:
+                        type: object
+                      most_used_templates:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            template_id:
+                              type: string
+                              format: uuid
+                            template_name:
+                              type: string
+                            usage_count:
+                              type: integer
+                            last_used:
+                              type: string
+                              format: date-time
+
+  /templates/available-customers:
+    get:
+      summary: Available Customers for Templates
+      description: Get list of customers that can be associated with templates
+      tags:
+        - Templates
+      responses:
+        '200':
+          description: Available customers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        email:
+                          type: string
+
+  /templates/validate:
+    post:
+      summary: Validate Template Data
+      description: Validate template data structure before saving
+      tags:
+        - Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - template_data
+              properties:
+                name:
+                  type: string
+                template_data:
+                  type: object
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  valid:
+                    type: boolean
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        message:
+                          type: string
+
+  # Credit Note Endpoints (if implemented via API)
+  # Note: Credit notes are primarily handled via CLI commands based on current implementation
+
+  # Enhanced Payment Allocation Endpoints
+  /payments/{paymentId}/allocations:
+    get:
+      summary: List Payment Allocations
+      description: Retrieve all allocations for a specific payment
+      tags:
+        - Payments
+        - Payment Allocation
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment ID (UUID)
+        - name: include_reversed
+          in: query
+          description: Include reversed allocations
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Payment allocations list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      payment:
+                      $ref: '#/components/schemas/Payment'
+                      allocations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PaymentAllocation'
+                      total_allocated:
+                        type: number
+                        format: decimal
+                      remaining_amount:
+                        type: number
+                        format: decimal
+                      allocation_summary:
+                        type: object
+                          properties:
+                            total_allocations:
+                              type: integer
+                            active_allocations:
+                              type: integer
+                            reversed_allocations:
+                              type: integer
+
+  /payments/allocation/suggestions:
+    post:
+      summary: Get Allocation Suggestions
+      description: Get smart allocation suggestions for a payment
+      tags:
+        - Payments
+        - Payment Allocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_id
+              properties:
+                payment_id:
+                  type: string
+                  format: uuid
+                strategy:
+                  type: string
+                  enum: [fifo, proportional, overdue_first, largest_first, custom]
+                  default: fifo
+                preferences:
+                  type: object
+      responses:
+        '200':
+          description: Allocation suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        invoice_id:
+                          type: string
+                          format: uuid
+                        invoice_number:
+                          type: string
+                        suggested_amount:
+                          type: number
+                          format: decimal
+                        reasoning:
+                          type: string
+
+  # Enhanced Invoice Endpoints (new methods)
+  /invoices/{id}/duplicate:
+    post:
+      summary: Duplicate Invoice
+      description: Create a duplicate of an existing invoice
+      tags:
+        - Invoices
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Invoice ID (UUID)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer_id:
+                  type: string
+                  format: uuid
+                  description: Customer ID for new invoice (optional)
+                invoice_date:
+                  type: string
+                  format: date
+                  description: Invoice date for new invoice (optional)
+                due_date:
+                  type: string
+                  format: date
+                  description: Due date for new invoice (optional)
+                notes:
+                  type: string
+                  description: Notes for new invoice (optional)
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      item_id:
+                      type: string
+                      format: uuid
+                      description: Line item ID to modify (optional)
+                      quantity:
+                      type: number
+                      format: decimal
+                      description: New quantity (optional)
+                      unit_price:
+                        type: number
+                        format: decimal
+                        description: New unit price (optional)
+                include_items:
+                  type: boolean
+                  default: true
+                  description: Include original line items (default: true)
+      responses:
+        '201':
+          description: Invoice duplicated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+
+  # CLI Commands Documentation Endpoints
+  /cli/commands:
+    get:
+      summary: Available CLI Commands
+      description: Get list of all available CLI commands with their descriptions and usage examples
+      tags:
+        - CLI
+      security: []
+      responses:
+        '200':
+          description: List of available CLI commands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                  type: boolean
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        command:
+                          type: string
+                          description: CLI command name
+                        signature:
+                          type: string
+                          description: Command signature
+                        description:
+                          type: string
+                        examples:
+                          type: array
+                          items:
+                            type: string
+                        category:
+                          type: string
+                          enum: [invoice, payment, template, credit_note, system]
+
+tags:
+  - name: System
+    description: System health and endpoints
+  - name: Invoices
+    description: Invoice management and operations
+  -name: Payments
+    description: Payment processing and allocation
+  - name: Payment Allocation
+    description: Enhanced payment allocation across multiple invoices
+  - name: Templates
+    description: Invoice templates for recurring billing
+  - name: Customers
+    description: Customer management and CRM
+  - name: Currencies
+    description: Multi-currency and exchange rate management
+  - name: CLI
+    description: Command-line interface operations

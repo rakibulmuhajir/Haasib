@@ -128,6 +128,41 @@ class Invoice extends Model
     }
 
     /**
+     * Get the payment allocations for this invoice.
+     */
+    public function paymentAllocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * Get the active payment allocations (not reversed).
+     */
+    public function activePaymentAllocations()
+    {
+        return $this->paymentAllocations()->active();
+    }
+
+    /**
+     * Get the total allocated amount from payments.
+     */
+    public function getTotalAllocatedAttribute(): float
+    {
+        return $this->activePaymentAllocations()->sum('allocated_amount');
+    }
+
+    /**
+     * Get the payments that have been allocated to this invoice.
+     */
+    public function allocatedPayments()
+    {
+        return $this->belongsToMany(Payment::class, 'invoicing.payment_allocations', 'invoice_id', 'payment_id')
+            ->withPivot(['allocated_amount', 'allocation_date', 'allocation_method', 'allocation_strategy', 'notes'])
+            ->wherePivotNull('reversed_at')
+            ->withTimestamps();
+    }
+
+    /**
      * Scope a query to only include invoices with a specific status.
      */
     public function scopeWithStatus($query, string $status)
@@ -199,12 +234,24 @@ class Invoice extends Model
         $taxAmount = $this->lineItems()->sum('tax_amount');
         $discountAmount = $this->lineItems()->sum('discount_amount');
         $totalAmount = $subtotal + $taxAmount - $discountAmount;
+        $allocatedAmount = $this->total_allocated;
 
         $this->subtotal = $subtotal;
         $this->tax_amount = $taxAmount;
         $this->discount_amount = $discountAmount;
         $this->total_amount = $totalAmount;
-        $this->balance_due = $totalAmount - $this->payments()->sum('amount');
+        $this->balance_due = $totalAmount - $allocatedAmount;
+
+        // Update payment status based on balance
+        if ($this->balance_due <= 0) {
+            $this->payment_status = 'paid';
+            $this->status = 'paid';
+            $this->paid_at = now();
+        } elseif ($allocatedAmount > 0) {
+            $this->payment_status = 'partially_paid';
+        } else {
+            $this->payment_status = 'unpaid';
+        }
 
         $this->save();
     }

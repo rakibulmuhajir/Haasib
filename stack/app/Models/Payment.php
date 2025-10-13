@@ -96,6 +96,57 @@ class Payment extends Model
     }
 
     /**
+     * Get the allocations for this payment.
+     */
+    public function allocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * Get the active allocations (not reversed).
+     */
+    public function activeAllocations()
+    {
+        return $this->allocations()->active();
+    }
+
+    /**
+     * Get the total allocated amount.
+     */
+    public function getTotalAllocatedAttribute(): float
+    {
+        return $this->activeAllocations()->sum('allocated_amount');
+    }
+
+    /**
+     * Get the remaining unallocated amount.
+     */
+    public function getRemainingAmountAttribute(): float
+    {
+        return $this->amount - $this->total_allocated;
+    }
+
+    /**
+     * Check if the payment is fully allocated.
+     */
+    public function getIsFullyAllocatedAttribute(): bool
+    {
+        return $this->remaining_amount <= 0;
+    }
+
+    /**
+     * Get the invoices this payment has been allocated to.
+     */
+    public function allocatedInvoices()
+    {
+        return $this->belongsToMany(Invoice::class, 'invoicing.payment_allocations', 'payment_id', 'invoice_id')
+            ->withPivot(['allocated_amount', 'allocation_date', 'allocation_method', 'allocation_strategy', 'notes'])
+            ->wherePivotNull('reversed_at')
+            ->withTimestamps();
+    }
+
+    /**
      * Scope a query to only include payments with a specific status.
      */
     public function scopeWithStatus($query, string $status)

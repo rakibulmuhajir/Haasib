@@ -112,6 +112,28 @@ Route::prefix('customers')->name('customers.')->group(function () {
     Route::post('/bulk', [CustomerApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
 });
 
+// Invoice Template Routes
+Route::prefix('templates')->name('templates.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'index'])->name('index');
+    Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'store'])->name('store')->middleware('idempotent');
+    Route::get('/{id}', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'show'])->whereUuid('id')->name('show');
+    Route::put('/{id}', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
+    Route::delete('/{id}', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+
+    // Template Actions
+    Route::post('/{id}/apply', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'apply'])->whereUuid('id')->name('apply')->middleware('idempotent');
+    Route::post('/{id}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'duplicate'])->whereUuid('id')->name('duplicate')->middleware('idempotent');
+    Route::patch('/{id}/toggle-status', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'toggleStatus'])->whereUuid('id')->name('toggle-status')->middleware('idempotent');
+
+    // Template Creation from Invoice
+    Route::post('/create-from-invoice', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'createFromInvoice'])->name('create-from-invoice')->middleware('idempotent');
+
+    // Template Statistics and Data
+    Route::get('/statistics', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'statistics'])->name('statistics');
+    Route::get('/available-customers', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'availableCustomers'])->name('available-customers');
+    Route::post('/validate', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'validate'])->name('validate');
+});
+
 // Invoicing requirements endpoint - uses web middleware for session authentication
 Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middleware(['web', 'auth'])->group(function () {
     Route::get('/', [InvoicingRequirementsController::class, 'getRequirements'])->name('get');
@@ -163,7 +185,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/', [\App\Http\Controllers\CompanyController::class, 'store'])->name('store')->middleware('idempotent');
             Route::get('/{id}', [\App\Http\Controllers\CompanyController::class, 'show'])->whereUuid('id')->name('show');
             Route::post('/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('switch')->middleware('idempotent');
-            
+
             // Company invitations
             Route::get('/{companyId}/invitations', [\App\Http\Controllers\CompanyInvitationController::class, 'index'])->name('invitations.index');
             Route::post('/{companyId}/invitations', [\App\Http\Controllers\CompanyInvitationController::class, 'store'])->name('invitations.store')->middleware('idempotent');

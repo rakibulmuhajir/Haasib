@@ -1,5 +1,7 @@
 # Haasib Lightbearer Playbook for AI Contributors
 
+> **ARCHIVE NOTICE**: This playbook predates the `stack/` workspace and ContextService-based architecture. Use only for historical reference when reviewing past decisions.
+
 ## 1. Purpose & Principles
 - **Mission**: Rebuild the Haasib modular monolith from a clean foundation, re-introducing features intentionally with proper RBAC, tenancy, and internationalization.
 - **Bias for creation**: Default to generating fresh code guided by briefs instead of patching legacy files. Use existing code only as reference material housed in `backup-2`.

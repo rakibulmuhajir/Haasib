@@ -3,9 +3,8 @@
 return [
     App\Providers\AppServiceProvider::class,
     App\Providers\AuthServiceProvider::class,
-    App\Providers\EventServiceProvider::class,
     App\Providers\CommandBusServiceProvider::class,
-    
-    // Module Service Providers
+    App\Providers\CommandPaletteServiceProvider::class,
+    App\Providers\EventServiceProvider::class,
     Modules\Accounting\Providers\AccountingServiceProvider::class,
 ];

@@ -1,5 +1,7 @@
 # User Context Refactoring Plan ✅ COMPLETED
 
+> **ARCHIVE NOTICE**: This plan reflects the deprecated ServiceContext DTO. The active implementation uses `App\Services\ContextService`; reference this file only for historical notes.
+
 ## Overview
 Replace global `auth()` calls in services with explicit user context injection to improve testability and enable queued processing.
 

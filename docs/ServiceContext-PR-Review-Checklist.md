@@ -1,5 +1,7 @@
 # ServiceContext PR Review Checklist
 
+> **ARCHIVE NOTICE**: This checklist applied to legacy ServiceContext migrations. Use the Constitution (v2.2.0) and ContextService patterns for current reviews.
+
 ## 📋 Overview
 This checklist helps reviewers ensure that ServiceContext is properly implemented in new code and that existing code is migrated correctly.
 

@@ -1,193 +1,185 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { router, usePage } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
+import axios from 'axios'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import TreeSelect from 'primevue/treeselect'
 import Divider from 'primevue/divider'
 import Message from 'primevue/message'
+import ProgressSpinner from 'primevue/progressspinner'
+import Badge from 'primevue/badge'
 
 const { t } = useI18n()
+const page = usePage()
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'commandExecuted'])
 
 const visible = ref(false)
 const searchQuery = ref('')
 const selectedIndex = ref(0)
 const loading = ref(false)
 const error = ref('')
+const suggestions = ref([])
+const availableCommands = ref([])
+const commandHistory = ref([])
+const commandTemplates = ref([])
+const showHistory = ref(false)
+const showTemplates = ref(false)
+const executionResult = ref(null)
 
-// Command categories and items
-const commands = ref([
-    {
-        label: 'Navigation',
-        icon: 'fas fa-compass',
-        items: [
-            {
-                id: 'dashboard',
-                label: 'Dashboard',
-                icon: 'fas fa-chart-line',
-                shortcut: 'Ctrl+D',
-                keywords: ['home', 'overview', 'main'],
-                action: () => navigateTo('/dashboard')
-            },
-            {
-                id: 'invoices',
-                label: 'Invoices',
-                icon: 'fas fa-file-invoice',
-                shortcut: 'Ctrl+I',
-                keywords: ['billing', 'sales', 'revenue'],
-                action: () => navigateTo('/invoicing')
-            },
-            {
-                id: 'customers',
-                label: 'Customers',
-                icon: 'fas fa-users',
-                shortcut: 'Ctrl+C',
-                keywords: ['clients', 'contacts'],
-                action: () => navigateTo('/customers')
-            },
-            {
-                id: 'reports',
-                label: 'Reports',
-                icon: 'fas fa-chart-bar',
-                shortcut: 'Ctrl+R',
-                keywords: ['analytics', 'insights'],
-                action: () => navigateTo('/reports')
-            }
-        ]
-    },
-    {
-        label: 'Actions',
-        icon: 'fas fa-bolt',
-        items: [
-            {
-                id: 'create-invoice',
-                label: 'Create Invoice',
-                icon: 'fas fa-plus',
-                shortcut: 'Ctrl+N',
-                keywords: ['new', 'add', 'invoice'],
-                action: () => navigateTo('/invoicing/create')
-            },
-            {
-                id: 'create-customer',
-                label: 'Create Customer',
-                icon: 'fas fa-user-plus',
-                shortcut: 'Ctrl+Shift+C',
-                keywords: ['new', 'add', 'customer', 'client'],
-                action: () => navigateTo('/customers/create')
-            },
-            {
-                id: 'record-payment',
-                label: 'Record Payment',
-                icon: 'fas fa-credit-card',
-                shortcut: 'Ctrl+P',
-                keywords: ['payment', 'receive', 'collect'],
-                action: () => navigateTo('/payments/record')
-            },
-            {
-                id: 'generate-report',
-                label: 'Generate Report',
-                icon: 'fas fa-file-export',
-                shortcut: 'Ctrl+G',
-                keywords: ['export', 'download', 'report'],
-                action: () => navigateTo('/reports/generate')
-            }
-        ]
-    },
-    {
-        label: 'System',
-        icon: 'fas fa-cog',
-        items: [
-            {
-                id: 'settings',
-                label: 'Settings',
-                icon: 'fas fa-cog',
-                shortcut: 'Ctrl+,',
-                keywords: ['preferences', 'config'],
-                action: () => navigateTo('/settings')
-            },
-            {
-                id: 'help',
-                label: 'Help & Documentation',
-                icon: 'fas fa-question-circle',
-                shortcut: 'F1',
-                keywords: ['docs', 'support', 'guide'],
-                action: () => openHelp()
-            },
-            {
-                id: 'logout',
-                label: 'Logout',
-                icon: 'fas fa-sign-out-alt',
-                shortcut: 'Ctrl+L',
-                keywords: ['signout', 'exit'],
-                action: () => logout()
-            }
-        ]
+// Current context for suggestions
+const currentContext = computed(() => {
+    return {
+        page: page.props.currentPage || 'dashboard',
+        recent_actions: commandHistory.value.slice(0, 5).map(h => h.command_name)
     }
-])
-
-// Keyboard shortcuts
-const shortcuts = computed(() => {
-    const shortcutMap = {}
-    commands.value.forEach(category => {
-        category.items.forEach(command => {
-            if (command.shortcut) {
-                shortcutMap[command.shortcut.toLowerCase()] = command
-            }
-        })
-    })
-    return shortcutMap
 })
 
-// Filtered commands based on search query
-const filteredCommands = computed(() => {
-    if (!searchQuery.value.trim()) {
-        return commands.value
+// Filtered commands based on search query and suggestions
+const displayCommands = computed(() => {
+    if (showHistory.value) {
+        return commandHistory.value.slice(0, 10)
     }
-
-    const query = searchQuery.value.toLowerCase()
-    const filtered = []
-
-    commands.value.forEach(category => {
-        const matchingItems = category.items.filter(command => {
-            const labelMatch = command.label.toLowerCase().includes(query)
-            const keywordMatch = command.keywords?.some(keyword => keyword.includes(query))
-            return labelMatch || keywordMatch
-        })
-
-        if (matchingItems.length > 0) {
-            filtered.push({
-                ...category,
-                items: matchingItems
-            })
-        }
-    })
-
-    return filtered
+    
+    if (showTemplates.value) {
+        return commandTemplates.value
+    }
+    
+    if (suggestions.value.length > 0) {
+        return suggestions.value
+    }
+    
+    if (searchQuery.value.trim()) {
+        return availableCommands.value.filter(command => 
+            command.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+            command.description.toLowerCase().includes(searchQuery.value.toLowerCase())
+        )
+    }
+    
+    return availableCommands.value.slice(0, 10)
 })
 
 // Flatten commands for keyboard navigation
 const allCommands = computed(() => {
-    const flat = []
-    filteredCommands.value.forEach(category => {
-        category.items.forEach(command => {
-            flat.push({
-                ...command,
-                category: category.label
-            })
-        })
-    })
-    return flat
+    return displayCommands.value.map(command => ({
+        ...command,
+        category: command.category || 'Commands'
+    }))
 })
 
-// Methods
-const open = () => {
+// API methods
+const loadAvailableCommands = async () => {
+    try {
+        loading.value = true
+        const response = await axios.get('/api/commands')
+        availableCommands.value = response.data.data || []
+    } catch (err) {
+        console.error('Failed to load commands:', err)
+        error.value = 'Failed to load commands'
+    } finally {
+        loading.value = false
+    }
+}
+
+const loadSuggestions = async (query) => {
+    if (query.length < 2) {
+        suggestions.value = []
+        return
+    }
+
+    try {
+        loading.value = true
+        const response = await axios.get('/api/commands/suggestions', {
+            params: {
+                input: query,
+                context: currentContext.value
+            }
+        })
+        suggestions.value = response.data.data || []
+    } catch (err) {
+        console.error('Failed to load suggestions:', err)
+        // Don't show error for suggestions, just continue without them
+    } finally {
+        loading.value = false
+    }
+}
+
+const loadCommandHistory = async () => {
+    try {
+        const response = await axios.get('/api/commands/history', {
+            params: { per_page: 20 }
+        })
+        commandHistory.value = response.data.data || []
+    } catch (err) {
+        console.error('Failed to load command history:', err)
+    }
+}
+
+const loadCommandTemplates = async () => {
+    try {
+        const response = await axios.get('/api/commands/templates')
+        commandTemplates.value = response.data.data || []
+    } catch (err) {
+        console.error('Failed to load command templates:', err)
+    }
+}
+
+const executeCommand = async (command) => {
+    try {
+        loading.value = true
+        error.value = ''
+        
+        const commandData = command.name || command.command_name
+        const parameters = command.parameter_values || {}
+        
+        const response = await axios.post('/api/commands/execute', {
+            command_name: commandData,
+            parameters: parameters
+        })
+
+        executionResult.value = response.data
+        
+        if (response.data.success) {
+            emit('commandExecuted', {
+                command: command,
+                result: response.data
+            })
+            
+            // Reload history to include the executed command
+            await loadCommandHistory()
+            
+            // Show success briefly
+            setTimeout(() => {
+                close()
+            }, 1000)
+        } else {
+            error.value = response.data.error || 'Command execution failed'
+        }
+    } catch (err) {
+        console.error('Failed to execute command:', err)
+        error.value = err.response?.data?.error || 'Failed to execute command'
+    } finally {
+        loading.value = false
+    }
+}
+
+// UI methods
+const open = async () => {
     visible.value = true
     searchQuery.value = ''
     selectedIndex.value = 0
+    error.value = ''
+    executionResult.value = null
+    showHistory.value = false
+    showTemplates.value = false
+    suggestions.value = []
+    
+    await loadAvailableCommands()
+    await loadCommandHistory()
+    await loadCommandTemplates()
+    
     nextTick(() => {
         document.getElementById('command-palette-input')?.focus()
     })
@@ -197,38 +189,22 @@ const close = () => {
     visible.value = false
     searchQuery.value = ''
     selectedIndex.value = 0
+    error.value = ''
+    executionResult.value = null
+    showHistory.value = false
+    showTemplates.value = false
+    suggestions.value = []
     emit('close')
 }
 
-const navigateTo = (url) => {
-    router.visit(url)
-    close()
-}
-
-const openHelp = () => {
-    window.open('/help', '_blank')
-    close()
-}
-
-const logout = async () => {
-    try {
-        await fetch('/logout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            }
-        })
-        window.location.href = '/'
-    } catch (error) {
-        error.value = 'Failed to logout'
-    }
-    close()
-}
-
 const selectCommand = (command) => {
-    if (command.action) {
+    if (command.command_name) {
+        executeCommand(command)
+    } else if (command.name) {
+        executeCommand(command)
+    } else if (command.action) {
         command.action()
+        close()
     }
 }
 
@@ -247,6 +223,45 @@ const moveSelection = (direction) => {
         selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
     }
 }
+
+const toggleHistory = () => {
+    showHistory.value = !showHistory.value
+    showTemplates.value = false
+    selectedIndex.value = 0
+}
+
+const toggleTemplates = () => {
+    showTemplates.value = !showTemplates.value
+    showHistory.value = false
+    selectedIndex.value = 0
+}
+
+const getCategoryIcon = (category) => {
+    const icons = {
+        'user': 'fas fa-user',
+        'customer': 'fas fa-users',
+        'invoice': 'fas fa-file-invoice',
+        'company': 'fas fa-building',
+        'general': 'fas fa-cog'
+    }
+    return icons[category] || 'fas fa-terminal'
+}
+
+const formatCommandName = (name) => {
+    return name.replace(/\./g, ' • ')
+}
+
+// Watch search query for suggestions
+watch(searchQuery, (newQuery) => {
+    if (newQuery.trim().length >= 2) {
+        loadSuggestions(newQuery)
+        showHistory.value = false
+        showTemplates.value = false
+    } else {
+        suggestions.value = []
+    }
+    selectedIndex.value = 0
+})
 
 // Keyboard event handlers
 const handleKeydown = (event) => {
@@ -269,34 +284,52 @@ const handleKeydown = (event) => {
             event.preventDefault()
             selectHighlightedCommand()
             break
+        case 'Tab':
+            event.preventDefault()
+            if (event.shiftKey) {
+                // Cycle backwards through views
+                if (showTemplates.value) {
+                    toggleTemplates()
+                    toggleHistory()
+                } else if (showHistory.value) {
+                    toggleHistory()
+                    toggleTemplates()
+                } else {
+                    toggleHistory()
+                }
+            } else {
+                // Cycle forwards through views
+                if (showHistory.value) {
+                    toggleHistory()
+                    toggleTemplates()
+                } else if (showTemplates.value) {
+                    toggleTemplates()
+                } else {
+                    toggleHistory()
+                }
+            }
+            break
+        case 'h':
+            if (event.ctrlKey) {
+                event.preventDefault()
+                toggleHistory()
+            }
+            break
+        case 't':
+            if (event.ctrlKey) {
+                event.preventDefault()
+                toggleTemplates()
+            }
+            break
     }
 }
 
 const handleGlobalKeydown = (event) => {
-    // Check for Ctrl+K to open command palette
-    if (event.ctrlKey && event.key === 'k') {
+    // Check for Ctrl+K or Cmd+K to open command palette
+    if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault()
         open()
     }
-
-    // Check for other shortcuts when palette is closed
-    if (!visible.value) {
-        const shortcut = getShortcutString(event)
-        const command = shortcuts.value[shortcut]
-        if (command) {
-            event.preventDefault()
-            selectCommand(command)
-        }
-    }
-}
-
-const getShortcutString = (event) => {
-    const parts = []
-    if (event.ctrlKey) parts.push('ctrl')
-    if (event.shiftKey) parts.push('shift')
-    if (event.altKey) parts.push('alt')
-    parts.push(event.key.toLowerCase())
-    return parts.join('+')
 }
 
 // Lifecycle
@@ -337,19 +370,52 @@ defineExpose({
                         placeholder="Type a command or search..."
                         class="w-full pl-10"
                         size="large"
+                        :disabled="loading"
                         @keydown.enter="selectHighlightedCommand"
                         @keydown.arrow-down.prevent="moveSelection('down')"
                         @keydown.arrow-up.prevent="moveSelection('up')"
                         @keydown.escape="close"
+                        @keydown.tab.prevent
+                        @keydown.ctrl.h.prevent="toggleHistory"
+                        @keydown.ctrl.t.prevent="toggleTemplates"
                     />
+                    <ProgressSpinner v-if="loading" class="absolute right-3 top-1/2 transform -translate-y-1/2" style="width: 20px; height: 20px" />
                 </div>
-                <div class="mt-2 flex items-center justify-between">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                        Type to search, use ↑↓ to navigate, Enter to select
-                    </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                
+                <!-- View Tabs -->
+                <div class="mt-3 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <button 
+                            @click="showHistory = false; showTemplates = false"
+                            :class="['px-3 py-1 text-xs rounded-full transition-colors', {
+                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': !showHistory && !showTemplates,
+                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': showHistory || showTemplates
+                            }]"
+                        >
+                            Commands
+                        </button>
+                        <button 
+                            @click="toggleHistory"
+                            :class="['px-3 py-1 text-xs rounded-full transition-colors', {
+                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': showHistory,
+                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': !showHistory
+                            }]"
+                        >
+                            History
+                        </button>
+                        <button 
+                            @click="toggleTemplates"
+                            :class="['px-3 py-1 text-xs rounded-full transition-colors', {
+                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': showTemplates,
+                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400': !showTemplates
+                            }]"
+                        >
+                            Templates
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
                         Press <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">Esc</kbd> to close
-                    </span>
+                    </div>
                 </div>
             </div>
 
@@ -358,50 +424,94 @@ defineExpose({
                 {{ error }}
             </Message>
 
+            <!-- Success Message -->
+            <Message v-if="executionResult?.success" severity="success" :closable="false" class="m-4">
+                Command executed successfully!
+            </Message>
+
             <!-- Commands List -->
             <div class="max-h-96 overflow-y-auto">
-                <div v-if="allCommands.length === 0" class="p-8 text-center">
+                <!-- No Results -->
+                <div v-if="allCommands.length === 0 && !loading" class="p-8 text-center">
                     <i class="fas fa-search text-3xl text-gray-400 mb-4"></i>
                     <p class="text-gray-600 dark:text-gray-400">
-                        No commands found for "{{ searchQuery }}"
+                        {{ showHistory ? 'No command history found' : 
+                           showTemplates ? 'No templates found' :
+                           searchQuery ? `No commands found for "${searchQuery}"` :
+                           'No commands available' }}
                     </p>
                 </div>
 
+                <!-- Command Items -->
                 <div v-else>
-                    <div v-for="(category, categoryIndex) in filteredCommands" :key="category.label">
-                        <!-- Category Header -->
-                        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                            {{ category.label }}
-                        </div>
-
-                        <!-- Command Items -->
+                    <div 
+                        v-for="(command, index) in allCommands" 
+                        :key="command.id || command.command_name || index"
+                        class="group border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    >
                         <div 
-                            v-for="(command, commandIndex) in category.items" 
-                            :key="command.id"
-                            class="group"
+                            class="flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                            :class="{
+                                'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500': index === selectedIndex,
+                                'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500': command.execution_status === 'success',
+                                'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500': command.execution_status === 'failed'
+                            }"
+                            @click="selectCommand(command)"
+                            @mouseenter="selectedIndex = index"
                         >
-                            <div 
-                                class="flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                                :class="{
-                                    'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500': 
-                                        allCommands.findIndex(c => c.id === command.id) === selectedIndex
-                                }"
-                                @click="selectCommand(command)"
-                                @mouseenter="selectedIndex = allCommands.findIndex(c => c.id === command.id)"
-                            >
-                                <div class="flex items-center flex-1">
-                                    <i :class="command.icon" class="text-gray-600 dark:text-gray-400 w-5"></i>
-                                    <span class="ml-3 text-gray-900 dark:text-white font-medium">
-                                        {{ command.label }}
-                                    </span>
+                            <div class="flex items-center flex-1 min-w-0">
+                                <!-- Icon -->
+                                <i 
+                                    :class="[
+                                        getCategoryIcon(command.category || command.name?.split('.')[0]),
+                                        'text-gray-600 dark:text-gray-400 w-5 flex-shrink-0'
+                                    ]"
+                                ></i>
+                                
+                                <!-- Command Info -->
+                                <div class="ml-3 flex-1 min-w-0">
+                                    <!-- Command Name -->
+                                    <div class="font-medium text-gray-900 dark:text-white truncate">
+                                        {{ command.name ? formatCommandName(command.name) : command.command_name }}
+                                    </div>
+                                    
+                                    <!-- Description or Status -->
+                                    <div class="text-sm text-gray-600 dark:text-gray-400 truncate">
+                                        <span v-if="command.description">{{ command.description }}</span>
+                                        <span v-else-if="command.execution_status" class="capitalize">
+                                            {{ command.execution_status }} {{ command.executed_at ? `• ${new Date(command.executed_at).toLocaleDateString()}` : '' }}
+                                        </span>
+                                        <span v-else-if="command.is_shared" class="text-blue-600 dark:text-blue-400">
+                                            Shared by {{ command.created_by }}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="flex items-center space-x-3">
-                                    <span v-if="command.shortcut" class="text-xs text-gray-500 dark:text-gray-400">
-                                        <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                                            {{ command.shortcut }}
-                                        </kbd>
-                                    </span>
-                                </div>
+                            </div>
+                            
+                            <!-- Right Side Info -->
+                            <div class="flex items-center space-x-3 flex-shrink-0 ml-3">
+                                <!-- Confidence Badge for Suggestions -->
+                                <Badge 
+                                    v-if="command.confidence" 
+                                    :value="Math.round(command.confidence * 100) + '%'"
+                                    severity="secondary"
+                                    size="small"
+                                />
+                                
+                                <!-- Match Type -->
+                                <span v-if="command.match_type" class="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                                    {{ command.match_type }}
+                                </span>
+                                
+                                <!-- Execution Status -->
+                                <i 
+                                    v-if="command.execution_status === 'success'" 
+                                    class="fas fa-check-circle text-green-500"
+                                ></i>
+                                <i 
+                                    v-else-if="command.execution_status === 'failed'" 
+                                    class="fas fa-times-circle text-red-500"
+                                ></i>
                             </div>
                         </div>
                     </div>
@@ -411,13 +521,22 @@ defineExpose({
             <!-- Footer -->
             <div class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                            Press <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">Ctrl+K</kbd> to open
+                    <div class="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <span>
+                            <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+K</kbd> to open
+                        </span>
+                        <span>
+                            <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">↑↓</kbd> to navigate
+                        </span>
+                        <span>
+                            <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> to select
+                        </span>
+                        <span>
+                            <kbd class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Tab</kbd> to switch views
                         </span>
                     </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ allCommands.length }} commands available
+                        {{ allCommands.length }} {{ showHistory ? 'history items' : showTemplates ? 'templates' : 'commands' }}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,7 @@
 # ServiceContext Monitoring Guide
 
+> **ARCHIVE NOTICE**: Monitoring instructions target the deprecated ServiceContext stack. Do not use for new alerts.
+
 ## Critical Metrics to Watch
 
 ### 1. Error Rates by Service Method

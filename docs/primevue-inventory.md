@@ -1,6 +1,6 @@
 PrimeVue v4.3.9 — Local Inventory (source of truth)
 
-This file is generated from the installed package at `app/node_modules/primevue` to serve as an offline reference. Use these names exactly when importing.
+This file is generated from the installed package at `stack/node_modules/primevue` to serve as an offline reference. Use these names exactly when importing.
 
 Core config and services
 - Config: `primevue/config` (default export: plugin)
@@ -31,5 +31,4 @@ Other useful
 Notes
 - Import paths are kebab-cased folder names, e.g., `import TabView from 'primevue/tabview'`.
 - Services are registered with `app.use(...)`; composables are imported and called inside setup.
-- See also local README: `app/node_modules/primevue/README.md`.
-
+- See also local README: `stack/node_modules/primevue/README.md`.

@@ -2,17 +2,13 @@
 
 ## Overview
 
-The Haasib CLI provides comprehensive command-line tools for managing multi-company operations. All commands support interactive and non-interactive modes.
+The Haasib CLI surfaces first-class company management verbs via Artisan commands located in `stack/modules/Core/CLI/Commands`. Each command has both interactive and flag-driven modes and uses the shared command bus so behaviour matches the GUI and command palette.
 
-## Installation
+## Running the Commands
 
-```bash
-# Install Haasib CLI globally
-composer global require haasib/cli
-
-# Or use via project
-php artisan company:help
-```
+- **Local workspace**: change into `stack/` and run `php artisan ...`.
+- **Alt syntax** (from repo root): `php stack/artisan ...`.
+- All commands honour the current company context through `SetCompanyContext`. Provide `--company=` or run `company:switch` before issuing company-scoped commands.
 
 ## Commands
 

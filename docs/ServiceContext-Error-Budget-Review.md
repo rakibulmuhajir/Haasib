@@ -1,5 +1,7 @@
 # Error Budget & Alert Threshold Review for ServiceContext Rollout
 
+> **ARCHIVE NOTICE**: ServiceContext has been retired in favour of `ContextService`. Use this document only for historical analysis.
+
 ## 📊 Error Budget Overview
 
 ### Service-Level Objectives (SLOs)

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\CommandController;
 use App\Http\Controllers\Api\CurrencyApiController;
 use App\Http\Controllers\Api\CustomerApiController;
 use App\Http\Controllers\Api\InvoiceApiController;
@@ -158,6 +159,26 @@ Route::get('/health', function () {
         'storage_symlink' => file_exists(public_path('storage')),
     ]);
 })->name('health');
+
+// API Documentation Route
+Route::get('/docs', [DocumentationController::class, 'index'])->name('api.docs');
+
+// Command Palette Routes - uses web middleware for session authentication
+Route::prefix('commands')->name('commands.')->middleware(['web', 'auth', 'company.context', 'api.rate.limit'])->group(function () {
+    Route::get('/', [CommandController::class, 'index'])->name('index');
+    Route::get('/suggestions', [CommandController::class, 'suggestions'])->name('suggestions');
+    Route::post('/execute', [CommandController::class, 'execute'])->name('execute')->middleware('idempotent');
+    Route::post('/batch-execute', [CommandController::class, 'batchExecute'])->name('batch.execute')->middleware('idempotent');
+    Route::get('/history', [CommandController::class, 'history'])->name('history');
+
+    // Command Templates
+    Route::prefix('/templates')->name('templates.')->group(function () {
+        Route::get('/', [CommandController::class, 'templates'])->name('index');
+        Route::post('/', [CommandController::class, 'storeTemplate'])->name('store')->middleware('idempotent');
+        Route::put('/{id}', [CommandController::class, 'updateTemplate'])->name('update')->middleware('idempotent');
+        Route::delete('/{id}', [CommandController::class, 'destroyTemplate'])->name('destroy');
+    });
+});
 
 // API v1 Routes - Core system endpoints
 Route::prefix('v1')->group(function () {

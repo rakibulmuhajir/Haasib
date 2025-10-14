@@ -1,6 +1,6 @@
 # Team Memory — Working Principles (MVP Phase)
 
-Last updated: 2025-09-05
+Last updated: 2025-10-14
 
 These notes capture persistent decisions and constraints to keep delivery fast and consistent.
 
@@ -26,9 +26,9 @@ Migration SOP
 - Dark Mode: Use PrimeVue's built-in dark mode theming system. Configure through PrimeVue theme configuration rather than Tailwind dark classes.
 
 PrimeVue Guardrails
-- Local Docs: Use `docs/primevue-inventory.md` and `app/node_modules/primevue/README.md` as the API source of truth for v4.3.9.
+- Local Docs: Use `docs/primevue-inventory.md` and `stack/node_modules/primevue/README.md` as the API source of truth for v4.3.9.
 - Before Changes: For any new PrimeVue component/service/directive:
-  1) Verify the import path exists in `app/node_modules/primevue/*`.
+ 1) Verify the import path exists in `stack/node_modules/primevue/*`.
   2) If service/composable, confirm exported name (e.g., `confirmationservice`, `usetoast`).
   3) Add a minimal usage snippet in the PR description to lock in the API.
 - Disallowed: Do not use undocumented paths (e.g., `confirmdialogservice`); grep the inventory first.
@@ -54,6 +54,9 @@ Practical implications
 Ownership
 - Command Palette + Parser: Shared between frontend and backend. Keep responses structured for clear errors and previews when needed.
 - Tests: Prefer lightweight Python probes/suites (tools/cli_probe.py, tools/cli_suite.py) and Playwright-based GUI checks (tools/gui_suite.py).
+
+Constitution Pointer
+- Haasib Constitution v2.2.0 lives at `.specify/memory/constitution.md` and governs all delivery, including CLI parity, tenancy/RLS, RBAC, audit, idempotency, and documentation gates.
 
 See also
 - PR review checklist: `.github/pull_request_template.md`

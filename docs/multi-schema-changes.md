@@ -1,5 +1,7 @@
 # Multi-Schema Database Implementation Changes
 
+> **ARCHIVE NOTICE**: Multi-schema notes reflect the pre-`stack/` layout. Confirm current migrations and schema policies before using any instructions here.
+
 This document tracks all changes made to implement the multi-schema database structure.
 
 ## Schema Distribution

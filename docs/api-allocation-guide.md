@@ -1,23 +1,52 @@
-# Payment Allocations API — Quick Guide
+# Payment Allocation API Cheatsheet
 
-- GET `/api/payments/{id}/allocations`
-  - Lists allocations for a payment (id = payment_id UUID)
+Tenancy-aware allocation routes live in `stack/routes/api.php` under the `Route::prefix('payments')` group. All URLs below are automatically prefixed with `/api`.
 
-- POST `/api/payments/{id}/allocations` (idempotent)
-  - Body example:
-    - `{ "invoice_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "amount": 50.00, "allocation_date": "2025-09-15", "notes": "Initial alloc" }`
-  - Returns created allocation with `allocation_id` (UUID) and computed fields.
+## Requirements
+- `Authorization: Bearer {token}` — Sanctum token for a user with `payments.allocate`.
+- `Idempotency-Key: <uuid>` — REQUIRED on every POST.
+- `X-Company-Id: <uuid>` — Required for non-session clients so `SetCompanyContext` can set `app.current_company_id`.
 
-- POST `/api/payments/{paymentId}/allocations/{allocationId}/void` (idempotent)
-  - Body example: `{ "reason": "Customer dispute" }`
+## Endpoints
 
-- POST `/api/payments/{paymentId}/allocations/{allocationId}/refund` (idempotent)
-  - Body example: `{ "amount": 10.00, "reason": "Partial refund" }`
+### List Allocations
+```http
+GET /api/payments/{paymentId}/allocations
+```
+Returns allocations, applied amounts, invoice metadata, and timestamps. Respects tenant scoping.
 
-Headers
-- Include `Idempotency-Key: <uuid>` on all mutating requests.
+### Create Allocation
+```http
+POST /api/payments/{paymentId}/allocations
+Headers: Authorization, Idempotency-Key, X-Company-Id
+```
+**Body example**
+```json
+{
+  "invoice_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "amount": 50.00,
+  "allocation_date": "2025-09-15",
+  "notes": "Initial allocation"
+}
+```
 
-Notes
-- All IDs are UUID strings.
-- Line-item taxes for invoices are specified as `items[].taxes[]` with `{ name, rate }`.
-- RLS is enforced by `app.current_company`; ensure your tenant context middleware sets it per request/job.
+### Void Allocation
+```http
+POST /api/payments/{paymentId}/allocations/{allocationId}/void
+Headers: Authorization, Idempotency-Key, X-Company-Id
+```
+Body example: `{ "reason": "Customer dispute" }`
+
+### Refund Allocation
+```http
+POST /api/payments/{paymentId}/allocations/{allocationId}/refund
+Headers: Authorization, Idempotency-Key, X-Company-Id
+```
+Body example: `{ "amount": 10.00, "reason": "Partial refund" }`
+
+## Notes
+- All identifiers (`paymentId`, `allocationId`, `invoice_id`) are UUIDs.
+- Allocation commands route through the command bus, hitting `PaymentApiController` → `PaymentService`, so audit and idempotency hooks fire automatically.
+- `app.current_company_id` is set by `SetCompanyContext`; missing or incorrect context yields 403/404.
+- Keep invoice line taxes in sync with `{ items[].taxes[] }` objects so allocation previews remain accurate.
+- See `.specify/memory/constitution.md` (v2.2.0) for tenancy, RBAC, and idempotency requirements that reviewers expect.

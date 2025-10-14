@@ -11,8 +11,9 @@
   - Persist the key across retries of the same operation; do not reuse a key across different payloads.
   - For multi-step client operations (e.g., create payment then allocate), use distinct keys per step.
 - Implementation notes:
-  - Stored in `idempotency_keys` with a unique index on `(user_id, company_id, action, key)`.
-  - Middleware: `EnsureIdempotency` defined and aliased as `idempotent` in the app bootstrap; applied to relevant API routes.
+  - Stored in `public.idempotency_keys` with a unique index on `(user_id, company_id, action, key)`.
+  - Middleware: `App\Http\Middleware\Idempotency` is aliased as `idempotent` in `stack/bootstrap/app.php` and applied to every mutating API route.
+  - Constitution link: see `.specify/memory/constitution.md` (v2.2.0, Principle X) for non-negotiable requirements.
 
 ## How to Retry Safely (curl examples)
 

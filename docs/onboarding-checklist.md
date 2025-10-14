@@ -1,5 +1,7 @@
 # Developer Onboarding Checklist
 
+> **ARCHIVE NOTICE**: This onboarding plan references the retired ServiceContext workflow. Consult `docs/TEAM_MEMORY.md` and the Constitution v2.2.0 for the current process.
+
 ## 🚀 Quick Start
 
 ### Day 1: Environment Setup

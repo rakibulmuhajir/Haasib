@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'audit.trail' => \App\Http\Middleware\AuditTrail::class,
             'company.context' => \App\Http\Middleware\SetCompanyContext::class,
             'performance.monitor' => \App\Http\Middleware\PerformanceMonitor::class,
+            'api.rate.limit' => \App\Http\Middleware\ApiRateLimit::class,
         ]);
     })
     ->withSchedule(function ($schedule): void {

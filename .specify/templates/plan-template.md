@@ -17,21 +17,45 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: PHP 8.2 (Laravel 12) — note deviations with owner approval  
+**Primary Dependencies**: Vue 3 + Inertia.js v2, PrimeVue 4.3.9, Tailwind CSS, Spatie Permission  
+**Storage**: PostgreSQL 16 with Row Level Security  
+**Testing**: PHPUnit, Playwright, CLI probes (`tools/cli_suite.py`)  
+**Target Platform**: Linux containers on PostgreSQL-backed infrastructure
+**Project Type**: Web application (`stack/` Laravel workspace)  
+**Performance Goals**: Document p95 latency, concurrency, and throughput targets per feature  
+**Constraints**: Enforce tenancy, RBAC, audit logging, and idempotency for every write flow  
+**Scale/Scope**: Multi-tenant SME accounting workloads; specify tenant counts and data volume assumptions
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Core Principles (Haasib Constitution v2.2.0)**
+- [ ] I. Single Source Doctrine — cite canonical docs and update `docs/TEAM_MEMORY.md` for any deviations
+- [ ] II. Command-Bus Supremacy — confirm write flows route through registered actions in `stack/config/command-bus.php`
+- [ ] III. CLI–GUI Parity — document CLI command(s), natural language aliases, and output formats
+- [ ] IV. Tenancy & RLS Safety — ensure `company_id` + `app.current_company_id` policies and onboarding scripts are accounted for
+- [ ] V. RBAC Integrity — list permissions, roles, and negative tests
+- [ ] VI. Translation & Accessibility — capture locale updates, ARIA coverage, and keyboard interactions
+- [ ] VII. PrimeVue v4 & FontAwesome 5 Compliance — verify component usage and icon sourcing
+- [ ] VIII. Module Governance — identify module locations, contracts, and boundaries
+- [ ] IX. Tests Before Triumph — outline fail-first tests (unit, feature, CLI, contract) for the change
+- [ ] X. Audit, Idempotency & Observability — specify audit events, idempotency keys, and telemetry updates
+
+**Architecture Guardrails**
+- [ ] Stack alignment — PHP 8.2/Laravel 12, Vue 3 + Inertia v2, PrimeVue 4.3.9, PostgreSQL 16 (note/justify exceptions)
+- [ ] Directory discipline — new work lives in `stack/` (modules + app orchestration); `/app` remains untouched
+- [ ] Command bus registry — planned action updates include registry + documentation adjustments
+- [ ] Tenancy infrastructure — onboarding scripts, roles, and RLS configs accounted for in migrations
+- [ ] Observability — logging, probes, dashboards updated with new signals
+
+**Workflow & Documentation Gates**
+- [ ] Spec → Plan → Tasks order respected; exceptions logged in `docs/TEAM_MEMORY.md`
+- [ ] Constitution Check re-run after design artifacts are produced
+- [ ] Required docs updated (spec, plan, tasks, briefs, release notes)
+- [ ] TODOs for deferred translation/tests/telemetry include owner + deadline
+- [ ] Compliance evidence captured for quarterly review
 
 ## Project Structure
 

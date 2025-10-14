@@ -1,0 +1,9 @@
+{
+    "name": "accounting",
+    "description": "Accounting module",
+    "version": "1.0.0",
+    "provider": "Modules\\Accounting\\Providers\\AccountingServiceProvider",
+    "aliases": [],
+    "dependencies": [],
+    "enabled": true
+}

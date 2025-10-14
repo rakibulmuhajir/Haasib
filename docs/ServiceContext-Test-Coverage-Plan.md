@@ -1,5 +1,7 @@
 # ServiceContext Test Coverage Improvement Plan
 
+> **ARCHIVE NOTICE**: ServiceContext-specific coverage plans no longer apply. Use current ContextService + SetCompanyContext approaches when designing tests.
+
 ## 📊 Current Coverage Analysis
 
 ### ✅ What's Covered Well

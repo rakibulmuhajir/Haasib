@@ -1,5 +1,7 @@
 # ServiceContext Implementation Guide
 
+> **ARCHIVE NOTICE**: The ServiceContext pattern has been superseded by `App\Services\ContextService` in the `stack/` workspace. Retain this file for historical reference only; do not base new specifications on it.
+
 ## Overview
 
 ServiceContext is a comprehensive solution for managing user context throughout the application, replacing global `auth()` calls with explicit context injection. This improves testability, enables queued processing, and provides better audit logging.

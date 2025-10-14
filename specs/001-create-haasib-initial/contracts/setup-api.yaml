@@ -1,0 +1,277 @@
+openapi: 3.0.3
+info:
+  title: Haasib Setup API
+  version: 1.0.0
+  description: API for initial platform setup, user management, and company configuration
+
+paths:
+  /api/v1/setup/status:
+    get:
+      summary: Check if system has been set up
+      tags: [Setup]
+      responses:
+        '200':
+          description: Setup status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_setup:
+                    type: boolean
+                  has_companies:
+                    type: boolean
+                  has_users:
+                    type: boolean
+                  modules_enabled:
+                    type: array
+                    items:
+                      type: string
+
+  /api/v1/setup/initialize:
+    post:
+      summary: Initialize system with demo data
+      tags: [Setup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeRequest'
+      responses:
+        '201':
+          description: System initialized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  companies_created:
+                    type: integer
+                  users_created:
+                    type: integer
+                  modules_enabled:
+                    type: array
+                    items:
+                      type: string
+        '409':
+          description: System already initialized
+
+  /api/v1/setup/reset:
+    delete:
+      summary: Reset system to clean state
+      tags: [Setup]
+      responses:
+        '200':
+          description: System reset
+        '401':
+          description: Unauthorized (system owner only)
+
+  /api/v1/users:
+    get:
+      summary: List predefined users
+      tags: [Users]
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /api/v1/users/login:
+    post:
+      summary: Login as predefined user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /api/v1/companies:
+    get:
+      summary: List available companies for user
+      tags: [Companies]
+      responses:
+        '200':
+          description: List of companies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Company'
+
+  /api/v1/companies/switch:
+    post:
+      summary: Switch active company context
+      tags: [Companies]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                company_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Company switched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  company:
+                    $ref: '#/components/schemas/Company'
+
+  /api/v1/modules:
+    get:
+      summary: List available modules
+      tags: [Modules]
+      responses:
+        '200':
+          description: List of modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Module'
+
+  /api/v1/modules/{id}/enable:
+    post:
+      summary: Enable module for company
+      tags: [Modules]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Module enabled
+        '403':
+          description: Insufficient permissions
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: ['system_owner', 'company_owner', 'accountant', 'member']
+        companies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Company'
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        industry:
+          type: string
+          enum: ['hospitality', 'retail', 'professional_services']
+        base_currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        modules_enabled:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+
+    Module:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: string
+        is_enabled:
+          type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+
+    InitializeRequest:
+      type: object
+      required: [confirm_reset]
+      properties:
+        confirm_reset:
+          type: boolean
+          description: Must be true to proceed with initialization
+        create_demo_data:
+          type: boolean
+          default: true
+        industries:
+          type: array
+          items:
+            type: string
+            enum: ['hospitality', 'retail', 'professional_services']
+          description: Industries to create sample companies for
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+        active_company:
+          $ref: '#/components/schemas/Company'
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

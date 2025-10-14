@@ -4,6 +4,7 @@
 - Mark each test with: ✅ (passed), ❌ (failed), ⚠️ (partial/warning), or ➖ (not tested)
 - Add notes for any failures or issues found
 - Date your test runs
+- Confirm CLI parity and API idempotency for every flow that mutates data (per Constitution v2.2.0).
 
 ---
 

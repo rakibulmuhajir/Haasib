@@ -1,5 +1,7 @@
 Migrations Strategy: Baseline + Patch Table
 
+> **ARCHIVE NOTICE**: Patch workflow predates the `stack/` workspace. Validate against current migration tooling before following these steps.
+
 Goal
 - Keep existing migrations as your baseline history.
 - Apply all future changes as "patch" migrations tracked separately in `migrations_patches`.
@@ -87,4 +89,3 @@ Accounting and financial data:
 4. **Improved security** - Isolate sensitive data (e.g., auth) from business data
 5. **Scalability** - Each domain can evolve independently
 6. **Cross-schema joins** - PostgreSQL supports foreign keys and joins across schemas
-

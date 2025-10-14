@@ -1,5 +1,7 @@
 # A→Z Development & Deployment Plan (v2)
 
+> **ARCHIVE NOTICE**: Superseded by the `stack/` architecture and Constitution v2.2.0. Keep for historical timelines only; do not use as the active roadmap.
+
 A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** using **Postgres (module-per-schema + RLS)**, **Inertia + Vue 3 + Vite** for a snappy web UI, and a **versioned /api/v1** for your mobile app in 3–6 months. CLI lives in the same codebase so domain logic isn’t duplicated.
 
 ---

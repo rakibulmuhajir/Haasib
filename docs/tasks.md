@@ -1,5 +1,7 @@
 # Haasib — Tasks & Checklists (v1)
 
+> **ARCHIVE NOTICE**: Checklist reflects the pre-`stack/` rebuild (ServiceContext era). Use `.specify/memory/constitution.md` plus current specs/plans to track new work.
+
 Single source of truth for execution. Pulled from the technical brief, schemas, and engineering log. Track progress by checking items. When in doubt, link a PR or note next action.
 
 ---

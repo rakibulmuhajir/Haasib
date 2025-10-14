@@ -1,5 +1,7 @@
 # Modules Architecture & Scaffolding Guide
 
+> **ARCHIVE NOTICE**: This scaffolding guide targets the legacy module tooling. The active workspace uses the `stack/modules/*` structure and Constitution v2.2.0 guardrails; treat this file as historical reference only.
+
 This guide defines how custom business modules live inside the `modules/` directory, how they register themselves with Laravel, and how to scaffold new modules (including CLI parity) using the `module:make` artisan command.
 
 ## 1. Directory Layout
@@ -166,4 +168,3 @@ CommandBus::dispatch('invoices.create', $params, $context);
 - Build ModuleServiceProvider base class with helpers for command bus/CLI registration.
 - Update the company-module toggle system to read from `config/modules.php` and reflect module metadata.
 - Extend CLI palette build step to consume module registry fragments at compile time.
-

@@ -1,5 +1,7 @@
 # ServiceContext Rollout Metrics Dashboard
 
+> **ARCHIVE NOTICE**: Dashboard guidance applied to the retired ServiceContext rollout. Retain for historical context only.
+
 ## 📊 Key Performance Indicators
 
 ### 1. ServiceContext Adoption

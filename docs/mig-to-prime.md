@@ -9,18 +9,18 @@ Scope: Entire Vue/Inertia frontend: toasts, confirms, tooltips, dialogs, tabs, c
 Prerequisites
 - Installed: `primevue @primeuix/themes` (done)
 - Optional: `primeicons` for built-in icons
-  - `npm i primeicons` and import `primeicons/primeicons.css` in `resources/js/app.js`
+  - `npm i primeicons` and import `primeicons/primeicons.css` in `stack/resources/js/app.js`
 
 Core Wiring (Phase 0)
-- File: `app/resources/js/app.js`
+- File: `stack/resources/js/app.js`
   - Use `PrimeVue` with `Aura` preset, `ToastService`, `ConfirmDialogService`. [Done]
-- File: `app/resources/js/Layouts/AuthenticatedLayout.vue`
+- File: `stack/resources/js/Layouts/AuthenticatedLayout.vue`
   - Keep Reka provider temporarily. Render `<Toast />` and `<ConfirmDialog />` once globally. [Done]
 - Acceptance: App boots clean; both toast systems can coexist.
 
 Phase 1 — Feedback & Confirmation
 Goal: Migrate notifications and confirmation flows first.
-- File: `app/resources/js/composables/useToasts.js`
+- File: `stack/resources/js/composables/useToasts.js`
   - Replace custom store with PrimeVue `useToast` thin wrapper. Keep same external API if referenced widely.
   - Example:
     ```ts
@@ -31,16 +31,16 @@ Goal: Migrate notifications and confirmation flows first.
       return { add, success: (m,l)=>add('success',m,l), info: (m,l)=>add('info',m,l), warning: (m,l)=>add('warn',m,l), danger: (m,l)=>add('error',m,l) }
     }
     ```
-- File: `app/resources/js/Components/Toasts.vue`
+- File: `stack/resources/js/Components/Toasts.vue`
   - Remove Reka usage; either delete or convert into a no-op once all callers use `useToast`.
-- File: `app/resources/js/Layouts/AuthenticatedLayout.vue`
+- File: `stack/resources/js/Layouts/AuthenticatedLayout.vue`
   - Remove `<Toasts />` and then `<ToastProvider>` after all toasts are migrated.
 - Grep: Replace any direct Reka `Toast*` usage.
 - Acceptance: All toasts and confirms work via PrimeVue; no `ToastRoot/ToastProvider` left.
 
 Phase 2 — Tooltip
 Goal: Replace Reka tooltip primitives with PrimeVue tooltip directive.
-- File: `app/resources/js/Components/Tooltip.vue`
+- File: `stack/resources/js/Components/Tooltip.vue`
   - Keep the same prop API and apply `v-tooltip="{ value: text, showDelay: 0 }"` to the trigger slot.
   - Or delete the wrapper and apply `v-tooltip` directly where used.
 - Files: `SidebarNavItem.vue` and any tooltip consumers
@@ -51,7 +51,7 @@ Phase 3 — Collapsible
 Goal: Replace Reka Collapsible with PrimeVue.
 - Strategy A: Use `Panel` with `toggleable` to mimic open/close sections.
 - Strategy B: Use `Accordion` when a group behavior fits better.
-- File: `app/resources/js/Components/Collapsible.vue`
+- File: `stack/resources/js/Components/Collapsible.vue`
   - Keep external slots intact; internally render PrimeVue `Panel`.
 - Files: `CompanyMemberList.vue`, `UserMembershipList.vue`
   - Update imports/props if the wrapper API changed.
@@ -59,14 +59,14 @@ Goal: Replace Reka Collapsible with PrimeVue.
 
 Phase 4 — Dialogs (Command Palette)
 Goal: Replace Reka dialogs with PrimeVue `Dialog`.
-- File: `app/resources/js/Components/CommandPalette.vue`
+- File: `stack/resources/js/Components/CommandPalette.vue`
   - Replace `DialogRoot/Portal/Overlay/Content` with `<Dialog :modal="true" :draggable="false" :dismissableMask="false">` and custom header/body.
   - Keep keyboard shortcuts and focus handling as-is.
 - Acceptance: Palette opens/closes correctly, overlay and sizing preserved.
 
 Phase 5 — Tabs
 Goal: Replace Reka tabs with PrimeVue `TabView`/`TabPanel`.
-- Files: `app/resources/js/Pages/Admin/Users/Show.vue`, `.../Companies/Show.vue`
+- Files: `stack/resources/js/Pages/Admin/Users/Show.vue`, `.../Companies/Show.vue`
   - Map active tab state; maintain deep-linking if present.
 - Acceptance: Tabs functionally equivalent.
 
@@ -136,4 +136,3 @@ Rollout Strategy
 Notes
 - Keep Tailwind for layout; use PrimeVue components for interactive controls.
 - Prefer wrapper components to minimize churn in consumers; swap internals first.
-

@@ -7,8 +7,6 @@
 
 ## Summary
 
-<!-- Before drafting, review the doc catalog at docs/spec-reference.md to ensure you pull guidance from the current sources. -->
-
 [Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context

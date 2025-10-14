@@ -1,0 +1,676 @@
+openapi: 3.1.0
+info:
+  title: Payment Receipts & Allocation API
+  version: 0.1.0
+  description: >
+    Endpoints for recording customer receipts, allocating payments to invoices,
+    managing batches, and retrieving receipts/audit data. All routes require company
+    tenancy context and Spatie permissions as noted.
+servers:
+  - url: https://api.haasib.local/api
+    description: Local tenant-scoped API
+security:
+  - sanctumAuth: []
+  - companyContext: []
+  - idempotencyKey: []
+tags:
+  - name: Payments
+  - name: Payment Allocations
+  - name: Payment Batches
+  - name: Receipts
+  - name: Audit
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Record a customer payment receipt
+      operationId: createPayment
+      security:
+        - sanctumAuth: []
+        - companyContext: []
+        - idempotencyKey: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+      responses:
+        '201':
+          description: Payment created and optionally auto-allocated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-permissions:
+        required: [accounting.payments.create]
+  /payments/{paymentId}:
+    get:
+      tags: [Payments]
+      summary: Fetch payment details with allocation summary
+      operationId: getPayment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Payment with allocation and remaining balance data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-permissions:
+        required: [accounting.payments.view]
+    post:
+      tags: [Payments]
+      summary: Reverse a payment (full or partial)
+      operationId: reversePayment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentReversalRequest'
+      responses:
+        '202':
+          description: Reversal accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReversalResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-permissions:
+        required: [accounting.payments.reverse]
+  /payments/{paymentId}/receipt:
+    get:
+      tags: [Receipts]
+      summary: Generate receipt confirmation document
+      operationId: downloadPaymentReceipt
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [pdf, json]
+          description: Output format. Defaults to pdf.
+      responses:
+        '200':
+          description: Receipt rendered
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReceiptJson'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-permissions:
+        required: [accounting.payments.view]
+  /payments/{paymentId}/allocations:
+    get:
+      tags: [Payment Allocations]
+      summary: List allocations for a payment
+      operationId: listAllocations
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Allocation collection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentAllocation'
+      x-permissions:
+        required: [accounting.payments.view]
+    post:
+      tags: [Payment Allocations]
+      summary: Allocate payment amount to invoices (manual)
+      operationId: allocatePayment
+      security:
+        - sanctumAuth: []
+        - companyContext: []
+        - idempotencyKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualAllocationRequest'
+      responses:
+        '201':
+          description: Allocation entries created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationResult'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      x-permissions:
+        required: [accounting.payments.allocate]
+  /payments/{paymentId}/allocations/auto:
+    post:
+      tags: [Payment Allocations]
+      summary: Apply automatic allocation strategy
+      operationId: autoAllocatePayment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomaticAllocationRequest'
+      responses:
+        '202':
+          description: Automatic allocation in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationResult'
+      x-permissions:
+        required: [accounting.payments.allocate]
+  /payments/{paymentId}/allocations/{allocationId}/reverse:
+    post:
+      tags: [Payment Allocations]
+      summary: Reverse a specific allocation
+      operationId: reverseAllocation
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/AllocationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocationReversalRequest'
+      responses:
+        '202':
+          description: Allocation reversal accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationReversalResponse'
+      x-permissions:
+        required: [accounting.payments.reverse]
+  /payment-batches:
+    post:
+      tags: [Payment Batches]
+      summary: Upload or create a batch of payment receipts
+      operationId: createPaymentBatch
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [source_type]
+              properties:
+                source_type:
+                  type: string
+                  enum: [manual, csv_import, bank_feed]
+                file:
+                  type: string
+                  format: binary
+                  description: Required when source_type=csv_import
+                entries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PaymentCreateRequest'
+                  description: Inline entries for manual/bank feed ingestion
+      responses:
+        '202':
+          description: Batch accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentBatchResponse'
+      x-permissions:
+        required: [accounting.payments.create]
+  /payment-batches/{batchId}:
+    get:
+      tags: [Payment Batches]
+      summary: Fetch batch processing status
+      operationId: getPaymentBatch
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Batch status payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentBatchResponse'
+      x-permissions:
+        required: [accounting.payments.view]
+  /payments/{paymentId}/audit:
+    get:
+      tags: [Audit]
+      summary: Retrieve payment audit trail
+      operationId: getPaymentAudit
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+      x-permissions:
+        required: [accounting.payments.view]
+components:
+  securitySchemes:
+    sanctumAuth:
+      type: http
+      scheme: bearer
+    companyContext:
+      type: apiKey
+      in: header
+      name: X-Company-Id
+    idempotencyKey:
+      type: apiKey
+      in: header
+      name: Idempotency-Key
+  parameters:
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AllocationId:
+      name: allocationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BatchId:
+      name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Missing permissions or invalid tenancy context
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Idempotency or state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    PaymentCreateRequest:
+      type: object
+      required:
+        - customer_id
+        - payment_method
+        - amount
+        - currency
+        - payment_date
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        payment_method:
+          type: string
+          enum: [cash, bank_transfer, card, cheque, other]
+        payment_date:
+          type: string
+          format: date
+        reference_number:
+          type: string
+          maxLength: 100
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        auto_allocate:
+          type: boolean
+          default: false
+        allocation_strategy:
+          type: string
+          nullable: true
+          enum: [fifo, proportional, overdue_first, largest_first, percentage_based, custom_priority]
+        allocation_options:
+          type: object
+          additionalProperties: true
+          description: Strategy-specific parameters (e.g., percentages map)
+    PaymentResponse:
+      type: object
+      required:
+        - payment
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        remaining_amount:
+          type: number
+          format: float
+        is_fully_allocated:
+          type: boolean
+    PaymentDetailResponse:
+      type: object
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        allocation_summary:
+          $ref: '#/components/schemas/AllocationSummary'
+        unpaid_invoices:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceStub'
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payment_number:
+          type: string
+        customer_id:
+          type: string
+          format: uuid
+        customer_name:
+          type: string
+        payment_date:
+          type: string
+          format: date
+        payment_method:
+          type: string
+        reference_number:
+          type: string
+          nullable: true
+        amount:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        batch_id:
+          type: string
+          format: uuid
+          nullable: true
+    AllocationSummary:
+      type: object
+      properties:
+        total_allocated:
+          type: number
+        remaining_amount:
+          type: number
+        is_fully_allocated:
+          type: boolean
+        allocation_count:
+          type: integer
+    InvoiceStub:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        balance_due:
+          type: number
+        due_date:
+          type: string
+          format: date
+    ManualAllocationRequest:
+      type: object
+      required:
+        - allocations
+      properties:
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [invoice_id, amount]
+            properties:
+              invoice_id:
+                type: string
+                format: uuid
+              amount:
+                type: number
+                minimum: 0.01
+              notes:
+                type: string
+                nullable: true
+        apply_discounts:
+          type: boolean
+          default: false
+    AutomaticAllocationRequest:
+      type: object
+      required:
+        - strategy
+      properties:
+        strategy:
+          type: string
+          enum: [fifo, proportional, overdue_first, largest_first, percentage_based, custom_priority]
+        options:
+          type: object
+          additionalProperties: true
+        dry_run:
+          type: boolean
+          default: false
+    AllocationResult:
+      type: object
+      properties:
+        payment_id:
+          type: string
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        remaining_amount:
+          type: number
+        notices:
+          type: array
+          items:
+            type: string
+    PaymentAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+        invoice_id:
+          type: string
+        invoice_number:
+          type: string
+        allocated_amount:
+          type: number
+        allocation_method:
+          type: string
+        allocation_strategy:
+          type: string
+          nullable: true
+        allocation_date:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+        discount_applied:
+          type: number
+          nullable: true
+    AllocationReversalRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+        refund_amount:
+          type: number
+          nullable: true
+    AllocationReversalResponse:
+      type: object
+      properties:
+        allocation_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed]
+    PaymentReversalRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+        amount:
+          type: number
+          nullable: true
+        method:
+          type: string
+          enum: [void, refund, chargeback]
+        metadata:
+          type: object
+          additionalProperties: true
+    PaymentReversalResponse:
+      type: object
+      properties:
+        reversal_id:
+          type: string
+        status:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+    PaymentBatchResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        batch_number:
+          type: string
+        status:
+          type: string
+        receipt_count:
+          type: integer
+        total_amount:
+          type: number
+        processed_at:
+          type: string
+          format: date-time
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchFailure'
+    BatchFailure:
+      type: object
+      properties:
+        row:
+          type: integer
+        error:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+    PaymentReceiptJson:
+      type: object
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+        customer:
+          type: object
+          additionalProperties: true
+        issued_at:
+          type: string
+          format: date-time
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+        actor_id:
+          type: string
+        actor_name:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string

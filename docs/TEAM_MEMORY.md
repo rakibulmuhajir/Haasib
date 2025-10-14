@@ -55,8 +55,17 @@ Ownership
 - Command Palette + Parser: Shared between frontend and backend. Keep responses structured for clear errors and previews when needed.
 - Tests: Prefer lightweight Python probes/suites (tools/cli_probe.py, tools/cli_suite.py) and Playwright-based GUI checks (tools/gui_suite.py).
 
-Constitution Pointer
-- Haasib Constitution v2.2.0 lives at `.specify/memory/constitution.md` and governs all delivery, including CLI parity, tenancy/RLS, RBAC, audit, idempotency, and documentation gates.
+## Payment Processing Feature (005-payment-processing-receipt)
+**Added**: 2025-10-14
+**Key Decisions**:
+- **Command Bus Usage**: All payment operations (create, allocate, reverse) dispatch through dedicated actions in `stack/modules/Accounting/Domain/Payments/Actions/` registered in `stack/config/command-bus.php`
+- **New Tables**: `invoicing.payment_receipt_batches` for batch processing (FR-011), plus enhanced `invoicing.payments` and `invoicing.payment_allocations` with RLS
+- **Telemetry**: Metrics counters for payment_created_total, allocation_applied_total, allocation_failure_total added to monitoring dashboards
+- **Permissions**: Extended Spatie permissions with `accounting.payments.*` permissions (`view`, `create`, `update`, `delete`, `allocate`, `reverse`, `reconcile`) plus `accounting.batches.*` and `accounting.audit.view` for fine-grained access control. Updated `RbacSeeder.php` to assign these permissions to owner, manager, and accountant roles.
+- **CLI ↔ GUI Parity**: Consolidated CLI flows using shared bus actions, maintaining JSON output format for automation
+- **Allocation Strategies**: Support for fifo, proportional, overdue_first, largest_first, percentage_based, and custom_priority strategies
+- **Audit Trail**: Structured audit events via `App\Models\AuditEntry` hooks for all payment operations
+- **Performance Targets**: p95 receipt recording <2s, allocation completion <3s, supporting ~250 receipts/day/tenant
 
 See also
 - PR review checklist: `.github/pull_request_template.md`

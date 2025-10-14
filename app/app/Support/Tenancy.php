@@ -16,7 +16,9 @@ class Tenancy
     public function userRoleInCurrentCompany(string $userId): ?string
     {
         $cid = $this->currentCompanyId();
-        if (! $cid) return null;
+        if (! $cid) {
+            return null;
+        }
 
         return app(CompanyLookupService::class)->userRole($cid, $userId);
     }
@@ -24,7 +26,9 @@ class Tenancy
     public function isMember(string $userId): bool
     {
         $cid = $this->currentCompanyId();
-        if (! $cid) return false;
+        if (! $cid) {
+            return false;
+        }
 
         return $this->verifyMembership($userId, $cid);
     }
@@ -64,4 +68,3 @@ class Tenancy
         }
     }
 }
-

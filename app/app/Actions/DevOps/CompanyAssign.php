@@ -11,9 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class CompanyAssign
 {
-    public function __construct(private CompanyLookupService $lookup)
-    {
-    }
+    public function __construct(private CompanyLookupService $lookup) {}
 
     public function handle(array $p, User $actor): array
     {
@@ -37,7 +35,7 @@ class CompanyAssign
             throw ValidationException::withMessages(['company' => 'Company not found']);
         }
 
-        if (!$actor->isSuperAdmin()) {
+        if (! $actor->isSuperAdmin()) {
             $active = session('current_company_id');
             abort_if($active !== $company->id, 403);
             abort_unless(
@@ -51,6 +49,12 @@ class CompanyAssign
             if (! $user) {
                 throw ValidationException::withMessages(['email' => 'User not found']);
             }
+
+            // Check if user is already assigned to this company
+            if ($company->users()->where('users.id', $user->id)->exists()) {
+                throw ValidationException::withMessages(['email' => 'User is already assigned to this company']);
+            }
+
             $company->users()->syncWithoutDetaching([$user->id => ['role' => $data['role']]]);
             $user = $company->users()->where('users.id', $user->id)->first();
 

@@ -5,41 +5,58 @@ namespace App\Services;
 use App\Models\User;
 use App\Support\CommandBus;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CommandExecutor
 {
-    public function __construct(private CommandBus $bus)
-    {
-    }
+    public function __construct(private CommandBus $bus) {}
 
     public function execute(string $action, array $params, User $user, ?string $companyId, string $key): array
     {
+        \Log::info('🚀 COMMAND EXECUTOR STARTED - CommandExecutor.php', [
+            'action' => $action,
+            'params' => $params,
+            'user_id' => $user->id,
+            'company_id' => $companyId,
+            'key' => $key,
+        ]);
+
         // Idempotency check (scoped by user/company/action/key)
         if ($this->checkIdempotency($action, $user, $companyId, $key)) {
+            \Log::warning('❌ DUPLICATE REQUEST DETECTED');
+
             return [['message' => 'Duplicate request'], 409];
         }
 
         try {
+            \Log::info('🔐 Checking authorization for command...');
             // Authorize command before dispatching
             Gate::authorize('command.execute', [$action, $companyId]);
+            \Log::info('✅ Authorization passed, dispatching command...');
             $result = $this->bus->dispatch($action, $params, $user);
+            \Log::info('🎉 Command dispatched successfully', ['result' => $result]);
         } catch (ValidationException $e) {
+            \Log::error('❌ VALIDATION FAILED', ['errors' => $e->errors()]);
+
             return [[
                 'ok' => false,
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
             ], 422];
         } catch (HttpExceptionInterface $e) {
+            \Log::error('❌ HTTP EXCEPTION', ['message' => $e->getMessage(), 'status' => $e->getStatusCode()]);
+
             return [[
                 'ok' => false,
                 'message' => $e->getMessage() ?: 'Request not allowed',
             ], $e->getStatusCode()];
         } catch (\Throwable $e) {
+            \Log::error('💥 COMMAND EXECUTION FAILED', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return [[
                 'ok' => false,
                 'message' => 'Command failed',
@@ -81,7 +98,7 @@ class CommandExecutor
             // Use a nested transaction (savepoint) so a failure here
             // does not poison the outer request transaction.
             DB::transaction(function () use ($action, $params, $user, $companyId, $key) {
-                DB::table('audit.audit_logs')->insert([
+                DB::table('audit_logs')->insert([
                     'id' => Str::uuid()->toString(),
                     'user_id' => $user->id,
                     'company_id' => $companyId,

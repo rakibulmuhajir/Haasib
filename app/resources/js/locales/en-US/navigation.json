@@ -1,0 +1,9 @@
+{
+    "dashboard": "Dashboard",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Log Out",
+    "language": "Language",
+    "darkModeTooltip": "Switch to dark mode",
+    "lightModeTooltip": "Switch to light mode"
+}

@@ -1,13 +1,9 @@
 import { ref, unref } from 'vue'
 import { http } from '@/lib/http'
 import { useToasts } from './useToasts.js'
+import { useApiForm } from './useApiForm.js'
 
 export function useCompanyInvites(company) {
-  const invite = ref({ email: '', role: 'viewer', expires_in_days: 14 })
-  const inviteLoading = ref(false)
-  const inviteError = ref('')
-  const inviteOk = ref(null)
-
   const invites = ref([])
   const invitesLoading = ref(false)
   const invitesError = ref('')
@@ -18,26 +14,22 @@ export function useCompanyInvites(company) {
 
   const companySlug = () => encodeURIComponent(unref(company))
 
-  async function sendInvite() {
-    inviteLoading.value = true
-    inviteError.value = ''
-    inviteOk.value = null
-    try {
-      const { data } = await http.post(`/web/companies/${companySlug()}/invite`, {
-        ...invite.value,
-      })
-      inviteOk.value = data.data
-      invites.value.unshift(data.data)
-      invite.value.email = ''
-      addToast('Invitation sent successfully.', 'success')
-    } catch (e) {
-      const message = e?.response?.data?.message || 'Failed to create invitation'
-      inviteError.value = message
-      addToast(message, 'danger')
-    } finally {
-      inviteLoading.value = false
+  const {
+    loading: inviteLoading,
+    error: inviteError,
+    data: inviteOk,
+    execute: sendInvite,
+    form: invite,
+  } = useApiForm(
+    (formData) => http.post(`/web/companies/${companySlug()}/invite`, formData),
+    {
+      initialFormState: { email: '', role: 'viewer', expires_in_days: 14 },
+      onSuccess: (newInvite) => {
+        invites.value.unshift(newInvite)
+        addToast('Invitation sent successfully.', 'success')
+      },
     }
-  }
+  )
 
   async function revokeInvite(id) {
     const target = id || revokeId.value

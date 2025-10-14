@@ -2,15 +2,12 @@
 
 namespace App\Actions\Company;
 
-use App\Actions\Company\InviteUser;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 
 class CompanyInvite
 {
-    public function __construct(private InviteUser $inviter)
-    {
-    }
+    public function __construct(private InviteUser $inviter) {}
 
     public function handle(array $p, User $actor): array
     {

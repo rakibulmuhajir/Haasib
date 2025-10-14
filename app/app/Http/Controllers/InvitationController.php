@@ -7,9 +7,7 @@ use Illuminate\Http\Request;
 
 class InvitationController extends Controller
 {
-    public function __construct(private InvitationService $invitations)
-    {
-    }
+    public function __construct(private InvitationService $invitations) {}
 
     public function companyInvitations(Request $request, string $company)
     {

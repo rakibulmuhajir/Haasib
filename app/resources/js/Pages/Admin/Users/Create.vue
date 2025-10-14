@@ -1,111 +1,148 @@
-<script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { Head, Link } from '@inertiajs/vue3'
-import { ref } from 'vue'
-import InputLabel from '@/Components/InputLabel.vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
+<script setup lang="ts">
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import { useForm } from '@inertiajs/vue3'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Message from 'primevue/message'
+import Dropdown from 'primevue/dropdown'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
-import { http, withIdempotency } from '@/lib/http'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 
-const form = ref({ name: '', email: '', password: '', system_role: '' })
-const loading = ref(false)
-const error = ref('')
+interface FormData {
+  name: string
+  email: string
+  password: string
+  system_role: string
+}
+
+const form = useForm<FormData>({ name: '', email: '', password: '', system_role: '' })
 const ok = ref('')
-const assign = ref({ company: '', role: 'viewer' })
+const assign = ref({ company: null, role: { value: 'viewer', label: 'Viewer' } })
+
+const roleOptions = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'accountant', label: 'Accountant' },
+  { value: 'viewer', label: 'Viewer' },
+]
 
 function randomPassword() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
 }
 
+// Breadcrumb items
+const breadcrumbItems = ref([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Users', url: '/admin/users', icon: 'users' },
+  { label: 'Create User', url: '#', icon: 'user-plus' }
+])
+
 async function submit() {
-  loading.value = true
-  error.value = ''
+  form.clearErrors()
   ok.value = ''
-  const payload = { ...form.value }
+  
+  const payload = { ...form }
   if (!payload.password) payload.password = randomPassword()
-  try {
-    const { data } = await http.post('/commands', payload, { headers: withIdempotency({ 'X-Action': 'user.create' }) })
-    ok.value = data?.message || 'User created'
-    if (assign.value.company) {
-      try {
-        await http.post('/commands', {
-          email: form.value.email,
-          company: assign.value.company,
-          role: assign.value.role,
-        }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-        ok.value += ' · Assigned to company'
-      } catch (e) {
-        // swallow, surface below
-        throw e
+  
+  // First create the user
+  form.transform(data => ({
+    ...data,
+    _action: 'user.create',
+    password: payload.password
+  })).post('/commands', {
+    onSuccess: () => {
+      ok.value = 'User created'
+      
+      // If company assignment is needed, do it separately
+      if (assign.value.company) {
+        const assignForm = useForm({
+          email: form.email,
+          company: assign.value.company.id || assign.value.company,
+          role: assign.value.role.value,
+          _action: 'company.assign'
+        })
+        
+        assignForm.post('/commands', {
+          onSuccess: () => {
+            ok.value += ' · Assigned to company'
+          },
+          onError: () => {
+            // Don't show error for assignment failure, just log it
+            console.error('Company assignment failed')
+          }
+        })
       }
+    },
+    onError: (errors) => {
+      console.error('Create user error:', errors);
     }
-  } catch (e) {
-    error.value = e?.response?.data?.message || 'Failed to create user'
-  } finally {
-    loading.value = false
-  }
+  })
 }
 </script>
 
 <template>
   <Head title="Create User" />
-  <AuthenticatedLayout>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Create User</h2>
-        <Link :href="route('admin.users.index')" class="text-sm text-gray-600 hover:underline">Back to users</Link>
+  
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel" />
+    </template>
+
+    <template #topbar>
+      <div class="flex items-center justify-between w-full">
+        <Breadcrumb :items="breadcrumbItems" />
       </div>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-2xl sm:px-6 lg:px-8">
-        <div class="overflow-hidden bg-white shadow sm:rounded-md p-6">
-          <div v-if="ok" class="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ ok }}</div>
-          <div v-if="error" class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
+    <div class="space-y-4">
+      <Message v-if="ok" severity="success" :closable="false">{{ ok }}</Message>
+      <Message v-if="form.errors.name" severity="error" :closable="false">{{ form.errors.name }}</Message>
+    <Message v-if="form.errors.email" severity="error" :closable="false">{{ form.errors.email }}</Message>
+    <Message v-if="form.errors.password" severity="error" :closable="false">{{ form.errors.password }}</Message>
+    <Message v-if="form.errors.system_role" severity="error" :closable="false">{{ form.errors.system_role }}</Message>
 
+      <Card class="w-full max-w-2xl mx-auto">
+        <template #title>Create New User</template>
+        <template #content>
           <div class="space-y-4">
             <div>
-              <InputLabel value="Name" />
-              <TextInput v-model="form.name" class="mt-1 block w-full" placeholder="Jane Doe" />
+              <label class="block text-sm font-medium mb-2">Name</label>
+              <InputText v-model="form.name" class="w-full" placeholder="Jane Doe" :class="{ 'p-invalid': form.errors.name }" />
             </div>
             <div>
-              <InputLabel value="Email" />
-              <TextInput v-model="form.email" class="mt-1 block w-full" placeholder="jane@example.com" />
+              <label class="block text-sm font-medium mb-2">Email</label>
+              <InputText v-model="form.email" class="w-full" placeholder="jane@example.com" :class="{ 'p-invalid': form.errors.email }" />
             </div>
             <div>
-              <InputLabel value="Password (optional)" />
-              <TextInput v-model="form.password" class="mt-1 block w-full" placeholder="Auto-generated if left blank" />
+              <label class="block text-sm font-medium mb-2">Password (optional)</label>
+              <InputText v-model="form.password" class="w-full" placeholder="Auto-generated if left blank" :class="{ 'p-invalid': form.errors.password }" />
             </div>
             <div>
-              <InputLabel value="System Role (optional)" />
-              <TextInput v-model="form.system_role" class="mt-1 block w-full" placeholder="superadmin" />
+              <label class="block text-sm font-medium mb-2">System Role (optional)</label>
+              <InputText v-model="form.system_role" class="w-full" placeholder="superadmin" :class="{ 'p-invalid': form.errors.system_role }" />
             </div>
-            <div class="border-t border-gray-200 pt-4">
-              <div class="text-sm text-gray-700 font-medium mb-2">Optional: Assign to a company</div>
+            <div class="border-t pt-4">
+              <div class="text-sm font-medium mb-2">Optional: Assign to a company</div>
               <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                 <div class="md:col-span-2">
-                  <InputLabel value="Company" />
+                  <label class="block text-sm font-medium mb-2">Company</label>
                   <CompanyPicker v-model="assign.company" />
                 </div>
                 <div>
-                  <InputLabel value="Role" />
-                  <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300">
-                    <option value="owner">Owner</option>
-                    <option value="admin">Admin</option>
-                    <option value="accountant">Accountant</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
+                  <label class="block text-sm font-medium mb-2">Role</label>
+                  <Dropdown v-model="assign.role" :options="roleOptions" optionLabel="label" class="w-full" />
                 </div>
               </div>
             </div>
             <div class="pt-2">
-              <PrimaryButton @click="submit" :disabled="loading">Create</PrimaryButton>
-              <span v-if="loading" class="ms-2 text-sm text-gray-500">Saving…</span>
+              <Button @click="submit" :loading="form.processing" label="Create User" icon="pi pi-user-plus" />
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </Card>
     </div>
-  </AuthenticatedLayout>
+  </LayoutShell>
 </template>

@@ -49,7 +49,7 @@ TS;
     {
         $type = $property->getType();
 
-        if (!$type) {
+        if (! $type) {
             return 'any';
         }
 
@@ -62,6 +62,7 @@ TS;
                 fn (\ReflectionNamedType $type) => $this->convertPhpTypeToTypeScript($type->getName()),
                 $type->getTypes()
             );
+
             return implode(' | ', $types);
         }
 

@@ -22,10 +22,10 @@ class UserLookupController extends Controller
         $query = User::query();
 
         if ($q !== '') {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
             $query->where(function ($w) use ($like) {
                 $w->where('email', 'ilike', $like)
-                  ->orWhere('name', 'ilike', $like);
+                    ->orWhere('name', 'ilike', $like);
             });
         }
 
@@ -36,7 +36,8 @@ class UserLookupController extends Controller
             $this->lookup->restrictUsersToCompany($query, $cid);
         }
 
-        $users = $query->limit($limit)->get(['id','name','email']);
+        $users = $query->limit($limit)->get(['id', 'name', 'email', 'is_active', 'system_role']);
+
         return response()->json(['data' => $users]);
     }
 
@@ -44,8 +45,8 @@ class UserLookupController extends Controller
     {
         $actor = $request->user();
         $user = User::query()
-            ->when(str_contains($userKey, '@'), fn($q) => $q->where('email', $userKey), fn($q) => $q->where('id', $userKey))
-            ->firstOrFail(['id','name','email','created_at','updated_at']);
+            ->when(str_contains($userKey, '@'), fn ($q) => $q->where('email', $userKey), fn ($q) => $q->where('id', $userKey))
+            ->firstOrFail(['id', 'name', 'email', 'is_active', 'system_role', 'created_at', 'updated_at']);
 
         // Access: superadmin OR share at least one company
         if (! $actor->isSuperAdmin()) {
@@ -59,22 +60,24 @@ class UserLookupController extends Controller
         // Last activity from audit logs if available
         $lastActivity = null;
         try {
-            $lastActivity = DB::table('audit.audit_logs')
+            $lastActivity = DB::table('audit_logs')
                 ->where('user_id', $user->id)
                 ->orderByDesc('created_at')
                 ->limit(1)
-                ->first(['action','company_id','created_at']);
-        } catch (\Throwable $e) { /* ignore */ }
+                ->first(['action', 'company_id', 'created_at']);
+        } catch (\Throwable $e) { /* ignore */
+        }
 
         return response()->json([
             'data' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_active' => $user->is_active,
+                'system_role' => $user->system_role,
                 'memberships' => $memberships,
                 'last_activity' => $lastActivity,
-            ]
+            ],
         ]);
     }
 }
-

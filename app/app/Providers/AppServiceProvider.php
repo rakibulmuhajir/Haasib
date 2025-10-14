@@ -2,12 +2,11 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Cache\RateLimiting\Limit;
-use App\Support\CommandBus;
-use App\Support\Tenancy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -16,8 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(CommandBus::class, fn () => new CommandBus());
-        $this->app->singleton(Tenancy::class, fn () => new Tenancy());
+        //
     }
 
     /**
@@ -27,8 +25,26 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
-         RateLimiter::for('devcli', fn($request) => [
-        Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip()),
-    ]);
+        // Custom validation rule for customers table with schema
+        Validator::extend('exists_customer', function ($attribute, $value, $parameters, $validator) {
+            $exists = DB::table('hrm.customers')
+                ->where('customer_id', $value)
+                ->exists();
+
+            return $exists;
+        });
+
+        // Custom validation rule for currencies table with schema
+        Validator::extend('exists_currency', function ($attribute, $value, $parameters, $validator) {
+            if (! $value) {
+                return true;
+            } // nullable field
+
+            $exists = DB::table('public.currencies')
+                ->where('id', $value)
+                ->exists();
+
+            return $exists;
+        });
     }
 }

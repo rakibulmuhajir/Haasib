@@ -2,10 +2,8 @@
 
 namespace App\Services;
 
-
 use App\Models\Company;
 use App\Models\User;
-use App\Services\CompanyLookupService;
 use Illuminate\Support\Facades\DB;
 
 class LookupService
@@ -17,13 +15,13 @@ class LookupService
      */
     public function companies(User $user, string $q = '', int $limit = 10, array $filters = [])
     {
-        $query = Company::query()->select(['id','name','slug','base_currency','language','locale']);
+        $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale']);
 
         if ($q !== '') {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
             $query->where(function ($w) use ($like) {
                 $w->where('name', 'ilike', $like)
-                  ->orWhere('slug', 'ilike', $like);
+                    ->orWhere('slug', 'ilike', $like);
             });
         }
 
@@ -53,12 +51,15 @@ class LookupService
 
         $query = DB::table($table)->select($select);
 
-        if ($q !== '' && !empty($searchCols)) {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
+        if ($q !== '' && ! empty($searchCols)) {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
             $query->where(function ($w) use ($searchCols, $like) {
                 foreach ($searchCols as $i => $col) {
-                    if ($i === 0) $w->where($col, 'ilike', $like);
-                    else $w->orWhere($col, 'ilike', $like);
+                    if ($i === 0) {
+                        $w->where($col, 'ilike', $like);
+                    } else {
+                        $w->orWhere($col, 'ilike', $like);
+                    }
                 }
             });
         }
@@ -66,14 +67,16 @@ class LookupService
         // Apply mapped filters from query string
         foreach ($filterMap as $reqKey => $map) {
             $val = request()->query($reqKey);
-            if ($val === null || $val === '') continue;
+            if ($val === null || $val === '') {
+                continue;
+            }
             if (is_string($map)) {
                 $query->where($map, $val);
             } elseif (is_array($map)) {
                 $col = $map['column'] ?? $reqKey;
                 $type = $map['type'] ?? null;
                 if ($type === 'bool') {
-                    $truthy = ['1','true','yes','on'];
+                    $truthy = ['1', 'true', 'yes', 'on'];
                     $val = is_bool($val) ? $val : in_array(strtolower((string) $val), $truthy, true);
                 }
                 $query->where($col, $val);

@@ -3,8 +3,8 @@
 namespace App\Actions\DevOps;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class UserDelete
 {

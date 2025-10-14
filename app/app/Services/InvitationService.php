@@ -3,14 +3,15 @@
 namespace App\Services;
 
 use App\Models\Company;
-use App\Models\User;
 use App\Models\CompanyInvitation;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class InvitationService
 {
     public function __construct(protected CompanyLookupService $lookup) {}
+
     /**
      * List invitations for a given company.
      */
@@ -28,14 +29,14 @@ class InvitationService
         $co = $q->firstOrFail(['id', 'name', 'slug']);
 
         // Permission check: owner/admin or superadmin
-        $allowed = $auth->isSuperAdmin() || $this->lookup->userHasRole($co->id, $auth->id, ['owner','admin']);
+        $allowed = $auth->isSuperAdmin() || $this->lookup->userHasRole($co->id, $auth->id, ['owner', 'admin']);
         abort_unless($allowed, 403);
 
         return CompanyInvitation::query()
             ->from('auth.company_invitations as i')
             ->leftJoin('users as u', 'u.id', '=', 'i.invited_by_user_id')
             ->where('i.company_id', $co->id)
-            ->when($status, fn($w) => $w->where('i.status', $status))
+            ->when($status, fn ($w) => $w->where('i.status', $status))
             ->orderByDesc('i.created_at')
             ->get([
                 'i.id',
@@ -127,10 +128,9 @@ class InvitationService
         abort_unless($inv, 404);
 
         // Permission: inviter, admin/owner of company, or superadmin
-        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || $this->lookup->userHasRole($inv->company_id, $auth->id, ['owner','admin']);
+        $allowed = $auth->isSuperAdmin() || $inv->invited_by_user_id === $auth->id || $this->lookup->userHasRole($inv->company_id, $auth->id, ['owner', 'admin']);
         abort_unless($allowed, 403);
 
         $inv->update(['status' => 'revoked', 'updated_at' => now()]);
     }
 }
-

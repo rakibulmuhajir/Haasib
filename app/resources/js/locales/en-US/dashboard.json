@@ -1,0 +1,38 @@
+{
+    "pageTitle": "Dashboard",
+    "breadcrumb": {
+        "home": "Home",
+        "dashboard": "Dashboard"
+    },
+    "header": {
+        "title": "Welcome back",
+        "subtitle": "Monitor key activities and shortcuts"
+    },
+    "toast": {
+        "summary": "Welcome",
+        "detail": "Blue Whale is active"
+    },
+    "actions": {
+        "toast": "Show Toast"
+    },
+    "cards": {
+        "welcome": {
+            "title": "Welcome",
+            "body": "You’re logged in. Cards render as overlays on the canvas.",
+            "primaryAction": "Primary Action"
+        },
+        "companies": {
+            "title": "Companies",
+            "columns": {
+                "id": "ID",
+                "company": "Company",
+                "users": "Users",
+                "status": "Status"
+            },
+            "actions": {
+                "newCompany": "New Company",
+                "inviteUser": "Invite User"
+            }
+        }
+    }
+}

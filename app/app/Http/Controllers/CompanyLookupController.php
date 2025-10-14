@@ -18,15 +18,16 @@ class CompanyLookupController extends Controller
         $q = (string) $request->query('q', '');
         $userId = $request->query('user_id');
         $userEmail = $request->query('user_email');
+        $excludeUserId = $request->query('exclude_user_id');
         $limit = (int) $request->query('limit', 10);
 
-        $query = Company::query()->select(['id','name','slug','base_currency','language','locale']);
+        $query = Company::query()->select(['id', 'name', 'slug', 'base_currency', 'language', 'locale', 'is_active']);
 
         if ($q !== '') {
-            $like = '%'.str_replace(['%','_'], ['\\%','\\_'], $q).'%';
-            $query->where(function($w) use ($like) {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $q).'%';
+            $query->where(function ($w) use ($like) {
                 $w->where('name', 'ilike', $like)
-                  ->orWhere('slug', 'ilike', $like);
+                    ->orWhere('slug', 'ilike', $like);
             });
         }
 
@@ -45,7 +46,13 @@ class CompanyLookupController extends Controller
             }
         }
 
+        // Exclude companies that a user is already assigned to (for assignment scenarios)
+        if ($excludeUserId) {
+            $this->lookup->excludeCompaniesFromUser($query, $excludeUserId);
+        }
+
         $companies = $query->limit($limit)->get();
+
         return response()->json(['data' => $companies]);
     }
 
@@ -58,6 +65,9 @@ class CompanyLookupController extends Controller
             abort_unless($this->lookup->isMember($record->id, $user->id), 403);
         }
 
+        // Load creator relationship
+        $record->load('creator');
+
         $members = $this->lookup->members($record->id, 10);
 
         $owners = $this->lookup->owners($record->id);
@@ -67,11 +77,11 @@ class CompanyLookupController extends Controller
         // Latest activity from audit logs if available
         $lastActivity = null;
         try {
-            $lastActivity = DB::table('audit.audit_logs')
+            $lastActivity = DB::table('audit_logs')
                 ->where('company_id', $record->id)
                 ->orderByDesc('created_at')
                 ->limit(1)
-                ->first(['action','created_at']);
+                ->first(['action', 'created_at']);
         } catch (\Throwable $e) {
             // audit schema may not exist yet; ignore
         }
@@ -84,12 +94,19 @@ class CompanyLookupController extends Controller
                 'base_currency' => $record->base_currency,
                 'language' => $record->language,
                 'locale' => $record->locale,
+                'created_by' => $record->creator ? [
+                    'id' => $record->creator->id,
+                    'name' => $record->creator->name,
+                    'email' => $record->creator->email,
+                ] : null,
+                'created_at' => $record->created_at,
+                'is_active' => $record->is_active,
                 'members_preview' => $members,
                 'members_count' => $this->lookup->membersCount($record->id),
                 'owners' => $owners,
                 'role_counts' => (object) $roleCounts,
                 'last_activity' => $lastActivity,
-            ]
+            ],
         ]);
     }
 
@@ -111,4 +128,3 @@ class CompanyLookupController extends Controller
         return response()->json(['data' => $users]);
     }
 }
-

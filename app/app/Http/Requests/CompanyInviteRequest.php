@@ -14,10 +14,9 @@ class CompanyInviteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required','email','max:190'],
-            'role' => ['required','in:owner,admin,accountant,viewer,member'],
-            'expires_in_days' => ['nullable','integer','min:1','max:90'],
+            'email' => ['required', 'email', 'max:190'],
+            'role' => ['required', 'in:owner,admin,accountant,viewer,member'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90'],
         ];
     }
 }
-

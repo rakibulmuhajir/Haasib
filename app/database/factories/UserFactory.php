@@ -29,7 +29,18 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'created_by_user_id' => null, // Default to null for seeded users
         ];
+    }
+
+    /**
+     * Indicate that the user was created by a specific user.
+     */
+    public function createdBy(User $creator): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'created_by_user_id' => $creator->id,
+        ]);
     }
 
     /**

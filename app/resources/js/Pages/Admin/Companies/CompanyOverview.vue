@@ -1,7 +1,13 @@
-<script setup>
-const props = defineProps({
-  company: { type: Object, default: null }
-})
+<script setup lang="ts">
+interface Company {
+  id: string
+  name: string
+  // Add other properties as needed
+}
+
+const props = defineProps<{
+  company: Company | null
+}>()
 </script>
 
 <template>
@@ -12,6 +18,18 @@ const props = defineProps({
       <div><span class="text-gray-500 dark:text-gray-400">Currency:</span> {{ company?.base_currency }}</div>
       <div><span class="text-gray-500 dark:text-gray-400">Language:</span> {{ company?.language }}</div>
       <div><span class="text-gray-500 dark:text-gray-400">Locale:</span> {{ company?.locale }}</div>
+      <div v-if="company?.created_by">
+        <span class="text-gray-500 dark:text-gray-400">Created by:</span> 
+        <span>{{ company.created_by.name }} ({{ company.created_by.email }})</span>
+      </div>
+      <div v-if="company?.created_at">
+        <span class="text-gray-500 dark:text-gray-400">Created:</span> 
+        <span>{{ new Date(company.created_at).toLocaleDateString() }}</span>
+      </div>
+      <div v-if="!company?.is_active" class="text-red-600 dark:text-red-400">
+        <span class="text-gray-500 dark:text-gray-400">Status:</span> 
+        <span>Inactive</span>
+      </div>
     </div>
   </div>
 </template>

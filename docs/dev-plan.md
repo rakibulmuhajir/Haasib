@@ -1,5 +1,7 @@
 # A→Z Development & Deployment Plan (v2)
 
+> **ARCHIVE NOTICE**: Superseded by the `stack/` architecture and Constitution v2.2.0. Keep for historical timelines only; do not use as the active roadmap.
+
 A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** using **Postgres (module-per-schema + RLS)**, **Inertia + Vue 3 + Vite** for a snappy web UI, and a **versioned /api/v1** for your mobile app in 3–6 months. CLI lives in the same codebase so domain logic isn’t duplicated.
 
 ---
@@ -36,6 +38,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **Double-entry ledger core**: add `ledger.ledger_accounts`, `ledger.journal_entries` (header), `ledger.journal_lines` (debit/credit). All financial features post balanced entries via domain services. Invoices/bills are immutable; changes via credit notes or reversing entries.
 * **Multi-company users**: support `company_user` pivot and an **active company** switcher. Update `SetTenantContext` to derive `app.current_company` from the active company, not just `users.company_id`. Jobs/CLI accept `--company=<uuid>` and set context before work.
 * **Payments driver layer**: strategy pattern for Stripe now, local gateways (JazzCash/Easypaisa) later, with webhook reconciliation and alerts.
+* **RBAC**: roles via `spatie/laravel-permission` — `owner | admin | accountant | member`; guard sensitive routes/actions with policies and permissions.
 
 ---
 
@@ -83,6 +86,7 @@ A practical, solo‑dev friendly roadmap for a **Laravel modular monolith** usin
 * **Columns**: every table that stores tenant data has `company_id uuid not null`.
 * **Keys**: primary keys are UUIDs. Index `(company_id, created_at)` on event-like tables; unique with partial indexes where needed.
 * **Timestamps**: `created_at`, `updated_at`, soft deletes where useful.
+* **Auditability**: tables representing user-creatable resources should have `created_by` and `updated_by` columns (nullable) that FK to `user_accounts.user_id` and `onDelete('set null')`. This provides a clear audit trail.
 
 ### Example Migration (schema + table + RLS)
 
@@ -174,7 +178,7 @@ class TransactionPerRequest
 ### 4A) Constraints & Money Precision
 
 * **DB constraints**: CHECKs for amounts (`>= 0`), valid statuses, and FK integrity. Postgres-first migrations only (purge MySQLisms like `AUTO_INCREMENT`).
-* **Money math**: store minor units per currency (e.g., cents) and use a library such as `brick/money` for calculations and formatting.
+* **Money math**: use `brick/money` for calculations and formatting. Storage can be `DECIMAL(15,2)` (as used by invoices/payments) or minor units per currency — pick consistently per table and document it.
 * **Idempotency**: enforce `Idempotency-Key` on all mutating endpoints touching money.
 
 ---
@@ -322,12 +326,19 @@ Pick one path and ignore the rest.
   * **Sorting**: `?sort=-created_at,amount_cents` (minus for desc).
   * **Errors**: `{ error: { code, message, details } }` with standard HTTP codes.
   * **Idempotency**: Accept `Idempotency-Key` on POST/PUT to avoid double writes.
+  * **Sparse fields**: `?fields[entity]=id,name,updated_at` for bandwidth-aware clients.
+  * **Delta sync**: `/sync?updated_since=ISO8601` for mobile/offline.
 * **Resources**: use Eloquent API Resources; keep responses in `{ data, meta }` envelope.
 * **Rate limits**: default 60 req/min per user/IP; custom buckets for webhooks or internal apps.
 * **Docs**: generate OpenAPI with `l5-swagger` or `scribe` and host `/docs` behind auth.
 * **Security**: Sanctum tokens for first‑party clients; CSRF on web routes; strict CORS for `/api`.
 * **Caching**: `ETag` and `If-None-Match` on common GETs.
 * **Health**: `/health` returns `{ status: 'ok', version, services: { db, redis, queue } }`.
+
+### API Guides
+
+- Idempotency guide: `docs/idempotency.md`
+- Payment allocations quick guide: `docs/api-allocation-guide.md`
 
 ---
 
@@ -339,6 +350,24 @@ Pick one path and ignore the rest.
 ### Webhooks & Reconciliation
 
 * Handle Stripe/local gateway webhooks with retries; reconcile payments daily and flag mismatches.
+
+---
+
+## 7A) Module Order & Why
+
+1. Foundations: Auth + Multi-company + RBAC → everything depends on it.
+2. Ledger Core → source of truth; all money posts here.
+3. Invoicing (Sales) → early business value, simple flow to validate posting.
+4. Payments (Manual Receipts) → cash in, approval workflow, ledger posting.
+5. Bank Reconciliation (CSV) → trust; match bank statements.
+6. Taxes (Calculator + presets) → compliance basics for AE/PK.
+7. Reporting v1 → trial balance, aging, P&L/BS.
+8. API v1 & Mobile Sync → compact/sparse/delta.
+9. Internationalization & Localization → polish for first international users.
+10. Module Registry & Extensibility → enable custom vertical modules.
+11. Observability & Health → alerts dialed-in.
+12. Backups & DR Automation → institutionalize the weekly restore drill.
+13. Onboarding Wizard & SaaS Subscription (Manual) → create company, COA seed, manual sub invoice + activation.
 
 ---
 
@@ -355,7 +384,7 @@ Pick one path and ignore the rest.
 
 1. **Model the data**: table(s) in the module schema with `company_id`, add indexes.
 2. **Migrate + RLS**: enable policy as shown above.
-3. **Domain services** in `App/Domain/<Module>`; keep controllers thin.
+3. **Domain services** in `App/Domain/<Module>`; keep controllers thin. Extract complex model lifecycles (e.g., `draft` → `sent` → `paid`) into dedicated **State Machine** classes.
 4. **Web UI**: Inertia pages for CRUD and reports.
 5. **API**: Resource controllers under `/api/v1/<module>`; API Resources for output.
 6. **CLI**: Command bus/palette invoking the same services (no duplicated logic).
@@ -380,7 +409,7 @@ Pick one path and ignore the rest.
 ### 9B) Reporting & Search
 
 * Use Postgres **materialized views** or summary tables for P\&L, balance sheet, aging; refresh on schedule.
-* Enable full-text or trigram indexes for invoices, contacts, and ledger memos to speed search.
+* For application-level summary tables (like `accounts_receivable`), use **scheduled commands** (e.g., a nightly `ar:update-aging` command) to prevent data from becoming stale.
 
 ---
 
@@ -554,7 +583,87 @@ location / {
 * ✅ Web CRUD (Inertia/Vue) + server validation + flash/errors
 * ✅ API v1 endpoints + **OpenAPI** docs + **rate limits** + **idempotency on all writes** + structured error codes
 * ✅ CLI commands using the same services; jobs/commands set `app.current_company`
+* ✅ Complex model statuses managed by a dedicated **State Machine** class
+* ✅ Long-running data sync operations (e.g., A/R updates from invoices) are offloaded to **queued jobs**
 * ✅ **Audit trail** for create/update/void actions on financial entities; immutable docs with credit notes
+
+---
+
+## 18) Reusable DataTable + Filters DSL (frontend + backend)
+
+This section standardizes a reusable, opt‑in advanced table experience across modules while keeping small views simple by default.
+
+### 18.1 Goals
+
+- Simple tables stay simple (paging/sorting only). Advanced tables (Payments, Invoices, Customers) get column‑menu filters, “Between” support, and chips.
+- One implementation: `DataTablePro` + a normalized filters DSL + a backend `FilterBuilder`.
+- Clean URLs (omit empty params), server‑side correctness, minimal per‑table config.
+
+### 18.2 Frontend: `DataTablePro` (Vue 3)
+
+- Inputs:
+  - `columns`: [{ field, header, filter?: { type: 'text'|'number'|'date'|'select'|'multiselect', matchMode? }, filterField?, style, sortable?, ... }]
+  - `v-model:filters`: PrimeVue filter model (only when advanced enabled).
+  - `:sortField`, `:sortOrder` and events `@page`, `@sort`, `@filter` (Inertia router hook).
+  - Optional features (opt‑in per table): chips (rendered in page), virtual scroll.
+
+- Behaviors:
+  - Column menu filters (`filterDisplay="menu"`) with labeled rule options per type:
+    - text: Contains, Starts with, Equals
+    - number: ≥, ≤, =, <, >, Between (Between shows two inputs)
+    - date: After, Before, On, Between (Between shows range calendar)
+    - select: Equals; multiselect: In
+  - Defaults: number → ≥, date → After, text → Contains, select → Equals.
+  - Cell slots: `#cell-<field>` for custom rendering; no mixing with `<Column>` outside of `DataTablePro`.
+
+- Utilities (resources/js/Utils/filters.ts):
+  - `buildDefaultTableFiltersFromColumns(columns)` → PrimeVue filter model with sensible defaults.
+  - `buildDslFromTableFilters(filtersModel)` → normalized `{ logic: 'and'|'or', rules: [{field,operator,value}] }`.
+  - `clearTableFilterField(model, field)` → clears a single field preserving its match mode.
+
+- Chips (in page):
+  - Render active filters with readable labels (e.g., status options), show “Between” ranges nicely.
+  - One‑click clear (uses `clearTableFilterField`) and a “Clear all” (resets model and URL).
+
+### 18.3 Backend: `FilterBuilder` (Laravel)
+
+- Input: decoded DSL and a per‑controller `fieldMap` that whitelists allowed fields and relation paths.
+- Operators supported:
+  - text: `contains`, `starts_with`, `equals`, `in`
+  - number: `eq`, `lt`, `lte`, `gt`, `gte`, `between`
+  - date: `on`, `before`, `after`, `between`
+- Implementation:
+  - Direct columns apply `where` on table.
+  - Relation fields apply `whereHas(<relation>, fn($q) => $q->where(<column> ...))`.
+  - Postgres ILIKE for case‑insensitive text matches.
+
+### 18.4 URL + State
+
+- When advanced filters exist, include `filters=<JSON>` (omit if empty). All other empty params stripped.
+- Sorting/paging preserved; controller returns `filters.dsl` for restore.
+
+### 18.5 Migration plan (done + upcoming)
+
+- Payments: migrated to `DataTablePro` + DSL + chips; date off‑by‑one fixed (local YYYY‑MM‑DD).
+- Invoices: moved to column‑menu filters, chips; controller uses `FilterBuilder`.
+- Customers: advanced filters enabled; Country/Currency left as text “Contains”; chips added.
+- Other tables: keep simple (no DSL, no chips) unless clearly needed.
+
+### 18.6 Dev ergonomics
+
+- Per table implement:
+  1) Define `columns` with filter type/field.
+  2) Initialize `tableFilters = buildDefaultTableFiltersFromColumns(columns)` (advanced only).
+  3) On `@filter` sync model and include `filters=JSON.stringify(buildDslFromTableFilters(tableFilters))` in the router GET.
+  4) Controller applies DSL via `FilterBuilder` with a minimal `fieldMap`.
+  5) Optional: add chips, label resolvers for select options.
+
+### 18.7 QA checklist
+
+- Sort/paging work with filters on and off.
+- Empty values removed from URL; breadcrumbs ignore query strings.
+- “Between” renders correct min/max/date ranges; date uses local day (no UTC shift).
+- Relation field filters produce expected results; field map is locked down.
 * ✅ `/health` reflects module deps; **metrics/alerts** wired (queue depth, p95, DB slow queries)
 * ✅ **Reconciliation** jobs and alerts for payment webhooks; **caching** updated and invalidated correctly
 * ✅ Backup includes new tables; **reporting views** updated; Cloudflare cache rules updated for new assets

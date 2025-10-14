@@ -3,8 +3,8 @@
 namespace App\Actions\DevOps;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class UserUpdate
 {
@@ -24,13 +24,20 @@ class UserUpdate
 
         DB::transaction(function () use (&$user, $data) {
             $updates = [];
-            if (!empty($data['name'])) $updates['name'] = $data['name'];
-            if (!empty($data['new_email'])) $updates['email'] = $data['new_email'];
-            if (!empty($data['password'])) $updates['password'] = $data['password'];
-            if ($updates) $user->update($updates);
+            if (! empty($data['name'])) {
+                $updates['name'] = $data['name'];
+            }
+            if (! empty($data['new_email'])) {
+                $updates['email'] = $data['new_email'];
+            }
+            if (! empty($data['password'])) {
+                $updates['password'] = $data['password'];
+            }
+            if ($updates) {
+                $user->update($updates);
+            }
         });
 
         return ['message' => 'User updated', 'data' => ['email' => $user->email]];
     }
 }
-

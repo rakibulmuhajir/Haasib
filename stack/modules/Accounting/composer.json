@@ -1,0 +1,91 @@
+{
+    "name": "haasib/accounting",
+    "description": "Core accounting infrastructure with multi-tenancy support",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Haasib Team",
+            "email": "dev@haasib.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^10.0",
+        "laravel/sanctum": "^3.0",
+        "spatie/laravel-permission": "^5.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "laravel/pint": "^1.0",
+        "laravel/telescope": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Accounting\\": ""
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Accounting\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "lint": "vendor/bin/pint",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Accounting\\Providers\\AccountingServiceProvider"
+            ]
+        },
+        "haasib": {
+            "name": "Accounting",
+            "key": "accounting",
+            "category": "core",
+            "version": "1.0.0",
+            "description": "Core accounting infrastructure with multi-tenancy support",
+            "dependencies": [],
+            "permissions": [
+                "view_users",
+                "manage_users",
+                "invite_users",
+                "remove_users",
+                "view_company",
+                "manage_company",
+                "transfer_ownership",
+                "view_modules",
+                "manage_modules",
+                "view_audit_log",
+                "export_data"
+            ],
+            "features": [
+                "multi_tenancy",
+                "audit_logging",
+                "role_management",
+                "module_system",
+                "api_authentication",
+                "company_switching",
+                "user_invitations",
+                "export_functionality",
+                "cli_commands"
+            ],
+            "commands": [
+                "accounting:module",
+                "accounting:company",
+                "accounting:user",
+                "accounting:audit",
+                "accounting:superadmin"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "preferred-install": "dist"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

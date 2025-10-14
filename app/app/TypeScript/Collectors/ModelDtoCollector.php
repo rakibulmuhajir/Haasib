@@ -36,10 +36,11 @@ class ModelDtoCollector extends Collector
             ->map(fn (\SplFileInfo $file) => $this->fullyQualifiedClassNameFromFile($file, base_path('app')))
             ->filter(fn (?string $fqcn) => $fqcn && class_exists($fqcn))
             ->map(fn (string $fqcn) => new ReflectionClass($fqcn))
-            ->filter(fn (ReflectionClass $rc) => $rc->isSubclassOf(Model::class) && !$rc->isAbstract())
+            ->filter(fn (ReflectionClass $rc) => $rc->isSubclassOf(Model::class) && ! $rc->isAbstract())
             ->map(function (ReflectionClass $modelReflection) {
                 // Convention: App\Models\User -> App\Data\UserData
-                $dtoClassName = str_replace('App\\Models\\', 'App\\Data\\', $modelReflection->getName()) . 'Data';
+                $dtoClassName = str_replace('App\\Models\\', 'App\\Data\\', $modelReflection->getName()).'Data';
+
                 return class_exists($dtoClassName) ? new CollectedClass(new ReflectionClass($dtoClassName)) : null;
             })
             ->filter();
@@ -48,19 +49,17 @@ class ModelDtoCollector extends Collector
     /**
      * This collector does not transform the types itself.
      * It returns null to let a registered Transformer handle it.
-     *
-     * @param \ReflectionClass $class
-     * @return \Spatie\TypeScriptTransformer\Structures\TransformedType|null
      */
     public function getTransformedType(ReflectionClass $class): ?TransformedType
     {
         return null;
     }
+
     private function fullyQualifiedClassNameFromFile(\SplFileInfo $file, string $basePath): string
     {
         // This approach is more robust than parsing the file with regex.
         return Str::of($file->getRealPath() ?: $file->getPathname())
-            ->after(realpath($basePath) . DIRECTORY_SEPARATOR)
+            ->after(realpath($basePath).DIRECTORY_SEPARATOR)
             ->replace(['/', '.php'], ['\\', ''])
             ->prepend('App\\')
             ->toString();

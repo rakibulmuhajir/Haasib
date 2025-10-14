@@ -11,9 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class CompanyUnassign
 {
-    public function __construct(private CompanyLookupService $lookup)
-    {
-    }
+    public function __construct(private CompanyLookupService $lookup) {}
 
     public function handle(array $p, User $actor): array
     {
@@ -36,7 +34,7 @@ class CompanyUnassign
             throw ValidationException::withMessages(['company' => 'Company not found']);
         }
 
-        if (!$actor->isSuperAdmin()) {
+        if (! $actor->isSuperAdmin()) {
             $active = session('current_company_id');
             abort_if($active !== $company->id, 403);
             abort_unless(

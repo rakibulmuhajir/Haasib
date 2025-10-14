@@ -4,13 +4,10 @@ namespace App\Support;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
-use App\Support\CommandBus;
 
 class DevOpsService
 {
-    public function __construct(private CommandBus $bus)
-    {
-    }
+    public function __construct(private CommandBus $bus) {}
 
     protected function actor(): User
     {
@@ -65,7 +62,7 @@ class DevOpsService
             $this->createCompany($co);
             $this->assignCompany($email, $co, $role);
         }
+
         return ['summary' => $summary, 'companies' => $companies];
     }
 }
-

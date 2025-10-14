@@ -1,37 +1,92 @@
-<script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { Head, Link, usePage } from '@inertiajs/vue3'
-import { ref, onMounted, computed } from 'vue'
-import InputLabel from '@/Components/InputLabel.vue'
-import TextInput from '@/Components/TextInput.vue'
-import PrimaryButton from '@/Components/PrimaryButton.vue'
-import SecondaryButton from '@/Components/SecondaryButton.vue'
+<script setup lang="ts">
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  is_active: boolean;
+  system_role?: string;
+  memberships: Membership[];
+  last_activity?: {
+    action: string;
+    created_at: string;
+  };
+}
+
+interface Membership {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RoleOption {
+  value: string;
+  label: string;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface AssignData {
+  company: Company | null;
+  role: RoleOption;
+}
+
+interface BreadcrumbItem {
+  label: string;
+  url: string;
+  icon: string;
+}
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import SidebarMenu from '@/Components/Sidebar/SidebarMenu.vue'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Message from 'primevue/message'
+import Dropdown from 'primevue/dropdown'
+import Badge from 'primevue/badge'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 import CompanyPicker from '@/Components/Pickers/CompanyPicker.vue'
 import UserMembershipList from '@/Components/UserMembershipList.vue'
+import SvgIcon from '@/Components/SvgIcon.vue'
 import { http, withIdempotency } from '@/lib/http';
-import { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent } from 'reka-ui';
+import TabView from 'primevue/tabview'
+import TabPanel from 'primevue/tabpanel'
 import { useToasts } from '@/composables/useToasts.js'
 import { usePersistentTabs } from '@/composables/usePersistentTabs.js'
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import { ref, onMounted, computed } from 'vue'
 
-const props = defineProps({ id: { type: String, required: true } })
+const props = defineProps<{ id: string }>()
 const { addToast } = useToasts()
-const loading = ref(false)
-const error = ref('')
-const user = ref(null)
+const loading = ref<boolean>(false)
+const error = ref<string>('')
+const user = ref<User | null>(null)
 
-const roleOptions = [
+const roleOptions: RoleOption[] = [
   { value: 'owner', label: 'Owner' },
   { value: 'admin', label: 'Admin' },
   { value: 'accountant', label: 'Accountant' },
   { value: 'viewer', label: 'Viewer' },
 ]
 
-async function load() {
+async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
     const { data } = await http.get(`/web/users/${encodeURIComponent(props.id)}`)
+    console.log('📥 User data loaded:', data.data)
+    console.log('📥 Memberships data:', data.data.memberships)
     user.value = data.data
+    // Update breadcrumb with actual user name
+    breadcrumbItems.value[2].label = user.value.name || 'User'
   } catch (e) {
     error.value = e?.response?.data?.message || 'Failed to load user'
   } finally {
@@ -42,25 +97,85 @@ async function load() {
 onMounted(load)
 
 // Assign to company
-const assign = ref({ company: '', role: 'viewer' })
-const assignLoading = ref(false)
-const assignError = ref('')
+const assign = ref<AssignData>({ company: null, role: { value: 'viewer', label: 'Viewer' } })
+const assignLoading = ref<boolean>(false)
+const assignError = ref<string>('')
 
-async function assignToCompany() {
-  if (!assign.value.company || !assign.value.role) return
+async function assignToCompany(): Promise<void> {
+  console.log('🔍 assignToCompany called with:', assign.value)
+  console.log('🔍 Validation check:', {
+    company: assign.value.company,
+    companyId: assign.value.company?.slug || assign.value.company?.id,
+    role: assign.value.role,
+    roleValue: assign.value.role?.value
+  })
+  
+  if (!assign.value.company || !assign.value.role || !assign.value.role.value) {
+    console.log('❌ Validation failed - missing required fields')
+    return
+  }
+  
+  console.log('✅ Validation passed, proceeding with assignment')
+  
+  // Check if user is already assigned to this company
+  const companyId = assign.value.company.slug || assign.value.company.id
+  const existingMembership = user.value.memberships.find(
+    membership => membership.id === companyId
+  )
+  
+  if (existingMembership) {
+    const message = `User is already assigned to this company as ${existingMembership.role}`
+    assignError.value = message
+    addToast(message, 'danger')
+    return
+  }
+  
   assignLoading.value = true
   assignError.value = ''
   try {
-    const { data } = await http.post('/commands', {
+    const companyId = assign.value.company.slug || assign.value.company.id
+    console.log('🚀 Making API call to /commands...', {
       email: user.value.email,
-      company: assign.value.company,
-      role: assign.value.role,
+      company: companyId,
+      role: assign.value.role.value,
+    })
+    
+    const response = await http.post('/commands', {
+      email: user.value.email,
+      company: companyId,
+      role: assign.value.role.value,
     }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
-    user.value.memberships.unshift(data.data)
-    assign.value.company = ''
-    assign.value.role = 'viewer'
+    
+    console.log('📥 API response received:', response)
+    console.log('📥 Response data:', response.data)
+    
+    const { data } = response
+    console.log('📦 Raw response data:', data)
+    console.log('📦 Data role:', data?.data?.role)
+    console.log('📦 Data structure:', JSON.stringify(data, null, 2))
+    
+    // Use the company object from the assign ref
+    const company = assign.value.company
+    console.log('🏢 Company object:', company)
+    
+    const membershipData = {
+      id: company.id, // Company UUID (for display as Company ID)
+      name: company.name, // Company name (for display)
+      slug: company.slug, // Company slug (for display as Company Slug)
+      role: data.data.role, // User's role in this company (nested in data.data)
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+    
+    console.log('🏢 Constructed membership data:', membershipData)
+    
+    user.value.memberships.unshift(membershipData)
+    assign.value.company = null
+    assign.value.role = { value: 'viewer', label: 'Viewer' }
     addToast('User assigned to company.', 'success')
   } catch (e) {
+    console.error('💥 API call failed:', e)
+    console.error('Error response:', e?.response?.data)
     const message = e?.response?.data?.message || 'Failed to assign'
     assignError.value = message
     addToast(message, 'danger')
@@ -69,25 +184,59 @@ async function assignToCompany() {
   }
 }
 
-async function changeRole(m) {
-  const originalRole = user.value.memberships.find(mem => mem.id === m.id)?.role
-  if (originalRole === m.role) return // No change
+async function changeRole(m: Membership & { role: string }): Promise<void> {
+  console.log('🚀 changeRole FUNCTION CALLED - Users/Show.vue')
+  console.log('Input parameter m:', m)
+  
+  // Find the membership by company ID since memberships don't have unique IDs
+  const membership = user.value.memberships.find(mem => mem.id === m.id)
+  const originalRole = membership?.role
+  console.log('Original role from memberships array:', originalRole)
+  console.log('New role from parameter:', m.role)
+  
+  if (originalRole === m.role) {
+    console.log('❌ Role unchanged, returning early')
+    return // No change
+  }
+  
+  console.log('📡 Making API call to /commands...')
+  
   try {
-    const { data } = await http.post('/commands', {
+    const payload = {
       email: user.value.email,
-      company: m.slug || m.id,
+      company: m.id, // This is the company ID from the membership
       role: m.role,
-    }, { headers: withIdempotency({ 'X-Action': 'company.assign' }) })
+    }
+    console.log('📤 Request payload:', payload)
+    
+    const { data } = await http.post('/commands', payload, { 
+      headers: withIdempotency({ 'X-Action': 'company.update_role' }) 
+    })
+    
+    console.log('📥 API response received:', data)
+    
+    // Update the membership in the array using the response data
     const index = user.value.memberships.findIndex(mem => mem.id === m.id)
-    if (index !== -1) user.value.memberships.splice(index, 1, data.data)
+    if (index !== -1) {
+      console.log('🔄 Updating membership in array at index:', index)
+      user.value.memberships.splice(index, 1, {
+        ...user.value.memberships[index],
+        ...data, // Use the response data which includes the updated role
+        updated_at: new Date().toISOString()
+      })
+      console.log('✅ Membership array updated')
+    }
+    
     addToast('Role changed successfully.', 'success')
+    console.log('🎉 Success toast shown')
   } catch (e) {
-    m.role = originalRole // Revert UI on failure
+    console.error('💥 API call failed:', e)
+    console.error('Error response:', e?.response?.data)
     addToast(e?.response?.data?.message || 'Failed to change role', 'danger')
   }
 }
 
-async function unassign(m) {
+async function unassign(m: Membership): Promise<void> {
   if (!confirm(`Remove ${user.value.email} from ${m.name}?`)) return
   try {
     await http.post('/commands', {
@@ -103,87 +252,252 @@ async function unassign(m) {
 
 const tabNames = ['memberships', 'assign']
 const storageKey = computed(() => `admin.user.tab.${props.id}`)
-const { selectedTab } = usePersistentTabs(tabNames, storageKey)
-const tabValue = computed({
-  get: () => String(selectedTab.value),
-  set: (val) => { selectedTab.value = Number(val) }
+const { selectedTab } = usePersistentTabs(tabNames, storageKey) // number index
+
+// Check if selected company is already assigned
+const isCompanyAlreadyAssigned = computed(() => {
+  if (!assign.value.company) return false
+  const companyId = assign.value.company.slug || assign.value.company.id
+  return user.value?.memberships?.some(
+    membership => membership.id === companyId
+  ) || false
 })
+
+// Breadcrumb items
+const breadcrumbItems = ref<BreadcrumbItem[]>([
+  { label: 'Admin', url: '/admin', icon: 'settings' },
+  { label: 'Users', url: '/admin/users', icon: 'users' },
+  { label: user?.name || 'User', url: '#' }
+])
+
+// Custom styles for copy behavior and tabs
+const customStyles = `
+<style>
+/* Copy group hover behavior */
+.copy-group:hover .copy-icon {
+  opacity: 1 !important;
+}
+.copy-icon:hover {
+  opacity: 1 !important;
+}
+
+/* Fix tab indicator once and for all */
+.p-tabview .p-tabview-nav {
+  position: relative;
+  border-bottom: 1px solid var(--p-content-border-color);
+  background: transparent;
+}
+
+.p-tabview .p-tabview-nav-container {
+  position: relative;
+}
+
+.p-tabview .p-tabview-tab {
+  position: relative;
+}
+
+.p-tabview .p-tabview-nav-link {
+  padding: 1rem 1.5rem;
+  font-weight: 500;
+  color: var(--p-text-muted-color);
+  background: transparent;
+  border: none;
+  transition: color 0.2s;
+}
+
+.p-tabview .p-tabview-nav-link:hover {
+  color: var(--p-text-color);
+}
+
+.p-tabview .p-tabview-nav-link.p-tabview-active {
+  color: var(--p-primary-color);
+}
+
+.p-tabview .p-tabview-active-bar {
+  position: absolute;
+  bottom: -1px;
+  height: 2px;
+  background: var(--p-primary-color) !important;
+  transition: all 0.3s ease;
+  border-radius: 2px 2px 0 0;
+  z-index: 1;
+}
+
+/* Force proper width calculation */
+.p-tabview .p-tabview-tab {
+  flex: 0 0 auto !important;
+}
+
+.p-tabview .p-tabview-active-bar {
+  width: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+</style>
+`
+
+const copyToClipboard = async (text: string): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(text)
+    addToast('Copied to clipboard', 'success')
+  } catch (err) {
+    console.error('Failed to copy text: ', err)
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    addToast('Copied to clipboard', 'success')
+  }
+}
 </script>
 
 <template>
   <Head :title="user ? `User · ${user.name}` : 'User'" />
-  <AuthenticatedLayout>
-    <template #header>
+  
+  <LayoutShell>
+    <template #sidebar>
+      <Sidebar title="Admin Panel" />
+    </template>
+
+    <template #topbar>
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">User</h2>
-        <Link :href="route('admin.users.index')" class="text-sm text-gray-600 dark:text-gray-300 hover:underline">Back to users</Link>
+        <!-- Breadcrumb Navigation -->
+        <Breadcrumb :items="breadcrumbItems" />
       </div>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-5xl sm:px-6 lg:px-8">
-        <div v-if="error" class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
+    <div class="space-y-6">
+      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Profile -->
-          <div class="lg:col-span-1">
-            <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md p-6">
-              <div class="text-lg font-semibold">{{ user?.name || '—' }}</div>
-              <div class="text-sm text-gray-600 dark:text-gray-300">{{ user?.email }}</div>
-              <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">ID: {{ user?.id }}</div>
+      <!-- User Profile Header -->
+      <Card class="overflow-hidden">
+        <template #content>
+          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
+                {{ user?.name?.charAt(0)?.toUpperCase() || 'U' }}
+              </div>
+              <div>
+                <div class="copy-group flex items-center gap-2">
+                  <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ user?.name || '—' }}</h1>
+                  <button 
+                    @click="copyToClipboard(user?.name)"
+                    class="copy-icon opacity-0 hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    v-tooltip="'Copy User Name'"
+                  >
+                    <SvgIcon name="copy" set="line" class="w-4 h-4" />
+                  </button>
+                </div>
+                <div class="copy-group flex items-center gap-2 mt-1">
+                  <p class="text-gray-600 dark:text-gray-400">{{ user?.email }}</p>
+                  <button 
+                    @click="copyToClipboard(user?.email)"
+                    class="copy-icon opacity-0 hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    v-tooltip="'Copy Email'"
+                  >
+                    <SvgIcon name="copy" set="line" class="w-4 h-4" />
+                  </button>
+                </div>
+                <div class="copy-group flex items-center gap-2 mt-1">
+                  <p class="text-xs text-gray-500 dark:text-gray-500 font-mono">ID: {{ user?.id }}</p>
+                  <button 
+                    @click="copyToClipboard(user?.id)"
+                    class="copy-icon opacity-0 hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    v-tooltip="'Copy User ID'"
+                  >
+                    <SvgIcon name="copy" set="line" class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <Badge :value="user?.is_active ? 'Active' : 'Inactive'" :severity="user?.is_active ? 'success' : 'danger'" />
+              <Badge :value="`${user?.memberships?.length || 0} Companies`" severity="info" />
+              <Badge :value="user?.system_role || 'User'" severity="secondary" />
             </div>
           </div>
+        </template>
+      </Card>
 
-          <!-- Tabs for memberships vs assign -->
-          <div class="lg:col-span-2">
-            <Tabs v-model="tabValue" class="w-full">
-              <div class="sticky top-16 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-gray-900/60">
-                <TabsList class="flex space-x-2 border-b border-gray-200 dark:border-gray-700 px-2">
-                  <TabsTrigger value="0" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
-                    Memberships
-                  </TabsTrigger>
-                  <TabsTrigger value="1" class="focus:outline-none px-4 py-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-400 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
-                    Assign
-                  </TabsTrigger>
-                </TabsList>
+      <!-- Company Memberships Section -->
+      <Card>
+        <template #title>Company Memberships</template>
+        <template #content>
+          <TabView v-model:activeIndex="selectedTab" class="w-full">
+            <TabPanel header="Current Memberships">
+              <div v-if="!loading && (!user?.memberships || user.memberships.length === 0)" class="text-center py-8">
+                <div class="text-gray-500 dark:text-gray-400 mb-4">User is not assigned to any companies</div>
+                <Button label="Assign to Company" icon="pi pi-plus" @click="selectedTab = 1" />
               </div>
-              <div class="mt-4">
-                <TabsContent value="0">
-                  <UserMembershipList
-                    :memberships="user?.memberships || []"
-                    :loading="loading"
-                    :role-options="roleOptions"
-                    @update-role="changeRole"
-                    @unassign="unassign"
-                  />
-                </TabsContent>
-                <TabsContent value="1">
-                  <div class="overflow-hidden bg-white dark:bg-gray-800 dark:border dark:border-gray-700 shadow sm:rounded-md p-6">
-                    <div class="font-medium mb-3">Assign to Company</div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                      <div>
-                        <InputLabel value="Company" />
-                        <CompanyPicker v-model="assign.company" class="mt-1 block w-full" placeholder="Find company by name or slug…" />
-                      </div>
-                      <div>
-                        <InputLabel value="Role" />
-                        <select v-model="assign.role" class="mt-1 block w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                          <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <PrimaryButton @click="assignToCompany" :disabled="assignLoading">Assign</PrimaryButton>
-                        <span v-if="assignLoading" class="ms-2 text-sm text-gray-500">Assigning…</span>
-                      </div>
-                    </div>
-                    <div v-if="assignError" class="mt-3 rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 text-xs text-red-700 dark:text-red-300">{{ assignError }}</div>
+              <UserMembershipList
+                v-else
+                :memberships="user?.memberships || []"
+                :loading="loading"
+                :role-options="roleOptions"
+                @update-role="(membership) => { 
+                  console.log('🎯 update-role event RECEIVED - Users/Show.vue')
+                  console.log('Received membership data:', membership)
+                  console.log('About to call changeRole function...')
+                  changeRole(membership)
+                  console.log('✅ changeRole function called')
+                }"
+                @unassign="unassign"
+              />
+            </TabPanel>
+            <TabPanel header="Assign to Company">
+              <div class="space-y-4">
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                  Assign this user to a company with a specific role.
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
+                  <div class="lg:col-span-2">
+                    <label class="block text-sm font-medium mb-2">Company</label>
+                    <CompanyPicker v-model="assign.company" :exclude-user-id="props.id" class="w-full" placeholder="Search for company…" />
                   </div>
-                </TabsContent>
+                  <div>
+                    <label class="block text-sm font-medium mb-2">Role</label>
+                    <Dropdown v-model="assign.role" :options="roleOptions" optionLabel="label" class="w-full" placeholder="Select role" />
+                  </div>
+                  <div>
+                    <Button 
+                      @click="assignToCompany" 
+                      :loading="assignLoading" 
+                      :disabled="!assign.company || !assign.role || isCompanyAlreadyAssigned"
+                      :label="isCompanyAlreadyAssigned ? 'Already Assigned' : 'Assign User'" 
+                      icon="pi pi-user-plus" 
+                      class="w-full" 
+                      v-tooltip="isCompanyAlreadyAssigned ? 'User is already assigned to this company' : ''"
+                    />
+                  </div>
+                </div>
+                <Message v-if="assignError" severity="error" :closable="false">{{ assignError }}</Message>
               </div>
-            </Tabs>
+            </TabPanel>
+          </TabView>
+        </template>
+      </Card>
+
+      <!-- Activity Section (if available) -->
+      <Card v-if="user?.last_activity">
+        <template #title>Recent Activity</template>
+        <template #content>
+          <div class="flex items-center gap-4 text-sm">
+            <div class="w-2 h-2 rounded-full bg-green-500"></div>
+            <div>
+              <span class="font-medium">{{ user.last_activity.action }}</span>
+              <span class="text-gray-500 dark:text-gray-400 ml-2">
+                {{ new Date(user.last_activity.created_at).toLocaleDateString() }}
+              </span>
+            </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </Card>
     </div>
-  </AuthenticatedLayout>
+    
+    <!-- Custom styles for tab indicator -->
+    <div v-html="customStyles"></div>
+  </LayoutShell>
 </template>

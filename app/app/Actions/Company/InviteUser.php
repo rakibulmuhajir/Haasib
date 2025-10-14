@@ -10,9 +10,7 @@ use Illuminate\Support\Str;
 
 class InviteUser
 {
-    public function __construct(private Tenancy $tenancy)
-    {
-    }
+    public function __construct(private Tenancy $tenancy) {}
 
     public function handle(string $company, array $data, User $actor): array
     {

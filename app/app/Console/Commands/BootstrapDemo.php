@@ -1,14 +1,16 @@
 <?php
 
 // app/Console/Commands/BootstrapDemo.php
+
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Support\DevOpsService;
+use Illuminate\Console\Command;
 
 class BootstrapDemo extends Command
 {
     protected $signature = 'bootstrap:demo {--name=Founder} {--email=} {--companies=} {--role=owner}';
+
     protected $description = 'Create a user and attach companies list';
 
     public function handle(DevOpsService $ops): int
@@ -21,7 +23,7 @@ class BootstrapDemo extends Command
             (string) $this->option('role')
         );
         $this->line(json_encode(['ok' => true, 'output' => $out], JSON_PRETTY_PRINT));
+
         return self::SUCCESS;
     }
 }
-

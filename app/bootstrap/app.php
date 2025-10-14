@@ -6,41 +6,35 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-         web: __DIR__.'/../routes/web.php',
+        web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        // add this ↓ line so /login, /register, etc. exist
-        //auth: __DIR__.'/../routes/auth.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            \Illuminate\Session\Middleware\StartSession::class,
+            // Do NOT force auth on all web routes; guest pages must be accessible
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\SetCompanyContext::class,
         ]);
 
-        // aliases so you can use 'tenant' and 'txn' in routes
+        $middleware->api(append: [
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ApiRateLimit::class,
+            \App\Http\Middleware\EnsureApiHasCompanyContext::class,
+        ]);
+
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\SetTenantContext::class,
-            'txn'    => \App\Http\Middleware\TransactionPerRequest::class,
-            'devconsole.enabled' => \App\Http\Middleware\EnsureDevConsoleEnabled::class,
-            'require.superadmin' => \App\Http\Middleware\RequireSuperadmin::class,
-        ]);
-
-         // optional: auto-apply to groups (keeps routes cleaner)
-        $middleware->appendToGroup('web', [
-            \App\Http\Middleware\SetTenantContext::class,
-            \App\Http\Middleware\TransactionPerRequest::class,
-        ]);
-        $middleware->appendToGroup('api', [
-            \App\Http\Middleware\SetTenantContext::class,
-            \App\Http\Middleware\TransactionPerRequest::class,
+            'idempotent' => \App\Http\Middleware\EnsureIdempotency::class,
+            'permission' => \App\Http\Middleware\RequirePermission::class,
         ]);
     })
-    ->withProviders([
-        \App\Providers\AppServiceProvider::class,
-        \App\Providers\AuthServiceProvider::class,
-    ])
+    ->withSchedule(function ($schedule): void {
+        $schedule->command('ar:update-aging')->daily()->at('23:59');
+        $schedule->command('fx:sync ecb')->daily()->at('02:00');
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

@@ -1,0 +1,38 @@
+{
+    "pageTitle": "Tableau de bord",
+    "breadcrumb": {
+        "home": "Accueil",
+        "dashboard": "Tableau de bord"
+    },
+    "header": {
+        "title": "Bienvenue",
+        "subtitle": "Surveillez les activités clés et les raccourcis"
+    },
+    "toast": {
+        "summary": "Bienvenue",
+        "detail": "Blue Whale est actif"
+    },
+    "actions": {
+        "toast": "Afficher le toast"
+    },
+    "cards": {
+        "welcome": {
+            "title": "Bienvenue",
+            "body": "Vous êtes connecté. Les cartes s’affichent en superposition sur la scène.",
+            "primaryAction": "Action principale"
+        },
+        "companies": {
+            "title": "Entreprises",
+            "columns": {
+                "id": "ID",
+                "company": "Entreprise",
+                "users": "Utilisateurs",
+                "status": "Statut"
+            },
+            "actions": {
+                "newCompany": "Nouvelle entreprise",
+                "inviteUser": "Inviter un utilisateur"
+            }
+        }
+    }
+}

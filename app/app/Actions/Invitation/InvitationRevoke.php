@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\Validator;
 
 class InvitationRevoke
 {
-    public function __construct(private InvitationService $service)
-    {
-    }
+    public function __construct(private InvitationService $service) {}
 
     public function handle(array $p, User $actor): array
     {

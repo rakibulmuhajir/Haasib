@@ -1,0 +1,3 @@
+<?php
+
+// Accounting Web routes

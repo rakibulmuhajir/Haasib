@@ -4,7 +4,6 @@ namespace App\Data;
 
 use App\Models\User;
 use Spatie\LaravelData\Data;
-use Spatie\LaravelData\Lazy;
 
 class UserData extends Data
 {
@@ -13,8 +12,7 @@ class UserData extends Data
         public string $name,
         public string $email,
         public ?string $role,
-    ) {
-    }
+    ) {}
 
     /**
      * Create a UserData object from a User model.

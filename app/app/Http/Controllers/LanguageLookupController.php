@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\LookupService;
+use Illuminate\Http\Request;
 
 class LanguageLookupController extends Controller
 {
@@ -12,14 +12,11 @@ class LanguageLookupController extends Controller
         $request->user();
 
         $rows = $lookup->suggest('languages', [
-            'select' => ['code','name','native_name','iso_639_1','iso_639_2','rtl','script'],
-            'search' => ['name','native_name','code','iso_639_1','iso_639_2'],
+            'select' => ['code', 'name', 'native_name'],
+            'search' => ['name', 'native_name', 'code'],
             'order' => 'name',
-        ], [
-            'rtl' => ['column' => 'rtl', 'type' => 'bool'],
         ]);
 
         return response()->json(['data' => $rows]);
     }
 }
-

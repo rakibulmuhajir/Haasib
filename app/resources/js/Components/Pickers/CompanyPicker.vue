@@ -1,70 +1,72 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
+import AutoComplete from 'primevue/autocomplete'
 import { http } from '@/lib/http'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' }, // emits slug (or id)
+  modelValue: { type: [String, Object], default: '' }, // can be slug/id or full company object
   placeholder: { type: String, default: 'Search companies…' },
+  excludeUserId: { type: String, default: '' }, // user ID to exclude companies for
 })
 const emit = defineEmits(['update:modelValue'])
 
-const q = ref(props.modelValue || '')
-const open = ref(false)
-const items = ref([])
+const selectedCompany = ref(null)
+const suggestions = ref([])
 const loading = ref(false)
-const error = ref('')
 
-async function search() {
-  if (!q.value || q.value.length < 2) { items.value = []; return }
+async function search(event) {
+  if (!event.query || event.query.length < 2) {
+    suggestions.value = []
+    return
+  }
+  
   loading.value = true
-  error.value = ''
   try {
-    const { data } = await http.get('/web/companies', { params: { q: q.value, limit: 8 } })
-    items.value = data.data || []
-    open.value = true
+    const params = { q: event.query, limit: 8 }
+    
+    // If excludeUserId is provided, filter out companies this user is already assigned to
+    if (props.excludeUserId) {
+      params.exclude_user_id = props.excludeUserId
+    }
+    
+    console.log('Searching companies with params:', params)
+    const { data } = await http.get('/web/companies', { params })
+    console.log('Company search response:', data)
+    suggestions.value = data.data || []
   } catch (e) {
-    error.value = 'Failed to load companies'
+    console.error('Company search error:', e)
+    suggestions.value = []
   } finally {
     loading.value = false
   }
 }
 
-let timer = null
-watch(q, () => { clearTimeout(timer); timer = setTimeout(search, 200) })
-
-function select(c) {
-  q.value = `${c.name} (${c.slug})`
-  emit('update:modelValue', c.slug || c.id)
-  open.value = false
+function onSelect(event) {
+  emit('update:modelValue', event.value) // emit full company object
 }
 </script>
 
 <template>
-  <div class="relative">
-    <input
-      :placeholder="placeholder"
-      v-model="q"
-      class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-      @focus="search"
-      @keydown.escape.prevent="open = false"
-    />
-    <div v-if="open" class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow">
-      <div v-if="loading" class="px-3 py-2 text-sm text-gray-500">Loading…</div>
-      <div v-else-if="error" class="px-3 py-2 text-sm text-red-600">{{ error }}</div>
-      <template v-else>
-        <button
-          v-for="c in items"
-          :key="c.id"
-          type="button"
-          class="w-full px-3 py-2 text-left hover:bg-gray-50"
-          @click="select(c)"
-        >
-          <div class="text-sm font-medium text-gray-900">{{ c.name }}</div>
-          <div class="text-xs text-gray-500">{{ c.slug }} · {{ c.base_currency }} · {{ c.language }}</div>
-        </button>
-        <div v-if="items.length === 0" class="px-3 py-2 text-sm text-gray-500">No results</div>
-      </template>
-    </div>
-  </div>
+  <AutoComplete
+    v-model="selectedCompany"
+    :suggestions="suggestions"
+    :loading="loading"
+    :placeholder="placeholder"
+    optionLabel="name"
+    @complete="search"
+    @item-select="onSelect"
+    class="w-full"
+  >
+    <template #option="slotProps">
+      <div class="flex flex-col">
+        <div class="text-sm font-medium text-gray-900">
+          {{ slotProps.option.name }}
+        </div>
+        <div class="text-xs text-gray-500">
+          {{ slotProps.option.slug }} · {{ slotProps.option.base_currency }} · {{ slotProps.option.language }}
+        </div>
+      </div>
+    </template>
+  </AutoComplete>
 </template>
 

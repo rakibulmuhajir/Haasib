@@ -15,7 +15,9 @@ class CapabilitiesController extends Controller
 
         $allowed = [];
         foreach ($actions as $action) {
-            if (str_starts_with($action, 'ui.')) continue; // UI-only
+            if (str_starts_with($action, 'ui.')) {
+                continue;
+            } // UI-only
             if (Gate::allows('command.execute', [$action, $companyId])) {
                 $allowed[] = $action;
             }
@@ -24,4 +26,3 @@ class CapabilitiesController extends Controller
         return response()->json(['allowed_actions' => $allowed]);
     }
 }
-

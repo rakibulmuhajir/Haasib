@@ -27,7 +27,7 @@ description: "Task list for Payment Processing - Receipt & Allocation"
 
 **Purpose**: Project initialization and baseline documentation alignment
 
-- [ ] T001 [Shared] Add feature entry in `docs/TEAM_MEMORY.md` summarizing key decisions from `specs/005-payment-processing-receipt/plan.md` and research (command bus usage, new tables, metrics) to satisfy Single Source Doctrine.
+- [x] T001 [Shared] Add feature entry in `docs/TEAM_MEMORY.md` summarizing key decisions from `specs/005-payment-processing-receipt/plan.md` and research (command bus usage, new tables, metrics) to satisfy Single Source Doctrine.
 
 ---
 
@@ -37,9 +37,9 @@ description: "Task list for Payment Processing - Receipt & Allocation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 [Foundation] Scaffold payments command-bus integration by creating `stack/modules/Accounting/Domain/Payments/Actions/registry.php`, updating `stack/modules/Accounting/Providers/AccountingServiceProvider.php`, and wiring stub `payment.*` routes in `stack/config/command-bus.php`.
-- [ ] T003 [Foundation] Extend Spatie permissions in `stack/database/seeders/PermissionSeeder.php` (and seeded roles) with `accounting.payments.allocate` + `accounting.payments.reverse`, adding doctrine notes in `docs/TEAM_MEMORY.md`.
-- [ ] T004 [Foundation] Establish telemetry scaffolding for payments by creating `stack/modules/Accounting/Domain/Payments/Telemetry/PaymentMetrics.php` (or similar) and registering counters in `stack/app/Providers/AppServiceProvider.php` for payment created/allocated/failure events.
+- [x] T002 [Foundation] Scaffold payments command-bus integration by creating `stack/modules/Accounting/Domain/Payments/Actions/registry.php`, updating `stack/modules/Accounting/Providers/AccountingServiceProvider.php`, and wiring stub `payment.*` routes in `stack/config/command-bus.php`.
+- [x] T003 [Foundation] Extend Spatie permissions in `app/database/seeders/RbacSeeder.php` (and seeded roles) with `accounting.payments.allocate` + `accounting.payments.reverse`, adding doctrine notes in `docs/TEAM_MEMORY.md`.
+- [x] T004 [Foundation] Establish telemetry scaffolding for payments by creating `stack/modules/Accounting/Domain/Payments/Telemetry/PaymentMetrics.php` (or similar) and registering counters in `stack/app/Providers/AppServiceProvider.php` for payment created/allocated/failure events.
 
 **Checkpoint**: Foundation ready — user story implementation can now begin
 

@@ -100,9 +100,22 @@ class RbacSeeder extends Seeder
             'payments.unallocate',
             'payments.reconcile',
             'payments.refund',
+            'payments.reverse',
             'payments.void',
             'payments.export',
             'payments.import',
+
+            // Accounting-specific permissions
+            'accounting.payments.view',
+            'accounting.payments.create',
+            'accounting.payments.update',
+            'accounting.payments.delete',
+            'accounting.payments.allocate',
+            'accounting.payments.reverse',
+            'accounting.payments.reconcile',
+            'accounting.batches.view',
+            'accounting.batches.create',
+            'accounting.audit.view',
 
             // Bill management (AP)
             'bills.view',
@@ -298,7 +311,12 @@ class RbacSeeder extends Seeder
 
                     // Full payment access
                     'payments.view', 'payments.create', 'payments.update', 'payments.delete', 'payments.allocate', 'payments.unallocate',
-                    'payments.reconcile', 'payments.refund', 'payments.void', 'payments.export', 'payments.import',
+                    'payments.reconcile', 'payments.refund', 'payments.reverse', 'payments.void', 'payments.export', 'payments.import',
+
+                    // Accounting-specific permissions
+                    'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete',
+                    'accounting.payments.allocate', 'accounting.payments.reverse', 'accounting.payments.reconcile',
+                    'accounting.batches.view', 'accounting.batches.create', 'accounting.audit.view',
 
                     // Full bill access
                     'bills.view', 'bills.create', 'bills.update', 'bills.delete', 'bills.approve', 'bills.pay', 'bills.void',
@@ -427,6 +445,9 @@ class RbacSeeder extends Seeder
                     // Payment operations
                     'payments.view', 'payments.create', 'payments.allocate', 'payments.refund', 'payments.export',
 
+                    // Basic accounting permissions
+                    'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.allocate', 'accounting.audit.view',
+
                     // Bill operations
                     'bills.view', 'bills.create', 'bills.update', 'bills.approve', 'bills.pay', 'bills.export',
                     'bill-items.view', 'bill-items.create', 'bill-items.update',
@@ -473,6 +494,10 @@ class RbacSeeder extends Seeder
 
                     // Payment operations
                     'payments.view', 'payments.create', 'payments.allocate', 'payments.reconcile', 'payments.refund', 'payments.export',
+
+                    // Accounting-specific permissions
+                    'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.allocate', 'accounting.payments.reverse',
+                    'accounting.payments.reconcile', 'accounting.batches.view', 'accounting.batches.create', 'accounting.audit.view',
 
                     // Bill operations
                     'bills.view', 'bills.create', 'bills.update', 'bills.approve', 'bills.pay', 'bills.void', 'bills.export',

@@ -7,7 +7,7 @@
 
 ## Summary
 
-Manual and automatic journal entry capabilities with traceable source documents, audit trails, and balancing safeguards. Technical approach pending Phase 0 research (NEEDS CLARIFICATION).
+Manual and automatic journal entry capabilities with traceable source documents, audit trails, and balancing safeguards built on the existing Accounting ledger services and command-bus actions, with Inertia/Vue interfaces for manual workflows.
 
 ## Technical Context
 
@@ -20,19 +20,20 @@ Manual and automatic journal entry capabilities with traceable source documents,
 **Language/Version**: PHP 8.2 (Laravel 12) and TypeScript/Vue 3  
 **Primary Dependencies**: Laravel framework, Inertia.js v2, PrimeVue 4.3.9, Tailwind CSS, Spatie Permission  
 **Storage**: PostgreSQL 16 (`invoicing` schema)  
-**Testing**: PHPUnit, Laravel Feature/Unit tests, Browser (Laravel Dusk/playwright) (NEEDS CLARIFICATION on exact tooling)  
+**Testing**: Pest (PHPUnit runner) for Laravel Feature/Unit/CLI suites, Playwright for browser automation  
 **Target Platform**: Web (Laravel application deployed on Linux)  
 **Project Type**: Full-stack monolith (`stack/` Laravel backend + Vue SPA)  
-**Performance Goals**: NEEDS CLARIFICATION  
-**Constraints**: NEEDS CLARIFICATION (period close rules, audit requirements pending)  
-**Scale/Scope**: NEEDS CLARIFICATION (volume of journal entries, concurrency expectations)
+**Performance Goals**: p95 journal entry create/post latency < 1.5s for ≤20 lines; support ≥10k journal lines/day per tenant  
+**Constraints**: Closed-period enforcement, double-entry validation, source document traceability, audit trail integration  
+**Scale/Scope**: Finance roles (ledger.postJournal) across ~50 concurrent tenants with manual/recurring/reversal coverage
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Constitution file `.specify/memory/constitution.md` contains placeholder sections with no ratified principles (NEEDS CLARIFICATION).
-- No enforceable gates can be derived without populated constitution. Flagging for stakeholder input before proceeding to implementation-specific commitments.
+- Constitution file `.specify/memory/constitution.md` is an unratified template; defaulting to `AGENTS.md` and repository guidelines until governance updates land.
+- No explicit gates are currently enforceable; proceed while documenting reliance on published development guidelines.
+- Post-design check: Phase 1 artifacts align with documented guidelines; no additional gate actions available until constitution is ratified.
 
 ## Project Structure
 

@@ -1,0 +1,884 @@
+openapi: 3.0.3
+info:
+  title: Journal Entries API
+  version: 0.1.0
+  description: >
+    HTTP contracts for manual and automatic journal entry management, including
+    batching, approvals, reversals, and trial balance reporting.
+servers:
+  - url: https://api.haasib.local
+    description: Local development (Inertia SPA + Laravel)
+security:
+  - BearerAuth: []
+tags:
+  - name: JournalEntries
+    description: CRUD and posting workflow for journal entries
+  - name: JournalBatches
+    description: Grouped journal processing
+  - name: RecurringTemplates
+    description: Recurring journal entry templates
+  - name: Reporting
+    description: Trial balance and ledger summaries
+
+paths:
+  /api/ledger/journal-entries:
+    get:
+      tags: [JournalEntries]
+      summary: List journal entries
+      parameters:
+        - in: query
+          name: filter[status]
+          schema:
+            type: string
+            enum: [draft, pending_approval, approved, posted, void]
+        - in: query
+          name: filter[type]
+          schema:
+            type: string
+        - in: query
+          name: filter[date_from]
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: filter[date_to]
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: filter[source_document]
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedJournalEntries'
+    post:
+      tags: [JournalEntries]
+      summary: Create manual journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntryCreateRequest'
+      responses:
+        '201':
+          description: Draft journal entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}:
+    parameters:
+      - $ref: '#/components/parameters/JournalEntryId'
+    get:
+      tags: [JournalEntries]
+      summary: Retrieve journal entry detail
+      responses:
+        '200':
+          description: Journal entry with lines and sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+    put:
+      tags: [JournalEntries]
+      summary: Update draft journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntryUpdateRequest'
+      responses:
+        '200':
+          description: Updated journal entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/submit:
+    post:
+      tags: [JournalEntries]
+      summary: Submit draft journal entry for approval
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      responses:
+        '202':
+          description: Entry moved to pending approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/approve:
+    post:
+      tags: [JournalEntries]
+      summary: Approve journal entry
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Entry approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/post:
+    post:
+      tags: [JournalEntries]
+      summary: Post journal entry
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      responses:
+        '200':
+          description: Entry posted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/void:
+    post:
+      tags: [JournalEntries]
+      summary: Void journal entry
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Entry voided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/reverse:
+    post:
+      tags: [JournalEntries]
+      summary: Create reversing entry
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reversal_date:
+                  type: string
+                  format: date
+                description_override:
+                  type: string
+      responses:
+        '201':
+          description: Reversing entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+
+  /api/ledger/journal-entries/{journalEntryId}/audit:
+    get:
+      tags: [JournalEntries]
+      summary: Fetch audit trail for a journal entry
+      parameters:
+        - $ref: '#/components/parameters/JournalEntryId'
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JournalAuditEvent'
+
+  /api/ledger/journal-batches:
+    get:
+      tags: [JournalBatches]
+      summary: List journal batches
+      responses:
+        '200':
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JournalBatch'
+    post:
+      tags: [JournalBatches]
+      summary: Create batch and attach draft entries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalBatchCreateRequest'
+      responses:
+        '201':
+          description: Batch created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalBatch'
+
+  /api/ledger/journal-batches/{batchId}/approve:
+    post:
+      tags: [JournalBatches]
+      summary: Approve batch for posting
+      parameters:
+        - $ref: '#/components/parameters/JournalBatchId'
+      responses:
+        '200':
+          description: Batch approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalBatch'
+
+  /api/ledger/journal-batches/{batchId}/post:
+    post:
+      tags: [JournalBatches]
+      summary: Post all entries in batch
+      parameters:
+        - $ref: '#/components/parameters/JournalBatchId'
+      responses:
+        '200':
+          description: Batch posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalBatch'
+
+  /api/ledger/journal-templates:
+    get:
+      tags: [RecurringTemplates]
+      summary: List recurring journal templates
+      responses:
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecurringTemplate'
+    post:
+      tags: [RecurringTemplates]
+      summary: Create recurring journal template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringTemplateCreateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringTemplate'
+
+  /api/ledger/journal-templates/{templateId}:
+    parameters:
+      - $ref: '#/components/parameters/RecurringTemplateId'
+    get:
+      tags: [RecurringTemplates]
+      summary: Retrieve template detail
+      responses:
+        '200':
+          description: Template with lines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringTemplate'
+    put:
+      tags: [RecurringTemplates]
+      summary: Update template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringTemplateUpdateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringTemplate'
+
+  /api/ledger/journal-templates/{templateId}/deactivate:
+    post:
+      tags: [RecurringTemplates]
+      summary: Deactivate recurring template
+      parameters:
+        - $ref: '#/components/parameters/RecurringTemplateId'
+      responses:
+        '200':
+          description: Template deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringTemplate'
+
+  /api/ledger/trial-balance:
+    get:
+      tags: [Reporting]
+      summary: Generate trial balance
+      parameters:
+        - in: query
+          name: period_id
+          schema:
+            type: string
+        - in: query
+          name: as_of_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: include_unposted
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Trial balance snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  company_id:
+                    type: string
+                    format: uuid
+                  period_id:
+                    type: string
+                    format: uuid
+                  generated_at:
+                    type: string
+                    format: date-time
+                  totals:
+                    type: object
+                    properties:
+                      total_debits:
+                        type: number
+                        format: double
+                      total_credits:
+                        type: number
+                        format: double
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrialBalanceAccount'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    JournalEntryId:
+      in: path
+      name: journalEntryId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JournalBatchId:
+      in: path
+      name: batchId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RecurringTemplateId:
+      in: path
+      name: templateId
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    PaginatedJournalEntries:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        meta:
+          type: object
+          properties:
+            current_page:
+              type: integer
+            per_page:
+              type: integer
+            total:
+              type: integer
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        batch_id:
+          type: string
+          nullable: true
+        reference:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        type:
+          type: string
+        status:
+          type: string
+        approval_note:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        exchange_rate:
+          type: number
+        source_document_type:
+          type: string
+          nullable: true
+        source_document_id:
+          type: string
+          nullable: true
+        origin_command:
+          type: string
+          nullable: true
+        auto_generated:
+          type: boolean
+        reverse_of_entry_id:
+          type: string
+          nullable: true
+        reversal_entry_id:
+          type: string
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLine'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalSource'
+        totals:
+          type: object
+          properties:
+            total_debits:
+              type: number
+              format: double
+            total_credits:
+              type: number
+              format: double
+            balanced:
+              type: boolean
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    JournalLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        line_number:
+          type: integer
+        account_id:
+          type: string
+          format: uuid
+        account_code:
+          type: string
+        account_name:
+          type: string
+        debit_credit:
+          type: string
+          enum: [debit, credit]
+        amount:
+          type: number
+          format: double
+        description:
+          type: string
+          nullable: true
+        source_line_type:
+          type: string
+          nullable: true
+        source_line_id:
+          type: string
+          nullable: true
+
+    JournalSource:
+      type: object
+      properties:
+        source_type:
+          type: string
+        source_id:
+          type: string
+        source_reference:
+          type: string
+        link_type:
+          type: string
+
+    JournalEntryCreateRequest:
+      type: object
+      required:
+        - description
+        - date
+        - type
+        - lines
+      properties:
+        batch_id:
+          type: string
+          nullable: true
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        type:
+          type: string
+        reference:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        exchange_rate:
+          type: number
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLineCreate'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    JournalEntryUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/JournalEntryCreateRequest'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [draft, pending_approval]
+
+    JournalLineCreate:
+      type: object
+      required:
+        - account_id
+        - debit_credit
+        - amount
+      properties:
+        line_number:
+          type: integer
+        account_id:
+          type: string
+          format: uuid
+        debit_credit:
+          type: string
+          enum: [debit, credit]
+        amount:
+          type: number
+          format: double
+        description:
+          type: string
+          nullable: true
+        source_line_type:
+          type: string
+          nullable: true
+        source_line_id:
+          type: string
+          nullable: true
+
+    JournalBatch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        batch_number:
+          type: string
+        status:
+          type: string
+        scheduled_post_at:
+          type: string
+          format: date-time
+          nullable: true
+        total_entries:
+          type: integer
+        total_debits:
+          type: number
+          format: double
+        total_credits:
+          type: number
+          format: double
+        created_by:
+          type: string
+          format: uuid
+        approved_by:
+          type: string
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        posted_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    JournalBatchCreateRequest:
+      type: object
+      required:
+        - entry_ids
+      properties:
+        entry_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        scheduled_post_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    RecurringTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        frequency:
+          type: string
+        next_run_at:
+          type: string
+          format: date-time
+        auto_post:
+          type: boolean
+        active:
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringTemplateLine'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    RecurringTemplateLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        line_number:
+          type: integer
+        account_id:
+          type: string
+          format: uuid
+        debit_credit:
+          type: string
+          enum: [debit, credit]
+        amount_formula:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    RecurringTemplateCreateRequest:
+      type: object
+      required:
+        - name
+        - frequency
+        - next_run_at
+        - lines
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        frequency:
+          type: string
+        custom_cron:
+          type: string
+          nullable: true
+        next_run_at:
+          type: string
+          format: date-time
+        auto_post:
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringTemplateLineCreate'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    RecurringTemplateLineCreate:
+      type: object
+      required:
+        - account_id
+        - debit_credit
+        - amount_formula
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        debit_credit:
+          type: string
+          enum: [debit, credit]
+        amount_formula:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    RecurringTemplateUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/RecurringTemplateCreateRequest'
+        - type: object
+          properties:
+            active:
+              type: boolean
+
+    TrialBalanceAccount:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        class:
+          type: string
+        total_debits:
+          type: number
+          format: double
+        total_credits:
+          type: number
+          format: double
+        balance:
+          type: number
+          format: double
+
+    JournalAuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        actor_id:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        mime_type:
+          type: string
+

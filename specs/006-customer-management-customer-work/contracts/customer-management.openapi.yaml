@@ -1,0 +1,790 @@
+openapi: 3.0.3
+info:
+  title: Customer Management API
+  version: 0.1.0
+  description: >
+    Endpoints powering the customer lifecycle feature (creation, contacts, credit limits,
+    statements, and aging). All endpoints require an authenticated tenant context and enforce
+    company-level RBAC.
+servers:
+  - url: https://api.haasib.local/v1
+    description: Local development
+  - url: https://staging-api.haasib.com/v1
+    description: Staging
+security:
+  - bearerAuth: []
+paths:
+  /customers:
+    get:
+      summary: List customers
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/Search'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, blocked]
+        - name: group_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Paginated list of customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPage'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Create a customer
+      tags: [Customers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /customers/import:
+    post:
+      summary: Import customers in bulk
+      tags: [Customers]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                format:
+                  type: string
+                  enum: [csv, xlsx]
+                idempotency_key:
+                  type: string
+                  description: Prevent duplicate imports
+      responses:
+        '202':
+          description: Import queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+        '409':
+          description: Duplicate import detected
+  /customers/export:
+    get:
+      summary: Export customers
+      tags: [Customers]
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, xlsx, json]
+            default: csv
+        - name: group_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /customers/{customerId}:
+    get:
+      summary: Retrieve customer profile
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: Customer record with relations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update customer
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+      responses:
+        '200':
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Soft-delete customer
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '204':
+          description: Deleted
+        '409':
+          description: Customer has open balances; deletion blocked
+  /customers/{customerId}/status:
+    patch:
+      summary: Change customer status
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status:
+                  type: string
+                  enum: [active, inactive, blocked]
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Status changed
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /customers/{customerId}/contacts:
+    post:
+      summary: Add contact
+      tags: [Contacts]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '409':
+          description: Duplicate primary contact role
+    get:
+      summary: List contacts
+      tags: [Contacts]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: Contact list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContactResponse'
+  /customers/{customerId}/contacts/{contactId}:
+    put:
+      summary: Update contact
+      tags: [Contacts]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+        - $ref: '#/components/parameters/ContactId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUpdateRequest'
+      responses:
+        '200':
+          description: Contact updated
+    delete:
+      summary: Remove contact
+      tags: [Contacts]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+        - $ref: '#/components/parameters/ContactId'
+      responses:
+        '204':
+          description: Deleted
+  /customers/{customerId}/credit-limit:
+    post:
+      summary: Adjust credit limit
+      tags: [Credit]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditLimitRequest'
+      responses:
+        '201':
+          description: Credit limit adjustment recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditLimitResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /customers/{customerId}/aging:
+    get:
+      summary: Retrieve aging snapshot
+      tags: [Aging]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+        - name: snapshot_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Aging snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingSnapshot'
+  /customers/{customerId}/statements:
+    get:
+      summary: List statements
+      tags: [Statements]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: Statement history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StatementSummary'
+    post:
+      summary: Generate statement
+      tags: [Statements]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatementGenerateRequest'
+      responses:
+        '201':
+          description: Statement generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementDetail'
+  /customers/{customerId}/communications:
+    get:
+      summary: List communication records
+      tags: [Communications]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: Communication history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommunicationResponse'
+    post:
+      summary: Log communication
+      tags: [Communications]
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunicationRequest'
+      responses:
+        '201':
+          description: Communication logged
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CompanyId:
+      name: company_id
+      in: header
+      description: Current tenant context
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+      description: Fuzzy search across name, number, email, phone
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ContactId:
+      name: contactId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Validation errors
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+  schemas:
+    CustomerPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        meta:
+          type: object
+          properties:
+            current_page:
+              type: integer
+            per_page:
+              type: integer
+            total:
+              type: integer
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_number:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        default_currency:
+          type: string
+        payment_terms:
+          type: string
+        credit_limit:
+          type: string
+          pattern: '^\d+(\.\d{1,2})?$'
+        balance_due:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CustomerResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        customer:
+          $ref: '#/components/schemas/Customer'
+    CustomerDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/CustomerResponse'
+        - type: object
+          properties:
+            contacts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Contact'
+            addresses:
+              type: array
+              items:
+                $ref: '#/components/schemas/Address'
+            credit_limit_history:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreditLimit'
+            aging_snapshot:
+              $ref: '#/components/schemas/AgingSnapshot'
+            statement_summary:
+              type: array
+              items:
+                $ref: '#/components/schemas/StatementSummary'
+    CustomerCreateRequest:
+      type: object
+      required: [name, default_currency]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        default_currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        payment_terms:
+          type: string
+        tax_id:
+          type: string
+        notes:
+          type: string
+    CustomerUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/CustomerCreateRequest'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [active, inactive, blocked]
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        role:
+          type: string
+        is_primary:
+          type: boolean
+    ContactResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        contact:
+          $ref: '#/components/schemas/Contact'
+    ContactCreateRequest:
+      type: object
+      required: [first_name, last_name, email, role]
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        role:
+          type: string
+        is_primary:
+          type: boolean
+        preferred_channel:
+          type: string
+          enum: [email, phone, sms, portal]
+    ContactUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/ContactCreateRequest'
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [billing, shipping, statement, other]
+        label:
+          type: string
+        line1:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        is_default:
+          type: boolean
+    CreditLimit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        limit_amount:
+          type: string
+        effective_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, approved, revoked]
+        changed_by_user_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    CreditLimitRequest:
+      type: object
+      required: [limit_amount, effective_at]
+      properties:
+        limit_amount:
+          type: string
+          pattern: '^\d+(\.\d{1,2})?$'
+        effective_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, approved]
+        reason:
+          type: string
+        approval_reference:
+          type: string
+    CreditLimitResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        credit_limit:
+          $ref: '#/components/schemas/CreditLimit'
+    AgingSnapshot:
+      type: object
+      properties:
+        snapshot_date:
+          type: string
+          format: date
+        bucket_current:
+          type: string
+        bucket_1_30:
+          type: string
+        bucket_31_60:
+          type: string
+        bucket_61_90:
+          type: string
+        bucket_90_plus:
+          type: string
+        total_invoices:
+          type: integer
+    StatementSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        closing_balance:
+          type: string
+        document_path:
+          type: string
+          nullable: true
+    StatementGenerateRequest:
+      type: object
+      required: [period_start, period_end]
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        delivery_channel:
+          type: string
+          enum: [download, email]
+        notify_contact_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    StatementDetail:
+      type: object
+      properties:
+        statement:
+          $ref: '#/components/schemas/StatementSummary'
+        opening_balance:
+          type: string
+        total_invoiced:
+          type: string
+        total_paid:
+          type: string
+        total_credit_notes:
+          type: string
+        line_items:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [invoice, payment, credit_note]
+              id:
+                type: string
+                format: uuid
+              reference:
+                type: string
+              occurred_at:
+                type: string
+                format: date
+              amount:
+                type: string
+    CommunicationRequest:
+      type: object
+      required: [channel, direction, subject, occurred_at]
+      properties:
+        channel:
+          type: string
+          enum: [email, phone, meeting, note]
+        direction:
+          type: string
+          enum: [inbound, outbound, internal]
+        contact_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        body:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              url:
+                type: string
+    CommunicationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        direction:
+          type: string
+        contact_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        body:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        logged_by_user_id:
+          type: string
+          format: uuid
+    Error:
+      type: object
+      properties:
+        message:
+          type: string

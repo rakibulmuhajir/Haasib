@@ -14,6 +14,10 @@ use App\Traits\AuditLogging;
 use Brick\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Bus;
+use Modules\Accounting\Domain\Payments\Actions\RecordPaymentAction;
+use Modules\Accounting\Domain\Payments\Actions\AllocatePaymentAction;
+use Modules\Accounting\Domain\Payments\Telemetry\PaymentMetrics;
 
 class PaymentService
 {
@@ -52,57 +56,53 @@ class PaymentService
         ?array $invoiceAllocations,
         ServiceContext $context
     ): Payment {
-        $idempotencyKey = $context->getIdempotencyKey();
-        $result = DB::transaction(function () use ($company, $customer, $paymentMethod, $amount, $currency, $paymentDate, $paymentNumber, $paymentReference, $autoAllocate, $invoiceAllocations) {
-            $currency = $currency ?? $customer->currency ?? $company->getDefaultCurrency();
-            $exchangeRate = $this->getExchangeRate($currency, $company);
+        // Set company context for RLS
+        DB::statement("SET app.current_company = ?", [$company->id]);
 
-            $payment = new Payment([
-                'company_id' => $company->id,
-                'customer_id' => $customer->id,
-                'currency_id' => $currency->id,
-                'payment_method' => $paymentMethod,
-                'payment_reference' => $paymentReference,
-                'payment_number' => $paymentNumber ?? $this->generateNextPaymentNumber($company->id),
-                'amount' => $amount->getAmount(),
-                'exchange_rate' => $exchangeRate,
-                'payment_date' => $paymentDate ?? now()->toDateString(),
-                'status' => 'pending',
-            ]);
-
-            $payment->save();
-
-            // Handle auto-allocation if requested
-            if ($autoAllocate && $invoiceAllocations) {
-                // Pre-load all invoices with locks to prevent race conditions
-                $invoiceIds = array_keys($invoiceAllocations);
-                $invoices = Invoice::whereIn('invoice_id', $invoiceIds)
-                    ->where('company_id', $company->id)
-                    ->where('customer_id', $customer->id)
-                    ->lockForUpdate()
-                    ->get()
-                    ->keyBy('invoice_id');
-
-                foreach ($invoiceAllocations as $invoiceId => $allocationAmount) {
-                    if ($allocationAmount > 0 && isset($invoices[$invoiceId])) {
-                        $payment->allocateToInvoice($invoices[$invoiceId], Money::of($allocationAmount, $currency->code));
-                    }
-                }
-            }
-
-            return $payment->fresh(['customer', 'currency']);
-        });
-
-        $this->logAudit('payment.create', [
+        // Map to command bus action format
+        $currency = $currency ?? $customer->currency ?? $company->getDefaultCurrency();
+        
+        $paymentData = [
             'company_id' => $company->id,
-            'customer_id' => $customer->id,
+            'entity_id' => $customer->id, // entity_id in schema = customer_id
             'payment_method' => $paymentMethod,
             'amount' => $amount->getAmount(),
             'currency_id' => $currency->id,
-            'payment_reference' => $result->payment_reference,
-        ], $context, result: ['payment_id' => $result->id]);
+            'payment_date' => $paymentDate ?? now()->toDateString(),
+            'reference_number' => $paymentReference,
+            'notes' => $notes,
+            'auto_allocate' => $autoAllocate,
+            'allocation_strategy' => $autoAllocate ? 'fifo' : null,
+            'allocation_options' => $invoiceAllocations ? [
+                'manual_allocations' => $invoiceAllocations
+            ] : [],
+            'idempotency_key' => $context->getIdempotencyKey(),
+            'created_by_user_id' => $context->user->id,
+        ];
 
-        return $result;
+        try {
+            // Dispatch through command bus
+            $result = Bus::dispatch('payment.create', $paymentData);
+            
+            $payment = Payment::findOrFail($result['payment_id']);
+
+            // Log audit event
+            $this->logAudit('payment.create', [
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'payment_method' => $paymentMethod,
+                'amount' => $amount->getAmount(),
+                'currency_id' => $currency->id,
+                'payment_reference' => $paymentReference,
+            ], $context, result: ['payment_id' => $payment->payment_id]);
+
+            return $payment->fresh(['entity', 'currency']);
+
+        } catch (\Throwable $e) {
+            // Record failure metrics
+            PaymentMetrics::paymentFailed($company->id, $paymentMethod, $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -233,55 +233,43 @@ class PaymentService
         ?string $notes,
         ServiceContext $context
     ): array {
-        $result = DB::transaction(function () use ($payment, $allocations, $notes) {
-            if (! $payment->canBeAllocated()) {
-                throw new \InvalidArgumentException('Payment cannot be allocated');
-            }
+        // Set company context for RLS
+        DB::statement("SET app.current_company = ?", [$payment->company_id]);
 
-            $createdAllocations = [];
-            $totalAllocationAmount = Money::of(0, $payment->currency->code);
+        // Map allocations to command bus format
+        $formattedAllocations = array_map(function ($allocation) use ($notes) {
+            return [
+                'invoice_id' => $allocation['invoice_id'],
+                'amount' => $allocation['amount'],
+                'notes' => $allocation['notes'] ?? $notes,
+            ];
+        }, $allocations);
 
-            // Pre-load all invoices with locks to prevent race conditions
-            $invoiceIds = array_column($allocations, 'invoice_id');
-            $invoices = Invoice::whereIn('invoice_id', $invoiceIds)
-                ->where('company_id', $payment->company_id)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('invoice_id');
+        try {
+            // Dispatch through command bus
+            $result = Bus::dispatch('payment.allocate', [
+                'payment_id' => $payment->payment_id,
+                'allocations' => $formattedAllocations,
+            ]);
 
-            foreach ($allocations as $allocation) {
-                $invoice = $invoices[$allocation['invoice_id']] ?? null;
-                if (! $invoice) {
-                    throw new \InvalidArgumentException("Invalid invoice ID: {$allocation['invoice_id']}");
-                }
+            // Log audit event
+            $this->logAudit('payment.allocate', [
+                'payment_id' => $payment->payment_id,
+                'payment_number' => $payment->payment_number,
+                'allocations_count' => $result['allocations_created'],
+                'total_allocated' => $result['total_allocated'],
+            ], $context, result: ['payment_id' => $result['payment_id']]);
 
-                $allocationAmount = Money::of($allocation['amount'], $payment->currency->code);
-                $totalAllocationAmount = $totalAllocationAmount->plus($allocationAmount);
+            // Return allocation models
+            return PaymentAllocation::whereIn('allocation_id', 
+                array_column($result['allocations'], 'allocation_id')
+            )->get()->toArray();
 
-                if ($totalAllocationAmount->isGreaterThan($payment->getUnallocatedAmount())) {
-                    throw new \InvalidArgumentException('Total allocation amount exceeds unallocated payment amount');
-                }
-
-                $paymentAllocation = $payment->allocateToInvoice(
-                    $invoice,
-                    $allocationAmount,
-                    $allocation['notes'] ?? $notes
-                );
-
-                $createdAllocations[] = $paymentAllocation;
-            }
-
-            return $createdAllocations;
-        });
-
-        $this->logAudit('payment.allocate', [
-            'payment_id' => $payment->id,
-            'payment_reference' => $payment->payment_reference,
-            'allocations_count' => count($result),
-            'total_allocated' => array_sum(array_column($result, 'amount')),
-        ], $context, result: ['allocation_ids' => array_column($result, 'id')]);
-
-        return $result;
+        } catch (\Throwable $e) {
+            // Record failure metrics
+            PaymentMetrics::allocationFailed($payment->company_id, 'manual', $e->getMessage());
+            throw $e;
+        }
     }
 
     /**

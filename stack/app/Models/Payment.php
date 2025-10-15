@@ -2,35 +2,28 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Payment extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, SoftDeletes;
 
-    public $incrementing = false;
+    protected $table = 'invoicing.payments';
+
+    protected $primaryKey = 'id';
 
     protected $keyType = 'string';
 
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'invoicing.payments';
+    public $incrementing = false;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
+        'id',
         'company_id',
         'customer_id',
         'payment_number',
@@ -41,46 +34,83 @@ class Payment extends Model
         'currency',
         'status',
         'notes',
-        'paymentable_id',
-        'paymentable_type',
+        'batch_id',
         'created_by_user_id',
+        'reconciled',
+        'reconciled_date',
     ];
 
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'payment_date' => 'date',
+        'reconciled' => 'boolean',
+        'reconciled_date' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $hidden = [
+        'deleted_at',
+    ];
+
+    protected $dates = [
+        'payment_date',
+        'reconciled_date',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+
+    // Constants for status
+    const STATUS_PENDING = 'pending';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_FAILED = 'failed';
+    const STATUS_CANCELLED = 'cancelled';
+    const STATUS_REVERSED = 'reversed';
+
+    // Constants for payment methods
+    const METHOD_CASH = 'cash';
+    const METHOD_BANK_TRANSFER = 'bank_transfer';
+    const METHOD_CARD = 'card';
+    const METHOD_CHEQUE = 'cheque';
+    const METHOD_OTHER = 'other';
+
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Get the allocations for this payment.
      */
-    protected function casts(): array
+    public function allocations(): HasMany
     {
-        return [
-            'payment_date' => 'date',
-            'amount' => 'decimal:2',
-            'company_id' => 'string',
-            'customer_id' => 'string',
-            'paymentable_id' => 'string',
-            'created_by_user_id' => 'string',
-        ];
+        return $this->hasMany(PaymentAllocation::class, 'payment_id')
+                    ->whereNull('reversed_at');
     }
 
     /**
-     * Get the company that owns the payment.
+     * Get all allocations including reversed ones.
+     */
+    public function allAllocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class, 'payment_id');
+    }
+
+    /**
+     * Get the company that owns this payment.
      */
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class, 'company_id');
     }
 
     /**
-     * Get the customer for the payment.
+     * Get the customer that made this payment.
      */
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     /**
-     * Get the user who created the payment.
+     * Get the user who created this payment.
      */
     public function creator(): BelongsTo
     {
@@ -88,27 +118,19 @@ class Payment extends Model
     }
 
     /**
-     * Get the payable model (invoice, etc.).
+     * Get the batch this payment belongs to.
      */
-    public function paymentable(): MorphTo
+    public function batch(): BelongsTo
     {
-        return $this->morphTo();
+        return $this->belongsTo(PaymentBatch::class, 'batch_id');
     }
 
     /**
-     * Get the allocations for this payment.
+     * Get the reversal record for this payment.
      */
-    public function allocations()
+    public function reversal(): HasOne
     {
-        return $this->hasMany(PaymentAllocation::class);
-    }
-
-    /**
-     * Get the active allocations (not reversed).
-     */
-    public function activeAllocations()
-    {
-        return $this->allocations()->active();
+        return $this->hasOne(PaymentReversal::class, 'payment_id');
     }
 
     /**
@@ -116,11 +138,11 @@ class Payment extends Model
      */
     public function getTotalAllocatedAttribute(): float
     {
-        return $this->activeAllocations()->sum('allocated_amount');
+        return $this->allocations()->sum('allocated_amount');
     }
 
     /**
-     * Get the remaining unallocated amount.
+     * Get the remaining amount.
      */
     public function getRemainingAmountAttribute(): float
     {
@@ -136,108 +158,163 @@ class Payment extends Model
     }
 
     /**
-     * Get the invoices this payment has been allocated to.
+     * Get payment method label.
      */
-    public function allocatedInvoices()
+    public function getPaymentMethodLabelAttribute(): string
     {
-        return $this->belongsToMany(Invoice::class, 'invoicing.payment_allocations', 'payment_id', 'invoice_id')
-            ->withPivot(['allocated_amount', 'allocation_date', 'allocation_method', 'allocation_strategy', 'notes'])
-            ->wherePivotNull('reversed_at')
-            ->withTimestamps();
+        return match($this->payment_method) {
+            self::METHOD_CASH => 'Cash',
+            self::METHOD_BANK_TRANSFER => 'Bank Transfer',
+            self::METHOD_CARD => 'Card',
+            self::METHOD_CHEQUE => 'Cheque',
+            self::METHOD_OTHER => 'Other',
+            default => $this->payment_method,
+        };
     }
 
     /**
-     * Scope a query to only include payments with a specific status.
+     * Get status label.
      */
-    public function scopeWithStatus($query, string $status)
+    public function getStatusLabelAttribute(): string
+    {
+        return match($this->status) {
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_COMPLETED => 'Completed',
+            self::STATUS_FAILED => 'Failed',
+            self::STATUS_CANCELLED => 'Cancelled',
+            self::STATUS_REVERSED => 'Reversed',
+            default => $this->status,
+        };
+    }
+
+    /**
+     * Scope payments by company.
+     */
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    /**
+     * Scope payments by customer.
+     */
+    public function scopeForCustomer($query, $customerId)
+    {
+        return $query->where('customer_id', $customerId);
+    }
+
+    /**
+     * Scope payments by status.
+     */
+    public function scopeByStatus($query, $status)
     {
         return $query->where('status', $status);
     }
 
     /**
-     * Scope a query to only include completed payments.
+     * Scope payments by payment method.
      */
-    public function scopeCompleted($query)
-    {
-        return $query->where('status', 'completed');
-    }
-
-    /**
-     * Scope a query to only include pending payments.
-     */
-    public function scopePending($query)
-    {
-        return $query->where('status', 'pending');
-    }
-
-    /**
-     * Scope a query to only include failed payments.
-     */
-    public function scopeFailed($query)
-    {
-        return $query->where('status', 'failed');
-    }
-
-    /**
-     * Scope a query to filter by payment method.
-     */
-    public function scopeWithMethod($query, string $method)
+    public function scopeByPaymentMethod($query, $method)
     {
         return $query->where('payment_method', $method);
     }
 
     /**
-     * Scope a query to filter by date range.
+     * Scope payments by date range.
      */
-    public function scopeBetweenDates($query, $startDate, $endDate)
+    public function scopeByDateRange($query, $startDate, $endDate = null)
     {
-        return $query->whereBetween('payment_date', [$startDate, $endDate]);
-    }
-
-    /**
-     * Mark the payment as completed.
-     */
-    public function markAsCompleted(): void
-    {
-        $this->status = 'completed';
-        $this->save();
-
-        // Update the invoice balance if applicable
-        if ($this->paymentable && method_exists($this->paymentable, 'markAsPaid')) {
-            $this->paymentable->calculateTotals();
-            $this->paymentable->markAsPaid();
+        $query->where('payment_date', '>=', $startDate);
+        
+        if ($endDate) {
+            $query->where('payment_date', '<=', $endDate);
         }
+        
+        return $query;
     }
 
     /**
-     * Mark the payment as failed.
+     * Scope unreconciled payments.
      */
-    public function markAsFailed(): void
+    public function scopeUnreconciled($query)
     {
-        $this->status = 'failed';
-        $this->save();
+        return $query->where('reconciled', false);
     }
 
     /**
-     * Generate a unique payment number.
+     * Scope reconciled payments.
      */
-    public static function generatePaymentNumber(string $companyId): string
+    public function scopeReconciled($query)
     {
-        $prefix = 'PAY';
-        $year = now()->format('Y');
-        $sequence = static::where('company_id', $companyId)
-            ->whereYear('created_at', $year)
-            ->withTrashed()
-            ->count() + 1;
-
-        return "{$prefix}-{$year}-{$sequence}";
+        return $query->where('reconciled', true);
     }
 
     /**
-     * Create a new factory instance for the model.
+     * Scope payments that can be reversed.
      */
-    protected static function newFactory(): Factory
+    public function scopeReversible($query)
     {
-        return \Database\Factories\PaymentFactory::new();
+        return $query->whereIn('status', [self::STATUS_COMPLETED, self::STATUS_FAILED]);
     }
+
+    /**
+     * Check if the payment can be reversed.
+     */
+    public function canBeReversed(): bool
+    {
+        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED]) &&
+               !$this->reversal()->exists();
+    }
+
+    /**
+     * Check if the payment has been reversed.
+     */
+    public function isReversed(): bool
+    {
+        return $this->status === self::STATUS_REVERSED || $this->reversal()->exists();
+    }
+
+    /**
+     * Get allocation summary.
+     */
+    public function getAllocationSummaryAttribute(): array
+    {
+        $allocations = $this->allocations;
+        $totalAllocated = $allocations->sum('allocated_amount');
+        
+        return [
+            'total_allocated' => $totalAllocated,
+            'remaining_amount' => $this->amount - $totalAllocated,
+            'is_fully_allocated' => $totalAllocated >= $this->amount,
+            'allocation_count' => $allocations->count(),
+        ];
+    }
+
+    /**
+     * Boot the model.
+     */
+    protected static function booted()
+    {
+        static::creating(function ($payment) {
+            if (!$payment->id) {
+                $payment->id = Str::uuid();
+            }
+            
+            if (!$payment->created_by_user_id) {
+                $payment->created_by_user_id = auth()->id();
+            }
+        });
+
+        static::updating(function ($payment) {
+            // Prevent status changes for reversed payments
+            if ($payment->isDirty('status') && $payment->getOriginal('status') === self::STATUS_REVERSED) {
+                throw new \InvalidArgumentException('Cannot change status of a reversed payment');
+            }
+        });
+    }
+
+    /**
+     * The attributes that are mass assignable.
+     */
+    protected $guarded = [];
 }

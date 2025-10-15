@@ -64,6 +64,10 @@ class PermissionSeeder extends Seeder
             'accounting.customers.create' => 'Create customers',
             'accounting.customers.update' => 'Update customers',
             'accounting.customers.delete' => 'Delete customers',
+            'accounting.customers.manage_contacts' => 'Manage customer contacts and addresses',
+            'accounting.customers.manage_groups' => 'Manage customer groups and assignments',
+            'accounting.customers.manage_comms' => 'Manage customer communications and history',
+            'accounting.customers.manage_credit' => 'Manage customer credit limits and adjustments',
 
             'accounting.invoices.view' => 'View invoices',
             'accounting.invoices.create' => 'Create invoices',
@@ -168,6 +172,7 @@ class PermissionSeeder extends Seeder
 
                 // Full accounting access
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update', 'accounting.customers.delete',
+                'accounting.customers.manage_contacts', 'accounting.customers.manage_groups', 'accounting.customers.manage_comms', 'accounting.customers.manage_credit',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update', 'accounting.chart_of_accounts.delete',
@@ -198,6 +203,7 @@ class PermissionSeeder extends Seeder
 
                 // Full accounting access for company
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update', 'accounting.customers.delete',
+                'accounting.customers.manage_contacts', 'accounting.customers.manage_groups', 'accounting.customers.manage_comms', 'accounting.customers.manage_credit',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update',
@@ -228,6 +234,7 @@ class PermissionSeeder extends Seeder
 
                 // Accounting permissions
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update',
+                'accounting.customers.manage_contacts', 'accounting.customers.manage_comms',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.update',

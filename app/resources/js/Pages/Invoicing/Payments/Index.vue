@@ -98,10 +98,10 @@
 
             <template #cell-customer="{ data }">
               <div class="font-medium text-gray-900">
-                {{ data.customer?.name || '(unallocated)' }}
+                {{ data.entity?.name || '(unallocated)' }}
               </div>
               <div class="text-xs text-gray-500">
-                {{ data.customer?.email }}
+                {{ data.entity?.email || '-' }}
               </div>
             </template>
 
@@ -110,7 +110,13 @@
                 {{ formatMoney(data.amount, data.currency) }}
               </div>
               <div class="text-xs text-gray-500 text-right">
-                Allocated: {{ formatMoney(data.allocated_amount, data.currency) }}
+                Allocated: {{ formatMoney(data.total_allocated, data.currency) }}
+              </div>
+              <div v-if="data.remaining_amount > 0" class="text-xs text-green-600 text-right font-medium">
+                Unallocated: {{ formatMoney(data.remaining_amount, data.currency) }}
+              </div>
+              <div v-if="data.has_discount" class="text-xs text-blue-600 text-right">
+                Discount Applied: {{ formatMoney(data.total_discount_applied, data.currency) }}
               </div>
             </template>
 
@@ -147,6 +153,15 @@
                   v-tooltip.bottom="'View payment details'"
                 />
 
+                <Button
+                  icon="pi pi-file-pdf"
+                  size="small"
+                  text
+                  rounded
+                  @click="viewReceipt(data.id)"
+                  v-tooltip.bottom="'View receipt'"
+                />
+
                 <template v-if="canEdit(data)">
                   <Button
                     icon="pi pi-edit"
@@ -164,8 +179,17 @@
                     size="small"
                     text
                     rounded
-                    @click="allocatePayment(data)"
+                    @click="allocatePayment(data, false)"
                     v-tooltip.bottom="'Allocate payment'"
+                  />
+                  <Button
+                    icon="pi pi-cog"
+                    size="small"
+                    text
+                    rounded
+                    severity="info"
+                    @click="allocatePayment(data, true)"
+                    v-tooltip.bottom="'Auto-allocate payment'"
                   />
                 </template>
 
@@ -288,12 +312,31 @@
       </template>
     </Dialog>
 
+      <!-- Allocation Dialog -->
+      <AllocationDialog
+        :visible="allocationDialog.visible"
+        :payment="allocationDialog.payment"
+        :isAutoAllocation="allocationDialog.isAuto"
+        :loading="allocationDialog.loading"
+        :loadingInvoices="allocationDialog.loadingInvoices"
+        :availableInvoices="allocationDialog.availableInvoices"
+        @hide="closeAllocationDialog"
+        @allocate="handleAllocation"
+      />
+
+      <!-- Receipt Dialog -->
+      <ReceiptDialog
+        :visible="receiptDialog.visible"
+        :paymentId="receiptDialog.paymentId"
+        @hide="closeReceiptDialog"
+      />
+
     </LayoutShell>
 </template>
 
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
-import { ref, reactive, onUnmounted } from 'vue'
+import { ref, reactive, onUnmounted, watch } from 'vue'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Button from 'primevue/button'
@@ -308,26 +351,30 @@ import SvgIcon from '@/Components/SvgIcon.vue'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import InputNumber from 'primevue/inputnumber'
+import AllocationDialog from '@/Components/Payments/AllocationDialog.vue'
+import ReceiptDialog from '@/Components/Payments/ReceiptDialog.vue'
 import { usePageActions } from '@/composables/usePageActions'
 import { useDataTable } from '@/composables/useDataTable'
 import { useLookups } from '@/composables/useLookups'
 import { formatMoney, formatDate } from '@/Utils/formatting'
 
 interface Payment {
-  id: number
+  id: string
   payment_number: string
   payment_date: string
   amount: number
-  allocated_amount: number
+  total_allocated: number
+  remaining_amount: number
+  is_fully_allocated: boolean
   payment_method: string
   status: string
-  customer?: {
-    id: number
+  entity?: {
+    id: string
     name: string
-    email?: string
+    type: string
   }
-  currency?: {
-    id: number
+  currency: {
+    id: string
     code: string
     symbol: string
   }
@@ -377,7 +424,7 @@ const breadcrumbItems = ref([
 // DataTablePro columns definition
 const columns = [
   { field: 'payment_number', header: 'Payment #', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 160px' },
-  { field: 'customer', header: 'Customer', filterField: 'customer_name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 220px' },
+  { field: 'entity', header: 'Customer', filterField: 'entity_name', filter: { type: 'text', matchMode: FilterMatchMode.CONTAINS }, style: 'width: 220px' },
   { field: 'amount', header: 'Amount', filter: { type: 'number', matchMode: FilterMatchMode.GREATER_THAN_OR_EQUAL_TO }, style: 'width: 140px; text-align: right' },
   { field: 'payment_method', header: 'Method', filter: { type: 'select', options: props.paymentMethodOptions }, style: 'width: 120px' },
   { field: 'status', header: 'Status', filter: { type: 'select', options: props.statusOptions }, style: 'width: 120px' },
@@ -411,6 +458,22 @@ const refundDialog = reactive({
   loading: false
 })
 
+// Allocation dialog state
+const allocationDialog = reactive({
+  visible: false,
+  payment: null as Payment | null,
+  isAuto: false,
+  loading: false,
+  loadingInvoices: false,
+  availableInvoices: [] as any[]
+})
+
+// Receipt dialog state
+const receiptDialog = reactive({
+  visible: false,
+  paymentId: ''
+})
+
 const viewPayment = (payment: Payment) => {
   router.visit(route('payments.show', payment.id))
 }
@@ -419,10 +482,78 @@ const editPayment = (payment: Payment) => {
   router.visit(route('payments.edit', payment.id))
 }
 
-const allocatePayment = (payment: Payment) => {
-  router.visit(route('payments.show', payment.id), {
-    data: { action: 'allocate' }
-  })
+const allocatePayment = (payment: Payment, isAuto = false) => {
+  allocationDialog.payment = payment
+  allocationDialog.isAuto = isAuto
+  allocationDialog.visible = true
+  // Load available invoices for allocation
+  loadAvailableInvoices(payment.id)
+}
+
+// Load available invoices for allocation
+const loadAvailableInvoices = async (paymentId: string) => {
+  allocationDialog.loadingInvoices = true
+  try {
+    const response = await fetch(`/api/accounting/payments/${paymentId}/available-invoices`)
+    allocationDialog.availableInvoices = await response.json()
+  } catch (error) {
+    console.error('Error loading available invoices:', error)
+  } finally {
+    allocationDialog.loadingInvoices = false
+  }
+}
+
+// Close allocation dialog
+const closeAllocationDialog = () => {
+  allocationDialog.visible = false
+  allocationDialog.payment = null
+  allocationDialog.isAuto = false
+  allocationDialog.availableInvoices = []
+}
+
+// Handle allocation
+const handleAllocation = async (data: any) => {
+  allocationDialog.loading = true
+  try {
+    const url = allocationDialog.isAuto 
+      ? `/api/accounting/payments/${allocationDialog.payment?.id}/allocations/auto`
+      : `/api/accounting/payments/${allocationDialog.payment?.id}/allocations`
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })
+    
+    if (response.ok) {
+      closeAllocationDialog()
+      table.fetchData()
+      // Show success message
+      const result = await response.json()
+      console.log('Allocation successful:', result)
+    } else {
+      throw new Error('Allocation failed')
+    }
+  } catch (error) {
+    console.error('Error allocating payment:', error)
+  } finally {
+    allocationDialog.loading = false
+  }
+}
+
+// Close receipt dialog
+const closeReceiptDialog = () => {
+  receiptDialog.visible = false
+  receiptDialog.paymentId = ''
+}
+
+// View payment receipt
+const viewReceipt = (paymentId: string) => {
+  receiptDialog.paymentId = paymentId
+  receiptDialog.visible = true
 }
 
 const confirmVoid = (payment: Payment) => {
@@ -433,7 +564,7 @@ const confirmVoid = (payment: Payment) => {
 
 const confirmRefund = (payment: Payment) => {
   refundDialog.payment = payment
-  refundDialog.amount = payment.allocated_amount || 0
+  refundDialog.amount = payment.total_allocated || 0
   refundDialog.reason = ''
   refundDialog.visible = true
 }
@@ -489,7 +620,7 @@ const canEdit = (payment: Payment) => {
 
 const canAllocate = (payment: Payment) => {
   return payment.status === 'completed' &&
-         (payment.allocated_amount || 0) < payment.amount
+         !payment.is_fully_allocated
 }
 
 const canVoid = (payment: Payment) => {
@@ -498,6 +629,6 @@ const canVoid = (payment: Payment) => {
 
 const canRefund = (payment: Payment) => {
   return payment.status === 'completed' &&
-         (payment.allocated_amount || 0) > 0
+         payment.total_allocated > 0
 }
 </script>

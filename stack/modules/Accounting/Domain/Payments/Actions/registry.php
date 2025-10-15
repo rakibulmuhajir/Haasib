@@ -10,5 +10,4 @@ return [
     
     // Batch actions
     'payment.batch.create' => Modules\Accounting\Domain\Payments\Actions\CreatePaymentBatchAction::class,
-    'payment.batch.process' => Modules\Accounting\Domain\Payments\Actions\ProcessPaymentBatchAction::class,
 ];

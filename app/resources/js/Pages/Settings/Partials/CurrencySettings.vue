@@ -439,7 +439,12 @@ const removeCurrency = async (currency) => {
 };
 
 // Base currency cannot be changed until migration wizard is implemented
-// TODO: Implement migration wizard for base currency changes
+// Note: Base currency changes require a migration wizard to:
+// 1. Convert all existing financial records
+// 2. Update historical exchange rates 
+// 3. Ensure reporting accuracy
+// 4. Provide audit trail
+// This is a complex feature that should be implemented with proper planning
 
 // Update exchange rate
 const updateExchangeRate = async () => {

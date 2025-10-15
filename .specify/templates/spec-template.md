@@ -7,10 +7,6 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-_Constitution alignment: Describe GUI + CLI entrypoints, tenancy/RBAC constraints, translation coverage, and audit needs for each story._
-
-<!-- Before writing scenarios, review docs/spec-reference.md for the current list of authoritative inputs. -->
-
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
@@ -80,8 +76,6 @@ _Constitution alignment: Describe GUI + CLI entrypoints, tenancy/RBAC constraint
 - How does system handle [error scenario]?
 
 ## Requirements *(mandatory)*
-
-_Document command-bus actions, permissions, tenancy policies, audit signals, and telemetry updates alongside functional requirements._
 
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.

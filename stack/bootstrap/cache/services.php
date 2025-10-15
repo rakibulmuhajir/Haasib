@@ -45,9 +45,10 @@
     41 => 'Tighten\\Ziggy\\ZiggyServiceProvider',
     42 => 'App\\Providers\\AppServiceProvider',
     43 => 'App\\Providers\\AuthServiceProvider',
-    44 => 'App\\Providers\\EventServiceProvider',
-    45 => 'App\\Providers\\CommandBusServiceProvider',
-    46 => 'Modules\\Accounting\\Providers\\AccountingServiceProvider',
+    44 => 'App\\Providers\\CommandBusServiceProvider',
+    45 => 'App\\Providers\\CommandPaletteServiceProvider',
+    46 => 'App\\Providers\\EventServiceProvider',
+    47 => 'Modules\\Accounting\\Providers\\AccountingServiceProvider',
   ),
   'eager' => 
   array (
@@ -79,9 +80,10 @@
     25 => 'Tighten\\Ziggy\\ZiggyServiceProvider',
     26 => 'App\\Providers\\AppServiceProvider',
     27 => 'App\\Providers\\AuthServiceProvider',
-    28 => 'App\\Providers\\EventServiceProvider',
-    29 => 'App\\Providers\\CommandBusServiceProvider',
-    30 => 'Modules\\Accounting\\Providers\\AccountingServiceProvider',
+    28 => 'App\\Providers\\CommandBusServiceProvider',
+    29 => 'App\\Providers\\CommandPaletteServiceProvider',
+    30 => 'App\\Providers\\EventServiceProvider',
+    31 => 'Modules\\Accounting\\Providers\\AccountingServiceProvider',
   ),
   'deferred' => 
   array (

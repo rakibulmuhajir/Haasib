@@ -6,10 +6,29 @@ return [
     'user.delete' => App\Actions\DevOps\UserDelete::class,
     'user.activate' => App\Actions\User\ActivateUser::class,
     'user.deactivate' => App\Actions\User\DeactivateUser::class,
-    // Customer actions
-    'customer.create' => App\Actions\DevOps\CustomerCreate::class,
-    'customer.update' => App\Actions\DevOps\CustomerUpdate::class,
-    'customer.delete' => App\Actions\DevOps\CustomerDelete::class,
+
+    // Customer actions - mapped to Accounting module registry
+    'customer.create' => Modules\Accounting\Domain\Customers\Actions\CreateCustomerAction::class,
+    'customer.update' => Modules\Accounting\Domain\Customers\Actions\UpdateCustomerAction::class,
+    'customer.delete' => Modules\Accounting\Domain\Customers\Actions\DeleteCustomerAction::class,
+    'customer.status' => Modules\Accounting\Domain\Customers\Actions\ChangeCustomerStatusAction::class,
+    'customer.contact.create' => Modules\Accounting\Domain\Customers\Actions\CreateCustomerContactAction::class,
+    'customer.contact.update' => Modules\Accounting\Domain\Customers\Actions\UpdateCustomerContactAction::class,
+    'customer.contact.delete' => Modules\Accounting\Domain\Customers\Actions\DeleteCustomerContactAction::class,
+    'customer.address.create' => Modules\Accounting\Domain\Customers\Actions\CreateCustomerAddressAction::class,
+    'customer.address.update' => Modules\Accounting\Domain\Customers\Actions\UpdateCustomerAddressAction::class,
+    'customer.address.delete' => Modules\Accounting\Domain\Customers\Actions\DeleteCustomerAddressAction::class,
+    'customer.group.create' => Modules\Accounting\Domain\Customers\Actions\CreateCustomerGroupAction::class,
+    'customer.group.assign' => Modules\Accounting\Domain\Customers\Actions\AssignCustomerToGroupAction::class,
+    'customer.group.remove' => Modules\Accounting\Domain\Customers\Actions\RemoveCustomerFromGroupAction::class,
+    'customer.communication.log' => Modules\Accounting\Domain\Customers\Actions\LogCustomerCommunicationAction::class,
+    'customer.communication.delete' => Modules\Accounting\Domain\Customers\Actions\DeleteCustomerCommunicationAction::class,
+    'customer.credit.adjust' => Modules\Accounting\Domain\Customers\Actions\AdjustCustomerCreditLimitAction::class,
+    'customer.statement.generate' => Modules\Accounting\Domain\Customers\Actions\GenerateCustomerStatementAction::class,
+    'customer.aging.refresh' => Modules\Accounting\Domain\Customers\Actions\RefreshCustomerAgingSnapshotAction::class,
+    'customer.import' => Modules\Accounting\Domain\Customers\Actions\ImportCustomersAction::class,
+    'customer.export' => Modules\Accounting\Domain\Customers\Actions\ExportCustomersAction::class,
+
     // Invoice actions
     'invoice.create' => App\Actions\DevOps\InvoiceCreate::class,
     'invoice.update' => App\Actions\DevOps\InvoiceUpdate::class,

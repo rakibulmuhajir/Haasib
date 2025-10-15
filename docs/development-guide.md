@@ -386,6 +386,195 @@ Use Vue DevTools to inspect:
 - Reactive data flow
 - Performance metrics
 
+## Batch Processing Components
+
+### Batches Management Interface
+
+The batch processing system includes a comprehensive Vue.js interface for managing payment batches:
+
+#### Component Structure
+```vue
+<template>
+  <Batches>
+    <BatchUpload @upload="handleUpload" />
+    <BatchList 
+      :batches="batches" 
+      @refresh="loadBatches"
+      @view="showBatchDetails"
+    />
+    <BatchDetails 
+      v-if="selectedBatch"
+      :batch="selectedBatch"
+      @retry="handleRetry"
+      @download="downloadReport"
+    />
+  </Batches>
+</template>
+```
+
+#### Key Features
+- **File Upload**: Drag-and-drop CSV file upload with validation
+- **Real-time Progress**: Live status updates with percentage completion
+- **Error Reporting**: Detailed error display with row-by-row validation
+- **Batch Actions**: Retry failed batches, download reports, view details
+- **Responsive Design**: Mobile-optimized interface
+
+#### Usage Patterns
+
+**File Upload Component:**
+```vue
+<BatchUpload
+  :max-file-size="10240"
+  accepted-types=".csv,.txt"
+  @validation-error="showValidationError"
+  @upload-success="onBatchCreated"
+/>
+```
+
+**Batch Status Display:**
+```vue
+<BatchStatus
+  :batch="batch"
+  :show-progress="true"
+  :auto-refresh="batch.isProcessing"
+  @status-changed="handleStatusChange"
+/>
+```
+
+**Error Details Component:**
+```vue
+<BatchErrors
+  :errors="batch.metadata.processing_errors"
+  :show-row-numbers="true"
+  @retry-row="retrySpecificRow"
+/>
+```
+
+#### State Management with Pinia
+
+```javascript
+// stores/batches.js
+export const useBatchesStore = defineStore('batches', {
+  state: () => ({
+    batches: [],
+    selectedBatch: null,
+    loading: false,
+    filters: {
+      status: null,
+      sourceType: null,
+      dateRange: null
+    }
+  }),
+  
+  actions: {
+    async loadBatches() {
+      this.loading = true
+      try {
+        const response = await api.get('/accounting/payment-batches', {
+          params: this.filters
+        })
+        this.batches = response.data.data
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    async createBatch(formData) {
+      const response = await api.post('/accounting/payment-batches', formData)
+      await this.loadBatches()
+      return response.data
+    },
+    
+    async retryBatch(batchId) {
+      await api.post(`/accounting/payment-batches/${batchId}/retry`)
+      await this.loadBatches()
+    }
+  }
+})
+```
+
+#### Real-time Updates
+
+Use polling or WebSocket for real-time batch status updates:
+
+```vue
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const selectedBatch = ref(null)
+let pollInterval = null
+
+const startPolling = () => {
+  pollInterval = setInterval(async () => {
+    if (selectedBatch.value?.isProcessing) {
+      await updateBatchStatus(selectedBatch.value.id)
+    }
+  }, 2000) // Poll every 2 seconds
+}
+
+onMounted(() => startPolling())
+onUnmounted(() => clearInterval(pollInterval))
+</script>
+```
+
+#### Error Handling
+
+Implement comprehensive error handling:
+
+```vue
+<template>
+  <BatchUpload @error="handleUploadError" />
+  <ErrorDisplay 
+    v-if="error"
+    :error="error"
+    @dismiss="clearError"
+  />
+</template>
+
+<script setup>
+const error = ref(null)
+
+const handleUploadError = (errorData) => {
+  error.value = {
+    type: 'validation',
+    message: errorData.message,
+    details: errorData.errors
+  }
+}
+</script>
+```
+
+#### Testing Batch Components
+
+```javascript
+// tests/components/BatchUpload.spec.js
+import { mount } from '@vue/test-utils'
+import BatchUpload from '@/components/BatchUpload.vue'
+
+describe('BatchUpload', () => {
+  test('validates CSV file format', async () => {
+    const wrapper = mount(BatchUpload)
+    const file = new File(['invalid content'], 'test.txt', {
+      type: 'text/plain'
+    })
+    
+    await wrapper.vm.handleFile(file)
+    
+    expect(wrapper.emitted('validation-error')).toBeTruthy()
+    expect(wrapper.vm.errorMessage).toContain('Invalid CSV format')
+  })
+  
+  test('emits upload-success with batch data', async () => {
+    const wrapper = mount(BatchUpload)
+    const validFile = new File(['valid,csv,data'], 'payments.csv')
+    
+    await wrapper.vm.handleFile(validFile)
+    
+    expect(wrapper.emitted('upload-success')).toBeTruthy()
+  })
+})
+```
+
 ## Contributing
 
 When adding new components:
@@ -396,5 +585,7 @@ When adding new components:
 4. Add unit tests
 5. Ensure accessibility compliance
 6. Update the component index
+7. Test batch processing workflows end-to-end
+8. Verify real-time updates work correctly
 
 See [Component Documentation Template](./docs/components/README.md) for documentation guidelines.

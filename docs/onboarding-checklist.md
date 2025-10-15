@@ -89,6 +89,9 @@ $idempotencyKey = $request->header('Idempotency-Key');
 - [ ] Use `PaymentServiceAllocationTest` as reference
 - [ ] Test race conditions with database locks
 - [ ] Test money precision handling
+- [ ] Test batch processing workflows with CSV and manual entries
+- [ ] Test batch status monitoring and error handling
+- [ ] Use `BatchProcessingTest` as reference for comprehensive batch scenarios
 
 ## 🔒 Security & Compliance
 
@@ -205,6 +208,39 @@ public function createInvoice(
 4. Write rollback logic
 5. Test migration and rollback
 
+### Batch Processing Workflows
+1. **CSV Import Process**:
+   - Validate CSV format and required columns
+   - Handle file uploads with proper validation
+   - Create batch records with metadata
+   - Process entries asynchronously with queues
+   - Monitor progress and handle errors
+
+2. **Manual Entry Batches**:
+   - Create batch with manual payment entries
+   - Validate customer UUIDs and payment data
+   - Support auto-allocation strategies
+   - Track processing status and statistics
+
+3. **CLI Operations**:
+   ```bash
+   # Import batch from CSV
+   php artisan payment:batch:import --source=csv --file=payments.csv
+   
+   # Monitor batch status
+   php artisan payment:batch:status BATCH-20250115-001 --refresh
+   
+   # List recent batches
+   php artisan payment:batch:list --status=completed --limit=10
+   ```
+
+4. **Testing Batch Features**:
+   - Test CSV validation with malformed files
+   - Test large batch processing performance
+   - Test error handling and recovery scenarios
+   - Test real-time status updates in UI
+   - Test idempotency with duplicate batch creation
+
 ## 📚 Key Documentation
 
 ### Must Read
@@ -212,6 +248,9 @@ public function createInvoice(
 - [Testing Guidelines](./testing.md) - How to write tests
 - [API Documentation](./api/) - API reference
 - [Deployment Guide](./deployment.md) - How to deploy
+- [Payment Batch Processing Quick Start](./payment-batch-quickstart.md) - Batch processing overview
+- [Payment Batch CLI Reference](./payment-batch-cli-reference.md) - Complete CLI command reference
+- [Payment Allocations API Guide](./api-allocation-guide.md) - Payment operations reference
 
 ### Architecture
 - [System Architecture](./architecture.md)

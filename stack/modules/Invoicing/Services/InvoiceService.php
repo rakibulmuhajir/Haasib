@@ -16,6 +16,7 @@ use Brick\Money\Money;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\Accounting\Domain\Customers\Services\CustomerCreditService;
 
 /**
  * InvoiceService - Handles invoicing business logic
@@ -31,6 +32,13 @@ use Illuminate\Support\Facades\Log;
 class InvoiceService
 {
     use AuditLogging;
+
+    private CustomerCreditService $creditService;
+
+    public function __construct(CustomerCreditService $creditService)
+    {
+        $this->creditService = $creditService;
+    }
 
     /**
      * Create a new invoice
@@ -60,6 +68,15 @@ class InvoiceService
         ServiceContext $context
     ): Invoice {
         $idempotencyKey = $context->getIdempotencyKey();
+
+        // Calculate invoice total from items
+        $invoiceTotal = 0;
+        foreach ($items as $item) {
+            $invoiceTotal += ($item['quantity'] ?? 1) * ($item['unit_price'] ?? 0);
+        }
+
+        // Check credit limit enforcement
+        $this->enforceCreditLimit($customer, $invoiceTotal, $context);
 
         try {
             $result = DB::transaction(function () use ($company, $customer, $items, $currency, $invoiceDate, $dueDate, $notes, $terms, $idempotencyKey) {
@@ -635,5 +652,69 @@ class InvoiceService
         }
 
         return $prefix.str_pad($sequence, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Enforce credit limits for invoice creation
+     *
+     * @throws \RuntimeException
+     */
+    private function enforceCreditLimit(Customer $customer, float $invoiceTotal, ServiceContext $context): void
+    {
+        $creditCheck = $this->creditService->canCreateInvoice($customer, $invoiceTotal);
+
+        if (! $creditCheck['allowed']) {
+            $user = $context->getUser();
+            $overrideRequested = $context->getOptions()['override_credit_limit'] ?? false;
+            $overrideReason = $context->getOptions()['override_reason'] ?? null;
+
+            // Check if override is requested and user has permission
+            if ($overrideRequested && $this->creditService->canOverrideCreditLimit($customer, $user)) {
+                $this->logCreditOverride($customer, $invoiceTotal, $creditCheck, $context);
+
+                return;
+            }
+
+            // Log credit limit breach attempt
+            $this->logCreditBreachAttempt($customer, $invoiceTotal, $creditCheck, $context);
+
+            throw new \RuntimeException(
+                "Credit limit enforcement: {$creditCheck['message']}",
+                0,
+                null,
+                $creditCheck['details'] ?? []
+            );
+        }
+    }
+
+    /**
+     * Log credit limit override
+     */
+    private function logCreditOverride(Customer $customer, float $invoiceTotal, array $creditCheck, ServiceContext $context): void
+    {
+        $this->logAudit('invoice.credit_limit_override', [
+            'customer_id' => $customer->id,
+            'invoice_amount' => $invoiceTotal,
+            'credit_limit' => $creditCheck['details']['credit_limit'] ?? null,
+            'current_exposure' => $creditCheck['details']['current_exposure'] ?? 0,
+            'override_reason' => $context->getOptions()['override_reason'] ?? null,
+            'user_id' => $context->getUser()?->id,
+        ], $context);
+    }
+
+    /**
+     * Log credit limit breach attempt
+     */
+    private function logCreditBreachAttempt(Customer $customer, float $invoiceTotal, array $creditCheck, ServiceContext $context): void
+    {
+        $this->logAudit('invoice.credit_limit_breach_attempt', [
+            'customer_id' => $customer->id,
+            'invoice_amount' => $invoiceTotal,
+            'credit_limit' => $creditCheck['details']['credit_limit'] ?? null,
+            'current_exposure' => $creditCheck['details']['current_exposure'] ?? 0,
+            'excess_amount' => $creditCheck['details']['excess_amount'] ?? 0,
+            'user_id' => $context->getUser()?->id,
+            'reason' => $creditCheck['reason'],
+        ], $context);
     }
 }

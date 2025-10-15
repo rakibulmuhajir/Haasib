@@ -2,73 +2,57 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, SoftDeletes;
 
-    public $incrementing = false;
+    protected $table = 'invoicing.customers';
+
+    protected $primaryKey = 'id';
 
     protected $keyType = 'string';
 
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'invoicing.customers';
+    public $incrementing = false;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'company_id',
         'customer_number',
         'name',
+        'legal_name',
+        'status',
         'email',
         'phone',
-        'address',
-        'city',
-        'state',
-        'postal_code',
-        'country',
+        'default_currency',
+        'payment_terms',
+        'credit_limit',
+        'credit_limit_effective_at',
         'tax_id',
         'website',
         'notes',
-        'credit_limit',
-        'payment_terms',
-        'is_active',
         'created_by_user_id',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'credit_limit' => 'decimal:2',
-            'is_active' => 'boolean',
-            'company_id' => 'string',
-            'created_by_user_id' => 'string',
-        ];
-    }
+    protected $casts = [
+        'credit_limit' => 'decimal:2',
+        'credit_limit_effective_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $attributes = [
+        'status' => 'active',
+    ];
 
     /**
      * Get the company that owns the customer.
      */
-    public function company(): BelongsTo
+    public function company()
     {
         return $this->belongsTo(Company::class);
     }
@@ -76,9 +60,57 @@ class Customer extends Model
     /**
      * Get the user who created the customer.
      */
-    public function creator(): BelongsTo
+    public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the contacts for the customer.
+     */
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerContact::class);
+    }
+
+    /**
+     * Get the addresses for the customer.
+     */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerAddress::class);
+    }
+
+    /**
+     * Get the credit limits for the customer.
+     */
+    public function creditLimits(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerCreditLimit::class);
+    }
+
+    /**
+     * Get the statements for the customer.
+     */
+    public function statements(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerStatement::class);
+    }
+
+    /**
+     * Get the aging snapshots for the customer.
+     */
+    public function agingSnapshots(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerAgingSnapshot::class);
+    }
+
+    /**
+     * Get the communications for the customer.
+     */
+    public function communications(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerCommunication::class);
     }
 
     /**
@@ -90,7 +122,7 @@ class Customer extends Model
     }
 
     /**
-     * Get the payments from the customer.
+     * Get the payments for the customer.
      */
     public function payments(): HasMany
     {
@@ -98,29 +130,58 @@ class Customer extends Model
     }
 
     /**
-     * Scope a query to only include active customers.
+     * Get the groups for the customer.
      */
-    public function scopeActive($query)
+    public function groups()
     {
-        return $query->where('is_active', true);
+        return $this->belongsToMany(\Modules\Accounting\Domain\Customers\Models\CustomerGroup::class, 'invoicing.customer_group_members');
     }
 
     /**
-     * Scope a query to search customers by name or email.
+     * Scope to only include active customers.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope to only include customers with a specific status.
+     */
+    public function scopeWithStatus($query, string $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Scope to search customers by name or email.
      */
     public function scopeSearch($query, string $term)
     {
         return $query->where(function ($q) use ($term) {
-            $q->where('name', 'ilike', "%{$term}%")
-                ->orWhere('email', 'ilike', "%{$term}%")
-                ->orWhere('customer_number', 'ilike', "%{$term}%");
+            $q->where('name', 'ILIKE', "%{$term}%")
+                ->orWhere('legal_name', 'ILIKE', "%{$term}%")
+                ->orWhere('email', 'ILIKE', "%{$term}%")
+                ->orWhere('customer_number', 'ILIKE', "%{$term}%");
         });
     }
 
     /**
-     * Get the total outstanding balance for the customer.
+     * Get the current credit limit (latest approved).
      */
-    public function getOutstandingBalance(): float
+    public function getCurrentCreditLimitAttribute()
+    {
+        return $this->creditLimits()
+            ->where('status', 'approved')
+            ->where('effective_at', '<=', now())
+            ->orderBy('effective_at', 'desc')
+            ->first();
+    }
+
+    /**
+     * Get the current balance (sum of unpaid invoices).
+     */
+    public function getCurrentBalanceAttribute()
     {
         return $this->invoices()
             ->where('status', '!=', 'paid')
@@ -128,68 +189,13 @@ class Customer extends Model
     }
 
     /**
-     * Get the total paid amount for the customer.
+     * Get available credit (credit limit minus current balance).
      */
-    public function getTotalPaid(): float
+    public function getAvailableCreditAttribute()
     {
-        return $this->payments()->sum('amount');
-    }
+        $creditLimit = $this->current_credit_limit?->limit_amount ?? 0;
+        $currentBalance = $this->current_balance;
 
-    /**
-     * Get the total invoiced amount for the customer.
-     */
-    public function getTotalInvoiced(): float
-    {
-        return $this->invoices()->sum('total_amount');
-    }
-
-    /**
-     * Check if customer has overdue invoices.
-     */
-    public function hasOverdueInvoices(): bool
-    {
-        return $this->invoices()
-            ->where('status', '!=', 'paid')
-            ->where('due_date', '<', now())
-            ->exists();
-    }
-
-    /**
-     * Get overdue invoices.
-     */
-    public function getOverdueInvoices(): HasMany
-    {
-        return $this->invoices()
-            ->where('status', '!=', 'paid')
-            ->where('due_date', '<', now());
-    }
-
-    /**
-     * Generate a unique customer number.
-     */
-    public static function generateCustomerNumber(string $companyId): string
-    {
-        $prefix = 'CUST';
-        $sequence = static::where('company_id', $companyId)
-            ->withTrashed()
-            ->count() + 1;
-
-        return "{$prefix}-{$companyId}-{$sequence}";
-    }
-
-    /**
-     * Get customer's display name with number.
-     */
-    public function getDisplayNameAttribute(): string
-    {
-        return "{$this->customer_number} - {$this->name}";
-    }
-
-    /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return \Database\Factories\Invoicing\CustomerFactory::new();
+        return max(0, $creditLimit - $currentBalance);
     }
 }

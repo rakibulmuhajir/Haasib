@@ -67,5 +67,42 @@ Ownership
 - **Audit Trail**: Structured audit events via `App\Models\AuditEntry` hooks for all payment operations
 - **Performance Targets**: p95 receipt recording <2s, allocation completion <3s, supporting ~250 receipts/day/tenant
 
+## Customer Management Lifecycle Feature (006-customer-management-customer-work)
+**Added**: 2025-10-15
+**Key Decisions**:
+- **Domain Architecture**: Customer lifecycle logic centralized in `Modules\Accounting\Domain\Customers\` namespace with dedicated Actions, Services, Models, and Telemetry subdirectories
+- **Command Bus Integration**: All customer operations (create, update, delete, status change, credit adjustment, statement generation, import/export) dispatch through registered bus actions with full CLI parity
+- **Comprehensive Data Model**: 8 new tables supporting complete customer lifecycle:
+  - `invoicing.customers` (enhanced with lifecycle fields)
+  - `invoicing.customer_contacts` with primary contact enforcement
+  - `invoicing.customer_addresses` with default designation
+  - `invoicing.customer_groups` + `customer_group_members` for segmentation
+  - `invoicing.customer_communications` for interaction history
+  - `invoicing.customer_credit_limits` with effective/expiry dates
+  - `invoicing.customer_statements` with document generation
+  - `invoicing.customer_aging_snapshots` for risk assessment
+- **Multi-Tenant Security**: Comprehensive RLS policies on all customer tables with `company_id` filtering and audit triggers
+- **Granular RBAC**: Extended permission set with 12 specific customer permissions covering view, create, update, delete, contact management, credit management, statement generation, and import/export operations
+- **Credit Enforcement**: Real-time credit limit checking during invoice creation with override support and audit logging
+- **Aging & Statements**: Automated aging calculations with nightly scheduler, on-demand refresh capability, and PDF/CSV statement generation
+- **Import/Export**: Bulk data operations supporting CSV, JSON, XLSX formats with validation, preview, and idempotency protection
+- **Advanced UI**: 8 Vue components using PrimeVue with tabbed interface, interactive charts, real-time updates, and responsive design
+- **Performance Optimization**: Database indexes for p95 <1.2s customer list queries, efficient aging calculations, and queue-based processing
+- **Observability**: Comprehensive audit logging, Prometheus metrics, and structured logging for all customer operations
+
+**Technical Notes**:
+- Customer numbers auto-generated with tenant-specific sequences (e.g., CUST-0001)
+- Credit limit adjustments support approval workflows and conflict resolution
+- Communication logging supports multiple channels (email, phone, meeting, note) with timeline view
+- Risk assessment with automated health scoring and collection recommendations
+- Statement generation includes watermarking, checksum verification, and delivery tracking
+- All CLI commands support `--json` output and `--dry-run` modes for testing
+
+**Future Considerations**:
+- Customer self-service portal for viewing statements and updating contact information
+- Advanced credit scoring with payment history integration
+- Automated collection workflows with configurable escalation rules
+- Integration with accounting systems for automatic payment application
+
 See also
 - PR review checklist: `.github/pull_request_template.md`

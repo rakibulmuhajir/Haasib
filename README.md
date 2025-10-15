@@ -530,7 +530,25 @@ The backend exposes a REST-style API for interacting with the system.
 * `GET  /api/v1/status` – simple health check.
 * `GET  /api/v1/users` – list existing users (authentication required).
 
-Additional routes and sample requests are available in the API documentation within the `docs/` directory.
+### Payment Processing & Batch Operations
+
+* `POST /api/accounting/payment-batches` – create and process payment batches from CSV or manual entries
+* `GET  /api/accounting/payment-batches/{id}` – get batch status and processing progress
+* `GET  /api/accounting/payment-batches` – list batches with filtering options
+* `POST /api/payments/{id}/allocations` – allocate payments to invoices with multiple strategies
+* `GET  /api/payments/{id}/receipt` – generate payment receipts in JSON or PDF format
+
+### Key Features
+
+- **Batch Processing**: Bulk payment processing from CSV files, manual entries, or bank feeds
+- **Auto-Allocation**: Intelligent payment allocation across customer invoices (FIFO, proportional, overdue_first, etc.)
+- **Real-time Monitoring**: Live batch processing status with progress tracking and error reporting
+- **Idempotent Operations**: Safe retry mechanisms with idempotency keys
+- **Multi-tenant Support**: Row-level security ensures complete tenant isolation
+
+Additional routes and sample requests are available in the API documentation within the `docs/` directory:
+- [Payment Allocations API Guide](./docs/api-allocation-guide.md)
+- [Batch Processing Quick Start](./docs/payment-batch-quickstart.md)
 
 ## 3. Laravel Setup and initialization
 

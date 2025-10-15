@@ -2,109 +2,92 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ChartOfAccount extends Model
 {
-    use HasFactory, HasUuids;
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
+    use HasFactory;
 
     /**
      * The table associated with the model.
-     *
-     * @var string
      */
-    protected $table = 'acct.accounts';
+    protected $table = 'accounting.chart_of_accounts';
+
+    /**
+     * The primary key associated with the table.
+     */
+    protected $primaryKey = 'account_code';
+
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     */
+    protected $keyType = 'string';
 
     /**
      * The attributes that are mass assignable.
-     *
-     * @var list<string>
      */
     protected $fillable = [
-        'company_id',
-        'account_group_id',
-        'code',
-        'name',
-        'description',
-        'normal_balance',
-        'is_active',
-        'allow_manual_entries',
+        'account_code',
+        'account_name',
         'account_type',
-        'currency',
-        'opening_balance',
-        'opening_balance_date',
-        'parent_id',
+        'account_category',
+        'is_active',
+        'description',
+        'parent_account_code',
+        'company_id',
+        'created_at',
+        'updated_at',
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * The attributes that should be cast.
      */
-    protected function casts(): array
-    {
-        return [
-            'opening_balance' => 'decimal:2',
-            'opening_balance_date' => 'date',
-            'is_active' => 'boolean',
-            'allow_manual_entries' => 'boolean',
-            'company_id' => 'string',
-            'account_group_id' => 'string',
-            'parent_id' => 'string',
-        ];
-    }
+    protected $casts = [
+        'is_active' => 'boolean',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
 
     /**
-     * Get the company that owns the account.
+     * Get the company that owns the chart of account.
      */
-    public function company(): BelongsTo
+    public function company()
     {
-        return $this->belongsTo(Company::class);
-    }
-
-    /**
-     * Get the account group for the account.
-     */
-    public function accountGroup(): BelongsTo
-    {
-        return $this->belongsTo(AccountGroup::class);
+        return $this->belongsTo(Company::class, 'company_id');
     }
 
     /**
      * Get the parent account.
      */
-    public function parent(): BelongsTo
+    public function parentAccount()
     {
-        return $this->belongsTo(self::class, 'parent_id');
+        return $this->belongsTo(ChartOfAccount::class, 'parent_account_code', 'account_code');
     }
 
     /**
      * Get the child accounts.
      */
-    public function children(): HasMany
+    public function childAccounts()
     {
-        return $this->hasMany(self::class, 'parent_id');
+        return $this->hasMany(ChartOfAccount::class, 'parent_account_code', 'account_code');
     }
 
     /**
-     * Get the journal transactions for the account.
+     * Get the journal entries for this account.
      */
-    public function journalTransactions(): HasMany
+    public function journalEntries()
     {
-        return $this->hasMany(JournalTransaction::class);
+        return $this->hasMany(JournalEntry::class, 'account_code', 'account_code');
     }
 
     /**
-     * Scope a query to only include active accounts.
+     * Scope to get active accounts.
      */
     public function scopeActive($query)
     {
@@ -112,100 +95,54 @@ class ChartOfAccount extends Model
     }
 
     /**
-     * Scope a query to filter by account type.
+     * Scope to get accounts by type.
      */
-    public function scopeOfType($query, string $type)
+    public function scopeByType($query, string $accountType)
     {
-        return $query->where('account_type', $type);
+        return $query->where('account_type', $accountType);
     }
 
     /**
-     * Scope a query to get parent accounts (no parent_id).
+     * Scope to get accounts by category.
      */
-    public function scopeParents($query)
+    public function scopeByCategory($query, string $accountCategory)
     {
-        return $query->whereNull('parent_id');
+        return $query->where('account_category', $accountCategory);
     }
 
     /**
-     * Scope a query to get detail accounts (has parent_id).
+     * Get the account type label.
      */
-    public function scopeDetails($query)
+    public function getAccountTypeLabelAttribute(): string
     {
-        return $query->whereNotNull('parent_id');
+        $labels = [
+            'asset' => 'Asset',
+            'liability' => 'Liability',
+            'equity' => 'Equity',
+            'revenue' => 'Revenue',
+            'expense' => 'Expense',
+        ];
+
+        return $labels[$this->account_type] ?? $this->account_type;
     }
 
     /**
-     * Get the current balance for the account.
+     * Get the account category label.
      */
-    public function getCurrentBalance(): float
+    public function getAccountCategoryLabelAttribute(): string
     {
-        $debits = $this->journalTransactions()
-            ->where('debit_credit', 'debit')
-            ->sum('amount');
+        $labels = [
+            'current_assets' => 'Current Assets',
+            'fixed_assets' => 'Fixed Assets',
+            'current_liabilities' => 'Current Liabilities',
+            'long_term_liabilities' => 'Long-term Liabilities',
+            'owner_equity' => 'Owner Equity',
+            'operating_revenue' => 'Operating Revenue',
+            'non_operating_revenue' => 'Non-operating Revenue',
+            'operating_expenses' => 'Operating Expenses',
+            'non_operating_expenses' => 'Non-operating Expenses',
+        ];
 
-        $credits = $this->journalTransactions()
-            ->where('debit_credit', 'credit')
-            ->sum('amount');
-
-        if ($this->normal_balance === 'debit') {
-            return $debits - $credits + $this->opening_balance;
-        } else {
-            return $credits - $debits + $this->opening_balance;
-        }
-    }
-
-    /**
-     * Get the balance for a specific period.
-     */
-    public function getPeriodBalance($startDate, $endDate): float
-    {
-        $debits = $this->journalTransactions()
-            ->whereHas('journalEntry', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            })
-            ->where('debit_credit', 'debit')
-            ->sum('amount');
-
-        $credits = $this->journalTransactions()
-            ->whereHas('journalEntry', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            })
-            ->where('debit_credit', 'credit')
-            ->sum('amount');
-
-        if ($this->normal_balance === 'debit') {
-            return $debits - $credits;
-        } else {
-            return $credits - $debits;
-        }
-    }
-
-    /**
-     * Check if this is a balance sheet account.
-     */
-    public function isBalanceSheet(): bool
-    {
-        return in_array($this->accountGroup->accountClass->type ?? '', [
-            'balance_sheet',
-        ]);
-    }
-
-    /**
-     * Check if this is an income statement account.
-     */
-    public function isIncomeStatement(): bool
-    {
-        return in_array($this->accountGroup->accountClass->type ?? '', [
-            'income_statement',
-        ]);
-    }
-
-    /**
-     * Create a new factory instance for the model.
-     */
-    protected static function newFactory(): Factory
-    {
-        return \Database\Factories\ChartOfAccountFactory::new();
+        return $labels[$this->account_category] ?? $this->account_category;
     }
 }

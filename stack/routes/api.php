@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Api\CommandController;
 use App\Http\Controllers\Api\CurrencyApiController;
-use App\Http\Controllers\Api\CustomerApiController;
 use App\Http\Controllers\Api\InvoiceApiController;
 use App\Http\Controllers\Api\InvoicingRequirementsController;
 use App\Http\Controllers\Api\PaymentApiController;
@@ -94,23 +93,98 @@ Route::prefix('currencies')->name('api.currencies.')->middleware(['web', 'auth']
 
 // Customer Routes
 Route::prefix('customers')->name('customers.')->group(function () {
-    Route::get('/', [CustomerApiController::class, 'index'])->name('index');
-    Route::post('/', [CustomerApiController::class, 'store'])->name('store')->middleware('idempotent');
-    Route::get('/{id}', [CustomerApiController::class, 'show'])->whereUuid('id')->name('show');
-    Route::put('/{id}', [CustomerApiController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
-    Route::delete('/{id}', [CustomerApiController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+    Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'index'])->name('index')->middleware('permission:accounting.customers.view');
+    Route::post('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'store'])->name('store')->middleware(['idempotent', 'permission:accounting.customers.create']);
+    Route::get('/{id}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'show'])->whereUuid('id')->name('show')->middleware('permission:accounting.customers.view');
+    Route::put('/{id}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'update'])->whereUuid('id')->name('update')->middleware(['idempotent', 'permission:accounting.customers.update']);
+    Route::delete('/{id}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware(['idempotent', 'permission:accounting.customers.delete']);
+
+    // Customer Status
+    Route::post('/{id}/status', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'changeStatus'])->whereUuid('id')->name('status.change')->middleware('permission:accounting.customers.update');
+
+    // Customer Credit Limits
+    Route::get('/{id}/credit-limit', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimit'])->whereUuid('id')->name('credit-limit.show')->middleware('permission:accounting.customers.manage_credit');
+    Route::post('/{id}/credit-limit', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimitAdjust'])->whereUuid('id')->name('credit-limit.adjust')->middleware(['idempotent', 'permission:accounting.customers.manage_credit']);
+    Route::post('/{id}/credit-limit/{creditLimitId}/approve', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimitApprove'])->whereUuid('id')->whereUuid('creditLimitId')->name('credit-limit.approve')->middleware(['idempotent', 'permission:accounting.customers.manage_credit']);
+    Route::post('/{id}/credit-limit/{creditLimitId}/reject', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimitReject'])->whereUuid('id')->whereUuid('creditLimitId')->name('credit-limit.reject')->middleware(['idempotent', 'permission:accounting.customers.manage_credit']);
+    Route::get('/{id}/credit-limit/history', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimitHistory'])->whereUuid('id')->name('credit-limit.history')->middleware('permission:accounting.customers.manage_credit');
+    Route::post('/{id}/credit-limit/check', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'creditLimitCheck'])->whereUuid('id')->name('credit-limit.check')->middleware('permission:accounting.customers.view');
 
     // Customer Relations
-    Route::get('/{id}/invoices', [CustomerApiController::class, 'invoices'])->whereUuid('id')->name('invoices');
-    Route::get('/{id}/payments', [CustomerApiController::class, 'payments'])->whereUuid('id')->name('payments');
-    Route::get('/{id}/statement', [CustomerApiController::class, 'statement'])->whereUuid('id')->name('statement');
-    Route::get('/{id}/statistics', [CustomerApiController::class, 'statistics'])->whereUuid('id')->name('statistics');
+    Route::get('/{id}/invoices', [\App\Http\Controllers\Api\CustomerApiController::class, 'invoices'])->whereUuid('id')->name('invoices')->middleware('permission:accounting.customers.view');
+    Route::get('/{id}/payments', [\App\Http\Controllers\Api\CustomerApiController::class, 'payments'])->whereUuid('id')->name('payments')->middleware('permission:accounting.customers.view');
+    Route::get('/{id}/statement', [\App\Http\Controllers\Api\CustomerApiController::class, 'statement'])->whereUuid('id')->name('statement')->middleware('permission:accounting.customers.view');
+    Route::get('/{id}/statistics', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'statistics'])->whereUuid('id')->name('statistics')->middleware('permission:accounting.customers.view');
+
+    // Customer Contacts
+    Route::prefix('/{id}/contacts')->name('contacts.')->whereUuid('id')->group(function () {
+        Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsIndex'])->name('index')->middleware('permission:accounting.customers.manage_contacts');
+        Route::post('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsStore'])->name('store')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::get('/{contactId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsShow'])->whereUuid('contactId')->name('show')->middleware('permission:accounting.customers.manage_contacts');
+        Route::put('/{contactId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsUpdate'])->whereUuid('contactId')->name('update')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::delete('/{contactId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsDestroy'])->whereUuid('contactId')->name('destroy')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::post('/{contactId}/set-primary', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'contactsSetPrimary'])->whereUuid('contactId')->name('set-primary')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+    });
+
+    // Customer Addresses
+    Route::prefix('/{id}/addresses')->name('addresses.')->whereUuid('id')->group(function () {
+        Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesIndex'])->name('index')->middleware('permission:accounting.customers.manage_contacts');
+        Route::post('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesStore'])->name('store')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::get('/{addressId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesShow'])->whereUuid('addressId')->name('show')->middleware('permission:accounting.customers.manage_contacts');
+        Route::put('/{addressId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesUpdate'])->whereUuid('addressId')->name('update')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::delete('/{addressId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesDestroy'])->whereUuid('addressId')->name('destroy')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+        Route::post('/{addressId}/set-default', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'addressesSetDefault'])->whereUuid('addressId')->name('set-default')->middleware(['idempotent', 'permission:accounting.customers.manage_contacts']);
+    });
+
+    // Customer Groups
+    Route::prefix('/{id}/groups')->name('groups.')->whereUuid('id')->group(function () {
+        Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsIndex'])->name('index')->middleware('permission:accounting.customers.manage_groups');
+        Route::post('/assign', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsAssign'])->name('assign')->middleware(['idempotent', 'permission:accounting.customers.manage_groups']);
+        Route::delete('/{groupId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsRemove'])->whereUuid('groupId')->name('remove')->middleware(['idempotent', 'permission:accounting.customers.manage_groups']);
+    });
+
+    // Customer Communications
+    Route::prefix('/{id}/communications')->name('communications.')->whereUuid('id')->group(function () {
+        Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'communicationsIndex'])->name('index')->middleware('permission:accounting.customers.manage_comms');
+        Route::post('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'communicationsStore'])->name('store')->middleware(['idempotent', 'permission:accounting.customers.manage_comms']);
+        Route::get('/{commId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'communicationsShow'])->whereUuid('commId')->name('show')->middleware('permission:accounting.customers.manage_comms');
+        Route::delete('/{commId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'communicationsDestroy'])->whereUuid('commId')->name('destroy')->middleware(['idempotent', 'permission:accounting.customers.manage_comms']);
+        Route::get('/timeline', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'communicationsTimeline'])->name('timeline')->middleware('permission:accounting.customers.manage_comms');
+    });
+
+    // Customer Groups Management (Global)
+    Route::prefix('groups')->name('groups.')->group(function () {
+        Route::get('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsGlobalIndex'])->name('index')->middleware('permission:accounting.customers.manage_groups');
+        Route::post('/', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsGlobalStore'])->name('store')->middleware(['idempotent', 'permission:accounting.customers.manage_groups']);
+        Route::get('/{groupId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsGlobalShow'])->whereUuid('groupId')->name('show')->middleware('permission:accounting.customers.manage_groups');
+        Route::put('/{groupId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsGlobalUpdate'])->whereUuid('groupId')->name('update')->middleware(['idempotent', 'permission:accounting.customers.manage_groups']);
+        Route::delete('/{groupId}', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsGlobalDestroy'])->whereUuid('groupId')->name('destroy')->middleware(['idempotent', 'permission:accounting.customers.manage_groups']);
+        Route::get('/{groupId}/members', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'groupsMembers'])->whereUuid('groupId')->name('members')->middleware('permission:accounting.customers.manage_groups');
+    });
 
     // Customer Search
-    Route::get('/search', [CustomerApiController::class, 'search'])->name('search');
+    Route::get('/search', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'search'])->name('search')->middleware('permission:accounting.customers.view');
 
-    // Bulk Operations
-    Route::post('/bulk', [CustomerApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
+    // Customer Aging & Statements
+    Route::get('/{id}/aging', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'aging'])->whereUuid('id')->name('aging')->middleware('permission:accounting.customers.view');
+    Route::post('/{id}/aging/refresh', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'agingRefresh'])->whereUuid('id')->name('aging.refresh')->middleware(['idempotent', 'permission:accounting.customers.view']);
+    Route::get('/{id}/statements', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'statements'])->whereUuid('id')->name('statements')->middleware('permission:accounting.customers.view');
+    Route::post('/{id}/statements/generate', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'statementGenerate'])->whereUuid('id')->name('statements.generate')->middleware(['idempotent', 'permission:accounting.customers.view']);
+    Route::get('/{id}/statements/{statementId}/download', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'statementDownload'])->whereUuid('id')->whereUuid('statementId')->name('statements.download')->middleware('permission:accounting.customers.view');
+
+    // Company-wide Customer Analytics
+    Route::get('/company/aging-summary', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'companyAgingSummary'])->name('company.aging-summary')->middleware('permission:accounting.customers.view');
+    Route::get('/company/high-risk-customers', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'highRiskCustomers'])->name('company.high-risk-customers')->middleware('permission:accounting.customers.view');
+
+    // Customer Import/Export
+    Route::post('/import', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'import'])->name('import')->middleware(['idempotent', 'permission:accounting.customers.create']);
+    Route::get('/import/{batchId}/status', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'importStatus'])->whereUuid('batchId')->name('import.status')->middleware('permission:accounting.customers.view');
+    Route::post('/export', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'exportCustomers'])->name('export.customers')->middleware(['idempotent', 'permission:accounting.customers.view']);
+    Route::get('/export/{batchId}/download', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'exportDownload'])->whereUuid('batchId')->name('export.download')->middleware('permission:accounting.customers.view');
+
+    // Export & Bulk Operations
+    Route::get('/export', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'export'])->name('export')->middleware('permission:accounting.customers.view');
+    Route::post('/bulk', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'bulk'])->name('bulk')->middleware(['idempotent', 'permission:accounting.customers.update']);
 });
 
 // Invoice Template Routes

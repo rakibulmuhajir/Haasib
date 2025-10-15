@@ -2,38 +2,33 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class PaymentAllocation extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, SoftDeletes;
 
-    public $incrementing = false;
+    protected $table = 'invoicing.payment_allocations';
+
+    protected $primaryKey = 'id';
 
     protected $keyType = 'string';
 
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'invoicing.payment_allocations';
+    public $incrementing = false;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
+        'id',
         'company_id',
         'payment_id',
         'invoice_id',
         'allocated_amount',
+        'original_amount',
+        'discount_amount',
+        'discount_percent',
         'allocation_date',
         'allocation_method',
         'allocation_strategy',
@@ -41,54 +36,64 @@ class PaymentAllocation extends Model
         'reversed_at',
         'reversal_reason',
         'reversed_by_user_id',
+        'status',
         'created_by_user_id',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'allocation_date' => 'datetime',
-            'allocated_amount' => 'decimal:2',
-            'reversed_at' => 'datetime',
-            'company_id' => 'string',
-            'payment_id' => 'string',
-            'invoice_id' => 'string',
-            'created_by_user_id' => 'string',
-            'reversed_by_user_id' => 'string',
-        ];
-    }
+    protected $casts = [
+        'allocated_amount' => 'decimal:2',
+        'original_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'discount_percent' => 'decimal:2',
+        'allocation_date' => 'date',
+        'reversed_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $dates = [
+        'allocation_date',
+        'reversed_at',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+
+    // Constants for status
+    const STATUS_ACTIVE = 'active';
+    const STATUS_REVERSED = 'reversed';
+
+    // Constants for allocation methods
+    const METHOD_MANUAL = 'manual';
+    const METHOD_AUTOMATIC = 'automatic';
 
     /**
-     * Get the company that owns the allocation.
-     */
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class);
-    }
-
-    /**
-     * Get the payment for the allocation.
+     * Get the payment for this allocation.
      */
     public function payment(): BelongsTo
     {
-        return $this->belongsTo(Payment::class);
+        return $this->belongsTo(Payment::class, 'payment_id');
     }
 
     /**
-     * Get the invoice for the allocation.
+     * Get the invoice for this allocation.
      */
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        return $this->belongsTo(Invoice::class, 'invoice_id');
     }
 
     /**
-     * Get the user who created the allocation.
+     * Get the company that owns this allocation.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    /**
+     * Get the user who created this allocation.
      */
     public function creator(): BelongsTo
     {
@@ -96,7 +101,7 @@ class PaymentAllocation extends Model
     }
 
     /**
-     * Get the user who reversed the allocation.
+     * Get the user who reversed this allocation.
      */
     public function reverser(): BelongsTo
     {
@@ -104,100 +109,177 @@ class PaymentAllocation extends Model
     }
 
     /**
-     * Get the user who reversed the allocation (alias for reversedByUser).
+     * Get allocation method label.
      */
-    public function reversedByUser(): BelongsTo
+    public function getAllocationMethodLabelAttribute(): string
     {
-        return $this->reverser();
+        return match($this->allocation_method) {
+            self::METHOD_MANUAL => 'Manual',
+            self::METHOD_AUTOMATIC => 'Automatic',
+            default => $this->allocation_method,
+        };
     }
 
     /**
-     * Check if the allocation is reversed.
+     * Get status label.
      */
-    public function getIsReversedAttribute(): bool
+    public function getStatusLabelAttribute(): string
     {
-        return !is_null($this->reversed_at);
+        return match($this->status) {
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_REVERSED => 'Reversed',
+            default => $this->status,
+        };
     }
 
     /**
-     * Scope a query to only include active allocations.
+     * Scope allocations by company.
+     */
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    /**
+     * Scope allocations by payment.
+     */
+    public function scopeForPayment($query, $paymentId)
+    {
+        return $query->where('payment_id', $paymentId);
+    }
+
+    /**
+     * Scope allocations by invoice.
+     */
+    public function scopeForInvoice($query, $invoiceId)
+    {
+        return $query->where('invoice_id', $invoiceId);
+    }
+
+    /**
+     * Scope active allocations (not reversed).
      */
     public function scopeActive($query)
     {
-        return $query->whereNull('reversed_at');
+        return $query->whereNull('reversed_at')->where('status', self::STATUS_ACTIVE);
     }
 
     /**
-     * Scope a query to only include reversed allocations.
+     * Scope reversed allocations.
      */
     public function scopeReversed($query)
     {
-        return $query->whereNotNull('reversed_at');
+        return $query->whereNotNull('reversed_at')->orWhere('status', self::STATUS_REVERSED);
     }
 
     /**
-     * Scope a query to only include allocations with a specific method.
+     * Scope allocations by method.
      */
-    public function scopeWithMethod($query, string $method)
+    public function scopeByMethod($query, $method)
     {
         return $query->where('allocation_method', $method);
     }
 
     /**
-     * Scope a query to only include allocations with a specific strategy.
+     * Scope allocations by date range.
      */
-    public function scopeWithStrategy($query, string $strategy)
+    public function scopeByDateRange($query, $startDate, $endDate = null)
     {
-        return $query->where('allocation_strategy', $strategy);
+        $query->where('allocation_date', '>=', $startDate);
+        
+        if ($endDate) {
+            $query->where('allocation_date', '<=', $endDate);
+        }
+        
+        return $query;
     }
 
     /**
-     * Scope a query to filter by date range.
+     * Check if the allocation is active.
      */
-    public function scopeBetweenDates($query, $startDate, $endDate)
+    public function isActive(): bool
     {
-        return $query->whereBetween('allocation_date', [$startDate, $endDate]);
+        return is_null($this->reversed_at) && $this->status === self::STATUS_ACTIVE;
     }
 
     /**
-     * Check if the allocation is active (not reversed).
+     * Check if the allocation has been reversed.
      */
-    public function getIsActiveAttribute(): bool
+    public function isReversed(): bool
     {
-        return is_null($this->reversed_at);
+        return !is_null($this->reversed_at) || $this->status === self::STATUS_REVERSED;
+    }
+
+    /**
+     * Check if the allocation can be reversed.
+     */
+    public function canBeReversed(): bool
+    {
+        return $this->isActive();
     }
 
     /**
      * Reverse the allocation.
      */
-    public function reverse(string $reason, ?User $user = null): void
+    public function reverse(string $reason, ?string $reverserUserId = null): void
     {
-        $this->reversed_at = now();
-        $this->reversal_reason = $reason;
-        $this->reversed_by_user_id = $user?->id ?? auth()->id();
-        $this->save();
-
-        // Update invoice balance
-        $this->invoice->calculateTotals();
-
-        // Log the reversal
-        activity()
-            ->causedBy($user ?? auth()->user())
-            ->performedOn($this)
-            ->withProperties([
-                'reason' => $reason,
-                'amount' => $this->allocated_amount,
-                'payment_id' => $this->payment_id,
-                'invoice_id' => $this->invoice_id,
-            ])
-            ->log('payment_allocation_reversed');
+        $this->update([
+            'reversed_at' => now(),
+            'reversal_reason' => $reason,
+            'reversed_by_user_id' => $reverserUserId ?? auth()->id(),
+            'status' => self::STATUS_REVERSED,
+        ]);
     }
 
     /**
-     * Create a new factory instance for the model.
+     * Get the effective amount (after discount).
      */
-    protected static function newFactory(): Factory
+    public function getEffectiveAmountAttribute(): float
     {
-        return \Database\Factories\PaymentAllocationFactory::new();
+        return $this->allocated_amount - ($this->discount_amount ?? 0);
     }
+
+    /**
+     * Get the discount percentage as a formatted string.
+     */
+    public function getDiscountPercentFormattedAttribute(): string
+    {
+        return number_format($this->discount_percent, 2) . '%';
+    }
+
+    /**
+     * Boot the model.
+     */
+    protected static function booted()
+    {
+        static::creating(function ($allocation) {
+            if (!$allocation->id) {
+                $allocation->id = Str::uuid();
+            }
+            
+            if (!$allocation->created_by_user_id) {
+                $allocation->created_by_user_id = auth()->id();
+            }
+            
+            if (!$allocation->status) {
+                $allocation->status = self::STATUS_ACTIVE;
+            }
+            
+            if (!$allocation->allocation_date) {
+                $allocation->allocation_date = now();
+            }
+        });
+
+        static::updating(function ($allocation) {
+            // Prevent changes to reversed allocations
+            if ($allocation->isReversed() && $allocation->isDirty('allocated_amount')) {
+                throw new \InvalidArgumentException('Cannot modify a reversed allocation');
+            }
+        });
+    }
+
+    /**
+     * The attributes that are mass assignable.
+     */
+    protected $guarded = [];
 }

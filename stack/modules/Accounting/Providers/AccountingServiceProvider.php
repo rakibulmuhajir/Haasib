@@ -10,6 +10,8 @@ use Modules\Accounting\Domain\Payments\Actions\ReversePaymentAction;
 use Modules\Accounting\Domain\Payments\Actions\ReverseAllocationAction;
 use Modules\Accounting\Domain\Payments\Actions\CreatePaymentBatchAction;
 use Modules\Accounting\Domain\Payments\Actions\ProcessPaymentBatchAction;
+use Modules\Accounting\Domain\Payments\Services\PaymentQueryService;
+use Modules\Accounting\Domain\Payments\Listeners\PaymentAuditListener;
 
 class AccountingServiceProvider extends ServiceProvider
 {
@@ -37,5 +39,21 @@ class AccountingServiceProvider extends ServiceProvider
         $this->app->bind('payment.allocation.reverse', ReverseAllocationAction::class);
         $this->app->bind('payment.batch.create', CreatePaymentBatchAction::class);
         $this->app->bind('payment.batch.process', ProcessPaymentBatchAction::class);
+        
+        // Register services
+        $this->app->singleton(PaymentQueryService::class);
+        
+        // Load routes
+        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        
+        // Register event subscribers
+        $this->app->subscribe(PaymentAuditListener::class);
+        
+        // Register CLI commands
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Modules\Accounting\CLI\Commands\PaymentAllocationReport::class,
+            ]);
+        }
     }
 }

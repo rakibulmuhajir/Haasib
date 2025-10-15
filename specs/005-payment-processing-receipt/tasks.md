@@ -53,19 +53,19 @@ description: "Task list for Payment Processing - Receipt & Allocation"
 
 ### Tests for User Story 1 — write first, ensure they fail ⚠️
 
-- [ ] T005 [P] [US1] Author fail-first feature tests in `stack/modules/Accounting/Tests/Feature/Payments/RecordPaymentTest.php` covering command-bus `payment.create` + manual allocations (`payment.allocate`) with RLS assertions.
-- [ ] T006 [P] [US1] Add console parity tests in `tests/Console/PaymentAllocateCommandTest.php` ensuring JSON output and error handling for allocation CLI workflows.
+- [x] T005 [P] [US1] Author fail-first feature tests in `stack/modules/Accounting/Tests/Feature/Payments/RecordPaymentTest.php` covering command-bus `payment.create` + manual allocations (`payment.allocate`) with RLS assertions.
+- [x] T006 [P] [US1] Add console parity tests in `tests/Console/PaymentAllocateCommandTest.php` ensuring JSON output and error handling for allocation CLI workflows.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Implement `RecordPaymentAction` and `AllocatePaymentAction` in `stack/modules/Accounting/Domain/Payments/Actions/` with idempotency + telemetry hooks, and register concrete classes in `stack/modules/Accounting/Domain/Payments/Actions/registry.php`.
-- [ ] T008 [US1] Update Eloquent models `stack/app/Models/Payment.php` and `stack/app/Models/PaymentAllocation.php` to add batch relations, aggregated accessors (`total_allocated`, `remaining_amount`), and tenancy scopes matching `data-model.md`.
-- [ ] T009 [US1] Refactor services `stack/app/Services/PaymentService.php` and `stack/app/Services/PaymentAllocationService.php` to delegate through command-bus actions, enforce validation rules, and emit audit/metric events.
-- [ ] T010 [US1] Replace stub API controller with real implementation by creating `stack/modules/Accounting/Http/Controllers/Api/PaymentController.php`, updating `stack/routes/api.php` bindings, and serializing responses that match `contracts/payments.yaml` (`POST /payments`, `POST /payments/{id}/allocations`, `POST /payments/{id}/allocations/auto`, `GET /payments/{id}`, `GET /payments/{id}/allocations`).
-- [ ] T011 [US1] Update CLI commands `stack/modules/Accounting/CLI/Commands/PaymentRecord.php` and `stack/app/Console/Commands/PaymentAllocate.php` to dispatch through the command bus, add `--format=json` parity, and surface allocation strategy options.
-- [ ] T012 [US1] Build Inertia UI for payments: create `stack/resources/js/Pages/Invoicing/Payments/Index.vue` plus supporting components under `stack/resources/js/Components/Payments/` using PrimeVue dialog/datatable to record receipts and allocations.
-- [ ] T013 [P] [US1] Add localization keys in `stack/resources/js/locales/en/payments.json` and `stack/resources/js/locales/ar/payments.json`, wiring components to vue-i18n with ARIA annotations.
-- [ ] T014 [US1] Document CLI/API workflow updates in `specs/005-payment-processing-receipt/quickstart.md` section 1–3 to reflect new command options and endpoints.
+- [x] T007 [US1] Implement `RecordPaymentAction` and `AllocatePaymentAction` in `stack/modules/Accounting/Domain/Payments/Actions/` with idempotency + telemetry hooks, and register concrete classes in `stack/modules/Accounting/Domain/Payments/Actions/registry.php`.
+- [x] T008 [US1] Update Eloquent models `stack/app/Models/Payment.php` and `stack/app/Models/PaymentAllocation.php` to add batch relations, aggregated accessors (`total_allocated`, `remaining_amount`), and tenancy scopes matching `data-model.md`.
+- [x] T009 [US1] Refactor services `stack/app/Services/PaymentService.php` and `stack/app/Services/PaymentAllocationService.php` to delegate through command-bus actions, enforce validation rules, and emit audit/metric events.
+- [x] T010 [US1] Replace stub API controller with real implementation by creating `stack/modules/Accounting/Http/Controllers/Api/PaymentController.php`, updating `stack/routes/api.php` bindings, and serializing responses that match `contracts/payments.yaml` (`POST /payments`, `POST /payments/{id}/allocations`, `POST /payments/{id}/allocations/auto`, `GET /payments/{id}`, `GET /payments/{id}/allocations`).
+- [x] T011 [US1] Update CLI commands `stack/modules/Accounting/CLI/Commands/PaymentRecord.php` and `stack/modules/Accounting/CLI/Commands/PaymentAllocate.php` to dispatch through the command bus, add `--format=json` parity, and surface allocation strategy options.
+- [x] T012 [US1] Build Inertia UI for payments: create `stack/resources/js/Pages/Invoicing/Payments/Index.vue` plus supporting components under `stack/resources/js/Components/Payments/` using PrimeVue dialog/datatable to record receipts and allocations.
+- [x] T013 [P] [US1] Add localization keys in `stack/resources/js/locales/en/payments.json` and `stack/resources/js/locales/ar/payments.json`, wiring components to vue-i18n with ARIA annotations.
+- [x] T014 [US1] Document CLI/API workflow updates in `specs/005-payment-processing-receipt/quickstart.md` section 1–3 to reflect new command options and endpoints.
 
 **Checkpoint**: User Story 1 delivers manual & automatic receipt allocation across API/CLI/UI with updated balances and passing tests.
 
@@ -79,16 +79,16 @@ description: "Task list for Payment Processing - Receipt & Allocation"
 
 ### Tests for User Story 2 — write first, ensure they fail ⚠️
 
-- [ ] T015 [P] [US2] Add feature tests in `stack/modules/Accounting/Tests/Feature/Payments/OverpaymentTest.php` covering discount calculation, unallocated cash creation, and receipt rendering.
-- [ ] T016 [P] [US2] Create contract tests in `tests/Feature/Api/Payments/ReceiptEndpointTest.php` validating `/payments/{paymentId}/receipt` outputs for PDF + JSON.
+- [x] T015 [P] [US2] Add feature tests in `stack/modules/Accounting/Tests/Feature/Payments/OverpaymentTest.php` covering discount calculation, unallocated cash creation, and receipt rendering.
+- [x] T016 [P] [US2] Create contract tests in `tests/Feature/Api/Payments/ReceiptEndpointTest.php` validating `/payments/{paymentId}/receipt` outputs for PDF + JSON.
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Extend domain actions in `stack/modules/Accounting/Domain/Payments/Actions/AllocatePaymentAction.php` to calculate early-payment discounts and persist unallocated cash entries (e.g., view or helper) per `data-model.md`.
-- [ ] T018 [US2] Implement receipt builder service `stack/modules/Accounting/Domain/Payments/Services/PaymentReceiptService.php` and wire `GET /payments/{paymentId}/receipt` in `stack/modules/Accounting/Http/Controllers/Api/PaymentController.php` to stream PDF/JSON responses.
-- [ ] T019 [US2] Surface overpayment and receipt download UI in `stack/resources/js/Pages/Invoicing/Payments/Index.vue` (and child components) including credit indicators and localized download actions.
-- [ ] T020 [P] [US2] Update CLI commands `PaymentRecord` and `PaymentAllocate` to output unallocated cash + receipt reference data, and add new command `payment:receipt` in `stack/app/Console/Commands/PaymentReceipt.php`.
-- [ ] T021 [US2] Add documentation for discounts/unallocated cash handling in `docs/api-allocation-guide.md` and `specs/005-payment-processing-receipt/quickstart.md` section 4.
+- [x] T017 [US2] Extend domain actions in `stack/modules/Accounting/Domain/Payments/Actions/AllocatePaymentAction.php` to calculate early-payment discounts and persist unallocated cash entries (e.g., view or helper) per `data-model.md`.
+- [x] T018 [US2] Implement receipt builder service `stack/modules/Accounting/Domain/Payments/Services/PaymentReceiptService.php` and wire `GET /payments/{paymentId}/receipt` in `stack/modules/Accounting/Http/Controllers/Api/PaymentController.php` to stream PDF/JSON responses.
+- [x] T019 [US2] Surface overpayment and receipt download UI in `stack/resources/js/Pages/Invoicing/Payments/Index.vue` (and child components) including credit indicators and localized download actions.
+- [x] T020 [P] [US2] Update CLI commands `PaymentRecord` and `PaymentAllocate` to output unallocated cash + receipt reference data, and add new command `payment:receipt` in `stack/app/Console/Commands/PaymentReceipt.php`.
+- [x] T021 [US2] Add documentation for discounts/unallocated cash handling in `docs/api-allocation-guide.md` and `specs/005-payment-processing-receipt/quickstart.md` section 4.
 
 **Checkpoint**: User Story 2 supports overpayments, receipt generation, and updated documentation with passing tests.
 

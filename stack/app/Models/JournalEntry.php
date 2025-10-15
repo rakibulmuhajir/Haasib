@@ -2,75 +2,100 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JournalEntry extends Model
 {
-    use HasFactory, HasUuids;
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
+    use HasFactory;
 
     /**
      * The table associated with the model.
-     *
-     * @var string
      */
-    protected $table = 'acct.journal_entries';
+    protected $table = 'accounting.journal_entries';
+
+    /**
+     * The primary key associated with the table.
+     */
+    protected $primaryKey = 'id';
+
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     */
+    protected $keyType = 'string';
 
     /**
      * The attributes that are mass assignable.
-     *
-     * @var list<string>
      */
     protected $fillable = [
+        'payment_id',
+        'invoice_id',
+        'allocation_id',
         'company_id',
-        'reference',
+        'entry_type',
+        'account_code',
+        'debit_amount',
+        'credit_amount',
         'description',
+        'reference',
         'date',
-        'type',
+        'balance',
         'status',
-        'created_by',
-        'posted_by',
+        'metadata',
         'posted_at',
-        'voided_by',
-        'voided_at',
-        'void_reason',
-        'currency',
-        'exchange_rate',
-        'fiscal_year_id',
-        'accounting_period_id',
-        'attachments',
+        'created_at',
+        'updated_at',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'debit_amount' => 'decimal:2',
+        'credit_amount' => 'decimal:2',
+        'balance' => 'decimal:2',
+        'date' => 'date',
+        'posted_at' => 'datetime',
+        'metadata' => 'array',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * The attributes that should be hidden for arrays.
+     */
+    protected $hidden = [
         'metadata',
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Get the payment that owns the journal entry.
      */
-    protected function casts(): array
+    public function payment(): BelongsTo
     {
-        return [
-            'date' => 'date',
-            'posted_at' => 'datetime',
-            'voided_at' => 'datetime',
-            'exchange_rate' => 'decimal:8',
-            'company_id' => 'string',
-            'created_by' => 'string',
-            'posted_by' => 'string',
-            'voided_by' => 'string',
-            'fiscal_year_id' => 'string',
-            'accounting_period_id' => 'string',
-            'attachments' => 'array',
-            'metadata' => 'array',
-        ];
+        return $this->belongsTo(Payment::class, 'payment_id');
+    }
+
+    /**
+     * Get the invoice that owns the journal entry.
+     */
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'invoice_id');
+    }
+
+    /**
+     * Get the allocation that owns the journal entry.
+     */
+    public function allocation(): BelongsTo
+    {
+        return $this->belongsTo(PaymentAllocation::class, 'allocation_id');
     }
 
     /**
@@ -78,83 +103,59 @@ class JournalEntry extends Model
      */
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class, 'company_id');
     }
 
     /**
-     * Get the user who created the entry.
+     * Get the chart of account for this entry.
      */
-    public function creator(): BelongsTo
+    public function chartOfAccount()
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(ChartOfAccount::class, 'account_code', 'account_code');
     }
 
     /**
-     * Get the user who posted the entry.
+     * Scope to get entries for a specific payment.
      */
-    public function poster(): BelongsTo
+    public function scopeForPayment($query, string $paymentId)
     {
-        return $this->belongsTo(User::class, 'posted_by');
+        return $query->where('payment_id', $paymentId);
     }
 
     /**
-     * Get the user who voided the entry.
+     * Scope to get entries for a specific invoice.
      */
-    public function voider(): BelongsTo
+    public function scopeForInvoice($query, string $invoiceId)
     {
-        return $this->belongsTo(User::class, 'voided_by');
+        return $query->where('invoice_id', $invoiceId);
     }
 
     /**
-     * Get the fiscal year for the entry.
+     * Scope to get entries for a specific company.
      */
-    public function fiscalYear(): BelongsTo
+    public function scopeForCompany($query, string $companyId)
     {
-        return $this->belongsTo(FiscalYear::class);
+        return $query->where('company_id', $companyId);
     }
 
     /**
-     * Get the accounting period for the entry.
+     * Scope to get entries by type.
      */
-    public function period(): BelongsTo
+    public function scopeByType($query, string $entryType)
     {
-        return $this->belongsTo(AccountingPeriod::class, 'accounting_period_id');
+        return $query->where('entry_type', $entryType);
     }
 
     /**
-     * Get the transactions for the journal entry.
+     * Scope to get entries by account code.
      */
-    public function transactions(): HasMany
+    public function scopeByAccount($query, string $accountCode)
     {
-        return $this->hasMany(JournalTransaction::class);
+        return $query->where('account_code', $accountCode);
     }
 
     /**
-     * Scope a query to only include entries with a specific status.
-     */
-    public function scopeWithStatus($query, string $status)
-    {
-        return $query->where('status', $status);
-    }
-
-    /**
-     * Scope a query to only include draft entries.
-     */
-    public function scopeDraft($query)
-    {
-        return $query->where('status', 'draft');
-    }
-
-    /**
-     * Scope a query to only include approved entries.
-     */
-    public function scopeApproved($query)
-    {
-        return $query->where('status', 'approved');
-    }
-
-    /**
-     * Scope a query to only include posted entries.
+     * Scope to get posted entries.
      */
     public function scopePosted($query)
     {
@@ -162,86 +163,63 @@ class JournalEntry extends Model
     }
 
     /**
-     * Scope a query to filter by journal type.
+     * Scope to get entries in a date range.
      */
-    public function scopeOfType($query, string $type)
-    {
-        return $query->where('type', $type);
-    }
-
-    /**
-     * Scope a query to filter by date range.
-     */
-    public function scopeBetweenDates($query, $startDate, $endDate)
+    public function scopeInDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('date', [$startDate, $endDate]);
     }
 
     /**
-     * Check if the entry is balanced.
+     * Check if entry is a debit entry.
      */
-    public function checkBalanced(): bool
+    public function isDebit(): bool
     {
-        $totalDebits = $this->transactions()->where('debit_credit', 'debit')->sum('amount');
-        $totalCredits = $this->transactions()->where('debit_credit', 'credit')->sum('amount');
-
-        return abs($totalDebits - $totalCredits) < 0.01;
+        return $this->debit_amount > 0;
     }
 
     /**
-     * Post the journal entry.
+     * Check if entry is a credit entry.
      */
-    public function post(User $user): void
+    public function isCredit(): bool
     {
-        if ($this->status !== 'draft') {
-            throw new \Exception('Journal entry must be in draft status to post');
-        }
-
-        if (! $this->checkBalanced()) {
-            throw new \Exception('Cannot post unbalanced journal entry');
-        }
-
-        $this->status = 'posted';
-        $this->posted_at = now();
-        $this->posted_by = $user->id;
-        $this->save();
+        return $this->credit_amount > 0;
     }
 
     /**
-     * Void the journal entry.
+     * Get the amount (debit or credit).
      */
-    public function void(User $user, string $reason): void
+    public function getAmount(): float
     {
-        if ($this->status === 'void') {
-            throw new \Exception('Journal entry is already void');
-        }
-
-        $this->status = 'void';
-        $this->voided_at = now();
-        $this->voided_by = $user->id;
-        $this->void_reason = $reason;
-        $this->save();
+        return max($this->debit_amount, $this->credit_amount);
     }
 
     /**
-     * Generate a unique reference number.
+     * Get the entry type label.
      */
-    public static function generateReference(string $companyId, string $type = 'JE'): string
+    public function getEntryTypeLabelAttribute(): string
     {
-        $year = now()->format('Y');
-        $sequence = static::where('company_id', $companyId)
-            ->where('type', $type)
-            ->whereYear('created_at', $year)
-            ->count() + 1;
+        $labels = [
+            'payment' => 'Payment',
+            'reversal' => 'Payment Reversal',
+            'allocation' => 'Allocation',
+            'allocation_reversal' => 'Allocation Reversal',
+        ];
 
-        return "{$type}-{$year}-{$sequence}";
+        return $labels[$this->entry_type] ?? $this->entry_type;
     }
 
     /**
-     * Create a new factory instance for the model.
+     * Get the status label.
      */
-    protected static function newFactory(): Factory
+    public function getStatusLabelAttribute(): string
     {
-        return \Database\Factories\JournalEntryFactory::new();
+        $labels = [
+            'draft' => 'Draft',
+            'posted' => 'Posted',
+            'void' => 'Void',
+        ];
+
+        return $labels[$this->status] ?? $this->status;
     }
 }

@@ -22,14 +22,19 @@ class AutoAllocatePaymentAction
             'options' => 'nullable|array',
         ])->validate();
 
-        // TODO: Implement actual auto-allocation logic
-        // This will be implemented in T007
+        // Find the payment
+        $payment = Payment::findOrFail($paymentId);
+        
+        // Execute auto-allocation based on strategy
+        $allocationService = new PaymentAllocationService();
+        $result = $allocationService->autoAllocate($payment, $strategy, $options ?? []);
         
         return [
             'payment_id' => $paymentId,
             'strategy_used' => $strategy,
-            'allocations_created' => 0, // TODO: Calculate actual number
-            'message' => 'Auto-allocation completed successfully',
+            'allocations_created' => $result['allocations_count'],
+            'total_allocated' => $result['total_allocated'],
+            'message' => $result['message'],
         ];
     }
 }

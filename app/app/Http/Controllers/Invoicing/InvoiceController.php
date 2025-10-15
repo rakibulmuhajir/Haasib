@@ -704,8 +704,28 @@ class InvoiceController extends Controller
             elseif ($newStatus === 'void') {
                 $invoice->status = 'void';
                 $invoice->cancellation_reason = $validated['void_reason'] ?? 'Voided by user';
-                // TODO: Handle reversal reference for posted/paid invoices
-                // This would typically create reversing journal entries
+                // Handle reversal reference for posted/paid invoices
+                // Create reversing journal entries for voided posted invoices
+                if ($invoice->status === 'posted') {
+                    try {
+                        $this->journalService->createReversingEntries($invoice, ServiceContextHelper::fromRequest($request, $company));
+                        
+                        Log::info('Reversing journal entries created for voided invoice', [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'reason' => $invoice->cancellation_reason,
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create reversing journal entries', [
+                            'invoice_id' => $invoice->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        
+                        // Continue with voiding but note the reversal issue
+                        $invoice->reversal_status = 'failed';
+                        $invoice->reversal_error = $e->getMessage();
+                    }
+                }
             }
             // Special handling for cancelling
             elseif ($newStatus === 'cancelled') {

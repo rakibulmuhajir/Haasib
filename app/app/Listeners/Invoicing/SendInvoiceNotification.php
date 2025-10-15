@@ -42,10 +42,23 @@ class SendInvoiceNotification implements ShouldQueue
                     'amount' => $invoice->total_amount,
                 ]);
 
-                // TODO: Create and send actual notification
-                // Example:
-                // $notification = new InvoiceSentNotification($invoice);
-                // NotificationFacade::route('mail', $contact->email)->notify($notification);
+                // Send invoice notification via email
+                try {
+                    \Illuminate\Support\Facades\Mail::to($contact->email)
+                        ->send(new \App\Mail\InvoiceSentMail($invoice));
+                        
+                    Log::info('Invoice notification sent', [
+                        'invoice_id' => $invoice->id,
+                        'contact_email' => $contact->email,
+                        'invoice_number' => $invoice->invoice_number,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send invoice notification', [
+                        'invoice_id' => $invoice->id,
+                        'contact_email' => $contact->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             // Also notify company users who should be alerted
@@ -60,9 +73,22 @@ class SendInvoiceNotification implements ShouldQueue
                     'invoice_number' => $invoice->invoice_number,
                 ]);
 
-                // TODO: Create and send internal notification
-                // Example:
-                // $user->notify(new InvoiceSentInternalNotification($invoice));
+                // Send internal notification to company users
+                try {
+                    $user->notify(new \App\Notifications\InvoiceSentInternalNotification($invoice));
+                    
+                    Log::info('Internal invoice notification sent', [
+                        'user_id' => $user->id,
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send internal invoice notification', [
+                        'user_id' => $user->id,
+                        'invoice_id' => $invoice->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
         } catch (\Exception $e) {

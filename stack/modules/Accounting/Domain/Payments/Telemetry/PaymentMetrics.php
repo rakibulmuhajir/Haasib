@@ -103,29 +103,173 @@ class PaymentMetrics
     }
     
     /**
+     * Record batch creation metric
+     */
+    public static function batchCreated(string $companyId, string $sourceType, int $receiptCount, float $totalAmount): void
+    {
+        self::increment('batch_created_total', [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        self::histogram('batch_receipt_count', $receiptCount, [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        self::histogram('batch_total_amount', $totalAmount, [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        Log::info('Payment batch created', [
+            'event' => 'payment.batch.created',
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+            'receipt_count' => $receiptCount,
+            'total_amount' => $totalAmount,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
      * Record batch processing metric
      */
-    public static function batchProcessed(string $companyId, int $paymentCount, int $successCount, int $failureCount): void
+    public static function batchProcessed(string $companyId, string $sourceType, int $processedCount, float $processedAmount): void
     {
         self::increment('batch_processed_total', [
             'company_id' => $companyId,
+            'source_type' => $sourceType,
         ]);
         
-        self::histogram('batch_payment_count', $paymentCount, [
+        self::histogram('batch_processed_count', $processedCount, [
             'company_id' => $companyId,
+            'source_type' => $sourceType,
         ]);
         
-        self::histogram('batch_success_rate', $failureCount > 0 ? $successCount / ($successCount + $failureCount) : 1.0, [
+        self::histogram('batch_processed_amount', $processedAmount, [
             'company_id' => $companyId,
+            'source_type' => $sourceType,
         ]);
         
         Log::info('Payment batch processed', [
             'event' => 'payment.batch.processed',
             'company_id' => $companyId,
-            'payment_count' => $paymentCount,
-            'success_count' => $successCount,
-            'failure_count' => $failureCount,
-            'success_rate' => $failureCount > 0 ? $successCount / ($successCount + $failureCount) : 1.0,
+            'source_type' => $sourceType,
+            'processed_count' => $processedCount,
+            'processed_amount' => $processedAmount,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
+     * Record batch failure metric
+     */
+    public static function batchFailed(string $companyId, string $sourceType, int $failedCount): void
+    {
+        self::increment('batch_failed_total', [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        self::histogram('batch_failure_count', $failedCount, [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        Log::warning('Payment batch failed', [
+            'event' => 'payment.batch.failed',
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+            'failed_count' => $failedCount,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
+     * Record batch processing errors metric
+     */
+    public static function batchErrors(string $companyId, string $sourceType, int $errorCount): void
+    {
+        self::increment('batch_error_total', [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        self::histogram('batch_error_count', $errorCount, [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        Log::warning('Payment batch errors recorded', [
+            'event' => 'payment.batch.errors',
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+            'error_count' => $errorCount,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
+     * Record batch processing time metric
+     */
+    public static function batchProcessingTime(string $companyId, string $sourceType, float $processingTimeSeconds): void
+    {
+        self::histogram('batch_processing_time_seconds', $processingTimeSeconds, [
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+        ]);
+        
+        Log::info('Payment batch processing time recorded', [
+            'event' => 'payment.batch.processing_time',
+            'company_id' => $companyId,
+            'source_type' => $sourceType,
+            'processing_time_seconds' => $processingTimeSeconds,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
+     * Record batch retry metric
+     */
+    public static function batchRetry(string $companyId, string $batchId, string $reason): void
+    {
+        self::increment('batch_retry_total', [
+            'company_id' => $companyId,
+            'reason' => $reason,
+        ]);
+        
+        Log::info('Payment batch retry initiated', [
+            'event' => 'payment.batch.retry',
+            'company_id' => $companyId,
+            'batch_id' => $batchId,
+            'reason' => $reason,
+            'timestamp' => now()->toISOString(),
+        ]);
+    }
+    
+    /**
+     * Record allocation reversal metric for batch context
+     */
+    public static function allocationReversed(string $companyId, float $originalAmount, float $refundAmount): void
+    {
+        self::increment('allocation_reversal_total', [
+            'company_id' => $companyId,
+        ]);
+        
+        self::histogram('allocation_reversal_original_amount', $originalAmount, [
+            'company_id' => $companyId,
+        ]);
+        
+        self::histogram('allocation_reversal_refund_amount', $refundAmount, [
+            'company_id' => $companyId,
+        ]);
+        
+        Log::info('Allocation reversed', [
+            'event' => 'payment.allocation.reversed',
+            'company_id' => $companyId,
+            'original_amount' => $originalAmount,
+            'refund_amount' => $refundAmount,
             'timestamp' => now()->toISOString(),
         ]);
     }

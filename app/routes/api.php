@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\InvoiceApiController;
 use App\Http\Controllers\Api\InvoicingRequirementsController;
 use App\Http\Controllers\Api\PaymentApiController;
 use App\Http\Controllers\InlineEditController;
+use Modules\Accounting\Http\Controllers\Api\PaymentController as AccountingPaymentController;
 use Illuminate\Support\Facades\Route;
 
 // API Routes for Invoicing System
@@ -61,6 +62,16 @@ Route::prefix('payments')->name('payments.')->group(function () {
 
     // Bulk Operations
     Route::post('/bulk', [PaymentApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
+});
+
+// Command Bus Payment Routes (New Implementation)
+Route::prefix('accounting/payments')->name('accounting.payments.')->group(function () {
+    Route::post('/', [AccountingPaymentController::class, 'store'])->name('store')->middleware('idempotent');
+    Route::get('/{paymentId}', [AccountingPaymentController::class, 'show'])->whereUuid('paymentId')->name('show');
+    Route::post('/{paymentId}/allocations', [AccountingPaymentController::class, 'allocate'])->whereUuid('paymentId')->name('allocate')->middleware('idempotent');
+    Route::post('/{paymentId}/allocations/auto', [AccountingPaymentController::class, 'autoAllocate'])->whereUuid('paymentId')->name('auto-allocate')->middleware('idempotent');
+    Route::get('/{paymentId}/allocations', [AccountingPaymentController::class, 'allocations'])->whereUuid('paymentId')->name('allocations');
+    Route::get('/{paymentId}/receipt', [AccountingPaymentController::class, 'receipt'])->whereUuid('paymentId')->name('receipt');
 });
 
 // Currency Routes - uses web middleware for session authentication

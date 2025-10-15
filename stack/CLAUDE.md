@@ -11,9 +11,11 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - php - 8.3.6
 - inertiajs/inertia-laravel (INERTIA) - v2
 - laravel/framework (LARAVEL) - v12
+- laravel/horizon (HORIZON) - v5
 - laravel/octane (OCTANE) - v2
 - laravel/prompts (PROMPTS) - v0
 - laravel/sanctum (SANCTUM) - v4
+- laravel/telescope (TELESCOPE) - v5
 - tightenco/ziggy (ZIGGY) - v2
 - laravel/breeze (BREEZE) - v2
 - laravel/pint (PINT) - v1
@@ -417,12 +419,4 @@ $pages->assertNoJavascriptErrors()->assertNoConsoleLogs();
 ## Tailwind 3
 
 - Always use Tailwind CSS v3 - verify you're using only classes supported by this version.
-
-
-=== tests rules ===
-
-## Test Enforcement
-
-- Every change must be programmatically tested. Write a new test or update an existing test, then run the affected tests to make sure they pass.
-- Run the minimum number of tests needed to ensure code quality and speed. Use `php artisan test` with a specific filename or filter.
 </laravel-boost-guidelines>

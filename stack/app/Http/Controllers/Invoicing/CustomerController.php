@@ -9,9 +9,22 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Accounting\Domain\Customers\Actions\ChangeCustomerStatusAction;
+use Modules\Accounting\Domain\Customers\Actions\CreateCustomerAction;
+use Modules\Accounting\Domain\Customers\Actions\DeleteCustomerAction;
+use Modules\Accounting\Domain\Customers\Actions\UpdateCustomerAction;
+use Modules\Accounting\Domain\Customers\Services\CustomerQueryService;
 
 class CustomerController extends Controller
 {
+    public function __construct(
+        private CustomerQueryService $customerQueryService,
+        private CreateCustomerAction $createCustomerAction,
+        private UpdateCustomerAction $updateCustomerAction,
+        private DeleteCustomerAction $deleteCustomerAction,
+        private ChangeCustomerStatusAction $changeCustomerStatusAction
+    ) {}
+
     /**
      * Display a listing of the resource.
      */
@@ -20,19 +33,33 @@ class CustomerController extends Controller
         $user = $request->user();
         $currentCompany = $request->attributes->get('company');
 
-        $customers = Customer::query()
-            ->where('company_id', $currentCompany->id)
-            ->with(['invoices', 'payments'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+        // Build filters from request
+        $filters = [
+            'status' => $request->get('status'),
+            'search' => $request->get('search'),
+            'currency' => $request->get('currency'),
+        ];
 
-        return Inertia::render('Customers/Index', [
+        $customers = $this->customerQueryService->getCustomers(
+            $currentCompany,
+            array_filter($filters),
+            $request->get('per_page', 15)
+        );
+
+        $statistics = $this->customerQueryService->getCustomerStatistics($currentCompany);
+
+        return Inertia::render('Accounting/Customers/Index', [
             'customers' => $customers,
+            'filters' => $filters,
+            'statistics' => $statistics,
             'can' => [
-                'create' => $user->hasPermissionTo('customers.create'),
-                'export' => $user->hasPermissionTo('customers.export'),
-                'update' => $user->hasPermissionTo('customers.update'),
-                'delete' => $user->hasPermissionTo('customers.delete'),
+                'create' => $user->hasPermissionTo('accounting.customers.create'),
+                'export' => $user->hasPermissionTo('accounting.customers.export'),
+                'update' => $user->hasPermissionTo('accounting.customers.update'),
+                'delete' => $user->hasPermissionTo('accounting.customers.delete'),
+                'manage_contacts' => $user->hasPermissionTo('accounting.customers.manage_contacts'),
+                'manage_credit' => $user->hasPermissionTo('accounting.customers.manage_credit'),
+                'generate_statements' => $user->hasPermissionTo('accounting.customers.generate_statements'),
             ],
         ]);
     }
@@ -52,26 +79,44 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'legal_name' => 'nullable|string|max:255',
+            'customer_number' => 'nullable|string|max:30',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
-            'address' => 'nullable|string|max:500',
-            'city' => 'nullable|string|max:100',
-            'country' => 'nullable|string|max:100',
+            'default_currency' => 'required|string|size:3',
+            'payment_terms' => 'nullable|string|max:100',
+            'credit_limit' => 'nullable|numeric|min:0',
             'tax_id' => 'nullable|string|max:50',
-            'notes' => 'nullable|string|max:1000',
+            'website' => 'nullable|url|max:255',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|in:active,inactive,blocked',
         ]);
 
         $currentCompany = $request->attributes->get('company');
+        $user = $request->user();
 
-        $customer = Customer::create([
-            ...$validated,
-            'company_id' => $currentCompany->id,
-        ]);
+        try {
+            $customer = $this->createCustomerAction->execute(
+                $currentCompany,
+                $validated,
+                $user
+            );
 
-        return response()->json([
-            'message' => 'Customer created successfully',
-            'customer' => $customer,
-        ], 201);
+            return response()->json([
+                'message' => 'Customer created successfully',
+                'customer' => $customer,
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to create customer',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -81,10 +126,40 @@ class CustomerController extends Controller
     {
         $this->authorizeCustomerAccess($request, $customer);
 
-        $customer->load(['invoices', 'payments']);
+        $currentCompany = $request->attributes->get('company');
+        $user = $request->user();
 
-        return Inertia::render('Customers/Show', [
+        $customer = $this->customerQueryService->getCustomerDetails($currentCompany, $customer->id);
+
+        if (! $customer) {
+            abort(404, 'Customer not found');
+        }
+
+        // Get credit limit information if user has permission
+        $creditData = null;
+        if ($user->hasPermissionTo('accounting.customers.manage_credit')) {
+            $creditService = app(\Modules\Accounting\Domain\Customers\Services\CustomerCreditService::class);
+            $creditLimit = $creditService->getCurrentCreditLimit($customer);
+            $currentExposure = $creditService->getCurrentExposure($customer);
+
+            $creditData = [
+                'credit_limit' => $creditLimit,
+                'current_exposure' => $currentExposure,
+                'available_credit' => $creditLimit ? max(0, $creditLimit - $currentExposure) : null,
+                'utilization_percentage' => $creditLimit ? round(($currentExposure / $creditLimit) * 100, 1) : 0,
+            ];
+        }
+
+        return Inertia::render('Accounting/Customers/Show', [
             'customer' => $customer,
+            'creditData' => $creditData,
+            'can' => [
+                'update' => $user->hasPermissionTo('accounting.customers.update'),
+                'delete' => $user->hasPermissionTo('accounting.customers.delete'),
+                'manage_contacts' => $user->hasPermissionTo('accounting.customers.manage_contacts'),
+                'manage_credit' => $user->hasPermissionTo('accounting.customers.manage_credit'),
+                'generate_statements' => $user->hasPermissionTo('accounting.customers.generate_statements'),
+            ],
         ]);
     }
 
@@ -108,22 +183,46 @@ class CustomerController extends Controller
         $this->authorizeCustomerAccess($request, $customer);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'sometimes|required|string|max:255',
+            'legal_name' => 'nullable|string|max:255',
+            'customer_number' => 'nullable|string|max:30',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
-            'address' => 'nullable|string|max:500',
-            'city' => 'nullable|string|max:100',
-            'country' => 'nullable|string|max:100',
+            'default_currency' => 'sometimes|required|string|size:3',
+            'payment_terms' => 'nullable|string|max:100',
+            'credit_limit' => 'nullable|numeric|min:0',
             'tax_id' => 'nullable|string|max:50',
-            'notes' => 'nullable|string|max:1000',
+            'website' => 'nullable|url|max:255',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|in:active,inactive,blocked',
         ]);
 
-        $customer->update($validated);
+        $currentCompany = $request->attributes->get('company');
+        $user = $request->user();
 
-        return response()->json([
-            'message' => 'Customer updated successfully',
-            'customer' => $customer,
-        ]);
+        try {
+            $customer = $this->updateCustomerAction->execute(
+                $currentCompany,
+                $customer->id,
+                $validated,
+                $user
+            );
+
+            return response()->json([
+                'message' => 'Customer updated successfully',
+                'customer' => $customer,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to update customer',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -133,11 +232,30 @@ class CustomerController extends Controller
     {
         $this->authorizeCustomerAccess($request, $customer);
 
-        $customer->delete();
+        $currentCompany = $request->attributes->get('company');
+        $user = $request->user();
 
-        return response()->json([
-            'message' => 'Customer deleted successfully',
-        ]);
+        try {
+            $this->deleteCustomerAction->execute(
+                $currentCompany,
+                $customer->id,
+                $user
+            );
+
+            return response()->json([
+                'message' => 'Customer deleted successfully',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Cannot delete customer',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete customer',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

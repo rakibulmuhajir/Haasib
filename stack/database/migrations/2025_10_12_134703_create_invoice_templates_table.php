@@ -2,7 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades.DB;
+use Illuminate\Support\Facades.Schema;
 
 return new class extends Migration
 {
@@ -11,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.invoice_templates', function (Blueprint $table) {
+        Schema::create('acct.invoice_templates', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->string('name', 255);
@@ -33,7 +34,7 @@ return new class extends Migration
 
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('set null');
 
             $table->foreign('created_by_user_id')
@@ -48,6 +49,19 @@ return new class extends Migration
             $table->index(['is_active']);
             $table->index(['created_by_user_id']);
         });
+
+        DB::statement('ALTER TABLE acct.invoice_templates ENABLE ROW LEVEL SECURITY');
+        DB::statement("
+            CREATE POLICY invoice_templates_company_policy
+            ON acct.invoice_templates
+            FOR ALL
+            USING (
+                company_id = current_setting('app.current_company_id')::uuid
+            )
+            WITH CHECK (
+                company_id = current_setting('app.current_company_id')::uuid
+            )
+        ");
     }
 
     /**
@@ -55,6 +69,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.invoice_templates');
+        DB::statement('DROP POLICY IF EXISTS invoice_templates_company_policy ON acct.invoice_templates');
+        DB::statement('ALTER TABLE acct.invoice_templates DISABLE ROW LEVEL SECURITY');
+        Schema::dropIfExists('acct.invoice_templates');
     }
 };

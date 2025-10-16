@@ -64,7 +64,7 @@ class InvoiceTemplateController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'customer_id' => 'nullable|uuid|exists:invoicing.customers,id',
+            'customer_id' => 'nullable|uuid|exists:acct.customers,id',
             'currency' => 'required|string|size:3',
             'template_data' => 'required|array',
             'template_data.notes' => 'nullable|string',
@@ -136,7 +136,7 @@ class InvoiceTemplateController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
-            'customer_id' => 'sometimes|nullable|uuid|exists:invoicing.customers,id',
+            'customer_id' => 'sometimes|nullable|uuid|exists:acct.customers,id',
             'currency' => 'sometimes|required|string|size:3',
             'template_data' => 'sometimes|required|array',
             'template_data.notes' => 'sometimes|nullable|string',
@@ -192,7 +192,7 @@ class InvoiceTemplateController extends Controller
         $this->authorize('apply', $template);
 
         $validated = $request->validate([
-            'customer_id' => 'nullable|uuid|exists:invoicing.customers,id',
+            'customer_id' => 'nullable|uuid|exists:acct.customers,id',
             'overrides' => 'nullable|array',
             'overrides.currency' => 'nullable|string|size:3',
             'overrides.issue_date' => 'nullable|date',
@@ -237,7 +237,7 @@ class InvoiceTemplateController extends Controller
     public function createFromInvoice(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'invoice_id' => 'required|uuid|exists:invoicing.invoices,id',
+            'invoice_id' => 'required|uuid|exists:acct.invoices,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
         ]);

@@ -264,7 +264,7 @@ class InvoiceTemplateService
         $rules = [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'customer_id' => 'nullable|uuid|exists:invoicing.customers,id',
+            'customer_id' => 'nullable|uuid|exists:acct.customers,id',
             'currency' => 'required|string|size:3',
             'template_data.line_items' => 'required|array|min:1',
             'template_data.line_items.*.description' => 'required|string',

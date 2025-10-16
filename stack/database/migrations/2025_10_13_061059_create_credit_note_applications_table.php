@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.credit_note_applications', function (Blueprint $table) {
+        Schema::create('acct.credit_note_applications', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('credit_note_id');
             $table->uuid('invoice_id');
@@ -22,8 +22,8 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreign('credit_note_id')->references('id')->on('invoicing.credit_notes')->onDelete('cascade');
-            $table->foreign('invoice_id')->references('id')->on('invoicing.invoices')->onDelete('cascade');
+            $table->foreign('credit_note_id')->references('id')->on('acct.credit_notes')->onDelete('cascade');
+            $table->foreign('invoice_id')->references('id')->on('acct.invoices')->onDelete('cascade');
             $table->foreign('applied_by_user_id')->references('id')->on('auth.users')->onDelete('set null');
 
             // Indexes
@@ -38,6 +38,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.credit_note_applications');
+        Schema::dropIfExists('acct.credit_note_applications');
     }
 };

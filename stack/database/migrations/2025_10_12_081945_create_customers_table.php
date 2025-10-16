@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.customers', function (Blueprint $table) {
+        Schema::create('acct.customers', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->string('customer_number')->unique();
@@ -53,16 +53,16 @@ return new class extends Migration
         });
 
         // Add soft deletes
-        Schema::table('invoicing.customers', function (Blueprint $table) {
+        Schema::table('acct.customers', function (Blueprint $table) {
             $table->softDeletes();
         });
 
         // Add RLS policies for PostgreSQL
-        DB::statement('ALTER TABLE "invoicing.customers" ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE "acct.customers" ENABLE ROW LEVEL SECURITY');
 
         // Policy: Users can only see customers from their companies
         DB::statement("
-            CREATE POLICY customers_select_policy ON \"invoicing.customers\"
+            CREATE POLICY customers_select_policy ON \"acct.customers\"
             FOR SELECT
             USING (
                 company_id = current_setting('app.current_company_id', true)::uuid
@@ -72,7 +72,7 @@ return new class extends Migration
 
         // Policy: Company users can insert customers in their company
         DB::statement("
-            CREATE POLICY customers_insert_policy ON \"invoicing.customers\"
+            CREATE POLICY customers_insert_policy ON \"acct.customers\"
             FOR INSERT
             WITH CHECK (
                 company_id = current_setting('app.current_company_id', true)::uuid
@@ -81,7 +81,7 @@ return new class extends Migration
 
         // Policy: Users can update customers from their companies
         DB::statement("
-            CREATE POLICY customers_update_policy ON \"invoicing.customers\"
+            CREATE POLICY customers_update_policy ON \"acct.customers\"
             FOR UPDATE
             USING (
                 company_id = current_setting('app.current_company_id', true)::uuid
@@ -90,7 +90,7 @@ return new class extends Migration
 
         // Policy: Users can delete customers from their companies
         DB::statement("
-            CREATE POLICY customers_delete_policy ON \"invoicing.customers\"
+            CREATE POLICY customers_delete_policy ON \"acct.customers\"
             FOR DELETE
             USING (
                 company_id = current_setting('app.current_company_id', true)::uuid
@@ -104,11 +104,11 @@ return new class extends Migration
     public function down(): void
     {
         // Drop RLS policies
-        DB::statement('DROP POLICY IF EXISTS customers_select_policy ON "invoicing.customers"');
-        DB::statement('DROP POLICY IF EXISTS customers_insert_policy ON "invoicing.customers"');
-        DB::statement('DROP POLICY IF EXISTS customers_update_policy ON "invoicing.customers"');
-        DB::statement('DROP POLICY IF EXISTS customers_delete_policy ON "invoicing.customers"');
+        DB::statement('DROP POLICY IF EXISTS customers_select_policy ON "acct.customers"');
+        DB::statement('DROP POLICY IF EXISTS customers_insert_policy ON "acct.customers"');
+        DB::statement('DROP POLICY IF EXISTS customers_update_policy ON "acct.customers"');
+        DB::statement('DROP POLICY IF EXISTS customers_delete_policy ON "acct.customers"');
 
-        Schema::dropIfExists('invoicing.customers');
+        Schema::dropIfExists('acct.customers');
     }
 };

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('unallocated_cash', function (Blueprint $table) {
+        Schema::create('acct.unallocated_cash', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('payment_id');
             $table->uuid('customer_id');
@@ -37,17 +38,17 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('payment_id')
                   ->references('id')
-                  ->on('payments')
+                  ->on('acct.payments')
                   ->onDelete('cascade');
-                  
+
             $table->foreign('customer_id')
                   ->references('id')
-                  ->on('hrm.customers')
+                  ->on('acct.customers')
                   ->onDelete('cascade');
-                  
+
             $table->foreign('company_id')
                   ->references('id')
-                  ->on('companies')
+                  ->on('auth.companies')
                   ->onDelete('cascade');
 
             // Unique constraint to prevent duplicate unallocated cash for same payment
@@ -57,7 +58,7 @@ return new class extends Migration
         // Create trigger for automatic RLS
         DB::unprepared("
             CREATE TRIGGER unallocated_cash_rls_trigger
-            BEFORE INSERT ON unallocated_cash
+            BEFORE INSERT ON acct.unallocated_cash
             FOR EACH ROW
             EXECUTE FUNCTION set_current_company_id();
         ");
@@ -68,6 +69,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('unallocated_cash');
+        Schema::dropIfExists('acct.unallocated_cash');
     }
 };

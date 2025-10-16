@@ -22,7 +22,7 @@ class InvoiceTemplate extends Model
      *
      * @var string
      */
-    protected $table = 'invoicing.invoice_templates';
+    protected $table = 'acct.invoice_templates';
 
     /**
      * The attributes that are mass assignable.

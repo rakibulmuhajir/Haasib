@@ -30,6 +30,12 @@ Single source of truth for execution. Pulled from the technical brief, schemas, 
 - [ ] Pre-deploy `pg_dump` backup step with checksum
 - [ ] Weekly restore drill + RLS validation script
 - [ ] Performance budgets enforced (P95 < 250ms APIs); slow query log monitored
+- [ ] **NEW**: Stand up dedicated `audit` schema (junior dev task)
+    - [ ] Create migrations for `audit.entries`, `audit.financial_transactions`, `audit.permission_changes`
+    - [ ] Update `audit_log()` helper to target `audit.entries` and add tests
+    - [ ] Migrate existing rows from `auth.audit_entries` → `audit.entries`
+    - [ ] Remove/rename old `auth.audit_entries` references across codebase
+    - [ ] (Stretch) Draft follow-up tickets for Phase 2/3 tables (`audit.data_exports`, `audit.login_attempts`, etc.)
 
 ---
 

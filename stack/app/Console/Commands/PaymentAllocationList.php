@@ -155,9 +155,9 @@ class PaymentAllocationList extends Command
             $relation = $sortField === 'payment_number' ? 'payment' : 'invoice';
             $field = $sortField === 'payment_number' ? 'payment_number' : 'invoice_number';
 
-            $query->join("invoicing.{$relation}s", "invoicing.payment_allocations.{$relation}_id", '=', "invoicing.{$relation}s.id")
-                ->orderBy("invoicing.{$relation}s.{$field}", $order)
-                ->select('invoicing.payment_allocations.*');
+            $query->join("acct.{$relation}s", "acct.payment_allocations.{$relation}_id", '=', "acct.{$relation}s.id")
+                ->orderBy("acct.{$relation}s.{$field}", $order)
+                ->select('acct.payment_allocations.*');
         } else {
             $query->orderBy($sortField, $order);
         }

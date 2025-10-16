@@ -11,7 +11,7 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'invoicing.customers';
+    protected $table = 'acct.customers';
 
     protected $primaryKey = 'id';
 
@@ -134,7 +134,7 @@ class Customer extends Model
      */
     public function groups()
     {
-        return $this->belongsToMany(\Modules\Accounting\Domain\Customers\Models\CustomerGroup::class, 'invoicing.customer_group_members');
+        return $this->belongsToMany(\Modules\Accounting\Domain\Customers\Models\CustomerGroup::class, 'acct.customer_group_members');
     }
 
     /**

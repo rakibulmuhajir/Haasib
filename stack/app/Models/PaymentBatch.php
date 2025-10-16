@@ -16,7 +16,7 @@ class PaymentBatch extends Model
     /**
      * The table associated with the model.
      */
-    protected $table = 'invoicing.payment_receipt_batches';
+    protected $table = 'acct.payment_receipt_batches';
 
     /**
      * The primary key associated with the table.

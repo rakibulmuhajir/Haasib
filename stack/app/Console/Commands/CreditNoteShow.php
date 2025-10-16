@@ -347,7 +347,7 @@ class CreditNoteShow extends CreditNoteBaseCommand
             ->get();
 
         // Get scheduled emails
-        $scheduledEmails = \DB::table('invoicing.scheduled_credit_note_emails')
+        $scheduledEmails = \DB::table('acct.scheduled_credit_note_emails')
             ->where('credit_note_id', $creditNote->id)
             ->orderBy('created_at', 'desc')
             ->get();

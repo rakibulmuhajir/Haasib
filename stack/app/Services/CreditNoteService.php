@@ -336,8 +336,8 @@ class CreditNoteService
             'posted_credit_notes' => CreditNote::forCompany($company->id)->posted()->count(),
             'cancelled_credit_notes' => CreditNote::forCompany($company->id)->cancelled()->count(),
             'total_amount_issued' => CreditNote::forCompany($company->id)->sum('total_amount'),
-            'total_amount_applied' => DB::table('invoicing.credit_note_applications')
-                ->join('invoicing.credit_notes', 'credit_note_applications.credit_note_id', '=', 'credit_notes.id')
+            'total_amount_applied' => DB::table('acct.credit_note_applications')
+                ->join('acct.credit_notes', 'credit_note_applications.credit_note_id', '=', 'credit_notes.id')
                 ->where('credit_notes.company_id', $company->id)
                 ->sum('credit_note_applications.amount_applied'),
             'credit_notes_by_currency' => CreditNote::forCompany($company->id)
@@ -431,7 +431,7 @@ class CreditNoteService
     private function validateCreditNoteData(array $data, Company $company): void
     {
         $validator = validator($data, [
-            'invoice_id' => 'required|uuid|exists:invoicing.invoices,id',
+            'invoice_id' => 'required|uuid|exists:acct.invoices,id',
             'reason' => 'required|string|max:500',
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
@@ -662,8 +662,8 @@ class CreditNoteService
             ->where('status', '!=', 'cancelled')
             ->sum('total_amount');
 
-        $appliedCreditNotes = DB::table('invoicing.credit_note_applications')
-            ->join('invoicing.credit_notes', 'credit_note_applications.credit_note_id', '=', 'credit_notes.id')
+        $appliedCreditNotes = DB::table('acct.credit_note_applications')
+            ->join('acct.credit_notes', 'credit_note_applications.credit_note_id', '=', 'credit_notes.id')
             ->where('credit_notes.invoice_id', $invoice->id)
             ->where('credit_notes.status', '!=', 'cancelled')
             ->sum('credit_note_applications.amount_applied');
@@ -874,7 +874,7 @@ class CreditNoteService
         // This would integrate with the existing payment allocation system
         // For now, we'll create a simple record in the credit_note_applications table
 
-        DB::table('invoicing.payment_allocations')->insert([
+        DB::table('acct.payment_allocations')->insert([
             'id' => str()->uuid(),
             'invoice_id' => $creditNote->invoice_id,
             'amount' => $amount,
@@ -910,7 +910,7 @@ class CreditNoteService
             $invoice->save();
 
             // Create reversal record
-            DB::table('invoicing.credit_note_application_reversals')->insert([
+            DB::table('acct.credit_note_application_reversals')->insert([
                 'id' => str()->uuid(),
                 'original_application_id' => $application->id,
                 'credit_note_id' => $application->credit_note_id,

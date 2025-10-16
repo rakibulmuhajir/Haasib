@@ -41,7 +41,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
     public function handle(CreditNoteService $creditNoteService): void
     {
         try {
-            $pendingEntries = DB::table('invoicing.pending_ledger_entries')
+            $pendingEntries = DB::table('acct.pending_ledger_entries')
                 ->where('company_id', $this->company->id)
                 ->where('reference_type', 'credit_note')
                 ->where('status', 'pending')
@@ -65,7 +65,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
 
                         if ($success) {
                             // Update pending entry status
-                            DB::table('invoicing.pending_ledger_entries')
+                            DB::table('acct.pending_ledger_entries')
                                 ->where('id', $pendingEntry->id)
                                 ->update([
                                     'status' => 'processed',
@@ -85,7 +85,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
                         }
                     } else {
                         // Mark as processed if credit note is no longer valid for integration
-                        DB::table('invoicing.pending_ledger_entries')
+                        DB::table('acct.pending_ledger_entries')
                             ->where('id', $pendingEntry->id)
                             ->update([
                                 'status' => 'invalid',
@@ -102,7 +102,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
                     ]);
 
                     // Update the error message
-                    DB::table('invoicing.pending_ledger_entries')
+                    DB::table('acct.pending_ledger_entries')
                         ->where('id', $pendingEntry->id)
                         ->update([
                             'error_message' => $e->getMessage(),
@@ -123,7 +123,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
             ]);
 
             // If there are still pending entries, dispatch another job
-            $remainingPending = DB::table('invoicing.pending_ledger_entries')
+            $remainingPending = DB::table('acct.pending_ledger_entries')
                 ->where('company_id', $this->company->id)
                 ->where('reference_type', 'credit_note')
                 ->where('status', 'pending')

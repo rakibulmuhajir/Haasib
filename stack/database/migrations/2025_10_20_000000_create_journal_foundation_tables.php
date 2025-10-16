@@ -47,6 +47,14 @@ return new class extends Migration
             $table->index(['company_id'])->where('status', '=', 'ready');
         });
 
+        DB::statement("
+            ALTER TABLE acct.journal_batches
+            ADD CONSTRAINT journal_batches_balanced
+            CHECK (
+                status != 'posted' OR total_debits = total_credits
+            )
+        ");
+
         // Create recurring journal templates table
         Schema::create('acct.recurring_journal_templates', function (Blueprint $table) {
             $table->uuid('id')->primary();

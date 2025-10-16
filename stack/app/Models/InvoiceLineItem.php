@@ -21,7 +21,7 @@ class InvoiceLineItem extends Model
      *
      * @var string
      */
-    protected $table = 'invoicing.invoice_line_items';
+    protected $table = 'acct.invoice_line_items';
 
     /**
      * The attributes that are mass assignable.

@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.customer_statements', function (Blueprint $table) {
+        Schema::create('acct.customer_statements', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('customer_id');
             $table->uuid('company_id');
@@ -33,17 +33,17 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
                 ->references('id')
-                ->on('companies')
+                ->on('auth.companies')
                 ->onDelete('cascade');
 
             $table->foreign('generated_by_user_id')
                 ->references('id')
-                ->on('users')
+                ->on('auth.users')
                 ->onDelete('set null');
 
             // Indexes for performance
@@ -71,7 +71,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.customer_statements');
+        Schema::dropIfExists('acct.customer_statements');
     }
 
     /**
@@ -80,7 +80,7 @@ return new class extends Migration
     private function createAuditTrigger(): void
     {
         $trigger = <<<'SQL'
-        CREATE OR REPLACE FUNCTION invoicing.customer_statements_audit_trigger()
+        CREATE OR REPLACE FUNCTION acct.customer_statements_audit_trigger()
         RETURNS TRIGGER AS $$
         DECLARE
             audit_action TEXT;
@@ -103,22 +103,13 @@ return new class extends Migration
                     'closing_balance', NEW.closing_balance,
                     'document_path', NEW.document_path
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_statements',
-                    NEW.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_statements_created',
                     details,
                     audit_user,
-                    NEW.company_id,
-                    NOW()
+                    'customer_statements',
+                    NEW.id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             
@@ -133,22 +124,13 @@ return new class extends Migration
                         'checksum', CASE WHEN OLD.checksum IS DISTINCT FROM NEW.checksum THEN NEW.checksum ELSE NULL END
                     )
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_statements',
-                    NEW.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_statements_updated',
                     details,
                     audit_user,
-                    NEW.company_id,
-                    NOW()
+                    'customer_statements',
+                    NEW.id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             
@@ -167,22 +149,13 @@ return new class extends Migration
                         'closing_balance', OLD.closing_balance
                     )
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_statements',
-                    OLD.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_statements_deleted',
                     details,
                     OLD.generated_by_user_id,
-                    OLD.company_id,
-                    NOW()
+                    'customer_statements',
+                    OLD.id,
+                    OLD.company_id
                 );
                 RETURN OLD;
             END IF;
@@ -198,8 +171,8 @@ return new class extends Migration
         // Create trigger
         DB::unprepared('
             CREATE TRIGGER customer_statements_audit
-                AFTER INSERT OR UPDATE OR DELETE ON invoicing.customer_statements
-                FOR EACH ROW EXECUTE FUNCTION invoicing.customer_statements_audit_trigger();
+                AFTER INSERT OR UPDATE OR DELETE ON acct.customer_statements
+                FOR EACH ROW EXECUTE FUNCTION acct.customer_statements_audit_trigger();
         ');
     }
 
@@ -208,7 +181,7 @@ return new class extends Migration
      */
     private function enableRLS(): void
     {
-        DB::unprepared('ALTER TABLE invoicing.customer_statements ENABLE ROW LEVEL SECURITY;');
+        DB::unprepared('ALTER TABLE acct.customer_statements ENABLE ROW LEVEL SECURITY;');
     }
 
     /**
@@ -218,13 +191,13 @@ return new class extends Migration
     {
         $policies = [
             // Company users can view statements for their company
-            'CREATE POLICY customer_statements_view_company ON invoicing.customer_statements
+            'CREATE POLICY customer_statements_view_company ON acct.customer_statements
                 FOR SELECT USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid
                 );',
 
             // Users with permission can manage statements
-            'CREATE POLICY customer_statements_manage ON invoicing.customer_statements
+            'CREATE POLICY customer_statements_manage ON acct.customer_statements
                 FOR ALL USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid AND
                     EXISTS (
@@ -236,7 +209,7 @@ return new class extends Migration
                 );',
 
             // System admins can access all statements
-            'CREATE POLICY customer_statements_system_admin ON invoicing.customer_statements
+            'CREATE POLICY customer_statements_system_admin ON acct.customer_statements
                 FOR ALL USING (
                     EXISTS (
                         SELECT 1 FROM users

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('customer_credit_limits', function (Blueprint $table) {
+        Schema::create('acct.customer_credit_limits', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('customer_id');
             $table->uuid('company_id');
@@ -27,17 +28,17 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
                 ->references('id')
-                ->on('companies')
+                ->on('auth.companies')
                 ->onDelete('cascade');
 
             $table->foreign('changed_by_user_id')
                 ->references('id')
-                ->on('users')
+                ->on('auth.users')
                 ->onDelete('restrict');
 
             // Indexes for performance
@@ -64,7 +65,12 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('customer_credit_limits');
+        DB::statement('DROP POLICY IF EXISTS customer_credit_limits_system_admin ON acct.customer_credit_limits');
+        DB::statement('DROP POLICY IF EXISTS customer_credit_limits_manage ON acct.customer_credit_limits');
+        DB::statement('DROP POLICY IF EXISTS customer_credit_limits_view_company ON acct.customer_credit_limits');
+        DB::statement('ALTER TABLE acct.customer_credit_limits DISABLE ROW LEVEL SECURITY');
+        DB::statement('DROP TRIGGER IF EXISTS customer_credit_limits_audit_trigger ON acct.customer_credit_limits');
+        Schema::dropIfExists('acct.customer_credit_limits');
     }
 
     /**
@@ -77,22 +83,8 @@ return new class extends Migration
         RETURNS TRIGGER AS $$
         BEGIN
             IF TG_OP = 'INSERT' THEN
-                INSERT INTO audit_logs (
-                    action,
-                    subject_type,
-                    subject_id,
-                    company_id,
-                    user_id,
-                    old_values,
-                    new_values,
-                    created_at
-                ) VALUES (
+                PERFORM audit_log(
                     'credit_limit_created',
-                    'App\Models\Customer',
-                    NEW.customer_id,
-                    NEW.company_id,
-                    NEW.changed_by_user_id,
-                    jsonb_build_object(),
                     jsonb_build_object(
                         'limit_amount', NEW.limit_amount,
                         'effective_at', NEW.effective_at,
@@ -100,58 +92,40 @@ return new class extends Migration
                         'status', NEW.status,
                         'reason', NEW.reason
                     ),
-                    NOW()
+                    NEW.changed_by_user_id,
+                    'App\\Models\\Customer',
+                    NEW.customer_id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             ELSIF TG_OP = 'UPDATE' THEN
-                INSERT INTO audit_logs (
-                    action,
-                    subject_type,
-                    subject_id,
-                    company_id,
-                    user_id,
-                    old_values,
-                    new_values,
-                    created_at
-                ) VALUES (
+                PERFORM audit_log(
                     'credit_limit_updated',
-                    'App\Models\Customer',
-                    NEW.customer_id,
-                    NEW.company_id,
+                    jsonb_build_object(
+                        'old_values', jsonb_build_object(
+                            'limit_amount', OLD.limit_amount,
+                            'effective_at', OLD.effective_at,
+                            'expires_at', OLD.expires_at,
+                            'status', OLD.status,
+                            'reason', OLD.reason
+                        ),
+                        'new_values', jsonb_build_object(
+                            'limit_amount', NEW.limit_amount,
+                            'effective_at', NEW.effective_at,
+                            'expires_at', NEW.expires_at,
+                            'status', NEW.status,
+                            'reason', NEW.reason
+                        )
+                    ),
                     NEW.changed_by_user_id,
-                    jsonb_build_object(
-                        'limit_amount', OLD.limit_amount,
-                        'effective_at', OLD.effective_at,
-                        'expires_at', OLD.expires_at,
-                        'status', OLD.status,
-                        'reason', OLD.reason
-                    ),
-                    jsonb_build_object(
-                        'limit_amount', NEW.limit_amount,
-                        'effective_at', NEW.effective_at,
-                        'expires_at', NEW.expires_at,
-                        'status', NEW.status,
-                        'reason', NEW.reason
-                    ),
-                    NOW()
+                    'App\\Models\\Customer',
+                    NEW.customer_id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             ELSIF TG_OP = 'DELETE' THEN
-                INSERT INTO audit_logs (
-                    action,
-                    subject_type,
-                    subject_id,
-                    company_id,
-                    user_id,
-                    old_values,
-                    new_values,
-                    created_at
-                ) VALUES (
+                PERFORM audit_log(
                     'credit_limit_deleted',
-                    'App\Models\Customer',
-                    OLD.customer_id,
-                    OLD.company_id,
-                    OLD.changed_by_user_id,
                     jsonb_build_object(
                         'limit_amount', OLD.limit_amount,
                         'effective_at', OLD.effective_at,
@@ -159,8 +133,10 @@ return new class extends Migration
                         'status', OLD.status,
                         'reason', OLD.reason
                     ),
-                    jsonb_build_object(),
-                    NOW()
+                    OLD.changed_by_user_id,
+                    'App\\Models\\Customer',
+                    OLD.customer_id,
+                    OLD.company_id
                 );
                 RETURN OLD;
             END IF;
@@ -168,9 +144,9 @@ return new class extends Migration
         END;
         $$ LANGUAGE plpgsql;
 
-        DROP TRIGGER IF EXISTS customer_credit_limits_audit_trigger ON customer_credit_limits;
+        DROP TRIGGER IF EXISTS customer_credit_limits_audit_trigger ON acct.customer_credit_limits;
         CREATE TRIGGER customer_credit_limits_audit_trigger
-            AFTER INSERT OR UPDATE OR DELETE ON customer_credit_limits
+            AFTER INSERT OR UPDATE OR DELETE ON acct.customer_credit_limits
             FOR EACH ROW EXECUTE FUNCTION audit_customer_credit_limits();
         SQL;
 
@@ -182,7 +158,7 @@ return new class extends Migration
      */
     private function enableRLS(): void
     {
-        DB::unprepared('ALTER TABLE customer_credit_limits ENABLE ROW LEVEL SECURITY;');
+        DB::unprepared('ALTER TABLE acct.customer_credit_limits ENABLE ROW LEVEL SECURITY;');
     }
 
     /**
@@ -192,13 +168,13 @@ return new class extends Migration
     {
         $policies = [
             // Company users can view credit limits for their company
-            'CREATE POLICY customer_credit_limits_view_company ON customer_credit_limits
+            'CREATE POLICY customer_credit_limits_view_company ON acct.customer_credit_limits
                 FOR SELECT USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid
                 );',
 
             // Users with permission can manage credit limits
-            'CREATE POLICY customer_credit_limits_manage ON customer_credit_limits
+            'CREATE POLICY customer_credit_limits_manage ON acct.customer_credit_limits
                 FOR ALL USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid AND
                     EXISTS (
@@ -210,7 +186,7 @@ return new class extends Migration
                 );',
 
             // System admins can access all
-            'CREATE POLICY customer_credit_limits_system_admin ON customer_credit_limits
+            'CREATE POLICY customer_credit_limits_system_admin ON acct.customer_credit_limits
                 FOR ALL USING (
                     EXISTS (
                         SELECT 1 FROM users

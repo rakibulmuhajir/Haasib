@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Modules\Accounting\Domain\JournalEntries\Events\BatchApproved;
 use Modules\Accounting\Domain\JournalEntries\Events\BatchCreated;
@@ -13,6 +14,7 @@ use Modules\Accounting\Domain\JournalEntries\Events\BatchDeleted;
 use Modules\Accounting\Domain\JournalEntries\Events\BatchPosted;
 use Modules\Accounting\Domain\JournalEntries\Events\EntryAddedToBatch;
 use Modules\Accounting\Domain\JournalEntries\Events\EntryRemovedFromBatch;
+use Modules\Accounting\Http\Requests\JournalBatchRequest;
 
 class JournalBatchController extends Controller
 {
@@ -21,21 +23,29 @@ class JournalBatchController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = \App\Models\JournalBatch::with(['journalEntries'])
-            ->where('company_id', $request->user()->company_id);
+        // Use caching for statistics to improve performance
+        $cacheKey = "batch_stats_{$request->user()->current_company_id}";
+        $stats = Cache::remember($cacheKey, 300, function () use ($request) {
+            return $this->statistics($request);
+        });
+
+        $query = \App\Models\JournalBatch::withCount(['journalEntries'])
+            ->where('company_id', $request->user()->current_company_id);
 
         // Filter by status
         if ($request->has('status')) {
             $query->where('status', $request->get('status'));
         }
 
-        // Search by name or description
+        // Search by name or description with sanitization
         if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('description', 'ilike', "%{$search}%");
-            });
+            $search = trim($request->get('search'));
+            if (strlen($search) > 0) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'ilike', '%'.addcslashes($search, '%_').'%')
+                        ->orWhere('description', 'ilike', '%'.addcslashes($search, '%_').'%');
+                });
+            }
         }
 
         // Filter by date range
@@ -64,31 +74,37 @@ class JournalBatchController extends Controller
             $query->orderBy($sortBy, $sortOrder);
         }
 
-        $perPage = min($request->get('per_page', 15), 100);
+        $perPage = min(max(1, $request->get('per_page', 15)), 100);
         $batches = $query->paginate($perPage);
 
-        // Load statistics for each batch
-        $batches->getCollection()->transform(function ($batch) {
-            $batch->statistics = $this->getBatchStatistics($batch);
+        // Load statistics for each batch only if needed
+        if ($request->get('include_stats', false)) {
+            $batches->getCollection()->transform(function ($batch) {
+                $batch->statistics = $this->getBatchStatistics($batch);
 
-            return $batch;
-        });
+                return $batch;
+            });
+        }
 
-        return response()->json($batches);
+        return response()->json([
+            'data' => $batches->items(),
+            'meta' => [
+                'current_page' => $batches->currentPage(),
+                'last_page' => $batches->lastPage(),
+                'per_page' => $batches->perPage(),
+                'total' => $batches->total(),
+                'statistics' => $stats,
+            ],
+        ]);
     }
 
     /**
      * Store a newly created journal batch.
      */
-    public function store(Request $request): JsonResponse
+    public function store(JournalBatchRequest $request): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'description' => 'nullable|string|max:1000',
-                'journal_entry_ids' => 'required|array|min:1',
-                'journal_entry_ids.*' => 'uuid|exists:journal_entries,id',
-            ]);
+            $validated = $request->validated();
 
             return DB::transaction(function () use ($validated, $request) {
                 // Verify all entries belong to the company and are in appropriate status

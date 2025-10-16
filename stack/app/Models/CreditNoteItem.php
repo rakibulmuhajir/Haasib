@@ -20,7 +20,7 @@ class CreditNoteItem extends Model
      *
      * @var string
      */
-    protected $table = 'invoicing.credit_note_items';
+    protected $table = 'acct.credit_note_items';
 
     /**
      * The attributes that are mass assignable.

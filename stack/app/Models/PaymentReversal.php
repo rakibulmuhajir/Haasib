@@ -11,7 +11,7 @@ class PaymentReversal extends Model
 {
     use HasFactory;
 
-    protected $table = 'invoicing.payment_reversals';
+    protected $table = 'acct.payment_reversals';
 
     protected $primaryKey = 'id';
 

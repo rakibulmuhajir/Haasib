@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.payments', function (Blueprint $table) {
+        Schema::create('acct.payments', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->uuid('customer_id');
@@ -30,22 +31,43 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('customer_id')->references('id')->on('invoicing.customers')->onDelete('cascade');
-            $table->foreign('created_by_user_id')->references('id')->on('auth.users')->onDelete('set null');
+            $table->foreign('customer_id')->references('id')->on('acct.customers')->onDelete('cascade');
+            $table->foreign('created_by_user_id')->references('id')->on('auth.users')->onDelete('restrict');
 
             // Indexes
             $table->unique(['company_id', 'payment_number']);
             $table->index(['company_id']);
             $table->index(['customer_id']);
-            $table->index(['payment_date']);
-            $table->index(['status']);
-            $table->index(['payment_method']);
+            $table->index(['company_id', 'customer_id']);
+            $table->index(['company_id', 'payment_date']);
+            $table->index(['company_id', 'status']);
+            $table->index(['company_id', 'payment_method']);
         });
 
         // Add soft deletes
-        Schema::table('invoicing.payments', function (Blueprint $table) {
+        Schema::table('acct.payments', function (Blueprint $table) {
             $table->softDeletes();
         });
+
+        DB::statement('
+            ALTER TABLE acct.payments
+            ADD CONSTRAINT payments_amount_positive
+            CHECK (amount >= 0)
+        ');
+
+        // Enforce tenant isolation
+        DB::statement('ALTER TABLE acct.payments ENABLE ROW LEVEL SECURITY');
+        DB::statement("
+            CREATE POLICY payments_company_policy
+            ON acct.payments
+            FOR ALL
+            USING (
+                company_id = current_setting('app.current_company_id')::uuid
+            )
+            WITH CHECK (
+                company_id = current_setting('app.current_company_id')::uuid
+            )
+        ");
     }
 
     /**
@@ -53,6 +75,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.payments');
+        DB::statement('DROP POLICY IF EXISTS payments_company_policy ON acct.payments');
+        DB::statement('ALTER TABLE acct.payments DISABLE ROW LEVEL SECURITY');
+        Schema::dropIfExists('acct.payments');
     }
 };

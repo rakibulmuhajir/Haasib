@@ -1,0 +1,5195 @@
+stack/
++-- .claude/
++-- .specify/
+|   \-- memory/
++-- .vscode/
++-- Actions/
+|   \-- Company/
++-- app/
+|   +-- Actions/
+|   |   +-- Company/
+|   |   \-- Invitation/
+|   +-- Console/
+|   |   +-- Commands/
+|   |   |   +-- Company/
+|   |   |   \-- Concerns/
+|   |   \-- Concerns/
+|   +-- Enums/
+|   +-- Http/
+|   |   +-- Controllers/
+|   |   |   +-- Api/
+|   |   |   +-- Auth/
+|   |   |   +-- Invoicing/
+|   |   |   +-- Ledger/
+|   |   |   \-- Traits/
+|   |   +-- Middleware/
+|   |   +-- Requests/
+|   |   |   \-- Api/
+|   |   \-- Resources/
+|   +-- Jobs/
+|   +-- Models/
+|   |   \-- Scopes/
+|   +-- Observers/
+|   +-- Policies/
+|   +-- Providers/
+|   +-- Services/
+|   |   \-- QueryFilters/
+|   \-- Support/
++-- bootstrap/
+|   \-- cache/
++-- config/
+|   \-- environments/
+|       +-- local/
+|       +-- production/
+|       \-- staging/
++-- Console/
+|   +-- Commands/
+|   \-- stubs/
++-- database/
+|   +-- factories/
+|   |   \-- Invoicing/
+|   +-- migrations/
+|   \-- seeders/
++-- docs/
+|   +-- briefs/
+|   +-- dosdonts/
+|   \-- request-journeys/
+|       +-- company/
+|       \-- user/
++-- Http/
+|   \-- Requests/
+|       \-- Api/
+|           +-- Currency/
+|           +-- Customer/
+|           \-- Payment/
++-- modules/
+|   +-- Accounting/
+|   |   +-- CLI/
+|   |   |   +-- Commands/
+|   |   |   \-- Console/
+|   |   +-- config/
+|   |   +-- Console/
+|   |   |   \-- Commands/
+|   |   +-- Database/
+|   |   |   +-- Migrations/
+|   |   |   +-- migrations/
+|   |   |   \-- seeders/
+|   |   +-- Domain/
+|   |   |   +-- Actions/
+|   |   |   +-- Customers/
+|   |   |   |   +-- Actions/
+|   |   |   |   +-- DTOs/
+|   |   |   |   +-- Events/
+|   |   |   |   +-- Exceptions/
+|   |   |   |   +-- Jobs/
+|   |   |   |   +-- Models/
+|   |   |   |   +-- routes/
+|   |   |   |   +-- Scopes/
+|   |   |   |   +-- Services/
+|   |   |   |   \-- Telemetry/
+|   |   |   +-- Events/
+|   |   |   +-- Exceptions/
+|   |   |   +-- Invoicing/
+|   |   |   |   +-- Actions/
+|   |   |   |   +-- Events/
+|   |   |   |   +-- Exceptions/
+|   |   |   |   +-- Listeners/
+|   |   |   |   +-- Models/
+|   |   |   |   \-- ValueObjects/
+|   |   |   +-- JournalEntries/
+|   |   |   |   +-- Events/
+|   |   |   |   \-- Listeners/
+|   |   |   +-- Ledger/
+|   |   |   |   +-- Actions/
+|   |   |   |   +-- Events/
+|   |   |   |   +-- Exceptions/
+|   |   |   |   +-- Listeners/
+|   |   |   |   +-- Models/
+|   |   |   |   \-- ValueObjects/
+|   |   |   +-- Ledgers/
+|   |   |   |   +-- Actions/
+|   |   |   |   |   \-- Recurring/
+|   |   |   |   +-- Events/
+|   |   |   |   +-- Listeners/
+|   |   |   |   \-- routes/
+|   |   |   +-- Listeners/
+|   |   |   +-- Models/
+|   |   |   +-- Payments/
+|   |   |   |   +-- Actions/
+|   |   |   |   +-- Events/
+|   |   |   |   +-- Exceptions/
+|   |   |   |   +-- Listeners/
+|   |   |   |   +-- Models/
+|   |   |   |   +-- Services/
+|   |   |   |   +-- Telemetry/
+|   |   |   |   \-- ValueObjects/
+|   |   |   \-- ValueObjects/
+|   |   +-- Events/
+|   |   +-- Http/
+|   |   |   +-- Controllers/
+|   |   |   |   \-- Api/
+|   |   |   +-- Middleware/
+|   |   |   +-- Requests/
+|   |   |   +-- Resources/
+|   |   |   \-- routes/
+|   |   +-- Jobs/
+|   |   +-- Models/
+|   |   +-- Providers/
+|   |   +-- Resources/
+|   |   |   +-- css/
+|   |   |   \-- js/
+|   |   +-- Routes/
+|   |   +-- routes/
+|   |   +-- Services/
+|   |   \-- Tests/
+|   |       +-- Feature/
+|   |       |   \-- Payments/
+|   |       \-- Unit/
+|   +-- Core/
+|   |   +-- CLI/
+|   |   |   \-- Commands/
+|   |   \-- Services/
+|   +-- Invoicing/
+|   |   +-- CLI/
+|   |   |   \-- Commands/
+|   |   \-- Services/
+|   \-- Ledger/
+|       +-- CLI/
+|       |   \-- Commands/
+|       \-- Services/
++-- node_modules/
+|   +-- .bin/
+|   +-- .vite/
+|   |   \-- deps/
+|   +-- .vite-temp/
+|   +-- .vue-global-types/
+|   +-- @alloc/
+|   |   \-- quick-lru/
+|   +-- @babel/
+|   |   +-- code-frame/
+|   |   |   \-- lib/
+|   |   +-- helper-string-parser/
+|   |   |   \-- lib/
+|   |   +-- helper-validator-identifier/
+|   |   |   \-- lib/
+|   |   +-- parser/
+|   |   |   +-- bin/
+|   |   |   +-- lib/
+|   |   |   \-- typings/
+|   |   \-- types/
+|   |       \-- lib/
+|   |           +-- asserts/
+|   |           |   \-- generated/
+|   |           +-- ast-types/
+|   |           |   \-- generated/
+|   |           +-- builders/
+|   |           |   +-- flow/
+|   |           |   +-- generated/
+|   |           |   +-- react/
+|   |           |   \-- typescript/
+|   |           +-- clone/
+|   |           +-- comments/
+|   |           +-- constants/
+|   |           |   \-- generated/
+|   |           +-- converters/
+|   |           +-- definitions/
+|   |           +-- modifications/
+|   |           |   +-- flow/
+|   |           |   \-- typescript/
+|   |           +-- retrievers/
+|   |           +-- traverse/
+|   |           +-- utils/
+|   |           |   \-- react/
+|   |           \-- validators/
+|   |               +-- generated/
+|   |               \-- react/
+|   +-- @esbuild/
+|   |   \-- linux-x64/
+|   |       \-- bin/
+|   +-- @eslint/
+|   |   +-- config-array/
+|   |   |   +-- dist/
+|   |   |   |   +-- cjs/
+|   |   |   |   |   \-- std__path/
+|   |   |   |   \-- esm/
+|   |   |   |       \-- std__path/
+|   |   |   \-- node_modules/
+|   |   |       +-- brace-expansion/
+|   |   |       \-- minimatch/
+|   |   +-- config-helpers/
+|   |   |   \-- dist/
+|   |   |       +-- cjs/
+|   |   |       \-- esm/
+|   |   +-- core/
+|   |   |   \-- dist/
+|   |   |       +-- cjs/
+|   |   |       \-- esm/
+|   |   +-- eslintrc/
+|   |   |   +-- conf/
+|   |   |   +-- dist/
+|   |   |   +-- lib/
+|   |   |   |   +-- config-array/
+|   |   |   |   +-- shared/
+|   |   |   |   \-- types/
+|   |   |   \-- node_modules/
+|   |   |       +-- brace-expansion/
+|   |   |       \-- minimatch/
+|   |   +-- js/
+|   |   |   +-- src/
+|   |   |   |   \-- configs/
+|   |   |   \-- types/
+|   |   +-- object-schema/
+|   |   |   \-- dist/
+|   |   |       +-- cjs/
+|   |   |       \-- esm/
+|   |   \-- plugin-kit/
+|   |       \-- dist/
+|   |           +-- cjs/
+|   |           \-- esm/
+|   +-- @eslint-community/
+|   |   +-- eslint-utils/
+|   |   \-- regexpp/
+|   +-- @formatjs/
+|   |   +-- ecma402-abstract/
+|   |   |   +-- lib/
+|   |   |   |   +-- NumberFormat/
+|   |   |   |   \-- types/
+|   |   |   +-- NumberFormat/
+|   |   |   \-- types/
+|   |   +-- fast-memoize/
+|   |   |   \-- lib/
+|   |   +-- icu-messageformat-parser/
+|   |   |   \-- lib/
+|   |   +-- icu-skeleton-parser/
+|   |   |   \-- lib/
+|   |   \-- intl-localematcher/
+|   |       +-- abstract/
+|   |       \-- lib/
+|   |           \-- abstract/
+|   +-- @fortawesome/
+|   |   +-- fontawesome-common-types/
+|   |   +-- fontawesome-svg-core/
+|   |   +-- free-solid-svg-icons/
+|   |   \-- vue-fontawesome/
+|   |       \-- src/
+|   |           \-- components/
+|   +-- @humanfs/
+|   |   +-- core/
+|   |   |   +-- dist/
+|   |   |   \-- src/
+|   |   \-- node/
+|   |       +-- dist/
+|   |       \-- src/
+|   +-- @humanwhocodes/
+|   |   +-- module-importer/
+|   |   |   +-- dist/
+|   |   |   \-- src/
+|   |   \-- retry/
+|   |       \-- dist/
+|   +-- @inertiajs/
+|   |   +-- core/
+|   |   |   +-- dist/
+|   |   |   \-- types/
+|   |   \-- vue3/
+|   |       +-- dist/
+|   |       \-- types/
+|   +-- @intlify/
+|   |   +-- bundle-utils/
+|   |   |   \-- lib/
+|   |   +-- core-base/
+|   |   |   +-- dist/
+|   |   |   \-- node_modules/
+|   |   |       \-- @intlify/
+|   |   |           +-- message-compiler/
+|   |   |           |   \-- dist/
+|   |   |           \-- shared/
+|   |   |               \-- dist/
+|   |   +-- message-compiler/
+|   |   |   \-- dist/
+|   |   +-- shared/
+|   |   |   \-- dist/
+|   |   +-- unplugin-vue-i18n/
+|   |   |   \-- lib/
+|   |   \-- vue-i18n-extensions/
+|   |       +-- dist/
+|   |       \-- node_modules/
+|   |           +-- @intlify/
+|   |           |   +-- core-base/
+|   |           |   |   \-- dist/
+|   |           |   +-- message-compiler/
+|   |           |   |   \-- dist/
+|   |           |   \-- shared/
+|   |           |       \-- dist/
+|   |           \-- vue-i18n/
+|   |               +-- dist/
+|   |               \-- vetur/
+|   +-- @isaacs/
+|   |   +-- cliui/
+|   |   |   \-- build/
+|   |   |       \-- lib/
+|   |   \-- fs-minipass/
+|   |       \-- dist/
+|   |           +-- commonjs/
+|   |           \-- esm/
+|   +-- @jridgewell/
+|   |   +-- gen-mapping/
+|   |   |   +-- dist/
+|   |   |   |   \-- types/
+|   |   |   +-- src/
+|   |   |   \-- types/
+|   |   +-- remapping/
+|   |   |   +-- dist/
+|   |   |   +-- src/
+|   |   |   \-- types/
+|   |   +-- resolve-uri/
+|   |   |   \-- dist/
+|   |   |       \-- types/
+|   |   +-- sourcemap-codec/
+|   |   |   +-- dist/
+|   |   |   +-- src/
+|   |   |   \-- types/
+|   |   \-- trace-mapping/
+|   |       +-- dist/
+|   |       +-- src/
+|   |       \-- types/
+|   +-- @kurkle/
+|   |   \-- color/
+|   |       \-- dist/
+|   +-- @nodelib/
+|   |   +-- fs.scandir/
+|   |   |   \-- out/
+|   |   |       +-- adapters/
+|   |   |       +-- providers/
+|   |   |       +-- types/
+|   |   |       \-- utils/
+|   |   +-- fs.stat/
+|   |   |   \-- out/
+|   |   |       +-- adapters/
+|   |   |       +-- providers/
+|   |   |       \-- types/
+|   |   \-- fs.walk/
+|   |       \-- out/
+|   |           +-- providers/
+|   |           +-- readers/
+|   |           \-- types/
+|   +-- @pkgjs/
+|   |   \-- parseargs/
+|   |       +-- examples/
+|   |       \-- internal/
+|   +-- @playwright/
+|   |   \-- test/
+|   +-- @primeuix/
+|   |   +-- styled/
+|   |   |   \-- dist/
+|   |   +-- styles/
+|   |   |   \-- dist/
+|   |   |       +-- accordion/
+|   |   |       +-- autocomplete/
+|   |   |       +-- avatar/
+|   |   |       +-- badge/
+|   |   |       +-- base/
+|   |   |       +-- blockui/
+|   |   |       +-- breadcrumb/
+|   |   |       +-- button/
+|   |   |       +-- buttongroup/
+|   |   |       +-- card/
+|   |   |       +-- carousel/
+|   |   |       +-- cascadeselect/
+|   |   |       +-- checkbox/
+|   |   |       +-- checkboxgroup/
+|   |   |       +-- chip/
+|   |   |       +-- colorpicker/
+|   |   |       +-- confirmdialog/
+|   |   |       +-- confirmpopup/
+|   |   |       +-- contextmenu/
+|   |   |       +-- datatable/
+|   |   |       +-- dataview/
+|   |   |       +-- datepicker/
+|   |   |       +-- dialog/
+|   |   |       +-- divider/
+|   |   |       +-- dock/
+|   |   |       +-- drawer/
+|   |   |       +-- editor/
+|   |   |       +-- fieldset/
+|   |   |       +-- fileupload/
+|   |   |       +-- floatlabel/
+|   |   |       +-- galleria/
+|   |   |       +-- iconfield/
+|   |   |       +-- iftalabel/
+|   |   |       +-- image/
+|   |   |       +-- imagecompare/
+|   |   |       +-- inlinemessage/
+|   |   |       +-- inplace/
+|   |   |       +-- inputchips/
+|   |   |       +-- inputgroup/
+|   |   |       +-- inputnumber/
+|   |   |       +-- inputotp/
+|   |   |       +-- inputtext/
+|   |   |       +-- knob/
+|   |   |       +-- listbox/
+|   |   |       +-- megamenu/
+|   |   |       +-- menu/
+|   |   |       +-- menubar/
+|   |   |       +-- message/
+|   |   |       +-- metergroup/
+|   |   |       +-- multiselect/
+|   |   |       +-- orderlist/
+|   |   |       +-- organizationchart/
+|   |   |       +-- overlaybadge/
+|   |   |       +-- paginator/
+|   |   |       +-- panel/
+|   |   |       +-- panelmenu/
+|   |   |       +-- password/
+|   |   |       +-- picklist/
+|   |   |       +-- popover/
+|   |   |       +-- progressbar/
+|   |   |       +-- progressspinner/
+|   |   |       +-- radiobutton/
+|   |   |       +-- radiobuttongroup/
+|   |   |       +-- rating/
+|   |   |       +-- ripple/
+|   |   |       +-- scrollpanel/
+|   |   |       +-- scrolltop/
+|   |   |       +-- select/
+|   |   |       +-- selectbutton/
+|   |   |       +-- skeleton/
+|   |   |       +-- slider/
+|   |   |       +-- speeddial/
+|   |   |       +-- splitbutton/
+|   |   |       +-- splitter/
+|   |   |       +-- stepper/
+|   |   |       +-- steps/
+|   |   |       +-- tabmenu/
+|   |   |       +-- tabs/
+|   |   |       +-- tabview/
+|   |   |       +-- tag/
+|   |   |       +-- terminal/
+|   |   |       +-- textarea/
+|   |   |       +-- tieredmenu/
+|   |   |       +-- timeline/
+|   |   |       +-- toast/
+|   |   |       +-- togglebutton/
+|   |   |       +-- toggleswitch/
+|   |   |       +-- toolbar/
+|   |   |       +-- tooltip/
+|   |   |       +-- tree/
+|   |   |       +-- treeselect/
+|   |   |       +-- treetable/
+|   |   |       \-- virtualscroller/
+|   |   +-- themes/
+|   |   |   +-- dist/
+|   |   |   |   +-- aura/
+|   |   |   |   |   +-- accordion/
+|   |   |   |   |   +-- autocomplete/
+|   |   |   |   |   +-- avatar/
+|   |   |   |   |   +-- badge/
+|   |   |   |   |   +-- base/
+|   |   |   |   |   +-- blockui/
+|   |   |   |   |   +-- breadcrumb/
+|   |   |   |   |   +-- button/
+|   |   |   |   |   +-- card/
+|   |   |   |   |   +-- carousel/
+|   |   |   |   |   +-- cascadeselect/
+|   |   |   |   |   +-- checkbox/
+|   |   |   |   |   +-- chip/
+|   |   |   |   |   +-- colorpicker/
+|   |   |   |   |   +-- confirmdialog/
+|   |   |   |   |   +-- confirmpopup/
+|   |   |   |   |   +-- contextmenu/
+|   |   |   |   |   +-- datatable/
+|   |   |   |   |   +-- dataview/
+|   |   |   |   |   +-- datepicker/
+|   |   |   |   |   +-- dialog/
+|   |   |   |   |   +-- divider/
+|   |   |   |   |   +-- dock/
+|   |   |   |   |   +-- drawer/
+|   |   |   |   |   +-- editor/
+|   |   |   |   |   +-- fieldset/
+|   |   |   |   |   +-- fileupload/
+|   |   |   |   |   +-- floatlabel/
+|   |   |   |   |   +-- galleria/
+|   |   |   |   |   +-- iconfield/
+|   |   |   |   |   +-- iftalabel/
+|   |   |   |   |   +-- image/
+|   |   |   |   |   +-- imagecompare/
+|   |   |   |   |   +-- inlinemessage/
+|   |   |   |   |   +-- inplace/
+|   |   |   |   |   +-- inputchips/
+|   |   |   |   |   +-- inputgroup/
+|   |   |   |   |   +-- inputnumber/
+|   |   |   |   |   +-- inputotp/
+|   |   |   |   |   +-- inputtext/
+|   |   |   |   |   +-- knob/
+|   |   |   |   |   +-- listbox/
+|   |   |   |   |   +-- megamenu/
+|   |   |   |   |   +-- menu/
+|   |   |   |   |   +-- menubar/
+|   |   |   |   |   +-- message/
+|   |   |   |   |   +-- metergroup/
+|   |   |   |   |   +-- multiselect/
+|   |   |   |   |   +-- orderlist/
+|   |   |   |   |   +-- organizationchart/
+|   |   |   |   |   +-- overlaybadge/
+|   |   |   |   |   +-- paginator/
+|   |   |   |   |   +-- panel/
+|   |   |   |   |   +-- panelmenu/
+|   |   |   |   |   +-- password/
+|   |   |   |   |   +-- picklist/
+|   |   |   |   |   +-- popover/
+|   |   |   |   |   +-- progressbar/
+|   |   |   |   |   +-- progressspinner/
+|   |   |   |   |   +-- radiobutton/
+|   |   |   |   |   +-- rating/
+|   |   |   |   |   +-- ripple/
+|   |   |   |   |   +-- scrollpanel/
+|   |   |   |   |   +-- select/
+|   |   |   |   |   +-- selectbutton/
+|   |   |   |   |   +-- skeleton/
+|   |   |   |   |   +-- slider/
+|   |   |   |   |   +-- speeddial/
+|   |   |   |   |   +-- splitbutton/
+|   |   |   |   |   +-- splitter/
+|   |   |   |   |   +-- stepper/
+|   |   |   |   |   +-- steps/
+|   |   |   |   |   +-- tabmenu/
+|   |   |   |   |   +-- tabs/
+|   |   |   |   |   +-- tabview/
+|   |   |   |   |   +-- tag/
+|   |   |   |   |   +-- terminal/
+|   |   |   |   |   +-- textarea/
+|   |   |   |   |   +-- tieredmenu/
+|   |   |   |   |   +-- timeline/
+|   |   |   |   |   +-- toast/
+|   |   |   |   |   +-- togglebutton/
+|   |   |   |   |   +-- toggleswitch/
+|   |   |   |   |   +-- toolbar/
+|   |   |   |   |   +-- tooltip/
+|   |   |   |   |   +-- tree/
+|   |   |   |   |   +-- treeselect/
+|   |   |   |   |   +-- treetable/
+|   |   |   |   |   \-- virtualscroller/
+|   |   |   |   +-- lara/
+|   |   |   |   |   +-- accordion/
+|   |   |   |   |   +-- autocomplete/
+|   |   |   |   |   +-- avatar/
+|   |   |   |   |   +-- badge/
+|   |   |   |   |   +-- base/
+|   |   |   |   |   +-- blockui/
+|   |   |   |   |   +-- breadcrumb/
+|   |   |   |   |   +-- button/
+|   |   |   |   |   +-- card/
+|   |   |   |   |   +-- carousel/
+|   |   |   |   |   +-- cascadeselect/
+|   |   |   |   |   +-- checkbox/
+|   |   |   |   |   +-- chip/
+|   |   |   |   |   +-- colorpicker/
+|   |   |   |   |   +-- confirmdialog/
+|   |   |   |   |   +-- confirmpopup/
+|   |   |   |   |   +-- contextmenu/
+|   |   |   |   |   +-- datatable/
+|   |   |   |   |   +-- dataview/
+|   |   |   |   |   +-- datepicker/
+|   |   |   |   |   +-- dialog/
+|   |   |   |   |   +-- divider/
+|   |   |   |   |   +-- dock/
+|   |   |   |   |   +-- drawer/
+|   |   |   |   |   +-- editor/
+|   |   |   |   |   +-- fieldset/
+|   |   |   |   |   +-- fileupload/
+|   |   |   |   |   +-- floatlabel/
+|   |   |   |   |   +-- galleria/
+|   |   |   |   |   +-- iconfield/
+|   |   |   |   |   +-- iftalabel/
+|   |   |   |   |   +-- image/
+|   |   |   |   |   +-- imagecompare/
+|   |   |   |   |   +-- inlinemessage/
+|   |   |   |   |   +-- inplace/
+|   |   |   |   |   +-- inputchips/
+|   |   |   |   |   +-- inputgroup/
+|   |   |   |   |   +-- inputnumber/
+|   |   |   |   |   +-- inputotp/
+|   |   |   |   |   +-- inputtext/
+|   |   |   |   |   +-- knob/
+|   |   |   |   |   +-- listbox/
+|   |   |   |   |   +-- megamenu/
+|   |   |   |   |   +-- menu/
+|   |   |   |   |   +-- menubar/
+|   |   |   |   |   +-- message/
+|   |   |   |   |   +-- metergroup/
+|   |   |   |   |   +-- multiselect/
+|   |   |   |   |   +-- orderlist/
+|   |   |   |   |   +-- organizationchart/
+|   |   |   |   |   +-- overlaybadge/
+|   |   |   |   |   +-- paginator/
+|   |   |   |   |   +-- panel/
+|   |   |   |   |   +-- panelmenu/
+|   |   |   |   |   +-- password/
+|   |   |   |   |   +-- picklist/
+|   |   |   |   |   +-- popover/
+|   |   |   |   |   +-- progressbar/
+|   |   |   |   |   +-- progressspinner/
+|   |   |   |   |   +-- radiobutton/
+|   |   |   |   |   +-- rating/
+|   |   |   |   |   +-- ripple/
+|   |   |   |   |   +-- scrollpanel/
+|   |   |   |   |   +-- select/
+|   |   |   |   |   +-- selectbutton/
+|   |   |   |   |   +-- skeleton/
+|   |   |   |   |   +-- slider/
+|   |   |   |   |   +-- speeddial/
+|   |   |   |   |   +-- splitbutton/
+|   |   |   |   |   +-- splitter/
+|   |   |   |   |   +-- stepper/
+|   |   |   |   |   +-- steps/
+|   |   |   |   |   +-- tabmenu/
+|   |   |   |   |   +-- tabs/
+|   |   |   |   |   +-- tabview/
+|   |   |   |   |   +-- tag/
+|   |   |   |   |   +-- terminal/
+|   |   |   |   |   +-- textarea/
+|   |   |   |   |   +-- tieredmenu/
+|   |   |   |   |   +-- timeline/
+|   |   |   |   |   +-- toast/
+|   |   |   |   |   +-- togglebutton/
+|   |   |   |   |   +-- toggleswitch/
+|   |   |   |   |   +-- toolbar/
+|   |   |   |   |   +-- tooltip/
+|   |   |   |   |   +-- tree/
+|   |   |   |   |   +-- treeselect/
+|   |   |   |   |   +-- treetable/
+|   |   |   |   |   \-- virtualscroller/
+|   |   |   |   +-- material/
+|   |   |   |   |   +-- accordion/
+|   |   |   |   |   +-- autocomplete/
+|   |   |   |   |   +-- avatar/
+|   |   |   |   |   +-- badge/
+|   |   |   |   |   +-- base/
+|   |   |   |   |   +-- blockui/
+|   |   |   |   |   +-- breadcrumb/
+|   |   |   |   |   +-- button/
+|   |   |   |   |   +-- card/
+|   |   |   |   |   +-- carousel/
+|   |   |   |   |   +-- cascadeselect/
+|   |   |   |   |   +-- checkbox/
+|   |   |   |   |   +-- chip/
+|   |   |   |   |   +-- colorpicker/
+|   |   |   |   |   +-- confirmdialog/
+|   |   |   |   |   +-- confirmpopup/
+|   |   |   |   |   +-- contextmenu/
+|   |   |   |   |   +-- datatable/
+|   |   |   |   |   +-- dataview/
+|   |   |   |   |   +-- datepicker/
+|   |   |   |   |   +-- dialog/
+|   |   |   |   |   +-- divider/
+|   |   |   |   |   +-- dock/
+|   |   |   |   |   +-- drawer/
+|   |   |   |   |   +-- editor/
+|   |   |   |   |   +-- fieldset/
+|   |   |   |   |   +-- fileupload/
+|   |   |   |   |   +-- floatlabel/
+|   |   |   |   |   +-- galleria/
+|   |   |   |   |   +-- iconfield/
+|   |   |   |   |   +-- iftalabel/
+|   |   |   |   |   +-- image/
+|   |   |   |   |   +-- imagecompare/
+|   |   |   |   |   +-- inlinemessage/
+|   |   |   |   |   +-- inplace/
+|   |   |   |   |   +-- inputchips/
+|   |   |   |   |   +-- inputgroup/
+|   |   |   |   |   +-- inputnumber/
+|   |   |   |   |   +-- inputotp/
+|   |   |   |   |   +-- inputtext/
+|   |   |   |   |   +-- knob/
+|   |   |   |   |   +-- listbox/
+|   |   |   |   |   +-- megamenu/
+|   |   |   |   |   +-- menu/
+|   |   |   |   |   +-- menubar/
+|   |   |   |   |   +-- message/
+|   |   |   |   |   +-- metergroup/
+|   |   |   |   |   +-- multiselect/
+|   |   |   |   |   +-- orderlist/
+|   |   |   |   |   +-- organizationchart/
+|   |   |   |   |   +-- overlaybadge/
+|   |   |   |   |   +-- paginator/
+|   |   |   |   |   +-- panel/
+|   |   |   |   |   +-- panelmenu/
+|   |   |   |   |   +-- password/
+|   |   |   |   |   +-- picklist/
+|   |   |   |   |   +-- popover/
+|   |   |   |   |   +-- progressbar/
+|   |   |   |   |   +-- progressspinner/
+|   |   |   |   |   +-- radiobutton/
+|   |   |   |   |   +-- rating/
+|   |   |   |   |   +-- ripple/
+|   |   |   |   |   +-- scrollpanel/
+|   |   |   |   |   +-- select/
+|   |   |   |   |   +-- selectbutton/
+|   |   |   |   |   +-- skeleton/
+|   |   |   |   |   +-- slider/
+|   |   |   |   |   +-- speeddial/
+|   |   |   |   |   +-- splitbutton/
+|   |   |   |   |   +-- splitter/
+|   |   |   |   |   +-- stepper/
+|   |   |   |   |   +-- steps/
+|   |   |   |   |   +-- tabmenu/
+|   |   |   |   |   +-- tabs/
+|   |   |   |   |   +-- tabview/
+|   |   |   |   |   +-- tag/
+|   |   |   |   |   +-- terminal/
+|   |   |   |   |   +-- textarea/
+|   |   |   |   |   +-- tieredmenu/
+|   |   |   |   |   +-- timeline/
+|   |   |   |   |   +-- toast/
+|   |   |   |   |   +-- togglebutton/
+|   |   |   |   |   +-- toggleswitch/
+|   |   |   |   |   +-- toolbar/
+|   |   |   |   |   +-- tooltip/
+|   |   |   |   |   +-- tree/
+|   |   |   |   |   +-- treeselect/
+|   |   |   |   |   +-- treetable/
+|   |   |   |   |   \-- virtualscroller/
+|   |   |   |   \-- nora/
+|   |   |   |       +-- accordion/
+|   |   |   |       +-- autocomplete/
+|   |   |   |       +-- avatar/
+|   |   |   |       +-- badge/
+|   |   |   |       +-- base/
+|   |   |   |       +-- blockui/
+|   |   |   |       +-- breadcrumb/
+|   |   |   |       +-- button/
+|   |   |   |       +-- card/
+|   |   |   |       +-- carousel/
+|   |   |   |       +-- cascadeselect/
+|   |   |   |       +-- checkbox/
+|   |   |   |       +-- chip/
+|   |   |   |       +-- colorpicker/
+|   |   |   |       +-- confirmdialog/
+|   |   |   |       +-- confirmpopup/
+|   |   |   |       +-- contextmenu/
+|   |   |   |       +-- datatable/
+|   |   |   |       +-- dataview/
+|   |   |   |       +-- datepicker/
+|   |   |   |       +-- dialog/
+|   |   |   |       +-- divider/
+|   |   |   |       +-- dock/
+|   |   |   |       +-- drawer/
+|   |   |   |       +-- editor/
+|   |   |   |       +-- fieldset/
+|   |   |   |       +-- fileupload/
+|   |   |   |       +-- floatlabel/
+|   |   |   |       +-- galleria/
+|   |   |   |       +-- iconfield/
+|   |   |   |       +-- iftalabel/
+|   |   |   |       +-- image/
+|   |   |   |       +-- imagecompare/
+|   |   |   |       +-- inlinemessage/
+|   |   |   |       +-- inplace/
+|   |   |   |       +-- inputchips/
+|   |   |   |       +-- inputgroup/
+|   |   |   |       +-- inputnumber/
+|   |   |   |       +-- inputotp/
+|   |   |   |       +-- inputtext/
+|   |   |   |       +-- knob/
+|   |   |   |       +-- listbox/
+|   |   |   |       +-- megamenu/
+|   |   |   |       +-- menu/
+|   |   |   |       +-- menubar/
+|   |   |   |       +-- message/
+|   |   |   |       +-- metergroup/
+|   |   |   |       +-- multiselect/
+|   |   |   |       +-- orderlist/
+|   |   |   |       +-- organizationchart/
+|   |   |   |       +-- overlaybadge/
+|   |   |   |       +-- paginator/
+|   |   |   |       +-- panel/
+|   |   |   |       +-- panelmenu/
+|   |   |   |       +-- password/
+|   |   |   |       +-- picklist/
+|   |   |   |       +-- popover/
+|   |   |   |       +-- progressbar/
+|   |   |   |       +-- progressspinner/
+|   |   |   |       +-- radiobutton/
+|   |   |   |       +-- rating/
+|   |   |   |       +-- ripple/
+|   |   |   |       +-- scrollpanel/
+|   |   |   |       +-- select/
+|   |   |   |       +-- selectbutton/
+|   |   |   |       +-- skeleton/
+|   |   |   |       +-- slider/
+|   |   |   |       +-- speeddial/
+|   |   |   |       +-- splitbutton/
+|   |   |   |       +-- splitter/
+|   |   |   |       +-- stepper/
+|   |   |   |       +-- steps/
+|   |   |   |       +-- tabmenu/
+|   |   |   |       +-- tabs/
+|   |   |   |       +-- tabview/
+|   |   |   |       +-- tag/
+|   |   |   |       +-- terminal/
+|   |   |   |       +-- textarea/
+|   |   |   |       +-- tieredmenu/
+|   |   |   |       +-- timeline/
+|   |   |   |       +-- toast/
+|   |   |   |       +-- togglebutton/
+|   |   |   |       +-- toggleswitch/
+|   |   |   |       +-- toolbar/
+|   |   |   |       +-- tooltip/
+|   |   |   |       +-- tree/
+|   |   |   |       +-- treeselect/
+|   |   |   |       +-- treetable/
+|   |   |   |       \-- virtualscroller/
+|   |   |   +-- tokens/
+|   |   |   +-- types/
+|   |   |   |   +-- accordion/
+|   |   |   |   +-- autocomplete/
+|   |   |   |   +-- avatar/
+|   |   |   |   +-- badge/
+|   |   |   |   +-- blockui/
+|   |   |   |   +-- breadcrumb/
+|   |   |   |   +-- button/
+|   |   |   |   +-- card/
+|   |   |   |   +-- carousel/
+|   |   |   |   +-- cascadeselect/
+|   |   |   |   +-- checkbox/
+|   |   |   |   +-- chip/
+|   |   |   |   +-- colorpicker/
+|   |   |   |   +-- confirmdialog/
+|   |   |   |   +-- confirmpopup/
+|   |   |   |   +-- contextmenu/
+|   |   |   |   +-- datatable/
+|   |   |   |   +-- dataview/
+|   |   |   |   +-- datepicker/
+|   |   |   |   +-- dialog/
+|   |   |   |   +-- divider/
+|   |   |   |   +-- dock/
+|   |   |   |   +-- drawer/
+|   |   |   |   +-- editor/
+|   |   |   |   +-- fieldset/
+|   |   |   |   +-- fileupload/
+|   |   |   |   +-- floatlabel/
+|   |   |   |   +-- galleria/
+|   |   |   |   +-- iconfield/
+|   |   |   |   +-- iftalabel/
+|   |   |   |   +-- image/
+|   |   |   |   +-- imagecompare/
+|   |   |   |   +-- inlinemessage/
+|   |   |   |   +-- inplace/
+|   |   |   |   +-- inputchips/
+|   |   |   |   +-- inputgroup/
+|   |   |   |   +-- inputnumber/
+|   |   |   |   +-- inputotp/
+|   |   |   |   +-- inputtext/
+|   |   |   |   +-- knob/
+|   |   |   |   +-- listbox/
+|   |   |   |   +-- megamenu/
+|   |   |   |   +-- menu/
+|   |   |   |   +-- menubar/
+|   |   |   |   +-- message/
+|   |   |   |   +-- metergroup/
+|   |   |   |   +-- multiselect/
+|   |   |   |   +-- orderlist/
+|   |   |   |   +-- organizationchart/
+|   |   |   |   +-- overlaybadge/
+|   |   |   |   +-- paginator/
+|   |   |   |   +-- panel/
+|   |   |   |   +-- panelmenu/
+|   |   |   |   +-- password/
+|   |   |   |   +-- picklist/
+|   |   |   |   +-- popover/
+|   |   |   |   +-- progressbar/
+|   |   |   |   +-- progressspinner/
+|   |   |   |   +-- radiobutton/
+|   |   |   |   +-- rating/
+|   |   |   |   +-- ripple/
+|   |   |   |   +-- scrollpanel/
+|   |   |   |   +-- select/
+|   |   |   |   +-- selectbutton/
+|   |   |   |   +-- skeleton/
+|   |   |   |   +-- slider/
+|   |   |   |   +-- speeddial/
+|   |   |   |   +-- splitbutton/
+|   |   |   |   +-- splitter/
+|   |   |   |   +-- stepper/
+|   |   |   |   +-- steps/
+|   |   |   |   +-- tabmenu/
+|   |   |   |   +-- tabs/
+|   |   |   |   +-- tabview/
+|   |   |   |   +-- tag/
+|   |   |   |   +-- terminal/
+|   |   |   |   +-- textarea/
+|   |   |   |   +-- tieredmenu/
+|   |   |   |   +-- timeline/
+|   |   |   |   +-- toast/
+|   |   |   |   +-- togglebutton/
+|   |   |   |   +-- toggleswitch/
+|   |   |   |   +-- toolbar/
+|   |   |   |   +-- tooltip/
+|   |   |   |   +-- tree/
+|   |   |   |   +-- treeselect/
+|   |   |   |   +-- treetable/
+|   |   |   |   \-- virtualscroller/
+|   |   |   \-- umd/
+|   |   \-- utils/
+|   |       \-- dist/
+|   |           +-- classnames/
+|   |           +-- dom/
+|   |           +-- eventbus/
+|   |           +-- mergeprops/
+|   |           +-- object/
+|   |           +-- uuid/
+|   |           \-- zindex/
+|   +-- @primevue/
+|   |   +-- core/
+|   |   |   +-- api/
+|   |   |   +-- base/
+|   |   |   |   \-- style/
+|   |   |   +-- basecomponent/
+|   |   |   |   \-- style/
+|   |   |   +-- basedirective/
+|   |   |   +-- baseeditableholder/
+|   |   |   +-- baseinput/
+|   |   |   +-- config/
+|   |   |   +-- service/
+|   |   |   +-- useattrselector/
+|   |   |   +-- useid/
+|   |   |   +-- usestyle/
+|   |   |   \-- utils/
+|   |   +-- icons/
+|   |   |   +-- angledoubledown/
+|   |   |   +-- angledoubleleft/
+|   |   |   +-- angledoubleright/
+|   |   |   +-- angledoubleup/
+|   |   |   +-- angledown/
+|   |   |   +-- angleleft/
+|   |   |   +-- angleright/
+|   |   |   +-- angleup/
+|   |   |   +-- arrowdown/
+|   |   |   +-- arrowup/
+|   |   |   +-- ban/
+|   |   |   +-- bars/
+|   |   |   +-- baseicon/
+|   |   |   |   \-- style/
+|   |   |   +-- blank/
+|   |   |   +-- calendar/
+|   |   |   +-- check/
+|   |   |   +-- chevrondown/
+|   |   |   +-- chevronleft/
+|   |   |   +-- chevronright/
+|   |   |   +-- chevronup/
+|   |   |   +-- exclamationtriangle/
+|   |   |   +-- eye/
+|   |   |   +-- eyeslash/
+|   |   |   +-- filter/
+|   |   |   +-- filterfill/
+|   |   |   +-- filterslash/
+|   |   |   +-- infocircle/
+|   |   |   +-- minus/
+|   |   |   +-- pencil/
+|   |   |   +-- plus/
+|   |   |   +-- refresh/
+|   |   |   +-- search/
+|   |   |   +-- searchminus/
+|   |   |   +-- searchplus/
+|   |   |   +-- sortalt/
+|   |   |   +-- sortamountdown/
+|   |   |   +-- sortamountupalt/
+|   |   |   +-- spinner/
+|   |   |   +-- star/
+|   |   |   +-- starfill/
+|   |   |   +-- thlarge/
+|   |   |   +-- times/
+|   |   |   +-- timescircle/
+|   |   |   +-- trash/
+|   |   |   +-- undo/
+|   |   |   +-- upload/
+|   |   |   +-- windowmaximize/
+|   |   |   \-- windowminimize/
+|   |   \-- themes/
+|   |       +-- aura/
+|   |       |   +-- accordion/
+|   |       |   +-- autocomplete/
+|   |       |   +-- avatar/
+|   |       |   +-- badge/
+|   |       |   +-- base/
+|   |       |   +-- blockui/
+|   |       |   +-- breadcrumb/
+|   |       |   +-- button/
+|   |       |   +-- card/
+|   |       |   +-- carousel/
+|   |       |   +-- cascadeselect/
+|   |       |   +-- checkbox/
+|   |       |   +-- chip/
+|   |       |   +-- colorpicker/
+|   |       |   +-- confirmdialog/
+|   |       |   +-- confirmpopup/
+|   |       |   +-- contextmenu/
+|   |       |   +-- datatable/
+|   |       |   +-- dataview/
+|   |       |   +-- datepicker/
+|   |       |   +-- dialog/
+|   |       |   +-- divider/
+|   |       |   +-- dock/
+|   |       |   +-- drawer/
+|   |       |   +-- editor/
+|   |       |   +-- fieldset/
+|   |       |   +-- fileupload/
+|   |       |   +-- floatlabel/
+|   |       |   +-- galleria/
+|   |       |   +-- iconfield/
+|   |       |   +-- iftalabel/
+|   |       |   +-- image/
+|   |       |   +-- imagecompare/
+|   |       |   +-- inlinemessage/
+|   |       |   +-- inplace/
+|   |       |   +-- inputchips/
+|   |       |   +-- inputgroup/
+|   |       |   +-- inputnumber/
+|   |       |   +-- inputotp/
+|   |       |   +-- inputtext/
+|   |       |   +-- knob/
+|   |       |   +-- listbox/
+|   |       |   +-- megamenu/
+|   |       |   +-- menu/
+|   |       |   +-- menubar/
+|   |       |   +-- message/
+|   |       |   +-- metergroup/
+|   |       |   +-- multiselect/
+|   |       |   +-- orderlist/
+|   |       |   +-- organizationchart/
+|   |       |   +-- overlaybadge/
+|   |       |   +-- paginator/
+|   |       |   +-- panel/
+|   |       |   +-- panelmenu/
+|   |       |   +-- password/
+|   |       |   +-- picklist/
+|   |       |   +-- popover/
+|   |       |   +-- progressbar/
+|   |       |   +-- progressspinner/
+|   |       |   +-- radiobutton/
+|   |       |   +-- rating/
+|   |       |   +-- ripple/
+|   |       |   +-- scrollpanel/
+|   |       |   +-- select/
+|   |       |   +-- selectbutton/
+|   |       |   +-- skeleton/
+|   |       |   +-- slider/
+|   |       |   +-- speeddial/
+|   |       |   +-- splitbutton/
+|   |       |   +-- splitter/
+|   |       |   +-- stepper/
+|   |       |   +-- steps/
+|   |       |   +-- tabmenu/
+|   |       |   +-- tabs/
+|   |       |   +-- tabview/
+|   |       |   +-- tag/
+|   |       |   +-- terminal/
+|   |       |   +-- textarea/
+|   |       |   +-- tieredmenu/
+|   |       |   +-- timeline/
+|   |       |   +-- toast/
+|   |       |   +-- togglebutton/
+|   |       |   +-- toggleswitch/
+|   |       |   +-- toolbar/
+|   |       |   +-- tooltip/
+|   |       |   +-- tree/
+|   |       |   +-- treeselect/
+|   |       |   +-- treetable/
+|   |       |   \-- virtualscroller/
+|   |       +-- lara/
+|   |       |   +-- accordion/
+|   |       |   +-- autocomplete/
+|   |       |   +-- avatar/
+|   |       |   +-- badge/
+|   |       |   +-- base/
+|   |       |   +-- blockui/
+|   |       |   +-- breadcrumb/
+|   |       |   +-- button/
+|   |       |   +-- card/
+|   |       |   +-- carousel/
+|   |       |   +-- cascadeselect/
+|   |       |   +-- checkbox/
+|   |       |   +-- chip/
+|   |       |   +-- colorpicker/
+|   |       |   +-- confirmdialog/
+|   |       |   +-- confirmpopup/
+|   |       |   +-- contextmenu/
+|   |       |   +-- datatable/
+|   |       |   +-- dataview/
+|   |       |   +-- datepicker/
+|   |       |   +-- dialog/
+|   |       |   +-- divider/
+|   |       |   +-- dock/
+|   |       |   +-- drawer/
+|   |       |   +-- editor/
+|   |       |   +-- fieldset/
+|   |       |   +-- fileupload/
+|   |       |   +-- floatlabel/
+|   |       |   +-- galleria/
+|   |       |   +-- iconfield/
+|   |       |   +-- iftalabel/
+|   |       |   +-- image/
+|   |       |   +-- imagecompare/
+|   |       |   +-- inlinemessage/
+|   |       |   +-- inplace/
+|   |       |   +-- inputchips/
+|   |       |   +-- inputgroup/
+|   |       |   +-- inputnumber/
+|   |       |   +-- inputotp/
+|   |       |   +-- inputtext/
+|   |       |   +-- knob/
+|   |       |   +-- listbox/
+|   |       |   +-- megamenu/
+|   |       |   +-- menu/
+|   |       |   +-- menubar/
+|   |       |   +-- message/
+|   |       |   +-- metergroup/
+|   |       |   +-- multiselect/
+|   |       |   +-- orderlist/
+|   |       |   +-- organizationchart/
+|   |       |   +-- overlaybadge/
+|   |       |   +-- paginator/
+|   |       |   +-- panel/
+|   |       |   +-- panelmenu/
+|   |       |   +-- password/
+|   |       |   +-- picklist/
+|   |       |   +-- popover/
+|   |       |   +-- progressbar/
+|   |       |   +-- progressspinner/
+|   |       |   +-- radiobutton/
+|   |       |   +-- rating/
+|   |       |   +-- ripple/
+|   |       |   +-- scrollpanel/
+|   |       |   +-- select/
+|   |       |   +-- selectbutton/
+|   |       |   +-- skeleton/
+|   |       |   +-- slider/
+|   |       |   +-- speeddial/
+|   |       |   +-- splitbutton/
+|   |       |   +-- splitter/
+|   |       |   +-- stepper/
+|   |       |   +-- steps/
+|   |       |   +-- tabmenu/
+|   |       |   +-- tabs/
+|   |       |   +-- tabview/
+|   |       |   +-- tag/
+|   |       |   +-- terminal/
+|   |       |   +-- textarea/
+|   |       |   +-- tieredmenu/
+|   |       |   +-- timeline/
+|   |       |   +-- toast/
+|   |       |   +-- togglebutton/
+|   |       |   +-- toggleswitch/
+|   |       |   +-- toolbar/
+|   |       |   +-- tooltip/
+|   |       |   +-- tree/
+|   |       |   +-- treeselect/
+|   |       |   +-- treetable/
+|   |       |   \-- virtualscroller/
+|   |       +-- material/
+|   |       |   +-- accordion/
+|   |       |   +-- autocomplete/
+|   |       |   +-- avatar/
+|   |       |   +-- badge/
+|   |       |   +-- base/
+|   |       |   +-- blockui/
+|   |       |   +-- breadcrumb/
+|   |       |   +-- button/
+|   |       |   +-- card/
+|   |       |   +-- carousel/
+|   |       |   +-- cascadeselect/
+|   |       |   +-- checkbox/
+|   |       |   +-- chip/
+|   |       |   +-- colorpicker/
+|   |       |   +-- confirmdialog/
+|   |       |   +-- confirmpopup/
+|   |       |   +-- contextmenu/
+|   |       |   +-- datatable/
+|   |       |   +-- dataview/
+|   |       |   +-- datepicker/
+|   |       |   +-- dialog/
+|   |       |   +-- divider/
+|   |       |   +-- dock/
+|   |       |   +-- drawer/
+|   |       |   +-- editor/
+|   |       |   +-- fieldset/
+|   |       |   +-- fileupload/
+|   |       |   +-- floatlabel/
+|   |       |   +-- galleria/
+|   |       |   +-- iconfield/
+|   |       |   +-- iftalabel/
+|   |       |   +-- image/
+|   |       |   +-- imagecompare/
+|   |       |   +-- inlinemessage/
+|   |       |   +-- inplace/
+|   |       |   +-- inputchips/
+|   |       |   +-- inputgroup/
+|   |       |   +-- inputnumber/
+|   |       |   +-- inputotp/
+|   |       |   +-- inputtext/
+|   |       |   +-- knob/
+|   |       |   +-- listbox/
+|   |       |   +-- megamenu/
+|   |       |   +-- menu/
+|   |       |   +-- menubar/
+|   |       |   +-- message/
+|   |       |   +-- metergroup/
+|   |       |   +-- multiselect/
+|   |       |   +-- orderlist/
+|   |       |   +-- organizationchart/
+|   |       |   +-- overlaybadge/
+|   |       |   +-- paginator/
+|   |       |   +-- panel/
+|   |       |   +-- panelmenu/
+|   |       |   +-- password/
+|   |       |   +-- picklist/
+|   |       |   +-- popover/
+|   |       |   +-- progressbar/
+|   |       |   +-- progressspinner/
+|   |       |   +-- radiobutton/
+|   |       |   +-- rating/
+|   |       |   +-- ripple/
+|   |       |   +-- scrollpanel/
+|   |       |   +-- select/
+|   |       |   +-- selectbutton/
+|   |       |   +-- skeleton/
+|   |       |   +-- slider/
+|   |       |   +-- speeddial/
+|   |       |   +-- splitbutton/
+|   |       |   +-- splitter/
+|   |       |   +-- stepper/
+|   |       |   +-- steps/
+|   |       |   +-- tabmenu/
+|   |       |   +-- tabs/
+|   |       |   +-- tabview/
+|   |       |   +-- tag/
+|   |       |   +-- terminal/
+|   |       |   +-- textarea/
+|   |       |   +-- tieredmenu/
+|   |       |   +-- timeline/
+|   |       |   +-- toast/
+|   |       |   +-- togglebutton/
+|   |       |   +-- toggleswitch/
+|   |       |   +-- toolbar/
+|   |       |   +-- tooltip/
+|   |       |   +-- tree/
+|   |       |   +-- treeselect/
+|   |       |   +-- treetable/
+|   |       |   \-- virtualscroller/
+|   |       +-- nora/
+|   |       |   +-- accordion/
+|   |       |   +-- autocomplete/
+|   |       |   +-- avatar/
+|   |       |   +-- badge/
+|   |       |   +-- base/
+|   |       |   +-- blockui/
+|   |       |   +-- breadcrumb/
+|   |       |   +-- button/
+|   |       |   +-- card/
+|   |       |   +-- carousel/
+|   |       |   +-- cascadeselect/
+|   |       |   +-- checkbox/
+|   |       |   +-- chip/
+|   |       |   +-- colorpicker/
+|   |       |   +-- confirmdialog/
+|   |       |   +-- confirmpopup/
+|   |       |   +-- contextmenu/
+|   |       |   +-- datatable/
+|   |       |   +-- dataview/
+|   |       |   +-- datepicker/
+|   |       |   +-- dialog/
+|   |       |   +-- divider/
+|   |       |   +-- dock/
+|   |       |   +-- drawer/
+|   |       |   +-- editor/
+|   |       |   +-- fieldset/
+|   |       |   +-- fileupload/
+|   |       |   +-- floatlabel/
+|   |       |   +-- galleria/
+|   |       |   +-- iconfield/
+|   |       |   +-- iftalabel/
+|   |       |   +-- image/
+|   |       |   +-- imagecompare/
+|   |       |   +-- inlinemessage/
+|   |       |   +-- inplace/
+|   |       |   +-- inputchips/
+|   |       |   +-- inputgroup/
+|   |       |   +-- inputnumber/
+|   |       |   +-- inputotp/
+|   |       |   +-- inputtext/
+|   |       |   +-- knob/
+|   |       |   +-- listbox/
+|   |       |   +-- megamenu/
+|   |       |   +-- menu/
+|   |       |   +-- menubar/
+|   |       |   +-- message/
+|   |       |   +-- metergroup/
+|   |       |   +-- multiselect/
+|   |       |   +-- orderlist/
+|   |       |   +-- organizationchart/
+|   |       |   +-- overlaybadge/
+|   |       |   +-- paginator/
+|   |       |   +-- panel/
+|   |       |   +-- panelmenu/
+|   |       |   +-- password/
+|   |       |   +-- picklist/
+|   |       |   +-- popover/
+|   |       |   +-- progressbar/
+|   |       |   +-- progressspinner/
+|   |       |   +-- radiobutton/
+|   |       |   +-- rating/
+|   |       |   +-- ripple/
+|   |       |   +-- scrollpanel/
+|   |       |   +-- select/
+|   |       |   +-- selectbutton/
+|   |       |   +-- skeleton/
+|   |       |   +-- slider/
+|   |       |   +-- speeddial/
+|   |       |   +-- splitbutton/
+|   |       |   +-- splitter/
+|   |       |   +-- stepper/
+|   |       |   +-- steps/
+|   |       |   +-- tabmenu/
+|   |       |   +-- tabs/
+|   |       |   +-- tabview/
+|   |       |   +-- tag/
+|   |       |   +-- terminal/
+|   |       |   +-- textarea/
+|   |       |   +-- tieredmenu/
+|   |       |   +-- timeline/
+|   |       |   +-- toast/
+|   |       |   +-- togglebutton/
+|   |       |   +-- toggleswitch/
+|   |       |   +-- toolbar/
+|   |       |   +-- tooltip/
+|   |       |   +-- tree/
+|   |       |   +-- treeselect/
+|   |       |   +-- treetable/
+|   |       |   \-- virtualscroller/
+|   |       +-- types/
+|   |       |   +-- accordion/
+|   |       |   +-- autocomplete/
+|   |       |   +-- avatar/
+|   |       |   +-- badge/
+|   |       |   +-- blockui/
+|   |       |   +-- breadcrumb/
+|   |       |   +-- button/
+|   |       |   +-- card/
+|   |       |   +-- carousel/
+|   |       |   +-- cascadeselect/
+|   |       |   +-- checkbox/
+|   |       |   +-- chip/
+|   |       |   +-- colorpicker/
+|   |       |   +-- confirmdialog/
+|   |       |   +-- confirmpopup/
+|   |       |   +-- contextmenu/
+|   |       |   +-- datatable/
+|   |       |   +-- dataview/
+|   |       |   +-- datepicker/
+|   |       |   +-- dialog/
+|   |       |   +-- divider/
+|   |       |   +-- dock/
+|   |       |   +-- drawer/
+|   |       |   +-- editor/
+|   |       |   +-- fieldset/
+|   |       |   +-- fileupload/
+|   |       |   +-- floatlabel/
+|   |       |   +-- galleria/
+|   |       |   +-- iconfield/
+|   |       |   +-- iftalabel/
+|   |       |   +-- image/
+|   |       |   +-- imagecompare/
+|   |       |   +-- inlinemessage/
+|   |       |   +-- inplace/
+|   |       |   +-- inputchips/
+|   |       |   +-- inputgroup/
+|   |       |   +-- inputnumber/
+|   |       |   +-- inputtext/
+|   |       |   +-- knob/
+|   |       |   +-- listbox/
+|   |       |   +-- megamenu/
+|   |       |   +-- menu/
+|   |       |   +-- menubar/
+|   |       |   +-- message/
+|   |       |   +-- metergroup/
+|   |       |   +-- multiselect/
+|   |       |   +-- orderlist/
+|   |       |   +-- organizationchart/
+|   |       |   +-- overlaybadge/
+|   |       |   +-- paginator/
+|   |       |   +-- panel/
+|   |       |   +-- panelmenu/
+|   |       |   +-- password/
+|   |       |   +-- picklist/
+|   |       |   +-- popover/
+|   |       |   +-- progressbar/
+|   |       |   +-- progressspinner/
+|   |       |   +-- radiobutton/
+|   |       |   +-- rating/
+|   |       |   +-- ripple/
+|   |       |   +-- scrollpanel/
+|   |       |   +-- select/
+|   |       |   +-- selectbutton/
+|   |       |   +-- skeleton/
+|   |       |   +-- slider/
+|   |       |   +-- speeddial/
+|   |       |   +-- splitbutton/
+|   |       |   +-- splitter/
+|   |       |   +-- stepper/
+|   |       |   +-- steps/
+|   |       |   +-- tabmenu/
+|   |       |   +-- tabs/
+|   |       |   +-- tabview/
+|   |       |   +-- tag/
+|   |       |   +-- terminal/
+|   |       |   +-- textarea/
+|   |       |   +-- tieredmenu/
+|   |       |   +-- timeline/
+|   |       |   +-- toast/
+|   |       |   +-- togglebutton/
+|   |       |   +-- toggleswitch/
+|   |       |   +-- toolbar/
+|   |       |   +-- tooltip/
+|   |       |   +-- tree/
+|   |       |   +-- treeselect/
+|   |       |   +-- treetable/
+|   |       |   \-- virtualscroller/
+|   |       \-- umd/
+|   +-- @rolldown/
+|   |   \-- pluginutils/
+|   |       \-- dist/
+|   +-- @rollup/
+|   |   +-- pluginutils/
+|   |   |   +-- dist/
+|   |   |   |   +-- cjs/
+|   |   |   |   \-- es/
+|   |   |   +-- node_modules/
+|   |   |   |   \-- picomatch/
+|   |   |   |       \-- lib/
+|   |   |   \-- types/
+|   |   +-- rollup-linux-x64-gnu/
+|   |   \-- rollup-linux-x64-musl/
+|   +-- @tailwindcss/
+|   |   +-- forms/
+|   |   |   +-- .github/
+|   |   |   |   +-- ISSUE_TEMPLATE/
+|   |   |   |   \-- workflows/
+|   |   |   +-- scripts/
+|   |   |   \-- src/
+|   |   +-- node/
+|   |   |   +-- dist/
+|   |   |   \-- node_modules/
+|   |   |       \-- tailwindcss/
+|   |   |           \-- dist/
+|   |   +-- oxide/
+|   |   |   \-- scripts/
+|   |   +-- oxide-linux-x64-gnu/
+|   |   +-- oxide-linux-x64-musl/
+|   |   \-- vite/
+|   |       +-- dist/
+|   |       \-- node_modules/
+|   |           \-- tailwindcss/
+|   |               \-- dist/
+|   +-- @types/
+|   |   +-- estree/
+|   |   +-- json-schema/
+|   |   +-- lodash/
+|   |   |   +-- common/
+|   |   |   \-- fp/
+|   |   \-- lodash-es/
+|   +-- @typescript-eslint/
+|   |   +-- project-service/
+|   |   |   \-- dist/
+|   |   +-- scope-manager/
+|   |   |   \-- dist/
+|   |   |       +-- definition/
+|   |   |       +-- lib/
+|   |   |       +-- referencer/
+|   |   |       +-- scope/
+|   |   |       \-- variable/
+|   |   +-- tsconfig-utils/
+|   |   |   \-- dist/
+|   |   +-- types/
+|   |   |   \-- dist/
+|   |   |       \-- generated/
+|   |   +-- typescript-estree/
+|   |   |   \-- dist/
+|   |   |       +-- create-program/
+|   |   |       +-- jsx/
+|   |   |       +-- parseSettings/
+|   |   |       \-- ts-estree/
+|   |   \-- visitor-keys/
+|   |       +-- dist/
+|   |       \-- node_modules/
+|   |           \-- eslint-visitor-keys/
+|   |               +-- dist/
+|   |               \-- lib/
+|   +-- @vitejs/
+|   |   \-- plugin-vue/
+|   |       \-- dist/
+|   +-- @vue/
+|   |   +-- compiler-core/
+|   |   |   \-- dist/
+|   |   +-- compiler-dom/
+|   |   |   \-- dist/
+|   |   +-- compiler-sfc/
+|   |   |   \-- dist/
+|   |   +-- compiler-ssr/
+|   |   |   \-- dist/
+|   |   +-- devtools-api/
+|   |   |   \-- lib/
+|   |   |       +-- cjs/
+|   |   |       |   \-- api/
+|   |   |       \-- esm/
+|   |   |           \-- api/
+|   |   +-- reactivity/
+|   |   |   \-- dist/
+|   |   +-- runtime-core/
+|   |   |   \-- dist/
+|   |   +-- runtime-dom/
+|   |   |   \-- dist/
+|   |   +-- server-renderer/
+|   |   |   \-- dist/
+|   |   \-- shared/
+|   |       \-- dist/
+|   +-- acorn/
+|   |   +-- bin/
+|   |   \-- dist/
+|   +-- acorn-jsx/
+|   +-- ajv/
+|   |   +-- dist/
+|   |   +-- lib/
+|   |   |   +-- compile/
+|   |   |   +-- dot/
+|   |   |   +-- dotjs/
+|   |   |   \-- refs/
+|   |   \-- scripts/
+|   +-- ansi-regex/
+|   +-- ansi-styles/
+|   +-- any-promise/
+|   |   \-- register/
+|   +-- anymatch/
+|   +-- arg/
+|   +-- argparse/
+|   |   \-- lib/
+|   +-- asynckit/
+|   |   \-- lib/
+|   +-- autoprefixer/
+|   |   +-- bin/
+|   |   +-- data/
+|   |   \-- lib/
+|   |       \-- hacks/
+|   +-- axios/
+|   |   +-- dist/
+|   |   |   +-- browser/
+|   |   |   +-- esm/
+|   |   |   \-- node/
+|   |   \-- lib/
+|   |       +-- adapters/
+|   |       +-- cancel/
+|   |       +-- core/
+|   |       +-- defaults/
+|   |       +-- env/
+|   |       |   \-- classes/
+|   |       +-- helpers/
+|   |       \-- platform/
+|   |           +-- browser/
+|   |           |   \-- classes/
+|   |           +-- common/
+|   |           \-- node/
+|   |               \-- classes/
+|   +-- balanced-match/
+|   |   \-- .github/
+|   +-- binary-extensions/
+|   +-- brace-expansion/
+|   |   \-- .github/
+|   +-- braces/
+|   |   \-- lib/
+|   +-- browserslist/
+|   +-- call-bind-apply-helpers/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- call-bound/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- callsites/
+|   +-- camelcase-css/
+|   +-- caniuse-lite/
+|   |   +-- data/
+|   |   |   +-- features/
+|   |   |   \-- regions/
+|   |   \-- dist/
+|   |       +-- lib/
+|   |       \-- unpacker/
+|   +-- chalk/
+|   |   +-- node_modules/
+|   |   |   \-- supports-color/
+|   |   \-- source/
+|   +-- chart.js/
+|   |   +-- auto/
+|   |   +-- dist/
+|   |   |   +-- chunks/
+|   |   |   +-- controllers/
+|   |   |   +-- core/
+|   |   |   +-- elements/
+|   |   |   +-- helpers/
+|   |   |   +-- platform/
+|   |   |   +-- plugins/
+|   |   |   |   \-- plugin.filler/
+|   |   |   +-- scales/
+|   |   |   \-- types/
+|   |   \-- helpers/
+|   +-- chokidar/
+|   |   +-- lib/
+|   |   +-- node_modules/
+|   |   |   \-- glob-parent/
+|   |   \-- types/
+|   +-- chownr/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- cliui/
+|   |   +-- build/
+|   |   |   \-- lib/
+|   |   \-- node_modules/
+|   |       +-- ansi-regex/
+|   |       +-- emoji-regex/
+|   |       |   \-- es2015/
+|   |       +-- string-width/
+|   |       +-- strip-ansi/
+|   |       \-- wrap-ansi/
+|   +-- color-convert/
+|   +-- color-name/
+|   +-- combined-stream/
+|   |   \-- lib/
+|   +-- commander/
+|   |   \-- typings/
+|   +-- concat-map/
+|   |   +-- example/
+|   |   \-- test/
+|   +-- concurrently/
+|   |   +-- dist/
+|   |   |   +-- bin/
+|   |   |   \-- src/
+|   |   |       +-- command-parser/
+|   |   |       \-- flow-control/
+|   |   \-- docs/
+|   |       \-- cli/
+|   +-- cross-spawn/
+|   |   \-- lib/
+|   |       \-- util/
+|   +-- cssesc/
+|   |   +-- bin/
+|   |   \-- man/
+|   +-- csstype/
+|   +-- date-fns/
+|   |   +-- _lib/
+|   |   |   \-- format/
+|   |   +-- docs/
+|   |   +-- fp/
+|   |   |   \-- _lib/
+|   |   +-- locale/
+|   |   |   +-- _lib/
+|   |   |   +-- af/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar-DZ/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar-EG/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar-MA/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar-SA/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ar-TN/
+|   |   |   |   \-- _lib/
+|   |   |   +-- az/
+|   |   |   |   \-- _lib/
+|   |   |   +-- be/
+|   |   |   |   \-- _lib/
+|   |   |   +-- be-tarask/
+|   |   |   |   \-- _lib/
+|   |   |   +-- bg/
+|   |   |   |   \-- _lib/
+|   |   |   +-- bn/
+|   |   |   |   \-- _lib/
+|   |   |   +-- bs/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ca/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ckb/
+|   |   |   |   \-- _lib/
+|   |   |   +-- cs/
+|   |   |   |   \-- _lib/
+|   |   |   +-- cy/
+|   |   |   |   \-- _lib/
+|   |   |   +-- da/
+|   |   |   |   \-- _lib/
+|   |   |   +-- de/
+|   |   |   |   \-- _lib/
+|   |   |   +-- de-AT/
+|   |   |   |   \-- _lib/
+|   |   |   +-- el/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-AU/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-CA/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-GB/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-IE/
+|   |   |   +-- en-IN/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-NZ/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-US/
+|   |   |   |   \-- _lib/
+|   |   |   +-- en-ZA/
+|   |   |   |   \-- _lib/
+|   |   |   +-- eo/
+|   |   |   |   \-- _lib/
+|   |   |   +-- es/
+|   |   |   |   \-- _lib/
+|   |   |   +-- et/
+|   |   |   |   \-- _lib/
+|   |   |   +-- eu/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fa-IR/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fi/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fr/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fr-CA/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fr-CH/
+|   |   |   |   \-- _lib/
+|   |   |   +-- fy/
+|   |   |   |   \-- _lib/
+|   |   |   +-- gd/
+|   |   |   |   \-- _lib/
+|   |   |   +-- gl/
+|   |   |   |   \-- _lib/
+|   |   |   +-- gu/
+|   |   |   |   \-- _lib/
+|   |   |   +-- he/
+|   |   |   |   \-- _lib/
+|   |   |   +-- hi/
+|   |   |   |   \-- _lib/
+|   |   |   +-- hr/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ht/
+|   |   |   |   \-- _lib/
+|   |   |   +-- hu/
+|   |   |   |   \-- _lib/
+|   |   |   +-- hy/
+|   |   |   |   \-- _lib/
+|   |   |   +-- id/
+|   |   |   |   \-- _lib/
+|   |   |   +-- is/
+|   |   |   |   \-- _lib/
+|   |   |   +-- it/
+|   |   |   |   \-- _lib/
+|   |   |   +-- it-CH/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ja/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ja-Hira/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ka/
+|   |   |   |   \-- _lib/
+|   |   |   +-- kk/
+|   |   |   |   \-- _lib/
+|   |   |   +-- km/
+|   |   |   |   \-- _lib/
+|   |   |   +-- kn/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ko/
+|   |   |   |   \-- _lib/
+|   |   |   +-- lb/
+|   |   |   |   \-- _lib/
+|   |   |   +-- lt/
+|   |   |   |   \-- _lib/
+|   |   |   +-- lv/
+|   |   |   |   \-- _lib/
+|   |   |   +-- mk/
+|   |   |   |   \-- _lib/
+|   |   |   +-- mn/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ms/
+|   |   |   |   \-- _lib/
+|   |   |   +-- mt/
+|   |   |   |   \-- _lib/
+|   |   |   +-- nb/
+|   |   |   |   \-- _lib/
+|   |   |   +-- nl/
+|   |   |   |   \-- _lib/
+|   |   |   +-- nl-BE/
+|   |   |   |   \-- _lib/
+|   |   |   +-- nn/
+|   |   |   |   \-- _lib/
+|   |   |   +-- oc/
+|   |   |   |   \-- _lib/
+|   |   |   +-- pl/
+|   |   |   |   \-- _lib/
+|   |   |   +-- pt/
+|   |   |   |   \-- _lib/
+|   |   |   +-- pt-BR/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ro/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ru/
+|   |   |   |   \-- _lib/
+|   |   |   +-- se/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sk/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sl/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sq/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sr/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sr-Latn/
+|   |   |   |   \-- _lib/
+|   |   |   +-- sv/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ta/
+|   |   |   |   \-- _lib/
+|   |   |   +-- te/
+|   |   |   |   \-- _lib/
+|   |   |   +-- th/
+|   |   |   |   \-- _lib/
+|   |   |   +-- tr/
+|   |   |   |   \-- _lib/
+|   |   |   +-- ug/
+|   |   |   |   \-- _lib/
+|   |   |   +-- uk/
+|   |   |   |   \-- _lib/
+|   |   |   +-- uz/
+|   |   |   |   \-- _lib/
+|   |   |   +-- uz-Cyrl/
+|   |   |   |   \-- _lib/
+|   |   |   +-- vi/
+|   |   |   |   \-- _lib/
+|   |   |   +-- zh-CN/
+|   |   |   |   \-- _lib/
+|   |   |   +-- zh-HK/
+|   |   |   |   \-- _lib/
+|   |   |   \-- zh-TW/
+|   |   |       \-- _lib/
+|   |   \-- parse/
+|   |       \-- _lib/
+|   |           \-- parsers/
+|   +-- debug/
+|   |   \-- src/
+|   +-- decimal.js/
+|   +-- deep-is/
+|   |   +-- example/
+|   |   \-- test/
+|   +-- delayed-stream/
+|   |   \-- lib/
+|   +-- detect-libc/
+|   |   \-- lib/
+|   +-- didyoumean/
+|   +-- diff/
+|   |   +-- dist/
+|   |   \-- lib/
+|   |       +-- convert/
+|   |       +-- diff/
+|   |       +-- patch/
+|   |       \-- util/
+|   +-- dlv/
+|   |   \-- dist/
+|   +-- dunder-proto/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- eastasianwidth/
+|   +-- electron-to-chromium/
+|   +-- emoji-regex/
+|   |   \-- es2015/
+|   +-- enhanced-resolve/
+|   |   \-- lib/
+|   |       \-- util/
+|   +-- entities/
+|   |   \-- lib/
+|   |       +-- esm/
+|   |       |   \-- generated/
+|   |       \-- generated/
+|   +-- error-ex/
+|   +-- es-define-property/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- es-errors/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- es-object-atoms/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- es-set-tostringtag/
+|   |   \-- test/
+|   +-- esbuild/
+|   |   +-- bin/
+|   |   \-- lib/
+|   +-- escalade/
+|   |   +-- dist/
+|   |   \-- sync/
+|   +-- escape-string-regexp/
+|   +-- escodegen/
+|   |   \-- bin/
+|   +-- eslint/
+|   |   +-- bin/
+|   |   +-- conf/
+|   |   +-- lib/
+|   |   |   +-- cli-engine/
+|   |   |   |   \-- formatters/
+|   |   |   +-- config/
+|   |   |   +-- eslint/
+|   |   |   +-- languages/
+|   |   |   |   \-- js/
+|   |   |   |       \-- source-code/
+|   |   |   |           \-- token-store/
+|   |   |   +-- linter/
+|   |   |   |   \-- code-path-analysis/
+|   |   |   +-- rule-tester/
+|   |   |   +-- rules/
+|   |   |   |   \-- utils/
+|   |   |   |       \-- unicode/
+|   |   |   +-- services/
+|   |   |   +-- shared/
+|   |   |   \-- types/
+|   |   +-- messages/
+|   |   \-- node_modules/
+|   |       +-- brace-expansion/
+|   |       +-- eslint-visitor-keys/
+|   |       |   +-- dist/
+|   |       |   \-- lib/
+|   |       \-- minimatch/
+|   +-- eslint-plugin-i18n-json/
+|   |   +-- node_modules/
+|   |   |   +-- ansi-styles/
+|   |   |   +-- chalk/
+|   |   |   |   \-- types/
+|   |   |   +-- color-convert/
+|   |   |   +-- color-name/
+|   |   |   +-- escape-string-regexp/
+|   |   |   +-- has-flag/
+|   |   |   \-- supports-color/
+|   |   \-- src/
+|   |       +-- __snapshots__/
+|   |       +-- message-validators/
+|   |       \-- util/
+|   +-- eslint-scope/
+|   |   +-- dist/
+|   |   \-- lib/
+|   +-- eslint-visitor-keys/
+|   |   +-- dist/
+|   |   \-- lib/
+|   +-- espree/
+|   |   +-- dist/
+|   |   +-- lib/
+|   |   \-- node_modules/
+|   |       \-- eslint-visitor-keys/
+|   |           +-- dist/
+|   |           \-- lib/
+|   +-- esprima/
+|   |   +-- bin/
+|   |   \-- dist/
+|   +-- esquery/
+|   |   \-- dist/
+|   +-- esrecurse/
+|   +-- estraverse/
+|   +-- estree-walker/
+|   |   +-- dist/
+|   |   |   +-- esm/
+|   |   |   \-- umd/
+|   |   +-- src/
+|   |   \-- types/
+|   +-- esutils/
+|   |   \-- lib/
+|   +-- fast-deep-equal/
+|   |   \-- es6/
+|   +-- fast-glob/
+|   |   +-- node_modules/
+|   |   |   \-- glob-parent/
+|   |   \-- out/
+|   |       +-- managers/
+|   |       +-- providers/
+|   |       |   +-- filters/
+|   |       |   +-- matchers/
+|   |       |   \-- transformers/
+|   |       +-- readers/
+|   |       +-- types/
+|   |       \-- utils/
+|   +-- fast-json-stable-stringify/
+|   |   +-- .github/
+|   |   +-- benchmark/
+|   |   +-- example/
+|   |   \-- test/
+|   +-- fast-levenshtein/
+|   +-- fastq/
+|   |   +-- .github/
+|   |   |   \-- workflows/
+|   |   \-- test/
+|   +-- file-entry-cache/
+|   +-- fill-range/
+|   +-- find-up/
+|   +-- flat-cache/
+|   |   \-- src/
+|   +-- flatted/
+|   |   +-- cjs/
+|   |   +-- esm/
+|   |   +-- php/
+|   |   +-- python/
+|   |   \-- types/
+|   +-- follow-redirects/
+|   +-- foreground-child/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- form-data/
+|   |   \-- lib/
+|   +-- fraction.js/
+|   +-- function-bind/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- get-caller-file/
+|   +-- get-intrinsic/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- get-proto/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- glob/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- glob-parent/
+|   +-- globals/
+|   +-- gopd/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- graceful-fs/
+|   +-- has-flag/
+|   +-- has-symbols/
+|   |   +-- .github/
+|   |   \-- test/
+|   |       \-- shams/
+|   +-- has-tostringtag/
+|   |   +-- .github/
+|   |   \-- test/
+|   |       \-- shams/
+|   +-- hasown/
+|   |   \-- .github/
+|   +-- ignore/
+|   +-- import-fresh/
+|   +-- imurmurhash/
+|   +-- indent-string/
+|   +-- irregular-plurals/
+|   +-- is-arrayish/
+|   +-- is-binary-path/
+|   +-- is-core-module/
+|   |   \-- test/
+|   +-- is-extglob/
+|   +-- is-fullwidth-code-point/
+|   +-- is-glob/
+|   +-- is-number/
+|   +-- isexe/
+|   |   \-- test/
+|   +-- jackspeak/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- jest-diff/
+|   |   +-- build/
+|   |   \-- node_modules/
+|   |       +-- ansi-styles/
+|   |       +-- chalk/
+|   |       |   \-- types/
+|   |       +-- color-convert/
+|   |       +-- color-name/
+|   |       +-- escape-string-regexp/
+|   |       +-- has-flag/
+|   |       \-- supports-color/
+|   +-- jest-get-type/
+|   |   \-- build/
+|   +-- jiti/
+|   |   +-- dist/
+|   |   \-- lib/
+|   +-- js-tokens/
+|   +-- js-yaml/
+|   |   +-- bin/
+|   |   +-- dist/
+|   |   \-- lib/
+|   |       +-- schema/
+|   |       \-- type/
+|   +-- json-buffer/
+|   |   \-- test/
+|   +-- json-parse-even-better-errors/
+|   +-- json-schema-traverse/
+|   |   \-- spec/
+|   |       \-- fixtures/
+|   +-- json-stable-stringify-without-jsonify/
+|   |   +-- example/
+|   |   \-- test/
+|   +-- jsonc-eslint-parser/
+|   |   +-- lib/
+|   |   |   +-- parser/
+|   |   |   |   \-- modules/
+|   |   |   \-- utils/
+|   |   \-- node_modules/
+|   |       \-- espree/
+|   |           +-- dist/
+|   |           \-- lib/
+|   +-- keyv/
+|   |   \-- src/
+|   +-- laravel-vite-plugin/
+|   |   +-- bin/
+|   |   +-- dist/
+|   |   \-- inertia-helpers/
+|   +-- levn/
+|   |   \-- lib/
+|   +-- lightningcss/
+|   |   \-- node/
+|   +-- lightningcss-linux-x64-gnu/
+|   +-- lightningcss-linux-x64-musl/
+|   +-- lilconfig/
+|   |   \-- src/
+|   +-- lines-and-columns/
+|   |   \-- build/
+|   +-- locate-path/
+|   +-- lodash/
+|   |   \-- fp/
+|   +-- lodash-es/
+|   +-- lodash.merge/
+|   +-- log-symbols/
+|   |   \-- node_modules/
+|   |       +-- ansi-styles/
+|   |       +-- chalk/
+|   |       |   \-- types/
+|   |       +-- color-convert/
+|   |       +-- color-name/
+|   |       +-- escape-string-regexp/
+|   |       +-- has-flag/
+|   |       \-- supports-color/
+|   +-- lru-cache/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- magic-string/
+|   |   \-- dist/
+|   +-- math-intrinsics/
+|   |   +-- .github/
+|   |   +-- constants/
+|   |   \-- test/
+|   +-- merge2/
+|   +-- micromatch/
+|   +-- mime-db/
+|   +-- mime-types/
+|   +-- mini-svg-data-uri/
+|   +-- minimatch/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- minipass/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- minizlib/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- mkdirp/
+|   |   \-- dist/
+|   |       +-- cjs/
+|   |       |   \-- src/
+|   |       \-- mjs/
+|   +-- ms/
+|   +-- mz/
+|   +-- nanoid/
+|   |   +-- async/
+|   |   +-- bin/
+|   |   +-- non-secure/
+|   |   \-- url-alphabet/
+|   +-- natural-compare/
+|   +-- node-releases/
+|   |   \-- data/
+|   |       +-- processed/
+|   |       \-- release-schedule/
+|   +-- normalize-path/
+|   +-- normalize-range/
+|   +-- object-assign/
+|   +-- object-hash/
+|   |   \-- dist/
+|   +-- object-inspect/
+|   |   +-- .github/
+|   |   +-- example/
+|   |   \-- test/
+|   |       \-- browser/
+|   +-- optionator/
+|   |   \-- lib/
+|   +-- p-limit/
+|   +-- p-locate/
+|   +-- package-json-from-dist/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- parent-module/
+|   +-- parse-json/
+|   +-- path-exists/
+|   +-- path-key/
+|   +-- path-parse/
+|   +-- path-scurry/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- pathe/
+|   |   \-- dist/
+|   |       \-- shared/
+|   +-- picocolors/
+|   +-- picomatch/
+|   |   \-- lib/
+|   +-- pify/
+|   +-- pirates/
+|   |   \-- lib/
+|   +-- playwright/
+|   |   +-- lib/
+|   |   |   +-- common/
+|   |   |   +-- isomorphic/
+|   |   |   +-- loader/
+|   |   |   +-- matchers/
+|   |   |   +-- mcp/
+|   |   |   +-- plugins/
+|   |   |   +-- reporters/
+|   |   |   |   \-- versions/
+|   |   |   +-- runner/
+|   |   |   +-- third_party/
+|   |   |   +-- transform/
+|   |   |   \-- worker/
+|   |   +-- node_modules/
+|   |   \-- types/
+|   +-- playwright-core/
+|   |   +-- bin/
+|   |   +-- lib/
+|   |   |   +-- cli/
+|   |   |   +-- client/
+|   |   |   +-- generated/
+|   |   |   +-- protocol/
+|   |   |   +-- remote/
+|   |   |   +-- server/
+|   |   |   |   +-- android/
+|   |   |   |   +-- bidi/
+|   |   |   |   |   \-- third_party/
+|   |   |   |   +-- chromium/
+|   |   |   |   +-- codegen/
+|   |   |   |   +-- dispatchers/
+|   |   |   |   +-- electron/
+|   |   |   |   +-- firefox/
+|   |   |   |   +-- har/
+|   |   |   |   +-- recorder/
+|   |   |   |   +-- registry/
+|   |   |   |   +-- trace/
+|   |   |   |   |   +-- recorder/
+|   |   |   |   |   +-- test/
+|   |   |   |   |   \-- viewer/
+|   |   |   |   +-- utils/
+|   |   |   |   |   \-- image_tools/
+|   |   |   |   \-- webkit/
+|   |   |   +-- third_party/
+|   |   |   +-- utils/
+|   |   |   |   \-- isomorphic/
+|   |   |   +-- utilsBundleImpl/
+|   |   |   \-- vite/
+|   |   |       +-- htmlReport/
+|   |   |       +-- recorder/
+|   |   |       |   \-- assets/
+|   |   |       \-- traceViewer/
+|   |   |           \-- assets/
+|   |   \-- types/
+|   +-- plur/
+|   +-- postcss/
+|   |   \-- lib/
+|   +-- postcss-import/
+|   |   \-- lib/
+|   +-- postcss-js/
+|   +-- postcss-load-config/
+|   |   \-- src/
+|   +-- postcss-nested/
+|   +-- postcss-selector-parser/
+|   |   \-- dist/
+|   |       +-- selectors/
+|   |       \-- util/
+|   +-- postcss-value-parser/
+|   |   \-- lib/
+|   +-- prelude-ls/
+|   |   \-- lib/
+|   +-- pretty-format/
+|   |   +-- build/
+|   |   |   \-- plugins/
+|   |   |       \-- lib/
+|   |   +-- build-es5/
+|   |   +-- node_modules/
+|   |   |   +-- ansi-regex/
+|   |   |   +-- ansi-styles/
+|   |   |   +-- color-convert/
+|   |   |   \-- color-name/
+|   |   \-- perf/
+|   +-- primeicons/
+|   |   +-- fonts/
+|   |   \-- raw-svg/
+|   +-- primevue/
+|   |   +-- accordion/
+|   |   |   \-- style/
+|   |   +-- accordioncontent/
+|   |   |   \-- style/
+|   |   +-- accordionheader/
+|   |   |   \-- style/
+|   |   +-- accordionpanel/
+|   |   |   \-- style/
+|   |   +-- accordiontab/
+|   |   |   \-- style/
+|   |   +-- animateonscroll/
+|   |   |   \-- style/
+|   |   +-- autocomplete/
+|   |   |   \-- style/
+|   |   +-- avatar/
+|   |   |   \-- style/
+|   |   +-- avatargroup/
+|   |   |   \-- style/
+|   |   +-- badge/
+|   |   |   \-- style/
+|   |   +-- badgedirective/
+|   |   |   \-- style/
+|   |   +-- blockui/
+|   |   |   \-- style/
+|   |   +-- breadcrumb/
+|   |   |   \-- style/
+|   |   +-- button/
+|   |   |   \-- style/
+|   |   +-- buttongroup/
+|   |   |   \-- style/
+|   |   +-- calendar/
+|   |   |   \-- style/
+|   |   +-- card/
+|   |   |   \-- style/
+|   |   +-- carousel/
+|   |   |   \-- style/
+|   |   +-- cascadeselect/
+|   |   |   \-- style/
+|   |   +-- chart/
+|   |   |   \-- style/
+|   |   +-- checkbox/
+|   |   |   \-- style/
+|   |   +-- checkboxgroup/
+|   |   |   \-- style/
+|   |   +-- chip/
+|   |   |   \-- style/
+|   |   +-- chips/
+|   |   |   \-- style/
+|   |   +-- colorpicker/
+|   |   |   \-- style/
+|   |   +-- column/
+|   |   |   \-- style/
+|   |   +-- columngroup/
+|   |   |   \-- style/
+|   |   +-- config/
+|   |   +-- confirmationeventbus/
+|   |   +-- confirmationoptions/
+|   |   +-- confirmationservice/
+|   |   +-- confirmdialog/
+|   |   |   \-- style/
+|   |   +-- confirmpopup/
+|   |   |   \-- style/
+|   |   +-- contextmenu/
+|   |   |   \-- style/
+|   |   +-- datatable/
+|   |   |   \-- style/
+|   |   +-- dataview/
+|   |   |   \-- style/
+|   |   +-- datepicker/
+|   |   |   \-- style/
+|   |   +-- deferredcontent/
+|   |   |   \-- style/
+|   |   +-- dialog/
+|   |   |   \-- style/
+|   |   +-- dialogservice/
+|   |   +-- divider/
+|   |   |   \-- style/
+|   |   +-- dock/
+|   |   |   \-- style/
+|   |   +-- drawer/
+|   |   |   \-- style/
+|   |   +-- dropdown/
+|   |   |   \-- style/
+|   |   +-- dynamicdialog/
+|   |   |   \-- style/
+|   |   +-- dynamicdialogeventbus/
+|   |   +-- dynamicdialogoptions/
+|   |   +-- editor/
+|   |   |   \-- style/
+|   |   +-- fieldset/
+|   |   |   \-- style/
+|   |   +-- fileupload/
+|   |   |   \-- style/
+|   |   +-- floatlabel/
+|   |   |   \-- style/
+|   |   +-- fluid/
+|   |   |   \-- style/
+|   |   +-- focustrap/
+|   |   |   \-- style/
+|   |   +-- galleria/
+|   |   |   \-- style/
+|   |   +-- iconfield/
+|   |   |   \-- style/
+|   |   +-- iftalabel/
+|   |   |   \-- style/
+|   |   +-- image/
+|   |   |   \-- style/
+|   |   +-- imagecompare/
+|   |   |   \-- style/
+|   |   +-- inlinemessage/
+|   |   |   \-- style/
+|   |   +-- inplace/
+|   |   |   \-- style/
+|   |   +-- inputchips/
+|   |   |   \-- style/
+|   |   +-- inputgroup/
+|   |   |   \-- style/
+|   |   +-- inputgroupaddon/
+|   |   |   \-- style/
+|   |   +-- inputicon/
+|   |   |   \-- style/
+|   |   +-- inputmask/
+|   |   |   \-- style/
+|   |   +-- inputnumber/
+|   |   |   \-- style/
+|   |   +-- inputotp/
+|   |   |   \-- style/
+|   |   +-- inputswitch/
+|   |   |   \-- style/
+|   |   +-- inputtext/
+|   |   |   \-- style/
+|   |   +-- keyfilter/
+|   |   |   \-- style/
+|   |   +-- knob/
+|   |   |   \-- style/
+|   |   +-- listbox/
+|   |   |   \-- style/
+|   |   +-- megamenu/
+|   |   |   \-- style/
+|   |   +-- menu/
+|   |   |   \-- style/
+|   |   +-- menubar/
+|   |   |   \-- style/
+|   |   +-- menuitem/
+|   |   +-- message/
+|   |   |   \-- style/
+|   |   +-- metergroup/
+|   |   |   \-- style/
+|   |   +-- multiselect/
+|   |   |   \-- style/
+|   |   +-- orderlist/
+|   |   |   \-- style/
+|   |   +-- organizationchart/
+|   |   |   \-- style/
+|   |   +-- overlaybadge/
+|   |   |   \-- style/
+|   |   +-- overlayeventbus/
+|   |   +-- overlaypanel/
+|   |   |   \-- style/
+|   |   +-- paginator/
+|   |   |   \-- style/
+|   |   +-- panel/
+|   |   |   \-- style/
+|   |   +-- panelmenu/
+|   |   |   \-- style/
+|   |   +-- passthrough/
+|   |   +-- password/
+|   |   |   \-- style/
+|   |   +-- picklist/
+|   |   |   \-- style/
+|   |   +-- popover/
+|   |   |   \-- style/
+|   |   +-- portal/
+|   |   |   \-- style/
+|   |   +-- progressbar/
+|   |   |   \-- style/
+|   |   +-- progressspinner/
+|   |   |   \-- style/
+|   |   +-- radiobutton/
+|   |   |   \-- style/
+|   |   +-- radiobuttongroup/
+|   |   |   \-- style/
+|   |   +-- rating/
+|   |   |   \-- style/
+|   |   +-- ripple/
+|   |   |   \-- style/
+|   |   +-- row/
+|   |   |   \-- style/
+|   |   +-- scrollpanel/
+|   |   |   \-- style/
+|   |   +-- scrolltop/
+|   |   |   \-- style/
+|   |   +-- select/
+|   |   |   \-- style/
+|   |   +-- selectbutton/
+|   |   |   \-- style/
+|   |   +-- sidebar/
+|   |   |   \-- style/
+|   |   +-- skeleton/
+|   |   |   \-- style/
+|   |   +-- slider/
+|   |   |   \-- style/
+|   |   +-- speeddial/
+|   |   |   \-- style/
+|   |   +-- splitbutton/
+|   |   |   \-- style/
+|   |   +-- splitter/
+|   |   |   \-- style/
+|   |   +-- splitterpanel/
+|   |   |   \-- style/
+|   |   +-- step/
+|   |   |   \-- style/
+|   |   +-- stepitem/
+|   |   |   \-- style/
+|   |   +-- steplist/
+|   |   |   \-- style/
+|   |   +-- steppanel/
+|   |   |   \-- style/
+|   |   +-- steppanels/
+|   |   |   \-- style/
+|   |   +-- stepper/
+|   |   |   \-- style/
+|   |   +-- steps/
+|   |   |   \-- style/
+|   |   +-- styleclass/
+|   |   |   \-- style/
+|   |   +-- tab/
+|   |   |   \-- style/
+|   |   +-- tablist/
+|   |   |   \-- style/
+|   |   +-- tabmenu/
+|   |   |   \-- style/
+|   |   +-- tabpanel/
+|   |   |   \-- style/
+|   |   +-- tabpanels/
+|   |   |   \-- style/
+|   |   +-- tabs/
+|   |   |   \-- style/
+|   |   +-- tabview/
+|   |   |   \-- style/
+|   |   +-- tag/
+|   |   |   \-- style/
+|   |   +-- terminal/
+|   |   |   \-- style/
+|   |   +-- terminalservice/
+|   |   +-- textarea/
+|   |   |   \-- style/
+|   |   +-- tieredmenu/
+|   |   |   \-- style/
+|   |   +-- timeline/
+|   |   |   \-- style/
+|   |   +-- toast/
+|   |   |   \-- style/
+|   |   +-- toasteventbus/
+|   |   +-- toastservice/
+|   |   +-- togglebutton/
+|   |   |   \-- style/
+|   |   +-- toggleswitch/
+|   |   |   \-- style/
+|   |   +-- toolbar/
+|   |   |   \-- style/
+|   |   +-- tooltip/
+|   |   |   \-- style/
+|   |   +-- tree/
+|   |   |   \-- style/
+|   |   +-- treenode/
+|   |   +-- treeselect/
+|   |   |   \-- style/
+|   |   +-- treetable/
+|   |   |   \-- style/
+|   |   +-- umd/
+|   |   +-- useconfirm/
+|   |   +-- usedialog/
+|   |   +-- usestyle/
+|   |   +-- usetoast/
+|   |   +-- utils/
+|   |   \-- virtualscroller/
+|   |       \-- style/
+|   +-- proxy-from-env/
+|   +-- punycode/
+|   +-- qs/
+|   |   +-- .github/
+|   |   +-- dist/
+|   |   +-- lib/
+|   |   \-- test/
+|   +-- queue-microtask/
+|   +-- read-cache/
+|   +-- readdirp/
+|   +-- require-directory/
+|   +-- resolve/
+|   |   +-- .github/
+|   |   +-- bin/
+|   |   +-- example/
+|   |   +-- lib/
+|   |   \-- test/
+|   |       +-- dotdot/
+|   |       |   \-- abc/
+|   |       +-- module_dir/
+|   |       |   +-- xmodules/
+|   |       |   |   \-- aaa/
+|   |       |   +-- ymodules/
+|   |       |   |   \-- aaa/
+|   |       |   \-- zmodules/
+|   |       |       \-- bbb/
+|   |       +-- node_path/
+|   |       |   +-- x/
+|   |       |   |   +-- aaa/
+|   |       |   |   \-- ccc/
+|   |       |   \-- y/
+|   |       |       +-- bbb/
+|   |       |       \-- ccc/
+|   |       +-- pathfilter/
+|   |       |   \-- deep_ref/
+|   |       +-- precedence/
+|   |       |   +-- aaa/
+|   |       |   \-- bbb/
+|   |       +-- resolver/
+|   |       |   +-- baz/
+|   |       |   +-- browser_field/
+|   |       |   +-- dot_main/
+|   |       |   +-- dot_slash_main/
+|   |       |   +-- false_main/
+|   |       |   +-- incorrect_main/
+|   |       |   +-- invalid_main/
+|   |       |   +-- multirepo/
+|   |       |   |   \-- packages/
+|   |       |   |       +-- package-a/
+|   |       |   |       \-- package-b/
+|   |       |   +-- nested_symlinks/
+|   |       |   |   \-- mylib/
+|   |       |   +-- other_path/
+|   |       |   |   \-- lib/
+|   |       |   +-- quux/
+|   |       |   |   \-- foo/
+|   |       |   +-- same_names/
+|   |       |   |   \-- foo/
+|   |       |   +-- symlinked/
+|   |       |   |   +-- _/
+|   |       |   |   |   +-- node_modules/
+|   |       |   |   |   \-- symlink_target/
+|   |       |   |   \-- package/
+|   |       |   \-- without_basedir/
+|   |       \-- shadowed_core/
+|   |           \-- node_modules/
+|   |               \-- util/
+|   +-- resolve-from/
+|   +-- reusify/
+|   |   +-- .github/
+|   |   |   \-- workflows/
+|   |   \-- benchmarks/
+|   +-- rollup/
+|   |   \-- dist/
+|   |       +-- bin/
+|   |       +-- es/
+|   |       |   \-- shared/
+|   |       \-- shared/
+|   +-- run-parallel/
+|   +-- rxjs/
+|   |   +-- ajax/
+|   |   +-- dist/
+|   |   |   +-- bundles/
+|   |   |   +-- cjs/
+|   |   |   |   +-- ajax/
+|   |   |   |   +-- fetch/
+|   |   |   |   +-- internal/
+|   |   |   |   |   +-- ajax/
+|   |   |   |   |   +-- observable/
+|   |   |   |   |   |   \-- dom/
+|   |   |   |   |   +-- operators/
+|   |   |   |   |   +-- scheduled/
+|   |   |   |   |   +-- scheduler/
+|   |   |   |   |   +-- symbol/
+|   |   |   |   |   +-- testing/
+|   |   |   |   |   \-- util/
+|   |   |   |   +-- operators/
+|   |   |   |   +-- testing/
+|   |   |   |   \-- webSocket/
+|   |   |   +-- esm/
+|   |   |   |   +-- ajax/
+|   |   |   |   +-- fetch/
+|   |   |   |   +-- internal/
+|   |   |   |   |   +-- ajax/
+|   |   |   |   |   +-- observable/
+|   |   |   |   |   |   \-- dom/
+|   |   |   |   |   +-- operators/
+|   |   |   |   |   +-- scheduled/
+|   |   |   |   |   +-- scheduler/
+|   |   |   |   |   +-- symbol/
+|   |   |   |   |   +-- testing/
+|   |   |   |   |   \-- util/
+|   |   |   |   +-- operators/
+|   |   |   |   +-- testing/
+|   |   |   |   \-- webSocket/
+|   |   |   +-- esm5/
+|   |   |   |   +-- ajax/
+|   |   |   |   +-- fetch/
+|   |   |   |   +-- internal/
+|   |   |   |   |   +-- ajax/
+|   |   |   |   |   +-- observable/
+|   |   |   |   |   |   \-- dom/
+|   |   |   |   |   +-- operators/
+|   |   |   |   |   +-- scheduled/
+|   |   |   |   |   +-- scheduler/
+|   |   |   |   |   +-- symbol/
+|   |   |   |   |   +-- testing/
+|   |   |   |   |   \-- util/
+|   |   |   |   +-- operators/
+|   |   |   |   +-- testing/
+|   |   |   |   \-- webSocket/
+|   |   |   \-- types/
+|   |   |       +-- ajax/
+|   |   |       +-- fetch/
+|   |   |       +-- internal/
+|   |   |       |   +-- ajax/
+|   |   |       |   +-- observable/
+|   |   |       |   |   \-- dom/
+|   |   |       |   +-- operators/
+|   |   |       |   +-- scheduled/
+|   |   |       |   +-- scheduler/
+|   |   |       |   +-- symbol/
+|   |   |       |   +-- testing/
+|   |   |       |   \-- util/
+|   |   |       +-- operators/
+|   |   |       +-- testing/
+|   |   |       \-- webSocket/
+|   |   +-- fetch/
+|   |   +-- operators/
+|   |   +-- src/
+|   |   |   +-- ajax/
+|   |   |   +-- fetch/
+|   |   |   +-- internal/
+|   |   |   |   +-- ajax/
+|   |   |   |   +-- observable/
+|   |   |   |   |   \-- dom/
+|   |   |   |   +-- operators/
+|   |   |   |   +-- scheduled/
+|   |   |   |   +-- scheduler/
+|   |   |   |   +-- symbol/
+|   |   |   |   +-- testing/
+|   |   |   |   \-- util/
+|   |   |   +-- operators/
+|   |   |   +-- testing/
+|   |   |   \-- webSocket/
+|   |   +-- testing/
+|   |   \-- webSocket/
+|   +-- semver/
+|   |   +-- bin/
+|   |   +-- classes/
+|   |   +-- functions/
+|   |   +-- internal/
+|   |   \-- ranges/
+|   +-- shebang-command/
+|   +-- shebang-regex/
+|   +-- shell-quote/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- side-channel/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- side-channel-list/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- side-channel-map/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- side-channel-weakmap/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- signal-exit/
+|   |   \-- dist/
+|   |       +-- cjs/
+|   |       \-- mjs/
+|   +-- source-map/
+|   |   +-- dist/
+|   |   \-- lib/
+|   +-- source-map-js/
+|   |   \-- lib/
+|   +-- string-width/
+|   +-- string-width-cjs/
+|   |   \-- node_modules/
+|   |       +-- ansi-regex/
+|   |       +-- emoji-regex/
+|   |       |   \-- es2015/
+|   |       \-- strip-ansi/
+|   +-- strip-ansi/
+|   +-- strip-ansi-cjs/
+|   |   \-- node_modules/
+|   |       \-- ansi-regex/
+|   +-- strip-json-comments/
+|   +-- sucrase/
+|   |   +-- bin/
+|   |   +-- dist/
+|   |   |   +-- esm/
+|   |   |   |   +-- parser/
+|   |   |   |   |   +-- plugins/
+|   |   |   |   |   |   \-- jsx/
+|   |   |   |   |   +-- tokenizer/
+|   |   |   |   |   +-- traverser/
+|   |   |   |   |   \-- util/
+|   |   |   |   +-- transformers/
+|   |   |   |   \-- util/
+|   |   |   +-- parser/
+|   |   |   |   +-- plugins/
+|   |   |   |   |   \-- jsx/
+|   |   |   |   +-- tokenizer/
+|   |   |   |   +-- traverser/
+|   |   |   |   \-- util/
+|   |   |   +-- transformers/
+|   |   |   +-- types/
+|   |   |   |   +-- parser/
+|   |   |   |   |   +-- plugins/
+|   |   |   |   |   |   \-- jsx/
+|   |   |   |   |   +-- tokenizer/
+|   |   |   |   |   +-- traverser/
+|   |   |   |   |   \-- util/
+|   |   |   |   +-- transformers/
+|   |   |   |   \-- util/
+|   |   |   \-- util/
+|   |   +-- register/
+|   |   \-- ts-node-plugin/
+|   +-- supports-color/
+|   +-- supports-preserve-symlinks-flag/
+|   |   +-- .github/
+|   |   \-- test/
+|   +-- tailwindcss/
+|   |   +-- lib/
+|   |   |   +-- cli/
+|   |   |   |   +-- build/
+|   |   |   |   +-- help/
+|   |   |   |   \-- init/
+|   |   |   +-- css/
+|   |   |   +-- lib/
+|   |   |   +-- postcss-plugins/
+|   |   |   |   \-- nesting/
+|   |   |   +-- public/
+|   |   |   +-- util/
+|   |   |   \-- value-parser/
+|   |   +-- nesting/
+|   |   +-- node_modules/
+|   |   |   +-- .bin/
+|   |   |   \-- jiti/
+|   |   |       +-- bin/
+|   |   |       +-- dist/
+|   |   |       |   \-- plugins/
+|   |   |       \-- lib/
+|   |   +-- peers/
+|   |   +-- scripts/
+|   |   +-- src/
+|   |   |   +-- cli/
+|   |   |   |   +-- build/
+|   |   |   |   +-- help/
+|   |   |   |   \-- init/
+|   |   |   +-- css/
+|   |   |   +-- lib/
+|   |   |   +-- postcss-plugins/
+|   |   |   |   \-- nesting/
+|   |   |   +-- public/
+|   |   |   +-- util/
+|   |   |   \-- value-parser/
+|   |   +-- stubs/
+|   |   \-- types/
+|   |       \-- generated/
+|   +-- tapable/
+|   |   \-- lib/
+|   +-- tar/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- thenify/
+|   +-- thenify-all/
+|   +-- tinyglobby/
+|   |   +-- dist/
+|   |   \-- node_modules/
+|   |       +-- fdir/
+|   |       |   \-- dist/
+|   |       \-- picomatch/
+|   |           \-- lib/
+|   +-- to-regex-range/
+|   +-- tree-kill/
+|   +-- ts-api-utils/
+|   |   \-- lib/
+|   +-- ts-interface-checker/
+|   |   \-- dist/
+|   +-- tslib/
+|   |   \-- modules/
+|   +-- type-check/
+|   |   \-- lib/
+|   +-- typescript/
+|   |   +-- bin/
+|   |   \-- lib/
+|   |       +-- cs/
+|   |       +-- de/
+|   |       +-- es/
+|   |       +-- fr/
+|   |       +-- it/
+|   |       +-- ja/
+|   |       +-- ko/
+|   |       +-- pl/
+|   |       +-- pt-br/
+|   |       +-- ru/
+|   |       +-- tr/
+|   |       +-- zh-cn/
+|   |       \-- zh-tw/
+|   +-- unplugin/
+|   |   +-- dist/
+|   |   |   +-- rspack/
+|   |   |   |   \-- loaders/
+|   |   |   \-- webpack/
+|   |   |       \-- loaders/
+|   |   \-- node_modules/
+|   |       \-- picomatch/
+|   |           \-- lib/
+|   +-- update-browserslist-db/
+|   +-- uri-js/
+|   |   \-- dist/
+|   |       +-- es5/
+|   |       \-- esnext/
+|   |           \-- schemes/
+|   +-- util-deprecate/
+|   +-- vite/
+|   |   +-- bin/
+|   |   +-- dist/
+|   |   |   +-- client/
+|   |   |   \-- node/
+|   |   |       \-- chunks/
+|   |   +-- misc/
+|   |   +-- node_modules/
+|   |   |   +-- fdir/
+|   |   |   |   \-- dist/
+|   |   |   \-- picomatch/
+|   |   |       \-- lib/
+|   |   \-- types/
+|   |       \-- internal/
+|   +-- vite-plugin-full-reload/
+|   |   \-- dist/
+|   +-- vue/
+|   |   +-- compiler-sfc/
+|   |   +-- dist/
+|   |   +-- jsx-runtime/
+|   |   \-- server-renderer/
+|   +-- vue-i18n/
+|   |   +-- dist/
+|   |   +-- node_modules/
+|   |   |   \-- @intlify/
+|   |   |       \-- shared/
+|   |   |           \-- dist/
+|   |   \-- vetur/
+|   +-- webpack-virtual-modules/
+|   |   +-- lib/
+|   |   \-- src/
+|   +-- which/
+|   |   \-- bin/
+|   +-- word-wrap/
+|   +-- wrap-ansi/
+|   |   \-- node_modules/
+|   |       \-- ansi-styles/
+|   +-- wrap-ansi-cjs/
+|   |   \-- node_modules/
+|   |       +-- ansi-regex/
+|   |       +-- emoji-regex/
+|   |       |   \-- es2015/
+|   |       +-- string-width/
+|   |       \-- strip-ansi/
+|   +-- y18n/
+|   |   \-- build/
+|   |       \-- lib/
+|   |           \-- platform-shims/
+|   +-- yallist/
+|   |   \-- dist/
+|   |       +-- commonjs/
+|   |       \-- esm/
+|   +-- yaml/
+|   |   +-- browser/
+|   |   |   \-- dist/
+|   |   |       +-- compose/
+|   |   |       +-- doc/
+|   |   |       +-- nodes/
+|   |   |       +-- parse/
+|   |   |       +-- schema/
+|   |   |       |   +-- common/
+|   |   |       |   +-- core/
+|   |   |       |   +-- json/
+|   |   |       |   \-- yaml-1.1/
+|   |   |       \-- stringify/
+|   |   \-- dist/
+|   |       +-- compose/
+|   |       +-- doc/
+|   |       +-- nodes/
+|   |       +-- parse/
+|   |       +-- schema/
+|   |       |   +-- common/
+|   |       |   +-- core/
+|   |       |   +-- json/
+|   |       |   \-- yaml-1.1/
+|   |       \-- stringify/
+|   +-- yaml-eslint-parser/
+|   |   \-- lib/
+|   |       \-- tags/
+|   +-- yargs/
+|   |   +-- build/
+|   |   |   \-- lib/
+|   |   |       +-- typings/
+|   |   |       \-- utils/
+|   |   +-- helpers/
+|   |   +-- lib/
+|   |   |   \-- platform-shims/
+|   |   +-- locales/
+|   |   \-- node_modules/
+|   |       +-- ansi-regex/
+|   |       +-- emoji-regex/
+|   |       |   \-- es2015/
+|   |       +-- string-width/
+|   |       \-- strip-ansi/
+|   +-- yargs-parser/
+|   |   \-- build/
+|   |       \-- lib/
+|   \-- yocto-queue/
++-- playwright-report/
+|   \-- data/
++-- public/
+|   +-- build/
+|   |   \-- assets/
+|   \-- docs/
++-- resources/
+|   +-- js/
+|   |   +-- Components/
+|   |   |   +-- Company/
+|   |   |   +-- Layout/
+|   |   |   \-- Sidebar/
+|   |   +-- composables/
+|   |   +-- Layouts/
+|   |   +-- locales/
+|   |   |   \-- en-US/
+|   |   +-- Pages/
+|   |   |   +-- Accounting/
+|   |   |   |   +-- Customers/
+|   |   |   |   |   \-- Tabs/
+|   |   |   |   +-- JournalEntries/
+|   |   |   |   |   \-- Batches/
+|   |   |   |   \-- Payments/
+|   |   |   +-- Auth/
+|   |   |   +-- Companies/
+|   |   |   +-- Dashboard/
+|   |   |   +-- Invoicing/
+|   |   |   \-- Setup/
+|   |   \-- styles/
+|   +-- lang/
+|   |   +-- ar/
+|   |   \-- en/
+|   \-- views/
++-- routes/
++-- scripts/
++-- storage/
+|   +-- api-docs/
+|   +-- app/
+|   |   +-- private/
+|   |   \-- public/
+|   +-- framework/
+|   |   +-- cache/
+|   |   |   \-- data/
+|   |   +-- sessions/
+|   |   +-- testing/
+|   |   |   \-- disks/
+|   |   |       \-- local/
+|   |   \-- views/
+|   +-- logs/
+|   \-- pail/
++-- test-results/
+|   +-- locale-switcher-Locale-Swi-bd7ed-ages-when-switching-locales-chromium/
+|   \-- locale-switcher-Locale-Swi-bd7ed-ages-when-switching-locales-firefox/
++-- tests/
+|   +-- Browser/
+|   +-- CLI/
+|   +-- Console/
+|   +-- Feature/
+|   |   +-- Accounting/
+|   |   |   +-- Customers/
+|   |   |   \-- JournalEntries/
+|   |   +-- Api/
+|   |   +-- Auth/
+|   |   +-- Browser/
+|   |   +-- CLI/
+|   |   +-- Companies/
+|   |   +-- Console/
+|   |   +-- Feature/
+|   |   +-- Invoicing/
+|   |   +-- Modules/
+|   |   \-- Setup/
+|   \-- Unit/
+|       +-- Accounting/
+|       |   \-- Customers/
+|       +-- Actions/
+|       +-- Models/
+|       +-- Policies/
+|       \-- Services/
+\-- vendor/
+    +-- bin/
+    +-- brianium/
+    |   \-- paratest/
+    |       +-- bin/
+    |       \-- src/
+    |           +-- Coverage/
+    |           +-- JUnit/
+    |           +-- Util/
+    |           \-- WrapperRunner/
+    +-- brick/
+    |   +-- math/
+    |   |   \-- src/
+    |   |       +-- Exception/
+    |   |       \-- Internal/
+    |   |           \-- Calculator/
+    |   \-- money/
+    |       +-- data/
+    |       \-- src/
+    |           +-- Context/
+    |           +-- Exception/
+    |           \-- ExchangeRateProvider/
+    +-- carbonphp/
+    |   \-- carbon-doctrine-types/
+    |       \-- src/
+    |           \-- Carbon/
+    |               \-- Doctrine/
+    +-- composer/
+    +-- darkaonline/
+    |   \-- l5-swagger/
+    |       +-- config/
+    |       +-- resources/
+    |       |   \-- views/
+    |       \-- src/
+    |           +-- Console/
+    |           +-- Exceptions/
+    |           \-- Http/
+    |               +-- Controllers/
+    |               \-- Middleware/
+    +-- dflydev/
+    |   \-- dot-access-data/
+    |       \-- src/
+    |           \-- Exception/
+    +-- doctrine/
+    |   +-- annotations/
+    |   |   +-- docs/
+    |   |   |   \-- en/
+    |   |   \-- lib/
+    |   |       \-- Doctrine/
+    |   |           \-- Common/
+    |   |               \-- Annotations/
+    |   |                   \-- Annotation/
+    |   +-- deprecations/
+    |   |   \-- src/
+    |   |       \-- PHPUnit/
+    |   +-- inflector/
+    |   |   +-- docs/
+    |   |   |   \-- en/
+    |   |   \-- src/
+    |   |       \-- Rules/
+    |   |           +-- English/
+    |   |           +-- Esperanto/
+    |   |           +-- French/
+    |   |           +-- Italian/
+    |   |           +-- NorwegianBokmal/
+    |   |           +-- Portuguese/
+    |   |           +-- Spanish/
+    |   |           \-- Turkish/
+    |   \-- lexer/
+    |       \-- src/
+    +-- dragonmantank/
+    |   \-- cron-expression/
+    |       \-- src/
+    |           \-- Cron/
+    +-- egulias/
+    |   \-- email-validator/
+    |       \-- src/
+    |           +-- Parser/
+    |           |   \-- CommentStrategy/
+    |           +-- Result/
+    |           |   \-- Reason/
+    |           +-- Validation/
+    |           |   +-- Exception/
+    |           |   \-- Extra/
+    |           \-- Warning/
+    +-- fakerphp/
+    |   \-- faker/
+    |       \-- src/
+    |           \-- Faker/
+    |               +-- Calculator/
+    |               +-- Container/
+    |               +-- Core/
+    |               +-- Extension/
+    |               +-- Guesser/
+    |               +-- ORM/
+    |               |   +-- CakePHP/
+    |               |   +-- Doctrine/
+    |               |   +-- Mandango/
+    |               |   +-- Propel/
+    |               |   +-- Propel2/
+    |               |   \-- Spot/
+    |               \-- Provider/
+    |                   +-- ar_EG/
+    |                   +-- ar_JO/
+    |                   +-- ar_SA/
+    |                   +-- at_AT/
+    |                   +-- bg_BG/
+    |                   +-- bn_BD/
+    |                   +-- cs_CZ/
+    |                   +-- da_DK/
+    |                   +-- de_AT/
+    |                   +-- de_CH/
+    |                   +-- de_DE/
+    |                   +-- el_CY/
+    |                   +-- el_GR/
+    |                   +-- en_AU/
+    |                   +-- en_CA/
+    |                   +-- en_GB/
+    |                   +-- en_HK/
+    |                   +-- en_IN/
+    |                   +-- en_NG/
+    |                   +-- en_NZ/
+    |                   +-- en_PH/
+    |                   +-- en_SG/
+    |                   +-- en_UG/
+    |                   +-- en_US/
+    |                   +-- en_ZA/
+    |                   +-- es_AR/
+    |                   +-- es_ES/
+    |                   +-- es_PE/
+    |                   +-- es_VE/
+    |                   +-- et_EE/
+    |                   +-- fa_IR/
+    |                   +-- fi_FI/
+    |                   +-- fr_BE/
+    |                   +-- fr_CA/
+    |                   +-- fr_CH/
+    |                   +-- fr_FR/
+    |                   +-- he_IL/
+    |                   +-- hr_HR/
+    |                   +-- hu_HU/
+    |                   +-- hy_AM/
+    |                   +-- id_ID/
+    |                   +-- is_IS/
+    |                   +-- it_CH/
+    |                   +-- it_IT/
+    |                   +-- ja_JP/
+    |                   +-- ka_GE/
+    |                   +-- kk_KZ/
+    |                   +-- ko_KR/
+    |                   +-- lt_LT/
+    |                   +-- lv_LV/
+    |                   +-- me_ME/
+    |                   +-- mn_MN/
+    |                   +-- ms_MY/
+    |                   +-- nb_NO/
+    |                   +-- ne_NP/
+    |                   +-- nl_BE/
+    |                   +-- nl_NL/
+    |                   +-- pl_PL/
+    |                   +-- pt_BR/
+    |                   +-- pt_PT/
+    |                   +-- ro_MD/
+    |                   +-- ro_RO/
+    |                   +-- ru_RU/
+    |                   +-- sk_SK/
+    |                   +-- sl_SI/
+    |                   +-- sr_Cyrl_RS/
+    |                   +-- sr_Latn_RS/
+    |                   +-- sr_RS/
+    |                   +-- sv_SE/
+    |                   +-- th_TH/
+    |                   +-- tr_TR/
+    |                   +-- uk_UA/
+    |                   +-- vi_VN/
+    |                   +-- zh_CN/
+    |                   \-- zh_TW/
+    +-- fidry/
+    |   \-- cpu-core-counter/
+    |       +-- bin/
+    |       \-- src/
+    |           +-- Executor/
+    |           \-- Finder/
+    +-- filp/
+    |   \-- whoops/
+    |       \-- src/
+    |           \-- Whoops/
+    |               +-- Exception/
+    |               +-- Handler/
+    |               +-- Inspector/
+    |               +-- Resources/
+    |               |   +-- css/
+    |               |   +-- js/
+    |               |   \-- views/
+    |               \-- Util/
+    +-- fruitcake/
+    |   \-- php-cors/
+    |       \-- src/
+    |           \-- Exceptions/
+    +-- graham-campbell/
+    |   \-- result-type/
+    |       \-- src/
+    +-- guzzlehttp/
+    |   +-- guzzle/
+    |   |   \-- src/
+    |   |       +-- Cookie/
+    |   |       +-- Exception/
+    |   |       \-- Handler/
+    |   +-- promises/
+    |   |   \-- src/
+    |   +-- psr7/
+    |   |   \-- src/
+    |   |       \-- Exception/
+    |   \-- uri-template/
+    |       \-- src/
+    +-- hamcrest/
+    |   \-- hamcrest-php/
+    |       +-- generator/
+    |       |   \-- parts/
+    |       \-- hamcrest/
+    |           \-- Hamcrest/
+    |               +-- Arrays/
+    |               +-- Collection/
+    |               +-- Core/
+    |               +-- Internal/
+    |               +-- Number/
+    |               +-- Text/
+    |               +-- Type/
+    |               \-- Xml/
+    +-- inertiajs/
+    |   \-- inertia-laravel/
+    |       +-- config/
+    |       +-- src/
+    |       |   +-- Commands/
+    |       |   +-- Middleware/
+    |       |   +-- Ssr/
+    |       |   +-- Support/
+    |       |   \-- Testing/
+    |       |       \-- Concerns/
+    |       \-- stubs/
+    +-- jean85/
+    |   \-- pretty-package-versions/
+    |       \-- src/
+    |           \-- Exception/
+    +-- laminas/
+    |   \-- laminas-diactoros/
+    |       \-- src/
+    |           +-- Exception/
+    |           +-- functions/
+    |           +-- Request/
+    |           +-- Response/
+    |           \-- ServerRequestFilter/
+    +-- laravel/
+    |   +-- boost/
+    |   |   +-- .ai/
+    |   |   |   +-- boost/
+    |   |   |   +-- filament/
+    |   |   |   |   +-- 2/
+    |   |   |   |   +-- 3/
+    |   |   |   |   \-- 4/
+    |   |   |   +-- fluxui-free/
+    |   |   |   +-- fluxui-pro/
+    |   |   |   +-- folio/
+    |   |   |   +-- herd/
+    |   |   |   +-- inertia-laravel/
+    |   |   |   |   +-- 1/
+    |   |   |   |   \-- 2/
+    |   |   |   +-- inertia-react/
+    |   |   |   |   +-- 1/
+    |   |   |   |   \-- 2/
+    |   |   |   +-- inertia-svelte/
+    |   |   |   |   +-- 1/
+    |   |   |   |   \-- 2/
+    |   |   |   +-- inertia-vue/
+    |   |   |   |   +-- 1/
+    |   |   |   |   \-- 2/
+    |   |   |   +-- laravel/
+    |   |   |   |   +-- 10/
+    |   |   |   |   +-- 11/
+    |   |   |   |   \-- 12/
+    |   |   |   +-- livewire/
+    |   |   |   |   +-- 2/
+    |   |   |   |   +-- 3/
+    |   |   |   |   \-- 4/
+    |   |   |   +-- pennant/
+    |   |   |   +-- pest/
+    |   |   |   |   \-- 4/
+    |   |   |   +-- php/
+    |   |   |   |   +-- 8.1/
+    |   |   |   |   +-- 8.2/
+    |   |   |   |   +-- 8.3/
+    |   |   |   |   \-- 8.4/
+    |   |   |   +-- phpunit/
+    |   |   |   +-- pint/
+    |   |   |   +-- tailwindcss/
+    |   |   |   |   +-- 3/
+    |   |   |   |   \-- 4/
+    |   |   |   \-- volt/
+    |   |   +-- config/
+    |   |   \-- src/
+    |   |       +-- Concerns/
+    |   |       +-- Console/
+    |   |       +-- Contracts/
+    |   |       +-- Install/
+    |   |       |   +-- Assists/
+    |   |       |   +-- Cli/
+    |   |       |   +-- CodeEnvironment/
+    |   |       |   +-- Contracts/
+    |   |       |   +-- Detection/
+    |   |       |   +-- Enums/
+    |   |       |   \-- Mcp/
+    |   |       +-- Mcp/
+    |   |       |   +-- Methods/
+    |   |       |   +-- Prompts/
+    |   |       |   +-- Resources/
+    |   |       |   \-- Tools/
+    |   |       |       \-- DatabaseSchema/
+    |   |       +-- Middleware/
+    |   |       \-- Services/
+    |   +-- breeze/
+    |   |   +-- src/
+    |   |   |   \-- Console/
+    |   |   \-- stubs/
+    |   |       +-- api/
+    |   |       |   +-- app/
+    |   |       |   |   +-- Http/
+    |   |       |   |   |   +-- Controllers/
+    |   |       |   |   |   |   \-- Auth/
+    |   |       |   |   |   +-- Middleware/
+    |   |       |   |   |   \-- Requests/
+    |   |       |   |   |       \-- Auth/
+    |   |       |   |   \-- Providers/
+    |   |       |   +-- config/
+    |   |       |   +-- pest-tests/
+    |   |       |   |   +-- Feature/
+    |   |       |   |   |   \-- Auth/
+    |   |       |   |   \-- Unit/
+    |   |       |   +-- routes/
+    |   |       |   \-- tests/
+    |   |       |       \-- Feature/
+    |   |       |           \-- Auth/
+    |   |       +-- default/
+    |   |       |   +-- app/
+    |   |       |   |   +-- Http/
+    |   |       |   |   |   +-- Controllers/
+    |   |       |   |   |   |   \-- Auth/
+    |   |       |   |   |   \-- Requests/
+    |   |       |   |   |       \-- Auth/
+    |   |       |   |   \-- View/
+    |   |       |   |       \-- Components/
+    |   |       |   +-- pest-tests/
+    |   |       |   |   +-- Feature/
+    |   |       |   |   |   \-- Auth/
+    |   |       |   |   \-- Unit/
+    |   |       |   +-- resources/
+    |   |       |   |   +-- css/
+    |   |       |   |   +-- js/
+    |   |       |   |   \-- views/
+    |   |       |   |       +-- auth/
+    |   |       |   |       +-- components/
+    |   |       |   |       +-- layouts/
+    |   |       |   |       \-- profile/
+    |   |       |   |           \-- partials/
+    |   |       |   +-- routes/
+    |   |       |   \-- tests/
+    |   |       |       \-- Feature/
+    |   |       |           \-- Auth/
+    |   |       +-- inertia-common/
+    |   |       |   +-- app/
+    |   |       |   |   +-- Http/
+    |   |       |   |   |   +-- Controllers/
+    |   |       |   |   |   |   \-- Auth/
+    |   |       |   |   |   \-- Middleware/
+    |   |       |   |   \-- Providers/
+    |   |       |   +-- pest-tests/
+    |   |       |   |   \-- Feature/
+    |   |       |   |       \-- Auth/
+    |   |       |   +-- routes/
+    |   |       |   \-- tests/
+    |   |       |       \-- Feature/
+    |   |       |           \-- Auth/
+    |   |       +-- inertia-react/
+    |   |       |   \-- resources/
+    |   |       |       +-- js/
+    |   |       |       |   +-- Components/
+    |   |       |       |   +-- Layouts/
+    |   |       |       |   \-- Pages/
+    |   |       |       |       +-- Auth/
+    |   |       |       |       \-- Profile/
+    |   |       |       |           \-- Partials/
+    |   |       |       \-- views/
+    |   |       +-- inertia-react-ts/
+    |   |       |   \-- resources/
+    |   |       |       \-- js/
+    |   |       |           +-- Components/
+    |   |       |           +-- Layouts/
+    |   |       |           +-- Pages/
+    |   |       |           |   +-- Auth/
+    |   |       |           |   \-- Profile/
+    |   |       |           |       \-- Partials/
+    |   |       |           \-- types/
+    |   |       +-- inertia-vue/
+    |   |       |   \-- resources/
+    |   |       |       +-- js/
+    |   |       |       |   +-- Components/
+    |   |       |       |   +-- Layouts/
+    |   |       |       |   \-- Pages/
+    |   |       |       |       +-- Auth/
+    |   |       |       |       \-- Profile/
+    |   |       |       |           \-- Partials/
+    |   |       |       \-- views/
+    |   |       +-- inertia-vue-ts/
+    |   |       |   \-- resources/
+    |   |       |       \-- js/
+    |   |       |           +-- Components/
+    |   |       |           +-- Layouts/
+    |   |       |           +-- Pages/
+    |   |       |           |   +-- Auth/
+    |   |       |           |   \-- Profile/
+    |   |       |           |       \-- Partials/
+    |   |       |           \-- types/
+    |   |       +-- livewire/
+    |   |       |   \-- resources/
+    |   |       |       \-- views/
+    |   |       |           \-- livewire/
+    |   |       |               +-- layout/
+    |   |       |               +-- pages/
+    |   |       |               |   \-- auth/
+    |   |       |               +-- profile/
+    |   |       |               \-- welcome/
+    |   |       +-- livewire-common/
+    |   |       |   +-- app/
+    |   |       |   |   \-- Livewire/
+    |   |       |   |       +-- Actions/
+    |   |       |   |       \-- Forms/
+    |   |       |   +-- pest-tests/
+    |   |       |   |   +-- Feature/
+    |   |       |   |   |   \-- Auth/
+    |   |       |   |   \-- Unit/
+    |   |       |   +-- resources/
+    |   |       |   |   \-- views/
+    |   |       |   |       +-- components/
+    |   |       |   |       \-- layouts/
+    |   |       |   +-- routes/
+    |   |       |   \-- tests/
+    |   |       |       \-- Feature/
+    |   |       |           \-- Auth/
+    |   |       \-- livewire-functional/
+    |   |           \-- resources/
+    |   |               \-- views/
+    |   |                   \-- livewire/
+    |   |                       +-- layout/
+    |   |                       +-- pages/
+    |   |                       |   \-- auth/
+    |   |                       +-- profile/
+    |   |                       \-- welcome/
+    |   +-- framework/
+    |   |   +-- config/
+    |   |   +-- config-stubs/
+    |   |   \-- src/
+    |   |       \-- Illuminate/
+    |   |           +-- Auth/
+    |   |           |   +-- Access/
+    |   |           |   |   \-- Events/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   |       \-- make/
+    |   |           |   |           \-- views/
+    |   |           |   |               \-- layouts/
+    |   |           |   +-- Events/
+    |   |           |   +-- Listeners/
+    |   |           |   +-- Middleware/
+    |   |           |   +-- Notifications/
+    |   |           |   \-- Passwords/
+    |   |           +-- Broadcasting/
+    |   |           |   \-- Broadcasters/
+    |   |           +-- Bus/
+    |   |           |   \-- Events/
+    |   |           +-- Cache/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Events/
+    |   |           |   \-- RateLimiting/
+    |   |           +-- Collections/
+    |   |           |   \-- Traits/
+    |   |           +-- Concurrency/
+    |   |           |   \-- Console/
+    |   |           +-- Conditionable/
+    |   |           |   \-- Traits/
+    |   |           +-- Config/
+    |   |           +-- Console/
+    |   |           |   +-- Concerns/
+    |   |           |   +-- Contracts/
+    |   |           |   +-- Events/
+    |   |           |   +-- resources/
+    |   |           |   |   \-- views/
+    |   |           |   |       \-- components/
+    |   |           |   +-- Scheduling/
+    |   |           |   \-- View/
+    |   |           |       \-- Components/
+    |   |           |           \-- Mutators/
+    |   |           +-- Container/
+    |   |           |   \-- Attributes/
+    |   |           +-- Contracts/
+    |   |           |   +-- Auth/
+    |   |           |   |   +-- Access/
+    |   |           |   |   \-- Middleware/
+    |   |           |   +-- Broadcasting/
+    |   |           |   +-- Bus/
+    |   |           |   +-- Cache/
+    |   |           |   +-- Concurrency/
+    |   |           |   +-- Config/
+    |   |           |   +-- Console/
+    |   |           |   +-- Container/
+    |   |           |   +-- Cookie/
+    |   |           |   +-- Database/
+    |   |           |   |   +-- Eloquent/
+    |   |           |   |   +-- Events/
+    |   |           |   |   \-- Query/
+    |   |           |   +-- Debug/
+    |   |           |   +-- Encryption/
+    |   |           |   +-- Events/
+    |   |           |   +-- Filesystem/
+    |   |           |   +-- Foundation/
+    |   |           |   +-- Hashing/
+    |   |           |   +-- Http/
+    |   |           |   +-- Log/
+    |   |           |   +-- Mail/
+    |   |           |   +-- Notifications/
+    |   |           |   +-- Pagination/
+    |   |           |   +-- Pipeline/
+    |   |           |   +-- Process/
+    |   |           |   +-- Queue/
+    |   |           |   +-- Redis/
+    |   |           |   +-- Routing/
+    |   |           |   +-- Session/
+    |   |           |   |   \-- Middleware/
+    |   |           |   +-- Support/
+    |   |           |   +-- Translation/
+    |   |           |   +-- Validation/
+    |   |           |   \-- View/
+    |   |           +-- Cookie/
+    |   |           |   \-- Middleware/
+    |   |           +-- Database/
+    |   |           |   +-- Capsule/
+    |   |           |   +-- Concerns/
+    |   |           |   +-- Connectors/
+    |   |           |   +-- Console/
+    |   |           |   |   +-- Factories/
+    |   |           |   |   |   \-- stubs/
+    |   |           |   |   +-- Migrations/
+    |   |           |   |   \-- Seeds/
+    |   |           |   |       \-- stubs/
+    |   |           |   +-- Eloquent/
+    |   |           |   |   +-- Attributes/
+    |   |           |   |   +-- Casts/
+    |   |           |   |   +-- Concerns/
+    |   |           |   |   +-- Factories/
+    |   |           |   |   \-- Relations/
+    |   |           |   |       \-- Concerns/
+    |   |           |   +-- Events/
+    |   |           |   +-- Migrations/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Query/
+    |   |           |   |   +-- Grammars/
+    |   |           |   |   \-- Processors/
+    |   |           |   \-- Schema/
+    |   |           |       \-- Grammars/
+    |   |           +-- Encryption/
+    |   |           +-- Events/
+    |   |           +-- Filesystem/
+    |   |           +-- Foundation/
+    |   |           |   +-- Auth/
+    |   |           |   |   \-- Access/
+    |   |           |   +-- Bootstrap/
+    |   |           |   +-- Bus/
+    |   |           |   +-- Concerns/
+    |   |           |   +-- Configuration/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Events/
+    |   |           |   +-- Exceptions/
+    |   |           |   |   +-- Renderer/
+    |   |           |   |   |   \-- Mappers/
+    |   |           |   |   +-- views/
+    |   |           |   |   \-- Whoops/
+    |   |           |   +-- Http/
+    |   |           |   |   +-- Events/
+    |   |           |   |   \-- Middleware/
+    |   |           |   |       \-- Concerns/
+    |   |           |   +-- Providers/
+    |   |           |   +-- Queue/
+    |   |           |   +-- resources/
+    |   |           |   |   \-- exceptions/
+    |   |           |   |       \-- renderer/
+    |   |           |   |           +-- components/
+    |   |           |   |           |   \-- icons/
+    |   |           |   |           \-- dist/
+    |   |           |   +-- Routing/
+    |   |           |   +-- stubs/
+    |   |           |   +-- Support/
+    |   |           |   |   \-- Providers/
+    |   |           |   +-- Testing/
+    |   |           |   |   +-- Concerns/
+    |   |           |   |   \-- Traits/
+    |   |           |   \-- Validation/
+    |   |           +-- Hashing/
+    |   |           +-- Http/
+    |   |           |   +-- Client/
+    |   |           |   |   +-- Concerns/
+    |   |           |   |   \-- Events/
+    |   |           |   +-- Concerns/
+    |   |           |   +-- Exceptions/
+    |   |           |   +-- Middleware/
+    |   |           |   +-- Resources/
+    |   |           |   |   \-- Json/
+    |   |           |   \-- Testing/
+    |   |           +-- JsonSchema/
+    |   |           |   \-- Types/
+    |   |           +-- Log/
+    |   |           |   +-- Context/
+    |   |           |   |   \-- Events/
+    |   |           |   \-- Events/
+    |   |           +-- Macroable/
+    |   |           |   \-- Traits/
+    |   |           +-- Mail/
+    |   |           |   +-- Events/
+    |   |           |   +-- Mailables/
+    |   |           |   +-- resources/
+    |   |           |   |   \-- views/
+    |   |           |   |       +-- html/
+    |   |           |   |       |   \-- themes/
+    |   |           |   |       \-- text/
+    |   |           |   \-- Transport/
+    |   |           +-- Notifications/
+    |   |           |   +-- Channels/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Events/
+    |   |           |   +-- Messages/
+    |   |           |   \-- resources/
+    |   |           |       \-- views/
+    |   |           +-- Pagination/
+    |   |           |   \-- resources/
+    |   |           |       \-- views/
+    |   |           +-- Pipeline/
+    |   |           +-- Process/
+    |   |           |   \-- Exceptions/
+    |   |           +-- Queue/
+    |   |           |   +-- Attributes/
+    |   |           |   +-- Capsule/
+    |   |           |   +-- Connectors/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Events/
+    |   |           |   +-- Failed/
+    |   |           |   +-- Jobs/
+    |   |           |   \-- Middleware/
+    |   |           +-- Redis/
+    |   |           |   +-- Connections/
+    |   |           |   +-- Connectors/
+    |   |           |   +-- Events/
+    |   |           |   \-- Limiters/
+    |   |           +-- Routing/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   +-- Contracts/
+    |   |           |   +-- Controllers/
+    |   |           |   +-- Events/
+    |   |           |   +-- Exceptions/
+    |   |           |   +-- Matching/
+    |   |           |   \-- Middleware/
+    |   |           +-- Session/
+    |   |           |   +-- Console/
+    |   |           |   |   \-- stubs/
+    |   |           |   \-- Middleware/
+    |   |           +-- Support/
+    |   |           |   +-- Defer/
+    |   |           |   +-- Exceptions/
+    |   |           |   +-- Facades/
+    |   |           |   +-- Testing/
+    |   |           |   |   \-- Fakes/
+    |   |           |   \-- Traits/
+    |   |           +-- Testing/
+    |   |           |   +-- Concerns/
+    |   |           |   +-- Constraints/
+    |   |           |   +-- Exceptions/
+    |   |           |   \-- Fluent/
+    |   |           |       \-- Concerns/
+    |   |           +-- Translation/
+    |   |           |   \-- lang/
+    |   |           |       \-- en/
+    |   |           +-- Validation/
+    |   |           |   +-- Concerns/
+    |   |           |   \-- Rules/
+    |   |           \-- View/
+    |   |               +-- Compilers/
+    |   |               |   \-- Concerns/
+    |   |               +-- Concerns/
+    |   |               +-- Engines/
+    |   |               \-- Middleware/
+    |   +-- horizon/
+    |   |   +-- art/
+    |   |   +-- config/
+    |   |   +-- dist/
+    |   |   +-- resources/
+    |   |   |   +-- js/
+    |   |   |   |   +-- components/
+    |   |   |   |   \-- screens/
+    |   |   |   |       +-- batches/
+    |   |   |   |       +-- failedJobs/
+    |   |   |   |       +-- metrics/
+    |   |   |   |       +-- monitoring/
+    |   |   |   |       \-- recentJobs/
+    |   |   |   +-- sass/
+    |   |   |   \-- views/
+    |   |   +-- routes/
+    |   |   +-- src/
+    |   |   |   +-- Connectors/
+    |   |   |   +-- Console/
+    |   |   |   +-- Contracts/
+    |   |   |   +-- Events/
+    |   |   |   +-- Exceptions/
+    |   |   |   +-- Http/
+    |   |   |   |   +-- Controllers/
+    |   |   |   |   \-- Middleware/
+    |   |   |   +-- Jobs/
+    |   |   |   +-- Listeners/
+    |   |   |   +-- MasterSupervisorCommands/
+    |   |   |   +-- Notifications/
+    |   |   |   +-- Repositories/
+    |   |   |   \-- SupervisorCommands/
+    |   |   +-- stubs/
+    |   |   \-- workbench/
+    |   |       +-- app/
+    |   |       |   \-- Providers/
+    |   |       \-- database/
+    |   |           +-- factories/
+    |   |           +-- migrations/
+    |   |           \-- seeders/
+    |   +-- mcp/
+    |   |   +-- .cursor/
+    |   |   |   \-- rules/
+    |   |   +-- .github/
+    |   |   |   +-- ISSUE_TEMPLATE/
+    |   |   |   \-- workflows/
+    |   |   +-- routes/
+    |   |   +-- src/
+    |   |   |   +-- Console/
+    |   |   |   |   \-- Commands/
+    |   |   |   \-- Server/
+    |   |   |       +-- Contracts/
+    |   |   |       |   +-- Methods/
+    |   |   |       |   +-- Resources/
+    |   |   |       |   +-- Tools/
+    |   |   |       |   \-- Transport/
+    |   |   |       +-- Exceptions/
+    |   |   |       +-- Facades/
+    |   |   |       +-- Methods/
+    |   |   |       +-- Pagination/
+    |   |   |       +-- Prompts/
+    |   |   |       +-- Resources/
+    |   |   |       |   \-- Content/
+    |   |   |       +-- Tools/
+    |   |   |       |   \-- Annotations/
+    |   |   |       \-- Transport/
+    |   |   +-- stubs/
+    |   |   +-- tests/
+    |   |   |   +-- Feature/
+    |   |   |   +-- Fixtures/
+    |   |   |   \-- Unit/
+    |   |   |       +-- Methods/
+    |   |   |       +-- Pagination/
+    |   |   |       +-- Prompts/
+    |   |   |       +-- Resources/
+    |   |   |       +-- Tools/
+    |   |   |       \-- Transport/
+    |   |   \-- workbench/
+    |   |       \-- app/
+    |   |           \-- Providers/
+    |   +-- octane/
+    |   |   +-- art/
+    |   |   +-- bin/
+    |   |   +-- config/
+    |   |   +-- fixes/
+    |   |   \-- src/
+    |   |       +-- Cache/
+    |   |       +-- Commands/
+    |   |       |   +-- Concerns/
+    |   |       |   \-- stubs/
+    |   |       +-- Concerns/
+    |   |       +-- Contracts/
+    |   |       +-- Events/
+    |   |       +-- Exceptions/
+    |   |       +-- Facades/
+    |   |       +-- FrankenPhp/
+    |   |       |   \-- Concerns/
+    |   |       +-- Listeners/
+    |   |       +-- RoadRunner/
+    |   |       |   \-- Concerns/
+    |   |       +-- Swoole/
+    |   |       |   +-- Actions/
+    |   |       |   \-- Handlers/
+    |   |       +-- Tables/
+    |   |       |   \-- Concerns/
+    |   |       \-- Testing/
+    |   |           \-- Fakes/
+    |   +-- pail/
+    |   |   \-- src/
+    |   |       +-- Console/
+    |   |       |   \-- Commands/
+    |   |       +-- Contracts/
+    |   |       +-- Guards/
+    |   |       +-- Printers/
+    |   |       \-- ValueObjects/
+    |   |           \-- Origin/
+    |   +-- pint/
+    |   |   +-- builds/
+    |   |   \-- overrides/
+    |   |       \-- Runner/
+    |   |           \-- Parallel/
+    |   +-- prompts/
+    |   |   \-- src/
+    |   |       +-- Concerns/
+    |   |       +-- Exceptions/
+    |   |       +-- Output/
+    |   |       +-- Support/
+    |   |       \-- Themes/
+    |   |           +-- Contracts/
+    |   |           \-- Default/
+    |   |               \-- Concerns/
+    |   +-- roster/
+    |   |   \-- src/
+    |   |       +-- Console/
+    |   |       +-- Enums/
+    |   |       \-- Scanners/
+    |   +-- sail/
+    |   |   +-- bin/
+    |   |   +-- database/
+    |   |   |   +-- mariadb/
+    |   |   |   +-- mysql/
+    |   |   |   \-- pgsql/
+    |   |   +-- runtimes/
+    |   |   |   +-- 8.0/
+    |   |   |   +-- 8.1/
+    |   |   |   +-- 8.2/
+    |   |   |   +-- 8.3/
+    |   |   |   \-- 8.4/
+    |   |   +-- src/
+    |   |   |   \-- Console/
+    |   |   |       \-- Concerns/
+    |   |   \-- stubs/
+    |   +-- sanctum/
+    |   |   +-- config/
+    |   |   +-- database/
+    |   |   |   \-- migrations/
+    |   |   \-- src/
+    |   |       +-- Console/
+    |   |       |   \-- Commands/
+    |   |       +-- Contracts/
+    |   |       +-- Events/
+    |   |       +-- Exceptions/
+    |   |       \-- Http/
+    |   |           +-- Controllers/
+    |   |           \-- Middleware/
+    |   +-- serializable-closure/
+    |   |   \-- src/
+    |   |       +-- Contracts/
+    |   |       +-- Exceptions/
+    |   |       +-- Serializers/
+    |   |       +-- Signers/
+    |   |       \-- Support/
+    |   +-- telescope/
+    |   |   +-- art/
+    |   |   +-- config/
+    |   |   +-- database/
+    |   |   |   +-- factories/
+    |   |   |   \-- migrations/
+    |   |   +-- dist/
+    |   |   +-- resources/
+    |   |   |   +-- js/
+    |   |   |   |   +-- components/
+    |   |   |   |   +-- mixins/
+    |   |   |   |   \-- screens/
+    |   |   |   |       +-- batches/
+    |   |   |   |       +-- cache/
+    |   |   |   |       +-- client-requests/
+    |   |   |   |       +-- commands/
+    |   |   |   |       +-- dumps/
+    |   |   |   |       +-- events/
+    |   |   |   |       +-- exceptions/
+    |   |   |   |       +-- gates/
+    |   |   |   |       +-- jobs/
+    |   |   |   |       +-- logs/
+    |   |   |   |       +-- mail/
+    |   |   |   |       +-- models/
+    |   |   |   |       +-- monitoring/
+    |   |   |   |       +-- notifications/
+    |   |   |   |       +-- queries/
+    |   |   |   |       +-- redis/
+    |   |   |   |       +-- requests/
+    |   |   |   |       +-- schedule/
+    |   |   |   |       \-- views/
+    |   |   |   +-- sass/
+    |   |   |   \-- views/
+    |   |   +-- routes/
+    |   |   +-- src/
+    |   |   |   +-- Console/
+    |   |   |   +-- Contracts/
+    |   |   |   +-- Http/
+    |   |   |   |   +-- Controllers/
+    |   |   |   |   \-- Middleware/
+    |   |   |   +-- Jobs/
+    |   |   |   +-- Storage/
+    |   |   |   \-- Watchers/
+    |   |   +-- stubs/
+    |   |   \-- workbench/
+    |   |       +-- app/
+    |   |       |   \-- Providers/
+    |   |       \-- database/
+    |   |           \-- seeders/
+    |   \-- tinker/
+    |       +-- config/
+    |       \-- src/
+    |           \-- Console/
+    +-- league/
+    |   +-- commonmark/
+    |   |   \-- src/
+    |   |       +-- Delimiter/
+    |   |       |   \-- Processor/
+    |   |       +-- Environment/
+    |   |       +-- Event/
+    |   |       +-- Exception/
+    |   |       +-- Extension/
+    |   |       |   +-- Attributes/
+    |   |       |   |   +-- Event/
+    |   |       |   |   +-- Node/
+    |   |       |   |   +-- Parser/
+    |   |       |   |   \-- Util/
+    |   |       |   +-- Autolink/
+    |   |       |   +-- CommonMark/
+    |   |       |   |   +-- Delimiter/
+    |   |       |   |   |   \-- Processor/
+    |   |       |   |   +-- Node/
+    |   |       |   |   |   +-- Block/
+    |   |       |   |   |   \-- Inline/
+    |   |       |   |   +-- Parser/
+    |   |       |   |   |   +-- Block/
+    |   |       |   |   |   \-- Inline/
+    |   |       |   |   \-- Renderer/
+    |   |       |   |       +-- Block/
+    |   |       |   |       \-- Inline/
+    |   |       |   +-- DefaultAttributes/
+    |   |       |   +-- DescriptionList/
+    |   |       |   |   +-- Event/
+    |   |       |   |   +-- Node/
+    |   |       |   |   +-- Parser/
+    |   |       |   |   \-- Renderer/
+    |   |       |   +-- DisallowedRawHtml/
+    |   |       |   +-- Embed/
+    |   |       |   |   \-- Bridge/
+    |   |       |   +-- ExternalLink/
+    |   |       |   +-- Footnote/
+    |   |       |   |   +-- Event/
+    |   |       |   |   +-- Node/
+    |   |       |   |   +-- Parser/
+    |   |       |   |   \-- Renderer/
+    |   |       |   +-- FrontMatter/
+    |   |       |   |   +-- Data/
+    |   |       |   |   +-- Exception/
+    |   |       |   |   +-- Input/
+    |   |       |   |   +-- Listener/
+    |   |       |   |   \-- Output/
+    |   |       |   +-- HeadingPermalink/
+    |   |       |   +-- InlinesOnly/
+    |   |       |   +-- Mention/
+    |   |       |   |   \-- Generator/
+    |   |       |   +-- SmartPunct/
+    |   |       |   +-- Strikethrough/
+    |   |       |   +-- Table/
+    |   |       |   +-- TableOfContents/
+    |   |       |   |   +-- Node/
+    |   |       |   |   \-- Normalizer/
+    |   |       |   \-- TaskList/
+    |   |       +-- Input/
+    |   |       +-- Node/
+    |   |       |   +-- Block/
+    |   |       |   +-- Inline/
+    |   |       |   \-- Query/
+    |   |       +-- Normalizer/
+    |   |       +-- Output/
+    |   |       +-- Parser/
+    |   |       |   +-- Block/
+    |   |       |   \-- Inline/
+    |   |       +-- Reference/
+    |   |       +-- Renderer/
+    |   |       |   +-- Block/
+    |   |       |   \-- Inline/
+    |   |       +-- Util/
+    |   |       \-- Xml/
+    |   +-- config/
+    |   |   \-- src/
+    |   |       \-- Exception/
+    |   +-- flysystem/
+    |   |   \-- src/
+    |   |       +-- UnixVisibility/
+    |   |       \-- UrlGeneration/
+    |   +-- flysystem-local/
+    |   +-- mime-type-detection/
+    |   |   \-- src/
+    |   +-- uri/
+    |   |   \-- UriTemplate/
+    |   \-- uri-interfaces/
+    |       +-- Contracts/
+    |       +-- Exceptions/
+    |       +-- Idna/
+    |       +-- IPv4/
+    |       +-- IPv6/
+    |       \-- KeyValuePair/
+    +-- mockery/
+    |   \-- mockery/
+    |       +-- docs/
+    |       |   +-- _static/
+    |       |   +-- cookbook/
+    |       |   +-- getting_started/
+    |       |   +-- mockery/
+    |       |   \-- reference/
+    |       \-- library/
+    |           \-- Mockery/
+    |               +-- Adapter/
+    |               |   \-- Phpunit/
+    |               +-- CountValidator/
+    |               +-- Exception/
+    |               +-- Generator/
+    |               |   \-- StringManipulation/
+    |               |       \-- Pass/
+    |               +-- Loader/
+    |               \-- Matcher/
+    +-- monolog/
+    |   \-- monolog/
+    |       \-- src/
+    |           \-- Monolog/
+    |               +-- Attribute/
+    |               +-- Formatter/
+    |               +-- Handler/
+    |               |   +-- Curl/
+    |               |   +-- FingersCrossed/
+    |               |   +-- Slack/
+    |               |   \-- SyslogUdp/
+    |               +-- Processor/
+    |               \-- Test/
+    +-- myclabs/
+    |   \-- deep-copy/
+    |       \-- src/
+    |           \-- DeepCopy/
+    |               +-- Exception/
+    |               +-- Filter/
+    |               |   \-- Doctrine/
+    |               +-- Matcher/
+    |               |   \-- Doctrine/
+    |               +-- Reflection/
+    |               +-- TypeFilter/
+    |               |   +-- Date/
+    |               |   \-- Spl/
+    |               \-- TypeMatcher/
+    +-- nesbot/
+    |   \-- carbon/
+    |       +-- bin/
+    |       +-- lazy/
+    |       |   \-- Carbon/
+    |       |       \-- MessageFormatter/
+    |       \-- src/
+    |           \-- Carbon/
+    |               +-- Cli/
+    |               +-- Exceptions/
+    |               +-- Lang/
+    |               +-- Laravel/
+    |               +-- List/
+    |               +-- MessageFormatter/
+    |               +-- PHPStan/
+    |               \-- Traits/
+    +-- nette/
+    |   +-- schema/
+    |   |   \-- src/
+    |   |       \-- Schema/
+    |   |           \-- Elements/
+    |   \-- utils/
+    |       \-- src/
+    |           +-- Iterators/
+    |           \-- Utils/
+    +-- nikic/
+    |   \-- php-parser/
+    |       +-- bin/
+    |       \-- lib/
+    |           \-- PhpParser/
+    |               +-- Builder/
+    |               +-- Comment/
+    |               +-- ErrorHandler/
+    |               +-- Internal/
+    |               +-- Lexer/
+    |               |   \-- TokenEmulator/
+    |               +-- Node/
+    |               |   +-- Expr/
+    |               |   |   +-- AssignOp/
+    |               |   |   +-- BinaryOp/
+    |               |   |   \-- Cast/
+    |               |   +-- Name/
+    |               |   +-- Scalar/
+    |               |   |   \-- MagicConst/
+    |               |   \-- Stmt/
+    |               |       \-- TraitUseAdaptation/
+    |               +-- NodeVisitor/
+    |               +-- Parser/
+    |               \-- PrettyPrinter/
+    +-- nunomaduro/
+    |   +-- collision/
+    |   |   +-- .temp/
+    |   |   \-- src/
+    |   |       +-- Adapters/
+    |   |       |   +-- Laravel/
+    |   |       |   |   +-- Commands/
+    |   |       |   |   \-- Exceptions/
+    |   |       |   \-- Phpunit/
+    |   |       |       +-- Printers/
+    |   |       |       +-- Subscribers/
+    |   |       |       \-- Support/
+    |   |       +-- Contracts/
+    |   |       |   \-- Adapters/
+    |   |       |       \-- Phpunit/
+    |   |       +-- Exceptions/
+    |   |       \-- SolutionsRepositories/
+    |   \-- termwind/
+    |       \-- src/
+    |           +-- Actions/
+    |           +-- Components/
+    |           +-- Enums/
+    |           +-- Exceptions/
+    |           +-- Helpers/
+    |           +-- Html/
+    |           +-- Laravel/
+    |           +-- Repositories/
+    |           \-- ValueObjects/
+    +-- pestphp/
+    |   +-- pest/
+    |   |   +-- .temp/
+    |   |   +-- bin/
+    |   |   +-- overrides/
+    |   |   |   +-- Event/
+    |   |   |   |   \-- Value/
+    |   |   |   +-- Logging/
+    |   |   |   |   \-- JUnit/
+    |   |   |   +-- Runner/
+    |   |   |   |   +-- Filter/
+    |   |   |   |   \-- ResultCache/
+    |   |   |   \-- TextUI/
+    |   |   |       +-- Command/
+    |   |   |       |   \-- Commands/
+    |   |   |       \-- Output/
+    |   |   |           \-- Default/
+    |   |   |               \-- ProgressPrinter/
+    |   |   |                   \-- Subscriber/
+    |   |   +-- resources/
+    |   |   |   \-- views/
+    |   |   |       +-- components/
+    |   |   |       \-- installers/
+    |   |   +-- src/
+    |   |   |   +-- ArchPresets/
+    |   |   |   +-- Bootstrappers/
+    |   |   |   +-- Collision/
+    |   |   |   +-- Concerns/
+    |   |   |   |   \-- Logging/
+    |   |   |   +-- Configuration/
+    |   |   |   +-- Console/
+    |   |   |   +-- Contracts/
+    |   |   |   |   \-- Plugins/
+    |   |   |   +-- Evaluators/
+    |   |   |   +-- Exceptions/
+    |   |   |   +-- Expectations/
+    |   |   |   +-- Factories/
+    |   |   |   |   +-- Concerns/
+    |   |   |   |   \-- Covers/
+    |   |   |   +-- Installers/
+    |   |   |   +-- Logging/
+    |   |   |   |   \-- TeamCity/
+    |   |   |   |       \-- Subscriber/
+    |   |   |   +-- Matchers/
+    |   |   |   +-- Mixins/
+    |   |   |   +-- PendingCalls/
+    |   |   |   |   \-- Concerns/
+    |   |   |   +-- Plugins/
+    |   |   |   |   +-- Actions/
+    |   |   |   |   +-- Concerns/
+    |   |   |   |   \-- Parallel/
+    |   |   |   |       +-- Contracts/
+    |   |   |   |       +-- Handlers/
+    |   |   |   |       +-- Paratest/
+    |   |   |   |       \-- Support/
+    |   |   |   +-- Repositories/
+    |   |   |   +-- Runner/
+    |   |   |   |   \-- Filter/
+    |   |   |   +-- Subscribers/
+    |   |   |   +-- Support/
+    |   |   |   +-- TestCaseFilters/
+    |   |   |   +-- TestCaseMethodFilters/
+    |   |   |   \-- TestCases/
+    |   |   +-- stubs/
+    |   |   |   +-- init/
+    |   |   |   |   +-- Feature/
+    |   |   |   |   \-- Unit/
+    |   |   |   \-- init-laravel/
+    |   |   |       +-- Feature/
+    |   |   |       \-- Unit/
+    |   |   \-- tests-external/
+    |   |       \-- Features/
+    |   |           \-- Expect/
+    |   +-- pest-plugin/
+    |   |   +-- .temp/
+    |   |   \-- src/
+    |   |       \-- Commands/
+    |   +-- pest-plugin-arch/
+    |   |   \-- src/
+    |   |       +-- Collections/
+    |   |       +-- Concerns/
+    |   |       +-- Contracts/
+    |   |       +-- Exceptions/
+    |   |       +-- Expectations/
+    |   |       +-- Factories/
+    |   |       +-- Objects/
+    |   |       +-- Options/
+    |   |       +-- Repositories/
+    |   |       +-- Support/
+    |   |       \-- ValueObjects/
+    |   +-- pest-plugin-laravel/
+    |   |   +-- resources/
+    |   |   |   +-- database/
+    |   |   |   |   \-- migrations/
+    |   |   |   \-- views/
+    |   |   +-- src/
+    |   |   |   \-- Commands/
+    |   |   \-- stubs/
+    |   |       \-- Laravel/
+    |   +-- pest-plugin-mutate/
+    |   |   +-- .temp/
+    |   |   |   +-- cache/
+    |   |   |   +-- mutations/
+    |   |   |   \-- pest-mutate-cache/
+    |   |   \-- src/
+    |   |       +-- Boostrappers/
+    |   |       +-- Cache/
+    |   |       +-- Contracts/
+    |   |       +-- Event/
+    |   |       |   \-- Events/
+    |   |       |       +-- Test/
+    |   |       |       |   +-- HookMethod/
+    |   |       |       |   \-- Outcome/
+    |   |       |       \-- TestSuite/
+    |   |       +-- Exceptions/
+    |   |       +-- Factories/
+    |   |       +-- Mutators/
+    |   |       |   +-- Abstract/
+    |   |       |   +-- Arithmetic/
+    |   |       |   +-- Array/
+    |   |       |   +-- Assignment/
+    |   |       |   +-- Casting/
+    |   |       |   +-- Concerns/
+    |   |       |   +-- ControlStructures/
+    |   |       |   +-- Equality/
+    |   |       |   +-- Laravel/
+    |   |       |   |   +-- Remove/
+    |   |       |   |   \-- Unwrap/
+    |   |       |   +-- Logical/
+    |   |       |   +-- Math/
+    |   |       |   +-- Number/
+    |   |       |   +-- Removal/
+    |   |       |   +-- Return/
+    |   |       |   +-- Sets/
+    |   |       |   +-- String/
+    |   |       |   \-- Visibility/
+    |   |       +-- Options/
+    |   |       +-- Plugins/
+    |   |       +-- Repositories/
+    |   |       +-- Subscribers/
+    |   |       +-- Support/
+    |   |       |   +-- Configuration/
+    |   |       |   \-- Printers/
+    |   |       \-- Tester/
+    |   \-- pest-plugin-profanity/
+    |       \-- src/
+    |           +-- Config/
+    |           |   \-- profanities/
+    |           +-- Contracts/
+    |           +-- Logging/
+    |           \-- Support/
+    +-- phar-io/
+    |   +-- manifest/
+    |   |   +-- .github/
+    |   |   |   \-- workflows/
+    |   |   +-- src/
+    |   |   |   +-- exceptions/
+    |   |   |   +-- values/
+    |   |   |   \-- xml/
+    |   |   \-- tools/
+    |   |       \-- php-cs-fixer.d/
+    |   \-- version/
+    |       \-- src/
+    |           +-- constraints/
+    |           \-- exceptions/
+    +-- phpdocumentor/
+    |   +-- reflection-common/
+    |   |   +-- .github/
+    |   |   |   \-- workflows/
+    |   |   \-- src/
+    |   +-- reflection-docblock/
+    |   |   \-- src/
+    |   |       +-- DocBlock/
+    |   |       |   \-- Tags/
+    |   |       |       +-- Factory/
+    |   |       |       +-- Formatter/
+    |   |       |       \-- Reference/
+    |   |       \-- Exception/
+    |   \-- type-resolver/
+    |       +-- .phpdoc/
+    |       |   \-- template/
+    |       +-- docs/
+    |       \-- src/
+    |           +-- PseudoTypes/
+    |           \-- Types/
+    +-- phpoption/
+    |   \-- phpoption/
+    |       \-- src/
+    |           \-- PhpOption/
+    +-- phpstan/
+    |   \-- phpdoc-parser/
+    |       \-- src/
+    |           +-- Ast/
+    |           |   +-- ConstExpr/
+    |           |   +-- NodeVisitor/
+    |           |   +-- PhpDoc/
+    |           |   |   \-- Doctrine/
+    |           |   \-- Type/
+    |           +-- Lexer/
+    |           +-- Parser/
+    |           \-- Printer/
+    +-- phpunit/
+    |   +-- php-code-coverage/
+    |   |   \-- src/
+    |   |       +-- Data/
+    |   |       +-- Driver/
+    |   |       +-- Exception/
+    |   |       +-- Node/
+    |   |       +-- Report/
+    |   |       |   +-- Html/
+    |   |       |   |   \-- Renderer/
+    |   |       |   |       \-- Template/
+    |   |       |   |           +-- css/
+    |   |       |   |           +-- icons/
+    |   |       |   |           \-- js/
+    |   |       |   \-- Xml/
+    |   |       +-- StaticAnalysis/
+    |   |       |   +-- Value/
+    |   |       |   \-- Visitor/
+    |   |       +-- Target/
+    |   |       +-- TestSize/
+    |   |       +-- TestStatus/
+    |   |       \-- Util/
+    |   +-- php-file-iterator/
+    |   |   \-- src/
+    |   +-- php-invoker/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   +-- php-text-template/
+    |   |   +-- .psalm/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   +-- php-timer/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   \-- phpunit/
+    |       +-- schema/
+    |       \-- src/
+    |           +-- Event/
+    |           |   +-- Dispatcher/
+    |           |   +-- Emitter/
+    |           |   +-- Events/
+    |           |   |   +-- Application/
+    |           |   |   +-- Test/
+    |           |   |   |   +-- HookMethod/
+    |           |   |   |   +-- Issue/
+    |           |   |   |   +-- Lifecycle/
+    |           |   |   |   +-- Outcome/
+    |           |   |   |   \-- TestDouble/
+    |           |   |   +-- TestRunner/
+    |           |   |   \-- TestSuite/
+    |           |   +-- Exception/
+    |           |   \-- Value/
+    |           |       +-- Runtime/
+    |           |       +-- Telemetry/
+    |           |       +-- Test/
+    |           |       |   +-- Issue/
+    |           |       |   \-- TestData/
+    |           |       \-- TestSuite/
+    |           +-- Framework/
+    |           |   +-- Assert/
+    |           |   +-- Attributes/
+    |           |   +-- Constraint/
+    |           |   |   +-- Boolean/
+    |           |   |   +-- Cardinality/
+    |           |   |   +-- Equality/
+    |           |   |   +-- Exception/
+    |           |   |   +-- Filesystem/
+    |           |   |   +-- Math/
+    |           |   |   +-- Object/
+    |           |   |   +-- Operator/
+    |           |   |   +-- String/
+    |           |   |   +-- Traversable/
+    |           |   |   \-- Type/
+    |           |   +-- Exception/
+    |           |   |   +-- Incomplete/
+    |           |   |   +-- ObjectEquals/
+    |           |   |   \-- Skipped/
+    |           |   +-- MockObject/
+    |           |   |   +-- Exception/
+    |           |   |   +-- Generator/
+    |           |   |   |   +-- Exception/
+    |           |   |   |   \-- templates/
+    |           |   |   \-- Runtime/
+    |           |   |       +-- Api/
+    |           |   |       +-- Interface/
+    |           |   |       +-- PropertyHook/
+    |           |   |       +-- Rule/
+    |           |   |       \-- Stub/
+    |           |   +-- TestRunner/
+    |           |   |   \-- templates/
+    |           |   +-- TestSize/
+    |           |   \-- TestStatus/
+    |           +-- Logging/
+    |           |   +-- JUnit/
+    |           |   |   \-- Subscriber/
+    |           |   +-- OpenTestReporting/
+    |           |   |   +-- Exception/
+    |           |   |   +-- schema/
+    |           |   |   \-- Subscriber/
+    |           |   +-- TeamCity/
+    |           |   |   \-- Subscriber/
+    |           |   \-- TestDox/
+    |           |       \-- TestResult/
+    |           |           \-- Subscriber/
+    |           +-- Metadata/
+    |           |   +-- Api/
+    |           |   +-- Exception/
+    |           |   +-- Parser/
+    |           |   \-- Version/
+    |           +-- Runner/
+    |           |   +-- Baseline/
+    |           |   |   +-- Exception/
+    |           |   |   \-- Subscriber/
+    |           |   +-- DeprecationCollector/
+    |           |   |   \-- Subscriber/
+    |           |   +-- Exception/
+    |           |   +-- Extension/
+    |           |   +-- Filter/
+    |           |   +-- GarbageCollection/
+    |           |   |   \-- Subscriber/
+    |           |   +-- HookMethod/
+    |           |   +-- Phpt/
+    |           |   |   +-- Exception/
+    |           |   |   \-- templates/
+    |           |   +-- ResultCache/
+    |           |   |   \-- Subscriber/
+    |           |   \-- TestResult/
+    |           |       \-- Subscriber/
+    |           +-- TextUI/
+    |           |   +-- Command/
+    |           |   |   \-- Commands/
+    |           |   +-- Configuration/
+    |           |   |   +-- Cli/
+    |           |   |   +-- Exception/
+    |           |   |   +-- Value/
+    |           |   |   \-- Xml/
+    |           |   |       +-- CodeCoverage/
+    |           |   |       |   \-- Report/
+    |           |   |       +-- Logging/
+    |           |   |       |   \-- TestDox/
+    |           |   |       +-- Migration/
+    |           |   |       |   \-- Migrations/
+    |           |   |       +-- SchemaDetector/
+    |           |   |       \-- Validator/
+    |           |   +-- Exception/
+    |           |   \-- Output/
+    |           |       +-- Default/
+    |           |       |   \-- ProgressPrinter/
+    |           |       |       \-- Subscriber/
+    |           |       +-- Printer/
+    |           |       \-- TestDox/
+    |           \-- Util/
+    |               +-- Exception/
+    |               +-- Http/
+    |               +-- PHP/
+    |               \-- Xml/
+    +-- psr/
+    |   +-- cache/
+    |   |   \-- src/
+    |   +-- clock/
+    |   |   \-- src/
+    |   +-- container/
+    |   |   \-- src/
+    |   +-- event-dispatcher/
+    |   |   \-- src/
+    |   +-- http-client/
+    |   |   \-- src/
+    |   +-- http-factory/
+    |   |   \-- src/
+    |   +-- http-message/
+    |   |   +-- docs/
+    |   |   \-- src/
+    |   +-- log/
+    |   |   \-- src/
+    |   \-- simple-cache/
+    |       \-- src/
+    +-- psy/
+    |   \-- psysh/
+    |       +-- bin/
+    |       \-- src/
+    |           +-- CodeCleaner/
+    |           +-- Command/
+    |           |   +-- ListCommand/
+    |           |   \-- TimeitCommand/
+    |           +-- Exception/
+    |           +-- ExecutionLoop/
+    |           +-- Formatter/
+    |           +-- Input/
+    |           +-- Output/
+    |           +-- Readline/
+    |           |   \-- Hoa/
+    |           |       \-- Terminfo/
+    |           |           +-- 77/
+    |           |           \-- 78/
+    |           +-- Reflection/
+    |           +-- Sudo/
+    |           +-- TabCompletion/
+    |           |   \-- Matcher/
+    |           +-- Util/
+    |           +-- VarDumper/
+    |           \-- VersionUpdater/
+    |               \-- Downloader/
+    +-- ralouphie/
+    |   \-- getallheaders/
+    |       \-- src/
+    +-- ramsey/
+    |   +-- collection/
+    |   |   \-- src/
+    |   |       +-- Exception/
+    |   |       +-- Map/
+    |   |       \-- Tool/
+    |   \-- uuid/
+    |       \-- src/
+    |           +-- Builder/
+    |           +-- Codec/
+    |           +-- Converter/
+    |           |   +-- Number/
+    |           |   \-- Time/
+    |           +-- Exception/
+    |           +-- Fields/
+    |           +-- Generator/
+    |           +-- Guid/
+    |           +-- Lazy/
+    |           +-- Math/
+    |           +-- Nonstandard/
+    |           +-- Provider/
+    |           |   +-- Dce/
+    |           |   +-- Node/
+    |           |   \-- Time/
+    |           +-- Rfc4122/
+    |           +-- Type/
+    |           \-- Validator/
+    +-- sebastian/
+    |   +-- cli-parser/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   +-- comparator/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   +-- complexity/
+    |   |   \-- src/
+    |   |       +-- Complexity/
+    |   |       +-- Exception/
+    |   |       \-- Visitor/
+    |   +-- diff/
+    |   |   \-- src/
+    |   |       +-- Exception/
+    |   |       \-- Output/
+    |   +-- environment/
+    |   |   \-- src/
+    |   +-- exporter/
+    |   |   \-- src/
+    |   +-- global-state/
+    |   |   \-- src/
+    |   |       \-- exceptions/
+    |   +-- lines-of-code/
+    |   |   \-- src/
+    |   |       \-- Exception/
+    |   +-- object-enumerator/
+    |   |   \-- src/
+    |   +-- object-reflector/
+    |   |   \-- src/
+    |   +-- recursion-context/
+    |   |   \-- src/
+    |   +-- type/
+    |   |   \-- src/
+    |   |       +-- exception/
+    |   |       \-- type/
+    |   \-- version/
+    |       \-- src/
+    +-- spatie/
+    |   \-- laravel-permission/
+    |       +-- config/
+    |       +-- database/
+    |       |   \-- migrations/
+    |       \-- src/
+    |           +-- Commands/
+    |           +-- Contracts/
+    |           +-- Events/
+    |           +-- Exceptions/
+    |           +-- Middleware/
+    |           +-- Models/
+    |           \-- Traits/
+    +-- staabm/
+    |   \-- side-effects-detector/
+    |       \-- lib/
+    +-- swagger-api/
+    |   \-- swagger-ui/
+    |       +-- .github/
+    |       |   +-- ISSUE_TEMPLATE/
+    |       |   \-- workflows/
+    |       +-- .husky/
+    |       +-- config/
+    |       |   \-- jest/
+    |       +-- dev-helpers/
+    |       +-- dist/
+    |       +-- docker/
+    |       |   +-- configurator/
+    |       |   \-- docker-entrypoint.d/
+    |       +-- flavors/
+    |       |   \-- swagger-ui-react/
+    |       |       +-- dist/
+    |       |       \-- release/
+    |       +-- release/
+    |       +-- src/
+    |       |   +-- core/
+    |       |   |   +-- assets/
+    |       |   |   +-- components/
+    |       |   |   |   +-- auth/
+    |       |   |   |   +-- layouts/
+    |       |   |   |   +-- parameters/
+    |       |   |   |   \-- providers/
+    |       |   |   +-- config/
+    |       |   |   |   +-- factorization/
+    |       |   |   |   +-- sources/
+    |       |   |   |   \-- type-cast/
+    |       |   |   |       \-- type-casters/
+    |       |   |   +-- containers/
+    |       |   |   +-- plugins/
+    |       |   |   |   +-- auth/
+    |       |   |   |   |   +-- components/
+    |       |   |   |   |   +-- configs-extensions/
+    |       |   |   |   |   \-- spec-extensions/
+    |       |   |   |   +-- configs/
+    |       |   |   |   +-- deep-linking/
+    |       |   |   |   +-- download-url/
+    |       |   |   |   +-- err/
+    |       |   |   |   |   \-- error-transformers/
+    |       |   |   |   |       \-- transformers/
+    |       |   |   |   +-- filter/
+    |       |   |   |   +-- icons/
+    |       |   |   |   |   \-- components/
+    |       |   |   |   +-- json-schema-2020-12/
+    |       |   |   |   |   \-- components/
+    |       |   |   |   |       +-- Accordion/
+    |       |   |   |   |       +-- ExpandDeepButton/
+    |       |   |   |   |       +-- icons/
+    |       |   |   |   |       +-- JSONSchema/
+    |       |   |   |   |       +-- JSONViewer/
+    |       |   |   |   |       \-- keywords/
+    |       |   |   |   |           +-- $vocabulary/
+    |       |   |   |   |           +-- Const/
+    |       |   |   |   |           +-- Constraint/
+    |       |   |   |   |           +-- Default/
+    |       |   |   |   |           +-- DependentRequired/
+    |       |   |   |   |           +-- Description/
+    |       |   |   |   |           +-- Enum/
+    |       |   |   |   |           +-- Examples/
+    |       |   |   |   |           +-- ExtensionKeywords/
+    |       |   |   |   |           +-- PatternProperties/
+    |       |   |   |   |           +-- Properties/
+    |       |   |   |   |           \-- Title/
+    |       |   |   |   +-- json-schema-2020-12-samples/
+    |       |   |   |   |   \-- fn/
+    |       |   |   |   |       +-- api/
+    |       |   |   |   |       +-- class/
+    |       |   |   |   |       +-- core/
+    |       |   |   |   |       +-- encoders/
+    |       |   |   |   |       +-- generators/
+    |       |   |   |   |       |   \-- media-types/
+    |       |   |   |   |       \-- types/
+    |       |   |   |   +-- json-schema-5/
+    |       |   |   |   |   +-- components/
+    |       |   |   |   |   \-- containers/
+    |       |   |   |   +-- json-schema-5-samples/
+    |       |   |   |   |   \-- fn/
+    |       |   |   |   +-- layout/
+    |       |   |   |   |   \-- spec-extensions/
+    |       |   |   |   +-- logs/
+    |       |   |   |   +-- oas3/
+    |       |   |   |   |   +-- auth-extensions/
+    |       |   |   |   |   +-- components/
+    |       |   |   |   |   |   \-- auth/
+    |       |   |   |   |   +-- spec-extensions/
+    |       |   |   |   |   \-- wrap-components/
+    |       |   |   |   |       \-- auth/
+    |       |   |   |   +-- oas31/
+    |       |   |   |   |   +-- auth-extensions/
+    |       |   |   |   |   +-- components/
+    |       |   |   |   |   |   +-- auth/
+    |       |   |   |   |   |   +-- model/
+    |       |   |   |   |   |   \-- models/
+    |       |   |   |   |   +-- json-schema-2020-12-extensions/
+    |       |   |   |   |   |   +-- components/
+    |       |   |   |   |   |   |   \-- keywords/
+    |       |   |   |   |   |   |       \-- Discriminator/
+    |       |   |   |   |   |   \-- wrap-components/
+    |       |   |   |   |   |       \-- keywords/
+    |       |   |   |   |   +-- oas3-extensions/
+    |       |   |   |   |   +-- spec-extensions/
+    |       |   |   |   |   \-- wrap-components/
+    |       |   |   |   |       \-- auth/
+    |       |   |   |   +-- on-complete/
+    |       |   |   |   +-- request-snippets/
+    |       |   |   |   +-- safe-render/
+    |       |   |   |   |   \-- components/
+    |       |   |   |   +-- spec/
+    |       |   |   |   +-- swagger-client/
+    |       |   |   |   +-- syntax-highlighting/
+    |       |   |   |   |   +-- components/
+    |       |   |   |   |   \-- wrap-components/
+    |       |   |   |   +-- util/
+    |       |   |   |   +-- versions/
+    |       |   |   |   +-- view/
+    |       |   |   |   \-- view-legacy/
+    |       |   |   +-- presets/
+    |       |   |   |   +-- apis/
+    |       |   |   |   \-- base/
+    |       |   |   |       \-- plugins/
+    |       |   |   |           +-- core-components/
+    |       |   |   |           \-- form-components/
+    |       |   |   \-- utils/
+    |       |   +-- standalone/
+    |       |   |   +-- plugins/
+    |       |   |   |   +-- stadalone-layout/
+    |       |   |   |   |   \-- components/
+    |       |   |   |   \-- top-bar/
+    |       |   |   |       +-- assets/
+    |       |   |   |       \-- components/
+    |       |   |   \-- presets/
+    |       |   |       \-- standalone/
+    |       |   \-- style/
+    |       +-- swagger-ui-dist-package/
+    |       \-- webpack/
+    +-- symfony/
+    |   +-- clock/
+    |   |   +-- Resources/
+    |   |   \-- Test/
+    |   +-- console/
+    |   |   +-- Attribute/
+    |   |   +-- CI/
+    |   |   +-- Command/
+    |   |   +-- CommandLoader/
+    |   |   +-- Completion/
+    |   |   |   \-- Output/
+    |   |   +-- DataCollector/
+    |   |   +-- Debug/
+    |   |   +-- DependencyInjection/
+    |   |   +-- Descriptor/
+    |   |   +-- Event/
+    |   |   +-- EventListener/
+    |   |   +-- Exception/
+    |   |   +-- Formatter/
+    |   |   +-- Helper/
+    |   |   +-- Input/
+    |   |   +-- Logger/
+    |   |   +-- Messenger/
+    |   |   +-- Output/
+    |   |   +-- Question/
+    |   |   +-- Resources/
+    |   |   |   \-- bin/
+    |   |   +-- SignalRegistry/
+    |   |   +-- Style/
+    |   |   \-- Tester/
+    |   |       \-- Constraint/
+    |   +-- css-selector/
+    |   |   +-- Exception/
+    |   |   +-- Node/
+    |   |   +-- Parser/
+    |   |   |   +-- Handler/
+    |   |   |   +-- Shortcut/
+    |   |   |   \-- Tokenizer/
+    |   |   \-- XPath/
+    |   |       \-- Extension/
+    |   +-- deprecation-contracts/
+    |   +-- error-handler/
+    |   |   +-- Command/
+    |   |   +-- Error/
+    |   |   +-- ErrorEnhancer/
+    |   |   +-- ErrorRenderer/
+    |   |   +-- Exception/
+    |   |   +-- Internal/
+    |   |   \-- Resources/
+    |   |       +-- assets/
+    |   |       |   +-- css/
+    |   |       |   +-- images/
+    |   |       |   \-- js/
+    |   |       +-- bin/
+    |   |       \-- views/
+    |   +-- event-dispatcher/
+    |   |   +-- Attribute/
+    |   |   +-- Debug/
+    |   |   \-- DependencyInjection/
+    |   +-- event-dispatcher-contracts/
+    |   +-- finder/
+    |   |   +-- Comparator/
+    |   |   +-- Exception/
+    |   |   \-- Iterator/
+    |   +-- http-foundation/
+    |   |   +-- Exception/
+    |   |   +-- File/
+    |   |   |   \-- Exception/
+    |   |   +-- RateLimiter/
+    |   |   +-- RequestMatcher/
+    |   |   +-- Session/
+    |   |   |   +-- Attribute/
+    |   |   |   +-- Flash/
+    |   |   |   \-- Storage/
+    |   |   |       +-- Handler/
+    |   |   |       \-- Proxy/
+    |   |   \-- Test/
+    |   |       \-- Constraint/
+    |   +-- http-kernel/
+    |   |   +-- Attribute/
+    |   |   +-- Bundle/
+    |   |   +-- CacheClearer/
+    |   |   +-- CacheWarmer/
+    |   |   +-- Config/
+    |   |   +-- Controller/
+    |   |   |   \-- ArgumentResolver/
+    |   |   +-- ControllerMetadata/
+    |   |   +-- DataCollector/
+    |   |   +-- Debug/
+    |   |   +-- DependencyInjection/
+    |   |   +-- Event/
+    |   |   +-- EventListener/
+    |   |   +-- Exception/
+    |   |   +-- Fragment/
+    |   |   +-- HttpCache/
+    |   |   +-- Log/
+    |   |   +-- Profiler/
+    |   |   \-- Resources/
+    |   +-- mailer/
+    |   |   +-- Command/
+    |   |   +-- DataCollector/
+    |   |   +-- Event/
+    |   |   +-- EventListener/
+    |   |   +-- Exception/
+    |   |   +-- Header/
+    |   |   +-- Messenger/
+    |   |   +-- Test/
+    |   |   |   \-- Constraint/
+    |   |   \-- Transport/
+    |   |       \-- Smtp/
+    |   |           +-- Auth/
+    |   |           \-- Stream/
+    |   +-- mime/
+    |   |   +-- Crypto/
+    |   |   +-- DependencyInjection/
+    |   |   +-- Encoder/
+    |   |   +-- Exception/
+    |   |   +-- Header/
+    |   |   +-- HtmlToTextConverter/
+    |   |   +-- Part/
+    |   |   |   \-- Multipart/
+    |   |   +-- Resources/
+    |   |   |   \-- bin/
+    |   |   \-- Test/
+    |   |       \-- Constraint/
+    |   +-- polyfill-ctype/
+    |   +-- polyfill-intl-grapheme/
+    |   +-- polyfill-intl-idn/
+    |   |   \-- Resources/
+    |   |       \-- unidata/
+    |   +-- polyfill-intl-normalizer/
+    |   |   \-- Resources/
+    |   |       +-- stubs/
+    |   |       \-- unidata/
+    |   +-- polyfill-mbstring/
+    |   |   \-- Resources/
+    |   |       \-- unidata/
+    |   +-- polyfill-php80/
+    |   |   \-- Resources/
+    |   |       \-- stubs/
+    |   +-- polyfill-php83/
+    |   |   \-- Resources/
+    |   |       \-- stubs/
+    |   +-- polyfill-php84/
+    |   |   \-- Resources/
+    |   |       \-- stubs/
+    |   +-- polyfill-php85/
+    |   |   \-- Resources/
+    |   |       \-- stubs/
+    |   +-- polyfill-uuid/
+    |   +-- process/
+    |   |   +-- Exception/
+    |   |   +-- Messenger/
+    |   |   \-- Pipes/
+    |   +-- psr-http-message-bridge/
+    |   |   +-- ArgumentValueResolver/
+    |   |   +-- EventListener/
+    |   |   \-- Factory/
+    |   +-- routing/
+    |   |   +-- Annotation/
+    |   |   +-- Attribute/
+    |   |   +-- DependencyInjection/
+    |   |   +-- Exception/
+    |   |   +-- Generator/
+    |   |   |   \-- Dumper/
+    |   |   +-- Loader/
+    |   |   |   +-- Configurator/
+    |   |   |   |   \-- Traits/
+    |   |   |   \-- schema/
+    |   |   |       \-- routing/
+    |   |   +-- Matcher/
+    |   |   |   \-- Dumper/
+    |   |   \-- Requirement/
+    |   +-- service-contracts/
+    |   |   +-- Attribute/
+    |   |   \-- Test/
+    |   +-- string/
+    |   |   +-- Exception/
+    |   |   +-- Inflector/
+    |   |   +-- Resources/
+    |   |   |   +-- bin/
+    |   |   |   \-- data/
+    |   |   \-- Slugger/
+    |   +-- translation/
+    |   |   +-- Catalogue/
+    |   |   +-- Command/
+    |   |   +-- DataCollector/
+    |   |   +-- DependencyInjection/
+    |   |   +-- Dumper/
+    |   |   +-- Exception/
+    |   |   +-- Extractor/
+    |   |   |   \-- Visitor/
+    |   |   +-- Formatter/
+    |   |   +-- Loader/
+    |   |   +-- Provider/
+    |   |   +-- Reader/
+    |   |   +-- Resources/
+    |   |   |   +-- bin/
+    |   |   |   +-- data/
+    |   |   |   \-- schemas/
+    |   |   +-- Test/
+    |   |   +-- Util/
+    |   |   \-- Writer/
+    |   +-- translation-contracts/
+    |   |   \-- Test/
+    |   +-- uid/
+    |   |   +-- Command/
+    |   |   +-- Exception/
+    |   |   \-- Factory/
+    |   +-- var-dumper/
+    |   |   +-- Caster/
+    |   |   +-- Cloner/
+    |   |   +-- Command/
+    |   |   |   \-- Descriptor/
+    |   |   +-- Dumper/
+    |   |   |   \-- ContextProvider/
+    |   |   +-- Exception/
+    |   |   +-- Resources/
+    |   |   |   +-- bin/
+    |   |   |   +-- css/
+    |   |   |   +-- functions/
+    |   |   |   \-- js/
+    |   |   +-- Server/
+    |   |   \-- Test/
+    |   \-- yaml/
+    |       +-- Command/
+    |       +-- Exception/
+    |       +-- Resources/
+    |       |   \-- bin/
+    |       \-- Tag/
+    +-- ta-tikoma/
+    |   \-- phpunit-architecture-test/
+    |       \-- src/
+    |           +-- Asserts/
+    |           |   +-- Dependencies/
+    |           |   |   \-- Elements/
+    |           |   +-- Inheritance/
+    |           |   +-- Iterator/
+    |           |   +-- Methods/
+    |           |   |   \-- Elements/
+    |           |   \-- Properties/
+    |           |       \-- Elements/
+    |           +-- Builders/
+    |           +-- Elements/
+    |           |   \-- Layer/
+    |           +-- Enums/
+    |           +-- Services/
+    |           \-- Storage/
+    +-- theseer/
+    |   \-- tokenizer/
+    |       \-- src/
+    +-- tightenco/
+    |   \-- ziggy/
+    |       +-- dist/
+    |       \-- src/
+    |           +-- js/
+    |           \-- Output/
+    +-- tijsverkoyen/
+    |   \-- css-to-inline-styles/
+    |       \-- src/
+    |           \-- Css/
+    |               +-- Property/
+    |               \-- Rule/
+    +-- vlucas/
+    |   \-- phpdotenv/
+    |       \-- src/
+    |           +-- Exception/
+    |           +-- Loader/
+    |           +-- Parser/
+    |           +-- Repository/
+    |           |   \-- Adapter/
+    |           +-- Store/
+    |           |   \-- File/
+    |           \-- Util/
+    +-- voku/
+    |   \-- portable-ascii/
+    |       \-- src/
+    |           \-- voku/
+    |               \-- helper/
+    |                   \-- data/
+    +-- webmozart/
+    |   \-- assert/
+    |       \-- src/
+    \-- zircote/
+        \-- swagger-php/
+            +-- bin/
+            \-- src/
+                +-- Analysers/
+                +-- Annotations/
+                +-- Attributes/
+                +-- Loggers/
+                \-- Processors/
+                    \-- Concerns/

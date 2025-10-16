@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades.DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.invoices', function (Blueprint $table) {
+        Schema::create('acct.invoices', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->uuid('customer_id');
@@ -37,23 +38,36 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
-            $table->foreign('customer_id')->references('id')->on('invoicing.customers')->onDelete('cascade');
-            $table->foreign('created_by_user_id')->references('id')->on('auth.users')->onDelete('set null');
+            $table->foreign('customer_id')->references('id')->on('acct.customers')->onDelete('cascade');
+            $table->foreign('created_by_user_id')->references('id')->on('auth.users')->onDelete('restrict');
 
             // Indexes
             $table->unique(['company_id', 'invoice_number']);
             $table->index(['company_id']);
             $table->index(['customer_id']);
-            $table->index(['status']);
-            $table->index(['payment_status']);
-            $table->index(['due_date']);
-            $table->index(['created_at']);
+            $table->index(['company_id', 'customer_id']);
+            $table->index(['company_id', 'status']);
+            $table->index(['company_id', 'payment_status']);
+            $table->index(['company_id', 'due_date']);
+            $table->index(['company_id', 'created_at']);
         });
 
         // Add soft deletes
-        Schema::table('invoicing.invoices', function (Blueprint $table) {
+        Schema::table('acct.invoices', function (Blueprint $table) {
             $table->softDeletes();
         });
+
+        DB::statement('
+            ALTER TABLE acct.invoices
+            ADD CONSTRAINT invoices_amounts_positive
+            CHECK (
+                subtotal >= 0
+                AND tax_amount >= 0
+                AND discount_amount >= 0
+                AND total_amount >= 0
+                AND balance_due >= 0
+            )
+        ');
     }
 
     /**
@@ -61,6 +75,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.invoices');
+        Schema::dropIfExists('acct.invoices');
     }
 };

@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         // Create customer groups table
-        Schema::create('invoicing.customer_groups', function (Blueprint $table) {
+        Schema::create('acct.customer_groups', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');
             $table->string('name', 100);
@@ -33,19 +33,19 @@ return new class extends Migration
         });
 
         // Enable RLS for customer groups
-        DB::statement('ALTER TABLE invoicing.customer_groups ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.customer_groups ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policy for customer groups
         DB::statement('
             CREATE POLICY customer_groups_company_policy 
-            ON invoicing.customer_groups 
+            ON acct.customer_groups 
             FOR ALL 
             TO authenticated_user 
             USING (company_id = current_setting(\'app.current_company_id\')::uuid)
         ');
 
         // Create customer group members join table
-        Schema::create('invoicing.customer_group_members', function (Blueprint $table) {
+        Schema::create('acct.customer_group_members', function (Blueprint $table) {
             $table->uuid('customer_id');
             $table->uuid('group_id');
             $table->uuid('company_id');
@@ -56,12 +56,12 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('group_id')
                 ->references('id')
-                ->on('invoicing.customer_groups')
+                ->on('acct.customer_groups')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
@@ -82,12 +82,12 @@ return new class extends Migration
         });
 
         // Enable RLS for customer group members
-        DB::statement('ALTER TABLE invoicing.customer_group_members ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.customer_group_members ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policy for customer group members
         DB::statement('
             CREATE POLICY customer_group_members_company_policy 
-            ON invoicing.customer_group_members 
+            ON acct.customer_group_members 
             FOR ALL 
             TO authenticated_user 
             USING (company_id = current_setting(\'app.current_company_id\')::uuid)
@@ -95,7 +95,7 @@ return new class extends Migration
 
         // Create audit trigger for customer groups
         DB::statement('
-            CREATE OR REPLACE FUNCTION invoicing.customer_groups_audit_trigger()
+            CREATE OR REPLACE FUNCTION acct.customer_groups_audit_trigger()
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = \'INSERT\' THEN
@@ -145,13 +145,13 @@ return new class extends Migration
         DB::statement('
             CREATE TRIGGER customer_groups_audit_trigger
             AFTER INSERT OR UPDATE OR DELETE
-            ON invoicing.customer_groups
-            FOR EACH ROW EXECUTE FUNCTION invoicing.customer_groups_audit_trigger()
+            ON acct.customer_groups
+            FOR EACH ROW EXECUTE FUNCTION acct.customer_groups_audit_trigger()
         ');
 
         // Create audit trigger for customer group membership changes
         DB::statement('
-            CREATE OR REPLACE FUNCTION invoicing.customer_group_members_audit_trigger()
+            CREATE OR REPLACE FUNCTION acct.customer_group_members_audit_trigger()
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = \'INSERT\' THEN
@@ -186,8 +186,8 @@ return new class extends Migration
         DB::statement('
             CREATE TRIGGER customer_group_members_audit_trigger
             AFTER INSERT OR DELETE
-            ON invoicing.customer_group_members
-            FOR EACH ROW EXECUTE FUNCTION invoicing.customer_group_members_audit_trigger()
+            ON acct.customer_group_members
+            FOR EACH ROW EXECUTE FUNCTION acct.customer_group_members_audit_trigger()
         ');
     }
 
@@ -197,18 +197,18 @@ return new class extends Migration
     public function down(): void
     {
         // Drop triggers and functions
-        DB::statement('DROP TRIGGER IF EXISTS customer_group_members_audit_trigger ON invoicing.customer_group_members');
-        DB::statement('DROP FUNCTION IF EXISTS invoicing.customer_group_members_audit_trigger()');
+        DB::statement('DROP TRIGGER IF EXISTS customer_group_members_audit_trigger ON acct.customer_group_members');
+        DB::statement('DROP FUNCTION IF EXISTS acct.customer_group_members_audit_trigger()');
 
-        DB::statement('DROP TRIGGER IF EXISTS customer_groups_audit_trigger ON invoicing.customer_groups');
-        DB::statement('DROP FUNCTION IF EXISTS invoicing.customer_groups_audit_trigger()');
+        DB::statement('DROP TRIGGER IF EXISTS customer_groups_audit_trigger ON acct.customer_groups');
+        DB::statement('DROP FUNCTION IF EXISTS acct.customer_groups_audit_trigger()');
 
         // Drop RLS policies
-        DB::statement('DROP POLICY IF EXISTS customer_group_members_company_policy ON invoicing.customer_group_members');
-        DB::statement('DROP POLICY IF EXISTS customer_groups_company_policy ON invoicing.customer_groups');
+        DB::statement('DROP POLICY IF EXISTS customer_group_members_company_policy ON acct.customer_group_members');
+        DB::statement('DROP POLICY IF EXISTS customer_groups_company_policy ON acct.customer_groups');
 
         // Drop tables
-        Schema::dropIfExists('invoicing.customer_group_members');
-        Schema::dropIfExists('invoicing.customer_groups');
+        Schema::dropIfExists('acct.customer_group_members');
+        Schema::dropIfExists('acct.customer_groups');
     }
 };

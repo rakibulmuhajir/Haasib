@@ -443,7 +443,7 @@ class UserManagement extends Command
             $this->info("System Role: {$user->system_role ?? 'user'}");
             $this->info("Status: " . ($user->is_active ? 'Active' : 'Inactive'));
             $this->info("Created: " . $user->created_at->format('Y-m-d H:i:s'));
-            $this->info("Last Login: " . ($user->last_login_at?->format('Y-m-d H:i:s') ?? 'Never'));
+            $this->info("Last Login: " . ($user->last_login_at ? $user->last_login_at->format('Y-m-d H:i:s') : 'Never'));
 
             $this->info("\nCompanies:");
             foreach ($user->companies as $company) {

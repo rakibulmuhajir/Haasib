@@ -113,7 +113,7 @@ class AuditTrailTest extends TestCase
 
         // Verify audit event was fired
         Event::assertDispatched(PaymentAllocated::class);
-        Event::assertDispatched(PaymentAudited::class, function ($event) use ($payment->id) {
+        Event::assertDispatched(PaymentAudited::class, function ($event) use ($payment) {
             return $event->paymentId === $payment->id && 
                    $event->action === 'payment_allocated';
         });

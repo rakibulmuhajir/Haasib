@@ -23,7 +23,7 @@ class CreditNote extends Model
      *
      * @var string
      */
-    protected $table = 'invoicing.credit_notes';
+    protected $table = 'acct.credit_notes';
 
     /**
      * The attributes that are mass assignable.
@@ -205,7 +205,7 @@ class CreditNote extends Model
             return 0;
         }
 
-        $appliedAmount = DB::table('invoicing.credit_note_applications')
+        $appliedAmount = DB::table('acct.credit_note_applications')
             ->where('credit_note_id', $this->id)
             ->sum('amount_applied');
 
@@ -346,7 +346,7 @@ class CreditNote extends Model
             $applicationAmount = min($this->remaining_balance, $this->invoice->balance_due);
             $balanceBefore = $this->invoice->balance_due;
 
-            $application = DB::table('invoicing.credit_note_applications')->insert([
+            $application = DB::table('acct.credit_note_applications')->insert([
                 'id' => str()->uuid(),
                 'credit_note_id' => $this->id,
                 'invoice_id' => $this->invoice_id,

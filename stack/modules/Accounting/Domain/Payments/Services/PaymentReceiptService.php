@@ -151,7 +151,7 @@ class PaymentReceiptService
                     <div><div class='label'>Payment Number:</div> <div class='value'>{$receiptData['payment_details']['payment_number']}</div></div>
                     <div><div class='label'>Payment Date:</div> <div class='value'>{$receiptData['payment_details']['payment_date']}</div></div>
                     <div><div class='label'>Payment Method:</div> <div class='value'>{$receiptData['payment_details']['payment_method_label']}</div></div>
-                    <div><div class='label'>Reference:</div> <div class='value'>{$receiptData['payment_details']['reference_number'] ?: '-'}</div></div>
+                    <div><div class='label'>Reference:</div> <div class='value'>{$receiptData['payment_details']['reference_number'] ?? '-'}</div></div>
                 </div>
             </div>
             

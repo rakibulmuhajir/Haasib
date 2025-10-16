@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.customer_communications', function (Blueprint $table) {
+        Schema::create('acct.customer_communications', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('customer_id');
             $table->uuid('company_id');
@@ -28,7 +28,7 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
@@ -38,7 +38,7 @@ return new class extends Migration
 
             $table->foreign('contact_id')
                 ->references('id')
-                ->on('invoicing.customer_contacts')
+                ->on('acct.customer_contacts')
                 ->onDelete('set null');
 
             $table->foreign('logged_by_user_id')
@@ -56,12 +56,12 @@ return new class extends Migration
         });
 
         // Enable RLS (Row Level Security)
-        DB::statement('ALTER TABLE invoicing.customer_communications ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.customer_communications ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policy to enforce tenancy
         DB::statement('
             CREATE POLICY customer_communications_company_policy 
-            ON invoicing.customer_communications 
+            ON acct.customer_communications 
             FOR ALL 
             TO authenticated_user 
             USING (company_id = current_setting(\'app.current_company_id\')::uuid)
@@ -69,7 +69,7 @@ return new class extends Migration
 
         // Create audit trigger for communication logs
         DB::statement('
-            CREATE OR REPLACE FUNCTION invoicing.customer_communications_audit_trigger()
+            CREATE OR REPLACE FUNCTION acct.customer_communications_audit_trigger()
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = \'INSERT\' THEN
@@ -128,13 +128,13 @@ return new class extends Migration
         DB::statement('
             CREATE TRIGGER customer_communications_audit_trigger
             AFTER INSERT OR UPDATE OR DELETE
-            ON invoicing.customer_communications
-            FOR EACH ROW EXECUTE FUNCTION invoicing.customer_communications_audit_trigger()
+            ON acct.customer_communications
+            FOR EACH ROW EXECUTE FUNCTION acct.customer_communications_audit_trigger()
         ');
 
         // Create function to get communication timeline for a customer
         DB::statement('
-            CREATE OR REPLACE FUNCTION invoicing.get_customer_communication_timeline(
+            CREATE OR REPLACE FUNCTION acct.get_customer_communication_timeline(
                 p_customer_id UUID,
                 p_company_id UUID,
                 p_limit INTEGER DEFAULT 50,
@@ -171,9 +171,9 @@ return new class extends Migration
                         ELSE NULL
                     END as contact_name,
                     comm.attachments
-                FROM invoicing.customer_communications comm
+                FROM acct.customer_communications comm
                 LEFT JOIN auth.users u ON u.id = comm.logged_by_user_id
-                LEFT JOIN invoicing.customer_contacts cc ON cc.id = comm.contact_id
+                LEFT JOIN acct.customer_contacts cc ON cc.id = comm.contact_id
                 WHERE comm.customer_id = p_customer_id 
                   AND comm.company_id = p_company_id
                 ORDER BY comm.occurred_at DESC
@@ -183,7 +183,7 @@ return new class extends Migration
         ');
 
         // Grant execute permission to authenticated users
-        DB::statement('GRANT EXECUTE ON FUNCTION invoicing.get_customer_communication_timeline TO authenticated_user');
+        DB::statement('GRANT EXECUTE ON FUNCTION acct.get_customer_communication_timeline TO authenticated_user');
     }
 
     /**
@@ -192,16 +192,16 @@ return new class extends Migration
     public function down(): void
     {
         // Drop function and permissions
-        DB::statement('REVOKE EXECUTE ON FUNCTION invoicing.get_customer_communication_timeline FROM authenticated_user');
-        DB::statement('DROP FUNCTION IF EXISTS invoicing.get_customer_communication_timeline');
+        DB::statement('REVOKE EXECUTE ON FUNCTION acct.get_customer_communication_timeline FROM authenticated_user');
+        DB::statement('DROP FUNCTION IF EXISTS acct.get_customer_communication_timeline');
 
         // Drop trigger and function
-        DB::statement('DROP TRIGGER IF EXISTS customer_communications_audit_trigger ON invoicing.customer_communications');
-        DB::statement('DROP FUNCTION IF EXISTS invoicing.customer_communications_audit_trigger()');
+        DB::statement('DROP TRIGGER IF EXISTS customer_communications_audit_trigger ON acct.customer_communications');
+        DB::statement('DROP FUNCTION IF EXISTS acct.customer_communications_audit_trigger()');
 
         // Drop RLS policy
-        DB::statement('DROP POLICY IF EXISTS customer_communications_company_policy ON invoicing.customer_communications');
+        DB::statement('DROP POLICY IF EXISTS customer_communications_company_policy ON acct.customer_communications');
 
-        Schema::dropIfExists('invoicing.customer_communications');
+        Schema::dropIfExists('acct.customer_communications');
     }
 };

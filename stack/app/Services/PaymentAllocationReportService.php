@@ -285,16 +285,16 @@ class PaymentAllocationReportService
     {
         $customerAllocations = PaymentAllocation::where('company_id', $company->id)
             ->whereBetween('allocation_date', [$startDate, $endDate])
-            ->join('invoicing.invoices', 'invoicing.payment_allocations.invoice_id', '=', 'invoicing.invoices.id')
-            ->join('invoicing.customers', 'invoicing.invoices.customer_id', '=', 'invoicing.customers.id')
-            ->groupBy('invoicing.customers.id', 'invoicing.customers.name')
+            ->join('acct.invoices', 'acct.payment_allocations.invoice_id', '=', 'acct.invoices.id')
+            ->join('acct.customers', 'acct.invoices.customer_id', '=', 'acct.customers.id')
+            ->groupBy('acct.customers.id', 'acct.customers.name')
             ->selectRaw('
-                invoicing.customers.id as customer_id,
-                invoicing.customers.name as customer_name,
+                acct.customers.id as customer_id,
+                acct.customers.name as customer_name,
                 COUNT(*) as allocation_count,
-                SUM(invoicing.payment_allocations.allocated_amount) as total_allocated,
-                AVG(invoicing.payment_allocations.allocated_amount) as average_allocation,
-                COUNT(DISTINCT invoicing.payment_allocations.invoice_id) as unique_invoices
+                SUM(acct.payment_allocations.allocated_amount) as total_allocated,
+                AVG(acct.payment_allocations.allocated_amount) as average_allocation,
+                COUNT(DISTINCT acct.payment_allocations.invoice_id) as unique_invoices
             ')
             ->orderBy('total_allocated', 'desc')
             ->get();

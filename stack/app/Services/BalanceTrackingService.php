@@ -75,13 +75,13 @@ class BalanceTrackingService
                 ->where('status', '!=', 'cancelled')
                 ->sum('balance_due');
 
-            $totalAllocated = Invoice::join('invoicing.payment_allocations', 'invoicing.payment_allocations.invoice_id', '=', 'invoicing.invoices.id')
-                ->join('invoicing.payments', 'invoicing.payment_allocations.payment_id', '=', 'invoicing.payments.id')
-                ->where('invoicing.invoices.company_id', $company->id)
-                ->where('invoicing.invoices.status', '!=', 'paid')
-                ->where('invoicing.invoices.status', '!=', 'cancelled')
-                ->whereNull('invoicing.payment_allocations.reversed_at')
-                ->sum('invoicing.payment_allocations.allocated_amount');
+        $totalAllocated = Invoice::join('acct.payment_allocations', 'acct.payment_allocations.invoice_id', '=', 'acct.invoices.id')
+                ->join('acct.payments', 'acct.payment_allocations.payment_id', '=', 'acct.payments.id')
+                ->where('acct.invoices.company_id', $company->id)
+                ->where('acct.invoices.status', '!=', 'paid')
+                ->where('acct.invoices.status', '!=', 'cancelled')
+                ->whereNull('acct.payment_allocations.reversed_at')
+                ->sum('acct.payment_allocations.allocated_amount');
 
             $unallocatedPayments = Payment::where('company_id', $company->id)
                 ->where('status', 'completed')

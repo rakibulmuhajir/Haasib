@@ -391,7 +391,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'action' => 'required|in:delete,export',
             'customer_ids' => 'required|array',
-            'customer_ids.*' => 'required|uuid|exists:invoicing.customers,id',
+            'customer_ids.*' => 'required|uuid|exists:acct.customers,id',
         ]);
 
         $currentCompany = $request->attributes->get('company');

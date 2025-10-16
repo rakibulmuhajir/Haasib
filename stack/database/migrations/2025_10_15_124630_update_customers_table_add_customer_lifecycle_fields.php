@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('invoicing.customers', function (Blueprint $table) {
+        Schema::table('acct.customers', function (Blueprint $table) {
             // Add legal_name field
             $table->string('legal_name')->nullable()->after('name');
 
@@ -38,7 +38,7 @@ return new class extends Migration
             $table->index(['company_id', 'email']);
 
             // Add trigram index for name search (PostgreSQL specific)
-            DB::statement('CREATE INDEX customers_name_trigram_idx ON "invoicing.customers" USING gin(name gin_trgm_ops)');
+            DB::statement('CREATE INDEX customers_name_trigram_idx ON "acct.customers" USING gin(name gin_trgm_ops)');
         });
     }
 
@@ -47,7 +47,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('invoicing.customers', function (Blueprint $table) {
+        Schema::table('acct.customers', function (Blueprint $table) {
             $table->dropColumn(['legal_name', 'default_currency', 'credit_limit_effective_at', 'status']);
 
             // Restore is_active

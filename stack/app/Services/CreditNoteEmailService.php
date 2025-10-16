@@ -118,7 +118,7 @@ class CreditNoteEmailService
             'updated_at' => now(),
         ];
 
-        \DB::table('invoicing.scheduled_credit_note_emails')->insert($scheduledEmail);
+        \DB::table('acct.scheduled_credit_note_emails')->insert($scheduledEmail);
 
         // Log the scheduling
         activity()
@@ -503,7 +503,7 @@ Best regards,
      */
     public function processScheduledEmails(): array
     {
-        $scheduledEmails = \DB::table('invoicing.scheduled_credit_note_emails')
+        $scheduledEmails = \DB::table('acct.scheduled_credit_note_emails')
             ->where('status', 'scheduled')
             ->where('send_at', '<=', now())
             ->orderBy('send_at', 'asc')
@@ -521,7 +521,7 @@ Best regards,
                 if ($creditNote && $user) {
                     $result = $this->sendCreditNoteEmail($creditNote, $user, $scheduledEmail->options);
 
-                    \DB::table('invoicing.scheduled_credit_note_emails')
+                    \DB::table('acct.scheduled_credit_note_emails')
                         ->where('id', $scheduledEmail->id)
                         ->update([
                             'status' => $result['success'] ? 'sent' : 'failed',
@@ -537,7 +537,7 @@ Best regards,
                     }
                 } else {
                     // Mark as failed if credit note or user not found
-                    \DB::table('invoicing.scheduled_credit_note_emails')
+                    \DB::table('acct.scheduled_credit_note_emails')
                         ->where('id', $scheduledEmail->id)
                         ->update([
                             'status' => 'failed',
@@ -547,7 +547,7 @@ Best regards,
                     $failed++;
                 }
             } catch (\Throwable $e) {
-                \DB::table('invoicing.scheduled_credit_note_emails')
+                \DB::table('acct.scheduled_credit_note_emails')
                     ->where('id', $scheduledEmail->id)
                     ->update([
                         'status' => 'failed',

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.customer_addresses', function (Blueprint $table) {
+        Schema::create('acct.customer_addresses', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('customer_id');
             $table->uuid('company_id');
@@ -31,7 +31,7 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
@@ -47,12 +47,12 @@ return new class extends Migration
         });
 
         // Enable RLS (Row Level Security)
-        DB::statement('ALTER TABLE invoicing.customer_addresses ENABLE ROW LEVEL SECURITY');
+        DB::statement('ALTER TABLE acct.customer_addresses ENABLE ROW LEVEL SECURITY');
 
         // Create RLS policy to enforce tenancy
         DB::statement('
             CREATE POLICY customer_addresses_company_policy 
-            ON invoicing.customer_addresses 
+            ON acct.customer_addresses 
             FOR ALL 
             TO authenticated_user 
             USING (company_id = current_setting(\'app.current_company_id\')::uuid)
@@ -61,13 +61,13 @@ return new class extends Migration
         // Create partial unique index for single default address per type per customer
         DB::statement('
             CREATE UNIQUE INDEX customer_addresses_default_unique 
-            ON invoicing.customer_addresses (customer_id, type) 
+            ON acct.customer_addresses (customer_id, type) 
             WHERE is_default = true AND deleted_at IS NULL
         ');
 
         // Create audit trigger for address changes
         DB::statement('
-            CREATE OR REPLACE FUNCTION invoicing.customer_addresses_audit_trigger()
+            CREATE OR REPLACE FUNCTION acct.customer_addresses_audit_trigger()
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = \'INSERT\' THEN
@@ -123,8 +123,8 @@ return new class extends Migration
         DB::statement('
             CREATE TRIGGER customer_addresses_audit_trigger
             AFTER INSERT OR UPDATE OR DELETE
-            ON invoicing.customer_addresses
-            FOR EACH ROW EXECUTE FUNCTION invoicing.customer_addresses_audit_trigger()
+            ON acct.customer_addresses
+            FOR EACH ROW EXECUTE FUNCTION acct.customer_addresses_audit_trigger()
         ');
     }
 
@@ -134,15 +134,15 @@ return new class extends Migration
     public function down(): void
     {
         // Drop trigger and function
-        DB::statement('DROP TRIGGER IF EXISTS customer_addresses_audit_trigger ON invoicing.customer_addresses');
-        DB::statement('DROP FUNCTION IF EXISTS invoicing.customer_addresses_audit_trigger()');
+        DB::statement('DROP TRIGGER IF EXISTS customer_addresses_audit_trigger ON acct.customer_addresses');
+        DB::statement('DROP FUNCTION IF EXISTS acct.customer_addresses_audit_trigger()');
 
         // Drop RLS policy
-        DB::statement('DROP POLICY IF EXISTS customer_addresses_company_policy ON invoicing.customer_addresses');
+        DB::statement('DROP POLICY IF EXISTS customer_addresses_company_policy ON acct.customer_addresses');
 
         // Drop indexes
         DB::statement('DROP INDEX IF EXISTS customer_addresses_default_unique');
 
-        Schema::dropIfExists('invoicing.customer_addresses');
+        Schema::dropIfExists('acct.customer_addresses');
     }
 };

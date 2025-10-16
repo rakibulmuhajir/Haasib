@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('invoicing.customer_aging_snapshots', function (Blueprint $table) {
+        Schema::create('acct.customer_aging_snapshots', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('customer_id');
             $table->uuid('company_id');
@@ -30,17 +30,17 @@ return new class extends Migration
             // Foreign keys
             $table->foreign('customer_id')
                 ->references('id')
-                ->on('invoicing.customers')
+                ->on('acct.customers')
                 ->onDelete('cascade');
 
             $table->foreign('company_id')
                 ->references('id')
-                ->on('companies')
+                ->on('auth.companies')
                 ->onDelete('cascade');
 
             $table->foreign('generated_by_user_id')
                 ->references('id')
-                ->on('users')
+                ->on('auth.users')
                 ->onDelete('set null');
 
             // Indexes for performance
@@ -71,7 +71,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('invoicing.customer_aging_snapshots');
+        Schema::dropIfExists('acct.customer_aging_snapshots');
     }
 
     /**
@@ -80,7 +80,7 @@ return new class extends Migration
     private function createAuditTrigger(): void
     {
         $trigger = <<<'SQL'
-        CREATE OR REPLACE FUNCTION invoicing.customer_aging_snapshots_audit_trigger()
+        CREATE OR REPLACE FUNCTION acct.customer_aging_snapshots_audit_trigger()
         RETURNS TRIGGER AS $$
         DECLARE
             audit_action TEXT;
@@ -104,22 +104,13 @@ return new class extends Migration
                     'generated_via', NEW.generated_via,
                     'total_outstanding', NEW.bucket_current + NEW.bucket_1_30 + NEW.bucket_31_60 + NEW.bucket_61_90 + NEW.bucket_90_plus
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_aging_snapshots',
-                    NEW.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_aging_snapshots_created',
                     details,
                     audit_user,
-                    NEW.company_id,
-                    NOW()
+                    'customer_aging_snapshots',
+                    NEW.id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             
@@ -144,22 +135,13 @@ return new class extends Migration
                             jsonb_build_object('old', OLD.total_invoices, 'new', NEW.total_invoices) ELSE NULL END
                     )
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_aging_snapshots',
-                    NEW.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_aging_snapshots_updated',
                     details,
                     audit_user,
-                    NEW.company_id,
-                    NOW()
+                    'customer_aging_snapshots',
+                    NEW.id,
+                    NEW.company_id
                 );
                 RETURN NEW;
             
@@ -179,22 +161,13 @@ return new class extends Migration
                         'generated_via', OLD.generated_via
                     )
                 );
-                INSERT INTO invoicing.audit_logs (
-                    table_name, 
-                    record_id, 
-                    action, 
-                    details, 
-                    user_id, 
-                    company_id, 
-                    created_at
-                ) VALUES (
-                    'customer_aging_snapshots',
-                    OLD.id,
-                    audit_action,
+                PERFORM audit_log(
+                    'customer_aging_snapshots_deleted',
                     details,
                     OLD.generated_by_user_id,
-                    OLD.company_id,
-                    NOW()
+                    'customer_aging_snapshots',
+                    OLD.id,
+                    OLD.company_id
                 );
                 RETURN OLD;
             END IF;
@@ -210,8 +183,8 @@ return new class extends Migration
         // Create trigger
         DB::unprepared('
             CREATE TRIGGER customer_aging_snapshots_audit
-                AFTER INSERT OR UPDATE OR DELETE ON invoicing.customer_aging_snapshots
-                FOR EACH ROW EXECUTE FUNCTION invoicing.customer_aging_snapshots_audit_trigger();
+                AFTER INSERT OR UPDATE OR DELETE ON acct.customer_aging_snapshots
+                FOR EACH ROW EXECUTE FUNCTION acct.customer_aging_snapshots_audit_trigger();
         ');
     }
 
@@ -220,7 +193,7 @@ return new class extends Migration
      */
     private function enableRLS(): void
     {
-        DB::unprepared('ALTER TABLE invoicing.customer_aging_snapshots ENABLE ROW LEVEL SECURITY;');
+        DB::unprepared('ALTER TABLE acct.customer_aging_snapshots ENABLE ROW LEVEL SECURITY;');
     }
 
     /**
@@ -230,13 +203,13 @@ return new class extends Migration
     {
         $policies = [
             // Company users can view aging snapshots for their company
-            'CREATE POLICY customer_aging_snapshots_view_company ON invoicing.customer_aging_snapshots
+            'CREATE POLICY customer_aging_snapshots_view_company ON acct.customer_aging_snapshots
                 FOR SELECT USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid
                 );',
 
             // Users with permission can manage aging snapshots
-            'CREATE POLICY customer_aging_snapshots_manage ON invoicing.customer_aging_snapshots
+            'CREATE POLICY customer_aging_snapshots_manage ON acct.customer_aging_snapshots
                 FOR ALL USING (
                     company_id = current_setting(\'app.current_company_id\')::uuid AND
                     EXISTS (
@@ -248,7 +221,7 @@ return new class extends Migration
                 );',
 
             // System admins can access all aging snapshots
-            'CREATE POLICY customer_aging_snapshots_system_admin ON invoicing.customer_aging_snapshots
+            'CREATE POLICY customer_aging_snapshots_system_admin ON acct.customer_aging_snapshots
                 FOR ALL USING (
                     EXISTS (
                         SELECT 1 FROM users
@@ -270,21 +243,21 @@ return new class extends Migration
     {
         $indexes = [
             // Index for finding high-risk customers (high 90+ bucket)
-            'CREATE INDEX idx_aging_90_plus_risk ON invoicing.customer_aging_snapshots 
+            'CREATE INDEX idx_aging_90_plus_risk ON acct.customer_aging_snapshots 
                 (company_id, bucket_90_plus DESC NULLS LAST) 
                 WHERE bucket_90_plus > 0;',
 
             // Index for aging trend analysis
-            'CREATE INDEX idx_aging_trend_analysis ON invoicing.customer_aging_snapshots 
+            'CREATE INDEX idx_aging_trend_analysis ON acct.customer_aging_snapshots 
                 (customer_id, snapshot_date DESC) 
                 WHERE snapshot_date >= CURRENT_DATE - INTERVAL \'90 days\';',
 
             // Index for scheduled vs on-demand comparison
-            'CREATE INDEX idx_aging_generation_method ON invoicing.customer_aging_snapshots 
+            'CREATE INDEX idx_aging_generation_method ON acct.customer_aging_snapshots 
                 (generated_via, snapshot_date DESC);',
 
             // Partial index for customers with significant outstanding balances
-            'CREATE INDEX idx_aging_significant_balance ON invoicing.customer_aging_snapshots 
+            'CREATE INDEX idx_aging_significant_balance ON acct.customer_aging_snapshots 
                 (company_id, (bucket_current + bucket_1_30 + bucket_31_60 + bucket_61_90 + bucket_90_plus) DESC) 
                 WHERE (bucket_current + bucket_1_30 + bucket_31_60 + bucket_61_90 + bucket_90_plus) > 1000;',
         ];

@@ -23,7 +23,7 @@ class Product extends Model
      *
      * @var string
      */
-    protected $table = 'invoicing.products';
+    protected $table = 'acct.products';
 
     /**
      * The attributes that are mass assignable.

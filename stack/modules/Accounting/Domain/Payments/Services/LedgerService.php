@@ -2,14 +2,17 @@
 
 namespace Modules\Accounting\Domain\Payments\Services;
 
+use App\Models\Account;
+use App\Models\JournalEntry;
+use App\Models\JournalEntrySource;
+use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Modules\Accounting\Domain\Ledgers\Actions\CreateJournalEntryAction;
-use Modules\Accounting\Domain\Ledgers\Events\LedgerEntryCreated;
-use Modules\Accounting\Domain\Payments\Events\PaymentCreated;
-use Modules\Accounting\Domain\Payments\Events\PaymentAllocated;
-use Modules\Accounting\Domain\Payments\Events\PaymentReversed;
+use Modules\Accounting\Domain\Ledgers\Actions\AutoJournalEntryAction;
 use Modules\Accounting\Domain\Payments\Events\AllocationReversed;
+use Modules\Accounting\Domain\Payments\Events\PaymentAllocated;
+use Modules\Accounting\Domain\Payments\Events\PaymentRecorded;
+use Modules\Accounting\Domain\Payments\Events\PaymentReversed;
 
 class LedgerService
 {
@@ -17,95 +20,92 @@ class LedgerService
      * Chart of accounts constants.
      */
     const ACCOUNTS_RECEIVABLE = '1100'; // AR
+
     const CASH_ACCOUNT = '1200'; // Bank/Cash
+
     const UNDEPOSITED_FUNDS = '1250'; // Undeposited Funds
+
     const PAYMENT_PROCESSING_FEES = '4600'; // Expense - Processing Fees
+
     const SALES_DISCOUNTS = '4700'; // Revenue - Discounts
+
     const SALES_RETURNS = '4750'; // Revenue - Returns
-    
+
     /**
      * Journal entry types.
      */
     const JOURNAL_PAYMENT = 'payment';
+
     const JOURNAL_REVERSAL = 'reversal';
+
     const JOURNAL_ALLOCATION = 'allocation';
+
     const JOURNAL_ALLOCATION_REVERSAL = 'allocation_reversal';
 
     /**
      * Create journal entries for payment recording.
      */
-    public function recordPayment(PaymentCreated $event): array
+    public function recordPayment(PaymentRecorded $event): array
     {
-        $paymentData = $event->getData();
-        $paymentId = $paymentData['payment_id'];
-        $amount = $paymentData['amount'];
-        $paymentMethod = $paymentData['payment_method'];
-        $companyId = $paymentData['company_id'];
+        $payment = $event->payment;
 
-        return DB::transaction(function () use ($paymentId, $amount, $paymentMethod, $companyId, $paymentData) {
-            $journalEntries = [];
+        return DB::transaction(function () use ($payment) {
+            $autoJournalAction = app(AutoJournalEntryAction::class);
 
-            // Determine the cash/bank account based on payment method
-            $cashAccount = $this->getCashAccountForPaymentMethod($paymentMethod);
+            // Determine accounts based on payment method
+            $cashAccountId = $this->getAccountIdForPaymentMethod($payment->method);
+            $arAccountId = $this->getAccountsReceivableAccountId($payment->company_id);
 
-            // Debit: Cash/Bank Account (increase assets)
-            $journalEntries[] = $this->createJournalEntry([
-                'payment_id' => $paymentId,
-                'company_id' => $companyId,
-                'entry_type' => self::JOURNAL_PAYMENT,
-                'account_code' => $cashAccount,
-                'debit_amount' => $amount,
-                'credit_amount' => 0,
-                'description' => "Payment received - {$paymentData['payment_number']}",
-                'reference' => $paymentData['payment_number'],
-                'date' => $paymentData['payment_date'],
-                'metadata' => [
-                    'payment_method' => $paymentMethod,
-                    'entity_id' => $paymentData['entity_id'],
-                    'entity_type' => $paymentData['entity_type'] ?? 'customer',
-                    'auto_allocated' => $paymentData['auto_allocated'] ?? false,
-                ],
-            ]);
-
-            // Credit: Undeposited Funds or Accounts Receivable (decrease other assets)
-            $arAccount = $this->shouldUseUndepositedFunds($paymentMethod) 
-                ? self::UNDEPOSITED_FUNDS 
-                : self::ACCOUNTS_RECEIVABLE;
-
-            $journalEntries[] = $this->createJournalEntry([
-                'payment_id' => $paymentId,
-                'company_id' => $companyId,
-                'entry_type' => self::JOURNAL_PAYMENT,
-                'account_code' => $arAccount,
-                'debit_amount' => 0,
-                'credit_amount' => $amount,
-                'description' => "Payment applied - {$paymentData['payment_number']}",
-                'reference' => $paymentData['payment_number'],
-                'date' => $paymentData['payment_date'],
-                'metadata' => [
-                    'payment_method' => $paymentMethod,
-                    'entity_id' => $paymentData['entity_id'],
-                    'entity_type' => $paymentData['entity_type'] ?? 'customer',
-                ],
-            ]);
-
-            // Emit ledger events for audit trail
-            foreach ($journalEntries as $entry) {
-                Event::dispatch(new LedgerEntryCreated([
-                    'journal_entry_id' => $entry['id'],
-                    'payment_id' => $paymentId,
-                    'company_id' => $companyId,
-                    'entry_type' => self::JOURNAL_PAYMENT,
-                    'account_code' => $entry['account_code'],
-                    'debit_amount' => $entry['debit_amount'],
-                    'credit_amount' => $entry['credit_amount'],
-                    'description' => $entry['description'],
-                    'timestamp' => now()->toISOString(),
-                    'metadata' => $entry['metadata'],
-                ]));
+            if (! $cashAccountId || ! $arAccountId) {
+                throw new \Exception('Required accounts not found for payment processing');
             }
 
-            return $journalEntries;
+            $journalData = [
+                'company_id' => $payment->company_id,
+                'description' => "Payment received - {$payment->payment_number}",
+                'date' => $payment->payment_date,
+                'type' => 'payment',
+                'currency' => $payment->currency,
+                'reference' => $payment->payment_number,
+                'lines' => [
+                    [
+                        'account_id' => $cashAccountId,
+                        'debit_credit' => 'debit',
+                        'amount' => $payment->amount,
+                        'description' => "Payment via {$payment->method}",
+                    ],
+                    [
+                        'account_id' => $arAccountId,
+                        'debit_credit' => 'credit',
+                        'amount' => $payment->amount,
+                        'description' => "Payment applied - {$payment->payment_number}",
+                    ],
+                ],
+                'source_data' => [
+                    'source_type' => 'payment',
+                    'source_id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
+                    'payment_method' => $payment->method,
+                    'entity_id' => $payment->entity_id,
+                    'entity_type' => $payment->entity_type ?? 'customer',
+                    'auto_allocated' => $payment->auto_allocated ?? false,
+                ],
+                'idempotency_key' => "payment_recorded_{$payment->id}",
+            ];
+
+            $result = $autoJournalAction->execute($journalData);
+
+            // Create source document link
+            if (isset($result['journal_entry_id'])) {
+                JournalEntrySource::create([
+                    'journal_entry_id' => $result['journal_entry_id'],
+                    'source_type' => 'payment',
+                    'source_id' => $payment->id,
+                    'source_data' => $journalData['source_data'],
+                ]);
+            }
+
+            return [$result];
         });
     }
 
@@ -114,73 +114,67 @@ class LedgerService
      */
     public function recordAllocation(PaymentAllocated $event): array
     {
-        $allocationData = $event->getData();
-        $paymentId = $allocationData['payment_id'];
-        $allocatedAmount = $allocationData['allocated_amount'];
-        $invoiceId = $allocationData['invoice_id'];
-        $companyId = $allocationData['company_id'];
+        $allocation = $event->allocation;
 
-        return DB::transaction(function () use ($paymentId, $allocatedAmount, $invoiceId, $companyId, $allocationData) {
-            $journalEntries = [];
+        return DB::transaction(function () use ($allocation) {
+            $autoJournalAction = app(AutoJournalEntryAction::class);
 
-            // Debit: Undeposited Funds (decrease - funds are now allocated)
-            $journalEntries[] = $this->createJournalEntry([
-                'payment_id' => $paymentId,
-                'invoice_id' => $invoiceId,
-                'company_id' => $companyId,
-                'entry_type' => self::JOURNAL_ALLOCATION,
-                'account_code' => self::UNDEPOSITED_FUNDS,
-                'debit_amount' => $allocatedAmount,
-                'credit_amount' => 0,
-                'description' => "Payment allocated to invoice #{$allocationData['invoice_number']}",
-                'reference' => $allocationData['payment_number'],
-                'date' => $allocationData['allocation_date'],
-                'metadata' => [
-                    'invoice_id' => $invoiceId,
-                    'invoice_number' => $allocationData['invoice_number'],
-                    'allocation_method' => $allocationData['allocation_method'],
-                    'entity_id' => $allocationData['entity_id'],
-                ],
-            ]);
+            // Get required accounts
+            $undepositedFundsId = $this->getUndepositedFundsAccountId($allocation->company_id);
+            $arAccountId = $this->getAccountsReceivableAccountId($allocation->company_id);
 
-            // Credit: Accounts Receivable (decrease - invoice is paid)
-            $journalEntries[] = $this->createJournalEntry([
-                'payment_id' => $paymentId,
-                'invoice_id' => $invoiceId,
-                'company_id' => $companyId,
-                'entry_type' => self::JOURNAL_ALLOCATION,
-                'account_code' => self::ACCOUNTS_RECEIVABLE,
-                'debit_amount' => 0,
-                'credit_amount' => $allocatedAmount,
-                'description' => "Invoice #{$allocationData['invoice_number']} payment applied",
-                'reference' => $allocationData['invoice_number'],
-                'date' => $allocationData['allocation_date'],
-                'metadata' => [
-                    'invoice_id' => $invoiceId,
-                    'invoice_number' => $allocationData['invoice_number'],
-                    'allocation_method' => $allocationData['allocation_method'],
-                    'entity_id' => $allocationData['entity_id'],
-                ],
-            ]);
-
-            // Emit ledger events
-            foreach ($journalEntries as $entry) {
-                Event::dispatch(new LedgerEntryCreated([
-                    'journal_entry_id' => $entry['id'],
-                    'payment_id' => $paymentId,
-                    'invoice_id' => $invoiceId,
-                    'company_id' => $companyId,
-                    'entry_type' => self::JOURNAL_ALLOCATION,
-                    'account_code' => $entry['account_code'],
-                    'debit_amount' => $entry['debit_amount'],
-                    'credit_amount' => $entry['credit_amount'],
-                    'description' => $entry['description'],
-                    'timestamp' => now()->toISOString(),
-                    'metadata' => $entry['metadata'],
-                ]));
+            if (! $undepositedFundsId || ! $arAccountId) {
+                throw new \Exception('Required accounts not found for allocation processing');
             }
 
-            return $journalEntries;
+            $journalData = [
+                'company_id' => $allocation->company_id,
+                'description' => "Payment allocated to invoice #{$allocation->invoice->invoice_number}",
+                'date' => $allocation->allocation_date,
+                'type' => 'allocation',
+                'currency' => $allocation->currency,
+                'reference' => $allocation->payment->payment_number,
+                'lines' => [
+                    [
+                        'account_id' => $undepositedFundsId,
+                        'debit_credit' => 'debit',
+                        'amount' => $allocation->amount,
+                        'description' => "Funds allocated to invoice #{$allocation->invoice->invoice_number}",
+                    ],
+                    [
+                        'account_id' => $arAccountId,
+                        'debit_credit' => 'credit',
+                        'amount' => $allocation->amount,
+                        'description' => "Invoice #{$allocation->invoice->invoice_number} payment applied",
+                    ],
+                ],
+                'source_data' => [
+                    'source_type' => 'payment_allocation',
+                    'source_id' => $allocation->id,
+                    'payment_id' => $allocation->payment_id,
+                    'invoice_id' => $allocation->invoice_id,
+                    'invoice_number' => $allocation->invoice->invoice_number,
+                    'payment_number' => $allocation->payment->payment_number,
+                    'allocation_amount' => $allocation->amount,
+                    'allocation_method' => $allocation->allocation_method,
+                    'entity_id' => $allocation->payment->entity_id,
+                ],
+                'idempotency_key' => "payment_allocation_{$allocation->id}",
+            ];
+
+            $result = $autoJournalAction->execute($journalData);
+
+            // Create source document link
+            if (isset($result['journal_entry_id'])) {
+                JournalEntrySource::create([
+                    'journal_entry_id' => $result['journal_entry_id'],
+                    'source_type' => 'payment_allocation',
+                    'source_id' => $allocation->id,
+                    'source_data' => $journalData['source_data'],
+                ]);
+            }
+
+            return [$result];
         });
     }
 
@@ -202,8 +196,8 @@ class LedgerService
             // Get the original payment method to determine accounts
             $originalPaymentMethod = $reversalData['payment_method'];
             $cashAccount = $this->getCashAccountForPaymentMethod($originalPaymentMethod);
-            $arAccount = $this->shouldUseUndepositedFunds($originalPaymentMethod) 
-                ? self::UNDEPOSITED_FUNDS 
+            $arAccount = $this->shouldUseUndepositedFunds($originalPaymentMethod)
+                ? self::UNDEPOSITED_FUNDS
                 : self::ACCOUNTS_RECEIVABLE;
 
             // Credit: Cash/Bank Account (decrease assets - money returned/refunded)
@@ -215,7 +209,7 @@ class LedgerService
                 'debit_amount' => 0,
                 'credit_amount' => $reversedAmount,
                 'description' => "Payment reversal - {$reversalData['payment_number']} ({$reversalMethod})",
-                'reference' => $reversalData['payment_number'] . '-R',
+                'reference' => $reversalData['payment_number'].'-R',
                 'date' => now()->toDateString(),
                 'metadata' => [
                     'reversal_method' => $reversalMethod,
@@ -235,7 +229,7 @@ class LedgerService
                 'debit_amount' => $reversedAmount,
                 'credit_amount' => 0,
                 'description' => "Payment reversal applied - {$reversalData['payment_number']}",
-                'reference' => $reversalData['payment_number'] . '-R',
+                'reference' => $reversalData['payment_number'].'-R',
                 'date' => now()->toDateString(),
                 'metadata' => [
                     'reversal_method' => $reversalMethod,
@@ -256,7 +250,7 @@ class LedgerService
                     'debit_amount' => 0,
                     'credit_amount' => $reversedAmount,
                     'description' => "Chargeback liability - {$reversalData['payment_number']}",
-                    'reference' => $reversalData['payment_number'] . '-CB',
+                    'reference' => $reversalData['payment_number'].'-CB',
                     'date' => now()->toDateString(),
                     'metadata' => [
                         'reversal_method' => $reversalMethod,
@@ -313,7 +307,7 @@ class LedgerService
                 'debit_amount' => 0,
                 'credit_amount' => $refundAmount,
                 'description' => "Allocation reversal - Invoice #{$reversalData['invoice_number']}",
-                'reference' => $reversalData['payment_number'] . '-AR',
+                'reference' => $reversalData['payment_number'].'-AR',
                 'date' => now()->toDateString(),
                 'metadata' => [
                     'original_amount' => $originalAmount,
@@ -335,7 +329,7 @@ class LedgerService
                 'debit_amount' => $refundAmount,
                 'credit_amount' => 0,
                 'description' => "Invoice balance restored - #{$reversalData['invoice_number']}",
-                'reference' => $reversalData['invoice_number'] . '-R',
+                'reference' => $reversalData['invoice_number'].'-R',
                 'date' => now()->toDateString(),
                 'metadata' => [
                     'original_amount' => $originalAmount,
@@ -369,37 +363,49 @@ class LedgerService
     }
 
     /**
-     * Create a single journal entry.
+     * Get account ID for payment method.
      */
-    private function createJournalEntry(array $data): array
+    private function getAccountIdForPaymentMethod(string $paymentMethod, ?string $companyId = null): ?string
     {
-        $action = new CreateJournalEntryAction();
-        return $action->execute($data);
-    }
-
-    /**
-     * Get the appropriate cash account for payment method.
-     */
-    private function getCashAccountForPaymentMethod(string $paymentMethod): string
-    {
-        $cashAccounts = [
-            'cash' => '1201', // Cash on Hand
-            'bank_transfer' => '1210', // Bank Account - Checking
-            'card' => '1220', // Bank Account - Card Processing
-            'cheque' => '1230', // Bank Account - Cheques
-            'other' => '1240', // Other Payment Methods
+        $accountMapping = [
+            'cash' => '10000', // Cash
+            'bank_transfer' => '11000', // Bank Account
+            'card' => '11000', // Bank Account (Card processing)
+            'cheque' => '11000', // Bank Account (Cheques)
+            'other' => '10000', // Other payment methods
         ];
 
-        return $cashAccounts[$paymentMethod] ?? self::CASH_ACCOUNT;
+        $accountCode = $accountMapping[$paymentMethod] ?? '10000';
+
+        if ($companyId) {
+            $account = Account::where('company_id', $companyId)
+                ->where('code', $accountCode)
+                ->first();
+
+            return $account?->id;
+        }
+
+        return Account::where('code', $accountCode)->first()?->id;
     }
 
     /**
-     * Determine if payment should use undeposited funds account.
+     * Get accounts receivable account ID for company.
      */
-    private function shouldUseUndepositedFunds(string $paymentMethod): bool
+    private function getAccountsReceivableAccountId(string $companyId): ?string
     {
-        // Cash and cheques typically go to undeposited funds first
-        return in_array($paymentMethod, ['cash', 'cheque']);
+        return Account::where('company_id', $companyId)
+            ->where('code', '12000') // Accounts Receivable
+            ->first()?->id;
+    }
+
+    /**
+     * Get undeposited funds account ID for company.
+     */
+    private function getUndepositedFundsAccountId(string $companyId): ?string
+    {
+        return Account::where('company_id', $companyId)
+            ->where('code', '12500') // Undeposited Funds
+            ->first()?->id;
     }
 
     /**
@@ -436,26 +442,42 @@ class LedgerService
      */
     public function calculatePaymentLedgerBalance(string $paymentId): array
     {
-        $sql = "
-            SELECT 
-                account_code,
-                SUM(debit_amount) as total_debits,
-                SUM(credit_amount) as total_credits,
-                SUM(debit_amount - credit_amount) as net_balance
-            FROM accounting.journal_entries 
-            WHERE payment_id = ? 
-            GROUP BY account_code
-            ORDER BY account_code
-        ";
+        // Get journal entries linked to this payment
+        $journalEntryIds = JournalEntrySource::where('source_type', 'payment')
+            ->where('source_id', $paymentId)
+            ->pluck('journal_entry_id');
 
-        $results = DB::select($sql, [$paymentId]);
+        if ($journalEntryIds->isEmpty()) {
+            return [
+                'payment_id' => $paymentId,
+                'account_balances' => [],
+                'total_debits' => 0,
+                'total_credits' => 0,
+                'is_balanced' => true,
+            ];
+        }
+
+        $transactions = DB::table('journal_transactions')
+            ->whereIn('journal_entry_id', $journalEntryIds)
+            ->join('accounts', 'journal_transactions.account_id', '=', 'accounts.id')
+            ->selectRaw('
+                accounts.code as account_code,
+                accounts.name as account_name,
+                SUM(CASE WHEN journal_transactions.debit_credit = \'debit\' THEN journal_transactions.amount ELSE 0 END) as total_debits,
+                SUM(CASE WHEN journal_transactions.debit_credit = \'credit\' THEN journal_transactions.amount ELSE 0 END) as total_credits,
+                SUM(CASE WHEN journal_transactions.debit_credit = \'debit\' THEN journal_transactions.amount ELSE 0 END) - 
+                SUM(CASE WHEN journal_transactions.debit_credit = \'credit\' THEN journal_transactions.amount ELSE 0 END) as net_balance
+            ')
+            ->groupBy('accounts.code', 'accounts.name')
+            ->orderBy('accounts.code')
+            ->get();
 
         return [
             'payment_id' => $paymentId,
-            'account_balances' => collect($results)->keyBy('account_code')->toArray(),
-            'total_debits' => collect($results)->sum('total_debits'),
-            'total_credits' => collect($results)->sum('total_credits'),
-            'is_balanced' => collect($results)->sum('total_debits') === collect($results)->sum('total_credits'),
+            'account_balances' => $transactions->keyBy('account_code')->toArray(),
+            'total_debits' => $transactions->sum('total_debits'),
+            'total_credits' => $transactions->sum('total_credits'),
+            'is_balanced' => abs($transactions->sum('total_debits') - $transactions->sum('total_credits')) < 0.01,
         ];
     }
 
@@ -465,23 +487,39 @@ class LedgerService
     public function getPaymentReconciliationSummary(string $paymentId): array
     {
         $ledgerBalance = $this->calculatePaymentLedgerBalance($paymentId);
-        
+
         // Get associated journal entries with details
-        $entries = DB::table('accounting.journal_entries')
-            ->where('payment_id', $paymentId)
-            ->orderBy('created_at')
+        $journalEntryIds = JournalEntrySource::where('source_type', 'payment')
+            ->where('source_id', $paymentId)
+            ->pluck('journal_entry_id');
+
+        $entries = JournalEntry::with(['transactions.account', 'sources'])
+            ->whereIn('id', $journalEntryIds)
+            ->orderBy('date')
             ->get()
             ->map(function ($entry) {
                 return [
                     'id' => $entry->id,
-                    'entry_type' => $entry->entry_type,
-                    'account_code' => $entry->account_code,
-                    'debit_amount' => $entry->debit_amount,
-                    'credit_amount' => $entry->credit_amount,
+                    'type' => $entry->type,
+                    'status' => $entry->status,
                     'description' => $entry->description,
-                    'date' => $entry->date,
-                    'created_at' => $entry->created_at,
-                    'metadata' => json_decode($entry->metadata, true),
+                    'date' => $entry->date->format('Y-m-d'),
+                    'reference' => $entry->reference,
+                    'transactions' => $entry->transactions->map(function ($transaction) {
+                        return [
+                            'account_code' => $transaction->account->code,
+                            'account_name' => $transaction->account->name,
+                            'debit_credit' => $transaction->debit_credit,
+                            'amount' => $transaction->amount,
+                        ];
+                    })->toArray(),
+                    'sources' => $entry->sources->map(function ($source) {
+                        return [
+                            'source_type' => $source->source_type,
+                            'source_id' => $source->source_id,
+                            'source_data' => $source->source_data,
+                        ];
+                    })->toArray(),
                 ];
             })
             ->toArray();

@@ -1,11 +1,158 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo">
+</p>
+
+<h1 align="center">Haasib</h1>
+<p align="center">
+  <strong>Comprehensive Double-Entry Accounting System</strong><br>
+  Built with Laravel 12, Vue 3, PostgreSQL 16, and PrimeVue 4
+</p>
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+  <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+  <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+  <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
+
+## 🚀 Quick Start
+
+### New to Haasib?
+- **[Quickstart Guide](./QUICKSTART.md)** - Complete setup and getting started guide
+- **[CLI Cheatsheet](./docs/CLI-CHEATSHEET.md)** - Quick reference for all commands
+- **[Documentation](./docs/)** - Detailed documentation and guides
+
+### Prerequisites
+- PHP 8.3+
+- PostgreSQL 16+  
+- Node.js 18+
+- Composer & NPM
+
+### Installation
+```bash
+git clone <repository-url>
+cd haasib/stack
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+# Configure database in .env
+php artisan migrate
+php artisan db:seed
+npm run build
+php artisan serve
+```
+
+## ✨ Features
+
+### 📊 Core Accounting
+- **Double-Entry System**: Complete double-entry bookkeeping with automatic validation
+- **Chart of Accounts**: Flexible account hierarchy and management
+- **Journal Entries**: Manual and automated journal entry creation
+- **Audit Trail**: Complete audit history for all transactions
+
+### 🔄 Workflow Management
+- **Entry Lifecycle**: Draft → Submit → Approve → Post
+- **Batch Processing**: Group and process multiple entries together
+- **Recurring Templates**: Schedule recurring journal entries automatically
+- **Approval Workflows**: Multi-level approval controls
+
+### 📈 Reporting & Analytics
+- **Trial Balance**: Real-time trial balance generation
+- **Financial Statements**: Balance sheet and income statement
+- **General Ledger**: Detailed transaction history
+- **Export Capabilities**: CSV export for all reports
+
+### 🎨 Modern Interface
+- **Vue 3 + Inertia**: Responsive and fast user interface
+- **PrimeVue Components**: Professional UI component library
+- **Real-time Updates**: Live data synchronization
+- **Dark Mode Support**: Eye-friendly dark theme
+
+### ⚡ Performance
+- **Queue System**: Background processing for heavy operations
+- **Caching**: Optimized query performance
+- **Database Optimized**: PostgreSQL with RLS support
+- **API First**: RESTful APIs for all operations
+
+## 🛠️ Architecture
+
+Built with modern technologies and best practices:
+
+- **Backend**: Laravel 12 with modular architecture
+- **Frontend**: Vue 3 + Inertia.js v2 + PrimeVue 4
+- **Database**: PostgreSQL 16 with Row Level Security
+- **Testing**: Pest 4 with comprehensive test coverage
+- **Queue**: Laravel Horizon for job monitoring
+- **DevTools**: Laravel Telescope for debugging
+
+## 📚 Resources
+
+### Documentation
+- [Quickstart Guide](./QUICKSTART.md) - Get started in minutes
+- [CLI Commands](./docs/CLI-CHEATSHEET.md) - Command reference
+- [API Documentation](./docs/api/) - REST API guide
+- [Feature Guides](./docs/) - Detailed feature documentation
+
+### Development
+- [Contributing Guidelines](./CONTRIBUTING.md) - How to contribute
+- [Architecture Overview](./docs/architecture.md) - System design
+- [Testing Guide](./docs/testing.md) - Testing practices
+
+### Community
+- [Issues](https://github.com/your-org/haasib/issues) - Report bugs and request features
+- [Discussions](https://github.com/your-org/haasib/discussions) - Community discussions
+
+## 📋 System Requirements
+
+- **PHP**: 8.3+
+- **Database**: PostgreSQL 16+
+- **Node.js**: 18+
+- **Extensions**: BCMath, Ctype, Fileinfo, JSON, Mbstring, OpenSSL, PDO, Tokenizer, XML
+- **Memory**: 512MB+ recommended
+- **Storage**: 100MB+ disk space
+
+## 🔧 Configuration
+
+Key configuration options in `.env`:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=haasib
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
+QUEUE_CONNECTION=database
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+```
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test file
+php artisan test tests/Feature/Accounting/JournalEntries/JournalAuditTest.php
+
+# Run with coverage
+php artisan test --coverage
+```
+
+## 📄 License
+
+Haasib is open-sourced software licensed under the [MIT license](LICENSE.md).
+
+## 🤝 Contributing
+
+Thank you for considering contributing to Haasib! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+
+---
 
 ## About Laravel
 

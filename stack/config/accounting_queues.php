@@ -153,6 +153,54 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Journal Entry Queue Worker
+    |--------------------------------------------------------------------------
+    |
+    | Worker for manual journal entry processing, approvals, and posting.
+    | These jobs require balance validation and audit trail integrity.
+    |
+    */
+    'journal' => [
+        'connection' => env('ACCOUNTING_QUEUE_CONNECTION', 'accounting'),
+        'queue' => ['journal', 'journal_approval', 'journal_posting'],
+        'sleep' => 2,
+        'tries' => 3,
+        'timeout' => 90,
+        'backoff' => [5, 15, 30],
+        'memory' => 256,
+        'delay' => 0,
+        'force' => false,
+        'stopWhenEmpty' => false,
+        'maxTime' => 0,
+        'maxJobs' => 0,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ledger Processing Queue Worker
+    |--------------------------------------------------------------------------
+    |
+    | Worker for automatic ledger posting from source documents like invoices
+    | and payments. These jobs maintain double-entry integrity.
+    |
+    */
+    'ledger' => [
+        'connection' => env('ACCOUNTING_QUEUE_CONNECTION', 'accounting'),
+        'queue' => ['ledger', 'ledger_auto_post', 'ledger_reconciliation'],
+        'sleep' => 1,
+        'tries' => 5,
+        'timeout' => 120,
+        'backoff' => [10, 30, 60],
+        'memory' => 512,
+        'delay' => 0,
+        'force' => false,
+        'stopWhenEmpty' => false,
+        'maxTime' => 0,
+        'maxJobs' => 0,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Supervisor Configuration Examples
     |--------------------------------------------------------------------------
     |
@@ -192,6 +240,28 @@ return [
             'numprocs' => 1,
             'redirect_stderr' => true,
             'stdout_logfile' => storage_path('logs/supervisor-accounting-batch.log'),
+            'stopwaitsecs' => 3600,
+        ],
+        'accounting_journal' => [
+            'program' => 'accounting_journal_worker',
+            'command' => 'php artisan queue:work accounting --queue=journal,journal_approval,journal_posting --sleep=2 --tries=3 --memory=256 --timeout=90',
+            'autostart' => true,
+            'autorestart' => true,
+            'user' => 'www-data',
+            'numprocs' => 2,
+            'redirect_stderr' => true,
+            'stdout_logfile' => storage_path('logs/supervisor-accounting-journal.log'),
+            'stopwaitsecs' => 3600,
+        ],
+        'accounting_ledger' => [
+            'program' => 'accounting_ledger_worker',
+            'command' => 'php artisan queue:work accounting --queue=ledger,ledger_auto_post,ledger_reconciliation --sleep=1 --tries=5 --memory=512 --timeout=120',
+            'autostart' => true,
+            'autorestart' => true,
+            'user' => 'www-data',
+            'numprocs' => 3,
+            'redirect_stderr' => true,
+            'stdout_logfile' => storage_path('logs/supervisor-accounting-ledger.log'),
             'stopwaitsecs' => 3600,
         ],
     ],

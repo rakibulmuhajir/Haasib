@@ -38,6 +38,20 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function ($schedule): void {
         $schedule->command('ar:update-aging')->daily()->at('23:59');
         $schedule->command('fx:sync ecb')->daily()->at('02:00');
+
+        // Generate recurring journal entries daily at 1 AM
+        $schedule->job(new \Modules\Accounting\Jobs\GenerateRecurringJournalEntries)
+            ->daily()
+            ->at('01:00')
+            ->description('Generate recurring journal entries')
+            ->onSuccess(function () {
+                \Illuminate\Support\Facades\Log::info('Recurring journal entries generation completed successfully');
+            })
+            ->onFailure(function (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Recurring journal entries generation failed', [
+                    'error' => $e->getMessage(),
+                ]);
+            });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -35,6 +35,15 @@ return [
     'invoice.delete' => App\Actions\DevOps\InvoiceDelete::class,
     'invoice.post' => App\Actions\DevOps\InvoicePost::class,
     'invoice.cancel' => App\Actions\DevOps\InvoiceCancel::class,
+
+    // Journal entry actions - mapped to Accounting module actions
+    'journal.create' => Modules\Accounting\Domain\Ledgers\Actions\CreateManualJournalEntryAction::class,
+    'journal.submit' => Modules\Accounting\Domain\Ledgers\Actions\SubmitJournalEntryAction::class,
+    'journal.approve' => Modules\Accounting\Domain\Ledgers\Actions\ApproveJournalEntryAction::class,
+    'journal.post' => Modules\Accounting\Domain\Ledgers\Actions\PostJournalEntryAction::class,
+    'journal.reverse' => Modules\Accounting\Domain\Ledgers\Actions\ReverseJournalEntryAction::class,
+    'journal.void' => Modules\Accounting\Domain\Ledgers\Actions\VoidJournalEntryAction::class,
+    'journal.auto' => Modules\Accounting\Domain\Ledgers\Actions\AutoJournalEntryAction::class,
     'company.create' => App\Actions\DevOps\CompanyCreate::class,
     'company.activate' => App\Actions\Company\ActivateCompany::class,
     'company.deactivate' => App\Actions\Company\DeactivateCompany::class,

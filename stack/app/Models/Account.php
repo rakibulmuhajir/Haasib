@@ -14,20 +14,23 @@ class Account extends Model
         'name',
         'description',
         'normal_balance',
-        'is_active',
-        'allow_manual_entries',
         'account_type',
+        'active',
+        'allow_manual_entries',
         'currency',
         'opening_balance',
         'opening_balance_date',
+        'current_balance',
         'parent_id',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'active' => 'boolean',
         'allow_manual_entries' => 'boolean',
         'opening_balance' => 'decimal:2',
         'opening_balance_date' => 'date',
+        'current_balance' => 'decimal:2',
+        'last_updated_at' => 'datetime',
     ];
 
     /**

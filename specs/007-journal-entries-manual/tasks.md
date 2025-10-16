@@ -18,8 +18,8 @@
 
 **Purpose**: Project initialization and baseline configuration required by all ledger stories
 
-- [ ] T001 Add `journal` and `ledger` queues to default worker configuration in `stack/config/queue.php`
-- [ ] T002 [P] Document queue worker requirements for journal processing in `docs/TEAM_MEMORY.md`
+- [X] T001 Add `journal` and `ledger` queues to default worker configuration in `stack/config/accounting_queues.php`
+- [X] T002 [P] Document queue worker requirements for journal processing in `docs/TEAM_MEMORY.md`
 
 ---
 
@@ -27,12 +27,12 @@
 
 **Purpose**: Core schema, models, and permissions that all user stories rely on
 
-- [ ] T003 Create migrations for batches, sources, recurring templates, and audit tables in `stack/modules/Accounting/Database/Migrations/2025_10_20_000000_create_journal_foundation_tables.php`
-- [ ] T004 [P] Align `stack/app/Models/JournalEntry.php` with new columns, relationships, and `acct` schema references
-- [ ] T005 [P] Add `stack/app/Models/JournalBatch.php` and `stack/app/Models/RecurringJournalTemplate.php` with relationships and casts
-- [ ] T006 [P] Add `stack/app/Models/JournalEntrySource.php` and `stack/app/Models/JournalAudit.php` to represent traceability and audit records
-- [ ] T007 Update ledger-related permissions and role assignments in `stack/database/seeders/PermissionSeeder.php`
-- [ ] T008 [P] Extend `stack/modules/Accounting/Providers/AccountingServiceProvider.php` to register ledger actions, CLI, and queue bindings scaffolds
+- [X] T003 Create migrations for batches, sources, recurring templates, and audit tables in `stack/modules/Accounting/Database/Migrations/2025_10_20_000000_create_journal_foundation_tables.php`
+- [X] T004 [P] Align `stack/app/Models/JournalEntry.php` with new columns, relationships, and `acct` schema references
+- [X] T005 [P] Add `stack/app/Models/JournalBatch.php` and `stack/app/Models/RecurringJournalTemplate.php` with relationships and casts
+- [X] T006 [P] Add `stack/app/Models/JournalEntrySource.php` and `stack/app/Models/JournalAudit.php` to represent traceability and audit records
+- [X] T007 Update ledger-related permissions and role assignments in `stack/database/seeders/PermissionSeeder.php`
+- [X] T008 [P] Extend `stack/modules/Accounting/Providers/AccountingServiceProvider.php` to register ledger actions, CLI, and queue bindings scaffolds
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -46,13 +46,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Add Pest feature tests for manual entry create/approve/post/reverse in `stack/tests/Feature/Accounting/JournalEntries/ManualEntryTest.php`
-- [ ] T010 [P] [US1] Add Playwright scenario validating manual entry UI flow in `stack/tests/Browser/journal.manual-entry.spec.ts`
+- [X] T009 [P] [US1] Add Pest feature tests for manual entry create/approve/post/reverse in `stack/tests/Feature/Accounting/JournalEntries/ManualEntryTest.php`
+- [X] T010 [P] [US1] Add Playwright scenario validating manual entry UI flow in `stack/tests/Browser/journal.manual-entry.spec.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Implement `CreateManualJournalEntryAction.php` and `SubmitJournalEntryAction.php` in `stack/modules/Accounting/Domain/Ledgers/Actions/`
-- [ ] T012 [US1] Implement `ApproveJournalEntryAction.php`, `PostJournalEntryAction.php`, and `ReverseJournalEntryAction.php` in `stack/modules/Accounting/Domain/Ledgers/Actions/`
+- [X] T011 [P] [US1] Implement `CreateManualJournalEntryAction.php` and `SubmitJournalEntryAction.php` in `stack/modules/Accounting/Domain/Ledgers/Actions/`
+- [X] T012 [US1] Implement `ApproveJournalEntryAction.php`, `PostJournalEntryAction.php`, and `ReverseJournalEntryAction.php` in `stack/modules/Accounting/Domain/Ledgers/Actions/`
 - [ ] T013 [US1] Register manual journal command bus routes in `stack/config/command-bus.php` and module registrar in `stack/modules/Accounting/Providers/AccountingServiceProvider.php`
 - [ ] T014 [US1] Extend `stack/modules/Accounting/Services/LedgerService.php` to support manual journal persistence, validations, and reversal links
 - [ ] T015 [P] [US1] Add API controller and routes for manual journals in `stack/modules/Accounting/Http/Controllers/Api/JournalEntryController.php` and `stack/modules/Accounting/routes/api.php`

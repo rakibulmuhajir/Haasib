@@ -104,5 +104,31 @@ Ownership
 - Automated collection workflows with configurable escalation rules
 - Integration with accounting systems for automatic payment application
 
+## Journal Entries & Ledger Processing Feature (007-journal-entries-manual)
+**Added**: 2025-10-15
+**Key Decisions**:
+- **Queue Architecture**: Dedicated `journal` and `ledger` queues with separate worker configurations for manual entry processing vs automatic ledger posting
+- **Worker Configuration**: 
+  - `journal` worker handles manual journal entry processing, approvals, and posting with 3 retry attempts and 90s timeout
+  - `ledger` worker processes automatic ledger posting from source documents with 5 retry attempts and 120s timeout
+  - Supervisor configurations included for high-availability deployment with 2 journal workers and 3 ledger workers
+- **Priority Separation**: Journal queues (`journal`, `journal_approval`, `journal_posting`) prioritize user-initiated actions, while ledger queues (`ledger`, `ledger_auto_post`, `ledger_reconciliation`) handle system-generated postings
+- **Balance Validation**: All journal processing must enforce double-entry balance validation before posting, with rollback on failure
+- **Audit Trail Integration**: Queue jobs automatically populate `acct.journal_audit_log` events for state changes, approvals, postings, and reversals
+- **Performance Targets**: p95 journal entry create/post latency <1.5s for ≤20 lines, support ≥10k journal lines/day per tenant
+- **Error Handling**: Configurable backoff strategies with journal operations using [5, 15, 30]s intervals and ledger operations using [10, 30, 60]s intervals
+
+**Queue Worker Requirements**:
+- **Journal Worker**: Lower memory footprint (256MB), faster processing (2s sleep), suitable for user-interactive operations requiring immediate feedback
+- **Ledger Worker**: Higher memory footprint (512MB), faster processing (1s sleep), optimized for high-throughput automatic posting from invoices/payments
+- **Isolation**: Separate queues prevent manual journal operations from being blocked by bulk ledger processing and vice versa
+- **Monitoring**: Dedicated log files for each worker type (`supervisor-accounting-journal.log`, `supervisor-accounting-ledger.log`) for debugging and performance analysis
+
+**Operational Notes**:
+- Journal workers should run continuously during business hours for responsive user experience
+- Ledger workers can handle burst loads from automated invoice/payment processing
+- Queue workers support graceful shutdown and can be restarted without data loss
+- Failed jobs are automatically retried with exponential backoff before being moved to failed_jobs table
+
 See also
 - PR review checklist: `.github/pull_request_template.md`

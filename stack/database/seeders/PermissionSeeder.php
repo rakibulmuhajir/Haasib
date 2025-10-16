@@ -86,11 +86,47 @@ class PermissionSeeder extends Seeder
             'accounting.chart_of_accounts.update' => 'Update chart accounts',
             'accounting.chart_of_accounts.delete' => 'Delete chart accounts',
 
+            // Journal entry permissions
             'accounting.journal_entries.view' => 'View journal entries',
             'accounting.journal_entries.create' => 'Create journal entries',
             'accounting.journal_entries.update' => 'Update journal entries',
             'accounting.journal_entries.delete' => 'Delete journal entries',
             'accounting.journal_entries.post' => 'Post journal entries',
+            'accounting.journal_entries.approve' => 'Approve journal entries',
+            'accounting.journal_entries.submit' => 'Submit journal entries for approval',
+            'accounting.journal_entries.reverse' => 'Create reversing journal entries',
+            'accounting.journal_entries.void' => 'Void journal entries',
+            'accounting.journal_entries.import' => 'Import journal entries',
+            'accounting.journal_entries.export' => 'Export journal entries',
+
+            // Journal batch permissions
+            'accounting.journal_batches.view' => 'View journal batches',
+            'accounting.journal_batches.create' => 'Create journal batches',
+            'accounting.journal_batches.update' => 'Update journal batches',
+            'accounting.journal_batches.delete' => 'Delete journal batches',
+            'accounting.journal_batches.approve' => 'Approve journal batches',
+            'accounting.journal_batches.post' => 'Post journal batches',
+            'accounting.journal_batches.schedule' => 'Schedule journal batches',
+
+            // Recurring journal template permissions
+            'accounting.journal_templates.view' => 'View recurring journal templates',
+            'accounting.journal_templates.create' => 'Create recurring journal templates',
+            'accounting.journal_templates.update' => 'Update recurring journal templates',
+            'accounting.journal_templates.delete' => 'Delete recurring journal templates',
+            'accounting.journal_templates.activate' => 'Activate recurring journal templates',
+            'accounting.journal_templates.deactivate' => 'Deactivate recurring journal templates',
+            'accounting.journal_templates.preview' => 'Preview recurring journal template generation',
+
+            // Trial balance and reporting permissions
+            'accounting.trial_balance.view' => 'View trial balance',
+            'accounting.trial_balance.generate' => 'Generate trial balance',
+            'accounting.trial_balance.export' => 'Export trial balance',
+            'accounting.ledger.view' => 'View general ledger',
+            'accounting.ledger.search' => 'Search ledger entries',
+
+            // Journal audit permissions
+            'accounting.journal_audit.view' => 'View journal entry audit trail',
+            'accounting.journal_audit.export' => 'Export journal audit logs',
 
             // Reporting permissions
             'reports.view' => 'View reports',
@@ -176,7 +212,24 @@ class PermissionSeeder extends Seeder
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update', 'accounting.chart_of_accounts.delete',
+                // Full journal entry access
                 'accounting.journal_entries.view', 'accounting.journal_entries.create', 'accounting.journal_entries.update', 'accounting.journal_entries.delete', 'accounting.journal_entries.post',
+                'accounting.journal_entries.approve', 'accounting.journal_entries.submit', 'accounting.journal_entries.reverse', 'accounting.journal_entries.void', 'accounting.journal_entries.import', 'accounting.journal_entries.export',
+
+                // Full journal batch access
+                'accounting.journal_batches.view', 'accounting.journal_batches.create', 'accounting.journal_batches.update', 'accounting.journal_batches.delete',
+                'accounting.journal_batches.approve', 'accounting.journal_batches.post', 'accounting.journal_batches.schedule',
+
+                // Full recurring template access
+                'accounting.journal_templates.view', 'accounting.journal_templates.create', 'accounting.journal_templates.update', 'accounting.journal_templates.delete',
+                'accounting.journal_templates.activate', 'accounting.journal_templates.deactivate', 'accounting.journal_templates.preview',
+
+                // Trial balance and ledger access
+                'accounting.trial_balance.view', 'accounting.trial_balance.generate', 'accounting.trial_balance.export',
+                'accounting.ledger.view', 'accounting.ledger.search',
+
+                // Full audit access
+                'accounting.journal_audit.view', 'accounting.journal_audit.export',
 
                 // Reporting
                 'reports.view', 'reports.financial', 'reports.sales', 'reports.audit',
@@ -207,7 +260,24 @@ class PermissionSeeder extends Seeder
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update',
+                // Full journal entry access for company
                 'accounting.journal_entries.view', 'accounting.journal_entries.create', 'accounting.journal_entries.update', 'accounting.journal_entries.post',
+                'accounting.journal_entries.approve', 'accounting.journal_entries.submit', 'accounting.journal_entries.reverse', 'accounting.journal_entries.void', 'accounting.journal_entries.export',
+
+                // Journal batch access
+                'accounting.journal_batches.view', 'accounting.journal_batches.create', 'accounting.journal_batches.update', 'accounting.journal_batches.delete',
+                'accounting.journal_batches.approve', 'accounting.journal_batches.post', 'accounting.journal_batches.schedule',
+
+                // Recurring template access
+                'accounting.journal_templates.view', 'accounting.journal_templates.create', 'accounting.journal_templates.update', 'accounting.journal_templates.delete',
+                'accounting.journal_templates.activate', 'accounting.journal_templates.deactivate', 'accounting.journal_templates.preview',
+
+                // Trial balance and ledger access
+                'accounting.trial_balance.view', 'accounting.trial_balance.generate', 'accounting.trial_balance.export',
+                'accounting.ledger.view', 'accounting.ledger.search',
+
+                // Audit access
+                'accounting.journal_audit.view',
 
                 // Company reporting
                 'reports.view', 'reports.financial', 'reports.sales',
@@ -238,7 +308,24 @@ class PermissionSeeder extends Seeder
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.approve',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.update',
+                // Full journal entry access
                 'accounting.journal_entries.view', 'accounting.journal_entries.create', 'accounting.journal_entries.update', 'accounting.journal_entries.post',
+                'accounting.journal_entries.approve', 'accounting.journal_entries.submit', 'accounting.journal_entries.reverse', 'accounting.journal_entries.void', 'accounting.journal_entries.export',
+
+                // Journal batch access
+                'accounting.journal_batches.view', 'accounting.journal_batches.create', 'accounting.journal_batches.update',
+                'accounting.journal_batches.approve', 'accounting.journal_batches.post', 'accounting.journal_batches.schedule',
+
+                // Recurring template access
+                'accounting.journal_templates.view', 'accounting.journal_templates.create', 'accounting.journal_templates.update',
+                'accounting.journal_templates.activate', 'accounting.journal_templates.deactivate', 'accounting.journal_templates.preview',
+
+                // Trial balance and ledger access
+                'accounting.trial_balance.view', 'accounting.trial_balance.generate', 'accounting.trial_balance.export',
+                'accounting.ledger.view', 'accounting.ledger.search',
+
+                // Audit access
+                'accounting.journal_audit.view',
 
                 // Reporting
                 'reports.view', 'reports.financial', 'reports.sales',
@@ -262,6 +349,14 @@ class PermissionSeeder extends Seeder
                 'accounting.payments.view',
                 'accounting.chart_of_accounts.view',
                 'accounting.journal_entries.view',
+
+                // Basic journal batch and template view
+                'accounting.journal_batches.view',
+                'accounting.journal_templates.view',
+
+                // Basic trial balance view
+                'accounting.trial_balance.view',
+                'accounting.ledger.view',
 
                 // Basic reports
                 'reports.view',

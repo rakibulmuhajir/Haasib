@@ -279,6 +279,30 @@ Route::middleware('auth')->group(function () {
                 ->middleware('permission:ledger.view')->name('index');
             Route::get('/create', [\App\Http\Controllers\Ledger\JournalController::class, 'create'])
                 ->middleware('permission:ledger.entries.create')->name('create');
+
+            // Journal Batches Routes
+            Route::prefix('batches')->name('batches.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'index'])
+                    ->middleware('permission:ledger.view')->name('index');
+
+                Route::get('/create', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'create'])
+                    ->middleware('permission:ledger.entries.create')->name('create');
+
+                Route::get('/{batch}', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'show'])
+                    ->middleware('permission:ledger.view')->name('show');
+
+                Route::get('/{batch}/edit', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'edit'])
+                    ->middleware('permission:ledger.entries.update')->name('edit');
+
+                Route::post('/{batch}/approve', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'approve'])
+                    ->middleware('permission:ledger.entries.approve')->name('approve');
+
+                Route::post('/{batch}/post', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'post'])
+                    ->middleware('permission:ledger.entries.post')->name('post');
+
+                Route::delete('/{batch}', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'destroy'])
+                    ->middleware('permission:ledger.entries.delete')->name('destroy');
+            });
         });
 
         // Dynamic parameter routes - must come after specific routes

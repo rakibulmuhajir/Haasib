@@ -60,6 +60,14 @@ return [
             'report' => false,
         ],
 
+        'bank-statements' => [
+            'driver' => 'local',
+            'root' => storage_path('app/bank-statements'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

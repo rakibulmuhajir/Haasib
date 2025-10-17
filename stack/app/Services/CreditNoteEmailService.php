@@ -486,7 +486,7 @@ This is a reminder that you have an available credit note that can be applied to
 
 Credit Note Details:
 - Number: {$creditNote->credit_note_number}
-- Available Amount: {$this->formatCurrency($creditNote->remaining_balance, $creditNote->currency)}
+- Available Amount: {$this->formatCurrency($creditNote->remainingBalance(), $creditNote->currency)}
 - Original Invoice: {$creditNote->invoice->invoice_number}
 - Reason: {$creditNote->reason}
 

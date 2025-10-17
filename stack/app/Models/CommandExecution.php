@@ -2,30 +2,27 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CommandExecution extends Model
 {
-    protected $fillable = [
-        'command_id',
-        'user_id',
-        'company_id',
-        'idempotency_key',
-        'status',
-        'started_at',
-        'completed_at',
-        'parameters',
-        'result',
-        'error_message',
-        'audit_reference',
-    ];
+    use BelongsToCompany;
+
+    /**
+     * The attributes that are not mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $casts = [
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
         'parameters' => 'array',
         'result' => 'array',
+        'company_id' => 'string',
     ];
 
     public function command(): BelongsTo

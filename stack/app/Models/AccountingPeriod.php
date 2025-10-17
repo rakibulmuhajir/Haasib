@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AccountingPeriod extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToCompany, HasFactory, HasUuids;
 
     public $incrementing = false;
 
@@ -25,22 +27,11 @@ class AccountingPeriod extends Model
     protected $table = 'acct.accounting_periods';
 
     /**
-     * The attributes that are mass assignable.
+     * The attributes that are not mass assignable.
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'fiscal_year_id',
-        'name',
-        'start_date',
-        'end_date',
-        'period_type',
-        'period_number',
-        'status',
-        'closed_by',
-        'closed_at',
-        'closing_notes',
-    ];
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     /**
      * Get the attributes that should be cast.
@@ -53,9 +44,12 @@ class AccountingPeriod extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'closed_at' => 'datetime',
+            'reopened_at' => 'datetime',
             'period_number' => 'integer',
             'fiscal_year_id' => 'string',
             'closed_by' => 'string',
+            'reopened_by' => 'string',
+            'company_id' => 'string',
         ];
     }
 
@@ -84,6 +78,14 @@ class AccountingPeriod extends Model
     }
 
     /**
+     * Get the period close record for this period.
+     */
+    public function periodClose(): HasOne
+    {
+        return $this->hasOne(\Modules\Ledger\Domain\PeriodClose\Models\PeriodClose::class, 'accounting_period_id');
+    }
+
+    /**
      * Scope a query to only include open periods.
      */
     public function scopeOpen($query)
@@ -100,6 +102,22 @@ class AccountingPeriod extends Model
     }
 
     /**
+     * Scope a query to only include closing periods.
+     */
+    public function scopeClosing($query)
+    {
+        return $query->where('status', 'closing');
+    }
+
+    /**
+     * Scope a query to only include reopened periods.
+     */
+    public function scopeReopened($query)
+    {
+        return $query->where('status', 'reopened');
+    }
+
+    /**
      * Check if the period is currently active.
      */
     public function isCurrent(): bool
@@ -110,13 +128,68 @@ class AccountingPeriod extends Model
     }
 
     /**
+     * Check if the period can be closed.
+     */
+    public function canBeClosed(): bool
+    {
+        return in_array($this->status, ['open', 'reopened']);
+    }
+
+    /**
+     * Check if the period is closed.
+     */
+    public function isClosed(): bool
+    {
+        return $this->status === 'closed';
+    }
+
+    /**
+     * Check if the period is closing.
+     */
+    public function isClosing(): bool
+    {
+        return $this->status === 'closing';
+    }
+
+    /**
+     * Check if the period has been reopened.
+     */
+    public function isReopened(): bool
+    {
+        return $this->status === 'reopened';
+    }
+
+    /**
      * Close the period.
      */
-    public function close(User $user): void
+    public function close(User $user, ?string $summary = null): void
     {
         $this->status = 'closed';
         $this->closed_at = now();
         $this->closed_by = $user->id;
+        if ($summary) {
+            $this->closing_notes = $summary;
+        }
+        $this->save();
+    }
+
+    /**
+     * Reopen the period.
+     */
+    public function reopen(User $user): void
+    {
+        $this->status = 'reopened';
+        $this->reopened_at = now();
+        $this->reopened_by = $user->id;
+        $this->save();
+    }
+
+    /**
+     * Start closing the period.
+     */
+    public function startClosing(): void
+    {
+        $this->status = 'closing';
         $this->save();
     }
 

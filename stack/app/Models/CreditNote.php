@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class CreditNote extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use BelongsToCompany, HasFactory, HasUuids, SoftDeletes;
 
     public $incrementing = false;
 
@@ -72,17 +73,9 @@ class CreditNote extends Model
     }
 
     /**
-     * The attributes that should be appended to the model.
-     *
-     * @var list<string>
+     * Cached remaining balance to avoid repeated sum queries per request.
      */
-    protected $appends = [
-        'can_be_posted',
-        'can_be_cancelled',
-        'is_posted',
-        'is_cancelled',
-        'remaining_balance',
-    ];
+    protected ?float $remainingBalanceCache = null;
 
     /**
      * Get the company that owns the credit note.
@@ -165,51 +158,97 @@ class CreditNote extends Model
     }
 
     /**
-     * Check if the credit note can be posted.
+     * Determine if the credit note can be posted.
      */
-    public function getCanBePostedAttribute(): bool
+    public function canBePosted(): bool
     {
         return $this->status === 'draft' && is_null($this->cancelled_at);
     }
 
     /**
-     * Check if the credit note can be cancelled.
+     * @deprecated Use canBePosted().
      */
-    public function getCanBeCancelledAttribute(): bool
+    public function getCanBePostedAttribute(): bool
     {
-        return in_array($this->status, ['draft', 'posted']) && is_null($this->cancelled_at);
+        return $this->canBePosted();
     }
 
     /**
-     * Check if the credit note is posted.
+     * Determine if the credit note can be cancelled.
      */
-    public function getIsPostedAttribute(): bool
+    public function canBeCancelled(): bool
+    {
+        return in_array($this->status, ['draft', 'posted'], true) && is_null($this->cancelled_at);
+    }
+
+    /**
+     * @deprecated Use canBeCancelled().
+     */
+    public function getCanBeCancelledAttribute(): bool
+    {
+        return $this->canBeCancelled();
+    }
+
+    /**
+     * Determine if the credit note is posted.
+     */
+    public function isPosted(): bool
     {
         return ! is_null($this->posted_at) && $this->status === 'posted';
     }
 
     /**
-     * Check if the credit note is cancelled.
+     * @deprecated Use isPosted().
      */
-    public function getIsCancelledAttribute(): bool
+    public function getIsPostedAttribute(): bool
+    {
+        return $this->isPosted();
+    }
+
+    /**
+     * Determine if the credit note is cancelled.
+     */
+    public function isCancelled(): bool
     {
         return ! is_null($this->cancelled_at) && $this->status === 'cancelled';
     }
 
     /**
+     * @deprecated Use isCancelled().
+     */
+    public function getIsCancelledAttribute(): bool
+    {
+        return $this->isCancelled();
+    }
+
+    /**
      * Calculate the remaining balance that can be applied to the invoice.
      */
-    public function getRemainingBalanceAttribute(): float
+    public function remainingBalance(): float
     {
-        if ($this->is_cancelled) {
-            return 0;
+        if ($this->isCancelled()) {
+            return 0.0;
+        }
+
+        if ($this->remainingBalanceCache !== null) {
+            return $this->remainingBalanceCache;
         }
 
         $appliedAmount = DB::table('acct.credit_note_applications')
             ->where('credit_note_id', $this->id)
             ->sum('amount_applied');
 
-        return max(0, $this->total_amount - $appliedAmount);
+        $this->remainingBalanceCache = max(0, (float) $this->total_amount - (float) $appliedAmount);
+
+        return $this->remainingBalanceCache;
+    }
+
+    /**
+     * @deprecated Use remainingBalance().
+     */
+    public function getRemainingBalanceAttribute(): float
+    {
+        return $this->remainingBalance();
     }
 
     /**
@@ -217,7 +256,7 @@ class CreditNote extends Model
      */
     public function post(): bool
     {
-        if (! $this->can_be_posted) {
+        if (! $this->canBePosted()) {
             return false;
         }
 
@@ -232,7 +271,7 @@ class CreditNote extends Model
      */
     public function cancel(string $reason): bool
     {
-        if (! $this->can_be_cancelled) {
+        if (! $this->canBeCancelled()) {
             return false;
         }
 
@@ -246,25 +285,31 @@ class CreditNote extends Model
     /**
      * Generate a unique credit note number.
      */
-    public static function generateCreditNoteNumber(int $companyId): string
+    public static function generateCreditNoteNumber(string $companyId): string
     {
         $prefix = 'CN-';
         $year = now()->format('Y');
 
-        // Get the next sequence number for this company and year
-        $lastNumber = static::where('company_id', $companyId)
-            ->whereYear('created_at', $year)
-            ->orderBy('credit_note_number', 'desc')
-            ->value('credit_note_number');
+        $resolver = function () use ($companyId, $prefix, $year) {
+            $lastNumber = static::query()
+                ->where('company_id', $companyId)
+                ->whereYear('created_at', $year)
+                ->lockForUpdate()
+                ->orderByDesc('credit_note_number')
+                ->value('credit_note_number');
 
-        if ($lastNumber) {
-            // Extract sequence number from existing format (CN-YYYY-XXXX)
-            $sequence = (int) substr($lastNumber, -4) + 1;
-        } else {
-            $sequence = 1;
+            $sequence = $lastNumber
+                ? ((int) substr($lastNumber, -4)) + 1
+                : 1;
+
+            return $prefix.$year.'-'.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+        };
+
+        if (DB::transactionLevel() > 0) {
+            return $resolver();
         }
 
-        return $prefix.$year.'-'.str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        return DB::transaction($resolver, 5);
     }
 
     /**
@@ -283,7 +328,7 @@ class CreditNote extends Model
             'total_amount' => (float) $this->total_amount,
             'currency' => $this->currency,
             'status' => $this->status,
-            'remaining_balance' => $this->remaining_balance,
+            'remaining_balance' => $this->remainingBalance(),
             'created_at' => $this->created_at,
             'posted_at' => $this->posted_at,
         ];
@@ -296,11 +341,11 @@ class CreditNote extends Model
     {
         $errors = [];
 
-        if ($this->status !== 'draft') {
+        if (! $this->canBePosted()) {
             $errors['status'] = 'Only draft credit notes can be posted';
         }
 
-        if ($this->is_cancelled) {
+        if ($this->isCancelled()) {
             $errors['status'] = 'Cancelled credit notes cannot be posted';
         }
 
@@ -327,11 +372,11 @@ class CreditNote extends Model
      */
     public function applyToInvoice(?User $user = null, ?string $notes = null): bool
     {
-        if (! $this->is_posted) {
+        if (! $this->isPosted()) {
             return false;
         }
 
-        if ($this->remaining_balance <= 0) {
+        if ($this->remainingBalance() <= 0) {
             return false;
         }
 
@@ -343,7 +388,7 @@ class CreditNote extends Model
 
         try {
             // Create credit note application record
-            $applicationAmount = min($this->remaining_balance, $this->invoice->balance_due);
+            $applicationAmount = min($this->remainingBalance(), $this->invoice->balance_due);
             $balanceBefore = $this->invoice->balance_due;
 
             $application = DB::table('acct.credit_note_applications')->insert([

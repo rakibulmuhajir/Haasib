@@ -1,86 +1,29 @@
-# Research Findings: Reporting Dashboard - Financial & KPI
+# Research – Reporting Dashboard (Financial & KPI)
 
-## Performance & Caching Strategy
+- Decision: Standardize dashboards on PrimeVue’s `Chart` component (Chart.js) already used in `stack/resources/js/Pages/Dashboard/Index.vue` and `stack/resources/js/Pages/Accounting/Customers/Tabs/AgingTab.vue`.
+  Rationale: Reusing the existing PrimeVue/Chart.js stack keeps theming consistent and avoids adding new chart dependencies while supporting the required KPIs and trend visualizations.
+  Alternatives considered: Introducing ECharts or D3 for bespoke visuals (rejected due to new dependency cost and lack of PrimeVue integration), rolling custom SVG charts (rejected for time-to-market and accessibility debt).
 
-**Decision**: Implement a multi-layer caching approach with Redis for real-time data
-- **Rationale**: Requirements specify <5 second data freshness and <10 second report generation
-- **Implementation**:
-  - Dashboard KPIs: Cache with 30-second TTL, background refresh
-  - Complex reports: Cache with 5-minute TTL, manual refresh option
-  - Raw data queries: No cache, use database connection pooling
-- **Alternatives considered**:
-  - Materialized views (rejected: complex refresh logic)
-  - Incremental calculations (rejected: requires complex change tracking)
+- Decision: Persist financial statement snapshots and generated reports in the planned `rpt` schema (per `docs/schemas/30_reporting.sql` and `docs/briefs/story-of-accounting.md`) with materialized views refreshed via command-bus jobs.
+  Rationale: Aligns with the Multi-Schema Domain Separation gate, keeps reporting storage isolated from `acct`/`ledger`, and provides auditable history while enabling <10s regeneration by pre-aggregating totals.
+  Alternatives considered: Querying ledger tables live on every request (rejected: slow for unlimited retention and burdens RLS), exporting to external warehouse (rejected: out of scope and violates constitution without documented exception).
 
-## Real-time Data Architecture
+- Decision: Use a dual-layer caching policy—`Cache::remember` entries (database/Redis store per `config/cache.php`) with 5s TTL for live dashboards and persisted `rpt.reports` snapshots refreshed on schedule/on-demand.
+  Rationale: Meets “real-time (<5s)” freshness by limiting cache staleness while avoiding repeated heavy queries; scheduled jobs can warm snapshots for exports and trial balance runs.
+  Alternatives considered: No caching (rejected: violates FR-013 and risks missing performance targets), long-lived caches (rejected: conflicts with live data requirement), client-side polling only (rejected: still requires backend throttling).
 
-**Decision**: Use WebSocket + Polling hybrid approach
-- **Rationale**: Balances real-time requirements with server resources
-- **Implementation**:
-  - Dashboard metrics: WebSocket push on data changes
-  - Report generation: Server-sent events for progress
-  - Fallback: 30-second polling for unsupported browsers
-- **Alternatives considered**:
-  - Pure WebSocket (rejected: overhead for simple dashboards)
-  - Server-sent events only (rejected: no bidirectional support)
+- Decision: Size concurrency targets to 100 concurrent dashboard viewers and ≥10 simultaneous heavy report generations, matching the load guidance in `docs/api/payment-audit-reporting.md` and monitoring playbooks.
+  Rationale: Reusing proven load envelopes ensures the design covers enterprise tenants and keeps us within existing observability thresholds.
+  Alternatives considered: Deferring concurrency sizing (rejected: leaves Scale/Scope unresolved), assuming lower loads (rejected: conflicts with compliance expectations documented in monitoring guides).
 
-## Large Dataset Handling
+- Decision: Apply Tailwind/PrimeVue layout patterns documented in `docs/frontend-architecture.md`—reuse existing summary cards, data tables, and KPI tiles while keeping business logic in composables/services.
+  Rationale: Maintains UI consistency, accelerates development through reusable components, and keeps Vue pages slim as recommended by the frontend architecture plan.
+  Alternatives considered: Building bespoke CSS per page (rejected: inconsistent UX), migrating to another utility framework (rejected: contradicts active tech stack).
 
-**Decision**: Implement pagination + lazy loading with database-side optimization
-- **Rationale**: Unlimited data retention requires efficient handling of large datasets
-- **Implementation**:
-  - Reports > 10,000 rows: Paginate with cursor-based navigation
-  - Exports: Stream to file using Laravel chunked queries
-  - Database: Proper indexing on date ranges and company_id
-- **Alternatives considered**:
-  - Client-side pagination (rejected: memory issues with large datasets)
-  - Pre-aggregated tables (rejected: complexity for this phase)
+- Decision: Register new dashboard/reporting command-bus actions using the practices in `docs/dosdonts/command-bus-best-practices.md` and existing `stack/config/command-bus.php`.
+  Rationale: Ensures commands are container-resolved, transactional, and testable while allowing CLI, HTTP, and scheduled jobs to share the same handlers.
+  Alternatives considered: Direct service invocation from controllers without bus registration (rejected: bypasses middleware/audit pipeline), chaining commands manually (rejected: risks nested transactions).
 
-## Currency Conversion Strategy
-
-**Decision**: Daily exchange rates with historical lookup
-- **Rationale**: Requirements specify historical rate support for multi-currency reports
-- **Implementation**:
-  - Store daily rates in exchange_rates table
-  - Use rate valid on transaction date for historical reports
-  - Cache current rates for 1 hour
-- **Alternatives considered**:
-  - Real-time API calls (rejected: latency and cost)
-  - Fixed rates (rejected: inaccurate historical reporting)
-
-## Chart & Visualization Library
-
-**Decision**: Use Chart.js with PrimeVue integration
-- **Rationale**: PrimeVue-compatible, lightweight, good performance
-- **Implementation**:
-  - Line charts for trends
-  - Bar charts for comparisons
-  - Pie charts for breakdowns
-  - Export charts as images in PDF reports
-- **Alternatives considered**:
-  - D3.js (rejected: overkill for standard financial charts)
-  - Highcharts (rejected: commercial license required)
-
-## Report Generation Engine
-
-**Decision**: Use DOMPDF + Laravel Excel
-- **Rationale**: Native PHP integration, good performance
-- **Implementation**:
-  - PDFs: DOMPDF with custom styling
-  - Excel: Laravel Excel with streaming
-  - Templates: Blade views for PDF, PHPExcel for Excel
-- **Alternatives considered**:
-  - Puppeteer (rejected: Node.js dependency overhead)
-  - TCPDF (rejected: outdated architecture)
-
-## Security & Tenancy
-
-**Decision**: Row-Level Security with view-level isolation
-- **Rationale**: Constitutional requirement for tenant isolation
-- **Implementation**:
-  - All queries include company_id filter
-  - RLS policies enforce tenant access
-  - Role-based permissions for report types
-- **Alternatives considered**:
-  - Application-level filtering (rejected: risk of data leaks)
-  - Separate databases per tenant (rejected: operational complexity)
+- Decision: Enforce report permissions with Spatie Laravel Permission per `docs/dosdonts/models-best-practices.md` and `docs/briefs/rbac_implementation_brief.md`, mapping Owner/Accountant/Viewer roles to granular abilities (e.g., `reporting.dashboard.view`, `reporting.reports.export`).
+  Rationale: Aligns with Security-First Bookkeeping by guaranteeing role-scoped access and leveraging existing caching/traits.
+  Alternatives considered: Hard-coded role checks (rejected: brittle and duplicates policy logic), new custom permission system (rejected: unnecessary and risks divergence from constitution).

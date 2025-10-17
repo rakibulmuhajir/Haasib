@@ -294,5 +294,74 @@ Route::prefix('v1')->group(function () {
             Route::post('/{id}/enable', [\App\Http\Controllers\ModuleController::class, 'enable'])->name('enable')->middleware('idempotent');
             Route::post('/{id}/disable', [\App\Http\Controllers\ModuleController::class, 'disable'])->name('disable')->middleware('idempotent');
         });
+
+        // Ledger routes
+        Route::prefix('ledger')->name('ledger.')->group(function () {
+            // Period close routes
+            Route::prefix('periods')->name('periods.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'index'])->name('index');
+                Route::get('/statistics', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'statistics'])->name('statistics');
+
+                // Period-specific routes
+                Route::prefix('/{periodId}')->whereUuid('periodId')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'show'])->name('show');
+                    Route::get('/actions', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'actions'])->name('actions');
+
+                    // Period close workflow routes
+                    Route::prefix('/close')->name('close.')->group(function () {
+                        Route::post('/start', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'start'])->name('start')->middleware('idempotent');
+                        Route::post('/validate', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'validate'])->name('validate')->middleware('idempotent');
+
+                        // Adjustment management
+                        Route::post('/adjustments', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'createAdjustment'])->name('adjustments.create')->middleware('idempotent');
+                        Route::get('/adjustments', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'getAdjustments'])->name('adjustments.index');
+                        Route::delete('/adjustments/{journalEntryId}', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'deleteAdjustment'])->name('adjustments.delete')->whereUuid('journalEntryId')->middleware('idempotent');
+
+                        // Lock and complete operations
+                        Route::post('/lock', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'lock'])->name('lock')->middleware('idempotent');
+                        Route::post('/complete', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'complete'])->name('complete')->middleware('idempotent');
+                        Route::get('/can-lock', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'canLock'])->name('can-lock');
+                        Route::get('/can-complete', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'canComplete'])->name('can-complete');
+
+                        // Report generation and management
+                        Route::prefix('/reports')->name('reports.')->group(function () {
+                            Route::post('/', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'generateReports'])->name('generate')->middleware('idempotent');
+                            Route::get('/', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'getReports'])->name('index');
+                            Route::get('/status', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'getReportStatus'])->name('status');
+                            Route::get('/options', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'getReportOptions'])->name('options');
+                            Route::get('/download/{reportType}', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'downloadReport'])->name('download')->where('reportType', '[a-zA-Z0-9_]+');
+                            Route::delete('/{reportId}', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'deleteReport'])->name('delete')->whereUuid('reportId')->middleware('idempotent');
+                        });
+
+                        // Reopen management
+                        Route::prefix('/reopen')->name('reopen.')->group(function () {
+                            Route::post('/', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'reopen'])->name('reopen')->middleware('idempotent');
+                            Route::get('/can-reopen', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'canReopen'])->name('can-reopen');
+                            Route::get('/history', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'getReopenHistory'])->name('history');
+                            Route::post('/extend-window', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'extendReopenWindow'])->name('extend-window')->middleware('idempotent');
+                            Route::get('/check-expired', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'checkReopenWindowExpired'])->name('check-expired');
+                        });
+
+                        // Task management
+                        Route::prefix('/tasks')->name('tasks.')->group(function () {
+                            Route::patch('/{taskId}', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'updateTask'])->name('update')->whereUuid('taskId')->middleware('idempotent');
+                            Route::post('/{taskId}/complete', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'completeTask'])->name('complete')->whereUuid('taskId')->middleware('idempotent');
+                        });
+                    });
+                });
+            });
+
+            // Period close template routes
+            Route::prefix('period-close/templates')->name('period-close.templates.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'index'])->name('index');
+                Route::get('/statistics', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'statistics'])->name('statistics');
+                Route::post('/', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'store'])->name('store')->middleware('idempotent');
+                Route::get('/{templateId}', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'show'])->name('show')->whereUuid('templateId');
+                Route::put('/{templateId}', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'update'])->name('update')->whereUuid('templateId')->middleware('idempotent');
+                Route::post('/{templateId}/archive', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'archive'])->name('archive')->whereUuid('templateId')->middleware('idempotent');
+                Route::post('/{templateId}/sync', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'sync'])->name('sync')->whereUuid('templateId')->middleware('idempotent');
+                Route::post('/{templateId}/duplicate', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'duplicate'])->name('duplicate')->whereUuid('templateId')->middleware('idempotent');
+            });
+        });
     });
 });

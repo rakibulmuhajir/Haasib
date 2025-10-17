@@ -1,181 +1,116 @@
-# Quickstart Guide: Reporting Dashboard
+# Quickstart – Financial Reporting & KPI Dashboard
 
 ## Prerequisites
-- Laravel 12 with PHP 8.2+
-- PostgreSQL 16 with RLS enabled
-- Redis for caching
-- Vue 3 + Inertia.js v2 + PrimeVue v4
+- Feature flag/module `reporting_dashboard` enabled for the company (`modules` table).
+- Roles mapped with new permissions: `reporting.dashboard.view`, `reporting.reports.generate`, `reporting.reports.export`, `reporting.reports.schedule`.
+- Command bus actions registered in `stack/config/command-bus.php`: `reporting.dashboard.refresh`, `reporting.report.generate`, `reporting.schedule.run`, `reporting.template.manage`.
+- Queue workers processing `reporting` and `exports` queues; cache store configured (database or Redis) to honor ≤5s TTL.
+- Materialized view refresh job scheduled (`php artisan reporting:refresh-views --company={uuid}`) or equivalent cron entry.
 
-## Module Installation
+## 1. Open the Reporting Dashboard
+- Navigate to **Reporting → Financial Dashboard**. The default layout loads KPI cards, charts, and tables using the current month range.
+- Use the date range picker (pre-sets: Today, MTD, QTD, YTD, Custom). Layout filters propagate to all widgets.
+- Toggle comparison (Prior Period / Prior Year) to populate trend deltas; cards update in place within SLA (<5s).
 
+### API
 ```bash
-# Create Reporting module
-php artisan module:make Reporting
-
-# Register module in config/modules.php
-'modules' => [
-    // ... existing modules
-    'Reporting',
-],
+curl -H "Authorization: Bearer $TOKEN" \
+     -H "X-Company-Id: $COMPANY_ID" \
+     "https://api.haasib.local/api/reporting/dashboard?layout_id=$LAYOUT&date_range[start]=2025-09-01&date_range[end]=2025-09-30"
 ```
 
-## Database Setup
+## 2. Refresh live metrics
+- Click **Refresh** to enqueue a cache refresh. Progress toaster indicates queue status; widgets reload when the job completes.
+- Use **Invalidate Cache** when ledgers were posted externally (e.g., CLI commands) to force view/materialized view regeneration.
 
+### CLI
 ```bash
-# Run migrations
-php artisan migrate
-
-# Create module-specific tables
-php artisan module:migrate Reporting
-
-# Seed exchange rates (sample data)
-php artisan db:seed --class=ExchangeRatesSeeder
+php artisan reporting:dashboard:refresh \
+  --company=$COMPANY_ID \
+  --layout=$LAYOUT \
+  --invalidate-cache
 ```
 
-## Configuration
+## 3. Generate financial statements
+- Go to **Reporting → Statements** and choose Income Statement, Balance Sheet, Cash Flow, or Trial Balance.
+- Select period (single or comparison), currency override, and whether to include unposted transactions.
+- Submit to queue; the UI polls until status `generated` then exposes view/download buttons. Heavy reports (YTD, multi-year) execute asynchronously but respect the 10s generation SLA for standard scopes.
 
-1. **Add to `config/command-bus.php`**:
-```php
-'registered_actions' => [
-    // ... existing
-    App\Modules\Reporting\Actions\GenerateReport::class,
-    App\Modules\Reporting\Actions\CreateDashboard::class,
-    App\Modules\Reporting\Actions\ExportReport::class,
-],
-```
-
-2. **Add permissions to database**:
-```sql
-INSERT INTO permissions (name, guard_name) VALUES
-('view_dashboard', 'web'),
-('generate_reports', 'web'),
-('export_reports', 'web'),
-('manage_templates', 'web'),
-('manage_schedules', 'web');
-
--- Assign to roles
-INSERT INTO role_has_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r, permissions p
-WHERE p.name IN ('view_dashboard', 'generate_reports')
-AND r.name IN ('Owner', 'Accountant');
-```
-
-## Quick Test Scenario
-
-### 1. Access Dashboard (GUI)
-```
-URL: /reporting/dashboard
-Method: GET
-Expected: Dashboard with KPIs, charts, and period comparison
-```
-
-### 2. Generate Report (API)
+### CLI
 ```bash
-curl -X POST http://localhost/api/v1/reports/types/income-statement \
-  -H "Authorization: Bearer {token}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "date_from": "2025-01-01",
-    "date_to": "2025-01-31",
-    "comparison_period": "previous_month",
-    "currency": "USD"
-  }'
+php artisan reporting:report \
+  --company=$COMPANY_ID \
+  --type=income_statement \
+  --start=2025-01-01 \
+  --end=2025-01-31 \
+  --comparison=prior_period \
+  --currency=USD
 ```
 
-### 3. CLI Command Test
+## 4. Drill into results
+- From dashboard cards or statement rows, click **View details**. A modal opens with lazy-loaded paginated transactions sourced from `rpt.v_transaction_drilldown`.
+- Filters inherited from the card (account, customer, project) are editable; exporting the drill-down triggers a lightweight CSV download (download token valid 10 minutes).
+
+## 5. Export & share
+- Use the **Export** dropdown to request PDF, Excel, or CSV. Exports appear in the **Downloads** panel with expiration timestamps (default 30 days).
+- Share via email by checking recipients (Owner/Accountant roles). Email deliveries log to `rpt.report_deliveries` with audit entries.
+
+### CLI
 ```bash
-# Test dashboard command
-php artisan report dashboard --company={company-id}
-
-# Test report generation
-php artisan report generate income-statement \
-    --from="2025-01-01" \
-    --to="2025-01-31" \
-    --export=pdf
+php artisan reporting:report \
+  --company=$COMPANY_ID \
+  --type=trial_balance \
+  --start=2025-09-01 \
+  --end=2025-09-30 \
+  --export=pdf \
+  --deliver=email:user@example.com,email:auditor@example.com
 ```
 
-## Verification Steps
+## 6. Customize templates & layouts
+- In **Reporting → Templates**, clone a system template or build a custom view: define columns, KPI cards, filters, and drill-down settings. Save to make it available across the company (if `is_public`).
+- For dashboards, select **Customize Layout** to rearrange cards, add KPI widgets, or embed saved reports. Save as private or share with specific roles.
 
-1. **Dashboard Loads**:
-   - [ ] KPIs display correctly
-   - [ ] Charts render with data
-   - [ ] Period comparison shows variance
-
-2. **Report Generation**:
-   - [ ] Income statement generates in <10 seconds
-   - [ ] Balance sheet balances (assets = liabilities + equity)
-   - [ ] Cash flow matches bank movements
-   - [ ] Trial balance debits = credits
-
-3. **Multi-tenancy**:
-   - [ ] Reports only show company data
-   - [ ] RLS policies prevent cross-tenant access
-   - [ ] User permissions enforced
-
-4. **Performance**:
-   - [ ] Dashboard loads in <2 seconds
-   - [ ] KPI cache refreshes in <5 seconds
-   - [ ] Large reports stream properly
-
-5. **Export Functionality**:
-   - [ ] PDF generates with proper formatting
-   - [ ] Excel file contains all data
-   - [ ] CSV exports correctly
-
-6. **CLI Parity**:
-   - [ ] All GUI features available in CLI
-   - [ ] Natural language commands work
-   - [ ] Output formats consistent
-
-## Sample Data for Testing
-
+### API
 ```bash
-# Seed sample transactions
-php artisan db:seed --class=ReportingSeeder
-
-# Creates:
-# - 3 months of transactions
-# - Sample invoices and payments
-# - Exchange rates for USD/EUR/GBP
-# - Dashboard KPI configurations
+curl -X POST https://api.haasib.local/api/reporting/templates \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "name": "Cash Flow - Weekly",
+           "report_type": "cash_flow",
+           "category": "financial",
+           "configuration": {"sections":[...]},
+           "filters": {"granularity":"weekly"},
+           "parameters": {"comparison":"prior_period"},
+           "is_public": true
+         }'
 ```
 
-## Manual QA Checklist
+## 7. Schedule recurring reports
+- Open **Reporting → Schedules** and create a schedule: choose template, frequency (Daily/Weekly/Monthly/Custom CRON), timezone, and recipients.
+- The scheduler dispatches `reporting.schedule.run` jobs; completed runs deliver exports and update the activity feed.
+- Pause/resume schedules to temporarily suppress deliveries; archiving preserves history but stops future runs.
 
-1. Login as different user roles
-2. Verify role-based access to reports
-3. Test currency conversion accuracy
-4. Verify date range filtering
-5. Test scheduled reports
-6. Check report expiration
-7. Validate audit trail entries
-
-## Common Issues & Solutions
-
-1. **Slow report generation**:
-   - Check database indexes
-   - Verify Redis caching is active
-   - Review query execution plans
-
-2. **Empty dashboard**:
-   - Verify company_id context
-   - Check if transactions exist
-   - Ensure user has permissions
-
-3. **Export failures**:
-   - Check file permissions
-   - Verify memory limits
-   - Check PDF library installation
-
-## Rollback Plan
-
+### CLI
 ```bash
-# Remove module
-php artisan module:delete Reporting
-
-# Rollback migrations
-php artisan module:rollback Reporting
-
-# Remove permissions
-DELETE FROM permissions WHERE name LIKE '%reporting%';
+php artisan reporting:schedule:create \
+  --company=$COMPANY_ID \
+  --template=42 \
+  --name="Month-End Pack" \
+  --frequency=monthly \
+  --next-run="2025-10-31T02:00:00-05:00" \
+  --recipients=email:cfo@example.com,email:controller@example.com
 ```
+
+## 8. Handle multi-currency
+- Switch **Display Currency** to render dashboard values using company base currency with captured exchange rates. Conversion audit details surface in the drill-down sidebar.
+- Rate refresh command (`php artisan accounting:exchange-rates:sync`) updates `public.exchange_rates`; the next dashboard refresh recalculates KPIs using the stored snapshot to maintain consistency.
+
+## Permission matrix
+- `reporting.dashboard.view` – Access dashboards and KPI cards.
+- `reporting.dashboard.refresh` – Trigger cache/materialized view refresh.
+- `reporting.reports.generate` – Queue statements/trial balance jobs.
+- `reporting.reports.export` – Download exports and deliver to recipients.
+- `reporting.templates.manage` – Create/update/archive templates and layouts.
+- `reporting.reports.schedule` – Create or manage report schedules.
+- `reporting.reports.admin` – Override expired downloads, manage system templates (restricted to Owner role).

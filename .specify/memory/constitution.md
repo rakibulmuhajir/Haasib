@@ -1,50 +1,41 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Haasib Architecture Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Multi-Schema Domain Separation
+We keep tenant data isolated by business capability. Every table lives in a deliberate schema (auth, acct, audit, ledger, etc.) with clear ownership and RLS policies. New domain work must start by picking or defining the correct schema before writing models.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Security-First Bookkeeping
+All money-affecting mutations require RLS, `company_id` scoping, and audit coverage. Migrations must include positive amount checks, FK constraints, and `current_setting('app.current_company_id')` clauses.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Test & Review Discipline
+Database migrations and command-bus handlers ship with regression coverage (unit or feature). PRs describe backward-compatibility impacts and note any RLS or audit updates required for QA.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Observability & Traceability
+Use the shared `audit_log()` helper (or the future `audit` schema entries) for financial and security events. Surface key metrics via the monitoring playbooks in `docs/monitoring/`.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+## Schema Ownership & Examples
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+| Schema | Purpose & Typical Tables | Notes |
+| --- | --- | --- |
+| `auth` | Identity, companies, RBAC (`auth.users`, `auth.companies`, `auth.company_user`, modules). | Review migrations around `2025_10_05_*` for patterns. All auth tables enforce RLS keyed to `app.current_user_id`/`app.current_company_id`. |
+| `acct` | Accounts receivable & customer-facing finance (`acct.customers`, `acct.invoices`, `acct.payments`, `acct.payment_allocations`, `acct.customer_contacts`, etc.). | See migrations dated `2025_10_13_*` and `2025_10_15_*`. Every table includes `company_id`, soft deletes where relevant, RLS policies, and audit triggers hooked into `audit_log()`. |
+| `ledger` | Core double-entry bookkeeping (`ledger.journal_entries`, `ledger.journal_lines`, supporting templates). | Check historical migrations in `2025_10_20_*`. Posting constraints enforce balanced debits/credits. |
+| `audit` | Centralized immutable logs for compliance (`audit.entries`, `audit.financial_transactions`, `audit.permission_changes`). | Schema created 2025-10-16. The `audit_log()` helper now writes to `audit.entries`. Old `auth.audit_entries` data migrated to new schema. See migrations `2025_10_16_100001*` for implementation details. |
+| `ops` | Operational support data (bank imports, tax rates, scheduled jobs). | Ops tables follow the same RLS template; reference `docs/monitoring/` for expectations. |
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+**Implementation tip:** For concrete column layouts and policy snippets, inspect the corresponding migration files under `stack/database/migrations/`. They serve as the canonical examples for new work.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Delivery Workflow
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Scope new features with an ADR or spec before writing migrations.
+- Keep migrations additive; coordinate destructive changes with rollback scripts.
+- Update the constitution and `docs/tasks.md` when introducing a new schema or cross-cutting rule.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- This constitution is the source of truth for architectural rules. Any divergence must be documented and ratified.
+- Amendments require a PR that highlights the change, updates affected documentation, and links related tasks/specs.
+- Reviews must confirm schema placement, RLS/audit coverage, and adherence to the principles above.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.2.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-16

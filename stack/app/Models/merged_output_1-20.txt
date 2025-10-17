@@ -1,0 +1,2846 @@
+
+=== File: Account.php ===
+Path: Account.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Account extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'account_group_id',
+        'code',
+        'name',
+        'description',
+        'normal_balance',
+        'account_type',
+        'active',
+        'allow_manual_entries',
+        'currency',
+        'opening_balance',
+        'opening_balance_date',
+        'current_balance',
+        'parent_id',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
+        'allow_manual_entries' => 'boolean',
+        'opening_balance' => 'decimal:2',
+        'opening_balance_date' => 'date',
+        'current_balance' => 'decimal:2',
+        'last_updated_at' => 'datetime',
+    ];
+
+    /**
+     * Get the company that owns the account.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the account group that contains the account.
+     */
+    public function accountGroup(): BelongsTo
+    {
+        return $this->belongsTo(AccountGroup::class);
+    }
+
+    /**
+     * Get the parent account.
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'parent_id');
+    }
+}
+
+---- File Content End ----
+
+
+=== File: AccountClass.php ===
+Path: AccountClass.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class AccountClass extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.account_classes';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'normal_balance',
+        'type',
+        'order',
+        'is_active',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'order' => 'integer',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /**
+     * Get the account groups for the class.
+     */
+    public function accountGroups(): HasMany
+    {
+        return $this->hasMany(AccountGroup::class);
+    }
+
+    /**
+     * Get the accounts for the class.
+     */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(ChartOfAccount::class);
+    }
+
+    /**
+     * Scope a query to only include active classes.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\AccountClassFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: AccountGroup.php ===
+Path: AccountGroup.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class AccountGroup extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.account_groups';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'account_class_id',
+        'name',
+        'code',
+        'order',
+        'is_active',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'order' => 'integer',
+            'is_active' => 'boolean',
+            'account_class_id' => 'string',
+        ];
+    }
+
+    /**
+     * Get the account class for the group.
+     */
+    public function accountClass(): BelongsTo
+    {
+        return $this->belongsTo(AccountClass::class);
+    }
+
+    /**
+     * Get the accounts for the group.
+     */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(ChartOfAccount::class);
+    }
+
+    /**
+     * Scope a query to only include active groups.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\AccountGroupFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: AccountingPeriod.php ===
+Path: AccountingPeriod.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+class AccountingPeriod extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.accounting_periods';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'fiscal_year_id',
+        'name',
+        'start_date',
+        'end_date',
+        'period_type',
+        'period_number',
+        'status',
+        'closed_by',
+        'closed_at',
+        'closing_notes',
+        'reopened_by',
+        'reopened_at',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'closed_at' => 'datetime',
+            'reopened_at' => 'datetime',
+            'period_number' => 'integer',
+            'fiscal_year_id' => 'string',
+            'closed_by' => 'string',
+            'reopened_by' => 'string',
+        ];
+    }
+
+    /**
+     * Get the fiscal year for the period.
+     */
+    public function fiscalYear(): BelongsTo
+    {
+        return $this->belongsTo(FiscalYear::class);
+    }
+
+    /**
+     * Get the user who closed the period.
+     */
+    public function closer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
+    }
+
+    /**
+     * Get the journal entries for the period.
+     */
+    public function journalEntries(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class);
+    }
+
+    /**
+     * Get the period close record for this period.
+     */
+    public function periodClose(): HasOne
+    {
+        return $this->hasOne(\Modules\Ledger\Domain\PeriodClose\Models\PeriodClose::class, 'accounting_period_id');
+    }
+
+    /**
+     * Scope a query to only include open periods.
+     */
+    public function scopeOpen($query)
+    {
+        return $query->where('status', 'open');
+    }
+
+    /**
+     * Scope a query to only include closed periods.
+     */
+    public function scopeClosed($query)
+    {
+        return $query->where('status', 'closed');
+    }
+
+    /**
+     * Scope a query to only include closing periods.
+     */
+    public function scopeClosing($query)
+    {
+        return $query->where('status', 'closing');
+    }
+
+    /**
+     * Scope a query to only include reopened periods.
+     */
+    public function scopeReopened($query)
+    {
+        return $query->where('status', 'reopened');
+    }
+
+    /**
+     * Check if the period is currently active.
+     */
+    public function isCurrent(): bool
+    {
+        $now = now();
+
+        return $this->status === 'open' && $this->start_date <= $now && $this->end_date >= $now;
+    }
+
+    /**
+     * Check if the period can be closed.
+     */
+    public function canBeClosed(): bool
+    {
+        return in_array($this->status, ['open', 'reopened']);
+    }
+
+    /**
+     * Check if the period is closed.
+     */
+    public function isClosed(): bool
+    {
+        return $this->status === 'closed';
+    }
+
+    /**
+     * Check if the period is closing.
+     */
+    public function isClosing(): bool
+    {
+        return $this->status === 'closing';
+    }
+
+    /**
+     * Check if the period has been reopened.
+     */
+    public function isReopened(): bool
+    {
+        return $this->status === 'reopened';
+    }
+
+    /**
+     * Close the period.
+     */
+    public function close(User $user, ?string $summary = null): void
+    {
+        $this->status = 'closed';
+        $this->closed_at = now();
+        $this->closed_by = $user->id;
+        if ($summary) {
+            $this->closing_notes = $summary;
+        }
+        $this->save();
+    }
+
+    /**
+     * Reopen the period.
+     */
+    public function reopen(User $user): void
+    {
+        $this->status = 'reopened';
+        $this->reopened_at = now();
+        $this->reopened_by = $user->id;
+        $this->save();
+    }
+
+    /**
+     * Start closing the period.
+     */
+    public function startClosing(): void
+    {
+        $this->status = 'closing';
+        $this->save();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\AccountingPeriodFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: AuditEntry.php ===
+Path: AuditEntry.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class AuditEntry extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'audit.entries';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'company_id',
+        'user_id',
+        'event',
+        'model_type',
+        'model_id',
+        'old_values',
+        'new_values',
+        'ip_address',
+        'user_agent',
+        'tags',
+        'metadata',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'old_values' => 'array',
+            'new_values' => 'array',
+            'tags' => 'array',
+            'metadata' => 'array',
+            'company_id' => 'string',
+            'user_id' => 'string',
+            'model_id' => 'string',
+        ];
+    }
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'ip_address',
+        'user_agent',
+    ];
+
+    /**
+     * Get the company that owns the audit entry.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the user that performed the action.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the audited model instance.
+     */
+    public function getModel()
+    {
+        if (! $this->model_type || ! $this->model_id) {
+            return null;
+        }
+
+        return $this->model_type::find($this->model_id);
+    }
+
+    /**
+     * Scope a query to only include entries for a specific event.
+     */
+    public function scopeForEvent($query, string $event)
+    {
+        return $query->where('event', $event);
+    }
+
+    /**
+     * Scope a query to only include entries for a specific model.
+     */
+    public function scopeForModel($query, string $modelType)
+    {
+        return $query->where('model_type', $modelType);
+    }
+
+    /**
+     * Scope a query to only include entries with a specific tag.
+     */
+    public function scopeWithTag($query, string $tag)
+    {
+        return $query->whereJsonContains('tags', $tag);
+    }
+
+    /**
+     * Scope a query to only include entries within a date range.
+     */
+    public function scopeBetweenDates($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('created_at', [$startDate, $endDate]);
+    }
+
+    /**
+     * Check if the audit entry is for a creation event.
+     */
+    public function isCreation(): bool
+    {
+        return $this->event === 'created';
+    }
+
+    /**
+     * Check if the audit entry is for an update event.
+     */
+    public function isUpdate(): bool
+    {
+        return $this->event === 'updated';
+    }
+
+    /**
+     * Check if the audit entry is for a deletion event.
+     */
+    public function isDeletion(): bool
+    {
+        return $this->event === 'deleted';
+    }
+
+    /**
+     * Check if the audit entry has specific changes.
+     */
+    public function hasAttributeChange(string $attribute): bool
+    {
+        return array_key_exists($attribute, $this->old_values ?? [])
+            || array_key_exists($attribute, $this->new_values ?? []);
+    }
+
+    /**
+     * Get the old value of a specific attribute.
+     */
+    public function getOldValue(string $attribute, mixed $default = null): mixed
+    {
+        return data_get($this->old_values, $attribute, $default);
+    }
+
+    /**
+     * Get the new value of a specific attribute.
+     */
+    public function getNewValue(string $attribute, mixed $default = null): mixed
+    {
+        return data_get($this->new_values, $attribute, $default);
+    }
+
+    /**
+     * Get the diff between old and new values.
+     */
+    public function getDiff(): array
+    {
+        $diff = [];
+
+        $allKeys = array_unique(array_merge(
+            array_keys($this->old_values ?? []),
+            array_keys($this->new_values ?? [])
+        ));
+
+        foreach ($allKeys as $key) {
+            $old = $this->getOldValue($key);
+            $new = $this->getNewValue($key);
+
+            if ($old !== $new) {
+                $diff[$key] = [
+                    'old' => $old,
+                    'new' => $new,
+                ];
+            }
+        }
+
+        return $diff;
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\AuditEntryFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: ChartOfAccount.php ===
+Path: ChartOfAccount.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+class ChartOfAccount extends Model
+{
+    use HasFactory;
+
+    /**
+     * The table associated with the model.
+     */
+    protected $table = 'accounting.chart_of_accounts';
+
+    /**
+     * The primary key associated with the table.
+     */
+    protected $primaryKey = 'account_code';
+
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     */
+    protected $keyType = 'string';
+
+    /**
+     * The attributes that are mass assignable.
+     */
+    protected $fillable = [
+        'account_code',
+        'account_name',
+        'account_type',
+        'account_category',
+        'is_active',
+        'description',
+        'parent_account_code',
+        'company_id',
+        'created_at',
+        'updated_at',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'is_active' => 'boolean',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * Get the company that owns the chart of account.
+     */
+    public function company()
+    {
+        return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    /**
+     * Get the parent account.
+     */
+    public function parentAccount()
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'parent_account_code', 'account_code');
+    }
+
+    /**
+     * Get the child accounts.
+     */
+    public function childAccounts()
+    {
+        return $this->hasMany(ChartOfAccount::class, 'parent_account_code', 'account_code');
+    }
+
+    /**
+     * Get the journal entries for this account.
+     */
+    public function journalEntries()
+    {
+        return $this->hasMany(JournalEntry::class, 'account_code', 'account_code');
+    }
+
+    /**
+     * Scope to get active accounts.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to get accounts by type.
+     */
+    public function scopeByType($query, string $accountType)
+    {
+        return $query->where('account_type', $accountType);
+    }
+
+    /**
+     * Scope to get accounts by category.
+     */
+    public function scopeByCategory($query, string $accountCategory)
+    {
+        return $query->where('account_category', $accountCategory);
+    }
+
+    /**
+     * Get the account type label.
+     */
+    public function getAccountTypeLabelAttribute(): string
+    {
+        $labels = [
+            'asset' => 'Asset',
+            'liability' => 'Liability',
+            'equity' => 'Equity',
+            'revenue' => 'Revenue',
+            'expense' => 'Expense',
+        ];
+
+        return $labels[$this->account_type] ?? $this->account_type;
+    }
+
+    /**
+     * Get the account category label.
+     */
+    public function getAccountCategoryLabelAttribute(): string
+    {
+        $labels = [
+            'current_assets' => 'Current Assets',
+            'fixed_assets' => 'Fixed Assets',
+            'current_liabilities' => 'Current Liabilities',
+            'long_term_liabilities' => 'Long-term Liabilities',
+            'owner_equity' => 'Owner Equity',
+            'operating_revenue' => 'Operating Revenue',
+            'non_operating_revenue' => 'Non-operating Revenue',
+            'operating_expenses' => 'Operating Expenses',
+            'non_operating_expenses' => 'Non-operating Expenses',
+        ];
+
+        return $labels[$this->account_category] ?? $this->account_category;
+    }
+}
+---- File Content End ----
+
+
+=== File: Command.php ===
+Path: Command.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use App\Models\Scopes\CommandPerformanceScope;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Command extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'name',
+        'description',
+        'category',
+        'parameters',
+        'required_permissions',
+        'execution_handler',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'parameters' => 'array',
+        'required_permissions' => 'array',
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new CommandPerformanceScope);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function commandTemplates(): HasMany
+    {
+        return $this->hasMany(CommandTemplate::class);
+    }
+
+    public function commandExecutions(): HasMany
+    {
+        return $this->hasMany(CommandExecution::class);
+    }
+
+    public function commandHistory(): HasMany
+    {
+        return $this->hasMany(CommandHistory::class);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    public function userHasPermission(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyPermission($this->required_permissions);
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CommandExecution.php ===
+Path: CommandExecution.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CommandExecution extends Model
+{
+    protected $fillable = [
+        'command_id',
+        'user_id',
+        'company_id',
+        'idempotency_key',
+        'status',
+        'started_at',
+        'completed_at',
+        'parameters',
+        'result',
+        'error_message',
+        'audit_reference',
+    ];
+
+    protected $casts = [
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'parameters' => 'array',
+        'result' => 'array',
+    ];
+
+    public function command(): BelongsTo
+    {
+        return $this->belongsTo(Command::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeRunning($query)
+    {
+        return $query->where('status', 'running');
+    }
+
+    public function scopeCompleted($query)
+    {
+        return $query->where('status', 'completed');
+    }
+
+    public function scopeFailed($query)
+    {
+        return $query->where('status', 'failed');
+    }
+
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    public function isSuccessful(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    public function isFailed(): bool
+    {
+        return $this->status === 'failed';
+    }
+
+    public function getDuration(): ?float
+    {
+        if (! $this->started_at || ! $this->completed_at) {
+            return null;
+        }
+
+        return $this->started_at->diffInSeconds($this->completed_at);
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CommandHistory.php ===
+Path: CommandHistory.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CommandHistory extends Model
+{
+    protected $fillable = [
+        'user_id',
+        'command_id',
+        'company_id',
+        'executed_at',
+        'input_text',
+        'parameters_used',
+        'execution_status',
+        'result_summary',
+        'audit_reference',
+    ];
+
+    protected $casts = [
+        'executed_at' => 'datetime',
+        'parameters_used' => 'array',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function command(): BelongsTo
+    {
+        return $this->belongsTo(Command::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function scopeForUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    public function scopeSuccessful($query)
+    {
+        return $query->where('execution_status', 'success');
+    }
+
+    public function scopeFailed($query)
+    {
+        return $query->where('execution_status', 'failed');
+    }
+
+    public function scopeRecent($query, int $days = 7)
+    {
+        return $query->where('executed_at', '>=', now()->subDays($days));
+    }
+
+    public function isSuccessful(): bool
+    {
+        return $this->execution_status === 'success';
+    }
+
+    public function isFailed(): bool
+    {
+        return $this->execution_status === 'failed';
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CommandTemplate.php ===
+Path: CommandTemplate.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CommandTemplate extends Model
+{
+    protected $fillable = [
+        'command_id',
+        'user_id',
+        'name',
+        'parameter_values',
+        'is_shared',
+    ];
+
+    protected $casts = [
+        'parameter_values' => 'array',
+        'is_shared' => 'boolean',
+    ];
+
+    public function command(): BelongsTo
+    {
+        return $this->belongsTo(Command::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function scopeShared($query)
+    {
+        return $query->where('is_shared', true);
+    }
+
+    public function scopePrivate($query)
+    {
+        return $query->where('is_shared', false);
+    }
+
+    public function scopeForUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeAccessibleBy($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
+                ->orWhere('is_shared', true);
+        });
+    }
+
+    public function isAccessibleBy(User $user): bool
+    {
+        return $this->user_id === $user->id || $this->is_shared;
+    }
+}
+
+---- File Content End ----
+
+
+=== File: Company.php ===
+Path: Company.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Company extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.companies';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'industry',
+        'slug',
+        'country',
+        'country_id',
+        'currency', // Added for API compatibility
+        'base_currency',
+        'currency_id',
+        'timezone', // Added for API compatibility
+        'exchange_rate_id',
+        'language',
+        'locale',
+        'settings',
+        'created_by_user_id',
+        'is_active',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'exchange_rate_id' => 'integer',
+            'settings' => 'array',
+            'industry' => 'string',
+            'country_id' => 'string',
+            'currency_id' => 'string',
+            'created_by_user_id' => 'string',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /**
+     * Get the users that belong to the company.
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'auth.company_user')
+            ->withPivot('role', 'is_active', 'joined_at', 'left_at')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the invitations for this company.
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(CompanyInvitation::class, 'company_id');
+    }
+
+    /**
+     * Get the modules enabled for this company.
+     */
+    public function modules(): BelongsToMany
+    {
+        return $this->belongsToMany(Module::class, 'auth.company_modules')
+            ->withPivot('is_active', 'enabled_at', 'enabled_by_user_id', 'disabled_at', 'disabled_by_user_id', 'settings')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get audit entries for this company.
+     */
+    public function auditEntries(): HasMany
+    {
+        return $this->hasMany(AuditEntry::class);
+    }
+
+    /**
+     * Get the creator of the company.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Scope a query to only include active companies.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Check if a module is enabled for this company (with caching).
+     */
+    public function isModuleEnabled(string $moduleName): bool
+    {
+        return \Illuminate\Support\Facades\Cache::remember(
+            "company:{$this->id}:module:{$moduleName}:enabled",
+            300, // 5 minutes
+            function () use ($moduleName) {
+                return $this->modules()
+                    ->where(function ($query) use ($moduleName) {
+                        $query->where('modules.key', $moduleName)
+                            ->orWhere('modules.name', $moduleName);
+                    })
+                    ->wherePivot('is_active', true)
+                    ->exists();
+            }
+        );
+    }
+
+    /**
+     * Enable a module for this company.
+     */
+    public function enableModule(string $moduleName, ?User $user = null): void
+    {
+        $module = Module::where('key', $moduleName)
+            ->orWhere('name', $moduleName)
+            ->firstOrFail();
+
+        $this->modules()->syncWithoutDetaching([
+            $module->id => [
+                'is_active' => true,
+                'enabled_at' => now(),
+                'enabled_by_user_id' => $user?->id,
+                'settings' => json_encode([]),
+                'disabled_at' => null,
+                'disabled_by_user_id' => null,
+            ],
+        ]);
+
+        // Clear related cache
+        \Illuminate\Support\Facades\Cache::forget("company:{$this->id}:module:{$moduleName}:enabled");
+    }
+
+    /**
+     * Disable a module for this company.
+     */
+    public function disableModule(string $moduleName, ?User $user = null): void
+    {
+        $module = Module::where('key', $moduleName)
+            ->orWhere('name', $moduleName)
+            ->firstOrFail();
+
+        $this->modules()->updateExistingPivot($module->id, [
+            'is_active' => false,
+            'disabled_at' => now(),
+            'disabled_by_user_id' => $user?->id,
+        ]);
+
+        // Clear related cache
+        \Illuminate\Support\Facades\Cache::forget("company:{$this->id}:module:{$moduleName}:enabled");
+    }
+
+    /**
+     * Determine if the company has a module enabled by key or name.
+     */
+    public function hasModuleEnabled(string $moduleKey): bool
+    {
+        return $this->modules()
+            ->where(function ($query) use ($moduleKey) {
+                $query->where('modules.key', $moduleKey)
+                    ->orWhere('modules.name', $moduleKey);
+            })
+            ->wherePivot('is_active', true)
+            ->exists();
+    }
+
+    /**
+     * Count active modules.
+     */
+    public function getActiveModulesCount(): int
+    {
+        return $this->modules()
+            ->wherePivot('is_active', true)
+            ->count();
+    }
+
+    /**
+     * Get company setting value.
+     */
+    public function getSetting(string $key, mixed $default = null): mixed
+    {
+        return data_get($this->settings, $key, $default);
+    }
+
+    /**
+     * Set company setting value.
+     */
+    public function setSetting(string $key, mixed $value): void
+    {
+        $settings = $this->settings ?? [];
+        data_set($settings, $key, $value);
+        $this->settings = $settings;
+        $this->save();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\CompanyFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CompanyInvitation.php ===
+Path: CompanyInvitation.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CompanyInvitation extends Model
+{
+    use HasFactory, HasUuids;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.company_invitations';
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
+     * The data type of the primary key.
+     */
+    protected $keyType = 'string';
+
+    protected $fillable = [
+        'company_id',
+        'email',
+        'role',
+        'token',
+        'message',
+        'expires_at',
+        'invited_by_user_id',
+        'status',
+    ];
+
+    protected $casts = [
+        'expires_at' => 'datetime',
+        'status' => 'string',
+    ];
+
+    /**
+     * Get the company that owns the invitation.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the user who sent the invitation.
+     */
+    public function inviter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    /**
+     * Check if the invitation is expired.
+     */
+    public function isExpired(): bool
+    {
+        return $this->expires_at->isPast();
+    }
+
+    /**
+     * Check if the invitation is still valid.
+     */
+    public function isValid(): bool
+    {
+        return $this->status === 'pending' && ! $this->isExpired();
+    }
+
+    /**
+     * Mark invitation as accepted.
+     */
+    public function accept(): void
+    {
+        $this->status = 'accepted';
+        $this->save();
+    }
+
+    /**
+     * Mark invitation as rejected.
+     */
+    public function reject(): void
+    {
+        $this->status = 'rejected';
+        $this->save();
+    }
+
+    /**
+     * Check if the invitation can be revoked.
+     */
+    public function canBeRevoked(): bool
+    {
+        return $this->status === 'pending' && ! $this->isExpired();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CompanyModule.php ===
+Path: CompanyModule.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Pivot;
+
+class CompanyModule extends Pivot
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.company_modules';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'company_id',
+        'module_id',
+        'is_active',
+        'settings',
+        'enabled_by_user_id',
+        'enabled_at',
+        'disabled_by_user_id',
+        'disabled_at',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'enabled_at' => 'datetime',
+            'disabled_at' => 'datetime',
+            'enabled_by_user_id' => 'string',
+            'disabled_by_user_id' => 'string',
+            'settings' => 'array',
+        ];
+    }
+
+    /**
+     * Indicates if the model should be timestamped.
+     *
+     * @var bool
+     */
+    public $timestamps = true;
+
+    /**
+     * Get the company that owns the pivot.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the module that owns the pivot.
+     */
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(Module::class);
+    }
+
+    /**
+     * Get the user who enabled the module.
+     */
+    public function enabledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'enabled_by_user_id');
+    }
+
+    /**
+     * Get the user who disabled the module.
+     */
+    public function disabledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disabled_by_user_id');
+    }
+
+    /**
+     * Enable the module for the company.
+     */
+    public function enable(?User $user = null): void
+    {
+        $this->is_active = true;
+        $this->enabled_at = now();
+        $this->enabled_by_user_id = $user?->id;
+        $this->disabled_at = null;
+        $this->disabled_by_user_id = null;
+        $this->save();
+    }
+
+    /**
+     * Disable the module for the company.
+     */
+    public function disable(?User $user = null): void
+    {
+        $this->is_active = false;
+        $this->disabled_at = now();
+        $this->disabled_by_user_id = $user?->id;
+        $this->save();
+    }
+
+    /**
+     * Get a module setting value.
+     */
+    public function getSetting(string $key, mixed $default = null): mixed
+    {
+        return data_get($this->settings, $key, $default);
+    }
+
+    /**
+     * Set a module setting value.
+     */
+    public function setSetting(string $key, mixed $value): void
+    {
+        $settings = $this->settings ?? [];
+        data_set($settings, $key, $value);
+        $this->settings = $settings;
+        $this->save();
+    }
+
+    /**
+     * Check if the module has been enabled for at least the given number of days.
+     */
+    public function isEnabledForDays(int $days): bool
+    {
+        if (! $this->is_active || ! $this->enabled_at) {
+            return false;
+        }
+
+        return $this->enabled_at->diffInDays(now()) >= $days;
+    }
+
+    /**
+     * Scope a query to only include enabled modules (alias for active).
+     */
+    public function scopeEnabled($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\CompanyModuleFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CompanyUser.php ===
+Path: CompanyUser.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Pivot;
+
+class CompanyUser extends Pivot
+{
+    use HasFactory;
+
+    /**
+     * Composite primary key – disable incrementing/id expectations.
+     */
+    public $incrementing = false;
+
+    protected $primaryKey = null;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'auth.company_user';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'company_id',
+        'user_id',
+        'role',
+        'joined_at',
+        'invited_by_user_id',
+        'is_active',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'joined_at' => 'datetime',
+            'is_active' => 'boolean',
+            'invited_by_user_id' => 'string',
+        ];
+    }
+
+    /**
+     * Indicates if the model should be timestamped.
+     *
+     * @var bool
+     */
+    public $timestamps = true;
+
+    /**
+     * Get the company that owns the pivot.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the user that owns the pivot.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the user who sent the invitation.
+     */
+    public function inviter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeByRole($query, string $role)
+    {
+        return $query->where('role', $role);
+    }
+
+    public function activate(): void
+    {
+        if (! $this->is_active) {
+            $this->is_active = true;
+            $this->left_at = null;
+            $this->save();
+        }
+    }
+
+    public function deactivate(): void
+    {
+        if ($this->is_active) {
+            $this->is_active = false;
+            $this->left_at = now();
+            $this->save();
+        }
+    }
+
+    public function changeRole(string $role): void
+    {
+        $this->role = $role;
+        $this->save();
+    }
+
+    /**
+     * Check if the user has admin role in the company.
+     */
+    public function isAdmin(): bool
+    {
+        return in_array($this->role, ['owner', 'admin', 'super_admin']);
+    }
+
+    /**
+     * Check if the user is the company owner.
+     */
+    public function isOwner(): bool
+    {
+        return $this->role === 'owner';
+    }
+
+    /**
+     * Check if the user can perform a specific action based on their role.
+     */
+    public function can(string $action): bool
+    {
+        $rolePermissions = [
+            'owner' => ['*'],
+            'admin' => ['manage_users', 'manage_settings', 'view_reports', 'manage_modules', 'manage_data'],
+            'manager' => ['view_reports', 'manage_team', 'manage_data'],
+            'accountant' => ['manage_entries', 'view_reports', 'reconcile'],
+            'clerk' => ['create_entries', 'view_reports'],
+            'viewer' => ['view_reports'],
+        ];
+
+        $userPermissions = $rolePermissions[$this->role] ?? [];
+
+        return in_array('*', $userPermissions) || in_array($action, $userPermissions);
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\CompanyUserFactory::new();
+    }
+
+    protected function setKeysForSaveQuery($query)
+    {
+        return $query->where('company_id', $this->getAttribute('company_id'))
+            ->where('user_id', $this->getAttribute('user_id'));
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CreditNote.php ===
+Path: CreditNote.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+
+class CreditNote extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.credit_notes';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'company_id',
+        'invoice_id',
+        'credit_note_number',
+        'reason',
+        'amount',
+        'tax_amount',
+        'total_amount',
+        'currency',
+        'status',
+        'notes',
+        'terms',
+        'sent_at',
+        'posted_at',
+        'cancelled_at',
+        'cancellation_reason',
+        'journal_entry_id',
+        'created_by_user_id',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'sent_at' => 'datetime',
+            'posted_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'total_amount' => 'decimal:2',
+            'company_id' => 'string',
+            'invoice_id' => 'string',
+            'journal_entry_id' => 'string',
+            'created_by_user_id' => 'string',
+        ];
+    }
+
+    /**
+     * The attributes that should be appended to the model.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'can_be_posted',
+        'can_be_cancelled',
+        'is_posted',
+        'is_cancelled',
+        'remaining_balance',
+    ];
+
+    /**
+     * Get the company that owns the credit note.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the invoice this credit note applies to.
+     */
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
+    /**
+     * Get the user who created the credit note.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the items for the credit note.
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(CreditNoteItem::class);
+    }
+
+    /**
+     * Get the applications for the credit note.
+     */
+    public function applications(): HasMany
+    {
+        return $this->hasMany(CreditNoteApplication::class);
+    }
+
+    /**
+     * Scope a query to only include credit notes for a specific company.
+     */
+    public function scopeForCompany($query, $companyId)
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    /**
+     * Scope a query to only include credit notes with a specific status.
+     */
+    public function scopeWithStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Scope a query to only include posted credit notes.
+     */
+    public function scopePosted($query)
+    {
+        return $query->whereNotNull('posted_at')->where('status', 'posted');
+    }
+
+    /**
+     * Scope a query to only include draft credit notes.
+     */
+    public function scopeDraft($query)
+    {
+        return $query->where('status', 'draft');
+    }
+
+    /**
+     * Scope a query to only include cancelled credit notes.
+     */
+    public function scopeCancelled($query)
+    {
+        return $query->whereNotNull('cancelled_at')->where('status', 'cancelled');
+    }
+
+    /**
+     * Check if the credit note can be posted.
+     */
+    public function getCanBePostedAttribute(): bool
+    {
+        return $this->status === 'draft' && is_null($this->cancelled_at);
+    }
+
+    /**
+     * Check if the credit note can be cancelled.
+     */
+    public function getCanBeCancelledAttribute(): bool
+    {
+        return in_array($this->status, ['draft', 'posted']) && is_null($this->cancelled_at);
+    }
+
+    /**
+     * Check if the credit note is posted.
+     */
+    public function getIsPostedAttribute(): bool
+    {
+        return ! is_null($this->posted_at) && $this->status === 'posted';
+    }
+
+    /**
+     * Check if the credit note is cancelled.
+     */
+    public function getIsCancelledAttribute(): bool
+    {
+        return ! is_null($this->cancelled_at) && $this->status === 'cancelled';
+    }
+
+    /**
+     * Calculate the remaining balance that can be applied to the invoice.
+     */
+    public function getRemainingBalanceAttribute(): float
+    {
+        if ($this->is_cancelled) {
+            return 0;
+        }
+
+        $appliedAmount = DB::table('acct.credit_note_applications')
+            ->where('credit_note_id', $this->id)
+            ->sum('amount_applied');
+
+        return max(0, $this->total_amount - $appliedAmount);
+    }
+
+    /**
+     * Post the credit note to the ledger.
+     */
+    public function post(): bool
+    {
+        if (! $this->can_be_posted) {
+            return false;
+        }
+
+        $this->status = 'posted';
+        $this->posted_at = now();
+
+        return $this->save();
+    }
+
+    /**
+     * Cancel the credit note with a reason.
+     */
+    public function cancel(string $reason): bool
+    {
+        if (! $this->can_be_cancelled) {
+            return false;
+        }
+
+        $this->status = 'cancelled';
+        $this->cancelled_at = now();
+        $this->cancellation_reason = $reason;
+
+        return $this->save();
+    }
+
+    /**
+     * Generate a unique credit note number.
+     */
+    public static function generateCreditNoteNumber(int $companyId): string
+    {
+        $prefix = 'CN-';
+        $year = now()->format('Y');
+
+        // Get the next sequence number for this company and year
+        $lastNumber = static::where('company_id', $companyId)
+            ->whereYear('created_at', $year)
+            ->orderBy('credit_note_number', 'desc')
+            ->value('credit_note_number');
+
+        if ($lastNumber) {
+            // Extract sequence number from existing format (CN-YYYY-XXXX)
+            $sequence = (int) substr($lastNumber, -4) + 1;
+        } else {
+            $sequence = 1;
+        }
+
+        return $prefix.$year.'-'.str_pad($sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Get a summary of the credit note.
+     */
+    public function getSummary(): array
+    {
+        return [
+            'id' => $this->id,
+            'credit_note_number' => $this->credit_note_number,
+            'invoice_number' => $this->invoice?->invoice_number,
+            'customer_name' => $this->invoice?->customer?->name,
+            'reason' => $this->reason,
+            'amount' => (float) $this->amount,
+            'tax_amount' => (float) $this->tax_amount,
+            'total_amount' => (float) $this->total_amount,
+            'currency' => $this->currency,
+            'status' => $this->status,
+            'remaining_balance' => $this->remaining_balance,
+            'created_at' => $this->created_at,
+            'posted_at' => $this->posted_at,
+        ];
+    }
+
+    /**
+     * Validate the credit note before posting.
+     */
+    public function validateForPosting(): array
+    {
+        $errors = [];
+
+        if ($this->status !== 'draft') {
+            $errors['status'] = 'Only draft credit notes can be posted';
+        }
+
+        if ($this->is_cancelled) {
+            $errors['status'] = 'Cancelled credit notes cannot be posted';
+        }
+
+        if ($this->total_amount <= 0) {
+            $errors['amount'] = 'Credit note amount must be greater than zero';
+        }
+
+        if (! $this->invoice) {
+            $errors['invoice'] = 'Credit note must be associated with an invoice';
+        } elseif ($this->invoice->status !== 'posted') {
+            $errors['invoice'] = 'Credit note can only be applied to posted invoices';
+        }
+
+        $availableBalance = $this->invoice->balance_due;
+        if ($this->total_amount > $availableBalance) {
+            $errors['amount'] = "Credit note amount ({$this->total_amount}) cannot exceed invoice balance due ({$availableBalance})";
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Apply the credit note to the invoice balance.
+     */
+    public function applyToInvoice(?User $user = null, ?string $notes = null): bool
+    {
+        if (! $this->is_posted) {
+            return false;
+        }
+
+        if ($this->remaining_balance <= 0) {
+            return false;
+        }
+
+        if ($this->invoice->balance_due <= 0) {
+            return false; // Invoice already fully paid
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Create credit note application record
+            $applicationAmount = min($this->remaining_balance, $this->invoice->balance_due);
+            $balanceBefore = $this->invoice->balance_due;
+
+            $application = DB::table('acct.credit_note_applications')->insert([
+                'id' => str()->uuid(),
+                'credit_note_id' => $this->id,
+                'invoice_id' => $this->invoice_id,
+                'amount_applied' => $applicationAmount,
+                'applied_at' => now(),
+                'user_id' => $user?->id,
+                'notes' => $notes,
+                'invoice_balance_before' => $balanceBefore,
+                'invoice_balance_after' => $balanceBefore - $applicationAmount,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Update invoice balance
+            $this->invoice->balance_due -= $applicationAmount;
+
+            // Update invoice payment status if fully paid
+            if ($this->invoice->balance_due <= 0) {
+                $this->invoice->payment_status = 'paid';
+                $this->invoice->paid_at = now();
+            } elseif ($this->invoice->balance_due < $this->invoice->total_amount) {
+                $this->invoice->payment_status = 'partially_paid';
+            }
+
+            $this->invoice->save();
+
+            // Log the application
+            activity()
+                ->performedOn($this)
+                ->causedBy($user ?? auth()->user())
+                ->withProperties([
+                    'amount_applied' => $applicationAmount,
+                    'invoice_balance_before' => $balanceBefore,
+                    'invoice_balance_after' => $this->invoice->balance_due,
+                    'notes' => $notes,
+                ])
+                ->log('Credit note applied to invoice');
+
+            DB::commit();
+
+            return true;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CreditNoteApplication.php ===
+Path: CreditNoteApplication.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CreditNoteApplication extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.credit_note_applications';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'credit_note_id',
+        'invoice_id',
+        'amount_applied',
+        'applied_at',
+        'user_id',
+        'notes',
+        'invoice_balance_before',
+        'invoice_balance_after',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'applied_at' => 'datetime',
+            'amount_applied' => 'decimal:2',
+            'invoice_balance_before' => 'decimal:2',
+            'invoice_balance_after' => 'decimal:2',
+            'credit_note_id' => 'string',
+            'invoice_id' => 'string',
+            'user_id' => 'string',
+        ];
+    }
+
+    /**
+     * Get the credit note that was applied.
+     */
+    public function creditNote(): BelongsTo
+    {
+        return $this->belongsTo(CreditNote::class);
+    }
+
+    /**
+     * Get the invoice the credit note was applied to.
+     */
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
+    /**
+     * Get the user who applied the credit note.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}
+
+---- File Content End ----
+
+
+=== File: CreditNoteItem.php ===
+Path: CreditNoteItem.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CreditNoteItem extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.credit_note_items';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'credit_note_id',
+        'description',
+        'quantity',
+        'unit_price',
+        'tax_rate',
+        'discount_amount',
+        'total_amount',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'decimal:2',
+            'unit_price' => 'decimal:2',
+            'tax_rate' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'total_amount' => 'decimal:2',
+            'credit_note_id' => 'string',
+        ];
+    }
+
+    /**
+     * Get the credit note that owns the item.
+     */
+    public function creditNote(): BelongsTo
+    {
+        return $this->belongsTo(CreditNote::class);
+    }
+
+    /**
+     * Calculate the line item subtotal before tax and discount.
+     */
+    public function getSubtotalAttribute(): float
+    {
+        return $this->quantity * $this->unit_price;
+    }
+
+    /**
+     * Calculate the tax amount for the line item.
+     */
+    public function getTaxAmountAttribute(): float
+    {
+        $subtotal = $this->subtotal;
+        $discountedSubtotal = $subtotal - $this->discount_amount;
+
+        return $discountedSubtotal * ($this->tax_rate / 100);
+    }
+
+    /**
+     * Calculate the final total after tax and discount.
+     */
+    public function getFinalTotalAttribute(): float
+    {
+        return $this->subtotal - $this->discount_amount + $this->tax_amount;
+    }
+}
+
+---- File Content End ----
+
+
+=== File: Customer.php ===
+Path: Customer.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Customer extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'acct.customers';
+
+    protected $primaryKey = 'id';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    protected $fillable = [
+        'company_id',
+        'customer_number',
+        'name',
+        'legal_name',
+        'status',
+        'email',
+        'phone',
+        'default_currency',
+        'payment_terms',
+        'credit_limit',
+        'credit_limit_effective_at',
+        'tax_id',
+        'website',
+        'notes',
+        'created_by_user_id',
+    ];
+
+    protected $casts = [
+        'credit_limit' => 'decimal:2',
+        'credit_limit_effective_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $attributes = [
+        'status' => 'active',
+    ];
+
+    /**
+     * Get the company that owns the customer.
+     */
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the user who created the customer.
+     */
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the contacts for the customer.
+     */
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerContact::class);
+    }
+
+    /**
+     * Get the addresses for the customer.
+     */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerAddress::class);
+    }
+
+    /**
+     * Get the credit limits for the customer.
+     */
+    public function creditLimits(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerCreditLimit::class);
+    }
+
+    /**
+     * Get the statements for the customer.
+     */
+    public function statements(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerStatement::class);
+    }
+
+    /**
+     * Get the aging snapshots for the customer.
+     */
+    public function agingSnapshots(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerAgingSnapshot::class);
+    }
+
+    /**
+     * Get the communications for the customer.
+     */
+    public function communications(): HasMany
+    {
+        return $this->hasMany(\Modules\Accounting\Domain\Customers\Models\CustomerCommunication::class);
+    }
+
+    /**
+     * Get the invoices for the customer.
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * Get the payments for the customer.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Get the groups for the customer.
+     */
+    public function groups()
+    {
+        return $this->belongsToMany(\Modules\Accounting\Domain\Customers\Models\CustomerGroup::class, 'acct.customer_group_members');
+    }
+
+    /**
+     * Scope to only include active customers.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope to only include customers with a specific status.
+     */
+    public function scopeWithStatus($query, string $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Scope to search customers by name or email.
+     */
+    public function scopeSearch($query, string $term)
+    {
+        return $query->where(function ($q) use ($term) {
+            $q->where('name', 'ILIKE', "%{$term}%")
+                ->orWhere('legal_name', 'ILIKE', "%{$term}%")
+                ->orWhere('email', 'ILIKE', "%{$term}%")
+                ->orWhere('customer_number', 'ILIKE', "%{$term}%");
+        });
+    }
+
+    /**
+     * Get the current credit limit (latest approved).
+     */
+    public function getCurrentCreditLimitAttribute()
+    {
+        return $this->creditLimits()
+            ->where('status', 'approved')
+            ->where('effective_at', '<=', now())
+            ->orderBy('effective_at', 'desc')
+            ->first();
+    }
+
+    /**
+     * Get the current balance (sum of unpaid invoices).
+     */
+    public function getCurrentBalanceAttribute()
+    {
+        return $this->invoices()
+            ->where('status', '!=', 'paid')
+            ->sum('balance_due');
+    }
+
+    /**
+     * Get available credit (credit limit minus current balance).
+     */
+    public function getAvailableCreditAttribute()
+    {
+        $creditLimit = $this->current_credit_limit?->limit_amount ?? 0;
+        $currentBalance = $this->current_balance;
+
+        return max(0, $creditLimit - $currentBalance);
+    }
+}
+
+---- File Content End ----
+
+
+=== File: FiscalYear.php ===
+Path: FiscalYear.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class FiscalYear extends Model
+{
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'acct.fiscal_years';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'company_id',
+        'name',
+        'start_date',
+        'end_date',
+        'is_active',
+        'is_locked',
+        'notes',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'is_active' => 'boolean',
+            'is_locked' => 'boolean',
+            'company_id' => 'string',
+        ];
+    }
+
+    /**
+     * Get the company that owns the fiscal year.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the accounting periods for the fiscal year.
+     */
+    public function periods(): HasMany
+    {
+        return $this->hasMany(AccountingPeriod::class);
+    }
+
+    /**
+     * Get the journal entries for the fiscal year.
+     */
+    public function journalEntries(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class);
+    }
+
+    /**
+     * Scope a query to only include active fiscal years.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope a query to only include closed fiscal years.
+     */
+    public function scopeClosed($query)
+    {
+        return $query->where('is_locked', true);
+    }
+
+    /**
+     * Check if the fiscal year is currently active.
+     */
+    public function isCurrent(): bool
+    {
+        $now = now();
+
+        return $this->is_active && $this->start_date <= $now && $this->end_date >= $now;
+    }
+
+    /**
+     * Close the fiscal year.
+     */
+    public function close(): void
+    {
+        $this->is_locked = true;
+        $this->save();
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\FiscalYearFactory::new();
+    }
+}
+
+---- File Content End ----
+
+
+=== File: Invoice.php ===
+Path: Invoice.php
+---- File Content Start ----
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Invoice extends Model
+{
+    use HasFactory;
+
+    protected $table = 'acct.invoices';
+
+    protected $primaryKey = 'invoice_id';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    protected $fillable = [
+        'invoice_number',
+        'company_id',
+        'customer_id',
+        'due_date',
+        'balance_due',
+        'status',
+    ];
+
+    protected $casts = [
+        'balance_due' => 'decimal:2',
+        'due_date' => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+}
+---- File Content End ----
+

@@ -995,8 +995,8 @@ const getStatusSeverity = (status) => {
     'pending': 'warning',
     'processing': 'info',
     'completed': 'success',
-    'failed' => 'danger',
-    'archived' => 'secondary'
+    'failed': 'danger',
+    'archived': 'secondary'
   }
   return severities[status] || 'secondary'
 }

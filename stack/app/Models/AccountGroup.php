@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountGroup extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToCompany, HasFactory, HasUuids;
 
     public $incrementing = false;
 
@@ -25,17 +26,11 @@ class AccountGroup extends Model
     protected $table = 'acct.account_groups';
 
     /**
-     * The attributes that are mass assignable.
+     * The attributes that are not mass assignable.
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'account_class_id',
-        'name',
-        'code',
-        'order',
-        'is_active',
-    ];
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     /**
      * Get the attributes that should be cast.
@@ -48,6 +43,7 @@ class AccountGroup extends Model
             'order' => 'integer',
             'is_active' => 'boolean',
             'account_class_id' => 'string',
+            'company_id' => 'string',
         ];
     }
 

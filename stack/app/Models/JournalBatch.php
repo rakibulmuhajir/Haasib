@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JournalBatch extends Model
 {
-    use HasFactory;
+    use BelongsToCompany, HasFactory, HasUuids;
 
     /**
      * The table associated with the model.
@@ -69,6 +71,7 @@ class JournalBatch extends Model
             'total_credits' => 'decimal:2',
             'attachments' => 'array',
             'metadata' => 'array',
+            'company_id' => 'string',
         ];
     }
 

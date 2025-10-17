@@ -135,7 +135,7 @@ class AuditReport extends Command
         // Show user breakdown
         $userBreakdown = (clone $query)
             ->selectRaw('u.name, u.email, COUNT(*) as count')
-            ->join('auth.users as u', 'u.id', '=', 'auth.audit_entries.user_id')
+            ->join('auth.users as u', 'u.id', '=', 'audit.entries.user_id')
             ->groupBy('u.id', 'u.name', 'u.email')
             ->orderByDesc('count')
             ->limit(10)

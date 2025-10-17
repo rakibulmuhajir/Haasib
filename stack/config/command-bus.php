@@ -53,4 +53,19 @@ return [
     'company.unassign' => App\Actions\DevOps\CompanyUnassign::class,
     'company.invite' => App\Actions\Company\CompanyInvite::class,
     'invitation.revoke' => App\Actions\Invitation\InvitationRevoke::class,
+
+    // Period close actions
+    'period-close.start' => Modules\Ledger\Domain\PeriodClose\Actions\StartPeriodCloseAction::class,
+    'period-close.snapshot' => Modules\Ledger\Domain\PeriodClose\Actions\GetPeriodCloseSnapshotAction::class,
+    'period-close.validate' => Modules\Ledger\Domain\PeriodClose\Actions\ValidatePeriodCloseAction::class,
+    'period-close.adjustment' => Modules\Ledger\Domain\PeriodClose\Actions\CreatePeriodCloseAdjustmentAction::class,
+    'period-close.lock' => Modules\Ledger\Domain\PeriodClose\Actions\LockPeriodCloseAction::class,
+    'period-close.complete' => Modules\Ledger\Domain\PeriodClose\Actions\CompletePeriodCloseAction::class,
+    'period-close.reopen' => Modules\Ledger\Domain\PeriodClose\Actions\ReopenPeriodCloseAction::class,
+    'period-close.reports.generate' => Modules\Ledger\Domain\PeriodClose\Actions\GeneratePeriodCloseReportsAction::class,
+
+    // Period close template actions
+    'period-close.template.sync' => Modules\Ledger\Domain\PeriodClose\Actions\SyncPeriodCloseTemplateAction::class,
+    'period-close.template.update' => Modules\Ledger\Domain\PeriodClose\Actions\UpdatePeriodCloseTemplateAction::class,
+    'period-close.template.archive' => Modules\Ledger\Domain\PeriodClose\Actions\ArchivePeriodCloseTemplateAction::class,
 ];

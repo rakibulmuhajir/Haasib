@@ -21,7 +21,7 @@ class AuditEntry extends Model
      *
      * @var string
      */
-    protected $table = 'auth.audit_entries';
+    protected $table = 'audit.entries';
 
     /**
      * The attributes that are mass assignable.

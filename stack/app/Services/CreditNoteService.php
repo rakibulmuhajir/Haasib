@@ -106,12 +106,12 @@ class CreditNoteService
         // Validate credit amount against invoice balance and existing credit notes
         $this->validateCreditAmount($data['total_amount'], $invoice, $data['invoice_id'] ?? null);
 
-        // Generate credit note number
-        $creditNoteNumber = CreditNote::generateCreditNoteNumber($company->id);
-
         DB::beginTransaction();
 
         try {
+            // Generate credit note number inside the transaction to avoid race conditions
+            $creditNoteNumber = CreditNote::generateCreditNoteNumber($company->id);
+
             // Create credit note
             $creditNote = CreditNote::create([
                 'company_id' => $company->id,
@@ -215,7 +215,7 @@ class CreditNoteService
         $this->authService->canAccessCompany($user, $creditNote->company);
         $this->authService->hasPermission($user, 'credit_notes.post');
 
-        if (! $creditNote->can_be_posted) {
+        if (! $creditNote->canBePosted()) {
             throw ValidationException::withMessages(['status' => 'Credit note cannot be posted']);
         }
 
@@ -270,7 +270,7 @@ class CreditNoteService
         $this->authService->canAccessCompany($user, $creditNote->company);
         $this->authService->hasPermission($user, 'credit_notes.cancel');
 
-        if (! $creditNote->can_be_cancelled) {
+        if (! $creditNote->canBeCancelled()) {
             throw ValidationException::withMessages(['status' => 'Credit note cannot be cancelled']);
         }
 
@@ -280,7 +280,7 @@ class CreditNoteService
             $creditNote->cancel($reason);
 
             // Create reversal ledger entries if posted
-            if ($creditNote->is_posted) {
+            if ($creditNote->isPosted()) {
                 $this->createReversalLedgerEntries($creditNote, $user);
             }
 
@@ -314,7 +314,7 @@ class CreditNoteService
         $this->authService->canAccessCompany($user, $creditNote->company);
         $this->authService->hasPermission($user, 'credit_notes.apply');
 
-        if (! $creditNote->is_posted) {
+        if (! $creditNote->isPosted()) {
             throw ValidationException::withMessages(['status' => 'Only posted credit notes can be applied']);
         }
 
@@ -733,11 +733,11 @@ class CreditNoteService
      */
     public function autoApplyCreditNote(CreditNote $creditNote, User $user): bool
     {
-        if (! $creditNote->is_posted) {
+        if (! $creditNote->isPosted()) {
             return false;
         }
 
-        if ($creditNote->remaining_balance <= 0) {
+        if ($creditNote->remainingBalance() <= 0) {
             return false;
         }
 
@@ -768,14 +768,14 @@ class CreditNoteService
             ->get();
 
         foreach ($postedCreditNotes as $creditNote) {
-            if ($creditNote->remaining_balance > 0 && $creditNote->invoice->balance_due > 0) {
+            if ($creditNote->remainingBalance() > 0 && $creditNote->invoice->balance_due > 0) {
                 $applied = $this->autoApplyCreditNote($creditNote, $user);
 
                 $results[] = [
                     'credit_note_id' => $creditNote->id,
                     'credit_note_number' => $creditNote->credit_note_number,
                     'invoice_number' => $creditNote->invoice->invoice_number,
-                    'amount_applied' => min($creditNote->remaining_balance, $creditNote->invoice->balance_due),
+                    'amount_applied' => min($creditNote->remainingBalance(), $creditNote->invoice->balance_due),
                     'applied' => $applied,
                 ];
             }
@@ -804,10 +804,12 @@ class CreditNoteService
         $impact = [
             'total_credit_notes' => $creditNotes->count(),
             'total_credit_amount' => $creditNotes->sum('total_amount'),
-            'total_applied_amount' => $creditNotes->sum(function ($cn) {
-                return $cn->total_amount - $cn->remaining_balance;
+            'total_applied_amount' => $creditNotes->sum(function (CreditNote $creditNote) {
+                return $creditNote->total_amount - $creditNote->remainingBalance();
             }),
-            'total_remaining_balance' => $creditNotes->sum('remaining_balance'),
+            'total_remaining_balance' => $creditNotes->sum(function (CreditNote $creditNote) {
+                return $creditNote->remainingBalance();
+            }),
             'by_customer' => [],
         ];
 
@@ -820,10 +822,12 @@ class CreditNoteService
                 'customer_name' => $customerData->name,
                 'credit_notes_count' => $customerCreditNotes->count(),
                 'total_credit_amount' => $customerCreditNotes->sum('total_amount'),
-                'total_applied_amount' => $customerCreditNotes->sum(function ($cn) {
-                    return $cn->total_amount - $cn->remaining_balance;
+                'total_applied_amount' => $customerCreditNotes->sum(function (CreditNote $creditNote) {
+                    return $creditNote->total_amount - $creditNote->remainingBalance();
                 }),
-                'remaining_balance' => $customerCreditNotes->sum('remaining_balance'),
+                'remaining_balance' => $customerCreditNotes->sum(function (CreditNote $creditNote) {
+                    return $creditNote->remainingBalance();
+                }),
             ];
         }
 

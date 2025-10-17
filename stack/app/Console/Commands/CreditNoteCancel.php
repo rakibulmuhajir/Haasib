@@ -191,7 +191,7 @@ class CreditNoteCancel extends CreditNoteBaseCommand
         $this->line("Customer: {$creditNote->invoice->customer->name}");
         $this->line('Current Status: '.ucfirst($creditNote->status));
         $this->line('Total Amount: $'.number_format($creditNote->total_amount, 2));
-        $this->line('Remaining Balance: $'.number_format($creditNote->remaining_balance, 2));
+        $this->line('Remaining Balance: $'.number_format($creditNote->remainingBalance(), 2));
         $this->line("Cancellation Reason: {$reason}");
 
         if ($creditNote->status === 'posted' && isset($input['reverse-ledger'])) {

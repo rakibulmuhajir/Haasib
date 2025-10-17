@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JournalEntry extends Model
 {
-    use HasFactory;
+    use BelongsToCompany, HasFactory, HasUuids;
 
     /**
      * The table associated with the model.
@@ -80,6 +82,7 @@ class JournalEntry extends Model
             'auto_generated' => 'boolean',
             'attachments' => 'array',
             'metadata' => 'array',
+            'company_id' => 'string',
         ];
     }
 

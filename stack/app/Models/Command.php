@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use App\Models\Scopes\CommandPerformanceScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,21 +10,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Command extends Model
 {
-    protected $fillable = [
-        'company_id',
-        'name',
-        'description',
-        'category',
-        'parameters',
-        'required_permissions',
-        'execution_handler',
-        'is_active',
-    ];
+    use BelongsToCompany;
+
+    /**
+     * The attributes that are not mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $casts = [
         'parameters' => 'array',
         'required_permissions' => 'array',
         'is_active' => 'boolean',
+        'company_id' => 'string',
     ];
 
     /**
@@ -70,6 +70,12 @@ class Command extends Model
             return false;
         }
 
-        return $user->hasAnyPermission($this->required_permissions);
+        $permissions = array_filter($this->required_permissions ?? []);
+
+        if ($permissions === []) {
+            return false;
+        }
+
+        return $user->hasAllPermissions($permissions);
     }
 }

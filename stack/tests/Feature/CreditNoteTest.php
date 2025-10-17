@@ -168,7 +168,7 @@ describe('CreditNote Feature Tests', function () {
             ]);
 
             $this->creditNote->refresh();
-            expect($this->creditNote->remaining_balance)->toBe(500);
+            expect($this->creditNote->remainingBalance())->toBe(500.0);
         });
     });
 
@@ -204,7 +204,7 @@ describe('CreditNote Feature Tests', function () {
 
             $this->invoice->refresh();
             expect($this->invoice->balance_due)->toBe($initialBalance - 500);
-            expect($this->creditNote->remaining_balance)->toBe(0);
+            expect($this->creditNote->remainingBalance())->toBe(0.0);
         });
 
         it('creates application record when applying to invoice', function () {

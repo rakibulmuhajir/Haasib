@@ -2,26 +2,25 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CommandHistory extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'command_id',
-        'company_id',
-        'executed_at',
-        'input_text',
-        'parameters_used',
-        'execution_status',
-        'result_summary',
-        'audit_reference',
-    ];
+    use BelongsToCompany;
+
+    /**
+     * The attributes that are not mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $casts = [
         'executed_at' => 'datetime',
         'parameters_used' => 'array',
+        'company_id' => 'string',
     ];
 
     public function user(): BelongsTo

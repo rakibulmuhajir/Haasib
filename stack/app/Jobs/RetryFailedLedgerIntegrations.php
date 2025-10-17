@@ -59,7 +59,7 @@ class RetryFailedLedgerIntegrations implements ShouldQueue
                         $this->company
                     );
 
-                    if ($creditNote && $creditNote->is_posted && ! $creditNote->journal_entry_id) {
+                    if ($creditNote && $creditNote->isPosted() && ! $creditNote->journal_entry_id) {
                         // Try to sync with ledger again
                         $success = $creditNoteService->syncCreditNoteWithLedger($creditNote, auth()->user());
 

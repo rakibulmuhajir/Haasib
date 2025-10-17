@@ -1,0 +1,575 @@
+openapi: 3.1.0
+info:
+  title: Period Close API
+  version: 0.1.0
+  description: |
+    Endpoints supporting the monthly accounting period close workflow (validation, checklist management, locking, and reopening).
+servers:
+  - url: https://api.haasib.test
+tags:
+  - name: PeriodClose
+    description: Operations for preparing, completing, and reopening accounting periods.
+paths:
+  /api/v1/ledger/periods/{periodId}/close:
+    get:
+      tags: [PeriodClose]
+      summary: Retrieve close status and checklist for a period
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      responses:
+        '200':
+          description: Close resource with checklist state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseResource'
+        '404':
+          $ref: '#/components/responses/PeriodNotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/start:
+    post:
+      tags: [PeriodClose]
+      summary: Start the closing workflow for a period
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      requestBody:
+        required: false
+      responses:
+        '202':
+          description: Close workflow moved into review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseResource'
+        '409':
+          description: Period already closed or in progress
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/validate:
+    post:
+      tags: [PeriodClose]
+      summary: Run close validations (trial balance, unposted documents)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      responses:
+        '200':
+          description: Validation summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseValidationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/tasks/{taskId}:
+    patch:
+      tags: [PeriodClose]
+      summary: Update a checklist task status, notes, and evidence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+        - $ref: '#/components/parameters/TaskIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdateRequest'
+      responses:
+        '200':
+          description: Updated task payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseTask'
+        '409':
+          description: Task cannot transition to requested status
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/lock:
+    post:
+      tags: [PeriodClose]
+      summary: Lock the period pending final approval once validations pass
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockRequest'
+      responses:
+        '202':
+          description: Period locked awaiting final approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseResource'
+        '412':
+          description: Required tasks or validations incomplete
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/complete:
+    post:
+      tags: [PeriodClose]
+      summary: Complete and close the period
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseRequest'
+      responses:
+        '200':
+          description: Period close completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseResource'
+        '412':
+          description: Lock step not completed or adjustments pending
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/periods/{periodId}/close/reopen:
+    post:
+      tags: [PeriodClose]
+      summary: Reopen a closed period with justification
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReopenRequest'
+      responses:
+        '202':
+          description: Period reopen queued and audit log recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseResource'
+        '409':
+          description: Period not in a closed state
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ledger/period-close/templates:
+    get:
+      tags: [PeriodClose]
+      summary: List period close templates for the current company
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Collection of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeriodCloseTemplate'
+    post:
+      tags: [PeriodClose]
+      summary: Create or clone a period close template
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseTemplate'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /api/v1/ledger/period-close/templates/{templateId}:
+    patch:
+      tags: [PeriodClose]
+      summary: Update template metadata or task ordering
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TemplateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseTemplate'
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [PeriodClose]
+      summary: Archive a template
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TemplateIdParam'
+      responses:
+        '204':
+          description: Template archived
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    PeriodIdParam:
+      name: periodId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Accounting period identifier
+    TaskIdParam:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Period close task identifier
+    TemplateIdParam:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Period close template identifier
+  responses:
+    PeriodNotFound:
+      description: Accounting period not found for the current tenant
+    Forbidden:
+      description: User lacks the required permission (e.g., `period-close.view`, `period-close.close`)
+  schemas:
+    PeriodCloseResource:
+      type: object
+      required:
+        - id
+        - accounting_period_id
+        - status
+        - tasks
+      properties:
+        id:
+          type: string
+          format: uuid
+        accounting_period_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, in_review, awaiting_approval, locked, closed, reopened]
+        trial_balance_variance:
+          type: number
+          format: double
+        unposted_documents:
+          type: array
+          items:
+            type: object
+            properties:
+              module:
+                type: string
+                example: "invoicing"
+              count:
+                type: integer
+              details:
+                type: array
+                items:
+                  type: object
+        closing_summary:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+        reopened_at:
+          type: string
+          format: date-time
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodCloseTask'
+    PeriodCloseTask:
+      type: object
+      required:
+        - id
+        - code
+        - status
+        - title
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+          enum: [trial_balance, subledger, compliance, reporting, misc]
+        status:
+          type: string
+          enum: [pending, in_progress, blocked, completed, waived]
+        is_required:
+          type: boolean
+        sequence:
+          type: integer
+        completed_by:
+          type: string
+          format: uuid
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        attachment_manifest:
+          type: array
+          items:
+            type: object
+            properties:
+              document_id:
+                type: string
+                format: uuid
+              label:
+                type: string
+    CloseValidationResponse:
+      type: object
+      required:
+        - period_id
+        - trial_balance_variance
+        - unposted_documents
+      properties:
+        period_id:
+          type: string
+          format: uuid
+        trial_balance_variance:
+          type: number
+          format: double
+        unposted_documents:
+          type: array
+          items:
+            type: object
+            properties:
+              module:
+                type: string
+              count:
+                type: integer
+              blocking:
+                type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+    TaskUpdateRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [pending, in_progress, blocked, completed, waived]
+        notes:
+          type: string
+        attachment_manifest:
+          type: array
+          items:
+            type: object
+            properties:
+              document_id:
+                type: string
+                format: uuid
+              label:
+                type: string
+        waiver_reason:
+          type: string
+          description: Required when status = waived
+    LockRequest:
+      type: object
+      required:
+        - approval_user_id
+        - checklist_hash
+      properties:
+        approval_user_id:
+          type: string
+          format: uuid
+          description: Approver granting lock
+        checklist_hash:
+          type: string
+          description: Client-calculated hash to detect stale checklist data
+        summary:
+          type: string
+          description: Optional lock note
+    CloseRequest:
+      type: object
+      required:
+        - approval_user_id
+        - closing_summary
+      properties:
+        approval_user_id:
+          type: string
+          format: uuid
+        closing_summary:
+          type: string
+        adjusting_entry_id:
+          type: string
+          format: uuid
+          description: Optional final balancing journal entry identifier
+    ReopenRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+        reopen_until:
+          type: string
+          format: date
+          description: Optional date the period should automatically re-lock
+    PeriodCloseTemplate:
+      type: object
+      required:
+        - id
+        - name
+        - tasks
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        frequency:
+          type: string
+          enum: [monthly, quarterly, annual]
+        is_default:
+          type: boolean
+        active:
+          type: boolean
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodCloseTemplateTask'
+    PeriodCloseTemplateTask:
+      type: object
+      required:
+        - id
+        - code
+        - title
+        - sequence
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+          enum: [trial_balance, subledger, compliance, reporting, misc]
+        sequence:
+          type: integer
+        is_required:
+          type: boolean
+        default_notes:
+          type: string
+          nullable: true
+    TemplateRequest:
+      type: object
+      required:
+        - name
+        - tasks
+      properties:
+        name:
+          type: string
+        frequency:
+          type: string
+          enum: [monthly, quarterly, annual]
+        is_default:
+          type: boolean
+        tasks:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - code
+              - title
+              - category
+              - sequence
+            properties:
+              id:
+                type: string
+                format: uuid
+                description: Include to update an existing template task
+              code:
+                type: string
+              title:
+                type: string
+              category:
+                type: string
+                enum: [trial_balance, subledger, compliance, reporting, misc]
+              sequence:
+                type: integer
+              is_required:
+                type: boolean
+              default_notes:
+                type: string
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object

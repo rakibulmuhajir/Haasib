@@ -92,7 +92,7 @@ class CreditNoteShow extends CreditNoteBaseCommand
         $this->line('Tax Amount: $'.number_format($creditNote->tax_amount, 2));
         $this->line('Total Amount: $'.number_format($creditNote->total_amount, 2));
         $this->line("Currency: {$creditNote->currency}");
-        $this->line('Remaining Balance: $'.number_format($creditNote->remaining_balance, 2));
+        $this->line('Remaining Balance: $'.number_format($creditNote->remainingBalance(), 2));
 
         $this->line('');
         $this->info('Dates:');
@@ -162,7 +162,7 @@ class CreditNoteShow extends CreditNoteBaseCommand
             'tax_amount' => $creditNote->tax_amount,
             'total_amount' => $creditNote->total_amount,
             'currency' => $creditNote->currency,
-            'remaining_balance' => $creditNote->remaining_balance,
+            'remaining_balance' => $creditNote->remainingBalance(),
             'notes' => $creditNote->notes,
             'terms' => $creditNote->terms,
             'created_at' => $creditNote->created_at->toISOString(),
@@ -232,7 +232,7 @@ class CreditNoteShow extends CreditNoteBaseCommand
         $totalApplied = $applications->sum('amount_applied');
         $this->line('');
         $this->line('Total Applied: $'.number_format($totalApplied, 2));
-        $this->line('Remaining Balance: $'.number_format($creditNote->remaining_balance, 2));
+        $this->line('Remaining Balance: $'.number_format($creditNote->remainingBalance(), 2));
     }
 
     /**

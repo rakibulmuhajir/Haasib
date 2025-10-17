@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountClass extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToCompany, HasFactory, HasUuids;
 
     public $incrementing = false;
 
@@ -24,17 +25,11 @@ class AccountClass extends Model
     protected $table = 'acct.account_classes';
 
     /**
-     * The attributes that are mass assignable.
+     * The attributes that are not mass assignable.
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'name',
-        'normal_balance',
-        'type',
-        'order',
-        'is_active',
-    ];
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     /**
      * Get the attributes that should be cast.
@@ -46,6 +41,7 @@ class AccountClass extends Model
         return [
             'order' => 'integer',
             'is_active' => 'boolean',
+            'company_id' => 'string',
         ];
     }
 

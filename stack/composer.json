@@ -16,6 +16,7 @@
         "laravel/sanctum": "^4.2",
         "laravel/telescope": "^5.11",
         "laravel/tinker": "^2.10.1",
+        "ofxparser/ofxparser": "^1.0",
         "spatie/laravel-permission": "^6.21",
         "symfony/yaml": "^7.3",
         "tightenco/ziggy": "^2.0"

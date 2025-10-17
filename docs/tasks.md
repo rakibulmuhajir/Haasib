@@ -24,17 +24,17 @@ Single source of truth for execution. Pulled from the technical brief, schemas, 
 - [x] TransactionPerRequest middleware for mutating HTTP verbs
 - [x] Health endpoint `/health` (DB, Redis, queue, build SHA)
 - [ ] Idempotency-Key middleware/validation on money-affecting writes
-- [x] Audit trail for financial mutations (writes to `audit.audit_logs`)
+- [x] Audit trail for financial mutations (writes to `audit.entries`)
 - [ ] OpenAPI/Scribe docs published behind auth
 - [x] CI basics: lint, static analysis, tests, build
 - [ ] Pre-deploy `pg_dump` backup step with checksum
 - [ ] Weekly restore drill + RLS validation script
 - [ ] Performance budgets enforced (P95 < 250ms APIs); slow query log monitored
-- [ ] **NEW**: Stand up dedicated `audit` schema (junior dev task)
-    - [ ] Create migrations for `audit.entries`, `audit.financial_transactions`, `audit.permission_changes`
-    - [ ] Update `audit_log()` helper to target `audit.entries` and add tests
-    - [ ] Migrate existing rows from `auth.audit_entries` → `audit.entries`
-    - [ ] Remove/rename old `auth.audit_entries` references across codebase
+- [x] **NEW**: Stand up dedicated `audit` schema (completed 2025-10-16)
+    - [x] Create migrations for `audit.entries`, `audit.financial_transactions`, `audit.permission_changes`
+    - [x] Update `audit_log()` helper to target `audit.entries` and add tests
+    - [x] Migrate existing rows from `auth.audit_entries` → `audit.entries`
+    - [x] Remove/rename old `auth.audit_entries` references across codebase
     - [ ] (Stretch) Draft follow-up tickets for Phase 2/3 tables (`audit.data_exports`, `audit.login_attempts`, etc.)
 
 ---

@@ -230,7 +230,7 @@ class CreditNotePost extends CreditNoteBaseCommand
 
             if ($applied) {
                 $this->info('✓ Credit note automatically applied to invoice!');
-                $this->line('  Amount Applied: $'.number_format($creditNote->remaining_balance, 2));
+                $this->line('  Amount Applied: $'.number_format($creditNote->remainingBalance(), 2));
                 $this->line('  Invoice Balance After: $'.number_format($creditNote->invoice->balance_due, 2));
             } else {
                 $this->warn('⚠ Could not auto-apply credit note to invoice');

@@ -255,6 +255,22 @@ Route::middleware('auth')->group(function () {
         Route::post('/', [\App\Http\Controllers\Ledger\LedgerController::class, 'store'])
             ->middleware('permission:ledger.entries.create')->name('store');
 
+        // Period Close Routes
+        Route::prefix('periods')->name('periods.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Ledger\PeriodClosePageController::class, 'index'])
+                ->middleware('permission:period-close.view')->name('index');
+            Route::get('/statistics', [\App\Http\Controllers\Ledger\PeriodClosePageController::class, 'statistics'])
+                ->middleware('permission:period-close.view')->name('statistics');
+
+            // Period-specific routes
+            Route::prefix('/{periodId}')->whereUuid('periodId')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Ledger\PeriodClosePageController::class, 'show'])
+                    ->middleware('permission:period-close.view')->name('show');
+                Route::get('/start', [\App\Http\Controllers\Ledger\PeriodClosePageController::class, 'start'])
+                    ->middleware('permission:period-close.start')->name('start');
+            });
+        });
+
         // Ledger Accounts Routes - must come before dynamic parameter routes
         Route::prefix('accounts')->name('accounts.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Ledger\LedgerAccountController::class, 'index'])
@@ -302,6 +318,83 @@ Route::middleware('auth')->group(function () {
 
                 Route::delete('/{batch}', [\App\Http\Controllers\Ledger\JournalBatchController::class, 'destroy'])
                     ->middleware('permission:ledger.entries.delete')->name('destroy');
+            });
+        });
+
+        // Bank Reconciliation Routes
+        Route::prefix('bank-reconciliation')->name('bank-reconciliation.')->group(function () {
+            // Statement Import Routes
+            Route::get('/import', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'index'])
+                ->middleware('permission:bank_statements.view')->name('import');
+            Route::post('/statements/import', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'store'])
+                ->middleware('permission:bank_statements.import')->name('statements.import');
+
+            // Statement Management Routes
+            Route::prefix('statements')->name('statements.')->group(function () {
+                Route::get('/{statement}', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'show'])
+                    ->whereUuid('statement')->middleware('permission:bank_statements.view')->name('show');
+                Route::get('/{statement}/status', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'status'])
+                    ->whereUuid('statement')->middleware('permission:bank_statements.view')->name('status');
+                Route::get('/{statement}/download', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'download'])
+                    ->whereUuid('statement')->middleware('permission:bank_statements.view')->name('download');
+                Route::delete('/{statement}', [\App\Http\Controllers\Ledger\BankStatementImportController::class, 'destroy'])
+                    ->whereUuid('statement')->middleware('permission:bank_statements.delete')->name('destroy');
+            });
+
+            // Reconciliation Management Routes
+            Route::prefix('reconciliations')->name('reconciliations.')->group(function () {
+                Route::get('/{reconciliation}', [\App\Http\Controllers\Ledger\BankReconciliationController::class, 'show'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.view')->name('show');
+                Route::post('/{reconciliation}/auto-match', [\App\Http\Controllers\Ledger\BankReconciliationController::class, 'autoMatch'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_matches.auto_match')->name('auto-match');
+                Route::post('/{reconciliation}/matches', [\App\Http\Controllers\Ledger\BankReconciliationController::class, 'createMatch'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_matches.create')->name('matches.store');
+                Route::delete('/{reconciliation}/matches/{match}', [\App\Http\Controllers\Ledger\BankReconciliationController::class, 'deleteMatch'])
+                    ->whereUuid('reconciliation')->whereUuid('match')->middleware('permission:bank_reconciliation_matches.delete')->name('matches.destroy');
+
+                // Lifecycle Management Routes
+                Route::post('/{reconciliation}/complete', [\App\Http\Controllers\Ledger\BankReconciliationStatusController::class, 'complete'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.complete')->name('complete');
+                Route::post('/{reconciliation}/lock', [\App\Http\Controllers\Ledger\BankReconciliationStatusController::class, 'lock'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.lock')->name('lock');
+                Route::post('/{reconciliation}/reopen', [\App\Http\Controllers\Ledger\BankReconciliationStatusController::class, 'reopen'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.reopen')->name('reopen');
+                Route::get('/{reconciliation}/status', [\App\Http\Controllers\Ledger\BankReconciliationStatusController::class, 'status'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.view')->name('status');
+                Route::get('/{reconciliation}/history', [\App\Http\Controllers\Ledger\BankReconciliationStatusController::class, 'history'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliations.view')->name('history');
+
+                // Adjustment Routes
+                Route::get('/{reconciliation}/adjustments', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'index'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_adjustments.view')->name('adjustments.index');
+                Route::post('/{reconciliation}/adjustments', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'store'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_adjustments.create')->name('adjustments.store');
+                Route::get('/{reconciliation}/adjustments/{adjustment}', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'show'])
+                    ->whereUuid('reconciliation')->whereUuid('adjustment')->middleware('permission:bank_reconciliation_adjustments.view')->name('adjustments.show');
+                Route::put('/{reconciliation}/adjustments/{adjustment}', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'update'])
+                    ->whereUuid('reconciliation')->whereUuid('adjustment')->middleware('permission:bank_reconciliation_adjustments.update')->name('adjustments.update');
+                Route::delete('/{reconciliation}/adjustments/{adjustment}', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'destroy'])
+                    ->whereUuid('reconciliation')->whereUuid('adjustment')->middleware('permission:bank_reconciliation_adjustments.delete')->name('adjustments.destroy');
+                Route::get('/{reconciliation}/adjustments/types', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'getAdjustmentTypes'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_adjustments.view')->name('adjustments.types');
+                Route::post('/{reconciliation}/adjustments/preview', [\App\Http\Controllers\Ledger\BankReconciliationAdjustmentController::class, 'getAdjustmentPreview'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_adjustments.view')->name('adjustments.preview');
+
+                // Report Routes
+                Route::get('/{reconciliation}/reports', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'index'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.view')->name('reports.index');
+                Route::get('/{reconciliation}/reports/{reportType}', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'show'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.view')->name('reports.show');
+                Route::post('/{reconciliation}/reports/{reportType}/export', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'export'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.export')->name('reports.export');
+                Route::get('/{reconciliation}/reports/download/{filename}', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'download'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.export')->name('reports.download');
+                Route::get('/{reconciliation}/reports/variance', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'variance'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.view')->name('reports.variance');
+                Route::get('/{reconciliation}/reports/audit', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'audit'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.view')->name('reports.audit');
+                Route::get('/{reconciliation}/reports/metrics', [\App\Http\Controllers\Ledger\BankReconciliationReportController::class, 'metrics'])
+                    ->whereUuid('reconciliation')->middleware('permission:bank_reconciliation_reports.view')->name('reports.metrics');
             });
         });
 

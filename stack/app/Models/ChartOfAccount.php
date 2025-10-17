@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class ChartOfAccount extends Model
 {
-    use HasFactory;
+    use BelongsToCompany, HasFactory;
 
     /**
      * The table associated with the model.
@@ -30,20 +31,9 @@ class ChartOfAccount extends Model
     protected $keyType = 'string';
 
     /**
-     * The attributes that are mass assignable.
+     * The attributes that are not mass assignable.
      */
-    protected $fillable = [
-        'account_code',
-        'account_name',
-        'account_type',
-        'account_category',
-        'is_active',
-        'description',
-        'parent_account_code',
-        'company_id',
-        'created_at',
-        'updated_at',
-    ];
+    protected $guarded = ['created_at', 'updated_at'];
 
     /**
      * The attributes that should be cast.
@@ -52,6 +42,7 @@ class ChartOfAccount extends Model
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'company_id' => 'string',
     ];
 
     /**

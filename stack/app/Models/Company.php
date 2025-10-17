@@ -25,27 +25,11 @@ class Company extends Model
     protected $table = 'auth.companies';
 
     /**
-     * The attributes that are mass assignable.
+     * The attributes that are not mass assignable.
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'name',
-        'industry',
-        'slug',
-        'country',
-        'country_id',
-        'currency', // Added for API compatibility
-        'base_currency',
-        'currency_id',
-        'timezone', // Added for API compatibility
-        'exchange_rate_id',
-        'language',
-        'locale',
-        'settings',
-        'created_by_user_id',
-        'is_active',
-    ];
+    protected $guarded = ['id', 'created_at', 'updated_at', 'is_active'];
 
     /**
      * Get the attributes that should be cast.

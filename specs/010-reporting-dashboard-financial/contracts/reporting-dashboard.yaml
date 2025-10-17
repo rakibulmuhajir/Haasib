@@ -1,0 +1,662 @@
+openapi: 3.1.0
+info:
+  title: Financial Reporting & KPI Dashboard API
+  version: 0.1.0
+  description: HTTP contracts for real-time financial dashboards, report execution, templates, and scheduling.
+servers:
+  - url: https://api.haasib.local
+    description: Local development
+security:
+  - Sanctum: []
+paths:
+  /api/reporting/dashboard:
+    get:
+      summary: Fetch dashboard data for a layout
+      operationId: getDashboard
+      tags: [Dashboard]
+      parameters:
+        - name: layout_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date_range[start]
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_range[end]
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: comparison
+          in: query
+          schema:
+            type: string
+            enum: [prior_period, prior_year, custom]
+        - name: filters[segment]
+          in: query
+          schema:
+            type: string
+        - name: currency
+          in: query
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 3
+      responses:
+        "200":
+          description: Dashboard payload with KPI cards, charts, and tables.
+          headers:
+            X-Cache-TTL:
+              description: Number of seconds the payload should be treated as fresh.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/reporting/dashboard/refresh:
+    post:
+      summary: Force-refresh dashboard cache for the current company
+      operationId: refreshDashboard
+      tags: [Dashboard]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [layout_id]
+              properties:
+                layout_id:
+                  type: string
+                  format: uuid
+                invalidate_cache:
+                  type: boolean
+                  default: true
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  default: normal
+      responses:
+        "202":
+          description: Refresh job queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  estimated_completion_seconds:
+                    type: integer
+        "409":
+          description: Refresh already in progress
+  /api/reporting/reports:
+    post:
+      summary: Request generation of a financial report
+      operationId: createReportRun
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_type, parameters]
+              properties:
+                template_id:
+                  type: integer
+                report_type:
+                  type: string
+                  enum: [income_statement, balance_sheet, cash_flow, trial_balance, kpi_dashboard, custom]
+                parameters:
+                  $ref: "#/components/schemas/ReportParameters"
+                delivery:
+                  $ref: "#/components/schemas/DeliveryOptions"
+      responses:
+        "202":
+          description: Report queued for generation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportRun"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/reporting/reports/{reportId}:
+    get:
+      summary: Fetch status and payload for a report run
+      operationId: getReportRun
+      tags: [Reports]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Expire a generated report
+      operationId: expireReportRun
+      tags: [Reports]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Report marked as expired
+        "409":
+          description: Cannot expire report while deliveries pending
+  /api/reporting/reports/{reportId}/export:
+    get:
+      summary: Download the generated export file
+      operationId: downloadReportExport
+      tags: [Reports]
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to signed download URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/reporting/templates:
+    get:
+      summary: List report templates for the company
+      operationId: listReportTemplates
+      tags: [Templates]
+      responses:
+        "200":
+          description: Template collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReportTemplate"
+  /api/reporting/templates:
+    post:
+      summary: Create a new custom report template
+      operationId: createReportTemplate
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportTemplateInput"
+      responses:
+        "201":
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /api/reporting/templates/{templateId}:
+    patch:
+      summary: Update an existing template
+      operationId: updateReportTemplate
+      tags: [Templates]
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportTemplateInput"
+      responses:
+        "200":
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "409":
+          description: Template name conflict or system template mutation
+    delete:
+      summary: Archive a template
+      operationId: archiveReportTemplate
+      tags: [Templates]
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Template archived
+        "409":
+          description: Template in use by active schedules
+  /api/reporting/schedules:
+    post:
+      summary: Create a scheduled report
+      operationId: createReportSchedule
+      tags: [Schedules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportScheduleInput"
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSchedule"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /api/reporting/schedules/{scheduleId}:
+    patch:
+      summary: Update schedule frequency, recipients, or status
+      operationId: updateReportSchedule
+      tags: [Schedules]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportScheduleInput"
+      responses:
+        "200":
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSchedule"
+        "409":
+          description: Cannot resume archived schedule
+    delete:
+      summary: Archive a schedule
+      operationId: archiveReportSchedule
+      tags: [Schedules]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Schedule archived
+  /api/reporting/kpis/definitions:
+    get:
+      summary: List KPI definitions available to the company
+      operationId: listKpiDefinitions
+      tags: [KPIs]
+      responses:
+        "200":
+          description: KPI definition list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/KpiDefinition"
+components:
+  securitySchemes:
+    Sanctum:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message, errors]
+            properties:
+              message: { type: string }
+              errors:
+                type: object
+    Forbidden:
+      description: User lacks permission
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+  schemas:
+    DashboardResponse:
+      type: object
+      required: [layout, refreshed_at, cards]
+      properties:
+        layout:
+          $ref: "#/components/schemas/DashboardLayout"
+        refreshed_at:
+          type: string
+          format: date-time
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardCard"
+        totals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SummaryTotal"
+    DashboardLayout:
+      type: object
+      required: [layout_id, name, visibility]
+      properties:
+        layout_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        visibility:
+          type: string
+          enum: [private, company, role]
+        filters:
+          type: object
+        cards:
+          type: array
+          items:
+            type: object
+            properties:
+              card_id: { type: string }
+              type: { type: string, enum: [kpi, chart, table] }
+              position: { type: object }
+    DashboardCard:
+      type: object
+      required: [card_id, type, data]
+      properties:
+        card_id:
+          type: string
+        type:
+          type: string
+          enum: [kpi, chart, table]
+        title:
+          type: string
+        data:
+          type: object
+        comparison:
+          type: object
+        drilldown_url:
+          type: string
+          format: uri
+    SummaryTotal:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        trend_percent:
+          type: number
+        direction:
+          type: string
+          enum: [up, down, flat]
+    ReportParameters:
+      type: object
+      required: [date_range]
+      properties:
+        date_range:
+          type: object
+          required: [start, end]
+          properties:
+            start: { type: string, format: date }
+            end: { type: string, format: date }
+        comparison:
+          type: string
+          enum: [none, prior_period, prior_year, rolling_12]
+        dimension_filters:
+          type: object
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        include_unposted:
+          type: boolean
+          default: false
+    DeliveryOptions:
+      type: object
+      properties:
+        immediate:
+          type: boolean
+          default: true
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [email, in_app]
+        recipients:
+          type: array
+          items:
+            type: string
+            format: email
+    ReportRun:
+      type: object
+      required: [report_id, status, report_type]
+      properties:
+        report_id:
+          type: integer
+        status:
+          type: string
+          enum: [queued, running, generated, failed, expired]
+        report_type:
+          type: string
+        name:
+          type: string
+        template_id:
+          type: integer
+        parameters:
+          $ref: "#/components/schemas/ReportParameters"
+        generated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        download_token:
+          type: string
+        delivery_status:
+          type: object
+    ReportTemplate:
+      type: object
+      required: [template_id, name, report_type, is_public]
+      properties:
+        template_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        report_type:
+          type: string
+        category:
+          type: string
+        configuration:
+          type: object
+        filters:
+          type: object
+        parameters:
+          type: object
+        is_public:
+          type: boolean
+        sort_order:
+          type: integer
+    ReportTemplateInput:
+      type: object
+      required: [name, report_type, configuration]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        report_type:
+          type: string
+          enum: [income_statement, balance_sheet, cash_flow, trial_balance, kpi_dashboard, custom]
+        category:
+          type: string
+          enum: [financial, operational, analytical]
+        configuration:
+          type: object
+        filters:
+          type: object
+        parameters:
+          type: object
+        is_public:
+          type: boolean
+    ReportScheduleInput:
+      type: object
+      required: [template_id, frequency, delivery_channels]
+      properties:
+        template_id:
+          type: integer
+        name:
+          type: string
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, yearly, custom]
+        custom_cron:
+          type: string
+        next_run_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        parameters:
+          $ref: "#/components/schemas/ReportParameters"
+        delivery_channels:
+          type: object
+          properties:
+            email:
+              type: array
+              items:
+                type: string
+                format: email
+            sftp:
+              type: object
+              properties:
+                endpoint: { type: string, format: uri }
+                credentials_id: { type: string }
+        status:
+          type: string
+          enum: [active, paused, archived]
+    ReportSchedule:
+      type: object
+      required: [schedule_id, template_id, frequency, status]
+      properties:
+        schedule_id:
+          type: string
+          format: uuid
+        template_id:
+          type: integer
+        name:
+          type: string
+        frequency:
+          type: string
+        timezone:
+          type: string
+        next_run_at:
+          type: string
+          format: date-time
+        last_run_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, paused, archived]
+        delivery_channels:
+          type: object
+        parameters:
+          $ref: "#/components/schemas/ReportParameters"
+    KpiDefinition:
+      type: object
+      required: [kpi_id, code, name, visual_type]
+      properties:
+        kpi_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        visual_type:
+          type: string
+          enum: [stat, trend, chart, gauge]
+        value_format:
+          type: string
+          enum: [currency, percentage, days, number]
+        thresholds:
+          type: object
+        default_granularity:
+          type: string
+          enum: [daily, weekly, monthly]
+        allow_drilldown:
+          type: boolean
+        is_global:
+          type: boolean

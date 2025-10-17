@@ -20,6 +20,8 @@ class CompanyPermissionsSeeder extends Seeder
             $this->createCompanyInvitationPermissions();
             $this->createFiscalYearPermissions();
             $this->createChartOfAccountsPermissions();
+            $this->createPeriodClosePermissions();
+            $this->createBankReconciliationPermissions();
             $this->assignPermissionsToRoles();
 
             DB::commit();
@@ -157,6 +159,101 @@ class CompanyPermissionsSeeder extends Seeder
         $this->command->info('✓ Chart of accounts permissions created');
     }
 
+    private function createPeriodClosePermissions(): void
+    {
+        $permissions = [
+            // Period close workflow
+            'period-close.view' => 'View period close dashboard and checklists',
+            'period-close.start' => 'Start period close workflow',
+            'period-close.validate' => 'Run period close validations',
+            'period-close.lock' => 'Lock period for final approval',
+            'period-close.complete' => 'Complete and finalize period close',
+            'period-close.reopen' => 'Reopen closed periods',
+            'period-close.adjust' => 'Create period adjusting entries',
+
+            // Period close templates
+            'period-close-templates.view' => 'View period close templates',
+            'period-close-templates.create' => 'Create period close templates',
+            'period-close-templates.update' => 'Update period close templates',
+            'period-close-templates.delete' => 'Delete period close templates',
+            'period-close-templates.manage' => 'Full template management access',
+            'period-close-templates.sync' => 'Sync template tasks to period closes',
+
+            // Period close tasks
+            'period-close-tasks.update' => 'Update period close task status',
+            'period-close-tasks.complete' => 'Mark period close tasks as completed',
+            'period-close-tasks.waive' => 'Waive required period close tasks',
+            'period-close-tasks.block' => 'Block period close tasks with notes',
+
+            // Period close reporting
+            'period-close.reports.view' => 'View period close reports',
+            'period-close.reports.generate' => 'Generate period close reports',
+            'period-close.reports.export' => 'Export period close reports',
+        ];
+
+        foreach ($permissions as $name => $description) {
+            Permission::firstOrCreate([
+                'name' => $name,
+                'guard_name' => 'web',
+            ], [
+                'description' => $description,
+            ]);
+        }
+
+        $this->command->info('✓ Period close permissions created');
+    }
+
+    private function createBankReconciliationPermissions(): void
+    {
+        $permissions = [
+            // Bank statements
+            'bank_statements.view' => 'View bank statements and statement lines',
+            'bank_statements.import' => 'Import bank statements (CSV, OFX, QFX)',
+            'bank_statements.delete' => 'Delete bank statements',
+            'bank_statements.process' => 'Process and normalize bank statement lines',
+
+            // Bank reconciliations
+            'bank_reconciliations.view' => 'View bank reconciliations and workspace',
+            'bank_reconciliations.create' => 'Start new bank reconciliations',
+            'bank_reconciliations.update' => 'Update bank reconciliation details and notes',
+            'bank_reconciliations.delete' => 'Delete bank reconciliations',
+            'bank_reconciliations.complete' => 'Complete bank reconciliations',
+            'bank_reconciliations.lock' => 'Lock completed reconciliations',
+            'bank_reconciliations.reopen' => 'Reopen locked reconciliations',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view' => 'View bank reconciliation matches',
+            'bank_reconciliation_matches.create' => 'Create manual matches between statements and transactions',
+            'bank_reconciliation_matches.delete' => 'Remove bank reconciliation matches',
+            'bank_reconciliation_matches.auto_match' => 'Run auto-matching algorithms',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view' => 'View bank reconciliation adjustments',
+            'bank_reconciliation_adjustments.create' => 'Create bank adjustments (fees, interest, write-offs)',
+            'bank_reconciliation_adjustments.update' => 'Update bank reconciliation adjustments',
+            'bank_reconciliation_adjustments.delete' => 'Delete bank reconciliation adjustments',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view' => 'View bank reconciliation reports',
+            'bank_reconciliation_reports.generate' => 'Generate bank reconciliation reports',
+            'bank_reconciliation_reports.export' => 'Export bank reconciliation reports and statements',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view' => 'View bank reconciliation audit trail',
+        ];
+
+        foreach ($permissions as $name => $description) {
+            Permission::firstOrCreate([
+                'name' => $name,
+                'guard_name' => 'web',
+            ], [
+                'description' => $description,
+            ]);
+        }
+
+        $this->command->info('✓ Bank reconciliation permissions created');
+    }
+
     private function assignPermissionsToRoles(): void
     {
         // Get or create roles
@@ -186,6 +283,21 @@ class CompanyPermissionsSeeder extends Seeder
             'accounting_periods.view', 'accounting_periods.create', 'accounting_periods.update',
             'accounting_periods.delete', 'accounting_periods.close',
 
+            // Period close
+            'period-close.view', 'period-close.start', 'period-close.validate', 'period-close.lock',
+            'period-close.complete', 'period-close.reopen', 'period-close.adjust',
+
+            // Period close templates
+            'period-close-templates.view', 'period-close-templates.create', 'period-close-templates.update',
+            'period-close-templates.delete', 'period-close-templates.manage', 'period-close-templates.sync',
+
+            // Period close tasks
+            'period-close-tasks.update', 'period-close-tasks.complete', 'period-close-tasks.waive',
+            'period-close-tasks.block',
+
+            // Period close reporting
+            'period-close.reports.view', 'period-close.reports.generate', 'period-close.reports.export',
+
             // Chart of accounts
             'charts_of_accounts.view', 'charts_of_accounts.create', 'charts_of_accounts.update',
             'charts_of_accounts.delete', 'charts_of_accounts.import',
@@ -199,6 +311,30 @@ class CompanyPermissionsSeeder extends Seeder
             // Account groups
             'account_groups.view', 'account_groups.create', 'account_groups.update',
             'account_groups.delete', 'account_groups.assign_accounts',
+
+            // Bank statements
+            'bank_statements.view', 'bank_statements.import', 'bank_statements.delete',
+            'bank_statements.process',
+
+            // Bank reconciliations
+            'bank_reconciliations.view', 'bank_reconciliations.create', 'bank_reconciliations.update',
+            'bank_reconciliations.delete', 'bank_reconciliations.complete', 'bank_reconciliations.lock',
+            'bank_reconciliations.reopen',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view', 'bank_reconciliation_matches.create',
+            'bank_reconciliation_matches.delete', 'bank_reconciliation_matches.auto_match',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view', 'bank_reconciliation_adjustments.create',
+            'bank_reconciliation_adjustments.update', 'bank_reconciliation_adjustments.delete',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view', 'bank_reconciliation_reports.generate',
+            'bank_reconciliation_reports.export',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view',
         ];
 
         // Owner permissions (full company management)
@@ -220,6 +356,21 @@ class CompanyPermissionsSeeder extends Seeder
             'accounting_periods.view', 'accounting_periods.create', 'accounting_periods.update',
             'accounting_periods.delete', 'accounting_periods.close',
 
+            // Period close
+            'period-close.view', 'period-close.start', 'period-close.validate', 'period-close.lock',
+            'period-close.complete', 'period-close.reopen', 'period-close.adjust',
+
+            // Period close templates
+            'period-close-templates.view', 'period-close-templates.create', 'period-close-templates.update',
+            'period-close-templates.delete', 'period-close-templates.manage', 'period-close-templates.sync',
+
+            // Period close tasks
+            'period-close-tasks.update', 'period-close-tasks.complete', 'period-close-tasks.waive',
+            'period-close-tasks.block',
+
+            // Period close reporting
+            'period-close.reports.view', 'period-close.reports.generate', 'period-close.reports.export',
+
             // Chart of accounts
             'charts_of_accounts.view', 'charts_of_accounts.create', 'charts_of_accounts.update',
             'charts_of_accounts.delete', 'charts_of_accounts.import',
@@ -233,6 +384,29 @@ class CompanyPermissionsSeeder extends Seeder
             // Account groups
             'account_groups.view', 'account_groups.create', 'account_groups.update',
             'account_groups.delete', 'account_groups.assign_accounts',
+
+            // Bank statements
+            'bank_statements.view', 'bank_statements.import', 'bank_statements.delete',
+            'bank_statements.process',
+
+            // Bank reconciliations
+            'bank_reconciliations.view', 'bank_reconciliations.create', 'bank_reconciliations.update',
+            'bank_reconciliations.complete', 'bank_reconciliations.lock', 'bank_reconciliations.reopen',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view', 'bank_reconciliation_matches.create',
+            'bank_reconciliation_matches.delete', 'bank_reconciliation_matches.auto_match',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view', 'bank_reconciliation_adjustments.create',
+            'bank_reconciliation_adjustments.update', 'bank_reconciliation_adjustments.delete',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view', 'bank_reconciliation_reports.generate',
+            'bank_reconciliation_reports.export',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view',
         ];
 
         // Admin permissions (company management without deletion)
@@ -253,6 +427,20 @@ class CompanyPermissionsSeeder extends Seeder
             'accounting_periods.view', 'accounting_periods.create', 'accounting_periods.update',
             'accounting_periods.close',
 
+            // Period close (admin cannot reopen periods)
+            'period-close.view', 'period-close.start', 'period-close.validate', 'period-close.lock',
+            'period-close.complete', 'period-close.adjust',
+
+            // Period close templates
+            'period-close-templates.view', 'period-close-templates.create', 'period-close-templates.update',
+            'period-close-templates.sync',
+
+            // Period close tasks
+            'period-close-tasks.update', 'period-close-tasks.complete', 'period-close-tasks.block',
+
+            // Period close reporting
+            'period-close.reports.view', 'period-close.reports.generate',
+
             // Chart of accounts
             'charts_of_accounts.view', 'charts_of_accounts.create', 'charts_of_accounts.update',
             'charts_of_accounts.import',
@@ -266,6 +454,27 @@ class CompanyPermissionsSeeder extends Seeder
             // Account groups
             'account_groups.view', 'account_groups.create', 'account_groups.update',
             'account_groups.assign_accounts',
+
+            // Bank statements
+            'bank_statements.view', 'bank_statements.import', 'bank_statements.process',
+
+            // Bank reconciliations
+            'bank_reconciliations.view', 'bank_reconciliations.create', 'bank_reconciliations.update',
+            'bank_reconciliations.complete', 'bank_reconciliations.lock',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view', 'bank_reconciliation_matches.create',
+            'bank_reconciliation_matches.delete', 'bank_reconciliation_matches.auto_match',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view', 'bank_reconciliation_adjustments.create',
+            'bank_reconciliation_adjustments.update', 'bank_reconciliation_adjustments.delete',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view', 'bank_reconciliation_reports.generate',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view',
         ];
 
         // Accountant permissions (financial management)
@@ -279,6 +488,16 @@ class CompanyPermissionsSeeder extends Seeder
             // Accounting periods
             'accounting_periods.view', 'accounting_periods.update',
 
+            // Period close (accountant can handle most tasks except reopening)
+            'period-close.view', 'period-close.start', 'period-close.validate',
+            'period-close.adjust',
+
+            // Period close tasks
+            'period-close-tasks.update', 'period-close-tasks.complete', 'period-close-tasks.block',
+
+            // Period close reporting
+            'period-close.reports.view', 'period-close.reports.generate',
+
             // Chart of accounts
             'charts_of_accounts.view', 'charts_of_accounts.update',
 
@@ -290,6 +509,27 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Account groups
             'account_groups.view', 'account_groups.update', 'account_groups.assign_accounts',
+
+            // Bank statements
+            'bank_statements.view', 'bank_statements.import', 'bank_statements.process',
+
+            // Bank reconciliations
+            'bank_reconciliations.view', 'bank_reconciliations.create', 'bank_reconciliations.update',
+            'bank_reconciliations.complete',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view', 'bank_reconciliation_matches.create',
+            'bank_reconciliation_matches.delete', 'bank_reconciliation_matches.auto_match',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view', 'bank_reconciliation_adjustments.create',
+            'bank_reconciliation_adjustments.update',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view', 'bank_reconciliation_reports.generate',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view',
         ];
 
         // Viewer permissions (read-only)
@@ -314,6 +554,24 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Account groups
             'account_groups.view',
+
+            // Bank statements
+            'bank_statements.view',
+
+            // Bank reconciliations
+            'bank_reconciliations.view',
+
+            // Bank reconciliation matching
+            'bank_reconciliation_matches.view',
+
+            // Bank reconciliation adjustments
+            'bank_reconciliation_adjustments.view',
+
+            // Bank reconciliation reporting
+            'bank_reconciliation_reports.view',
+
+            // Bank reconciliation audit
+            'bank_reconciliation_audit.view',
         ];
 
         // Assign permissions to roles

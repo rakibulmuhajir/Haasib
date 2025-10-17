@@ -530,7 +530,7 @@ setFiscalYearDefaults()
                 <p class="mt-4 text-center">Creating company...</p>
             </div>
         </div>
-    </div>
+    </LayoutShell>
 </template>
 
 <style scoped>

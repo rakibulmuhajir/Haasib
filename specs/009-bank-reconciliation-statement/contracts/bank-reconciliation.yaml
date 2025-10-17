@@ -1,0 +1,486 @@
+openapi: 3.1.0
+info:
+  title: Bank Reconciliation API
+  version: 0.1.0
+  description: |
+    HTTP contracts for bank statement import, matching, and reconciliation completion.
+servers:
+  - url: https://api.haasib.local
+    description: Local development
+security:
+  - Sanctum: []
+paths:
+  /api/banking/statements/import:
+    post:
+      summary: Import a bank statement file
+      operationId: importBankStatement
+      tags: [Bank Statements]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [bank_account_id, statement_file, statement_period_start, statement_period_end, opening_balance, closing_balance, currency]
+              properties:
+                bank_account_id:
+                  type: string
+                  format: uuid
+                statement_file:
+                  type: string
+                  format: binary
+                statement_period_start:
+                  type: string
+                  format: date
+                statement_period_end:
+                  type: string
+                  format: date
+                opening_balance:
+                  type: string
+                  pattern: "^-?\\d{1,12}(\\.\\d{1,4})?$"
+                closing_balance:
+                  type: string
+                  pattern: "^-?\\d{1,12}(\\.\\d{1,4})?$"
+                currency:
+                  type: string
+                  minLength: 3
+                  maxLength: 3
+      responses:
+        "201":
+          description: Statement accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankStatement"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /api/banking/reconciliations:
+    post:
+      summary: Start a reconciliation for a processed statement
+      operationId: startReconciliation
+      tags: [Bank Reconciliations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statement_id]
+              properties:
+                statement_id:
+                  type: string
+                  format: uuid
+                lock_on_complete:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Reconciliation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankReconciliation"
+        "409":
+          description: Active reconciliation already exists
+  /api/banking/reconciliations/{reconciliationId}:
+    get:
+      summary: Fetch reconciliation details, statement lines, and suggested matches
+      operationId: getReconciliation
+      tags: [Bank Reconciliations]
+      parameters:
+        - name: reconciliationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page[statement_lines]
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page[statement_lines]
+          in: query
+          schema:
+            type: integer
+            minimum: 25
+            maximum: 200
+        - name: filters[internal_source]
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reconciliation detail payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reconciliation:
+                    $ref: "#/components/schemas/BankReconciliation"
+                  statement_lines:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BankStatementLine"
+                  unmatched_internal_transactions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InternalTransaction"
+                  auto_match_suggestions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MatchSuggestion"
+        "404":
+          description: Reconciliation not found
+  /api/banking/reconciliations/{reconciliationId}/auto-match:
+    post:
+      summary: Run auto-matching against statement lines and internal transactions
+      operationId: runAutoMatch
+      tags: [Bank Reconciliations]
+      parameters:
+        - name: reconciliationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                strategy:
+                  type: string
+                  enum: [default, strict_date, loose_amount]
+                  default: default
+      responses:
+        "202":
+          description: Auto-match queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+        "409":
+          description: Auto-match already running
+  /api/banking/reconciliations/{reconciliationId}/matches:
+    post:
+      summary: Create manual match between a statement line and internal transaction(s)
+      operationId: createManualMatch
+      tags: [Bank Matches]
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statement_line_id, source_type, source_id, amount]
+              properties:
+                statement_line_id:
+                  type: string
+                  format: uuid
+                source_type:
+                  type: string
+                  enum: [ledger.journal_entry, acct.payment, acct.credit_note]
+                source_id:
+                  type: string
+                  format: uuid
+                amount:
+                  type: string
+                  pattern: "^-?\\d{1,12}(\\.\\d{1,4})?$"
+      responses:
+        "201":
+          description: Match created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankReconciliationMatch"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Remove a match from the reconciliation
+      operationId: deleteMatch
+      tags: [Bank Matches]
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+        - name: matchId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Match removed
+  /api/banking/reconciliations/{reconciliationId}/adjustments:
+    post:
+      summary: Record an adjustment generated during reconciliation
+      operationId: createAdjustment
+      tags: [Bank Adjustments]
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adjustment_type, amount, description]
+              properties:
+                statement_line_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                adjustment_type:
+                  type: string
+                  enum: [bank_fee, interest, write_off, timing]
+                amount:
+                  type: string
+                  pattern: "^-?\\d{1,12}(\\.\\d{1,4})?$"
+                description:
+                  type: string
+                post_journal_entry:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Adjustment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankReconciliationAdjustment"
+  /api/banking/reconciliations/{reconciliationId}/complete:
+    post:
+      summary: Complete and optionally lock the reconciliation
+      operationId: completeReconciliation
+      tags: [Bank Reconciliations]
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lock:
+                  type: boolean
+                  default: true
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Reconciliation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankReconciliation"
+        "409":
+          description: Variance must be zero before completion
+  /api/banking/reconciliations/{reconciliationId}/reopen:
+    post:
+      summary: Reopen a locked reconciliation
+      operationId: reopenReconciliation
+      tags: [Bank Reconciliations]
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Reconciliation reopened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankReconciliation"
+        "403":
+          description: User lacks permission or reconciliation not locked
+components:
+  securitySchemes:
+    Sanctum:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ReconciliationId:
+      name: reconciliationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationError"
+  schemas:
+    BankStatement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bank_account_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processed, reconciled, archived]
+        opening_balance:
+          type: string
+        closing_balance:
+          type: string
+        currency:
+          type: string
+        statement_period_start:
+          type: string
+          format: date
+        statement_period_end:
+          type: string
+          format: date
+        imported_at:
+          type: string
+          format: date-time
+    BankStatementLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        transaction_date:
+          type: string
+          format: date
+        description:
+          type: string
+        reference_number:
+          type: string
+          nullable: true
+        amount:
+          type: string
+        balance_after:
+          type: string
+          nullable: true
+        matched:
+          type: boolean
+        match_id:
+          type: string
+          format: uuid
+          nullable: true
+    BankReconciliation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        statement_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, in_progress, completed, locked, reopened]
+        variance:
+          type: string
+        unmatched_statement_total:
+          type: string
+        unmatched_internal_total:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+    BankReconciliationMatch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        statement_line_id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+        source_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+        auto_matched:
+          type: boolean
+        matched_at:
+          type: string
+          format: date-time
+    BankReconciliationAdjustment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        adjustment_type:
+          type: string
+        amount:
+          type: string
+        description:
+          type: string
+        journal_entry_id:
+          type: string
+          format: uuid
+    InternalTransaction:
+      type: object
+      properties:
+        source_type:
+          type: string
+        source_id:
+          type: string
+          format: uuid
+        transaction_date:
+          type: string
+          format: date
+        amount:
+          type: string
+        remaining_balance:
+          type: string
+        reference:
+          type: string
+    MatchSuggestion:
+      type: object
+      properties:
+        statement_line_id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+        source_id:
+          type: string
+          format: uuid
+        confidence_score:
+          type: number
+          minimum: 0
+          maximum: 1
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object

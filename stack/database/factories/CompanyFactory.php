@@ -45,7 +45,6 @@ class CompanyFactory extends Factory
                 'time_format' => 'H:i:s',
             ],
             'created_by_user_id' => User::factory(),
-            'is_active' => true,
         ];
     }
 }

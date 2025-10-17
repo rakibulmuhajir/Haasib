@@ -60,7 +60,6 @@ class LedgerService
                 $description,
                 $reference,
                 $entryDate,
-                $idempotencyKey,
                 $entryType
             ) {
                 // Validate that debits and credits balance
@@ -109,12 +108,10 @@ class LedgerService
                     'company_id' => $company->id,
                     'description' => $description,
                     'reference' => $reference,
-                    'entry_date' => $entryDate ?? now()->toDateString(),
-                    'entry_type' => $entryType,
-                    'total_debits' => $totalDebits,
-                    'total_credits' => $totalCredits,
+                    'date' => $entryDate ?? now()->toDateString(),
+                    'type' => $entryType,
                     'status' => 'posted', // Default to posted
-                    'idempotency_key' => $idempotencyKey,
+                    'created_by' => $context->getUserId(),
                 ]);
 
                 if (! $journalEntry->save()) {
@@ -568,5 +565,102 @@ class LedgerService
         ], $context);
 
         return $stats;
+    }
+
+    /**
+     * Create a period close adjustment entry
+     *
+     * @param  Company  $company  The company context
+     * @param  array  $lines  Array of journal entry lines [account_id, debit, credit, description]
+     * @param  string  $description  Description of the adjustment
+     * @param  string  $reference  Reference for the adjustment
+     * @param  string|null  $entryDate  Date of the entry (defaults to current date)
+     * @param  ServiceContext  $context  The service context
+     * @param  string|null  $periodCloseId  The period close ID this adjustment belongs to
+     * @return JournalEntry The created journal entry
+     *
+     * @throws \InvalidArgumentException If validation fails
+     * @throws \Throwable If the journal entry creation fails
+     */
+    public function createPeriodCloseAdjustment(
+        Company $company,
+        array $lines,
+        string $description,
+        string $reference,
+        ?string $entryDate,
+        ServiceContext $context,
+        ?string $periodCloseId = null
+    ): JournalEntry {
+        $idempotencyKey = $context->getIdempotencyKey();
+
+        // Validate that all accounts belong to the company and period
+        $accountIds = array_column($lines, 'account_id');
+        $validAccounts = ChartOfAccount::where('company_id', $company->id)
+            ->whereIn('id', $accountIds)
+            ->pluck('id')
+            ->toArray();
+
+        if (count($validAccounts) !== count($accountIds)) {
+            $invalidAccounts = array_diff($accountIds, $validAccounts);
+            throw new \InvalidArgumentException(
+                'One or more accounts do not belong to this company: '.implode(', ', $invalidAccounts)
+            );
+        }
+
+        // Create metadata to track period close association
+        $metadata = [
+            'created_during_period_close' => true,
+            'period_close_id' => $periodCloseId,
+            'adjustment_type' => 'period_close',
+        ];
+
+        try {
+            $result = DB::transaction(function () use (
+                $company,
+                $lines,
+                $description,
+                $reference,
+                $entryDate,
+                $context,
+                $metadata
+            ) {
+                $journalEntry = $this->createJournalEntry(
+                    $company,
+                    $lines,
+                    $description,
+                    $reference,
+                    $entryDate,
+                    $context,
+                    'period_adjustment'
+                );
+
+                // Update metadata to include period close association
+                $existingMetadata = $journalEntry->metadata ?? [];
+                $journalEntry->metadata = array_merge($existingMetadata, $metadata);
+                $journalEntry->save();
+
+                $this->logAudit('ledger.period_close_adjustment_created', [
+                    'company_id' => $company->id,
+                    'journal_entry_id' => $journalEntry->id,
+                    'reference' => $reference,
+                    'description' => $description,
+                    'period_close_id' => $periodCloseId,
+                    'total_amount' => array_sum(array_column($lines, 'debit')) + array_sum(array_column($lines, 'credit')),
+                ], $context);
+
+                return $journalEntry->fresh(['lines', 'company']);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Transaction failed in createPeriodCloseAdjustment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'company_id' => $company->id,
+                'description' => $description,
+                'period_close_id' => $periodCloseId,
+            ]);
+            throw $e;
+        }
+
+        return $result;
     }
 }

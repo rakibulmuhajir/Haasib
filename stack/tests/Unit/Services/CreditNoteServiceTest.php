@@ -288,7 +288,7 @@ describe('CreditNoteService Unit Tests', function () {
             expect($this->invoice->balance_due)->toBe(500);
 
             $this->creditNote->refresh();
-            expect($this->creditNote->remaining_balance)->toBe(0);
+            expect($this->creditNote->remainingBalance())->toBe(0.0);
         });
 
         it('cannot apply draft credit notes', function () {
@@ -319,7 +319,7 @@ describe('CreditNoteService Unit Tests', function () {
             expect($this->invoice->balance_due)->toBe(0);
 
             $this->creditNote->refresh();
-            expect($this->creditNote->remaining_balance)->toBe(200);
+            expect($this->creditNote->remainingBalance())->toBe(200.0);
         });
     });
 

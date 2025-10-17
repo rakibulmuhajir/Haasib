@@ -137,7 +137,7 @@ class CreditNoteList extends CreditNoteBaseCommand
                 'total_amount' => $creditNote->total_amount,
                 'currency' => $creditNote->currency,
                 'status' => $creditNote->status,
-                'remaining_balance' => $creditNote->remaining_balance,
+                'remaining_balance' => $creditNote->remainingBalance(),
                 'created_at' => $creditNote->created_at->toISOString(),
                 'posted_at' => $creditNote->posted_at?->toISOString(),
                 'cancelled_at' => $creditNote->cancelled_at?->toISOString(),
@@ -186,7 +186,7 @@ class CreditNoteList extends CreditNoteBaseCommand
             $this->line('Amount: ${'.number_format($creditNote->total_amount, 2).'}');
             $this->line('Status: '.ucfirst($creditNote->status));
             $this->line("Created: {$creditNote->created_at->format('Y-m-d H:i:s')}");
-            $this->line('Remaining Balance: ${'.number_format($creditNote->remaining_balance, 2).'}');
+            $this->line('Remaining Balance: ${'.number_format($creditNote->remainingBalance(), 2).'}');
             $this->line('');
         }
     }

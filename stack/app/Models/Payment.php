@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Payment extends Model
@@ -22,23 +23,12 @@ class Payment extends Model
 
     public $incrementing = false;
 
-    protected $fillable = [
-        'id',
-        'company_id',
-        'customer_id',
-        'payment_number',
-        'payment_date',
-        'payment_method',
-        'reference_number',
-        'amount',
-        'currency',
-        'status',
-        'notes',
-        'batch_id',
-        'created_by_user_id',
-        'reconciled',
-        'reconciled_date',
-    ];
+    /**
+     * Guarded attributes.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['id', 'created_at', 'updated_at', 'deleted_at'];
 
     protected $casts = [
         'amount' => 'decimal:2',
@@ -64,16 +54,24 @@ class Payment extends Model
 
     // Constants for status
     const STATUS_PENDING = 'pending';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_FAILED = 'failed';
+
     const STATUS_CANCELLED = 'cancelled';
+
     const STATUS_REVERSED = 'reversed';
 
     // Constants for payment methods
     const METHOD_CASH = 'cash';
+
     const METHOD_BANK_TRANSFER = 'bank_transfer';
+
     const METHOD_CARD = 'card';
+
     const METHOD_CHEQUE = 'cheque';
+
     const METHOD_OTHER = 'other';
 
     /**
@@ -82,7 +80,7 @@ class Payment extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class, 'payment_id')
-                    ->whereNull('reversed_at');
+            ->whereNull('reversed_at');
     }
 
     /**
@@ -134,6 +132,14 @@ class Payment extends Model
     }
 
     /**
+     * Polymorphic owner of the payment.
+     */
+    public function paymentable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /**
      * Get the total allocated amount.
      */
     public function getTotalAllocatedAttribute(): float
@@ -162,7 +168,7 @@ class Payment extends Model
      */
     public function getPaymentMethodLabelAttribute(): string
     {
-        return match($this->payment_method) {
+        return match ($this->payment_method) {
             self::METHOD_CASH => 'Cash',
             self::METHOD_BANK_TRANSFER => 'Bank Transfer',
             self::METHOD_CARD => 'Card',
@@ -177,7 +183,7 @@ class Payment extends Model
      */
     public function getStatusLabelAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             self::STATUS_PENDING => 'Pending',
             self::STATUS_COMPLETED => 'Completed',
             self::STATUS_FAILED => 'Failed',
@@ -225,11 +231,11 @@ class Payment extends Model
     public function scopeByDateRange($query, $startDate, $endDate = null)
     {
         $query->where('payment_date', '>=', $startDate);
-        
+
         if ($endDate) {
             $query->where('payment_date', '<=', $endDate);
         }
-        
+
         return $query;
     }
 
@@ -263,7 +269,7 @@ class Payment extends Model
     public function canBeReversed(): bool
     {
         return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED]) &&
-               !$this->reversal()->exists();
+               ! $this->reversal()->exists();
     }
 
     /**
@@ -281,7 +287,7 @@ class Payment extends Model
     {
         $allocations = $this->allocations;
         $totalAllocated = $allocations->sum('allocated_amount');
-        
+
         return [
             'total_allocated' => $totalAllocated,
             'remaining_amount' => $this->amount - $totalAllocated,
@@ -296,11 +302,11 @@ class Payment extends Model
     protected static function booted()
     {
         static::creating(function ($payment) {
-            if (!$payment->id) {
+            if (! $payment->id) {
                 $payment->id = Str::uuid();
             }
-            
-            if (!$payment->created_by_user_id) {
+
+            if (! $payment->created_by_user_id) {
                 $payment->created_by_user_id = auth()->id();
             }
         });

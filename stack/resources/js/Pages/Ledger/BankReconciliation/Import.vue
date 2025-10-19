@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { Head, Link, useForm } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Head, Link, useForm, router } from '@inertiajs/vue3'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -70,7 +70,7 @@ const onFileSelect = (event) => {
     const file = event.files[0]
     if (file) {
         form.statement_file = file
-        
+
         // Try to extract dates from filename if possible
         const dateMatch = file.name.match(/(\d{4})[_-]?(\d{2})[_-]?(\d{2})/)
         if (dateMatch) {
@@ -129,7 +129,7 @@ const uploadStatement = async () => {
         uploadProgress.value = 0
 
         let errorMessage = 'Upload failed. Please try again.'
-        
+
         if (error.response?.data?.message) {
             errorMessage = error.response.data.message
         } else if (error.response?.data?.errors) {
@@ -154,7 +154,7 @@ const startStatusPolling = (statementId) => {
             if (statement.is_processed || statement.status === 'failed') {
                 clearInterval(interval)
                 pollingIntervals.value.delete(statementId)
-                
+
                 if (statement.is_processed) {
                     toast.add({
                         severity: 'success',
@@ -170,7 +170,7 @@ const startStatusPolling = (statementId) => {
                         life: 5000,
                     })
                 }
-                
+
                 await fetchRecentStatements()
             }
         } catch (error) {
@@ -184,11 +184,10 @@ const startStatusPolling = (statementId) => {
 
 const fetchRecentStatements = async () => {
     try {
-        const response = await axios.get(route('bank-reconciliation.import'))
-        // Update recent statements through Inertia reload
-        window.location.reload()
+        // Use Inertia's reload method to refresh props without a full page reload
+        router.reload({ only: ['recentStatements'] })
     } catch (error) {
-        console.error('Failed to fetch recent statements:', error)
+        toast.add({ severity: 'warn', summary: 'Refresh Failed', detail: 'Could not refresh the list of recent statements.', life: 3000 })
     }
 }
 
@@ -199,7 +198,7 @@ const deleteStatement = async (statementId) => {
 
     try {
         await axios.delete(route('bank-reconciliation.statements.destroy', statementId))
-        
+
         toast.add({
             severity: 'success',
             summary: 'Statement Deleted',
@@ -223,7 +222,7 @@ const downloadStatement = async (statementId, statementName) => {
         const response = await axios.get(route('bank-reconciliation.statements.download', statementId), {
             responseType: 'blob',
         })
-        
+
         const url = window.URL.createObjectURL(new Blob([response.data]))
         const link = document.createElement('a')
         link.href = url
@@ -261,7 +260,7 @@ onUnmounted(() => {
 <template>
     <Head title="Bank Statement Import" />
 
-    <AppLayout>
+    <LayoutShell>
         <div class="space-y-6">
             <!-- Header -->
             <div class="flex items-center justify-between">
@@ -273,8 +272,8 @@ onUnmounted(() => {
                         Upload CSV, OFX, or QFX bank statements for reconciliation
                     </p>
                 </div>
-                
-                <Link 
+
+                <Link
                     :href="route('ledger.index')"
                     class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
@@ -287,7 +286,7 @@ onUnmounted(() => {
                 <template #title>
                     Upload New Statement
                 </template>
-                
+
                 <template #content>
                     <form @submit.prevent="uploadStatement" class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -445,11 +444,11 @@ onUnmounted(() => {
                 <template #title>
                     Recent Statements
                 </template>
-                
+
                 <template #content>
-                    <DataTable 
-                        :value="recentStatements" 
-                        :paginator="true" 
+                    <DataTable
+                        :value="recentStatements"
+                        :paginator="true"
                         :rows="10"
                         :loading="false"
                         striped-rows
@@ -460,39 +459,39 @@ onUnmounted(() => {
                                 <span class="font-medium">{{ data.statement_name }}</span>
                             </template>
                         </Column>
-                        
+
                         <Column field="bank_account" header="Bank Account" />
-                        
+
                         <Column field="period" header="Period">
                             <template #body="{ data }">
                                 {{ data.period_start }} to {{ data.period_end }}
                             </template>
                         </Column>
-                        
+
                         <Column field="status" header="Status">
                             <template #body="{ data }">
                                 <Tag :value="data.status" :severity="getStatusSeverity(data.status)" />
                             </template>
                         </Column>
-                        
+
                         <Column field="format" header="Format">
                             <template #body="{ data }">
                                 <Badge :value="data.format.toUpperCase()" :severity="getFormatBadge(data.format)" />
                             </template>
                         </Column>
-                        
+
                         <Column field="lines_count" header="Lines">
                             <template #body="{ data }">
                                 {{ data.lines_count || 'Processing...' }}
                             </template>
                         </Column>
-                        
+
                         <Column field="imported_at" header="Imported">
                             <template #body="{ data }">
                                 {{ new Date(data.imported_at).toLocaleDateString() }}
                             </template>
                         </Column>
-                        
+
                         <Column header="Actions">
                             <template #body="{ data }">
                                 <div class="flex space-x-2">
@@ -504,7 +503,7 @@ onUnmounted(() => {
                                         @click="downloadStatement(data.id, data.statement_name)"
                                         v-tooltip="'Download'"
                                     />
-                                    
+
                                     <Button
                                         v-if="data.can_be_reconciled"
                                         icon="pi pi-sync"
@@ -515,7 +514,7 @@ onUnmounted(() => {
                                         :href="route('bank-reconciliation.workspace.create', { statement_id: data.id })"
                                         v-tooltip="'Start Reconciliation'"
                                     />
-                                    
+
                                     <Button
                                         v-if="permissions.can_delete && data.status !== 'reconciled'"
                                         icon="pi pi-trash"
@@ -530,12 +529,12 @@ onUnmounted(() => {
                             </template>
                         </Column>
                     </DataTable>
-                    
+
                     <div v-if="recentStatements.length === 0" class="text-center py-8 text-gray-500">
                         No statements imported yet. Upload your first statement above.
                     </div>
                 </template>
             </Card>
         </div>
-    </AppLayout>
+    </LayoutShell>
 </template>

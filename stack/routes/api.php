@@ -267,6 +267,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [\App\Http\Controllers\Auth\AuthController::class, 'login'])->name('login')->middleware('idempotent');
     });
 
+    // Company context switching (no company context required)
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::post('/companies/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('companies.switch')->middleware('idempotent');
+        Route::post('/companies/{company}/switch', [\App\Http\Controllers\CompanyController::class, 'switchByUrl'])->name('companies.switch.by.url')->middleware('idempotent');
+    });
+
     // Authenticated routes - use session authentication like the old system
     Route::middleware(['web', 'auth', 'company.context'])->group(function () {
         // User routes (except login)
@@ -279,7 +285,6 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [\App\Http\Controllers\CompanyController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\CompanyController::class, 'store'])->name('store')->middleware('idempotent');
             Route::get('/{id}', [\App\Http\Controllers\CompanyController::class, 'show'])->whereUuid('id')->name('show');
-            Route::post('/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('switch')->middleware('idempotent');
 
             // Company invitations
             Route::get('/{companyId}/invitations', [\App\Http\Controllers\CompanyInvitationController::class, 'index'])->name('invitations.index');
@@ -363,5 +368,87 @@ Route::prefix('v1')->group(function () {
                 Route::post('/{templateId}/duplicate', [\App\Http\Controllers\Ledger\PeriodCloseTemplateController::class, 'duplicate'])->name('duplicate')->whereUuid('templateId')->middleware('idempotent');
             });
         });
+    });
+});
+
+// Reporting Dashboard Routes - uses Sanctum authentication
+Route::prefix('reporting')->name('reporting.')->middleware(['auth:sanctum', 'company.context'])->group(function () {
+    Route::prefix('dashboard')->name('dashboard.')->group(function () {
+        // Dashboard main endpoints
+        Route::get('/', [App\Http\Controllers\Reporting\DashboardController::class, 'index'])->name('index');
+        Route::post('/refresh', [App\Http\Controllers\Reporting\DashboardController::class, 'refresh'])->name('refresh');
+        Route::post('/refresh-all', [App\Http\Controllers\Reporting\DashboardController::class, 'refreshAll'])->name('refresh.all');
+        Route::post('/invalidate-cache', [App\Http\Controllers\Reporting\DashboardController::class, 'invalidateCache'])->name('invalidate.cache');
+
+        // Dashboard management endpoints
+        Route::get('/status', [App\Http\Controllers\Reporting\DashboardController::class, 'status'])->name('status');
+        Route::get('/stats', [App\Http\Controllers\Reporting\DashboardController::class, 'stats'])->name('stats');
+        Route::get('/layouts', [App\Http\Controllers\Reporting\DashboardController::class, 'layouts'])->name('layouts');
+
+        // Advanced KPIs for dashboard
+        Route::get('/aging-kpis', [App\Http\Controllers\Reporting\DashboardController::class, 'agingKpis'])->name('aging-kpis');
+    });
+
+    // Reports endpoints
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Reporting\ReportController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\Reporting\ReportController::class, 'store'])->name('store')->middleware('idempotent');
+        Route::get('/types', [App\Http\Controllers\Reporting\ReportController::class, 'types'])->name('types');
+        Route::get('/statistics', [App\Http\Controllers\Reporting\ReportController::class, 'statistics'])->name('statistics');
+        Route::get('/preview', [App\Http\Controllers\Reporting\ReportController::class, 'preview'])->name('preview');
+
+        // Report specific endpoints
+        Route::get('/{id}', [App\Http\Controllers\Reporting\ReportController::class, 'show'])->whereUuid('id')->name('show');
+        Route::get('/{id}/status', [App\Http\Controllers\Reporting\ReportController::class, 'status'])->whereUuid('id')->name('status');
+        Route::get('/{id}/download', [App\Http\Controllers\Reporting\ReportController::class, 'download'])->whereUuid('id')->name('download');
+        Route::get('/{id}/download-with-token', [App\Http\Controllers\Reporting\ReportController::class, 'downloadWithToken'])->whereUuid('id')->name('download.token');
+        Route::post('/{id}/deliver', [App\Http\Controllers\Reporting\ReportController::class, 'deliver'])->whereUuid('id')->name('deliver');
+        Route::delete('/{id}', [App\Http\Controllers\Reporting\ReportController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+    });
+
+    // Advanced KPI endpoints
+    Route::prefix('kpis')->name('kpis.')->group(function () {
+        Route::get('/aging', [App\Http\Controllers\Reporting\ReportController::class, 'agingKpis'])->name('aging');
+        Route::get('/budget', [App\Http\Controllers\Reporting\ReportController::class, 'budgetKpis'])->name('budget');
+        Route::get('/advanced', [App\Http\Controllers\Reporting\ReportController::class, 'advancedKpis'])->name('advanced');
+        Route::get('/currencies', [App\Http\Controllers\Reporting\ReportController::class, 'currencies'])->name('currencies');
+    });
+
+    // Transaction drilldown endpoints
+    Route::prefix('transactions')->name('transactions.')->group(function () {
+        Route::get('/drilldown', [App\Http\Controllers\Reporting\ReportController::class, 'drilldown'])->name('drilldown');
+        Route::get('/search', [App\Http\Controllers\Reporting\ReportController::class, 'searchTransactions'])->name('search');
+    });
+
+    // Report templates endpoints
+    Route::prefix('templates')->name('templates.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'store'])->name('store')->middleware('idempotent');
+        Route::get('/available', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'available'])->name('available');
+        Route::get('/default-configuration', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'getDefaultConfiguration'])->name('default-configuration');
+        Route::post('/validate-configuration', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'validateConfiguration'])->name('validate-configuration');
+        Route::post('/reorder', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'reorder'])->name('reorder');
+
+        // Template specific endpoints
+        Route::get('/{id}', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'show'])->whereUuid('id')->name('show');
+        Route::put('/{id}', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'update'])->whereUuid('id')->name('update');
+        Route::delete('/{id}', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+        Route::post('/{id}/duplicate', [App\Http\Controllers\Reporting\ReportTemplateController::class, 'duplicate'])->whereUuid('id')->name('duplicate');
+    });
+
+    // Report schedules endpoints
+    Route::prefix('schedules')->name('schedules.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'store'])->name('store')->middleware('idempotent');
+        Route::get('/statistics', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'statistics'])->name('statistics');
+        Route::get('/upcoming', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'upcoming'])->name('upcoming');
+
+        // Schedule specific endpoints
+        Route::get('/{id}', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'show'])->whereUuid('id')->name('show');
+        Route::put('/{id}', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'update'])->whereUuid('id')->name('update');
+        Route::delete('/{id}', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+        Route::post('/{id}/pause', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'pause'])->whereUuid('id')->name('pause');
+        Route::post('/{id}/resume', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'resume'])->whereUuid('id')->name('resume');
+        Route::post('/{id}/trigger', [App\Http\Controllers\Reporting\ReportScheduleController::class, 'trigger'])->whereUuid('id')->name('trigger');
     });
 });

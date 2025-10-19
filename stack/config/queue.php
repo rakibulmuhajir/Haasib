@@ -72,6 +72,43 @@ return [
             'after_commit' => false,
         ],
 
+        // Reporting queue connections for different workload types
+        'reports' => [
+            'driver' => env('REPORTING_QUEUE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REPORTING_QUEUE_NAME', 'reports'),
+            'retry_after' => (int) env('REPORTING_QUEUE_RETRY_AFTER', 300), // 5 minutes for report generation
+            'block_for' => null,
+            'after_commit' => true,
+        ],
+
+        'dashboard' => [
+            'driver' => env('REPORTING_DASHBOARD_QUEUE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_DASHBOARD_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REPORTING_DASHBOARD_QUEUE_NAME', 'dashboard'),
+            'retry_after' => (int) env('REPORTING_DASHBOARD_QUEUE_RETRY_AFTER', 30), // 30 seconds for dashboard refresh
+            'block_for' => null,
+            'after_commit' => true,
+        ],
+
+        'exports' => [
+            'driver' => env('REPORTING_EXPORTS_QUEUE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_EXPORTS_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REPORTING_EXPORTS_QUEUE_NAME', 'exports'),
+            'retry_after' => (int) env('REPORTING_EXPORTS_QUEUE_RETRY_AFTER', 600), // 10 minutes for export generation
+            'block_for' => null,
+            'after_commit' => true,
+        ],
+
+        'schedules' => [
+            'driver' => env('REPORTING_SCHEDULES_QUEUE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_SCHEDULES_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REPORTING_SCHEDULES_QUEUE_NAME', 'schedules'),
+            'retry_after' => (int) env('REPORTING_SCHEDULES_QUEUE_RETRY_AFTER', 180), // 3 minutes for scheduled reports
+            'block_for' => null,
+            'after_commit' => true,
+        ],
+
     ],
 
     /*

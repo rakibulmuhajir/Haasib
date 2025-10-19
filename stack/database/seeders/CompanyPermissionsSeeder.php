@@ -22,6 +22,7 @@ class CompanyPermissionsSeeder extends Seeder
             $this->createChartOfAccountsPermissions();
             $this->createPeriodClosePermissions();
             $this->createBankReconciliationPermissions();
+            $this->createReportingPermissions();
             $this->assignPermissionsToRoles();
 
             DB::commit();
@@ -254,6 +255,57 @@ class CompanyPermissionsSeeder extends Seeder
         $this->command->info('✓ Bank reconciliation permissions created');
     }
 
+    private function createReportingPermissions(): void
+    {
+        $permissions = [
+            // Dashboard permissions
+            'reporting.dashboard.view' => 'View financial dashboard and KPIs',
+            'reporting.dashboard.refresh' => 'Force refresh dashboard cache',
+
+            // Report management permissions
+            'reporting.reports.view' => 'View generated reports',
+            'reporting.reports.generate' => 'Generate new reports',
+            'reporting.reports.export' => 'Export reports (PDF, Excel, CSV)',
+            'reporting.reports.delete' => 'Delete expired reports',
+
+            // Template management permissions
+            'reporting.templates.view' => 'View report templates',
+            'reporting.templates.create' => 'Create custom report templates',
+            'reporting.templates.update' => 'Update report templates',
+            'reporting.templates.delete' => 'Delete report templates',
+            'reporting.templates.manage' => 'Full template management access',
+
+            // Schedule management permissions
+            'reporting.schedules.view' => 'View report schedules',
+            'reporting.schedules.create' => 'Create scheduled reports',
+            'reporting.schedules.update' => 'Update scheduled reports',
+            'reporting.schedules.delete' => 'Delete scheduled reports',
+            'reporting.schedules.manage' => 'Full schedule management access',
+
+            // KPI management permissions
+            'reporting.kpis.view' => 'View KPI definitions and data',
+            'reporting.kpis.create' => 'Create custom KPI definitions',
+            'reporting.kpis.update' => 'Update KPI definitions',
+            'reporting.kpis.delete' => 'Delete custom KPI definitions',
+
+            // Advanced reporting permissions
+            'reporting.advanced.drilldown' => 'Access transaction drill-down from reports',
+            'reporting.advanced.comparative' => 'Access comparative period analysis',
+            'reporting.advanced.currency' => 'Access multi-currency reports',
+        ];
+
+        foreach ($permissions as $name => $description) {
+            Permission::firstOrCreate([
+                'name' => $name,
+                'guard_name' => 'web',
+            ], [
+                'description' => $description,
+            ]);
+        }
+
+        $this->command->info('✓ Reporting permissions created');
+    }
+
     private function assignPermissionsToRoles(): void
     {
         // Get or create roles
@@ -407,6 +459,14 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Bank reconciliation audit
             'bank_reconciliation_audit.view',
+
+            // Reporting permissions
+            'reporting.dashboard.view', 'reporting.dashboard.refresh',
+            'reporting.reports.view', 'reporting.reports.generate', 'reporting.reports.export', 'reporting.reports.delete',
+            'reporting.templates.view', 'reporting.templates.create', 'reporting.templates.update', 'reporting.templates.delete', 'reporting.templates.manage',
+            'reporting.schedules.view', 'reporting.schedules.create', 'reporting.schedules.update', 'reporting.schedules.delete', 'reporting.schedules.manage',
+            'reporting.kpis.view', 'reporting.kpis.create', 'reporting.kpis.update', 'reporting.kpis.delete',
+            'reporting.advanced.drilldown', 'reporting.advanced.comparative', 'reporting.advanced.currency',
         ];
 
         // Admin permissions (company management without deletion)
@@ -475,6 +535,14 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Bank reconciliation audit
             'bank_reconciliation_audit.view',
+
+            // Reporting permissions (admin has full access except deletion of schedules)
+            'reporting.dashboard.view', 'reporting.dashboard.refresh',
+            'reporting.reports.view', 'reporting.reports.generate', 'reporting.reports.export',
+            'reporting.templates.view', 'reporting.templates.create', 'reporting.templates.update',
+            'reporting.schedules.view', 'reporting.schedules.create', 'reporting.schedules.update',
+            'reporting.kpis.view', 'reporting.kpis.update',
+            'reporting.advanced.drilldown', 'reporting.advanced.comparative',
         ];
 
         // Accountant permissions (financial management)
@@ -530,6 +598,14 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Bank reconciliation audit
             'bank_reconciliation_audit.view',
+
+            // Reporting permissions (accountant can generate and manage reports)
+            'reporting.dashboard.view', 'reporting.dashboard.refresh',
+            'reporting.reports.view', 'reporting.reports.generate', 'reporting.reports.export',
+            'reporting.templates.view', 'reporting.templates.create', 'reporting.templates.update',
+            'reporting.schedules.view', 'reporting.schedules.create', 'reporting.schedules.update',
+            'reporting.kpis.view', 'reporting.kpis.update',
+            'reporting.advanced.drilldown', 'reporting.advanced.comparative',
         ];
 
         // Viewer permissions (read-only)
@@ -572,6 +648,13 @@ class CompanyPermissionsSeeder extends Seeder
 
             // Bank reconciliation audit
             'bank_reconciliation_audit.view',
+
+            // Reporting permissions (viewer has read-only access)
+            'reporting.dashboard.view',
+            'reporting.reports.view', 'reporting.reports.export',
+            'reporting.templates.view',
+            'reporting.schedules.view',
+            'reporting.kpis.view',
         ];
 
         // Assign permissions to roles

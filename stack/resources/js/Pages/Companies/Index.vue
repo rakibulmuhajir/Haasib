@@ -18,7 +18,7 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import MultiSelect from 'primevue/multiselect'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import ProgressBar from 'primevue/progressbar'
 import Toast from 'primevue/toast'
 import Message from 'primevue/message'
@@ -133,11 +133,15 @@ const loadCompanies = async () => {
             )
         })
 
-        const response = await fetch(`/api/v1/companies?${params}`, {
+        // Get CSRF token from the hidden input
+    const csrfInput = document.querySelector('input[name="_token"]')
+    const csrfToken = csrfInput?.value || ''
+    
+    const response = await fetch(`/api/v1/companies?${params}`, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                'X-CSRF-TOKEN': csrfToken
             }
         })
         const data = await response.json()
@@ -203,11 +207,15 @@ const onPage = (event) => {
 
 const switchToCompany = async (company) => {
     try {
-        const response = await fetch('/api/v1/company-context/switch', {
+        // Get CSRF token from the hidden input (this is what @csrf generates)
+        const csrfInput = document.querySelector('input[name="_token"]')
+        const csrfToken = csrfInput?.value || ''
+        
+        const response = await fetch('/api/v1/companies/switch', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                'X-CSRF-TOKEN': csrfToken
             },
             body: JSON.stringify({
                 company_id: company.id
@@ -215,6 +223,11 @@ const switchToCompany = async (company) => {
         })
 
         if (response.ok) {
+            const responseData = await response.json()
+            console.log('Switch response:', responseData)
+            console.log('Current company before reload:', window.location.href)
+            console.log('Window location origin:', window.location.origin)
+            
             toast.value.add({
                 severity: 'success',
                 summary: 'Success',
@@ -222,12 +235,15 @@ const switchToCompany = async (company) => {
                 life: 2000
             })
             
-            // Reload page to update context
+            // Redirect to companies page instead of reloading current URL
             setTimeout(() => {
-                window.location.reload()
-            }, 1000)
+                console.log('About to redirect to companies page...')
+                window.location.href = window.location.origin + '/companies'
+            }, 2000)
         } else {
-            throw new Error('Failed to switch company')
+            const errorText = await response.text()
+            console.error('Switch failed response:', errorText)
+            throw new Error(`Failed to switch company: ${response.status}`)
         }
     } catch (error) {
         console.error('Failed to switch company:', error)
@@ -246,11 +262,15 @@ const deactivateCompany = async (company) => {
     }
 
     try {
-        const response = await fetch(`/api/v1/companies/${company.id}`, {
+        // Get CSRF token from the hidden input
+    const csrfInput = document.querySelector('input[name="_token"]')
+    const csrfToken = csrfInput?.value || ''
+    
+    const response = await fetch(`/api/v1/companies/${company.id}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                'X-CSRF-TOKEN': csrfToken
             },
             body: JSON.stringify({
                 is_active: false
@@ -521,7 +541,7 @@ watch(currentCompany, (newCompany) => {
                         />
                     </IconField>
                     
-                    <Dropdown
+                    <Select
                         v-model="filters.industry"
                         :options="industryOptions"
                         option-label="label"
@@ -531,7 +551,7 @@ watch(currentCompany, (newCompany) => {
                         @change="applyFilters"
                     />
                     
-                    <Dropdown
+                    <Select
                         v-model="filters.is_active"
                         :options="statusOptions"
                         option-label="label"
@@ -541,7 +561,7 @@ watch(currentCompany, (newCompany) => {
                         @change="applyFilters"
                     />
                     
-                    <Dropdown
+                    <Select
                         v-model="sort"
                         :options="sortOptions"
                         option-label="label"

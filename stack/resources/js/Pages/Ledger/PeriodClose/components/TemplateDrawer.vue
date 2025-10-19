@@ -11,11 +11,9 @@ import PrimeCheckbox from 'primevue/checkbox'
 import PrimeDataTable from 'primevue/datatable'
 import PrimeColumn from 'primevue/column'
 import PrimeDialog from 'primevue/dialog'
-import PrimeMessages from 'primevue/messages'
 import PrimeMessage from 'primevue/message'
 import PrimeBadge from 'primevue/badge'
 import PrimeTag from 'primevue/tag'
-import PrimeIcon from 'primevue/icon'
 import PrimeScrollPanel from 'primevue/scrollpanel'
 import PrimeToolbar from 'primevue/toolbar'
 import PrimeTooltip from 'primevue/tooltip'
@@ -463,7 +461,7 @@ onMounted(() => {
     <template #header>
       <div class="flex items-center justify-between w-full">
         <div class="flex items-center gap-2">
-          <PrimeIcon name="pi pi-list" />
+          <i class="pi pi-list" />
           <h2 class="text-xl font-semibold">
             {{ mode === 'create' ? 'Create Template' : mode === 'edit' ? 'Edit Template' : 'View Template' }}
           </h2>
@@ -492,7 +490,16 @@ onMounted(() => {
 
     <div class="space-y-6">
       <!-- Messages -->
-      <PrimeMessages v-if="messages.length > 0" :messages="messages" />
+      <div v-if="messages.length > 0" class="space-y-2">
+        <PrimeMessage 
+          v-for="(message, index) in messages" 
+          :key="index"
+          :severity="message.severity"
+          :closable="false"
+        >
+          {{ message.text }}
+        </PrimeMessage>
+      </div>
 
       <!-- Template Details -->
       <PrimeCard>
@@ -587,7 +594,7 @@ onMounted(() => {
         
         <template #content>
           <div v-if="form.tasks.length === 0" class="text-center py-8 text-gray-500">
-            <PrimeIcon name="pi pi-list" class="text-4xl mb-2" />
+            <i class="pi pi-list text-4xl mb-2" />
             <p>No tasks added yet. Click "Add Task" to get started.</p>
           </div>
           

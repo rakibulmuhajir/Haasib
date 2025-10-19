@@ -18,12 +18,12 @@ import PrimeBadge from 'primevue/badge'
 import { usePeriodClose } from '@/composables/usePeriodClose'
 import { usePeriodCloseForms } from '@/composables/usePeriodCloseForms'
 import { useToast } from 'primevue/usetoast'
-import { 
-  TaskList, 
-  ValidationSummary, 
-  ProgressCard, 
-  ChecklistActions, 
-  DeadlinesAlert 
+import {
+  TaskList,
+  ValidationSummary,
+  ProgressCard,
+  ChecklistActions,
+  DeadlinesAlert
 } from './components'
 import AdjustmentDialog from './components/AdjustmentDialog.vue'
 import ReportsPanel from './components/ReportsPanel.vue'
@@ -109,16 +109,16 @@ async function handleValidatePeriodClose() {
 
 async function handleCompleteTask(task: any) {
   if (!periodId.value) return
-  
+
   selectedTask.value = task
   taskForm.status = 'completed'
   taskForm.notes = ''
-  
+
   const success = await updateTask(periodId.value, task.id, {
     status: 'completed',
     notes: taskForm.notes.trim() || undefined
   })
-  
+
   if (success) {
     showTaskDialog.value = false
     selectedTask.value = null
@@ -134,15 +134,15 @@ async function handleCompleteTask(task: any) {
 
 async function handleExecuteAction(action: string, data?: any) {
   if (!periodId.value) return
-  
+
   currentAction.value = action
-  
+
   const success = await executeAction(periodId.value, action, data)
-  
+
   if (success) {
     showActionDialog.value = false
     resetActionForm()
-    
+
     // Show success message based on action
     let successMessage = 'Action completed successfully'
     if (action === 'lock') {
@@ -150,14 +150,14 @@ async function handleExecuteAction(action: string, data?: any) {
     } else if (action === 'complete') {
       successMessage = 'Period close completed successfully! The accounting period has been closed.'
     }
-    
+
     toast.add({
       severity: 'success',
       summary: 'Success',
       detail: successMessage,
       life: 5000
     })
-    
+
     // Reload data after action
     await handleLoadPeriodClose()
   }
@@ -165,20 +165,20 @@ async function handleExecuteAction(action: string, data?: any) {
 
 async function handleSaveAdjustment(adjustmentData: any) {
   if (!periodId.value) return
-  
+
   try {
     const success = await executeAction(periodId.value, 'adjust', { adjustmentData })
-    
+
     if (success) {
       showAdjustmentDialog.value = false
-      
+
       toast.add({
         severity: 'success',
         summary: 'Adjustment Created',
         detail: 'Period close adjustment has been created successfully',
         life: 3000
       })
-      
+
       // Reload data after adjustment
       await handleLoadPeriodClose()
     }
@@ -198,7 +198,7 @@ function handleCancelAdjustment() {
 
 async function handleReopenPeriod(reopenData: any) {
   if (!periodId.value) return
-  
+
   try {
     const response = await fetch(`/api/v1/ledger/periods/${periodId.value}/close/reopen`, {
       method: 'POST',
@@ -216,17 +216,17 @@ async function handleReopenPeriod(reopenData: any) {
 
     const data = await response.json()
     showReopenDialog.value = false
-    
+
     toast.add({
       severity: 'success',
       summary: 'Period Reopened',
       detail: 'Period has been reopened successfully',
       life: 3000
     })
-    
+
     // Reload data to show updated status
     await handleLoadPeriodClose()
-    
+
   } catch (error: any) {
     toast.add({
       severity: 'error',
@@ -243,7 +243,7 @@ function handleCancelReopen() {
 
 async function handleExtendReopenWindow() {
   if (!periodId.value) return
-  
+
   // For now, just show a message. In a real implementation,
   // you would open a dialog to collect the extension details
   toast.add({
@@ -292,14 +292,14 @@ function setTaskFilter(filter: string) {
   activeFilter.value = filter
 }
 
-function handleReportsGenerated(reports: any) {
+async function handleReportsGenerated(reports: any) {
   toast.add({
     severity: 'success',
     summary: 'Reports Generated',
     detail: 'Period close reports have been generated successfully',
     life: 3000
   })
-  
+
   // Reload data to show updated reports
   await handleLoadPeriodClose()
 }
@@ -393,10 +393,10 @@ function handleAction(action: string, data?: any) {
       <!-- Error Message -->
       <PrimeMessage v-if="hasError" severity="error" :closable="false" class="mb-4">
         {{ errorMessage }}
-        <PrimeButton 
-          label="Dismiss" 
-          size="small" 
-          severity="secondary" 
+        <PrimeButton
+          label="Dismiss"
+          size="small"
+          severity="secondary"
           @click="clearError"
           class="ml-2"
         />
@@ -406,7 +406,7 @@ function handleAction(action: string, data?: any) {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <!-- Period Progress Card -->
         <div class="lg:col-span-1">
-          <ProgressCard 
+          <ProgressCard
             :period="{
               ...period,
               period_close: periodClose
@@ -418,7 +418,7 @@ function handleAction(action: string, data?: any) {
 
         <!-- Actions Card -->
         <div class="lg:col-span-1">
-          <ChecklistActions 
+          <ChecklistActions
             :period-close="periodClose"
             :permissions="permissions"
             :loading="isLoading"
@@ -447,7 +447,7 @@ function handleAction(action: string, data?: any) {
                   <span class="font-semibold">{{ completionPercentage }}%</span>
                 </div>
                 <PrimeProgressbar :value="completionPercentage" :showValue="false" />
-                
+
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-600 dark:text-gray-400">Required Tasks</span>
                   <span class="font-semibold text-green-600">{{ requiredCompletionPercentage }}%</span>
@@ -478,11 +478,11 @@ function handleAction(action: string, data?: any) {
           <PrimeTab value="2">Activity</PrimeTab>
           <PrimeTab value="3" v-if="permissions.can_view_reports">Reports</PrimeTab>
         </PrimeTabList>
-        
+
         <PrimeTabPanels>
           <!-- Tasks Tab -->
           <PrimeTabPanel value="0">
-            <TaskList 
+            <TaskList
               :tasks="filteredTasks"
               :show-progress="true"
               :compact="false"
@@ -504,8 +504,8 @@ function handleAction(action: string, data?: any) {
                 :disabled="!permissions.can_validate"
               />
             </div>
-            
-            <ValidationSummary 
+
+            <ValidationSummary
               v-else-if="periodClose && hasValidation"
               :results="{
                 status: validationPassed ? 'passed' : 'failed',
@@ -567,10 +567,10 @@ function handleAction(action: string, data?: any) {
       </PrimeTabs>
 
       <!-- Task Update Dialog -->
-      <PrimeDialog 
-        v-model:visible="showTaskDialog" 
-        modal 
-        :header="`Update Task - ${selectedTask?.title}`" 
+      <PrimeDialog
+        v-model:visible="showTaskDialog"
+        modal
+        :header="`Update Task - ${selectedTask?.title}`"
         style="width: 600px"
       >
         <div class="space-y-4">
@@ -578,7 +578,7 @@ function handleAction(action: string, data?: any) {
             <label for="taskStatus" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Status
             </label>
-            <select 
+            <select
               id="taskStatus"
               v-model="taskForm.status"
               class="w-full p-2 border rounded-md"
@@ -590,30 +590,30 @@ function handleAction(action: string, data?: any) {
               <option value="waived">Waived</option>
             </select>
           </div>
-          
+
           <div>
             <label for="taskNotes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Notes
             </label>
-            <PrimeTextarea 
-              id="taskNotes" 
-              v-model="taskForm.notes" 
-              rows="4" 
-              placeholder="Add notes about this task..." 
+            <PrimeTextarea
+              id="taskNotes"
+              v-model="taskForm.notes"
+              rows="4"
+              placeholder="Add notes about this task..."
               class="w-full"
             />
           </div>
         </div>
-        
+
         <template #footer>
-          <PrimeButton 
-            label="Cancel" 
-            @click="showTaskDialog = false" 
-            severity="secondary" 
+          <PrimeButton
+            label="Cancel"
+            @click="showTaskDialog = false"
+            severity="secondary"
           />
-          <PrimeButton 
-            label="Update Task" 
-            @click="handleCompleteTask(selectedTask)" 
+          <PrimeButton
+            label="Update Task"
+            @click="handleCompleteTask(selectedTask)"
             :loading="taskForm.processing"
             severity="primary"
           />
@@ -621,53 +621,53 @@ function handleAction(action: string, data?: any) {
       </PrimeDialog>
 
       <!-- Action Confirmation Dialog -->
-      <PrimeDialog 
-        v-model:visible="showActionDialog" 
-        modal 
-        :header="getActionDialogTitle(currentAction)" 
+      <PrimeDialog
+        v-model:visible="showActionDialog"
+        modal
+        :header="getActionDialogTitle(currentAction)"
         style="width: 500px"
       >
         <div class="space-y-4">
           <p class="text-gray-700 dark:text-gray-300">
             {{ getActionDialogContent(currentAction) }}
           </p>
-          
+
           <div v-if="currentAction === 'reopen' || currentAction === 'lock'">
             <label for="actionReason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Reason (Required)
             </label>
-            <PrimeTextarea 
-              id="actionReason" 
-              v-model="actionForm.reason" 
-              rows="3" 
-              placeholder="Please provide a reason..." 
+            <PrimeTextarea
+              id="actionReason"
+              v-model="actionForm.reason"
+              rows="3"
+              placeholder="Please provide a reason..."
               class="w-full"
             />
           </div>
-          
+
           <div v-if="currentAction === 'complete'">
             <label for="actionNotes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Notes (Optional)
             </label>
-            <PrimeTextarea 
-              id="actionNotes" 
-              v-model="actionForm.notes" 
-              rows="3" 
-              placeholder="Add any additional notes..." 
+            <PrimeTextarea
+              id="actionNotes"
+              v-model="actionForm.notes"
+              rows="3"
+              placeholder="Add any additional notes..."
               class="w-full"
             />
           </div>
         </div>
-        
+
         <template #footer>
-          <PrimeButton 
-            label="Cancel" 
-            @click="showActionDialog = false" 
-            severity="secondary" 
+          <PrimeButton
+            label="Cancel"
+            @click="showActionDialog = false"
+            severity="secondary"
           />
-          <PrimeButton 
-            label="Confirm" 
-            @click="handleExecuteAction(currentAction)" 
+          <PrimeButton
+            label="Confirm"
+            @click="handleExecuteAction(currentAction)"
             :loading="actionForm.processing"
             severity="primary"
           />

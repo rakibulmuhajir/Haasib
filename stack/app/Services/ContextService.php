@@ -20,12 +20,18 @@ class ContextService
         }
 
         if (Request::hasSession()) {
-            Request::session()->put('current_company_id', $company->id);
+            Request::session()->put('active_company_id', $company->id);
+            \Log::info('Set company in request session', ['company_id' => $company->id]);
         }
-        Session::put('current_company_id', $company->id);
+        Session::put('active_company_id', $company->id);
+        \Log::info('Set company in main session', ['company_id' => $company->id]);
 
         $this->applyTenantContext($user, $company);
         $this->cacheUserPermissions($user, $company);
+
+        // Verify it was set
+        $verified = Request::hasSession() ? Request::session()->get('active_company_id') : Session::get('active_company_id');
+        \Log::info('Verified company after setting', ['verified_company_id' => $verified]);
 
         return true;
     }
@@ -35,34 +41,42 @@ class ContextService
         $user = $user ?? auth()->user();
 
         if (! $user) {
+            \Log::info('getCurrentCompany: No user found');
             return null;
         }
 
         $companyId = null;
 
         if (Request::hasSession()) {
-            $companyId = Request::session()->get('current_company_id');
+            $companyId = Request::session()->get('active_company_id');
+            \Log::info('getCurrentCompany: Found company in request session', ['company_id' => $companyId]);
         }
 
         if (! $companyId) {
-            $companyId = Session::get('current_company_id');
+            $companyId = Session::get('active_company_id');
+            \Log::info('getCurrentCompany: Found company in main session', ['company_id' => $companyId]);
         }
 
         if ($companyId) {
-            return $user->isSuperAdmin()
+            $company = $user->isSuperAdmin()
                 ? Company::find($companyId)
                 : $user->companies()->where('auth.companies.id', $companyId)->first();
+            
+            \Log::info('getCurrentCompany: Returning company', ['company_id' => $companyId, 'company_name' => $company?->name]);
+            return $company;
         }
 
-        return $user->companies()->first();
+        $fallback = $user->companies()->first();
+        \Log::info('getCurrentCompany: Using fallback company', ['company_id' => $fallback?->id, 'company_name' => $fallback?->name]);
+        return $fallback;
     }
 
     public function clearCurrentCompany(User $user): void
     {
         if (Request::hasSession()) {
-            Request::session()->forget('current_company_id');
+            Request::session()->forget('active_company_id');
         }
-        Session::forget('current_company_id');
+        Session::forget('active_company_id');
 
         $this->resetTenantContext();
         $this->clearPermissionCache($user);

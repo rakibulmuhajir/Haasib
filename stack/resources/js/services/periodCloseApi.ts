@@ -1,5 +1,5 @@
 import axios from 'axios'
-import router from '@inertiajs/vue3/router'
+import { router } from '@inertiajs/vue3'
 
 // API base configuration
 const API_BASE_URL = '/api/v1/ledger'

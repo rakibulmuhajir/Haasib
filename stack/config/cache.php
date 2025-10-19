@@ -90,6 +90,34 @@ return [
             'driver' => 'octane',
         ],
 
+        'reporting_dashboard' => [
+            'driver' => env('REPORTING_DASHBOARD_CACHE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_DASHBOARD_CACHE_CONNECTION', 'cache'),
+            'lock_connection' => env('REPORTING_DASHBOARD_CACHE_LOCK_CONNECTION', 'default'),
+            'ttl' => env('REPORTING_DASHBOARD_CACHE_TTL', 5), // 5 seconds
+        ],
+
+        'reporting_kpi' => [
+            'driver' => env('REPORTING_KPI_CACHE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_KPI_CACHE_CONNECTION', 'cache'),
+            'lock_connection' => env('REPORTING_KPI_CACHE_LOCK_CONNECTION', 'default'),
+            'ttl' => env('REPORTING_KPI_CACHE_TTL', 300), // 5 minutes
+        ],
+
+        'reporting_reports' => [
+            'driver' => env('REPORTING_REPORTS_CACHE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_REPORTS_CACHE_CONNECTION', 'cache'),
+            'lock_connection' => env('REPORTING_REPORTS_CACHE_LOCK_CONNECTION', 'default'),
+            'ttl' => env('REPORTING_REPORTS_CACHE_TTL', 3600), // 1 hour
+        ],
+
+        'reporting_downloads' => [
+            'driver' => env('REPORTING_DOWNLOADS_CACHE_DRIVER', 'redis'),
+            'connection' => env('REPORTING_DOWNLOADS_CACHE_CONNECTION', 'cache'),
+            'lock_connection' => env('REPORTING_DOWNLOADS_CACHE_LOCK_CONNECTION', 'default'),
+            'ttl' => env('REPORTING_DOWNLOADS_CACHE_TTL', 600), // 10 minutes
+        ],
+
     ],
 
     /*

@@ -13,7 +13,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import Timeline from 'primevue/timeline'
-import AppLayout from '@/Layouts/AppLayout.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 
 const props = defineProps({
   reconciliation: Object,
@@ -73,23 +73,23 @@ const openReportDialog = (reportType) => {
 
 const generateReport = async () => {
   if (!selectedReportType.value) return
-  
+
   loading.value = true
-  
+
   try {
     const response = await axios.get(`/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reports/${selectedReportType.value}`, {
       params: { format: selectedFormat.value }
     })
-    
+
     reportData.value = response.data.data
-    
+
     toast.add({
       severity: 'success',
       summary: 'Report Generated',
       detail: `${reportTypes.find(r => r.type === selectedReportType.value)?.name} has been generated successfully`,
       life: 3000
     })
-    
+
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -104,28 +104,28 @@ const generateReport = async () => {
 
 const exportReport = async () => {
   if (!selectedReportType.value) return
-  
+
   loading.value = true
-  
+
   try {
     const response = await axios.post(`/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reports/${selectedReportType.value}/export`, {
       format: selectedFormat.value
     })
-    
+
     const { filename, download_url } = response.data
-    
+
     // Download the file
     window.open(download_url, '_blank')
-    
+
     toast.add({
       severity: 'success',
       summary: 'Export Started',
       detail: `Report exported as ${filename}`,
       life: 3000
     })
-    
+
     showReportDialog.value = false
-    
+
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -140,7 +140,7 @@ const exportReport = async () => {
 
 const loadAuditData = async () => {
   loading.value = true
-  
+
   try {
     const response = await axios.get(`/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reports/audit`)
     auditData.value = response.data.audit_trail
@@ -158,7 +158,7 @@ const loadAuditData = async () => {
 
 const loadVarianceData = async () => {
   loading.value = true
-  
+
   try {
     const response = await axios.get(`/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reports/variance`)
     varianceData.value = response.data.variance_analysis
@@ -176,7 +176,7 @@ const loadVarianceData = async () => {
 
 const loadMetricsData = async () => {
   loading.value = true
-  
+
   try {
     const response = await axios.get(`/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reports/metrics`)
     metricsData.value = response.data.metrics
@@ -227,7 +227,7 @@ onMounted(() => {
 <template>
   <Head title="Reconciliation Reports" />
 
-  <AppLayout>
+  <LayoutShell>
     <div class="space-y-6">
       <!-- Header -->
       <div class="flex items-center justify-between">
@@ -239,7 +239,7 @@ onMounted(() => {
             {{ reconciliation.statement.name }} • {{ reconciliation.statement.period }}
           </p>
         </div>
-        
+
         <div class="flex items-center gap-2">
           <Button
             label="Refresh Data"
@@ -313,7 +313,7 @@ onMounted(() => {
                 </div>
                 <i class="pi pi-file text-gray-400 mt-1"></i>
               </div>
-              
+
               <div class="mt-3 flex gap-2">
                 <span class="text-xs text-gray-500">Available formats:</span>
                 <div class="flex gap-1">
@@ -340,13 +340,13 @@ onMounted(() => {
                 <p class="text-xl font-semibold" :class="varianceData.variance_status === 'balanced' ? 'text-green-600' : 'text-red-600'">
                   {{ varianceData.variance_formatted }}
                 </p>
-                <Tag 
-                  :value="varianceData.variance_status" 
+                <Tag
+                  :value="varianceData.variance_status"
                   :severity="varianceStatusVariant"
                   class="mt-2"
                 />
               </div>
-              
+
               <div class="bg-gray-50 p-4 rounded-lg">
                 <p class="text-sm text-gray-500">Unmatched Items</p>
                 <p class="text-xl font-semibold">
@@ -409,7 +409,7 @@ onMounted(() => {
               <h4 class="font-medium text-gray-900 mb-3">Status Changes</h4>
               <Timeline :value="auditData.status_changes" layout="horizontal" class="customized-timeline">
                 <template #marker="{ item }">
-                  <span 
+                  <span
                     class="flex w-8 h-8 items-center justify-center rounded-full border-2 text-sm font-bold"
                     :class="{
                       'bg-blue-100 border-blue-500 text-blue-700': item.new_status === 'completed',
@@ -432,8 +432,8 @@ onMounted(() => {
             <!-- Recent Activities -->
             <div v-if="auditData.activities?.length">
               <h4 class="font-medium text-gray-900 mb-3">Recent Activities</h4>
-              <DataTable 
-                :value="auditData.activities.slice(0, 10)" 
+              <DataTable
+                :value="auditData.activities.slice(0, 10)"
                 :paginator="false"
                 class="p-datatable-sm"
               >
@@ -471,7 +471,7 @@ onMounted(() => {
             <!-- Progress Metrics -->
             <div class="space-y-4">
               <h4 class="font-medium text-gray-900">Progress</h4>
-              
+
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-600">Completion</span>
@@ -487,7 +487,7 @@ onMounted(() => {
             <!-- Activity Metrics -->
             <div class="space-y-4">
               <h4 class="font-medium text-gray-900">Activity Summary</h4>
-              
+
               <div class="space-y-3">
                 <div class="flex justify-between">
                   <span class="text-sm text-gray-600">Total Matches</span>
@@ -513,22 +513,22 @@ onMounted(() => {
           <div class="mt-6 p-4 bg-gray-50 rounded-lg">
             <h4 class="font-medium text-gray-900 mb-3">Available Actions</h4>
             <div class="flex flex-wrap gap-2">
-              <Tag 
+              <Tag
                 v-if="metricsData.status.can_be_edited"
                 value="Can Edit"
                 severity="success"
               />
-              <Tag 
+              <Tag
                 v-if="metricsData.status.can_be_completed"
                 value="Can Complete"
                 severity="info"
               />
-              <Tag 
+              <Tag
                 v-if="metricsData.status.can_be_locked"
                 value="Can Lock"
                 severity="warning"
               />
-              <Tag 
+              <Tag
                 v-if="metricsData.status.can_be_reopened"
                 value="Can Reopen"
                 severity="danger"
@@ -540,9 +540,9 @@ onMounted(() => {
     </div>
 
     <!-- Report Generation Dialog -->
-    <Dialog 
-      v-model:visible="showReportDialog" 
-      modal 
+    <Dialog
+      v-model:visible="showReportDialog"
+      modal
       header="Generate Report"
       :style="{ width: '500px' }"
     >
@@ -560,8 +560,8 @@ onMounted(() => {
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Export Format
           </label>
-          <Dropdown 
-            v-model="selectedFormat" 
+          <Dropdown
+            v-model="selectedFormat"
             :options="formats"
             optionLabel="label"
             optionValue="value"
@@ -574,22 +574,22 @@ onMounted(() => {
           <pre class="text-xs text-gray-600">{{ JSON.stringify(reportData, null, 2) }}</pre>
         </div>
       </div>
-      
+
       <div class="flex justify-end gap-2 mt-6">
-        <Button 
-          label="Cancel" 
-          @click="showReportDialog = false" 
+        <Button
+          label="Cancel"
+          @click="showReportDialog = false"
           severity="secondary"
           :disabled="loading"
         />
-        <Button 
-          label="Preview" 
+        <Button
+          label="Preview"
           @click="generateReport"
           :loading="loading"
           severity="info"
         />
-        <Button 
-          label="Export" 
+        <Button
+          label="Export"
           @click="exportReport"
           :loading="loading"
           :disabled="!reportData || !canExportReports"
@@ -597,7 +597,7 @@ onMounted(() => {
         />
       </div>
     </Dialog>
-  </AppLayout>
+  </LayoutShell>
 </template>
 
 <style scoped>

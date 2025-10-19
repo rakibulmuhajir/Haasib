@@ -39,6 +39,13 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Dashboard
                                 </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user?.can('reporting.dashboard.view')"
+                                    :href="route('reporting.dashboard')"
+                                    :active="route().current('reporting.dashboard')"
+                                >
+                                    Financial Reports
+                                </NavLink>
                             </div>
                         </div>
 

@@ -91,7 +91,7 @@ class CompanyController extends Controller
     /**
      * Create a new company.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
         $request->validate([
             'name' => 'required|string|max:255',
@@ -134,7 +134,7 @@ class CompanyController extends Controller
         // Create fiscal year and chart of accounts
         $this->createCompanyAccountingStructure($company);
 
-        return response()->json([
+        $response = [
             'data' => [
                 'id' => $company->id,
                 'name' => $company->name,
@@ -152,7 +152,17 @@ class CompanyController extends Controller
                 'fiscal_year_created' => true,
                 'chart_of_accounts_created' => true,
             ],
-        ], 201);
+        ];
+
+        // Check if this is an Inertia request (coming from the web form)
+        if ($request->header('X-Inertia')) {
+            // For Inertia requests, redirect to the company list with a flash message
+            return redirect()->route('companies.index')
+                ->with('success', 'Company created successfully!');
+        }
+
+        // For API requests, return JSON response
+        return response()->json($response, 201);
     }
 
     /**
@@ -386,6 +396,79 @@ class CompanyController extends Controller
         $success = $this->contextService->setCurrentCompany($user, $company);
 
         if (! $success) {
+            \Log::error('Failed to set current company', [
+                'user_id' => $user->id,
+                'company_id' => $company->id,
+                'company_name' => $company->name
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to switch company',
+            ], 500);
+        }
+
+        // Verify the context was actually set
+        $currentCompany = $this->contextService->getCurrentCompany($user);
+        
+        \Log::info('Company switched successfully', [
+            'user_id' => $user->id,
+            'target_company_id' => $company->id,
+            'target_company_name' => $company->name,
+            'current_company_id' => $currentCompany?->id,
+            'current_company_name' => $currentCompany?->name,
+            'context_matches' => $currentCompany?->id === $company->id
+        ]);
+
+        return response()->json([
+            'message' => 'Company switched successfully',
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'role' => $this->authService->getUserRole($user, $company),
+            ],
+            'debug' => [
+                'current_company_id' => $currentCompany?->id,
+                'context_matches' => $currentCompany?->id === $company->id
+            ]
+        ]);
+    }
+
+    /**
+     * Switch the active company for the current user using URL parameter.
+     */
+    public function switchByUrl(Request $request, string $company): JsonResponse
+    {
+        $user = $request->user();
+
+        try {
+            $companyModel = Company::find($company);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return response()->json([
+                'message' => 'Invalid company ID format',
+            ], 422);
+        }
+
+        if (! $companyModel) {
+            return response()->json([
+                'message' => 'Company not found',
+            ], 404);
+        }
+
+        if (! $companyModel->is_active) {
+            return response()->json([
+                'message' => 'Company is inactive',
+            ], 400);
+        }
+
+        if (! $this->authService->canAccessCompany($user, $companyModel)) {
+            return response()->json([
+                'message' => 'Access denied to this company',
+            ], 403);
+        }
+
+        $success = $this->contextService->setCurrentCompany($user, $companyModel);
+
+        if (! $success) {
             return response()->json([
                 'message' => 'Failed to switch company',
             ], 500);
@@ -394,9 +477,9 @@ class CompanyController extends Controller
         return response()->json([
             'message' => 'Company switched successfully',
             'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'role' => $this->authService->getUserRole($user, $company),
+                'id' => $companyModel->id,
+                'name' => $companyModel->name,
+                'role' => $this->authService->getUserRole($user, $companyModel),
             ],
         ]);
     }
@@ -416,7 +499,9 @@ class CompanyController extends Controller
             ['code' => 'CHF', 'name' => 'Swiss Franc', 'symbol' => 'Fr'],
             ['code' => 'CNY', 'name' => 'Chinese Yuan', 'symbol' => '¥'],
             ['code' => 'INR', 'name' => 'Indian Rupee', 'symbol' => '₹'],
+            ['code' => 'PKR', 'name' => 'Pakistani Rupee', 'symbol' => '₨'],
             ['code' => 'AED', 'name' => 'UAE Dirham', 'symbol' => 'د.إ'],
+            ['code' => 'SAR', 'name' => 'Saudi Riyal', 'symbol' => '﷼'],
         ];
     }
 
@@ -435,6 +520,7 @@ class CompanyController extends Controller
             ['code' => 'JP', 'name' => 'Japan'],
             ['code' => 'CN', 'name' => 'China'],
             ['code' => 'IN', 'name' => 'India'],
+            ['code' => 'PK', 'name' => 'Pakistan'],
             ['code' => 'AE', 'name' => 'United Arab Emirates'],
             ['code' => 'SA', 'name' => 'Saudi Arabia'],
             ['code' => 'EG', 'name' => 'Egypt'],
@@ -459,6 +545,7 @@ class CompanyController extends Controller
             ['value' => 'Europe/Berlin', 'label' => 'Berlin'],
             ['value' => 'Asia/Tokyo', 'label' => 'Tokyo'],
             ['value' => 'Asia/Shanghai', 'label' => 'Shanghai'],
+            ['value' => 'Asia/Karachi', 'label' => 'Karachi'],
             ['value' => 'Asia/Dubai', 'label' => 'Dubai'],
             ['value' => 'Asia/Riyadh', 'label' => 'Riyadh'],
             ['value' => 'Africa/Cairo', 'label' => 'Cairo'],

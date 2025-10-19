@@ -12,8 +12,7 @@ import Message from 'primevue/message'
 import ProgressBar from 'primevue/progressbar'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import AppLayout from '@/Layouts/AppLayout.vue'
-import { formatCurrency } from '@/Utils/format.js'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 
 const props = defineProps({
   reconciliation: Object,
@@ -66,7 +65,7 @@ const completeReconciliation = () => {
   }
 
   isSubmitting.value = true
-  
+
   router.post(
     `/ledger/bank-statements/reconciliations/${props.reconciliation.id}/complete`,
     {},
@@ -107,7 +106,7 @@ const lockReconciliation = () => {
   }
 
   isSubmitting.value = true
-  
+
   router.post(
     `/ledger/bank-statements/reconciliations/${props.reconciliation.id}/lock`,
     {},
@@ -148,7 +147,7 @@ const reopenReconciliation = () => {
   }
 
   isSubmitting.value = true
-  
+
   router.post(
     `/ledger/bank-statements/reconciliations/${props.reconciliation.id}/reopen`,
     { reason: reopenReason.value },
@@ -217,7 +216,7 @@ const autoMatch = () => {
 <template>
   <Head title="Bank Reconciliation" />
 
-  <AppLayout>
+  <LayoutShell>
     <div class="space-y-6">
       <!-- Header -->
       <div class="flex items-center justify-between">
@@ -229,7 +228,7 @@ const autoMatch = () => {
             {{ reconciliation.statement.name }} • {{ reconciliation.statement.period }}
           </p>
         </div>
-        
+
         <div class="flex items-center gap-2">
           <Button
             label="Auto-Match"
@@ -239,7 +238,7 @@ const autoMatch = () => {
             severity="secondary"
             size="small"
           />
-          
+
           <Button
             label="Complete"
             icon="pi pi-check"
@@ -248,7 +247,7 @@ const autoMatch = () => {
             severity="success"
             size="small"
           />
-          
+
           <Button
             label="Lock"
             icon="pi pi-lock"
@@ -257,7 +256,7 @@ const autoMatch = () => {
             severity="danger"
             size="small"
           />
-          
+
           <Button
             label="Reopen"
             icon="pi pi-unlock"
@@ -390,7 +389,7 @@ const autoMatch = () => {
       </div>
 
       <!-- Variance Warning -->
-      <Message 
+      <Message
         v-if="reconciliation.variance_status !== 'balanced'"
         :severity="reconciliation.variance_status === 'positive' ? 'warn' : 'error'"
         :closable="false"
@@ -410,25 +409,25 @@ const autoMatch = () => {
     </div>
 
     <!-- Complete Confirmation Dialog -->
-    <Dialog 
-      v-model:visible="showCompleteDialog" 
-      modal 
+    <Dialog
+      v-model:visible="showCompleteDialog"
+      modal
       header="Complete Reconciliation"
       :style="{ width: '450px' }"
     >
       <p class="mb-4">
         Are you sure you want to complete this reconciliation? This will mark the reconciliation as finished and it can no longer be edited unless reopened.
       </p>
-      
+
       <div class="flex justify-end gap-2">
-        <Button 
-          label="Cancel" 
-          @click="showCompleteDialog = false" 
+        <Button
+          label="Cancel"
+          @click="showCompleteDialog = false"
           severity="secondary"
           :disabled="isSubmitting"
         />
-        <Button 
-          label="Complete" 
+        <Button
+          label="Complete"
           @click="completeReconciliation"
           :loading="isSubmitting"
           severity="success"
@@ -437,25 +436,25 @@ const autoMatch = () => {
     </Dialog>
 
     <!-- Lock Confirmation Dialog -->
-    <Dialog 
-      v-model:visible="showLockDialog" 
-      modal 
+    <Dialog
+      v-model:visible="showLockDialog"
+      modal
       header="Lock Reconciliation"
       :style="{ width: '450px' }"
     >
       <p class="mb-4">
         Are you sure you want to lock this reconciliation? Once locked, it cannot be edited or reopened without special permissions.
       </p>
-      
+
       <div class="flex justify-end gap-2">
-        <Button 
-          label="Cancel" 
-          @click="showLockDialog = false" 
+        <Button
+          label="Cancel"
+          @click="showLockDialog = false"
           severity="secondary"
           :disabled="isSubmitting"
         />
-        <Button 
-          label="Lock" 
+        <Button
+          label="Lock"
           @click="lockReconciliation"
           :loading="isSubmitting"
           severity="danger"
@@ -464,21 +463,21 @@ const autoMatch = () => {
     </Dialog>
 
     <!-- Reopen Dialog -->
-    <Dialog 
-      v-model:visible="showReopenDialog" 
-      modal 
+    <Dialog
+      v-model:visible="showReopenDialog"
+      modal
       header="Reopen Reconciliation"
       :style="{ width: '450px' }"
     >
       <p class="mb-4">
         Please provide a reason for reopening this reconciliation. This will be recorded for audit purposes.
       </p>
-      
+
       <div class="mb-4">
         <label for="reason" class="block text-sm font-medium text-gray-700 mb-2">
           Reason
         </label>
-        <Textarea 
+        <Textarea
           id="reason"
           v-model="reopenReason"
           rows="3"
@@ -486,21 +485,21 @@ const autoMatch = () => {
           placeholder="Enter reason for reopening..."
         />
       </div>
-      
+
       <div class="flex justify-end gap-2">
-        <Button 
-          label="Cancel" 
-          @click="showReopenDialog = false; reopenReason = ''" 
+        <Button
+          label="Cancel"
+          @click="showReopenDialog = false; reopenReason = ''"
           severity="secondary"
           :disabled="isSubmitting"
         />
-        <Button 
-          label="Reopen" 
+        <Button
+          label="Reopen"
           @click="reopenReconciliation"
           :loading="isSubmitting"
           severity="warning"
         />
       </div>
     </Dialog>
-  </AppLayout>
+  </LayoutShell>
 </template>

@@ -51,7 +51,7 @@ const reasonValidation = ref<any>(null)
 
 // Computed properties
 const isValid = computed(() => {
-  return form.value.reason.trim() !== '' && 
+  return form.value.reason.trim() !== '' &&
          form.value.reopen_until !== '' &&
          form.value.reason.length <= 500 &&
          form.value.notes.length <= 2000 &&
@@ -97,21 +97,21 @@ async function checkCanReopen() {
   if (!props.periodId || isChecking.value) return
 
   isChecking.value = true
-  
+
   try {
     const response = await fetch(`/api/v1/ledger/periods/${props.periodId}/close/reopen/can-reopen`)
     if (!response.ok) throw new Error('Failed to check reopen status')
-    
+
     const data = await response.json()
     canReopenInfo.value = data
-    
+
     // Set default reopen_until to max allowed date
     const maxDate = new Date()
     maxDate.setDate(maxDate.getDate() + data.max_reopen_days)
     form.value.reopen_until = maxDate.toISOString().split('T')[0]
-    
+
     emit('check-can-reopen')
-    
+
   } catch (error: any) {
     console.error('Failed to check reopen status:', error)
     canReopenInfo.value = {
@@ -163,7 +163,7 @@ async function validateReason() {
       suggestions,
       character_count: reason.length,
     }
-    
+
   } catch (error) {
     reasonValidation.value = null
   }
@@ -202,7 +202,7 @@ async function handleSubmit() {
     }
 
     emit('reopen', reopenData)
-    
+
   } catch (error: any) {
     console.error('Failed to reopen period:', error)
     // Show error to user
@@ -241,7 +241,7 @@ function getMaxDate(): string {
 function getRoleLimitColor(): string {
   const roleLimits: Record<string, string> = {
     'cfo': 'text-blue-600',
-    'controller': 'text-green-600', 
+    'controller': 'text-green-600',
     'accountant': 'text-amber-600',
   }
   return roleLimits[userRole.value] || 'text-gray-600'
@@ -327,7 +327,7 @@ onMounted(() => {
       <!-- Role Information -->
       <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div class="flex items-center space-x-3">
-          <i :class="getRoleIcon()" class="text-2xl" :class="getRoleLimitColor()"></i>
+          <i :class="[getRoleIcon(), getRoleLimitColor()]" class="text-2xl"></i>
           <div>
             <h4 class="text-sm font-medium text-gray-900 dark:text-white">
               Your Role: <span class="capitalize">{{ userRole }}</span>
@@ -369,7 +369,7 @@ onMounted(() => {
               }"
             />
           </div>
-          
+
           <!-- Reason validation feedback -->
           <div v-if="reasonValidation" class="mt-2">
             <div v-if="reasonIssues.length > 0" class="text-red-600 text-sm space-y-1">
@@ -378,7 +378,7 @@ onMounted(() => {
                 {{ issue }}
               </p>
             </div>
-            
+
             <div v-if="reasonSuggestions.length > 0" class="text-amber-600 text-sm space-y-1">
               <p v-for="suggestion in reasonSuggestions" :key="suggestion" class="flex items-start">
                 <i class="pi pi-info-circle mt-0.5 mr-1"></i>
@@ -386,7 +386,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          
+
           <div v-if="validationErrors.reason" class="text-red-600 text-sm mt-1">
             {{ validationErrors.reason[0] }}
           </div>
@@ -413,7 +413,7 @@ onMounted(() => {
             </span>
             <PrimeChip :label="`Max: ${maxDays} days`" class="text-xs" />
           </div>
-          
+
           <div v-if="validationErrors.reopen_until" class="text-red-600 text-sm mt-1">
             {{ validationErrors.reopen_until[0] }}
           </div>
@@ -465,40 +465,40 @@ onMounted(() => {
         </div>
       </form>
     </div>
-  </PrimeDialog>
 
-  <template #footer>
-    <div v-if="isChecking" class="flex justify-end">
-      <PrimeButton label="Cancel" @click="handleCancel" severity="secondary" />
-    </div>
-    
-    <div v-else-if="canReopenInfo && !canReopenInfo.can_reopen" class="flex justify-end">
-      <PrimeButton label="Close" @click="handleCancel" severity="secondary" />
-    </div>
-    
-    <div v-else class="flex justify-between">
-      <div class="text-sm text-gray-600 dark:text-gray-400">
-        <i class="pi pi-info-circle mr-1"></i>
-        This action will be logged and requires audit approval
+    <template #footer>
+      <div v-if="isChecking" class="flex justify-end">
+        <PrimeButton label="Cancel" @click="handleCancel" severity="secondary" />
       </div>
-      <div class="flex space-x-2">
-        <PrimeButton
-          label="Cancel"
-          @click="handleCancel"
-          severity="secondary"
-          :disabled="isSubmitting"
-        />
-        <PrimeButton
-          label="Reopen Period"
-          icon="pi pi-sign-in"
-          @click="handleSubmit"
-          :loading="isSubmitting"
-          :disabled="!isValid || isSubmitting"
-          severity="danger"
-        />
+
+      <div v-else-if="canReopenInfo && !canReopenInfo.can_reopen" class="flex justify-end">
+        <PrimeButton label="Close" @click="handleCancel" severity="secondary" />
       </div>
-    </div>
-  </template>
+
+      <div v-else class="flex justify-between">
+        <div class="text-sm text-gray-600 dark:text-gray-400">
+          <i class="pi pi-info-circle mr-1"></i>
+          This action will be logged and requires audit approval
+        </div>
+        <div class="flex space-x-2">
+          <PrimeButton
+            label="Cancel"
+            @click="handleCancel"
+            severity="secondary"
+            :disabled="isSubmitting"
+          />
+          <PrimeButton
+            label="Reopen Period"
+            icon="pi pi-sign-in"
+            @click="handleSubmit"
+            :loading="isSubmitting"
+            :disabled="!isValid || isSubmitting"
+            severity="danger"
+          />
+        </div>
+      </div>
+    </template>
+  </PrimeDialog>
 </template>
 
 <style scoped>

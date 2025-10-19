@@ -37,6 +37,17 @@ Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+// Reporting Dashboard Routes
+Route::prefix('reporting')->name('reporting.')->middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', function () {
+        return Inertia::render('Reporting/Dashboard/Index');
+    })->middleware('permission:reporting.dashboard.view')->name('dashboard');
+
+    Route::get('/statements', function () {
+        return Inertia::render('Reporting/Statements/Index');
+    })->middleware('permission:reporting.reports.view')->name('statements');
+});
+
 // Command execution endpoint
 Route::post('/commands', [CommandController::class, 'execute'])->middleware(['auth', 'verified']);
 

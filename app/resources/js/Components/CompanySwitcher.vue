@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watchEffect } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
-import { http } from '@/lib/http'
+import { http, withCsrf } from '@/lib/http'
 import Dropdown from 'primevue/dropdown'
 
 const page = usePage()
@@ -13,7 +13,7 @@ const selectedCompany = ref(null)
 // Prepare options for the dropdown
 const dropdownOptions = computed(() => {
   const options = [...companies.value]
-  
+
   // Add option to remove company context for super admins
   if (isSuperAdmin.value) {
     options.unshift({
@@ -22,7 +22,7 @@ const dropdownOptions = computed(() => {
       description: 'Remove company context to perform system-wide duties'
     })
   }
-  
+
   return options
 })
 
@@ -64,7 +64,7 @@ async function switchCompany(event) {
   if (companyId === null && isSuperAdmin.value) {
     console.log('🔍 [DEBUG] Attempting to clear company context')
     try {
-      const response = await http.post('/company/clear-context')
+      const response = await http.post('/company/clear-context', {}, { headers: withCsrf() })
       console.log('🔍 [DEBUG] Clear context response:', response.data)
 
       router.visit(window.location.pathname, {
@@ -83,7 +83,7 @@ async function switchCompany(event) {
   if (!companyId || companyId === currentCompanyId.value) return
 
   try {
-    const response = await http.post(`/company/${companyId}/switch`)
+    const response = await http.post(`/company/${companyId}/switch`, {}, { headers: withCsrf() })
     console.log('🔍 [DEBUG] Switch response:', response.data)
 
     // Use Inertia's router to visit the current page with fresh data

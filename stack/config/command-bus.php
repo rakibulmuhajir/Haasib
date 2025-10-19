@@ -68,4 +68,38 @@ return [
     'period-close.template.sync' => Modules\Ledger\Domain\PeriodClose\Actions\SyncPeriodCloseTemplateAction::class,
     'period-close.template.update' => Modules\Ledger\Domain\PeriodClose\Actions\UpdatePeriodCloseTemplateAction::class,
     'period-close.template.archive' => Modules\Ledger\Domain\PeriodClose\Actions\ArchivePeriodCloseTemplateAction::class,
+
+    // Reporting Dashboard actions
+    'reporting.dashboard.refresh' => Modules\Reporting\Actions\Dashboard\RefreshDashboardAction::class,
+    'reporting.dashboard.invalidate_cache' => Modules\Reporting\Actions\Dashboard\InvalidateDashboardCacheAction::class,
+
+    // Reporting Report actions
+    'reporting.report.generate' => Modules\Reporting\Actions\Reports\GenerateReportAction::class,
+    'reporting.report.deliver' => Modules\Reporting\Actions\Reports\DeliverReportAction::class,
+    'reporting.report.expire' => Modules\Reporting\Actions\Reports\ExpireReportAction::class,
+
+    // Reporting Template actions
+    'reporting.template.create' => Modules\Reporting\Actions\Templates\CreateReportTemplateAction::class,
+    'reporting.template.update' => Modules\Reporting\Actions\Templates\UpdateReportTemplateAction::class,
+    'reporting.template.delete' => Modules\Reporting\Actions\Templates\DeleteReportTemplateAction::class,
+
+    // Reporting Schedule actions
+    'reporting.schedule.create' => Modules\Reporting\Actions\Schedules\CreateReportScheduleAction::class,
+    'reporting.schedule.update' => Modules\Reporting\Actions\Schedules\UpdateReportScheduleAction::class,
+    'reporting.schedule.delete' => Modules\Reporting\Actions\Schedules\DeleteReportScheduleAction::class,
+    'reporting.schedule.run' => Modules\Reporting\Actions\Schedules\RunScheduledReportsAction::class,
+
+    // Reporting KPI actions
+    'reporting.kpi.create' => Modules\Reporting\Actions\Kpi\CreateKpiDefinitionAction::class,
+    'reporting.kpi.update' => Modules\Reporting\Actions\Kpi\UpdateKpiDefinitionAction::class,
+    'reporting.kpi.delete' => Modules\Reporting\Actions\Kpi\DeleteKpiDefinitionAction::class,
+    'reporting.kpi.recompute' => Modules\Reporting\Actions\Kpi\RecomputeKpiSnapshotsAction::class,
+
+    // Reporting Export actions
+    'reporting.export.generate' => Modules\Reporting\Actions\Exports\GenerateReportExportAction::class,
+    'reporting.export.deliver' => Modules\Reporting\Actions\Exports\DeliverReportExportAction::class,
+
+    // Reporting System actions
+    'reporting.system.refresh_views' => Modules\Reporting\Actions\System\RefreshMaterializedViewsAction::class,
+    'reporting.system.cleanup' => Modules\Reporting\Actions\System\CleanupExpiredReportsAction::class,
 ];

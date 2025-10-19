@@ -17,5 +17,28 @@ return [
             ],
             'permissions' => [],
         ],
+        'reporting' => [
+            'name' => 'Reporting',
+            'namespace' => 'Modules\\Reporting',
+            'provider' => Modules\Reporting\Providers\ReportingServiceProvider::class,
+            'schema' => 'rpt',
+            'routes' => [
+                'web' => true,
+                'api' => true,
+            ],
+            'cli' => [
+                'commands' => true,
+                'palette' => false,
+            ],
+            'permissions' => [
+                'reporting.dashboard.view',
+                'reporting.reports.generate',
+                'reporting.reports.view',
+                'reporting.reports.schedule',
+                'reporting.reports.export',
+                'reporting.templates.manage',
+                'reporting.schedules.manage',
+            ],
+        ],
     ],
 ];

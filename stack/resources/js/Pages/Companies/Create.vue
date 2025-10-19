@@ -8,7 +8,7 @@ import PageHeader from '@/Components/PageHeader.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import Calendar from 'primevue/calendar'
 import Checkbox from 'primevue/checkbox'
 import Toast from 'primevue/toast'
@@ -61,7 +61,11 @@ const countryOptions = [
     { label: 'Germany', value: 'DE' },
     { label: 'France', value: 'FR' },
     { label: 'Japan', value: 'JP' },
-    { label: 'China', value: 'CN' }
+    { label: 'China', value: 'CN' },
+    { label: 'India', value: 'IN' },
+    { label: 'Pakistan', value: 'PK' },
+    { label: 'United Arab Emirates', value: 'AE' },
+    { label: 'Saudi Arabia', value: 'SA' }
 ]
 
 const currencyOptions = [
@@ -71,7 +75,11 @@ const currencyOptions = [
     { label: 'CAD - Canadian Dollar', value: 'CAD' },
     { label: 'AUD - Australian Dollar', value: 'AUD' },
     { label: 'JPY - Japanese Yen', value: 'JPY' },
-    { label: 'CNY - Chinese Yuan', value: 'CNY' }
+    { label: 'CNY - Chinese Yuan', value: 'CNY' },
+    { label: 'INR - Indian Rupee', value: 'INR' },
+    { label: 'PKR - Pakistani Rupee', value: 'PKR' },
+    { label: 'AED - UAE Dirham', value: 'AED' },
+    { label: 'SAR - Saudi Riyal', value: 'SAR' }
 ]
 
 const languageOptions = [
@@ -108,6 +116,7 @@ const canSubmit = computed(() => {
            form.industry && 
            form.country && 
            form.base_currency &&
+           form.timezone &&
            !form.processing
 })
 
@@ -171,10 +180,59 @@ const handleCountryChange = () => {
             form.timezone = 'Australia/Sydney'
             form.locale = 'en_AU'
             break
+        case 'IN':
+            form.timezone = 'Asia/Kolkata'
+            form.locale = 'en_IN'
+            break
+        case 'PK':
+            form.timezone = 'Asia/Karachi'
+            form.locale = 'en_PK'
+            break
+        case 'AE':
+            form.timezone = 'Asia/Dubai'
+            form.locale = 'en_AE'
+            break
+        case 'SA':
+            form.timezone = 'Asia/Riyadh'
+            form.locale = 'en_SA'
+            break
         default:
             form.timezone = 'UTC'
             form.locale = 'en_US'
     }
+    
+    // Auto-set currency based on country
+    switch (form.country) {
+        case 'US':
+            form.base_currency = 'USD'
+            break
+        case 'GB':
+            form.base_currency = 'GBP'
+            break
+        case 'CA':
+            form.base_currency = 'CAD'
+            break
+        case 'AU':
+            form.base_currency = 'AUD'
+            break
+        case 'IN':
+            form.base_currency = 'INR'
+            break
+        case 'PK':
+            form.base_currency = 'PKR'
+            break
+        case 'AE':
+            form.base_currency = 'AED'
+            break
+        case 'SA':
+            form.base_currency = 'SAR'
+            break
+        default:
+            form.base_currency = 'USD'
+    }
+    
+    // Update the actual currency field
+    form.currency = form.base_currency
 }
 
 const handleCurrencyChange = () => {
@@ -185,7 +243,7 @@ const submitForm = async () => {
     submitting.value = true
     
     try {
-        await form.post('/api/v1/companies', {
+        await form.post('/companies', {
             onSuccess: (page) => {
                 toast.value.add({
                     severity: 'success',
@@ -281,7 +339,7 @@ setFiscalYearDefaults()
                                 <label for="industry" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Industry <span class="text-red-500">*</span>
                                 </label>
-                                <Dropdown
+                                <Select
                                     id="industry"
                                     v-model="form.industry"
                                     :options="industryOptions"
@@ -301,7 +359,7 @@ setFiscalYearDefaults()
                                 <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Country <span class="text-red-500">*</span>
                                 </label>
-                                <Dropdown
+                                <Select
                                     id="country"
                                     v-model="form.country"
                                     :options="countryOptions"
@@ -323,6 +381,13 @@ setFiscalYearDefaults()
                                     URL slug will be: <strong>{{ generateSlug() }}</strong>
                                 </p>
                             </div>
+
+                            <div v-if="form.country && form.base_currency" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+                                <p class="text-sm text-green-700 dark:text-green-300">
+                                    <i class="pi pi-check-circle mr-2"></i>
+                                    Currency automatically set to: <strong>{{ form.base_currency }}</strong>
+                                </p>
+                            </div>
                         </div>
                     </template>
                 </Card>
@@ -336,7 +401,7 @@ setFiscalYearDefaults()
                                 <label for="base_currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Base Currency <span class="text-red-500">*</span>
                                 </label>
-                                <Dropdown
+                                <Select
                                     id="base_currency"
                                     v-model="form.base_currency"
                                     :options="currencyOptions"
@@ -361,14 +426,18 @@ setFiscalYearDefaults()
                                     v-model="form.timezone"
                                     placeholder="e.g., America/New_York"
                                     class="w-full"
+                                    readonly
                                 />
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Automatically set based on country selection
+                                </p>
                             </div>
 
                             <div>
                                 <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Language
                                 </label>
-                                <Dropdown
+                                <Select
                                     id="language"
                                     v-model="form.language"
                                     :options="languageOptions"
@@ -383,7 +452,7 @@ setFiscalYearDefaults()
                                 <label for="locale" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Locale
                                 </label>
-                                <Dropdown
+                                <Select
                                     id="locale"
                                     v-model="form.locale"
                                     :options="localeOptions"

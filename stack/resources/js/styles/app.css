@@ -1,20 +1,14 @@
 /* Font Awesome integration */
 @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css");
 
+/* Import theme styles */
+@import './themes/blue-whale.css';
+@import './layout/shell.css';
+
 /* Tailwind CSS imports */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* PrimeVue theme overrides */
-:root {
-    --primary-50: #eff6ff;
-    --primary-100: #dbeafe;
-    --primary-500: #3b82f6;
-    --primary-600: #2563eb;
-    --primary-700: #1d4ed8;
-    --primary-900: #1e3a8a;
-}
 
 /* RTL support */
 [dir="rtl"] {

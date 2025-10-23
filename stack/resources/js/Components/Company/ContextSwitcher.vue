@@ -20,14 +20,20 @@ const menu = ref()
 const loading = ref(false)
 const switching = ref(false)
 const companies = ref([])
-const currentCompany = ref(null)
+const csrfToken = ref('')
 
-// Options
+const ROUTE_MAP = {
+    dashboard: '/dashboard',
+    details: (company) => `/companies/${company.id}`,
+    users: (company) => `/companies/${company.id}?tab=users`,
+    settings: (company) => `/companies/${company.id}?tab=settings`
+}
+
 const displayOptions = [
-    { label: 'View Dashboard', icon: 'pi pi-home', action: 'dashboard' },
-    { label: 'View Details', icon: 'pi pi-eye', action: 'details' },
-    { label: 'Manage Users', icon: 'pi pi-users', action: 'users' },
-    { label: 'Settings', icon: 'pi pi-cog', action: 'settings' }
+    { action: 'dashboard', label: 'Dashboard', icon: 'pi pi-home' },
+    { action: 'details', label: 'Details', icon: 'pi pi-building' },
+    { action: 'users', label: 'Users', icon: 'pi pi-users' },
+    { action: 'settings', label: 'Settings', icon: 'pi pi-cog' }
 ]
 
 // Computed properties
@@ -35,8 +41,45 @@ const user = computed(() => page.props.auth?.user)
 const currentCompanyData = computed(() => page.props.currentCompany)
 const userCompanies = computed(() => page.props.userCompanies || [])
 const hasCompanies = computed(() => companies.value.length > 0 || userCompanies.value.length > 0)
-const currentCompanyName = computed(() => currentCompany.value?.name || currentCompanyData?.name || 'No Company')
-const currentUserRole = computed(() => currentCompany.value?.userRole?.role || currentCompanyData?.userRole || '')
+
+// Single source of truth for current company
+const currentCompany = computed(() => {
+    // Priority 1: Explicit current company from API
+    if (companies.value.length > 0) {
+        const explicitCurrent = companies.value.find(c => c.is_current)
+        if (explicitCurrent) return explicitCurrent
+    }
+    
+    // Priority 2: Current company from props
+    if (currentCompanyData.value) {
+        return currentCompanyData.value
+    }
+    
+    // Priority 3: First company in list
+    if (companies.value.length > 0) {
+        return companies.value[0]
+    }
+    
+    // Priority 4: First company from props
+    if (userCompanies.value.length > 0) {
+        return userCompanies.value[0]
+    }
+    
+    return null
+})
+
+const currentCompanyName = computed(() => currentCompany.value?.name || 'No Company')
+const currentUserRole = computed(() => currentCompany.value?.userRole?.role || 'member')
+
+// Computed menu items for better performance
+const menuItems = computed(() => {
+    return companies.value.map(company => ({
+        label: company.name,
+        company: company,
+        command: () => switchCompany(company),
+        template: 'item' // For PrimeVue slot reference
+    }))
+})
 
 // Methods
 const loadCompanies = async () => {
@@ -49,12 +92,17 @@ const loadCompanies = async () => {
 
     loading.value = true
     try {
-        const response = await fetch('/api/v1/companies')
+        const response = await fetch('/api/v1/companies', {
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken.value
+            }
+        })
         const data = await response.json()
         
         if (response.ok) {
             companies.value = data.data || []
-            currentCompany.value = companies.value.find(c => c.is_current) || null
+            // currentCompany computed property will handle selection automatically
         }
     } catch (error) {
         console.error('Failed to load companies:', error)
@@ -80,36 +128,34 @@ const switchCompany = async (company) => {
 
     switching.value = true
     try {
-        const response = await fetch('/api/v1/company-context/switch', {
+        const response = await fetch('/api/v1/companies/switch', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                'X-CSRF-TOKEN': csrfToken.value
             },
             body: JSON.stringify({
                 company_id: company.id
             })
         })
 
-        if (response.ok) {
-            toast.value.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: `Switched to ${company.name}`,
-                life: 2000
-            })
-            
-            // Update current company locally
-            currentCompany.value = company
-            
-            // Reload page to update context
-            setTimeout(() => {
-                window.location.reload()
-            }, 1000)
-        } else {
-            const data = await response.json()
-            throw new Error(data.message || 'Failed to switch company')
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: Failed to switch company`)
         }
+
+        toast.value.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: `Switched to ${company.name}`,
+            life: 2000
+        })
+        
+        // The computed currentCompany will update automatically
+        
+        // Reload page to update context
+        setTimeout(() => {
+            window.location.reload()
+        }, 1000)
     } catch (error) {
         console.error('Failed to switch company:', error)
         toast.value.add({
@@ -128,20 +174,10 @@ const handleCompanyAction = (company, action) => {
     switchCompany(company).then(() => {
         // After switching, perform the action
         setTimeout(() => {
-            switch (action) {
-                case 'dashboard':
-                    router.visit('/dashboard')
-                    break
-                case 'details':
-                    router.visit(`/companies/${company.id}`)
-                    break
-                case 'users':
-                    router.visit(`/companies/${company.id}?tab=users`)
-                    break
-                case 'settings':
-                    router.visit(`/companies/${company.id}?tab=settings`)
-                    break
-            }
+            const route = typeof ROUTE_MAP[action] === 'function' 
+                ? ROUTE_MAP[action](company) 
+                : ROUTE_MAP[action]
+            router.visit(route)
         }, 1500)
     })
 }
@@ -187,11 +223,16 @@ const getAvatarColor = (company) => {
 }
 
 const formatCompanyInfo = (company) => {
-    return `${company.industry} • ${company.currency || 'USD'}`
+    return `${company.industry || 'N/A'} • ${company.currency || 'USD'}`
 }
 
 // Lifecycle
 onMounted(() => {
+    // Initialize CSRF token
+    const csrfInput = document.querySelector('input[name="_token"]')
+    csrfToken.value = csrfInput?.value || ''
+    
+    // Load companies
     loadCompanies()
 })
 </script>
@@ -235,11 +276,7 @@ onMounted(() => {
             <!-- Company Dropdown Menu -->
             <Menu
                 ref="menu"
-                :model="companies.map(company => ({
-                    label: company.name,
-                    command: () => switchCompany(company),
-                    template: () => companyItemTemplate(company)
-                }))"
+                :model="menuItems"
                 :popup="true"
                 class="company-menu"
             >
@@ -247,36 +284,36 @@ onMounted(() => {
                     <div v-if="props" class="company-menu-item">
                         <div class="flex items-center gap-3 w-full">
                             <Avatar
-                                :label="getCompanyInitials(item.label)"
-                                :class="getAvatarColor(companies.find(c => c.name === item.label) || item)"
+                                :label="getCompanyInitials(item.company.name)"
+                                :class="getAvatarColor(item.company)"
                                 size="small"
                             />
                             <div class="flex-1">
-                                <div class="font-medium text-sm">{{ item.label }}</div>
+                                <div class="font-medium text-sm">{{ item.company.name }}</div>
                                 <div class="text-xs text-gray-500">
-                                    {{ formatCompanyInfo(companies.find(c => c.name === item.label) || item) }}
+                                    {{ formatCompanyInfo(item.company) }}
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 <Badge
-                                    :value="companies.find(c => c.name === item.label)?.userRole || ''"
-                                    :severity="getRoleSeverity(companies.find(c => c.name === item.label)?.userRole)"
+                                    :value="item.company.userRole || ''"
+                                    :severity="getRoleSeverity(item.company.userRole)"
                                     size="small"
                                 />
                                 <i
-                                    v-if="currentCompany?.name === item.label || currentCompanyData?.name === item.label"
+                                    v-if="currentCompany?.id === item.company.id"
                                     class="pi pi-check text-green-500"
                                 />
                             </div>
                         </div>
                         
                         <!-- Company Actions -->
-                        <div v-if="currentCompany?.name !== item.label" class="company-actions mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div v-if="currentCompany?.id !== item.company.id" class="company-actions mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                             <div class="grid grid-cols-2 gap-1">
                                 <Button
                                     v-for="option in displayOptions"
                                     :key="option.action"
-                                    @click="handleCompanyAction(companies.find(c => c.name === item.label), option.action)"
+                                    @click="handleCompanyAction(item.company, option.action)"
                                     :label="option.label"
                                     :icon="option.icon"
                                     size="small"
@@ -307,34 +344,6 @@ onMounted(() => {
     </div>
 </template>
 
-<script>
-import { h } from 'vue'
-
-const companyItemTemplate = (company) => {
-    return h('div', { class: 'company-menu-item' }, [
-        h('div', { class: 'flex items-center gap-3 w-full' }, [
-            h('Avatar', {
-                label: this.getCompanyInitials(company.name),
-                class: this.getAvatarColor(company),
-                size: 'small'
-            }),
-            h('div', { class: 'flex-1' }, [
-                h('div', { class: 'font-medium text-sm' }, company.name),
-                h('div', { class: 'text-xs text-gray-500' }, this.formatCompanyInfo(company))
-            ]),
-            h('div', { class: 'flex items-center gap-2' }, [
-                h('Badge', {
-                    value: company.userRole,
-                    severity: this.getRoleSeverity(company.userRole),
-                    size: 'small'
-                }),
-                currentCompany.value?.name === company.name ? 
-                    h('i', { class: 'pi pi-check text-green-500' }) : null
-            ])
-        ])
-    ])
-}
-</script>
 
 <style scoped>
 .company-context-switcher {

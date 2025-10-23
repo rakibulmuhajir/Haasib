@@ -216,7 +216,7 @@ Route::prefix('invoicing-requirements')->name('invoicing-requirements.')->middle
 });
 
 // Universal inline edit endpoint
-Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware('web');
+Route::patch('/inline-edit', [InlineEditController::class, 'patch'])->middleware(['web', 'auth']);
 
 // Public invitation routes (no authentication required)
 Route::prefix('invitations')->name('invitations.')->group(function () {

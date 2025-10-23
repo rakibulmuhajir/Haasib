@@ -29,3 +29,4 @@ PHP 8.2+, Laravel 12: Follow standard conventions
 - /stack is the working and active laravel installation
 - look back what's already there plus there is an old working directory /app with /stack.
 - app is old. stack is new and current
+- great. lets add that to the project memory. to refactorize, using smaller components

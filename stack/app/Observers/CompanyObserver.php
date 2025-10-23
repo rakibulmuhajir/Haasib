@@ -4,8 +4,6 @@ namespace App\Observers;
 
 use App\Models\AuditEntry;
 use App\Models\Company;
-use App\Models\CompanyInvitation;
-use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -23,7 +21,7 @@ class CompanyObserver
     {
         $changes = $company->getChanges();
         $original = $company->getOriginal();
-        
+
         $this->createAuditEntry($company, 'update', [
             'old_values' => $this->filterChangedValues($original, $changes),
             'new_values' => $this->filterChangedValues($changes, $changes),
@@ -49,11 +47,15 @@ class CompanyObserver
     private function createAuditEntry(Company $company, string $action, array $data): void
     {
         try {
+            if (! $this->auditTableExists()) {
+                return;
+            }
+
             $user = Auth::user();
-            
+
             // Generate idempotency key for this audit entry
-            $idempotencyKey = DB::selectOne("SELECT gen_random_uuid() as uuid")->uuid;
-            
+            $idempotencyKey = DB::selectOne('SELECT gen_random_uuid() as uuid')->uuid;
+
             AuditEntry::create([
                 'company_id' => $company->id,
                 'entity_type' => 'Company',
@@ -97,5 +99,23 @@ class CompanyObserver
     private function filterChangedValues(array $values, array $changes): array
     {
         return array_intersect_key($values, $changes);
+    }
+
+    private function auditTableExists(): bool
+    {
+        static $exists;
+
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        try {
+            $result = DB::selectOne("SELECT to_regclass('audit.entries') AS relname");
+            $exists = isset($result->relname) && $result->relname !== null;
+        } catch (\Throwable $e) {
+            $exists = false;
+        }
+
+        return $exists;
     }
 }

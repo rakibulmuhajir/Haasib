@@ -95,7 +95,7 @@ class CommandPerformanceMonitoring
             'method' => $request->method(),
             'status' => $response->getStatusCode(),
             'user_id' => auth()->id() ?? 'anonymous',
-            'company_id' => session('active_company_id') ?? 'none',
+            'company_id' => session('current_company_id') ?? session('active_company_id') ?? 'none',
         ];
 
         // Record API response time

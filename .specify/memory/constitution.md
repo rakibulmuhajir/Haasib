@@ -32,10 +32,30 @@ Use the shared `audit_log()` helper (or the future `audit` schema entries) for f
 - Keep migrations additive; coordinate destructive changes with rollback scripts.
 - Update the constitution and `docs/tasks.md` when introducing a new schema or cross-cutting rule.
 
+## Frontend Architecture Patterns
+
+### V. Component-Based Index Page Refactoring
+When refactoring complex pages like Index.vue components, follow this pattern:
+- Keep main logic centralized in 1 primary file per feature
+- Use smaller, focused components for specific functionality (CompanyRow, CompanyCard, ContextSwitcher)
+- Add comprehensive null safety to handle incomplete data gracefully across all components
+- Use PrimeVue components consistently instead of custom implementations
+- Implement debounced search to prevent excessive API calls and improve performance
+- Fix visual issues (CSS alignment, highlight effects) with simple, clean solutions
+- Maintain component architecture consistency across the application
+- Prioritize single source of truth for state management within components
+
+**Success Example**: Companies Index refactoring (2025-10-20) demonstrated this pattern with:
+- Primary Index.vue containing table, search, and data management
+- Supporting components (CompanyRow, CompanyCard) with null-safe data display
+- ContextSwitcher architectural refactor for clean state management
+- PrimeVue search integration with proper debouncing
+- Removal of complex custom CSS in favor of simple, maintainable solutions
+
 ## Governance
 
 - This constitution is the source of truth for architectural rules. Any divergence must be documented and ratified.
 - Amendments require a PR that highlights the change, updates affected documentation, and links related tasks/specs.
-- Reviews must confirm schema placement, RLS/audit coverage, and adherence to the principles above.
+- Reviews must confirm schema placement, RLS/audit coverage, frontend component patterns, and adherence to the principles above.
 
-**Version**: 1.2.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-16
+**Version**: 1.3.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-20

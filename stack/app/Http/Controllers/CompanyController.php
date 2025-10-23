@@ -23,10 +23,11 @@ class CompanyController extends Controller
     {
         $user = $request->user();
         $companies = $user->getActiveCompanies();
+        $currentCompanyId = $this->contextService->getCurrentCompany($user)?->id;
 
         // For API requests, return JSON
         if ($request->expectsJson()) {
-            $mappedCompanies = $companies->map(function ($company) use ($user) {
+            $mappedCompanies = $companies->map(function ($company) use ($user, $currentCompanyId) {
                 $companyUser = $company->users()->where('user_id', $user->id)->first();
 
                 return [
@@ -40,6 +41,7 @@ class CompanyController extends Controller
                     'created_at' => $company->created_at,
                     'user_role' => $companyUser?->role ?? 'member',
                     'is_active_in_company' => $companyUser?->is_active ?? false,
+                    'is_current' => $company->id === $currentCompanyId,
                 ];
             });
 
@@ -56,7 +58,7 @@ class CompanyController extends Controller
 
         // For web requests, return Inertia view
         return Inertia::render('Companies/Index', [
-            'companies' => $companies->map(function ($company) use ($user) {
+            'companies' => $companies->map(function ($company) use ($user, $currentCompanyId) {
                 $companyUser = $company->users()->where('user_id', $user->id)->first();
 
                 return [
@@ -70,6 +72,7 @@ class CompanyController extends Controller
                     'created_at' => $company->created_at,
                     'user_role' => $companyUser?->role ?? 'member',
                     'is_active_in_company' => $companyUser?->is_active ?? false,
+                    'is_current' => $company->id === $currentCompanyId,
                 ];
             }),
         ]);
@@ -221,7 +224,8 @@ class CompanyController extends Controller
             'name' => $company->name,
             'slug' => $company->slug,
             'industry' => $company->industry,
-            'currency' => $company->currency,
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
             'timezone' => $company->timezone,
             'country' => $company->country,
             'language' => $company->language,
@@ -399,9 +403,9 @@ class CompanyController extends Controller
             \Log::error('Failed to set current company', [
                 'user_id' => $user->id,
                 'company_id' => $company->id,
-                'company_name' => $company->name
+                'company_name' => $company->name,
             ]);
-            
+
             return response()->json([
                 'message' => 'Failed to switch company',
             ], 500);
@@ -409,14 +413,14 @@ class CompanyController extends Controller
 
         // Verify the context was actually set
         $currentCompany = $this->contextService->getCurrentCompany($user);
-        
+
         \Log::info('Company switched successfully', [
             'user_id' => $user->id,
             'target_company_id' => $company->id,
             'target_company_name' => $company->name,
             'current_company_id' => $currentCompany?->id,
             'current_company_name' => $currentCompany?->name,
-            'context_matches' => $currentCompany?->id === $company->id
+            'context_matches' => $currentCompany?->id === $company->id,
         ]);
 
         return response()->json([
@@ -428,8 +432,8 @@ class CompanyController extends Controller
             ],
             'debug' => [
                 'current_company_id' => $currentCompany?->id,
-                'context_matches' => $currentCompany?->id === $company->id
-            ]
+                'context_matches' => $currentCompany?->id === $company->id,
+            ],
         ]);
     }
 

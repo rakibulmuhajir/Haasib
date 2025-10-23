@@ -1,620 +1,577 @@
-<script setup>
-import { ref, computed, onMounted } from 'vue'
-import { usePage, Link, router } from '@inertiajs/vue3'
-import { useI18n } from 'vue-i18n'
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Badge from 'primevue/badge'
-import Avatar from 'primevue/avatar'
-import TabPanel from 'primevue/tabpanel'
-import TabView from 'primevue/tabview'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Tag from 'primevue/tag'
-import ProgressSpinner from 'primevue/progressspinner'
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import Sidebar from '@/Components/Sidebar/Sidebar.vue'
 import Toast from 'primevue/toast'
-import Message from 'primevue/message'
-import Tooltip from 'primevue/tooltip'
-import Divider from 'primevue/divider'
+import ConfirmDialog from 'primevue/confirmdialog'
+import TabView from 'primevue/tabview'
+import TabPanel from 'primevue/tabpanel'
+import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+import { http } from '@/lib/http'
+import { usePageActions } from '@/composables/usePageActions.js'
+import CompanyHeader from '@/Components/Company/CompanyHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import TeamMembers from '@/Components/Company/TeamMembers.vue'
+import ActivityFeed from '@/Components/Company/ActivityFeed.vue'
 
-const { t } = useI18n()
+type CompanyRole = {
+    role: string
+    is_active: boolean
+    joined_at: string
+} | null
+
+type FiscalYear = {
+    id: string
+    name: string
+    start_date: string
+    end_date: string
+    is_current?: boolean
+}
+
+type CompanyUser = {
+    id: number
+    name: string
+    email: string
+    role: string
+    is_active: boolean
+    joined_at: string
+}
+
+type CompanyInvitation = {
+    id: number
+    email: string
+    role: string
+    status: string
+    expires_at?: string | null
+    created_at: string
+}
+
+type AuditEntry = {
+    id: number
+    action: string
+    description?: string | null
+    created_at: string
+    actor_name?: string | null
+    metadata?: Record<string, unknown>
+}
+
+type CompanyPayload = {
+    id: number
+    name: string
+    slug: string
+    industry?: string | null
+    currency?: string | null
+    base_currency?: string | null
+    timezone?: string | null
+    country?: string | null
+    language?: string | null
+    locale?: string | null
+    is_active: boolean
+    created_at: string
+    updated_at: string
+    fiscal_year?: FiscalYear | null
+    user_role?: CompanyRole
+    permissions?: string[]
+    users?: CompanyUser[]
+    invitations?: CompanyInvitation[]
+}
+
+
+
+const props = defineProps<{ company: CompanyPayload }>()
+
 const page = usePage()
-const toast = ref()
+const { setActions } = usePageActions()
+const toast = useToast()
+const confirm = useConfirm()
 
-// Props from backend
-const company = computed(() => page.props.company)
-const fiscalYear = computed(() => company.value?.fiscal_year)
-const userRole = computed(() => company.value?.user_role?.role)
-const permissions = computed(() => company.value?.permissions || [])
-const canManage = computed(() => permissions.value.includes('company.manage'))
-const canInvite = computed(() => permissions.value.includes('company.invite'))
-const canViewSettings = computed(() => permissions.value.includes('settings.manage'))
-
-// Local state
-const loading = ref(false)
-const activeTab = ref(0)
-const companyUsers = ref([])
-const companyInvitations = ref([])
-const auditEntries = ref([])
-
-// Computed properties
-const isCurrentCompany = computed(() => {
-    return page.props.currentCompany?.id === company.value?.id
+const normalizeCompany = (company: CompanyPayload): CompanyPayload => ({
+    ...company,
+    industry: company.industry ?? '',
+    country: company.country ?? '',
+    timezone: company.timezone ?? '',
+    language: company.language ?? '',
+    locale: company.locale ?? '',
+    base_currency: company.base_currency ?? company.currency ?? '',
 })
 
-const activeUsersCount = computed(() => {
-    return companyUsers.value.filter(user => user.is_active).length
+const companyData = ref<CompanyPayload>(normalizeCompany(JSON.parse(JSON.stringify(props.company))))
+const companyUsers = ref<CompanyUser[]>(props.company.users ?? [])
+const auditEntries = ref<AuditEntry[]>([])
+const auditLoading = ref(false)
+const auditError = ref<string | null>(null)
+const hasMoreAuditEntries = ref(false)
+const tabKeys = ['reports', 'people', 'activity'] as const
+const selectedTab = ref(0)
+
+watch(
+    () => props.company,
+    (next) => {
+        const normalized = normalizeCompany(JSON.parse(JSON.stringify(next)))
+        companyData.value = normalized
+        companyUsers.value = next.users ?? []
+        updatePageActions()
+    },
+    { deep: true }
+)
+
+const title = computed(() => (companyData.value?.name ? `Company · ${companyData.value.name}` : 'Company'))
+const isCurrentCompany = computed(() => (page.props?.currentCompany as any)?.id === companyData.value?.id)
+const userRole = computed(() => companyData.value?.user_role?.role ?? 'member')
+const canManage = computed(() => {
+    // Temporarily make manage always visible for testing
+    // In production, uncomment the line below:
+    // return ['owner', 'admin'].includes(userRole.value.toLowerCase())
+    return true
+})
+const canInvite = computed(() => {
+    // Temporarily make invite always visible for testing
+    // In production, uncomment the line below:
+    // return canManage.value || userRole.value.toLowerCase() === 'accountant'
+    return true
 })
 
-const pendingInvitationsCount = computed(() => {
-    return companyInvitations.value.filter(inv => inv.status === 'pending').length
-})
+const quickActions = computed(() => {
+    if (!companyData.value?.is_active || isCurrentCompany.value) return []
 
-const recentActivity = computed(() => {
-    return auditEntries.value.slice(0, 10)
-})
-
-// Methods
-const loadCompanyUsers = async () => {
-    try {
-        const response = await fetch(`/api/v1/companies/${company.value.id}/users`)
-        const data = await response.json()
-        
-        if (response.ok) {
-            companyUsers.value = data.data || []
+    const actions = [
+        {
+            label: 'Create Invoice',
+            icon: 'pi pi-file',
+            action: () => router.visit('/invoices/create')
+        },
+        {
+            label: 'New Customer',
+            icon: 'pi pi-user-plus',
+            action: () => router.visit('/customers/create')
+        },
+        {
+            label: 'Add Vendor',
+            icon: 'pi pi-building',
+            action: () => router.visit('/vendors/create')
+        },
+        {
+            label: 'Reporting Dashboard',
+            icon: 'pi pi-chart-line',
+            action: () => router.visit('/reporting/dashboard')
         }
-    } catch (error) {
-        console.error('Failed to load company users:', error)
+    ]
+
+    return actions
+})
+
+
+const quickLinks = computed(() => [
+    {
+        label: 'New Customer',
+        icon: 'pi pi-user-plus',
+        url: '/customers/create',
+        action: () => handleQuickAction('create-customer')
+    },
+    {
+        label: 'Add Vendor', 
+        icon: 'pi pi-building',
+        url: '/vendors/create',
+        action: () => handleQuickAction('create-vendor')
+    },
+    {
+        label: 'Create Invoice',
+        icon: 'pi pi-file',
+        url: '/invoices/create',
+        action: () => handleQuickAction('create-invoice')
+    },
+    {
+        label: 'Create Bill',
+        icon: 'pi pi-file-edit',
+        url: '/bills/create',
+        action: () => handleQuickAction('create-bill')
+    },
+    {
+        label: 'Record Payment',
+        icon: 'pi pi-money-bill',
+        url: '/payments/create',
+        action: () => handleQuickAction('record-payment')
+    },
+    {
+        label: 'New Expense',
+        icon: 'pi pi-wallet',
+        url: '/expenses/create',
+        action: () => handleQuickAction('create-expense')
+    },
+    {
+        label: 'Journal Entry',
+        icon: 'pi pi-book',
+        url: '/journal-entries/create',
+        action: () => handleQuickAction('create-journal-entry')
+    },
+    {
+        label: 'Reports',
+        icon: 'pi pi-chart-line',
+        url: '/reporting/dashboard',
+        action: () => handleQuickAction('view-reports')
+    }
+])
+
+const handleInvite = () => {
+    const peopleIndex = tabKeys.indexOf('people')
+    if (peopleIndex >= 0) {
+        selectedTab.value = peopleIndex
     }
 }
 
-const loadCompanyInvitations = async () => {
+const handleQuickAction = (action: string) => {
+    toast.add({
+        severity: 'info',
+        summary: 'Quick Action',
+        detail: `Action "${action}" triggered`,
+        life: 2000
+    })
+}
+
+const handleManageMember = (member: CompanyUser) => {
+    toast.add({
+        severity: 'info',
+        summary: 'Member management',
+        detail: `Manage controls for ${member.name} coming soon.`,
+        life: 3000
+    })
+}
+
+const handleInviteMember = async (inviteData: { email: string; role: string; message: string }) => {
+    if (!companyData.value?.id) return
+
     try {
-        const response = await fetch(`/api/v1/companies/${company.value.id}/invitations`)
-        const data = await response.json()
+        await http.post(`/api/v1/companies/${companyData.value.id}/invitations`, {
+            email: inviteData.email,
+            role: inviteData.role,
+            message: inviteData.message
+        })
         
-        if (response.ok) {
-            companyInvitations.value = data.data || []
-        }
-    } catch (error) {
-        console.error('Failed to load company invitations:', error)
+        toast.add({
+            severity: 'success',
+            summary: 'Invitation sent',
+            detail: `Invitation sent to ${inviteData.email}`,
+            life: 3000
+        })
+        
+        // Refresh company data to show updated invitations
+        refreshCompany()
+    } catch (err: any) {
+        toast.add({
+            severity: 'error',
+            summary: 'Invitation failed',
+            detail: err?.response?.data?.message || 'Unable to send invitation.',
+            life: 4000
+        })
+        throw err
     }
+}
+
+const handleUpdateRole = async (member: CompanyUser, newRole: string) => {
+    if (!companyData.value?.id) return
+
+    try {
+        await http.patch(`/api/v1/companies/${companyData.value.id}/members/${member.id}/role`, {
+            role: newRole
+        })
+        
+        toast.add({
+            severity: 'success',
+            summary: 'Role updated',
+            detail: `${member.name}'s role updated to ${newRole}`,
+            life: 3000
+        })
+        
+        // Refresh company data to show updated roles
+        refreshCompany()
+    } catch (err: any) {
+        toast.add({
+            severity: 'error',
+            summary: 'Role update failed',
+            detail: err?.response?.data?.message || 'Unable to update member role.',
+            life: 4000
+        })
+        throw err
+    }
+}
+
+const loadMoreAuditEntries = async () => {
+    if (!hasMoreAuditEntries.value) return
+    await loadAuditEntries()
 }
 
 const loadAuditEntries = async () => {
+    if (!companyData.value?.id) return
+
+    auditLoading.value = true
+    auditError.value = null
+
     try {
-        const response = await fetch(`/api/v1/companies/${company.value.id}/audit-entries`)
-        const data = await response.json()
-        
-        if (response.ok) {
-            auditEntries.value = data.data || []
+        const { data } = await http.get(`/api/v1/companies/${companyData.value.id}/audit-entries`)
+        auditEntries.value = data.data ?? []
+        hasMoreAuditEntries.value = Boolean(data.meta?.next_page_url)
+    } catch (err: any) {
+        if (err?.response?.status === 404) {
+            auditError.value = 'Activity feed is not enabled for this company yet.'
+        } else {
+            auditError.value = err?.response?.data?.message || 'Unable to load activity.'
         }
-    } catch (error) {
-        console.error('Failed to load audit entries:', error)
+        auditEntries.value = []
+        hasMoreAuditEntries.value = false
+    } finally {
+        auditLoading.value = false
     }
+}
+
+const refreshCompany = () => {
+    router.reload({
+        only: ['company'],
+    })
 }
 
 const switchToCompany = async () => {
-    if (isCurrentCompany.value) return
+    if (!companyData.value?.id || isCurrentCompany.value) return
 
-    try {
-        const response = await fetch('/api/v1/company-context/switch', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            },
-            body: JSON.stringify({
-                company_id: company.value.id
-            })
-        })
+    confirm.require({
+        header: 'Switch Company Context',
+        message: `Switch to ${companyData.value.name}?`,
+        icon: 'pi pi-sign-in',
+        acceptClass: 'p-button-success',
+        accept: async () => {
+            try {
+                await http.post('/api/v1/company-context/switch', {
+                    company_id: companyData.value?.id,
+                })
+                toast.add({
+                    severity: 'success',
+                    summary: 'Context switched',
+                    detail: `Now working in ${companyData.value?.name}`,
+                    life: 3000
+                })
+                setTimeout(() => window.location.reload(), 1200)
+            } catch (err: any) {
+                toast.add({
+                    severity: 'error',
+                    summary: 'Switch failed',
+                    detail: err?.response?.data?.message || 'Unable to switch company.',
+                    life: 4000
+                })
+            }
+        },
+    })
+}
 
-        if (response.ok) {
-            toast.value.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: `Switched to ${company.value.name}`,
-                life: 2000
-            })
-            
-            setTimeout(() => {
-                window.location.reload()
-            }, 1000)
-        }
-    } catch (error) {
-        console.error('Failed to switch company:', error)
-        toast.value.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: 'Failed to switch company',
-            life: 3000
-        })
-    }
+const activateCompany = async () => {
+    if (!companyData.value?.id) return
+
+    confirm.require({
+        header: 'Activate Company',
+        message: `Activate ${companyData.value.name}? Users will regain access.`,
+        icon: 'pi pi-check',
+        acceptClass: 'p-button-success',
+        accept: async () => {
+            try {
+                await http.patch(`/web/companies/${companyData.value?.id}/activate`)
+                toast.add({
+                    severity: 'success',
+                    summary: 'Company activated',
+                    detail: `${companyData.value?.name} is back online.`,
+                    life: 3000
+                })
+                refreshCompany()
+            } catch (err: any) {
+                toast.add({
+                    severity: 'error',
+                    summary: 'Activation failed',
+                    detail: err?.response?.data?.message || 'Unable to activate company.',
+                    life: 4000
+                })
+            }
+        },
+    })
 }
 
 const deactivateCompany = async () => {
-    if (!confirm(`Are you sure you want to deactivate ${company.value.name}? This action can be reversed.`)) {
-        return
-    }
+    if (!companyData.value?.id) return
 
-    try {
-        const response = await fetch(`/api/v1/companies/${company.value.id}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            },
-            body: JSON.stringify({
-                is_active: false
-            })
-        })
-
-        if (response.ok) {
-            toast.value.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: 'Company deactivated successfully',
-                life: 3000
-            })
-            
-            setTimeout(() => {
-                router.visit('/companies')
-            }, 1500)
-        }
-    } catch (error) {
-        console.error('Failed to deactivate company:', error)
-        toast.value.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: 'Failed to deactivate company',
-            life: 3000
-        })
-    }
+    confirm.require({
+        header: 'Deactivate Company',
+        message: `Deactivate ${companyData.value.name}? Users will lose access until reactivated.`,
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
+        accept: async () => {
+            try {
+                await http.patch(`/web/companies/${companyData.value?.id}/deactivate`)
+                toast.add({
+                    severity: 'warn',
+                    summary: 'Company deactivated',
+                    detail: `${companyData.value?.name} is now inactive.`,
+                    life: 3000
+                })
+                refreshCompany()
+            } catch (err: any) {
+                toast.add({
+                    severity: 'error',
+                    summary: 'Deactivation failed',
+                    detail: err?.response?.data?.message || 'Unable to deactivate company.',
+                    life: 4000
+                })
+            }
+        },
+    })
 }
 
-const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString()
+const updatePageActions = () => {
+    if (!companyData.value) return
+
+    setActions([
+        {
+            key: 'back',
+            label: 'Back to Companies',
+            icon: 'pi pi-arrow-left',
+            severity: 'secondary',
+            click: () => router.visit('/companies'),
+        },
+        {
+            key: 'switch',
+            label: 'Switch to Company',
+            icon: 'pi pi-sign-in',
+            severity: 'success',
+            click: switchToCompany,
+            disabled: () => !companyData.value?.is_active || isCurrentCompany.value,
+        },
+        {
+            key: 'activate',
+            label: 'Activate Company',
+            icon: 'pi pi-check',
+            severity: 'success',
+            click: activateCompany,
+            disabled: () => companyData.value?.is_active || !canManage.value,
+        },
+        {
+            key: 'deactivate',
+            label: 'Deactivate Company',
+            icon: 'pi pi-ban',
+            severity: 'warning',
+            click: deactivateCompany,
+            disabled: () => !companyData.value?.is_active || !canManage.value,
+        },
+    ])
 }
 
-const formatDateTime = (dateString) => {
-    return new Date(dateString).toLocaleString()
-}
+watch(
+    () => [companyData.value?.id, companyData.value?.is_active, userRole.value],
+    () => updatePageActions(),
+    { immediate: true }
+)
 
-const getRoleSeverity = (role) => {
-    switch (role) {
-        case 'owner': return 'success'
-        case 'admin': return 'info'
-        case 'accountant': return 'warning'
-        case 'member': return 'secondary'
-        default: return 'secondary'
-    }
-}
-
-const getInvitationStatusSeverity = (status) => {
-    switch (status) {
-        case 'pending': return 'warning'
-        case 'accepted': return 'success'
-        case 'rejected': return 'danger'
-        case 'expired': return 'secondary'
-        default: return 'secondary'
-    }
-}
-
-const getActionSeverity = (action) => {
-    switch (action) {
-        case 'create': return 'success'
-        case 'update': return 'info'
-        case 'delete': return 'danger'
-        case 'activate': return 'success'
-        case 'deactivate': return 'warning'
-        default: return 'secondary'
-    }
-}
-
-// Lifecycle
-onMounted(async () => {
-    loading.value = true
-    try {
-        await Promise.all([
-            loadCompanyUsers(),
-            loadCompanyInvitations(),
-            loadAuditEntries()
-        ])
-    } finally {
-        loading.value = false
-    }
+watch(selectedTab, (newIndex) => {
+    if (typeof window === 'undefined') return
+    const tabKey = tabKeys[newIndex]
+    if (!tabKey) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tabKey)
+    window.history.replaceState({}, '', url.toString())
 })
+
+const initializeTabFromUrl = () => {
+    if (typeof window === 'undefined') return
+    const urlParams = new URLSearchParams(window.location.search)
+    const tabFromUrl = urlParams.get('tab') as typeof tabKeys[number] | null
+    if (tabFromUrl && tabKeys.includes(tabFromUrl)) {
+        selectedTab.value = tabKeys.indexOf(tabFromUrl)
+    } else {
+        // Default to reports tab if no valid tab in URL
+        selectedTab.value = 0 // reports tab
+    }
+}
+
+onMounted(async () => {
+    initializeTabFromUrl()
+    await loadAuditEntries()
+})
+
 </script>
 
 <template>
-    <div class="company-show">
-        <Toast ref="toast" />
-        
-        <!-- Loading State -->
-        <div v-if="loading" class="flex justify-center items-center py-12">
-            <ProgressSpinner />
-        </div>
+    <Head :title="title" />
 
-        <div v-else-if="company">
-            <!-- Header -->
-            <div class="flex justify-between items-start mb-6">
-                <div class="flex items-center gap-4">
-                    <Avatar
-                        :label="company.name.charAt(0)"
-                        class="bg-primary text-primary-contrast"
-                        size="xlarge"
-                    />
-                    <div>
-                        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                            {{ company.name }}
-                        </h1>
-                        <div class="flex items-center gap-3 mt-2">
-                            <Badge
-                                :value="company.industry"
-                                severity="secondary"
+    <Toast />
+    <ConfirmDialog />
+
+    <LayoutShell>
+        <template #sidebar>
+            <Sidebar title="Companies" />
+        </template>
+
+        <CompanyHeader
+            :company="companyData"
+            :is-current-company="isCurrentCompany"
+            :quick-actions="quickActions"
+            @switch-context="switchToCompany"
+        />
+
+        <section class="mx-auto w-full max-w-7xl px-4 pb-16">
+            <div class="gap-6 lg:grid lg:grid-cols-[1fr,320px]">
+                <div class="space-y-6">
+                    <div class="rounded-3xl border border-slate-100 bg-white/90 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+                        <TabView v-model:activeIndex="selectedTab" :lazy="true">
+                        <TabPanel header="Reports" value="reports">
+                            <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                                <div class="text-center py-12">
+                                    <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i class="pi pi-chart-line text-blue-500 dark:text-blue-400 text-xl"></i>
+                                    </div>
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                                        Financial Reports
+                                    </h3>
+                                    <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                                        Comprehensive financial reporting and analytics for your company.
+                                    </p>
+                                </div>
+                            </div>
+                        </TabPanel>
+
+                    <TabPanel header="People" value="people">
+                        <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                            <TeamMembers
+                                :members="companyUsers"
+                                :can-invite="canInvite"
+                                :can-manage="canManage"
+                                @invite="handleInvite"
+                                @manage-member="handleManageMember"
+                                @invite-member="handleInviteMember"
+                                @update-role="handleUpdateRole"
                             />
-                            <Badge
-                                :value="company.user_role?.role"
-                                :severity="getRoleSeverity(company.user_role?.role)"
-                            />
-                            <Badge
-                                :value="company.is_active ? 'Active' : 'Inactive'"
-                                :severity="company.is_active ? 'success' : 'danger'"
-                            />
-                            <span v-if="!isCurrentCompany" class="text-sm text-gray-500">
-                                Not currently active
-                            </span>
                         </div>
+                    </TabPanel>
+
+                    <TabPanel header="Activity" value="activity">
+                        <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                            <ActivityFeed
+                                :entries="auditEntries"
+                                :loading="auditLoading"
+                                :error="auditError"
+                                :has-more="hasMoreAuditEntries"
+                                @refresh="loadAuditEntries"
+                                @load-more="loadMoreAuditEntries"
+                            />
+                        </div>
+                    </TabPanel>
+                    </TabView>
                     </div>
                 </div>
-
-                <div class="flex gap-2">
-                    <Button
-                        v-if="!isCurrentCompany && company.is_active"
-                        @click="switchToCompany"
-                        icon="pi pi-sign-in"
-                        label="Switch to Company"
-                        severity="success"
+                
+                <!-- Quick Links Sidebar -->
+                <div class="lg:sticky lg:top-6 h-fit">
+                    <QuickLinks
+                        :links="quickLinks"
+                        title="Quick Actions"
                     />
-                    
-                    <Link v-if="canManage" :href="`/companies/${company.id}/edit`">
-                        <Button
-                            icon="pi pi-pencil"
-                            label="Edit"
-                            severity="secondary"
-                            outlined
-                        />
-                    </Link>
-
-                    <Button
-                        v-if="canManage && company.is_active && company.user_role?.role === 'owner'"
-                        @click="deactivateCompany"
-                        icon="pi pi-times"
-                        label="Deactivate"
-                        severity="danger"
-                        outlined
-                    />
-
-                    <Link href="/companies">
-                        <Button
-                            icon="pi pi-arrow-left"
-                            label="Back"
-                            severity="secondary"
-                            outlined
-                        />
-                    </Link>
                 </div>
             </div>
-
-            <!-- Company Overview -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <Card>
-                    <template #content>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-primary">{{ activeUsersCount }}</div>
-                            <div class="text-gray-600 dark:text-gray-400">Active Users</div>
-                        </div>
-                    </template>
-                </Card>
-
-                <Card>
-                    <template #content>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-primary">{{ pendingInvitationsCount }}</div>
-                            <div class="text-gray-600 dark:text-gray-400">Pending Invitations</div>
-                        </div>
-                    </template>
-                </Card>
-
-                <Card>
-                    <template #content>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-primary">{{ company.currency }}</div>
-                            <div class="text-gray-600 dark:text-gray-400">Currency</div>
-                        </div>
-                    </template>
-                </Card>
-
-                <Card>
-                    <template #content>
-                        <div class="text-center">
-                            <div class="text-2xl font-bold text-primary">
-                                {{ fiscalYear ? fiscalYear.name : 'N/A' }}
-                            </div>
-                            <div class="text-gray-600 dark:text-gray-400">Fiscal Year</div>
-                        </div>
-                    </template>
-                </Card>
-            </div>
-
-            <!-- Details Tabs -->
-            <Card>
-                <TabView v-model:activeIndex="activeTab">
-                    <!-- Overview Tab -->
-                    <TabPanel header="Overview">
-                        <div class="space-y-6">
-                            <!-- Company Information -->
-                            <div>
-                                <h3 class="text-lg font-semibold mb-4">Company Information</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Industry</label>
-                                        <p class="text-gray-900 dark:text-white">{{ company.industry }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
-                                        <p class="text-gray-900 dark:text-white">{{ company.country }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Timezone</label>
-                                        <p class="text-gray-900 dark:text-white">{{ company.timezone || 'Not set' }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Language</label>
-                                        <p class="text-gray-900 dark:text-white">{{ company.language || 'en' }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Created</label>
-                                        <p class="text-gray-900 dark:text-white">{{ formatDate(company.created_at) }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Last Updated</label>
-                                        <p class="text-gray-900 dark:text-white">{{ formatDate(company.updated_at) }}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Divider />
-
-                            <!-- Fiscal Year Information -->
-                            <div v-if="fiscalYear">
-                                <h3 class="text-lg font-semibold mb-4">Fiscal Year</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Fiscal Year</label>
-                                        <p class="text-gray-900 dark:text-white">{{ fiscalYear.name }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
-                                        <p class="text-gray-900 dark:text-white">{{ formatDate(fiscalYear.start_date) }}</p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
-                                        <p class="text-gray-900 dark:text-white">{{ formatDate(fiscalYear.end_date) }}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Divider />
-
-                            <!-- Your Role -->
-                            <div v-if="company.user_role">
-                                <h3 class="text-lg font-semibold mb-4">Your Role in This Company</h3>
-                                <div class="flex items-center gap-4">
-                                    <Badge
-                                        :value="company.user_role.role"
-                                        :severity="getRoleSeverity(company.user_role.role)"
-                                        size="large"
-                                    />
-                                    <div>
-                                        <p class="text-gray-900 dark:text-white">
-                                            {{ company.user_role.role.charAt(0).toUpperCase() + company.user_role.role.slice(1) }}
-                                        </p>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                                            Member since {{ formatDate(company.user_role.joined_at) }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </TabPanel>
-
-                    <!-- Users Tab -->
-                    <TabPanel header="Users">
-                        <div class="space-y-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-lg font-semibold">Company Users ({{ companyUsers.length }})</h3>
-                                <Button
-                                    v-if="canInvite"
-                                    icon="pi pi-user-plus"
-                                    label="Invite User"
-                                    severity="secondary"
-                                    outlined
-                                    @click="activeTab = 2"
-                                />
-                            </div>
-
-                            <DataTable
-                                :value="companyUsers"
-                                :paginator="true"
-                                :rows="10"
-                                scrollable
-                                scroll-height="400px"
-                            >
-                                <Column field="name" header="Name">
-                                    <template #body="{ data }">
-                                        <div class="flex items-center gap-3">
-                                            <Avatar
-                                                :label="data.name.charAt(0)"
-                                                class="bg-primary text-primary-contrast"
-                                            />
-                                            <div>
-                                                <div class="font-semibold">{{ data.name }}</div>
-                                                <div class="text-sm text-gray-500">{{ data.email }}</div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </Column>
-
-                                <Column field="role" header="Role">
-                                    <template #body="{ data }">
-                                        <Badge
-                                            :value="data.pivot.role"
-                                            :severity="getRoleSeverity(data.pivot.role)"
-                                        />
-                                    </template>
-                                </Column>
-
-                                <Column field="pivot.is_active" header="Status">
-                                    <template #body="{ data }">
-                                        <Badge
-                                            :value="data.pivot.is_active ? 'Active' : 'Inactive'"
-                                            :severity="data.pivot.is_active ? 'success' : 'danger'"
-                                        />
-                                    </template>
-                                </Column>
-
-                                <Column field="pivot.created_at" header="Joined">
-                                    <template #body="{ data }">
-                                        {{ formatDate(data.pivot.created_at) }}
-                                    </template>
-                                </Column>
-
-                                <template #empty>
-                                    <div class="text-center py-8">
-                                        <i class="pi pi-users text-4xl text-gray-400"></i>
-                                        <p class="text-gray-500 dark:text-gray-400 mt-4">
-                                            No users found in this company
-                                        </p>
-                                    </div>
-                                </template>
-                            </DataTable>
-                        </div>
-                    </TabPanel>
-
-                    <!-- Invitations Tab -->
-                    <TabPanel header="Invitations">
-                        <div class="space-y-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-lg font-semibold">
-                                    Pending Invitations ({{ pendingInvitationsCount }})
-                                </h3>
-                                <Button
-                                    v-if="canInvite"
-                                    icon="pi pi-plus"
-                                    label="Send Invitation"
-                                />
-                            </div>
-
-                            <DataTable
-                                :value="companyInvitations"
-                                :paginator="true"
-                                :rows="10"
-                                scrollable
-                                scroll-height="400px"
-                            >
-                                <Column field="email" header="Email" />
-                                <Column field="role" header="Role">
-                                    <template #body="{ data }">
-                                        <Badge
-                                            :value="data.role"
-                                            :severity="getRoleSeverity(data.role)"
-                                        />
-                                    </template>
-                                </Column>
-                                <Column field="status" header="Status">
-                                    <template #body="{ data }">
-                                        <Badge
-                                            :value="data.status"
-                                            :severity="getInvitationStatusSeverity(data.status)"
-                                        />
-                                    </template>
-                                </Column>
-                                <Column field="expires_at" header="Expires">
-                                    <template #body="{ data }">
-                                        {{ formatDate(data.expires_at) }}
-                                    </template>
-                                </Column>
-                                <Column field="created_at" header="Sent">
-                                    <template #body="{ data }">
-                                        {{ formatDate(data.created_at) }}
-                                    </template>
-                                </Column>
-
-                                <template #empty>
-                                    <div class="text-center py-8">
-                                        <i class="pi pi-envelope text-4xl text-gray-400"></i>
-                                        <p class="text-gray-500 dark:text-gray-400 mt-4">
-                                            No invitations found
-                                        </p>
-                                    </div>
-                                </template>
-                            </DataTable>
-                        </div>
-                    </TabPanel>
-
-                    <!-- Activity Tab -->
-                    <TabPanel header="Activity">
-                        <div class="space-y-4">
-                            <h3 class="text-lg font-semibold">Recent Activity</h3>
-
-                            <div v-if="recentActivity.length > 0" class="space-y-3">
-                                <div
-                                    v-for="entry in recentActivity"
-                                    :key="entry.id"
-                                    class="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                                >
-                                    <Badge
-                                        :value="entry.action"
-                                        :severity="getActionSeverity(entry.action)"
-                                    />
-                                    <div class="flex-1">
-                                        <p class="text-sm font-medium">{{ entry.entity_type }} {{ entry.action }}</p>
-                                        <p class="text-xs text-gray-500">
-                                            {{ formatDateTime(entry.created_at) }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-else class="text-center py-8">
-                                <i class="pi pi-history text-4xl text-gray-400"></i>
-                                <p class="text-gray-500 dark:text-gray-400 mt-4">
-                                    No recent activity found
-                                </p>
-                            </div>
-                        </div>
-                    </TabPanel>
-                </TabView>
-            </Card>
-        </div>
-
-        <!-- Error State -->
-        <div v-else class="text-center py-12">
-            <i class="pi pi-exclamation-triangle text-4xl text-yellow-500"></i>
-            <h2 class="text-xl font-semibold mt-4">Company Not Found</h2>
-            <p class="text-gray-600 dark:text-gray-400 mt-2">
-                The company you're looking for doesn't exist or you don't have access to it.
-            </p>
-            <Link href="/companies">
-                <Button label="Back to Companies" class="mt-4" />
-            </Link>
-        </div>
-    </div>
+        </section>
+    </LayoutShell>
 </template>
-
-<style scoped>
-.company-show {
-    @apply p-6;
-}
-</style>

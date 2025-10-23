@@ -1,0 +1,1199 @@
+/* Blue Whale Theme Tokens (light + dark)
+   Works with PrimeVue token names and can be used by Tailwind via CSS vars. */
+
+/* Light */
+:root[data-theme="blue-whale"], :root {
+  /* Brand blues (Tailwindish) */
+  --p-blue-50:#eff6ff; --p-blue-100:#dbeafe; --p-blue-200:#bfdbfe; --p-blue-300:#93c5fd;
+  --p-blue-400:#60a5fa; --p-blue-500:#3b82f6; --p-blue-600:#2563eb; --p-blue-700:#1d4ed8;
+  --p-blue-800:#1e40af; --p-blue-900:#1e3a8a; --p-blue-950:#172554;
+
+  /* Primary mapping */
+  --p-primary-50: var(--p-blue-50);
+  --p-primary-100: var(--p-blue-100);
+  --p-primary-200: var(--p-blue-200);
+  --p-primary-300: var(--p-blue-300);
+  --p-primary-400: var(--p-blue-400);
+  --p-primary-500: var(--p-blue-500);
+  --p-primary-600: var(--p-blue-600);
+  --p-primary-700: var(--p-blue-700);
+  --p-primary-800: var(--p-blue-800);
+  --p-primary-900: var(--p-blue-900);
+  --p-primary-950: var(--p-blue-950);
+  --p-primary-color: var(--p-primary-500);
+  --p-primary-hover-color: var(--p-primary-600);
+  --p-primary-active-color: var(--p-primary-700);
+  --p-primary-contrast-color: #fff;
+
+  /* Brand‑tinted surfaces */
+  --p-surface-0:  color-mix(in srgb, var(--p-primary-950), white 100%);
+  --p-surface-50: color-mix(in srgb, var(--p-primary-950), white 95%);
+  --p-surface-100:color-mix(in srgb, var(--p-primary-950), white 90%);
+  --p-surface-200:color-mix(in srgb, var(--p-primary-950), white 80%);
+  --p-surface-300:color-mix(in srgb, var(--p-primary-950), white 70%);
+  --p-surface-400:color-mix(in srgb, var(--p-primary-950), white 60%);
+  --p-surface-500:color-mix(in srgb, var(--p-primary-950), white 50%);
+  --p-surface-600:color-mix(in srgb, var(--p-primary-950), white 40%);
+  --p-surface-700:color-mix(in srgb, var(--p-primary-950), white 30%);
+  --p-surface-800:color-mix(in srgb, var(--p-primary-950), white 20%);
+  --p-surface-900:color-mix(in srgb, var(--p-primary-950), white 10%);
+  --p-surface-950:color-mix(in srgb, var(--p-primary-950), white 5%);
+
+  /* Text & borders */
+  --p-text-color: var(--p-surface-700);
+  --p-text-hover-color: var(--p-surface-800);
+  --p-text-muted-color: var(--p-surface-500);
+  --p-content-background: var(--p-surface-0);
+  --p-content-hover-background: var(--p-surface-100);
+  --p-content-border-color: var(--p-surface-200);
+
+  /* Highlights & focus */
+  --p-highlight-background: var(--p-primary-50);
+  --p-highlight-focus-background: var(--p-primary-100);
+  --p-highlight-color: var(--p-primary-700);
+  --p-highlight-focus-color: var(--p-primary-800);
+  --p-focus-ring-width: 1px;
+  --p-focus-ring-style: solid;
+  --p-focus-ring-color: var(--p-primary-color);
+  --p-focus-ring-offset: 2px;
+
+  /* Forms + motion */
+  --p-form-field-background: var(--p-surface-0);
+  --p-form-field-border-color: var(--p-surface-300);
+  --p-form-field-hover-border-color: var(--p-surface-400);
+  --p-form-field-focus-border-color: var(--p-primary-color);
+  --p-form-field-color: var(--p-surface-700);
+  --p-border-radius-sm: 4px;
+  --p-border-radius-md: 6px;
+  --p-border-radius-lg: 8px;
+  --p-overlay-popover-border-radius: 10px;
+  --p-overlay-modal-border-radius: 1.5rem;
+  --p-transition-duration: .2s;
+
+  /* Shadows */
+  --p-overlay-popover-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+  --p-overlay-modal-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+  --p-form-field-shadow: 0 0 #0000, 0 0 #0000, 0 1px 2px 0 rgba(18,18,23,.05);
+
+  /* Fonts */
+  --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-alt: "Roboto Flex", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Ground (page) background for light */
+  --surface-ground: linear-gradient(180deg, #e0e7f5 0%, rgba(170, 194, 239, 0.06) 111.26%);
+}
+
+html, body { font-family: var(--font-sans); }
+h1,h2,h3 { font-family: var(--font-alt); font-weight: 600; }
+body { background: var(--surface-ground, var(--p-surface-50)); }
+
+/* Dark */
+:root[data-theme="blue-whale-dark"] {
+  color-scheme: dark;
+  /* Ground (page) background for dark */
+  --surface-ground: rgb(0, 12, 35);
+
+  /* Overlays as translucent white on ground */
+  --p-surface-50: rgba(255, 255, 255, 0.04);
+  --p-surface-100: rgba(255, 255, 255, 0.08);
+  --p-surface-200: rgba(255, 255, 255, 0.12);
+  --p-surface-300: rgba(255, 255, 255, 0.16);
+  --p-surface-400: rgba(255, 255, 255, 0.24);
+  --p-surface-500: rgba(255, 255, 255, 0.32);
+  --p-surface-600: rgba(255, 255, 255, 0.40);
+  --p-surface-700: rgba(255, 255, 255, 0.52);
+  --p-surface-800: rgba(255, 255, 255, 0.64);
+  --p-surface-900: rgba(255, 255, 255, 0.76);
+  --p-surface-950: rgba(255, 255, 255, 0.88);
+  /* Card/background base */
+  --p-surface-0: rgba(255, 255, 255, 0.08);
+
+  /* Text ramp for dark */
+  --p-text-color: rgba(255, 255, 255, 0.92);
+  --p-text-hover-color: rgba(255, 255, 255, 1);
+  --p-text-muted-color: rgba(255, 255, 255, 0.48);
+
+  /* Borders on dark over ground */
+  --p-content-border-color: rgba(255, 255, 255, 0.12);
+}
+
+
+/* Component stitching (sample) */
+:root, :root[data-theme="blue-whale"], :root[data-theme="blue-whale-dark"] {
+  /* Button */
+  --p-button-primary-background: var(--p-primary-color);
+  --p-button-primary-hover-background: var(--p-primary-hover-color);
+  --p-button-primary-active-background: var(--p-primary-active-color);
+  --p-button-primary-color: var(--p-primary-contrast-color);
+  /* InputText */
+  --p-inputtext-background: var(--p-form-field-background);
+  --p-inputtext-border-color: var(--p-form-field-border-color);
+  --p-inputtext-hover-border-color: var(--p-form-field-hover-border-color);
+  --p-inputtext-focus-border-color: var(--p-form-field-focus-border-color);
+  --p-inputtext-color: var(--p-form-field-color);
+  --p-inputtext-shadow: var(--p-form-field-shadow);
+}
+
+/* Block Section Components (salvaged from design) */
+.block-section {
+  margin-bottom: 4rem;
+  overflow: hidden;
+}
+
+.block-header {
+  padding: 1rem 2rem;
+  background-color: var(--surface-card);
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  border: 1px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.block-header .block-title {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.block-header .block-title .badge-free {
+  border-radius: 4px;
+  padding: .25rem .5rem;
+  background-color: var(--p-orange-500);
+  color: #fff;
+  margin-left: 1rem;
+  font-weight: 700;
+  font-size: .875rem;
+}
+
+.block-header .block-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  margin-left: 1rem;
+}
+
+.block-header .block-actions a {
+  display: flex;
+  align-items: center;
+  margin-right: .75rem;
+  padding: .5rem 1rem;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background-color .2s;
+  cursor: pointer;
+}
+
+.block-header .block-actions a:last-child {
+  margin-right: 0;
+}
+
+.block-header .block-actions a:not(.block-action-disabled):hover {
+  background-color: var(--surface-card);
+}
+
+.block-header .block-actions a.block-action-active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.block-header .block-actions a.block-action-copy i {
+  color: var(--primary-color);
+  font-size: 1.25rem;
+}
+
+.block-header .block-actions a.block-action-disabled {
+  opacity: .6;
+  cursor: auto !important;
+}
+
+.block-header .block-actions a i {
+  margin-right: .5rem;
+}
+
+.block-content {
+  padding: 0;
+  border: 1px solid var(--surface-border);
+  border-top: 0 none;
+}
+
+/* Code Block Styling */
+pre {
+  border: 0 none !important;
+  border-radius: 0 !important;
+}
+
+pre .app-code {
+  background: var(--p-surface-900) !important;
+  margin: 0 !important;
+  border: 0 none !important;
+}
+
+pre .app-code:before,
+pre .app-code:after {
+  display: none !important;
+}
+
+pre .app-code code {
+  color: var(--p-surface-50);
+  padding: 1rem;
+  line-height: 1.5;
+  display: block;
+  font-family: monaco, Consolas, monospace;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 575px) {
+  .block-header {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .block-header .block-actions {
+    margin-top: 1rem;
+    margin-left: 0;
+  }
+}
+
+/* Utility Components */
+.card {
+  border-radius: 1rem;
+  background-color: var(--surface-card);
+  padding: 1rem;
+  --tw-shadow: 0px 10px 10px -8px rgba(18,18,23,.02), 0px 2px 2px -1.5px rgba(18,18,23,.02), 0px 1px 1px -.5px rgba(18,18,23,.02), 0px 0px 0px 1px rgba(18,18,23,.02);
+  --tw-shadow-colored: 0px 10px 10px -8px var(--tw-shadow-color), 0px 2px 2px -1.5px var(--tw-shadow-color), 0px 1px 1px -.5px var(--tw-shadow-color), 0px 0px 0px 1px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+@media (min-width: 992px) {
+  .card {
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+  }
+}
+
+.badge {
+  border-radius: 9999px;
+  border-width: 1px;
+  --tw-bg-opacity: 1;
+  background-color: color-mix(in srgb, var(--p-surface-0) calc(100% * var(--tw-bg-opacity, 1)), transparent);
+  padding: .25rem .875rem;
+  font-weight: 500;
+  --tw-text-opacity: 1;
+  color: color-mix(in srgb, var(--p-surface-950) calc(100% * var(--tw-text-opacity, 1)), transparent);
+  --tw-shadow: 0px 1px 2px 0px rgba(18,18,23,.05);
+  --tw-shadow-colored: 0px 1px 2px 0px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  border-color: var(--p-content-border-color);
+}
+
+.badge:where([class*=app-dark], [class*=app-dark] *) {
+  border-color: #ffffff1a;
+  background-color: #ffffff1f;
+  --tw-text-opacity: 1;
+  color: color-mix(in srgb, var(--p-surface-0) calc(100% * var(--tw-text-opacity, 1)), transparent);
+}
+
+.button-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  border-radius: 9999px;
+  --tw-bg-opacity: 1;
+  background-color: color-mix(in srgb, var(--p-primary-color) calc(100% * var(--tw-bg-opacity, 1)), transparent);
+  padding: .75rem 1.75rem;
+  font-weight: 500;
+  --tw-text-opacity: 1;
+  color: color-mix(in srgb, var(--p-primary-contrast-color) calc(100% * var(--tw-text-opacity, 1)), transparent);
+  --tw-shadow: var(--custom-shadow);
+  --tw-shadow-colored: var(--custom-shadow);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  transition-property: all;
+  transition-timing-function: cubic-bezier(.4,0,.2,1);
+  transition-duration: .15s;
+}
+
+.button-primary:hover {
+  --tw-bg-opacity: 1;
+  background-color: color-mix(in srgb, var(--p-primary-hover-color) calc(100% * var(--tw-bg-opacity, 1)), transparent);
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  border-radius: 9999px;
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+  padding: .75rem 1.75rem;
+  font-weight: 500;
+  --tw-text-opacity: 1;
+  color: color-mix(in srgb, var(--p-surface-700) calc(100% * var(--tw-text-opacity, 1)), transparent);
+  --tw-shadow: var(--custom-shadow);
+  --tw-shadow-colored: var(--custom-shadow);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  transition-property: all;
+  transition-timing-function: cubic-bezier(.4,0,.2,1);
+  transition-duration: .15s;
+}
+
+.button:hover {
+  --tw-bg-opacity: 1;
+  background-color: color-mix(in srgb, var(--p-surface-50) calc(100% * var(--tw-bg-opacity, 1)), transparent);
+}
+
+.button:where([class*=app-dark], [class*=app-dark] *) {
+  background-color: #ffffff1a;
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.button:hover:where([class*=app-dark], [class*=app-dark] *) {
+  background-color: #fff3;
+}
+
+
+/* Custom shadow variable */
+:root {
+  --custom-shadow: 0px 10px 10px -8px rgba(18, 18, 23, .02), 0px 2px 2px -1.5px rgba(18, 18, 23, .02), 0px 1px 1px -.5px rgba(18, 18, 23, .02);
+}
+
+/* Blue Whale focus, surface, and utility system */
+:root,
+:root[data-theme="blue-whale"],
+:root[data-theme="blue-whale-dark"] {
+  --bw-focus-ring-width: 2px;
+  --bw-focus-ring-offset: 2px;
+  --bw-focus-ring-color: var(--p-primary-500);
+  --bw-focus-ring-shadow: 0 0 0 calc(var(--bw-focus-ring-width) + 1px) color-mix(in srgb, var(--bw-focus-ring-color) 35%, transparent);
+
+  --bw-surface-elevated-background: linear-gradient(to right,
+      rgba(249, 250, 251, 1) 0%,
+      rgba(255, 255, 255, 1) 10px,
+      rgba(255, 255, 255, 1) calc(100% - 10px),
+      rgba(249, 250, 251, 1) 100%
+  );
+  --bw-surface-elevated-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --bw-surface-elevated-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+
+  --bw-table-head-background: linear-gradient(180deg,
+      rgba(249, 250, 251, 1) 0%,
+      rgba(243, 244, 246, 1) 100%
+  );
+  --bw-table-head-border-color: rgba(229, 231, 235, 1);
+  --bw-table-row-hover-background: rgba(249, 250, 251, 0.5);
+  --bw-table-row-current-background: rgba(37, 99, 235, 0.05);
+  --bw-table-row-current-border: #3b82f6;
+
+  --bw-floating-toolbar-background: rgba(17, 24, 39, 0.95);
+  --bw-floating-toolbar-border: rgba(17, 24, 39, 0.9);
+  --bw-floating-toolbar-color: #fff;
+  --bw-floating-toolbar-shadow: 0 18px 45px -18px rgba(15, 23, 42, 0.45);
+  --bw-floating-toolbar-divider: rgba(148, 163, 184, 0.6);
+  --bw-floating-toolbar-hover: rgba(255, 255, 255, 0.08);
+
+  --bw-danger-color: #f87171;
+}
+
+:root[data-theme="blue-whale-dark"] {
+  --bw-focus-ring-color: var(--p-primary-300);
+  --bw-focus-ring-shadow: 0 0 0 calc(var(--bw-focus-ring-width) + 1px) color-mix(in srgb, var(--bw-focus-ring-color) 30%, transparent);
+
+  --bw-surface-elevated-background: linear-gradient(to right,
+      rgba(31, 41, 55, 1) 0%,
+      rgba(17, 24, 39, 1) 10px,
+      rgba(17, 24, 39, 1) calc(100% - 10px),
+      rgba(31, 41, 55, 1) 100%
+  );
+  --bw-surface-elevated-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3),
+      0 1px 2px 0 rgba(0, 0, 0, 0.2),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --bw-surface-elevated-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
+      0 2px 4px -1px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  --bw-table-head-background: linear-gradient(180deg,
+      rgba(31, 41, 55, 0.8) 0%,
+      rgba(17, 24, 39, 0.8) 100%
+  );
+  --bw-table-head-border-color: rgba(55, 65, 81, 1);
+  --bw-table-row-hover-background: rgba(55, 65, 81, 0.3);
+  --bw-table-row-current-background: rgba(96, 165, 250, 0.08);
+  --bw-table-row-current-border: #60a5fa;
+
+  --bw-floating-toolbar-background: rgba(15, 23, 42, 0.85);
+  --bw-floating-toolbar-border: rgba(96, 165, 250, 0.35);
+  --bw-floating-toolbar-color: #f1f5f9;
+  --bw-floating-toolbar-divider: rgba(100, 116, 139, 0.6);
+  --bw-floating-toolbar-hover: rgba(148, 163, 184, 0.18);
+}
+
+:where(button, [role="button"], a[href], input:not([type="hidden"]), select, textarea, .p-inputtext, .p-button, .p-dropdown, .p-multiselect, .p-calendar, .p-listbox, .p-checkbox-box, .p-radiobutton-box):focus-visible {
+  outline: var(--bw-focus-ring-width) solid var(--bw-focus-ring-color);
+  outline-offset: var(--bw-focus-ring-offset);
+  box-shadow: var(--bw-focus-ring-shadow);
+}
+
+.bw-table-container {
+  background: var(--bw-surface-elevated-background);
+  border-radius: 0.75rem;
+  box-shadow: var(--bw-surface-elevated-shadow);
+  overflow: hidden;
+  transition: box-shadow var(--p-transition-duration), transform var(--p-transition-duration);
+}
+
+.bw-table-container:hover {
+  box-shadow: var(--bw-surface-elevated-shadow-hover);
+}
+
+.bw-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: var(--p-surface-0);
+}
+
+.bw-table thead {
+  background: var(--bw-table-head-background);
+  border-bottom: 1px solid var(--bw-table-head-border-color);
+}
+
+.bw-table thead th {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1rem;
+  color: var(--p-text-muted-color);
+}
+
+.bw-table tbody {
+  background-color: var(--p-content-background);
+}
+
+.bw-table tbody tr {
+  transition: background-color var(--p-transition-duration);
+  border-bottom: 1px solid var(--p-content-border-color);
+}
+
+.bw-table tbody tr:hover {
+  background-color: var(--bw-table-row-hover-background);
+}
+
+.bw-table tbody tr.bw-table-row-current {
+  background-color: var(--bw-table-row-current-background);
+  box-shadow: inset 3px 0 0 0 var(--bw-table-row-current-border);
+}
+
+.bw-table tbody tr.bw-table-row-current:hover {
+  background-color: color-mix(in srgb, var(--bw-table-row-current-background) 80%, transparent);
+}
+
+.bw-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.bw-interactive-cell {
+  position: relative;
+}
+
+.bw-interactive-cell__content {
+  transition: transform var(--p-transition-duration);
+}
+
+.bw-interactive-cell:hover .bw-interactive-cell__content {
+  transform: translateX(2px);
+}
+
+.bw-floating-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  background: var(--bw-floating-toolbar-background);
+  color: var(--bw-floating-toolbar-color);
+  border: 1px solid var(--bw-floating-toolbar-border);
+  box-shadow: var(--bw-floating-toolbar-shadow);
+  backdrop-filter: blur(12px);
+}
+
+.bw-floating-toolbar__count {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.bw-floating-toolbar__divider {
+  width: 1px;
+  height: 1rem;
+  background: var(--bw-floating-toolbar-divider);
+}
+
+.bw-floating-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  color: inherit;
+  background: transparent;
+  border: none;
+  transition: background var(--p-transition-duration), color var(--p-transition-duration);
+}
+
+.bw-floating-toolbar__button:hover {
+  background: var(--bw-floating-toolbar-hover);
+}
+
+.bw-floating-toolbar__button--danger {
+  color: var(--bw-danger-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bw-table-container,
+  .bw-table tbody tr,
+  .bw-floating-toolbar,
+  .bw-floating-toolbar__button,
+  .bw-interactive-cell__content {
+    transition: none !important;
+  }
+
+  .bw-interactive-cell:hover .bw-interactive-cell__content {
+    transform: none !important;
+  }
+}
+
+/* DataTable Component Styles */
+.p-datatable {
+  position: relative;
+}
+
+.p-datatable-table {
+  border-spacing: 0;
+  border-collapse: separate;
+  width: 100%;
+}
+
+.p-datatable-scrollable > .p-datatable-table-container {
+  position: relative;
+}
+
+.p-datatable-scrollable-table > .p-datatable-thead {
+  inset-block-start: 0;
+  z-index: 1;
+}
+
+.p-datatable-scrollable-table > .p-datatable-frozen-tbody {
+  position: sticky;
+  z-index: 1;
+}
+
+.p-datatable-scrollable-table > .p-datatable-tfoot {
+  inset-block-end: 0;
+  z-index: 1;
+}
+
+.p-datatable-scrollable .p-datatable-frozen-column {
+  position: sticky;
+  background: var(--p-datatable-header-cell-background);
+}
+
+.p-datatable-scrollable th.p-datatable-frozen-column {
+  z-index: 1;
+}
+
+.p-datatable-scrollable > .p-datatable-table-container > .p-datatable-table > .p-datatable-thead,
+.p-datatable-scrollable > .p-datatable-table-container > .p-virtualscroller > .p-datatable-table > .p-datatable-thead {
+  background: var(--p-datatable-header-cell-background);
+}
+
+.p-datatable-scrollable > .p-datatable-table-container > .p-datatable-table > .p-datatable-tfoot,
+.p-datatable-scrollable > .p-datatable-table-container > .p-virtualscroller > .p-datatable-table > .p-datatable-tfoot {
+  background: var(--p-datatable-footer-cell-background);
+}
+
+.p-datatable-flex-scrollable {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.p-datatable-flex-scrollable > .p-datatable-table-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+}
+
+.p-datatable-scrollable-table > .p-datatable-tbody > .p-datatable-row-group-header {
+  position: sticky;
+  z-index: 1;
+}
+
+.p-datatable-resizable-table > .p-datatable-thead > tr > th,
+.p-datatable-resizable-table > .p-datatable-tfoot > tr > td,
+.p-datatable-resizable-table > .p-datatable-tbody > tr > td {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.p-datatable-resizable-table > .p-datatable-thead > tr > th.p-datatable-resizable-column:not(.p-datatable-frozen-column) {
+  background-clip: padding-box;
+  position: relative;
+}
+
+.p-datatable-resizable-table-fit > .p-datatable-thead > tr > th.p-datatable-resizable-column:last-child .p-datatable-column-resizer {
+  display: none;
+}
+
+.p-datatable-column-resizer {
+  display: block;
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+  width: var(--p-datatable-column-resizer-width);
+  height: 100%;
+  padding: 0;
+  cursor: col-resize;
+  border: 1px solid transparent;
+}
+
+.p-datatable-column-header-content {
+  display: flex;
+  align-items: center;
+  gap: var(--p-datatable-header-cell-gap);
+}
+
+.p-datatable-column-resize-indicator {
+  width: var(--p-datatable-resize-indicator-width);
+  position: absolute;
+  z-index: 10;
+  display: none;
+  background: var(--p-datatable-resize-indicator-color);
+}
+
+.p-datatable-row-reorder-indicator-up,
+.p-datatable-row-reorder-indicator-down {
+  position: absolute;
+  display: none;
+}
+
+.p-datatable-reorderable-column,
+.p-datatable-reorderable-row-handle {
+  cursor: move;
+}
+
+.p-datatable-mask {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.p-datatable-inline-filter {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--p-datatable-filter-inline-gap);
+}
+
+.p-datatable-inline-filter .p-datatable-filter-element-container {
+  flex: 1 1 auto;
+  width: 1%;
+}
+
+.p-datatable-filter-overlay {
+  background: var(--p-datatable-filter-overlay-select-background);
+  color: var(--p-datatable-filter-overlay-select-color);
+  border: 1px solid var(--p-datatable-filter-overlay-select-border-color);
+  border-radius: var(--p-datatable-filter-overlay-select-border-radius);
+  box-shadow: var(--p-datatable-filter-overlay-select-shadow);
+  min-width: 12.5rem;
+}
+
+.p-datatable-filter-constraint-list {
+  margin: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  padding: var(--p-datatable-filter-constraint-list-padding);
+  gap: var(--p-datatable-filter-constraint-list-gap);
+}
+
+.p-datatable-filter-constraint {
+  padding: var(--p-datatable-filter-constraint-padding);
+  color: var(--p-datatable-filter-constraint-color);
+  border-radius: var(--p-datatable-filter-constraint-border-radius);
+  cursor: pointer;
+  transition: background var(--p-datatable-transition-duration), color var(--p-datatable-transition-duration), border-color var(--p-datatable-transition-duration), box-shadow var(--p-datatable-transition-duration);
+}
+
+.p-datatable-filter-constraint-selected {
+  background: var(--p-datatable-filter-constraint-selected-background);
+  color: var(--p-datatable-filter-constraint-selected-color);
+}
+
+.p-datatable-filter-constraint:not(.p-datatable-filter-constraint-selected):not(.p-disabled):hover {
+  background: var(--p-datatable-filter-constraint-focus-background);
+  color: var(--p-datatable-filter-constraint-focus-color);
+}
+
+.p-datatable-filter-constraint:focus-visible {
+  outline: 0 none;
+  background: var(--p-datatable-filter-constraint-focus-background);
+  color: var(--p-datatable-filter-constraint-focus-color);
+}
+
+.p-datatable-filter-constraint-selected:focus-visible {
+  outline: 0 none;
+  background: var(--p-datatable-filter-constraint-selected-focus-background);
+  color: var(--p-datatable-filter-constraint-selected-focus-color);
+}
+
+.p-datatable-filter-constraint-separator {
+  border-block-start: 1px solid var(--p-datatable-filter-constraint-separator-border-color);
+}
+
+.p-datatable-popover-filter {
+  display: inline-flex;
+  margin-inline-start: auto;
+}
+
+.p-datatable-filter-overlay-popover {
+  background: var(--p-datatable-filter-overlay-popover-background);
+  color: var(--p-datatable-filter-overlay-popover-color);
+  border: 1px solid var(--p-datatable-filter-overlay-popover-border-color);
+  border-radius: var(--p-datatable-filter-overlay-popover-border-radius);
+  box-shadow: var(--p-datatable-filter-overlay-popover-shadow);
+  min-width: 12.5rem;
+  padding: var(--p-datatable-filter-overlay-popover-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-datatable-filter-overlay-popover-gap);
+}
+
+.p-datatable-filter-operator-dropdown {
+  width: 100%;
+}
+
+.p-datatable-filter-rule-list,
+.p-datatable-filter-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-datatable-filter-overlay-popover-gap);
+}
+
+.p-datatable-filter-rule {
+  border-block-end: 1px solid var(--p-datatable-filter-rule-border-color);
+  padding-bottom: var(--p-datatable-filter-overlay-popover-gap);
+}
+
+.p-datatable-filter-rule:last-child {
+  border-block-end: 0 none;
+  padding-bottom: 0;
+}
+
+.p-datatable-filter-add-rule-button {
+  width: 100%;
+}
+
+.p-datatable-filter-remove-rule-button {
+  width: 100%;
+}
+
+.p-datatable-filter-buttonbar {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.p-datatable-virtualscroller-spacer {
+  display: flex;
+}
+
+.p-datatable .p-virtualscroller .p-virtualscroller-loading {
+  transform: none !important;
+  min-height: 0;
+  position: sticky;
+  inset-block-start: 0;
+  inset-inline-left: 0;
+}
+
+.p-datatable-paginator-top {
+  border-color: var(--p-datatable-paginator-top-border-color);
+  border-style: solid;
+  border-width: var(--p-datatable-paginator-top-border-width);
+}
+
+.p-datatable-paginator-bottom {
+  border-color: var(--p-datatable-paginator-bottom-border-color);
+  border-style: solid;
+  border-width: var(--p-datatable-paginator-bottom-border-width);
+}
+
+.p-datatable-header {
+  background: var(--p-datatable-header-background);
+  color: var(--p-datatable-header-color);
+  border-color: var(--p-datatable-header-border-color);
+  border-style: solid;
+  border-width: var(--p-datatable-header-border-width);
+  padding: var(--p-datatable-header-padding);
+}
+
+.p-datatable-footer {
+  background: var(--p-datatable-footer-background);
+  color: var(--p-datatable-footer-color);
+  border-color: var(--p-datatable-footer-border-color);
+  border-style: solid;
+  border-width: var(--p-datatable-footer-border-width);
+  padding: var(--p-datatable-footer-padding);
+}
+
+.p-datatable-header-cell {
+  padding: var(--p-datatable-header-cell-padding);
+  background: var(--p-datatable-header-cell-background);
+  border-color: var(--p-datatable-header-cell-border-color);
+  border-style: solid;
+  border-width: 0 0 1px 0;
+  color: var(--p-datatable-header-cell-color);
+  font-weight: normal;
+  text-align: start;
+  transition: background var(--p-datatable-transition-duration), color var(--p-datatable-transition-duration), border-color var(--p-datatable-transition-duration), outline-color var(--p-datatable-transition-duration), box-shadow var(--p-datatable-transition-duration);
+}
+
+.p-datatable-column-title {
+  font-weight: var(--p-datatable-column-title-font-weight);
+}
+
+.p-datatable-tbody > tr {
+  outline-color: transparent;
+  background: var(--p-datatable-row-background);
+  color: var(--p-datatable-row-color);
+  transition: background var(--p-datatable-transition-duration), color var(--p-datatable-transition-duration), border-color var(--p-datatable-transition-duration), outline-color var(--p-datatable-transition-duration), box-shadow var(--p-datatable-transition-duration);
+}
+
+.p-datatable-tbody > tr > td {
+  text-align: start;
+  border-color: var(--p-datatable-body-cell-border-color);
+  border-style: solid;
+  border-width: 0 0 1px 0;
+  padding: var(--p-datatable-body-cell-padding);
+}
+
+.p-datatable-hoverable .p-datatable-tbody > tr:not(.p-datatable-row-selected):hover {
+  background: var(--p-datatable-row-hover-background);
+  color: var(--p-datatable-row-hover-color);
+}
+
+.p-datatable-tbody > tr.p-datatable-row-selected {
+  background: var(--p-datatable-row-selected-background);
+  color: var(--p-datatable-row-selected-color);
+}
+
+.p-datatable-tbody > tr:has(+ .p-datatable-row-selected) > td {
+  border-block-end-color: var(--p-datatable-body-cell-selected-border-color);
+}
+
+.p-datatable-tbody > tr.p-datatable-row-selected > td {
+  border-block-end-color: var(--p-datatable-body-cell-selected-border-color);
+}
+
+.p-datatable-tbody > tr:focus-visible,
+.p-datatable-tbody > tr.p-datatable-contextmenu-row-selected {
+  box-shadow: var(--p-datatable-row-focus-ring-shadow);
+  outline: var(--p-datatable-row-focus-ring-width) var(--p-datatable-row-focus-ring-style) var(--p-datatable-row-focus-ring-color);
+  outline-offset: var(--p-datatable-row-focus-ring-offset);
+}
+
+.p-datatable-tfoot > tr > td {
+  text-align: start;
+  padding: var(--p-datatable-footer-cell-padding);
+  border-color: var(--p-datatable-footer-cell-border-color);
+  border-style: solid;
+  border-width: 0 0 1px 0;
+  color: var(--p-datatable-footer-cell-color);
+  background: var(--p-datatable-footer-cell-background);
+}
+
+.p-datatable-column-footer {
+  font-weight: var(--p-datatable-column-footer-font-weight);
+}
+
+.p-datatable-sortable-column {
+  cursor: pointer;
+  user-select: none;
+  outline-color: transparent;
+}
+
+.p-datatable-column-title,
+.p-datatable-sort-icon,
+.p-datatable-sort-badge {
+  vertical-align: middle;
+}
+
+.p-datatable-sort-icon {
+  color: var(--p-datatable-sort-icon-color);
+  font-size: var(--p-datatable-sort-icon-font-size);
+  transition: color var(--p-datatable-transition-duration);
+}
+
+.p-datatable-sortable-column:not(.p-datatable-column-sorted):hover .p-datatable-sort-icon {
+  color: var(--p-datatable-sort-icon-hover-color);
+}
+
+.p-datatable-column-sorted .p-datatable-sort-icon {
+  color: var(--p-datatable-sort-icon-active-color);
+}
+
+.p-datatable-sortable-column:focus-visible {
+  box-shadow: var(--p-datatable-header-cell-focus-ring-shadow);
+  outline: var(--p-datatable-header-cell-focus-ring-width) var(--p-datatable-header-cell-focus-ring-style) var(--p-datatable-header-cell-focus-ring-color);
+  outline-offset: var(--p-datatable-header-cell-focus-ring-offset);
+}
+
+.p-datatable-column-sorted:focus-visible {
+  box-shadow: var(--p-datatable-header-cell-focus-ring-shadow);
+  outline: var(--p-datatable-header-cell-focus-ring-width) var(--p-datatable-header-cell-focus-ring-style) var(--p-datatable-header-cell-focus-ring-color);
+  outline-offset: var(--p-datatable-header-cell-focus-ring-offset);
+}
+
+.p-datatable-loading-overlay {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.p-datatable-loading-icon {
+  font-size: var(--p-datatable-loading-icon-font-size);
+  width: var(--p-datatable-loading-icon-width);
+  height: var(--p-datatable-loading-icon-height);
+}
+
+.p-datatable-row-toggler {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: var(--p-datatable-row-toggler-width);
+  height: var(--p-datatable-row-toggler-height);
+  border-radius: var(--p-datatable-row-toggler-border-radius);
+  background: var(--p-datatable-row-toggler-background);
+  color: var(--p-datatable-row-toggler-color);
+  border: var(--p-datatable-row-toggler-border);
+  transition: background var(--p-datatable-transition-duration), color var(--p-datatable-transition-duration), border-color var(--p-datatable-transition-duration), outline-color var(--p-datatable-transition-duration), box-shadow var(--p-datatable-transition-duration);
+}
+
+.p-datatable-row-toggler:hover {
+  background: var(--p-datatable-row-toggler-hover-background);
+  color: var(--p-datatable-row-toggler-hover-color);
+  border-color: var(--p-datatable-row-toggler-hover-border-color);
+}
+
+.p-datatable-row-toggler:focus-visible {
+  box-shadow: var(--p-datatable-row-toggler-focus-ring-shadow);
+  outline: var(--p-datatable-row-toggler-focus-ring-width) var(--p-datatable-row-toggler-focus-ring-style) var(--p-datatable-row-toggler-focus-ring-color);
+  outline-offset: var(--p-datatable-row-toggler-focus-ring-offset);
+}
+
+.p-datatable-row-editor-init,
+.p-datatable-row-editor-save,
+.p-datatable-row-editor-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: var(--p-datatable-row-editor-button-width);
+  height: var(--p-datatable-row-editor-button-height);
+  border-radius: var(--p-datatable-row-editor-button-border-radius);
+  background: var(--p-datatable-row-editor-button-background);
+  color: var(--p-datatable-row-editor-button-color);
+  border: var(--p-datatable-row-editor-button-border);
+  transition: background var(--p-datatable-transition-duration), color var(--p-datatable-transition-duration), border-color var(--p-datatable-transition-duration), outline-color var(--p-datatable-transition-duration), box-shadow var(--p-datatable-transition-duration);
+}
+
+.p-datatable-row-editor-init:hover,
+.p-datatable-row-editor-save:hover,
+.p-datatable-row-editor-cancel:hover {
+  background: var(--p-datatable-row-editor-button-hover-background);
+  color: var(--p-datatable-row-editor-button-hover-color);
+  border-color: var(--p-datatable-row-editor-button-hover-border-color);
+}
+
+.p-datatable-row-editor-init:focus-visible,
+.p-datatable-row-editor-save:focus-visible,
+.p-datatable-row-editor-cancel:focus-visible {
+  box-shadow: var(--p-datatable-row-editor-button-focus-ring-shadow);
+  outline: var(--p-datatable-row-editor-button-focus-ring-width) var(--p-datatable-row-editor-button-focus-ring-style) var(--p-datatable-row-editor-button-focus-ring-color);
+  outline-offset: var(--p-datatable-row-editor-button-focus-ring-offset);
+}
+
+.p-datatable .p-checkbox {
+  width: var(--p-datatable-checkbox-width);
+  height: var(--p-datatable-checkbox-height);
+}
+
+.p-datatable .p-radiobutton {
+  width: var(--p-datatable-radiobutton-width);
+  height: var(--p-datatable-radiobutton-height);
+}
+
+/* DataTable Theme Variables */
+:root, :root[data-theme="blue-whale"], :root[data-theme="blue-whale-dark"] {
+  /* DataTable specific variables */
+  --p-datatable-header-background: var(--p-surface-0);
+  --p-datatable-header-color: var(--p-text-color);
+  --p-datatable-header-border-color: var(--p-content-border-color);
+  --p-datatable-header-border-width: 0 0 1px 0;
+  --p-datatable-header-padding: 1rem 1.5rem;
+
+  --p-datatable-footer-background: var(--p-surface-0);
+  --p-datatable-footer-color: var(--p-text-color);
+  --p-datatable-footer-border-color: var(--p-content-border-color);
+  --p-datatable-footer-border-width: 0 0 1px 0;
+  --p-datatable-footer-padding: 1rem 1.5rem;
+
+  --p-datatable-header-cell-background: var(--p-surface-0);
+  --p-datatable-header-cell-color: var(--p-text-color);
+  --p-datatable-header-cell-border-color: var(--p-content-border-color);
+  --p-datatable-header-cell-padding: 1rem 1.5rem;
+  --p-datatable-header-cell-gap: 0.5rem;
+
+  --p-datatable-body-cell-border-color: var(--p-content-border-color);
+  --p-datatable-body-cell-padding: 1rem 1.5rem;
+  --p-datatable-body-cell-selected-border-color: var(--p-primary-color);
+
+  --p-datatable-footer-cell-background: var(--p-surface-0);
+  --p-datatable-footer-cell-color: var(--p-text-color);
+  --p-datatable-footer-cell-border-color: var(--p-content-border-color);
+  --p-datatable-footer-cell-padding: 1rem 1.5rem;
+
+  --p-datatable-row-background: var(--p-content-background);
+  --p-datatable-row-color: var(--p-text-color);
+  --p-datatable-row-hover-background: var(--p-content-hover-background);
+  --p-datatable-row-hover-color: var(--p-text-hover-color);
+  --p-datatable-row-selected-background: var(--p-primary-50);
+  --p-datatable-row-selected-color: var(--p-primary-700);
+
+  --p-datatable-column-title-font-weight: 600;
+  --p-datatable-column-footer-font-weight: 600;
+
+  --p-datatable-sort-icon-color: var(--p-text-muted-color);
+  --p-datatable-sort-icon-hover-color: var(--p-text-color);
+  --p-datatable-sort-icon-active-color: var(--p-primary-color);
+  --p-datatable-sort-icon-font-size: 0.875rem;
+
+  --p-datatable-column-resizer-width: 0.5rem;
+  --p-datatable-resize-indicator-width: 2px;
+  --p-datatable-resize-indicator-color: var(--p-primary-color);
+
+  --p-datatable-transition-duration: 0.2s;
+
+  /* Focus rings */
+  --p-datatable-row-focus-ring-shadow: var(--focus-ring-shadow);
+  --p-datatable-row-focus-ring-width: var(--p-focus-ring-width);
+  --p-datatable-row-focus-ring-style: var(--p-focus-ring-style);
+  --p-datatable-row-focus-ring-color: var(--p-focus-ring-color);
+  --p-datatable-row-focus-ring-offset: var(--p-focus-ring-offset);
+
+  --p-datatable-header-cell-focus-ring-shadow: var(--focus-ring-shadow);
+  --p-datatable-header-cell-focus-ring-width: var(--p-focus-ring-width);
+  --p-datatable-header-cell-focus-ring-style: var(--p-focus-ring-style);
+  --p-datatable-header-cell-focus-ring-color: var(--p-focus-ring-color);
+  --p-datatable-header-cell-focus-ring-offset: var(--p-focus-ring-offset);
+
+  /* Row toggler */
+  --p-datatable-row-toggler-width: 2rem;
+  --p-datatable-row-toggler-height: 2rem;
+  --p-datatable-row-toggler-border-radius: 50%;
+  --p-datatable-row-toggler-background: transparent;
+  --p-datatable-row-toggler-color: var(--p-text-color);
+  --p-datatable-row-toggler-border: 1px solid var(--p-content-border-color);
+  --p-datatable-row-toggler-hover-background: var(--p-content-hover-background);
+  --p-datatable-row-toggler-hover-color: var(--p-text-hover-color);
+  --p-datatable-row-toggler-hover-border-color: var(--p-content-border-color);
+  --p-datatable-row-toggler-focus-ring-shadow: var(--focus-ring-shadow);
+  --p-datatable-row-toggler-focus-ring-width: var(--p-focus-ring-width);
+  --p-datatable-row-toggler-focus-ring-style: var(--p-focus-ring-style);
+  --p-datatable-row-toggler-focus-ring-color: var(--p-focus-ring-color);
+  --p-datatable-row-toggler-focus-ring-offset: var(--p-focus-ring-offset);
+
+  /* Row editor buttons */
+  --p-datatable-row-editor-button-width: 2rem;
+  --p-datatable-row-editor-button-height: 2rem;
+  --p-datatable-row-editor-button-border-radius: 50%;
+  --p-datatable-row-editor-button-background: transparent;
+  --p-datatable-row-editor-button-color: var(--p-text-color);
+  --p-datatable-row-editor-button-border: 1px solid var(--p-content-border-color);
+  --p-datatable-row-editor-button-hover-background: var(--p-content-hover-background);
+  --p-datatable-row-editor-button-hover-color: var(--p-text-hover-color);
+  --p-datatable-row-editor-button-hover-border-color: var(--p-content-border-color);
+  --p-datatable-row-editor-button-focus-ring-shadow: var(--focus-ring-shadow);
+  --p-datatable-row-editor-button-focus-ring-width: var(--p-focus-ring-width);
+  --p-datatable-row-editor-button-focus-ring-style: var(--p-focus-ring-style);
+  --p-datatable-row-editor-button-focus-ring-color: var(--p-focus-ring-color);
+  --p-datatable-row-editor-button-focus-ring-offset: var(--p-focus-ring-offset);
+
+  /* Checkbox and radiobutton */
+  --p-datatable-checkbox-width: 1.25rem;
+  --p-datatable-checkbox-height: 1.25rem;
+  --p-datatable-radiobutton-width: 1.25rem;
+  --p-datatable-radiobutton-height: 1.25rem;
+
+  /* Loading */
+  --p-datatable-loading-icon-font-size: 2rem;
+  --p-datatable-loading-icon-width: 2rem;
+  --p-datatable-loading-icon-height: 2rem;
+
+  /* Paginator */
+  --p-datatable-paginator-top-border-color: var(--p-content-border-color);
+  --p-datatable-paginator-top-border-width: 0 0 1px 0;
+  --p-datatable-paginator-bottom-border-color: var(--p-content-border-color);
+  --p-datatable-paginator-bottom-border-width: 1px 0 0 0;
+
+  /* Filter */
+  --p-datatable-filter-inline-gap: 0.5rem;
+  --p-datatable-filter-overlay-select-background: var(--p-surface-0);
+  --p-datatable-filter-overlay-select-color: var(--p-text-color);
+  --p-datatable-filter-overlay-select-border-color: var(--p-content-border-color);
+  --p-datatable-filter-overlay-select-border-radius: var(--p-border-radius-md);
+  --p-datatable-filter-overlay-select-shadow: var(--p-overlay-popover-shadow);
+  --p-datatable-filter-constraint-list-padding: 0.5rem;
+  --p-datatable-filter-constraint-list-gap: 0.25rem;
+  --p-datatable-filter-constraint-padding: 0.5rem 0.75rem;
+  --p-datatable-filter-constraint-color: var(--p-text-color);
+  --p-datatable-filter-constraint-border-radius: var(--p-border-radius-sm);
+  --p-datatable-filter-constraint-selected-background: var(--p-primary-50);
+  --p-datatable-filter-constraint-selected-color: var(--p-primary-700);
+  --p-datatable-filter-constraint-focus-background: var(--p-content-hover-background);
+  --p-datatable-filter-constraint-focus-color: var(--p-text-hover-color);
+  --p-datatable-filter-constraint-selected-focus-background: var(--p-primary-100);
+  --p-datatable-filter-constraint-selected-focus-color: var(--p-primary-800);
+  --p-datatable-filter-constraint-separator-border-color: var(--p-content-border-color);
+  --p-datatable-filter-overlay-popover-background: var(--p-surface-0);
+  --p-datatable-filter-overlay-popover-color: var(--p-text-color);
+  --p-datatable-filter-overlay-popover-border-color: var(--p-content-border-color);
+  --p-datatable-filter-overlay-popover-border-radius: var(--p-border-radius-md);
+  --p-datatable-filter-overlay-popover-shadow: var(--p-overlay-popover-shadow);
+  --p-datatable-filter-overlay-popover-padding: 1rem;
+  --p-datatable-filter-overlay-popover-gap: 1rem;
+  --p-datatable-filter-rule-border-color: var(--p-content-border-color);
+}

@@ -43,11 +43,6 @@ class SetCompanyContext
         // Store company in request context for controllers
         $request->attributes->set('company', $company);
 
-        // Share company context with Inertia if it's a web request
-        if ($request->inertia()) {
-            $this->shareCompanyContext($company, $user);
-        }
-
         return $next($request);
     }
 
@@ -58,7 +53,7 @@ class SetCompanyContext
             $company = $user->companies()->find($request->header('X-Company-Id'));
             if ($company) {
                 // Store in session for future requests
-                session(['active_company_id' => $company->id]);
+                $this->storeCompanyInSession($company->id);
                 Log::info('Company context set from header', [
                     'user_id' => $user->id,
                     'company_id' => $company->id,
@@ -74,7 +69,7 @@ class SetCompanyContext
             $company = $user->companies()->find($request->get('company_id'));
             if ($company) {
                 // Store in session for future requests
-                session(['active_company_id' => $company->id]);
+                $this->storeCompanyInSession($company->id);
                 Log::info('Company context set from parameter', [
                     'user_id' => $user->id,
                     'company_id' => $company->id,
@@ -91,7 +86,7 @@ class SetCompanyContext
             if ($companyId) {
                 $company = $user->companies()->find($companyId);
                 if ($company) {
-                    session(['active_company_id' => $company->id]);
+                    $this->storeCompanyInSession($company->id);
                     Log::info('Company context switched', [
                         'user_id' => $user->id,
                         'company_id' => $company->id,
@@ -104,20 +99,21 @@ class SetCompanyContext
         }
 
         // 4. Check session for previously selected company
-        if (session('active_company_id')) {
-            $company = $user->companies()->find(session('active_company_id'));
+        $sessionCompanyId = $this->getCompanyFromSession();
+        if ($sessionCompanyId) {
+            $company = $user->companies()->find($sessionCompanyId);
             if ($company) {
                 return $company;
             } else {
                 // Clear invalid company from session
-                session()->forget('active_company_id');
+                $this->forgetCompanyInSession();
             }
         }
 
         // 5. Use user's default company (first available)
         $company = $user->companies()->first();
         if ($company) {
-            session(['active_company_id' => $company->id]);
+            $this->storeCompanyInSession($company->id);
         }
 
         return $company;
@@ -149,90 +145,21 @@ class SetCompanyContext
         DB::statement('RESET app.is_super_admin');
     }
 
-    private function shareCompanyContext(Company $company, User $user): void
+    private function storeCompanyInSession(string $companyId): void
     {
-        // Share company context with Inertia for frontend components
-        $companyUser = $company->users()->where('user_id', $user->id)->first();
-
-        // Use the Inertia facade to share data
-        \Inertia\Inertia::share(array_filter([
-            'currentCompany' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'industry' => $company->industry,
-                'currency' => $company->currency ?? 'USD',
-                'userRole' => $companyUser?->role ?? 'member',
-                'isActive' => $companyUser?->is_active ?? false,
-                'permissions' => $this->getUserCompanyPermissions($company, $user),
-            ],
-            'userCompanies' => $user->companies()->get()->map(function ($comp) use ($user) {
-                $compUser = $comp->users()->where('user_id', $user->id)->first();
-
-                return [
-                    'id' => $comp->id,
-                    'name' => $comp->name,
-                    'slug' => $comp->slug,
-                    'industry' => $comp->industry,
-                    'currency' => $comp->currency ?? 'USD',
-                    'userRole' => $compUser?->role ?? 'member',
-                    'isActive' => $compUser?->is_active ?? false,
-                    'permissions' => $this->getUserCompanyPermissions($comp, $user),
-                ];
-            }),
-        ]));
+        session([
+            'current_company_id' => $companyId,
+            'active_company_id' => $companyId,
+        ]);
     }
 
-    private function getUserCompanyPermissions(Company $company, User $user): array
+    private function forgetCompanyInSession(): void
     {
-        // Get user's role in this company
-        $companyUser = $company->users()->where('user_id', $user->id)->first();
-        $role = $companyUser?->role ?? 'member';
+        session()->forget(['current_company_id', 'active_company_id']);
+    }
 
-        // Define permissions based on role
-        $permissions = match ($role) {
-            'owner' => [
-                'company.manage',
-                'company.invite',
-                'company.users.view',
-                'company.users.manage',
-                'settings.manage',
-                'invoices.view',
-                'invoices.manage',
-                'accounting.view',
-                'accounting.manage',
-                'reports.view',
-            ],
-            'admin' => [
-                'company.invite',
-                'company.users.view',
-                'company.users.manage',
-                'settings.manage',
-                'invoices.view',
-                'invoices.manage',
-                'accounting.view',
-                'accounting.manage',
-                'reports.view',
-            ],
-            'manager' => [
-                'company.users.view',
-                'invoices.view',
-                'invoices.manage',
-                'accounting.view',
-                'reports.view',
-            ],
-            'employee' => [
-                'invoices.view',
-                'accounting.view',
-            ],
-            default => []
-        };
-
-        // Add system-wide permissions for super admins
-        if ($user->system_role === 'system_owner' || $user->system_role === 'super_admin') {
-            $permissions[] = 'company.manage';
-        }
-
-        return $permissions;
+    private function getCompanyFromSession(): ?string
+    {
+        return session('current_company_id') ?? session('active_company_id');
     }
 }

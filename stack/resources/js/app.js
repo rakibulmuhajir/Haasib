@@ -1,10 +1,17 @@
 import { createApp, h } from 'vue'
 import { createInertiaApp } from '@inertiajs/vue3'
 import PrimeVue from 'primevue/config'
+import ToastService from 'primevue/toastservice'
+import ConfirmationService from 'primevue/confirmationservice'
 import Aura from '@primevue/themes/aura'
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { createI18n } from 'vue-i18n'
 import './styles/app.css'
+
+// Add Figtree font for the Blue Whale theme
+import '@fontsource/figtree/400.css'
+import '@fontsource/figtree/600.css'
+import '@fontsource/roboto-flex/400.css'
 
 // Import locale files
 import en from './locales/en.json'
@@ -38,6 +45,8 @@ createInertiaApp({
                     }
                 }
             })
+            .use(ToastService)
+            .use(ConfirmationService)
             .use(i18n)
             .mount(el)
     },

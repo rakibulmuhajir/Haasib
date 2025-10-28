@@ -1,34 +1,19 @@
 <template>
-  <AppLayout>
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            Report Schedules
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Manage automated report generation and delivery schedules
-          </p>
-        </div>
-        
-        <div class="flex items-center space-x-3">
-          <!-- Statistics Button -->
-          <Button
-            icon="pi pi-chart-bar"
-            label="Statistics"
-            severity="secondary"
-            @click="showStatisticsDialog = true"
-          />
-          
-          <!-- Create Button -->
-          <Button
-            icon="pi pi-plus"
-            label="Create Schedule"
-            @click="showCreateDialog = true"
-          />
-        </div>
-      </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Reports"
+      description="Generate and manage business reports"
+      subDescription="Create insightful reports for business analysis"
+      :show-search="true"
+      search-placeholder="Search reports..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="space-y-6">
 
       <!-- Quick Stats -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -356,10 +341,18 @@
         />
       </Dialog>
 
-      <!-- Delete Confirmation -->
-      <ConfirmDialog />
+        </div>
+      </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks title="Schedules Quick Links" :links="schedulesQuickLinks" />
+      </div>
     </div>
-  </AppLayout>
+
+    <!-- Delete Confirmation -->
+    <ConfirmDialog />
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -367,10 +360,29 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import AppLayout from '@/Layouts/AuthenticatedLayout.vue'
+import { usePageActions } from '@/composables/usePageActions'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
 import ScheduleForm from '@/Components/Reporting/Schedules/ScheduleForm.vue'
 import ScheduleStatistics from '@/Components/Reporting/Schedules/ScheduleStatistics.vue'
 import DeliveryLogs from '@/Components/Reporting/Schedules/DeliveryLogs.vue'
+
+// Set up page actions and quick links
+const { setPageActions } = usePageActions()
+
+const schedulesQuickLinks = ref([
+  { title: 'Create Schedule', icon: 'pi pi-plus', route: '#', onClick: () => showCreateDialog.value = true },
+  { title: 'Schedule Statistics', icon: 'pi pi-chart-bar', route: '#', onClick: () => showStatisticsDialog.value = true },
+  { title: 'Test Delivery', icon: 'pi pi-envelope', route: '#', onClick: handleTestDelivery },
+  { title: 'Schedule History', icon: 'pi pi-history', route: '#', onClick: handleScheduleHistory }
+])
+
+// Initialize page actions
+setPageActions([
+  { title: 'Statistics', icon: 'pi pi-chart-bar', onClick: () => showStatisticsDialog.value = true },
+  { title: 'Create Schedule', icon: 'pi pi-plus', onClick: () => showCreateDialog.value = true }
+])
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -783,9 +795,29 @@ const getTimeUntil = (dateString) => {
   return `In ${Math.floor(days / 7)}w`
 }
 
+// Quick link handlers
+const handleTestDelivery = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Test Delivery',
+    detail: 'Test delivery functionality would be implemented here',
+    life: 3000
+  })
+}
+
+const handleScheduleHistory = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Schedule History',
+    detail: 'Schedule history functionality would be implemented here',
+    life: 3000
+  })
+}
+
 // Lifecycle
 onMounted(() => {
   refreshData()
   loadTemplates()
 })
 </script>
+

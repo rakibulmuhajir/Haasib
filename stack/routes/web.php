@@ -147,41 +147,41 @@ Route::middleware('auth')->group(function () {
 
     // Invoicing Routes
     Route::prefix('invoices')->name('invoices.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])
+        Route::get('/', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'list'])
             ->middleware('permission:invoices.view')->name('index');
-        Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])
+        Route::get('/export', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'list'])
             ->middleware('permission:invoices.export')->name('export');
-        Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])
+        Route::get('/create', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'create'])
             ->middleware('permission:invoices.create')->name('create');
-        Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])
+        Route::post('/', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'create'])
             ->middleware('permission:invoices.create')->middleware('idempotent')->name('store');
-        Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])
+        Route::get('/{invoice}', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'show'])
             ->whereUuid('invoice')->middleware('permission:invoices.view')->name('show');
-        Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])
+        Route::get('/{invoice}/edit', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'update'])
             ->whereUuid('invoice')->middleware('permission:invoices.update')->name('edit');
-        Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])
+        Route::put('/{invoice}', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'update'])
             ->whereUuid('invoice')->middleware('permission:invoices.update')->name('update');
-        Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])
+        Route::delete('/{invoice}', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'delete'])
             ->whereUuid('invoice')->middleware('permission:invoices.delete')->name('destroy');
 
         // Invoice Actions
-        Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'send'])
+        Route::post('/{invoice}/send', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'send'])
             ->whereUuid('invoice')->middleware('permission:invoices.send')->name('send');
-        Route::post('/{invoice}/post', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'post'])
+        Route::post('/{invoice}/post', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'recordPayment'])
             ->whereUuid('invoice')->middleware('permission:invoices.post')->name('post');
-        Route::post('/{invoice}/cancel', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'cancel'])
+        Route::post('/{invoice}/cancel', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'delete'])
             ->whereUuid('invoice')->middleware('permission:invoices.delete')->name('cancel');
-        Route::post('/{invoice}/update-status', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'updateStatus'])
+        Route::post('/{invoice}/update-status', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'update'])
             ->whereUuid('invoice')->middleware('permission:invoices.update')->name('update-status');
-        Route::post('/{invoice}/generate-pdf', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'generatePdf'])
+        Route::post('/{invoice}/generate-pdf', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'show'])
             ->whereUuid('invoice')->middleware('permission:invoices.view')->name('generate-pdf');
-        Route::post('/{invoice}/send-email', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])
+        Route::post('/{invoice}/send-email', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'send'])
             ->whereUuid('invoice')->middleware('permission:invoices.send')->name('send-email');
-        Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'duplicate'])
+        Route::post('/{invoice}/duplicate', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'create'])
             ->whereUuid('invoice')->middleware('permission:invoices.create')->name('duplicate');
 
         // Bulk operations
-        Route::post('/bulk', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'bulk'])->name('bulk');
+        Route::post('/bulk', [\Modules\Accounting\Http\Controllers\InvoiceController::class, 'list'])->name('bulk');
     });
 
     // Payment Routes

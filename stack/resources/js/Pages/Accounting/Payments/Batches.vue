@@ -1,95 +1,39 @@
 <template>
-  <div class="payment-batch-manager">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-          Payment Batches
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Import and manage payment receipt batches from CSV files or manual entries
-        </p>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          icon="pi pi-upload"
-          label="New Batch"
-          @click="showNewBatchDialog = true"
-        />
-        <Button
-          icon="pi pi-refresh"
-          label="Refresh"
-          @click="refreshBatches"
-          :loading="loading"
-          severity="secondary"
-        />
-      </div>
-    </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Payments"
+      description="Manage payment processing and transactions"
+      subDescription="Track receipts, reversals, and payment allocations"
+      :show-search="true"
+      search-placeholder="Search payments..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="payment-batch-manager">
 
     <!-- Statistics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <Card>
         <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg">
-              <i class="pi pi-database text-blue-600 dark:text-blue-400"></i>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Total Batches</p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-white">
-                {{ batchStats.total_batches || 0 }}
-              </p>
-            </div>
-          </div>
         </template>
       </Card>
 
       <Card>
         <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg">
-              <i class="pi pi-check-circle text-green-600 dark:text-green-400"></i>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Completed</p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-white">
-                {{ batchStats.completed_batches || 0 }}
-              </p>
-            </div>
-          </div>
         </template>
       </Card>
 
       <Card>
         <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 bg-orange-100 dark:bg-orange-900 rounded-lg">
-              <i class="pi pi-spin pi-spinner text-orange-600 dark:text-orange-400"></i>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Processing</p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-white">
-                {{ batchStats.processing_batches || 0 }}
-              </p>
-            </div>
-          </div>
         </template>
       </Card>
 
       <Card>
         <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 bg-red-100 dark:bg-red-900 rounded-lg">
-              <i class="pi pi-times-circle text-red-600 dark:text-red-400"></i>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Failed</p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-white">
-                {{ batchStats.failed_batches || 0 }}
-              </p>
-            </div>
-          </div>
         </template>
       </Card>
     </div>
@@ -607,16 +551,78 @@
         />
       </template>
     </Dialog>
-  </div>
+      </div>
+    </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks 
+          :links="quickLinks" 
+          title="Payment Actions"
+        />
+      </div>
+    </div>
+  </LayoutShell>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { format } from 'date-fns'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 // Composition
 const toast = useToast()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'new-batch',
+    label: 'New Batch',
+    icon: 'pi pi-plus',
+    severity: 'primary',
+    action: () => showNewBatchDialog.value = true
+  },
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => refreshBatches()
+  }
+]
+
+// Define quick links for the payments page
+const quickLinks = [
+  {
+    label: 'New Payment Batch',
+    url: '#',
+    icon: 'pi pi-plus',
+    action: () => showNewBatchDialog.value = true
+  },
+  {
+    label: 'Payment Reversals',
+    url: '/payments/reversals',
+    icon: 'pi pi-undo'
+  },
+  {
+    label: 'Audit Timeline',
+    url: '/payments/audit',
+    icon: 'pi pi-history'
+  },
+  {
+    label: 'Payment Reports',
+    url: '/payments/reports',
+    icon: 'pi pi-chart-bar'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 // State
 const loading = ref(false)
@@ -1063,31 +1069,3 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.payment-batch-manager {
-  @apply space-y-6;
-}
-
-/* Custom scrollbar styles */
-.overflow-y-auto {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(156 163 175) transparent;
-}
-
-.overflow-y-auto::-webkit-scrollbar {
-  width: 6px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: rgb(156 163 175);
-  border-radius: 3px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(107 114 128);
-}
-</style>

@@ -2,6 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
+import { usePageActions } from '@/composables/usePageActions'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -23,8 +27,66 @@ import CommandPalette from '@/Components/CommandPalette.vue'
 
 const { t } = useI18n()
 const page = usePage()
+const { actions } = usePageActions()
 
 const emit = defineEmits(['invoice-selected'])
+
+// Define page actions for invoices
+const invoiceActions = [
+    {
+        key: 'create-invoice',
+        label: 'Create Invoice',
+        icon: 'pi pi-plus',
+        severity: 'primary',
+        routeName: 'invoices.create'
+    },
+    {
+        key: 'export-invoices',
+        label: 'Export Invoices',
+        icon: 'pi pi-download',
+        severity: 'secondary',
+        action: () => exportInvoices()
+    },
+    {
+        key: 'batch-send',
+        label: 'Batch Send',
+        icon: 'pi pi-envelope',
+        severity: 'secondary'
+    }
+]
+
+// Define quick links for the invoices page
+const quickLinks = [
+    {
+        label: 'Create Invoice',
+        url: '/invoices/create',
+        icon: 'pi pi-plus'
+    },
+    {
+        label: 'Invoice Templates',
+        url: '/invoices/templates',
+        icon: 'pi pi-file'
+    },
+    {
+        label: 'Export Selected',
+        url: '#',
+        icon: 'pi pi-download',
+        action: () => exportInvoices()
+    },
+    {
+        label: 'Invoice Reports',
+        url: '/invoices/reports',
+        icon: 'pi pi-chart-bar'
+    },
+    {
+        label: 'Recurring Invoices',
+        url: '/invoices/recurring',
+        icon: 'pi pi-repeat'
+    }
+]
+
+// Set page actions
+actions.value = invoiceActions
 
 // Refs
 const menu = ref()
@@ -368,324 +430,288 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <!-- Header -->
-        <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center space-x-4">
-                        <i class="fas fa-file-invoice text-2xl text-blue-600 dark:text-blue-400"></i>
-                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-                            {{ t('invoicing.invoices') }}
-                        </h1>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <CompanySwitcher />
-                        <CommandPalette ref="commandPalette" />
-                        <Button 
-                            @click="exportInvoices"
-                            icon="fas fa-download"
-                            label="Export"
-                            text
-                        />
-                        <Button 
-                            @click="createInvoice"
-                            icon="fas fa-plus"
-                            :label="t('invoicing.create_invoice')"
-                        />
-                    </div>
+  <LayoutShell>
+    <Toast ref="toast" />
+    <CommandPalette ref="commandPalette" />
+    
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Invoices"
+      description="Create, manage, and track your invoices"
+      subDescription="Send professional invoices and track payments"
+      :show-search="true"
+      search-placeholder="Search invoices..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <!-- Filters Card -->
+        <Card class="mb-6 filters-card">
+          <template #title>
+            <div class="flex justify-between items-center">
+              <span>Filters</span>
+              <Button 
+                @click="clearFilters"
+                icon="pi pi-filter-slash"
+                label="Clear"
+                text
+                size="small"
+              />
+            </div>
+          </template>
+          <template #content>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Search
+                </label>
+                <InputText 
+                  v-model="filters.global.value"
+                  placeholder="Search invoices..."
+                  class="w-full"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Status
+                </label>
+                <Dropdown 
+                  v-model="filters.status.value"
+                  :options="statusOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="All Statuses"
+                  class="w-full"
+                  showClear
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Customer
+                </label>
+                <InputText 
+                  v-model="filters.customer.value"
+                  placeholder="Customer name..."
+                  class="w-full"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Date Range
+                </label>
+                <Calendar 
+                  v-model="filters.date_range.value"
+                  selectionMode="range"
+                  placeholder="Select dates..."
+                  class="w-full"
+                  showButtonBar
+                />
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <Button 
+                @click="onFilter"
+                icon="pi pi-filter"
+                label="Apply Filters"
+              />
+            </div>
+          </template>
+        </Card>
+
+        <!-- Invoices Table -->
+        <Card>
+          <template #title>
+            <div class="flex justify-between items-center">
+              <span>{{ t('invoicing.invoice_list') }}</span>
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                {{ totalRecords }} total invoices
+              </div>
+            </div>
+          </template>
+          <template #content>
+            <!-- Loading State -->
+            <div v-if="loading && !hasInvoices" class="flex justify-center py-12">
+              <ProgressSpinner />
+            </div>
+
+            <!-- Empty State -->
+            <div v-else-if="!hasInvoices && !loading" class="text-center py-12">
+              <i class="fas fa-file-invoice text-4xl text-gray-400 mb-4"></i>
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No invoices found
+              </h3>
+              <p class="text-gray-600 dark:text-gray-400 mb-4">
+                Get started by creating your first invoice
+              </p>
+              <Button 
+                @click="createInvoice"
+                icon="fas fa-plus"
+                :label="t('invoicing.create_invoice')"
+              />
+            </div>
+
+            <!-- Data Table -->
+            <DataTable 
+              v-else
+              :value="invoices"
+              :paginator="true"
+              :rows="25"
+              :totalRecords="totalRecords"
+              :lazy="true"
+              :loading="loading"
+              @page="onPage"
+              @sort="onSort"
+              @filter="onFilter"
+              v-model:selection="selectedInvoices"
+              :filters="filters"
+              filterDisplay="menu"
+              :globalFilterFields="['invoice_number', 'customer.name', 'amount']"
+              sortMode="single"
+              dataKey="id"
+              :rowsPerPageOptions="[10, 25, 50]"
+              currentPageReportTemplate="Showing {first} to {last} of {totalRecords} invoices"
+              paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+              responsiveLayout="scroll"
+            >
+              <template #header>
+                <div class="flex justify-between items-center">
+                  <span class="text-xl text-gray-900 dark:text-white">
+                    Invoice Management
+                  </span>
+                  <div class="flex space-x-2">
+                    <Button 
+                      v-if="selectedInvoices.length > 0"
+                      @click="exportInvoices"
+                      icon="fas fa-download"
+                      label="Export Selected"
+                      size="small"
+                    />
+                  </div>
                 </div>
-            </div>
-        </div>
+              </template>
 
-        <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Filters Card -->
-            <Card class="mb-6 shadow-md">
-                <template #title>
-                    <div class="flex justify-between items-center">
-                        <span>Filters</span>
-                        <Button 
-                            @click="clearFilters"
-                            icon="fas fa-times"
-                            label="Clear"
-                            text
-                            size="small"
-                        />
-                    </div>
+              <!-- Selection Column -->
+              <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+
+              <!-- Invoice Number -->
+              <Column field="invoice_number" header="Invoice #" sortable>
+                <template #body="{ data }">
+                  <div class="font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
+                    {{ data.invoice_number }}
+                  </div>
                 </template>
-                <template #content>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Search
-                            </label>
-                            <InputText 
-                                v-model="filters.global.value"
-                                placeholder="Search invoices..."
-                                class="w-full"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Status
-                            </label>
-                            <Dropdown 
-                                v-model="filters.status.value"
-                                :options="statusOptions"
-                                optionLabel="label"
-                                optionValue="value"
-                                placeholder="All Statuses"
-                                class="w-full"
-                                showClear
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Customer
-                            </label>
-                            <InputText 
-                                v-model="filters.customer.value"
-                                placeholder="Customer name..."
-                                class="w-full"
-                            />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Date Range
-                            </label>
-                            <Calendar 
-                                v-model="filters.date_range.value"
-                                selectionMode="range"
-                                placeholder="Select dates..."
-                                class="w-full"
-                                showButtonBar
-                            />
-                        </div>
-                    </div>
-                    <div class="mt-4 flex justify-end">
-                        <Button 
-                            @click="onFilter"
-                            icon="fas fa-filter"
-                            label="Apply Filters"
-                        />
-                    </div>
+              </Column>
+
+              <!-- Customer -->
+              <Column field="customer.name" header="Customer" sortable>
+                <template #body="{ data }">
+                  <div class="text-gray-900 dark:text-white">
+                    {{ data.customer?.name || 'N/A' }}
+                  </div>
                 </template>
-            </Card>
+              </Column>
 
-            <!-- Invoices Table -->
-            <Card class="shadow-md">
-                <template #title>
-                    <div class="flex justify-between items-center">
-                        <span>{{ t('invoicing.invoice_list') }}</span>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                            {{ totalRecords }} total invoices
-                        </div>
-                    </div>
+              <!-- Date -->
+              <Column field="invoice_date" header="Date" sortable>
+                <template #body="{ data }">
+                  <div class="text-gray-600 dark:text-gray-400">
+                    {{ formatDate(data.invoice_date) }}
+                  </div>
                 </template>
-                <template #content>
-                    <!-- Loading State -->
-                    <div v-if="loading && !hasInvoices" class="flex justify-center py-12">
-                        <ProgressSpinner />
-                    </div>
+              </Column>
 
-                    <!-- Empty State -->
-                    <div v-else-if="!hasInvoices && !loading" class="text-center py-12">
-                        <i class="fas fa-file-invoice text-4xl text-gray-400 mb-4"></i>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                            No invoices found
-                        </h3>
-                        <p class="text-gray-600 dark:text-gray-400 mb-4">
-                            Get started by creating your first invoice
-                        </p>
-                        <Button 
-                            @click="createInvoice"
-                            icon="fas fa-plus"
-                            :label="t('invoicing.create_invoice')"
-                        />
-                    </div>
-
-                    <!-- Data Table -->
-                    <DataTable 
-                        v-else
-                        :value="invoices"
-                        :paginator="true"
-                        :rows="25"
-                        :totalRecords="totalRecords"
-                        :lazy="true"
-                        :loading="loading"
-                        @page="onPage"
-                        @sort="onSort"
-                        @filter="onFilter"
-                        v-model:selection="selectedInvoices"
-                        :filters="filters"
-                        filterDisplay="menu"
-                        :globalFilterFields="['invoice_number', 'customer.name', 'amount']"
-                        sortMode="single"
-                        dataKey="id"
-                        :rowsPerPageOptions="[10, 25, 50]"
-                        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} invoices"
-                        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                        responsiveLayout="scroll"
-                    >
-                        <template #header>
-                            <div class="flex justify-between items-center">
-                                <span class="text-xl text-gray-900 dark:text-white">
-                                    Invoice Management
-                                </span>
-                                <div class="flex space-x-2">
-                                    <Button 
-                                        v-if="selectedInvoices.length > 0"
-                                        @click="exportInvoices"
-                                        icon="fas fa-download"
-                                        label="Export Selected"
-                                        size="small"
-                                    />
-                                </div>
-                            </div>
-                        </template>
-
-                        <!-- Selection Column -->
-                        <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-
-                        <!-- Invoice Number -->
-                        <Column field="invoice_number" header="Invoice #" sortable>
-                            <template #body="{ data }">
-                                <div class="font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
-                                    {{ data.invoice_number }}
-                                </div>
-                            </template>
-                        </Column>
-
-                        <!-- Customer -->
-                        <Column field="customer.name" header="Customer" sortable>
-                            <template #body="{ data }">
-                                <div class="text-gray-900 dark:text-white">
-                                    {{ data.customer?.name || 'N/A' }}
-                                </div>
-                            </template>
-                        </Column>
-
-                        <!-- Date -->
-                        <Column field="invoice_date" header="Date" sortable>
-                            <template #body="{ data }">
-                                <div class="text-gray-600 dark:text-gray-400">
-                                    {{ formatDate(data.invoice_date) }}
-                                </div>
-                            </template>
-                        </Column>
-
-                        <!-- Due Date -->
-                        <Column field="due_date" header="Due Date" sortable>
-                            <template #body="{ data }">
-                                <div class="text-gray-600 dark:text-gray-400">
-                                    {{ formatDate(data.due_date) }}
-                                </div>
-                            </template>
-                        </Column>
-
-                        <!-- Amount -->
-                        <Column field="amount" header="Amount" sortable>
-                            <template #body="{ data }">
-                                <div class="font-medium text-gray-900 dark:text-white">
-                                    {{ formatCurrency(data.amount) }}
-                                </div>
-                            </template>
-                        </Column>
-
-                        <!-- Status -->
-                        <Column field="status" header="Status" sortable>
-                            <template #body="{ data }">
-                                <Tag :value="data.status" :severity="getSeverity(data.status)" />
-                            </template>
-                        </Column>
-
-                        <!-- Actions -->
-                        <Column header="Actions" style="width: 120px">
-                            <template #body="{ data }">
-                                <div class="flex space-x-2">
-                                    <Button 
-                                        @click="selectInvoice(data)"
-                                        icon="fas fa-eye"
-                                        text
-                                        size="small"
-                                        v-tooltip="'View Invoice'"
-                                    />
-                                    <Button 
-                                        @click="$event => menu.toggle($event)"
-                                        icon="fas fa-ellipsis-v"
-                                        text
-                                        size="small"
-                                        v-tooltip="'More Actions'"
-                                    />
-                                    <Menu ref="menu" :model="getRowActions(data)" popup />
-                                </div>
-                            </template>
-                        </Column>
-                    </DataTable>
+              <!-- Due Date -->
+              <Column field="due_date" header="Due Date" sortable>
+                <template #body="{ data }">
+                  <div class="text-gray-600 dark:text-gray-400">
+                    {{ formatDate(data.due_date) }}
+                  </div>
                 </template>
-            </Card>
-        </div>
+              </Column>
 
-        <!-- Delete Confirmation Dialog -->
-        <Dialog 
-            v-model:visible="deleteDialog" 
-            modal 
-            header="Confirm Delete"
-            :style="{ width: '450px' }"
-        >
-            <div class="text-center">
-                <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
-                <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    Delete Invoice
-                </h4>
-                <p class="text-gray-600 dark:text-gray-400">
-                    Are you sure you want to delete invoice {{ invoiceToDelete?.invoice_number }}? 
-                    This action cannot be undone.
-                </p>
-            </div>
+              <!-- Amount -->
+              <Column field="amount" header="Amount" sortable>
+                <template #body="{ data }">
+                  <div class="font-medium text-gray-900 dark:text-white">
+                    {{ formatCurrency(data.amount) }}
+                  </div>
+                </template>
+              </Column>
 
-            <template #footer>
-                <Button 
-                    @click="deleteDialog = false"
-                    :label="$t('common.cancel')"
-                    text
-                />
-                <Button 
-                    @click="deleteInvoice"
-                    label="Delete"
-                    severity="danger"
-                    :loading="loading"
-                />
-            </template>
-        </Dialog>
+              <!-- Status -->
+              <Column field="status" header="Status" sortable>
+                <template #body="{ data }">
+                  <Tag :value="data.status" :severity="getSeverity(data.status)" />
+                </template>
+              </Column>
 
-        <!-- Toast -->
-        <Toast ref="toast" />
+              <!-- Actions -->
+              <Column header="Actions" style="width: 120px">
+                <template #body="{ data }">
+                  <div class="flex space-x-2">
+                    <Button 
+                      @click="selectInvoice(data)"
+                      icon="fas fa-eye"
+                      text
+                      size="small"
+                      v-tooltip="'View Invoice'"
+                    />
+                    <Button 
+                      @click="$event => menu.toggle($event)"
+                      icon="fas fa-ellipsis-v"
+                      text
+                      size="small"
+                      v-tooltip="'More Actions'"
+                    />
+                    <Menu ref="menu" :model="getRowActions(data)" popup />
+                  </div>
+                </template>
+              </Column>
+            </DataTable>
+          </template>
+        </Card>
+      </div>
+
+      <!-- Right Column - Sidebar -->
+      <div class="sidebar-content">
+        <QuickLinks :links="quickLinks" />
+      </div>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <Dialog 
+      v-model:visible="deleteDialog" 
+      modal 
+      header="Confirm Delete"
+      :style="{ width: '450px' }"
+    >
+      <div class="text-center">
+        <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
+        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          Delete Invoice
+        </h4>
+        <p class="text-gray-600 dark:text-gray-400">
+          Are you sure you want to delete invoice {{ invoiceToDelete?.invoice_number }}? 
+          This action cannot be undone.
+        </p>
+      </div>
+
+      <template #footer>
+        <Button 
+          @click="deleteDialog = false"
+          :label="$t('common.cancel')"
+          text
+        />
+        <Button 
+          @click="deleteInvoice"
+          label="Delete"
+          severity="danger"
+          :loading="loading"
+        />
+      </template>
+    </Dialog>
+  </LayoutShell>
 </template>
 
-<style scoped>
-:deep(.p-datatable-tbody > tr) {
-    cursor: pointer;
-}
-
-:deep(.p-datatable-tbody > tr:hover) {
-    background-color: rgb(243 244 246);
-}
-
-.dark :deep(.p-datatable-tbody > tr:hover) {
-    background-color: rgb(55 65 81);
-}
-
-:deep(.p-tag) {
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-:deep(.p-paginator) {
-    background: transparent;
-    border: none;
-    padding: 1rem 0;
-}
-</style>

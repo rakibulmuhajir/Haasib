@@ -4,6 +4,8 @@
 /* Import theme styles */
 @import './themes/blue-whale.css';
 @import './layout/shell.css';
+@import './pages/common.css';
+@import './components/common.css';
 
 /* Tailwind CSS imports */
 @tailwind base;

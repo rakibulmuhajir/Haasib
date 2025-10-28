@@ -1,33 +1,18 @@
 <template>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Journal Entries"
+      description="Manage and process journal entry batches"
+      subDescription="Review, approve, and post accounting entries"
+      :show-search="true"
+      search-placeholder="Search journal entries..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
   <div class="trial-balance-page">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-          Trial Balance
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Mathematical verification of debits and credits from posted journal entries
-        </p>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          icon="pi pi-file-pdf"
-          label="Export CSV"
-          @click="exportTrialBalance"
-          :loading="exporting"
-          severity="primary"
-        />
-        <Button
-          icon="pi pi-refresh"
-          label="Refresh"
-          @click="refreshData"
-          :loading="loading"
-          severity="secondary"
-        />
-      </div>
-    </div>
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -302,6 +287,17 @@
       </template>
     </Card>
   </div>
+    </div>
+
+    <!-- Right Column - Quick Links -->
+    <div class="sidebar-content">
+      <QuickLinks 
+        :links="quickLinks" 
+        title="Trial Balance Actions"
+      />
+    </div>
+  </div>
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -309,6 +305,10 @@ import { ref, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 // PrimeVue Components
 import Card from 'primevue/card'
@@ -331,6 +331,52 @@ const props = defineProps({
 
 const toast = useToast()
 const { t } = useI18n()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'export',
+    label: 'Export CSV',
+    icon: 'pi pi-file-pdf',
+    severity: 'primary',
+    action: () => exportTrialBalance()
+  },
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => refreshData()
+  }
+]
+
+// Define quick links for trial balance
+const quickLinks = [
+  {
+    label: 'New Journal Entry',
+    url: '/accounting/journal-entries/create',
+    icon: 'pi pi-plus'
+  },
+  {
+    label: 'Journal Batches',
+    url: '/accounting/journal-entries/batches',
+    icon: 'pi pi-folder'
+  },
+  {
+    label: 'Bank Reconciliation',
+    url: '/ledger/bank-reconciliation',
+    icon: 'pi pi-bank'
+  },
+  {
+    label: 'Period Close',
+    url: '/ledger/period-close',
+    icon: 'pi pi-calendar'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -476,16 +522,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.trial-balance-page {
-  @apply space-y-6;
-}
-
-.metric-card {
-  @apply transition-all duration-200 hover:shadow-lg;
-}
-
-.metric-card:hover {
-  @apply transform scale-105;
-}
-</style>

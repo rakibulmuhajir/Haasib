@@ -1,32 +1,18 @@
 <template>
-  <div class="payment-reporting-dashboard">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-          Payment Reporting Dashboard
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Comprehensive payment analytics and allocation insights
-        </p>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          icon="pi pi-file-pdf"
-          label="Generate Report"
-          @click="generateReport"
-          :loading="generatingReport"
-          severity="primary"
-        />
-        <Button
-          icon="pi pi-cog"
-          label="Configure"
-          @click="showConfigDialog = true"
-          severity="secondary"
-        />
-      </div>
-    </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Dashboard"
+      description="Comprehensive dashboard and analytics"
+      subDescription="Monitor your business performance and key metrics"
+      :show-search="false"
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="payment-reporting-dashboard">
 
     <!-- Key Metrics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -422,13 +408,28 @@
         />
       </template>
     </Dialog>
-  </div>
+      </div>
+    </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks 
+          :links="quickLinks" 
+          title="Payment Actions"
+        />
+      </div>
+    </div>
+  </LayoutShell>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { format } from 'date-fns'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -459,6 +460,53 @@ ChartJS.register(
 
 // Composition
 const toast = useToast()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'generate-report',
+    label: 'Generate Report',
+    icon: 'pi pi-file-pdf',
+    severity: 'primary',
+    action: () => generateReport()
+  },
+  {
+    key: 'configure',
+    label: 'Configure',
+    icon: 'pi pi-cog',
+    severity: 'secondary',
+    action: () => showConfigDialog.value = true
+  }
+]
+
+// Define quick links for the payments page
+const quickLinks = [
+  {
+    label: 'Generate Payment Report',
+    url: '#',
+    icon: 'pi pi-file-pdf',
+    action: () => generateReport()
+  },
+  {
+    label: 'Payment Batches',
+    url: '/payments/batches',
+    icon: 'pi pi-database'
+  },
+  {
+    label: 'Payment Reversals',
+    url: '/payments/reversals',
+    icon: 'pi pi-undo'
+  },
+  {
+    label: 'Audit Timeline',
+    url: '/payments/audit',
+    icon: 'pi pi-history'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 // State
 const loading = ref(false)
@@ -957,39 +1005,3 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.payment-reporting-dashboard {
-  @apply space-y-6;
-}
-
-.metric-card {
-  @apply transition-all duration-200 hover:shadow-md;
-}
-
-/* Chart container stylescanvas {
-  max-height: 320px;
-}
-
-/* Custom scrollbar styles */
-.overflow-x-auto {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(156 163 175) transparent;
-}
-
-.overflow-x-auto::-webkit-scrollbar {
-  height: 6px;
-}
-
-.overflow-x-auto::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: rgb(156 163 175);
-  border-radius: 3px;
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(107 114 128);
-}
-</style>

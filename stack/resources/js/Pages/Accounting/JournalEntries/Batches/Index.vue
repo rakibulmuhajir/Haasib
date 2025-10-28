@@ -1,32 +1,18 @@
 <template>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Journal Entries"
+      description="Manage and process journal entry batches"
+      subDescription="Review, approve, and post accounting entries"
+      :show-search="true"
+      search-placeholder="Search journal entries..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
   <div class="journal-batches-page">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-          Journal Batches
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Manage and process journal entry batches for approval and posting
-        </p>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          icon="pi pi-plus"
-          label="Create Batch"
-          @click="showCreateDialog = true"
-          severity="primary"
-        />
-        <Button
-          icon="pi pi-refresh"
-          label="Refresh"
-          @click="refreshData"
-          :loading="loading"
-          severity="secondary"
-        />
-      </div>
-    </div>
 
     <!-- Statistics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -409,12 +395,27 @@
     <!-- Toast -->
     <Toast />
   </div>
+    </div>
+
+    <!-- Right Column - Quick Links -->
+    <div class="sidebar-content">
+      <QuickLinks 
+        :links="quickLinks" 
+        title="Batch Actions"
+      />
+    </div>
+  </div>
+  </LayoutShell>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 // PrimeVue Components
 import Card from 'primevue/card'
@@ -440,6 +441,52 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'create-batch',
+    label: 'Create Batch',
+    icon: 'pi pi-plus',
+    severity: 'primary',
+    action: () => showCreateDialog.value = true
+  },
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => refreshData()
+  }
+]
+
+// Define quick links for journal batches
+const quickLinks = [
+  {
+    label: 'New Journal Entry',
+    url: '/accounting/journal-entries/create',
+    icon: 'pi pi-plus'
+  },
+  {
+    label: 'Trial Balance',
+    url: '/accounting/journal-entries/trial-balance',
+    icon: 'pi pi-calculator'
+  },
+  {
+    label: 'Posted Entries',
+    url: '/accounting/journal-entries?status=posted',
+    icon: 'pi pi-check'
+  },
+  {
+    label: 'Bank Reconciliation',
+    url: '/ledger/bank-reconciliation',
+    icon: 'pi pi-bank'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 const loading = ref(false)
 const loadingEntries = ref(false)
@@ -779,16 +826,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.journal-batches-page {
-  @apply space-y-6;
-}
-
-.metric-card {
-  @apply transition-all duration-200 hover:shadow-lg;
-}
-
-.metric-card:hover {
-  @apply transform scale-105;
-}
-</style>

@@ -293,304 +293,293 @@ setFiscalYearDefaults()
     <LayoutShell>
         <Toast ref="toast" />
         
-        <!-- Page Header -->
-        <PageHeader 
-            title="Create New Company" 
-            subtitle="Set up a new company with accounting and management features"
-        >
-            <template #actionsLeft>
-                <Link href="/companies">
+        <!-- Universal Page Header -->
+        <PageHeader
+            title="Create Company"
+            description="Add a new business entity to your accounting system"
+        />
+
+        <div class="company-create">
+            <form @submit.prevent="submitForm">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Basic Information -->
+                    <Card>
+                        <template #title>Basic Information</template>
+                        <template #content>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Company Name <span class="text-red-500">*</span>
+                                    </label>
+                                    <InputText
+                                        id="name"
+                                        v-model="form.name"
+                                        placeholder="Enter company name"
+                                        :class="{ 'p-invalid': form.errors.name }"
+                                        class="w-full"
+                                    />
+                                    <Message v-if="form.errors.name" severity="error" :closable="false">
+                                        {{ form.errors.name }}
+                                    </Message>
+                                </div>
+
+                                <div>
+                                    <label for="industry" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Industry <span class="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        id="industry"
+                                        v-model="form.industry"
+                                        :options="industryOptions"
+                                        option-label="label"
+                                        option-value="value"
+                                        placeholder="Select industry"
+                                        :class="{ 'p-invalid': form.errors.industry }"
+                                        class="w-full"
+                                        @change="handleIndustryChange"
+                                    />
+                                    <Message v-if="form.errors.industry" severity="error" :closable="false">
+                                        {{ form.errors.industry }}
+                                    </Message>
+                                </div>
+
+                                <div>
+                                    <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Country <span class="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        id="country"
+                                        v-model="form.country"
+                                        :options="countryOptions"
+                                        option-label="label"
+                                        option-value="value"
+                                        placeholder="Select country"
+                                        :class="{ 'p-invalid': form.errors.country }"
+                                        class="w-full"
+                                        @change="handleCountryChange"
+                                    />
+                                    <Message v-if="form.errors.country" severity="error" :closable="false">
+                                        {{ form.errors.country }}
+                                    </Message>
+                                </div>
+
+                                <div v-if="generateSlug()" class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                                        <i class="pi pi-info-circle mr-2"></i>
+                                        URL slug will be: <strong>{{ generateSlug() }}</strong>
+                                    </p>
+                                </div>
+
+                                <div v-if="form.country && form.base_currency" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+                                    <p class="text-sm text-green-700 dark:text-green-300">
+                                        <i class="pi pi-check-circle mr-2"></i>
+                                        Currency automatically set to: <strong>{{ form.base_currency }}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </template>
+                    </Card>
+
+                    <!-- Financial Settings -->
+                    <Card>
+                        <template #title>Financial Settings</template>
+                        <template #content>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="base_currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Base Currency <span class="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        id="base_currency"
+                                        v-model="form.base_currency"
+                                        :options="currencyOptions"
+                                        option-label="label"
+                                        option-value="value"
+                                        placeholder="Select base currency"
+                                        :class="{ 'p-invalid': form.errors.base_currency }"
+                                        class="w-full"
+                                        @change="handleCurrencyChange"
+                                    />
+                                    <Message v-if="form.errors.base_currency" severity="error" :closable="false">
+                                        {{ form.errors.base_currency }}
+                                    </Message>
+                                </div>
+
+                                <div>
+                                    <label for="timezone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Timezone
+                                    </label>
+                                    <InputText
+                                        id="timezone"
+                                        v-model="form.timezone"
+                                        placeholder="e.g., America/New_York"
+                                        class="w-full"
+                                        readonly
+                                    />
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                        Automatically set based on country selection
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Language
+                                    </label>
+                                    <Select
+                                        id="language"
+                                        v-model="form.language"
+                                        :options="languageOptions"
+                                        option-label="label"
+                                        option-value="value"
+                                        placeholder="Select language"
+                                        class="w-full"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label for="locale" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Locale
+                                    </label>
+                                    <Select
+                                        id="locale"
+                                        v-model="form.locale"
+                                        :options="localeOptions"
+                                        option-label="label"
+                                        option-value="value"
+                                        placeholder="Select locale"
+                                        class="w-full"
+                                    />
+                                </div>
+                            </div>
+                        </template>
+                    </Card>
+
+                    <!-- Fiscal Year Settings -->
+                    <Card class="lg:col-span-2">
+                        <template #title>Fiscal Year Settings</template>
+                        <template #content>
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-2">
+                                    <Checkbox
+                                        id="create_fiscal_year"
+                                        v-model="form.create_fiscal_year"
+                                        input-id="create_fiscal_year"
+                                        binary
+                                    />
+                                    <label for="create_fiscal_year" class="font-medium">
+                                        Create fiscal year automatically
+                                    </label>
+                                </div>
+
+                                <div v-if="form.create_fiscal_year" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="fiscal_year_start" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Fiscal Year Start Date <span class="text-red-500">*</span>
+                                        </label>
+                                        <Calendar
+                                            id="fiscal_year_start"
+                                            v-model="form.fiscal_year_start"
+                                            date-format="yy-mm-dd"
+                                            placeholder="Select start date"
+                                            :class="{ 'p-invalid': form.errors.fiscal_year_start }"
+                                            class="w-full"
+                                        />
+                                        <Message v-if="form.errors.fiscal_year_start" severity="error" :closable="false">
+                                            {{ form.errors.fiscal_year_start }}
+                                        </Message>
+                                    </div>
+
+                                    <div>
+                                        <label for="fiscal_year_end" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Fiscal Year End Date <span class="text-red-500">*</span>
+                                        </label>
+                                        <Calendar
+                                            id="fiscal_year_end"
+                                            v-model="form.fiscal_year_end"
+                                            date-format="yy-mm-dd"
+                                            placeholder="Select end date"
+                                            :class="{ 'p-invalid': form.errors.fiscal_year_end }"
+                                            class="w-full"
+                                        />
+                                        <Message v-if="form.errors.fiscal_year_end" severity="error" :closable="false">
+                                            {{ form.errors.fiscal_year_end }}
+                                        </Message>
+                                    </div>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        @click="setFiscalYearDefaults"
+                                        label="Use Calendar Year"
+                                        severity="secondary"
+                                        outlined
+                                        size="small"
+                                    />
+                                </div>
+                            </div>
+                        </template>
+                    </Card>
+
+                    <!-- Advanced Settings -->
+                    <Card class="lg:col-span-2">
+                        <template #title>Advanced Settings</template>
+                        <template #content>
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-2">
+                                    <Checkbox
+                                        id="auto_setup"
+                                        v-model="form.auto_setup"
+                                        input-id="auto_setup"
+                                        binary
+                                    />
+                                    <label for="auto_setup" class="font-medium">
+                                        Auto-setup accounting features
+                                    </label>
+                                </div>
+
+                                <p class="text-sm text-gray-600 dark:text-gray-400">
+                                    This will automatically create chart of accounts, enable core modules, and set up basic accounting structure.
+                                </p>
+                            </div>
+                        </template>
+                    </Card>
+                </div>
+
+                <!-- Form Actions -->
+                <Divider class="my-6" />
+
+                <div class="flex justify-between items-center">
                     <Button
+                        type="button"
+                        @click="resetForm"
+                        label="Reset Form"
                         severity="secondary"
                         outlined
-                    >
-                        <i class="fas fa-arrow-left"></i>
-                        <span>Back to Companies</span>
-                    </Button>
-                </Link>
-            </template>
-        </PageHeader>
-
-        <!-- Form -->
-        <form @submit.prevent="submitForm">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Basic Information -->
-                <Card>
-                    <template #title>Basic Information</template>
-                    <template #content>
-                        <div class="space-y-4">
-                            <div>
-                                <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Company Name <span class="text-red-500">*</span>
-                                </label>
-                                <InputText
-                                    id="name"
-                                    v-model="form.name"
-                                    placeholder="Enter company name"
-                                    :class="{ 'p-invalid': form.errors.name }"
-                                    class="w-full"
-                                />
-                                <Message v-if="form.errors.name" severity="error" :closable="false">
-                                    {{ form.errors.name }}
-                                </Message>
-                            </div>
-
-                            <div>
-                                <label for="industry" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Industry <span class="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    id="industry"
-                                    v-model="form.industry"
-                                    :options="industryOptions"
-                                    option-label="label"
-                                    option-value="value"
-                                    placeholder="Select industry"
-                                    :class="{ 'p-invalid': form.errors.industry }"
-                                    class="w-full"
-                                    @change="handleIndustryChange"
-                                />
-                                <Message v-if="form.errors.industry" severity="error" :closable="false">
-                                    {{ form.errors.industry }}
-                                </Message>
-                            </div>
-
-                            <div>
-                                <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Country <span class="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    id="country"
-                                    v-model="form.country"
-                                    :options="countryOptions"
-                                    option-label="label"
-                                    option-value="value"
-                                    placeholder="Select country"
-                                    :class="{ 'p-invalid': form.errors.country }"
-                                    class="w-full"
-                                    @change="handleCountryChange"
-                                />
-                                <Message v-if="form.errors.country" severity="error" :closable="false">
-                                    {{ form.errors.country }}
-                                </Message>
-                            </div>
-
-                            <div v-if="generateSlug()" class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                                <p class="text-sm text-blue-700 dark:text-blue-300">
-                                    <i class="pi pi-info-circle mr-2"></i>
-                                    URL slug will be: <strong>{{ generateSlug() }}</strong>
-                                </p>
-                            </div>
-
-                            <div v-if="form.country && form.base_currency" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
-                                <p class="text-sm text-green-700 dark:text-green-300">
-                                    <i class="pi pi-check-circle mr-2"></i>
-                                    Currency automatically set to: <strong>{{ form.base_currency }}</strong>
-                                </p>
-                            </div>
-                        </div>
-                    </template>
-                </Card>
-
-                <!-- Financial Settings -->
-                <Card>
-                    <template #title>Financial Settings</template>
-                    <template #content>
-                        <div class="space-y-4">
-                            <div>
-                                <label for="base_currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Base Currency <span class="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    id="base_currency"
-                                    v-model="form.base_currency"
-                                    :options="currencyOptions"
-                                    option-label="label"
-                                    option-value="value"
-                                    placeholder="Select base currency"
-                                    :class="{ 'p-invalid': form.errors.base_currency }"
-                                    class="w-full"
-                                    @change="handleCurrencyChange"
-                                />
-                                <Message v-if="form.errors.base_currency" severity="error" :closable="false">
-                                    {{ form.errors.base_currency }}
-                                </Message>
-                            </div>
-
-                            <div>
-                                <label for="timezone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Timezone
-                                </label>
-                                <InputText
-                                    id="timezone"
-                                    v-model="form.timezone"
-                                    placeholder="e.g., America/New_York"
-                                    class="w-full"
-                                    readonly
-                                />
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                    Automatically set based on country selection
-                                </p>
-                            </div>
-
-                            <div>
-                                <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Language
-                                </label>
-                                <Select
-                                    id="language"
-                                    v-model="form.language"
-                                    :options="languageOptions"
-                                    option-label="label"
-                                    option-value="value"
-                                    placeholder="Select language"
-                                    class="w-full"
-                                />
-                            </div>
-
-                            <div>
-                                <label for="locale" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Locale
-                                </label>
-                                <Select
-                                    id="locale"
-                                    v-model="form.locale"
-                                    :options="localeOptions"
-                                    option-label="label"
-                                    option-value="value"
-                                    placeholder="Select locale"
-                                    class="w-full"
-                                />
-                            </div>
-                        </div>
-                    </template>
-                </Card>
-
-                <!-- Fiscal Year Settings -->
-                <Card class="lg:col-span-2">
-                    <template #title>Fiscal Year Settings</template>
-                    <template #content>
-                        <div class="space-y-4">
-                            <div class="flex items-center gap-2">
-                                <Checkbox
-                                    id="create_fiscal_year"
-                                    v-model="form.create_fiscal_year"
-                                    input-id="create_fiscal_year"
-                                    binary
-                                />
-                                <label for="create_fiscal_year" class="font-medium">
-                                    Create fiscal year automatically
-                                </label>
-                            </div>
-
-                            <div v-if="form.create_fiscal_year" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="fiscal_year_start" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Fiscal Year Start Date <span class="text-red-500">*</span>
-                                    </label>
-                                    <Calendar
-                                        id="fiscal_year_start"
-                                        v-model="form.fiscal_year_start"
-                                        date-format="yy-mm-dd"
-                                        placeholder="Select start date"
-                                        :class="{ 'p-invalid': form.errors.fiscal_year_start }"
-                                        class="w-full"
-                                    />
-                                    <Message v-if="form.errors.fiscal_year_start" severity="error" :closable="false">
-                                        {{ form.errors.fiscal_year_start }}
-                                    </Message>
-                                </div>
-
-                                <div>
-                                    <label for="fiscal_year_end" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Fiscal Year End Date <span class="text-red-500">*</span>
-                                    </label>
-                                    <Calendar
-                                        id="fiscal_year_end"
-                                        v-model="form.fiscal_year_end"
-                                        date-format="yy-mm-dd"
-                                        placeholder="Select end date"
-                                        :class="{ 'p-invalid': form.errors.fiscal_year_end }"
-                                        class="w-full"
-                                    />
-                                    <Message v-if="form.errors.fiscal_year_end" severity="error" :closable="false">
-                                        {{ form.errors.fiscal_year_end }}
-                                    </Message>
-                                </div>
-                            </div>
-
-                            <div class="flex gap-2">
-                                <Button
-                                    type="button"
-                                    @click="setFiscalYearDefaults"
-                                    label="Use Calendar Year"
-                                    severity="secondary"
-                                    outlined
-                                    size="small"
-                                />
-                            </div>
-                        </div>
-                    </template>
-                </Card>
-
-                <!-- Advanced Settings -->
-                <Card class="lg:col-span-2">
-                    <template #title>Advanced Settings</template>
-                    <template #content>
-                        <div class="space-y-4">
-                            <div class="flex items-center gap-2">
-                                <Checkbox
-                                    id="auto_setup"
-                                    v-model="form.auto_setup"
-                                    input-id="auto_setup"
-                                    binary
-                                />
-                                <label for="auto_setup" class="font-medium">
-                                    Auto-setup accounting features
-                                </label>
-                            </div>
-
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                This will automatically create chart of accounts, enable core modules, and set up basic accounting structure.
-                            </p>
-                        </div>
-                    </template>
-                </Card>
-            </div>
-
-            <!-- Form Actions -->
-            <Divider class="my-6" />
-
-            <div class="flex justify-between items-center">
-                <Button
-                    type="button"
-                    @click="resetForm"
-                    label="Reset Form"
-                    severity="secondary"
-                    outlined
-                    :disabled="form.processing"
-                />
-
-                <div class="flex gap-2">
-                    <Link href="/companies">
-                        <Button
-                            type="button"
-                            label="Cancel"
-                            severity="secondary"
-                            outlined
-                        />
-                    </Link>
-
-                    <Button
-                        type="submit"
-                        label="Create Company"
-                        icon="pi pi-check"
-                        :loading="submitting"
-                        :disabled="!canSubmit"
+                        :disabled="form.processing"
                     />
+
+                    <div class="flex gap-2">
+                        <Link href="/companies">
+                            <Button
+                                type="button"
+                                label="Cancel"
+                                severity="secondary"
+                                outlined
+                            />
+                        </Link>
+
+                        <Button
+                            type="submit"
+                            label="Create Company"
+                            icon="pi pi-check"
+                            :loading="submitting"
+                            :disabled="!canSubmit"
+                        />
+                    </div>
                 </div>
-            </div>
-        </form>
+            </form>
+        </div>
 
         <!-- Loading Overlay -->
         <div v-if="submitting" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

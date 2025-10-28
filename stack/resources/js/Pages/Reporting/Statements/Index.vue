@@ -1,35 +1,19 @@
 <template>
-  <AppLayout>
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            Financial Statements
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Generate income statement, balance sheet, cash flow, and trial balance reports
-          </p>
-        </div>
-        
-        <div class="flex items-center space-x-3">
-          <!-- Generate Report Button -->
-          <Button
-            :loading="isGenerating"
-            icon="pi pi-file-pdf"
-            label="Generate Report"
-            @click="showGenerateDialog = true"
-          />
-          
-          <!-- Settings Button -->
-          <Button
-            icon="pi pi-cog"
-            severity="secondary"
-            text
-            @click="showSettings = true"
-          />
-        </div>
-      </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Reports"
+      description="Generate and manage business reports"
+      subDescription="Create insightful reports for business analysis"
+      :show-search="true"
+      search-placeholder="Search reports..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="space-y-6">
 
       <!-- Alert for Errors -->
       <Message
@@ -366,6 +350,13 @@
           Select report parameters and generate your first financial statement.
         </p>
       </div>
+        </div>
+      </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks title="Reporting Quick Links" :links="reportingQuickLinks" />
+      </div>
     </div>
 
     <!-- Transaction Drilldown Modal -->
@@ -447,7 +438,7 @@
         />
       </template>
     </Dialog>
-  </AppLayout>
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -455,7 +446,10 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
 import { useReportingStatements } from '@/services/reportingStatements'
-import AppLayout from '@/Layouts/AuthenticatedLayout.vue'
+import { usePageActions } from '@/composables/usePageActions'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
 
 // Import preview components
 import IncomeStatementPreview from '@/components/Reporting/IncomeStatementPreview.vue'
@@ -463,6 +457,22 @@ import BalanceSheetPreview from '@/components/Reporting/BalanceSheetPreview.vue'
 import CashFlowPreview from '@/components/Reporting/CashFlowPreview.vue'
 import TrialBalancePreview from '@/components/Reporting/TrialBalancePreview.vue'
 import TransactionDrilldownModal from '@/components/Reporting/TransactionDrilldownModal.vue'
+
+// Set up page actions and quick links
+const { setPageActions } = usePageActions()
+
+const reportingQuickLinks = ref([
+  { title: 'Generate Statement', icon: 'pi pi-file-pdf', route: '#', onClick: () => showGenerateDialog.value = true },
+  { title: 'Export PDF', icon: 'pi pi-download', route: '#', onClick: handleExportPDF },
+  { title: 'Email Statements', icon: 'pi pi-envelope', route: '#', onClick: handleEmailStatements },
+  { title: 'Custom Templates', icon: 'pi pi-palette', route: '#', onClick: handleCustomTemplates }
+])
+
+// Initialize page actions
+setPageActions([
+  { title: 'Generate Report', icon: 'pi pi-file-pdf', onClick: () => showGenerateDialog.value = true, loading: isGenerating },
+  { title: 'Settings', icon: 'pi pi-cog', onClick: () => showSettings.value = true }
+])
 
 const toast = useToast()
 const page = usePage()
@@ -826,6 +836,34 @@ const toggleAutoRefresh = () => {
   }
 }
 
+// Quick link handlers
+const handleExportPDF = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Export PDF',
+    detail: 'PDF export functionality would be implemented here',
+    life: 3000
+  })
+}
+
+const handleEmailStatements = () => {
+  toast.add({
+    severity: 'info', 
+    summary: 'Email Statements',
+    detail: 'Email statements functionality would be implemented here',
+    life: 3000
+  })
+}
+
+const handleCustomTemplates = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Custom Templates',
+    detail: 'Custom templates functionality would be implemented here',
+    life: 3000
+  })
+}
+
 // Lifecycle
 onMounted(async () => {
   await loadRecentReports()
@@ -850,3 +888,4 @@ onUnmounted(() => {
 watch(autoRefreshReports, toggleAutoRefresh)
 watch(selectedReportType, loadRecentReports)
 </script>
+

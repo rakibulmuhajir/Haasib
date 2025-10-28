@@ -1,30 +1,19 @@
 <template>
-  <div class="payment-reversal-manager">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-          Payment Reversals
-        </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Manage payment reversals and allocation adjustments
-        </p>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          icon="pi pi-history"
-          label="View Audit Trail"
-          @click="showAuditTrail = true"
-          severity="secondary"
-        />
-        <Button
-          icon="pi pi-plus"
-          label="New Reversal"
-          @click="showNewReversalDialog = true"
-        />
-      </div>
-    </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Payments"
+      description="Manage payment processing and transactions"
+      subDescription="Track receipts, reversals, and payment allocations"
+      :show-search="true"
+      search-placeholder="Search payments..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="payment-reversal-manager">
 
     <!-- Search and Filters -->
     <Card class="mb-6">
@@ -688,7 +677,18 @@
     >
       <AuditTimeline :payment-id="selectedPayment?.id" />
     </Dialog>
-  </div>
+      </div>
+    </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks 
+          :links="quickLinks" 
+          title="Payment Actions"
+        />
+      </div>
+    </div>
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -696,9 +696,60 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { format } from 'date-fns'
 import AuditTimeline from './AuditTimeline.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 // Composition
 const toast = useToast()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'new-reversal',
+    label: 'New Reversal',
+    icon: 'pi pi-plus',
+    severity: 'primary',
+    action: () => showNewReversalDialog.value = true
+  },
+  {
+    key: 'audit-trail',
+    label: 'View Audit Trail',
+    icon: 'pi pi-history',
+    severity: 'secondary',
+    action: () => showAuditTrail.value = true
+  }
+]
+
+// Define quick links for the payments page
+const quickLinks = [
+  {
+    label: 'New Payment Reversal',
+    url: '#',
+    icon: 'pi pi-plus',
+    action: () => showNewReversalDialog.value = true
+  },
+  {
+    label: 'Payment Batches',
+    url: '/payments/batches',
+    icon: 'pi pi-database'
+  },
+  {
+    label: 'Audit Timeline',
+    url: '/payments/audit',
+    icon: 'pi pi-history'
+  },
+  {
+    label: 'Payment Reports',
+    url: '/payments/reports',
+    icon: 'pi pi-chart-bar'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 // State
 const loading = ref(false)
@@ -1055,8 +1106,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.payment-reversal-manager {
-  @apply space-y-6;
-}
-</style>

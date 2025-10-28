@@ -22,8 +22,11 @@ export function useCompanyContext() {
     const currentCompanyId = computed(() => currentCompany.value?.id)
     
     // Company permissions
+    const companyPermissions = computed(() => currentCompany.value?.permissions || [])
+    const systemPermissions = computed(() => page.props.auth?.permissions || [])
+    
     const permissions = computed(() => {
-        const companyPerms = currentCompany.value?.permissions || []
+        const companyPerms = companyPermissions.value
         return {
             canManage: companyPerms.includes('company.manage'),
             canInvite: companyPerms.includes('company.invite'),
@@ -103,12 +106,59 @@ export function useCompanyContext() {
         return companyUser?.userRole || null
     }
 
-    const hasPermission = (permission) => {
-        return permissions.value[`can${permission.charAt(0).toUpperCase() + permission.slice(1)}`] || false
+    const normalizePermissions = (permission) => {
+        if (!permission) return []
+        if (Array.isArray(permission)) return permission.filter(Boolean)
+        return [permission]
     }
 
-    const hasAnyPermission = (permissions) => {
-        return permissions.some(perm => hasPermission(perm))
+    const buildLegacyKey = (permission) => {
+        if (!permission || typeof permission !== 'string') return null
+        const parts = permission.split('.').filter(Boolean)
+        if (parts.length === 0) return null
+
+        const [first, ...rest] = parts
+        const capitalizedFirst = first.charAt(0).toUpperCase() + first.slice(1)
+        const capitalizedRest = rest.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+
+        return `can${capitalizedFirst}${capitalizedRest}`
+    }
+
+    const hasPermission = (permission) => {
+        if (!currentCompany.value) {
+            return true
+        }
+        
+        const permissionsToCheck = normalizePermissions(permission)
+        if (permissionsToCheck.length === 0) return true
+
+        return permissionsToCheck.some((perm) => {
+            if (companyPermissions.value.includes(perm)) {
+                return true
+            }
+
+            if (systemPermissions.value.includes(perm)) {
+                return true
+            }
+
+            const legacyKey = buildLegacyKey(perm)
+            if (legacyKey && permissions.value.hasOwnProperty(legacyKey)) {
+                return Boolean(permissions.value[legacyKey])
+            }
+
+            return false
+        })
+    }
+    
+    const hasAnyPermission = (permList) => {
+        if (!currentCompany.value) {
+            return true
+        }
+        
+        const permissionsToCheck = normalizePermissions(permList)
+        if (permissionsToCheck.length === 0) return true
+
+        return permissionsToCheck.some((perm) => hasPermission(perm))
     }
 
     const canPerformAction = (action, resource = null) => {

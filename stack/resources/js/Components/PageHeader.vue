@@ -6,7 +6,7 @@ import PageActions from './PageActions.vue'
 const props = defineProps({
   title: {
     type: String,
-    required: true
+    default: ''
   },
   subtitle: {
     type: String,
@@ -30,9 +30,9 @@ const hasActions = computed(() => hasLeftActions.value || hasRightActions.value)
   <div class="page-header">
     <!-- Header Content -->
     <div class="page-header-content">
-      <!-- Title Section -->
-      <div class="page-header-title">
-        <h1 class="page-title">{{ title }}</h1>
+      <!-- Title Section (Optional) -->
+      <div v-if="title || subtitle" class="page-header-title">
+        <h1 v-if="title" class="page-title">{{ title }}</h1>
         <p v-if="subtitle" class="page-subtitle">{{ subtitle }}</p>
       </div>
 
@@ -54,11 +54,7 @@ const hasActions = computed(() => hasLeftActions.value || hasRightActions.value)
       </div>
     </div>
 
-    <!-- Breadcrumb Section (Optional) -->
-    <div v-if="slots.breadcrumb" class="page-header-breadcrumb">
-      <slot name="breadcrumb" />
-    </div>
-
+  
     <!-- Additional Content -->
     <div v-if="slots.default" class="page-header-content-extra">
       <slot />
@@ -83,6 +79,10 @@ const hasActions = computed(() => hasLeftActions.value || hasRightActions.value)
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.5rem;
+}
+
+.page-header-content:has(.page-header-title:not(:has(*))) {
+  margin-bottom: 0;
 }
 
 .page-header-title {
@@ -137,9 +137,6 @@ const hasActions = computed(() => hasLeftActions.value || hasRightActions.value)
   flex: 1;
 }
 
-.page-header-breadcrumb {
-  margin-bottom: 0.5rem;
-}
 
 .page-header-content-extra {
   margin-top: 1rem;

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Accounting\Domain\Customers\Actions\ChangeCustomerStatusAction;
@@ -69,53 +70,129 @@ class CustomerController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Customers/Create');
+        // Get countries from database if available, otherwise use static data
+        try {
+            $countries = DB::table('countries')->orderBy('name')->get() ?: collect([
+                (object) ['id' => 'US', 'name' => 'United States'],
+                (object) ['id' => 'CA', 'name' => 'Canada'],
+                (object) ['id' => 'GB', 'name' => 'United Kingdom'],
+                (object) ['id' => 'AU', 'name' => 'Australia'],
+                (object) ['id' => 'DE', 'name' => 'Germany'],
+                (object) ['id' => 'FR', 'name' => 'France'],
+                (object) ['id' => 'JP', 'name' => 'Japan'],
+                (object) ['id' => 'CN', 'name' => 'China'],
+                (object) ['id' => 'IN', 'name' => 'India'],
+                (object) ['id' => 'BR', 'name' => 'Brazil'],
+            ]);
+        } catch (\Exception $e) {
+            $countries = collect([
+                (object) ['id' => 'US', 'name' => 'United States'],
+                (object) ['id' => 'CA', 'name' => 'Canada'],
+                (object) ['id' => 'GB', 'name' => 'United Kingdom'],
+                (object) ['id' => 'AU', 'name' => 'Australia'],
+                (object) ['id' => 'DE', 'name' => 'Germany'],
+                (object) ['id' => 'FR', 'name' => 'France'],
+                (object) ['id' => 'JP', 'name' => 'Japan'],
+                (object) ['id' => 'CN', 'name' => 'China'],
+                (object) ['id' => 'IN', 'name' => 'India'],
+                (object) ['id' => 'BR', 'name' => 'Brazil'],
+            ]);
+        }
+
+        // Get currencies from database if available, otherwise use static data
+        try {
+            $currencies = DB::table('currencies')->orderBy('code')->get() ?: collect([
+                (object) ['id' => 'USD', 'code' => 'USD'],
+                (object) ['id' => 'EUR', 'code' => 'EUR'],
+                (object) ['id' => 'GBP', 'code' => 'GBP'],
+                (object) ['id' => 'CAD', 'code' => 'CAD'],
+                (object) ['id' => 'AUD', 'code' => 'AUD'],
+                (object) ['id' => 'JPY', 'code' => 'JPY'],
+                (object) ['id' => 'CNY', 'code' => 'CNY'],
+                (object) ['id' => 'INR', 'code' => 'INR'],
+                (object) ['id' => 'BRL', 'code' => 'BRL'],
+            ]);
+        } catch (\Exception $e) {
+            $currencies = collect([
+                (object) ['id' => 'USD', 'code' => 'USD'],
+                (object) ['id' => 'EUR', 'code' => 'EUR'],
+                (object) ['id' => 'GBP', 'code' => 'GBP'],
+                (object) ['id' => 'CAD', 'code' => 'CAD'],
+                (object) ['id' => 'AUD', 'code' => 'AUD'],
+                (object) ['id' => 'JPY', 'code' => 'JPY'],
+                (object) ['id' => 'CNY', 'code' => 'CNY'],
+                (object) ['id' => 'INR', 'code' => 'INR'],
+                (object) ['id' => 'BRL', 'code' => 'BRL'],
+            ]);
+        }
+
+        return Inertia::render('Accounting/Customers/Create', [
+            'countries' => $countries,
+            'availableCurrencies' => $currencies,
+        ]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'legal_name' => 'nullable|string|max:255',
-            'customer_number' => 'nullable|string|max:30',
-            'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:50',
-            'default_currency' => 'required|string|size:3',
-            'payment_terms' => 'nullable|string|max:100',
-            'credit_limit' => 'nullable|numeric|min:0',
-            'tax_id' => 'nullable|string|max:50',
-            'website' => 'nullable|url|max:255',
-            'notes' => 'nullable|string',
+            'customer_type' => 'nullable|string|max:50',
+            'address_line_1' => 'nullable|string|max:255',
+            'country_id' => 'nullable|string',
+            'currency_id' => 'nullable|string',
+            'contact' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive,blocked',
         ]);
 
         $currentCompany = $request->attributes->get('company');
         $user = $request->user();
 
+        // Map form fields to the expected fields for CreateCustomerAction
+        $customerData = [
+            'name' => $validated['name'],
+            'legal_name' => $validated['name'], // Use name as legal_name for now
+            'status' => $validated['status'] ?? 'active',
+            'default_currency' => $this->getCurrencyCode($validated['currency_id'] ?? 'USD'),
+            'email' => null,
+            'phone' => null,
+        ];
+
+        // Determine if contact is email or phone
+        if (!empty($validated['contact'])) {
+            if (filter_var($validated['contact'], FILTER_VALIDATE_EMAIL)) {
+                $customerData['email'] = $validated['contact'];
+            } else {
+                $customerData['phone'] = $validated['contact'];
+            }
+        }
+
         try {
+            \Log::info('Creating customer with data:', $customerData);
             $customer = $this->createCustomerAction->execute(
                 $currentCompany,
-                $validated,
+                $customerData,
                 $user
             );
+            \Log::info('Customer created successfully:', ['id' => $customer->id, 'name' => $customer->name]);
 
-            return response()->json([
-                'message' => 'Customer created successfully',
-                'customer' => $customer,
-            ], 201);
+            return redirect()
+                ->to('/customers')
+                ->with('success', 'Customer created successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $e->errors(),
-            ], 422);
+            \Log::error('Validation failed:', $e->errors());
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to create customer',
-                'error' => $e->getMessage(),
-            ], 500);
+            \Log::error('Customer creation failed:', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return redirect()
+                ->back()
+                ->with('error', 'Failed to create customer: ' . $e->getMessage())
+                ->withInput();
         }
     }
 
@@ -170,7 +247,7 @@ class CustomerController extends Controller
     {
         $this->authorizeCustomerAccess($request, $customer);
 
-        return Inertia::render('Customers/Edit', [
+        return Inertia::render('Accounting/Customers/Edit', [
             'customer' => $customer,
         ]);
     }
@@ -438,6 +515,30 @@ class CustomerController extends Controller
             'processed' => $processedCount,
             'requested' => count($validated['customer_ids']),
         ]);
+    }
+
+    /**
+     * Get currency code from currency ID or return the code directly.
+     */
+    private function getCurrencyCode(string $currencyIdOrCode): string
+    {
+        // If it's already a 3-letter code, return it
+        if (strlen($currencyIdOrCode) === 3 && ctype_alpha($currencyIdOrCode)) {
+            return strtoupper($currencyIdOrCode);
+        }
+
+        // Try to get from database if it's an ID
+        try {
+            $currency = DB::table('currencies')->where('id', $currencyIdOrCode)->first();
+            if ($currency) {
+                return $currency->code;
+            }
+        } catch (\Exception $e) {
+            // Ignore if table doesn't exist
+        }
+
+        // Default to USD
+        return 'USD';
     }
 
     /**

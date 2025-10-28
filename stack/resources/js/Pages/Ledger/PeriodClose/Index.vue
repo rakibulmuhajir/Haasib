@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 import PrimeButton from 'primevue/button'
 import PrimeCard from 'primevue/card'
 import PrimeDataTable from 'primevue/datatable'
@@ -82,9 +85,58 @@ const deadlines = computed(() => props.value.deadlines as Deadline[])
 const permissions = computed(() => props.value.permissions as Permission)
 const currentCompany = computed(() => props.value.current_company as { id: string; name: string })
 
+// Composition
+const { actions } = usePageActions()
+
 // Form state
 const { useStartPeriodCloseForm } = usePeriodCloseForms()
 const { form: startForm, startPeriodClose, reset: resetStartForm } = useStartPeriodCloseForm()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'new-period-close',
+    label: 'Start Period Close',
+    icon: 'pi pi-play',
+    severity: 'primary',
+    action: () => showStartDialog.value = true
+  },
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => window.location.reload()
+  }
+]
+
+// Define quick links for the period close page
+const quickLinks = [
+  {
+    label: 'Start Period Close',
+    url: '#',
+    icon: 'pi pi-play',
+    action: () => showStartDialog.value = true
+  },
+  {
+    label: 'Bank Reconciliation',
+    url: '/ledger/bank-reconciliation',
+    icon: 'pi pi-bank'
+  },
+  {
+    label: 'Journal Entries',
+    url: '/accounting/journal-entries',
+    icon: 'pi pi-book'
+  },
+  {
+    label: 'Trial Balance',
+    url: '/ledger/trial-balance',
+    icon: 'pi pi-calculator'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 // Dialog state
 const showStartDialog = ref(false)
@@ -229,30 +281,19 @@ function getCompletionTime(time?: number): string {
 <template>
   <Head title="Period Close Management" />
 
-  <AuthenticatedLayout>
-    <div class="container mx-auto px-4 py-6">
-      <!-- Header -->
-      <div class="mb-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-              Period Close Management
-            </h1>
-            <p class="text-gray-600 dark:text-gray-400">
-              Manage monthly closing workflows for {{ currentCompany?.name }}
-            </p>
-          </div>
-          <div class="flex space-x-2">
-            <PrimeButton
-              v-if="permissions.can_view"
-              label="Refresh"
-              icon="pi pi-refresh"
-              @click="router.reload()"
-              severity="secondary"
-            />
-          </div>
-        </div>
-      </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Period Close"
+      description="Manage monthly closing workflows"
+      subDescription="Complete accounting period closing procedures"
+      :show-search="true"
+      search-placeholder="Search periods..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
 
       <!-- Statistics Overview -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -526,24 +567,16 @@ function getCompletionTime(time?: number): string {
           />
         </template>
       </PrimeDialog>
+      </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks 
+          :links="quickLinks" 
+          title="Period Actions"
+        />
+      </div>
     </div>
-  </AuthenticatedLayout>
+  </LayoutShell>
 </template>
 
-<style scoped>
-:deep(.p-datatable .p-datatable-tbody > tr > td) {
-  padding: 0.75rem;
-}
-
-:deep(.p-progressbar .p-progressbar-value) {
-  transition: width 0.3s ease-in-out;
-}
-
-:deep(.p-tag) {
-  font-size: 0.75rem;
-}
-
-:deep(.p-datatable-scrollable .p-datatable-wrapper) {
-  overflow-x: auto;
-}
-</style>

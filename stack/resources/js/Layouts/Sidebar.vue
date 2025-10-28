@@ -1,476 +1,589 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { usePage, Link } from '@inertiajs/vue3'
-import { useI18n } from 'vue-i18n'
-import Button from 'primevue/button'
-import Avatar from 'primevue/avatar'
-import Badge from 'primevue/badge'
-import Menu from 'primevue/menu'
-import Divider from 'primevue/divider'
-import Accordion from 'primevue/accordion'
-import AccordionTab from 'primevue/accordiontab'
-import Toast from 'primevue/toast'
-import ProgressSpinner from 'primevue/progressspinner'
-import CompanyContextSwitcher from '../Components/Company/ContextSwitcher.vue'
-import { useCompanyContext } from '../composables/useCompanyContext'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Link } from '@inertiajs/vue3'
+import { useSidebar } from '@/composables/useSidebar'
+import { useCompanyContext } from '@/composables/useCompanyContext'
+import SidebarMenuItem from '@/Components/Sidebar/SidebarMenuItem.vue'
+import SidebarCompanySwitcher from '@/Components/Sidebar/SidebarCompanySwitcher.vue'
 
-const { t } = useI18n()
-const page = usePage()
-const toast = ref()
-
-// Use company context composable
 const {
-    currentCompany,
-    userCompanies,
-    user,
-    permissions,
-    canCreateCompany,
-    hasPermission,
-    canPerformAction,
-    getCompanyAvatarData,
-    formatCompanyDisplay
+  isMobile,
+  isMobileMenuOpen,
+  closeMobileMenu,
+  setSlim
+} = useSidebar()
+
+const {
+  currentCompany,
+  hasPermission
 } = useCompanyContext()
 
-// Reactive data
-const collapsed = ref(false)
-const activeMenuItems = ref(new Set())
-const userMenu = ref()
-const companyMenu = ref()
+const navigation = computed(() => {
+  const companyId = currentCompany.value?.id
 
-// Computed properties
-const hasCompanies = computed(() => userCompanies.value.length > 0)
-const userInitials = computed(() => {
-    if (!user.value?.name) return '?'
-    return user.value.name
-        .split(' ')
-        .map(word => word.charAt(0))
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-})
-
-// Navigation items configuration
-const mainNavigation = computed(() => {
-    const items = [
+  const organizationChildren = currentCompany.value
+    ? [
         {
-            label: 'Dashboard',
-            icon: 'pi pi-home',
-            route: '/dashboard',
-            permission: null // Always visible
+          label: 'Company Overview',
+          path: `/companies/${companyId}`,
+          icon: 'id-badge'
         },
         {
-            label: 'Companies',
-            icon: 'pi pi-building',
-            route: '/companies',
-            permission: null // Always visible
+          label: 'Fiscal Year',
+          path: `/companies/${companyId}/fiscal-year`,
+          icon: 'calendar-alt',
+          permission: 'canManage'
         },
         {
-            label: 'Users',
-            icon: 'pi pi-users',
-            route: '#',
-            permission: 'canViewUsers',
-            subItems: [
-                {
-                    label: 'All Users',
-                    route: '/companies/users',
-                    permission: 'canViewUsers'
-                },
-                {
-                    label: 'Invitations',
-                    route: '/companies/invitations',
-                    permission: 'canInvite'
-                }
-            ]
+          label: 'Modules',
+          path: `/companies/${companyId}/modules`,
+          icon: 'th-large',
+          permission: 'canManage'
+        },
+        {
+          label: 'Audit Log',
+          path: `/companies/${companyId}/audit`,
+          icon: 'clipboard-list',
+          permission: 'canManage'
+        },
+        {
+          label: 'Users & Roles',
+          path: '/companies/users',
+          icon: 'users-cog',
+          permission: 'canViewUsers'
         }
-    ]
-
-    // Add company-specific items if a company is selected
-    if (currentCompany.value) {
-        items.push(
-            {
-                label: 'Invoicing',
-                icon: 'pi pi-file',
-                route: '/invoices',
-                permission: 'canAccessInvoicing'
-            },
-            {
-                label: 'Accounting',
-                icon: 'pi pi-calculator',
-                route: '/accounting',
-                permission: 'canAccessAccounting'
-            },
-            {
-                label: 'Reports',
-                icon: 'pi pi-chart-bar',
-                route: '/reports',
-                permission: 'canViewReports'
-            },
-            {
-                label: 'Settings',
-                icon: 'pi pi-cog',
-                route: '/settings',
-                permission: 'canViewSettings'
-            }
-        )
-    }
-
-    return items.filter(item => 
-        !item.permission || hasPermission(item.permission)
-    )
-})
-
-const companySettings = computed(() => {
-    if (!currentCompany.value) return []
-
-    return [
+      ]
+    : [
         {
-            label: 'Company Details',
-            icon: 'pi pi-info-circle',
-            route: `/companies/${currentCompany.value.id}`,
-            permission: null
-        },
-        {
-            label: 'Fiscal Year',
-            icon: 'pi pi-calendar',
-            route: `/companies/${currentCompany.value.id}/fiscal-year`,
-            permission: 'canManage'
-        },
-        {
-            label: 'Modules',
-            icon: 'pi pi-th-large',
-            route: `/companies/${currentCompany.value.id}/modules`,
-            permission: 'canManage'
-        },
-        {
-            label: 'Audit Log',
-            icon: 'pi pi-history',
-            route: `/companies/${currentCompany.value.id}/audit`,
-            permission: 'canManage'
+          label: 'Companies',
+          path: '/companies',
+          icon: 'building'
         }
-    ].filter(item => 
-        !item.permission || hasPermission(item.permission)
-    )
+      ]
+
+  const items = [
+    {
+      label: 'Overview',
+      path: '/dashboard',
+      icon: 'tachometer-alt',
+      description: 'Company KPIs and high-level metrics.'
+    },
+    {
+      label: 'Sales & Receivables',
+      icon: 'hand-holding-usd',
+      permission: 'canAccessInvoicing',
+      description: 'Quotes, invoices, and customer collections.',
+      children: [
+        {
+          label: 'Invoices',
+          path: '/invoices',
+          icon: 'file-invoice',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Payments',
+          path: '/payments',
+          icon: 'credit-card',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Customers',
+          path: '/customers',
+          icon: 'users',
+          permission: 'canAccessInvoicing'
+        }
+      ]
+    },
+    {
+      label: 'Banking & Cash',
+      icon: 'university',
+      permission: 'canAccessAccounting',
+      description: 'Statement imports and reconciliation.',
+      children: [
+        {
+          label: 'Reconciliation',
+          path: '/bank-reconciliation',
+          icon: 'balance-scale',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Statement Import',
+          path: '/bank-import',
+          icon: 'file-upload',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Bank Reports',
+          path: '/bank-reports',
+          icon: 'chart-bar',
+          permission: 'canAccessAccounting'
+        }
+      ]
+    },
+    {
+      label: 'Accounting Ops',
+      icon: 'calculator',
+      permission: 'canAccessAccounting',
+      description: 'Journal entries, ledgers, and balances.',
+      children: [
+        {
+          label: 'Journal Entries',
+          path: '/journal-entries',
+          icon: 'book',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Trial Balance',
+          path: '/trial-balance',
+          icon: 'list-alt',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Ledger',
+          path: '/ledger',
+          icon: 'book-open',
+          permission: 'canAccessAccounting'
+        }
+      ]
+    },
+    {
+      label: 'Period Close',
+      icon: 'calendar-check',
+      permission: 'canAccessPeriodClose',
+      description: 'Checklist workflows and compliance tracking.',
+      children: [
+        {
+          label: 'Period Close',
+          path: '/period-close',
+          icon: 'tasks',
+          permission: 'canAccessPeriodClose'
+        },
+        {
+          label: 'Audit Trail',
+          path: '/audit-trail',
+          icon: 'history',
+          permission: 'canAccessPeriodClose'
+        },
+        {
+          label: 'Compliance',
+          path: '/compliance',
+          icon: 'shield-alt',
+          permission: 'canAccessPeriodClose'
+        }
+      ]
+    },
+    {
+      label: 'Reporting',
+      icon: 'chart-line',
+      permission: 'canViewReports',
+      description: 'Dashboards, statements, and saved templates.',
+      children: [
+        {
+          label: 'Dashboard',
+          path: '/reports/dashboard',
+          icon: 'chart-pie',
+          permission: 'canViewReports'
+        },
+        {
+          label: 'Financial Reports',
+          path: '/reports/financial',
+          icon: 'file-alt',
+          permission: 'canViewReports'
+        },
+        {
+          label: 'Statements',
+          path: '/reports/statements',
+          icon: 'file-invoice-dollar',
+          permission: 'canViewReports'
+        },
+        {
+          label: 'Templates',
+          path: '/reports/templates',
+          icon: 'layer-group',
+          permission: 'canViewReports'
+        }
+      ]
+    },
+    {
+      label: 'Organization',
+      icon: 'building',
+      description: 'Manage entities, teams, and access.',
+      children: organizationChildren
+    },
+    {
+      label: 'User & Settings',
+      icon: 'user-cog',
+      description: 'Personal profile and workspace preferences.',
+      children: [
+        {
+          label: 'My Profile',
+          path: '/profile',
+          icon: 'user'
+        },
+        {
+          label: 'System Settings',
+          path: '/settings',
+          icon: 'cog',
+          permission: 'canViewSettings'
+        }
+      ]
+    }
+  ]
+
+  const sanitizeChildren = (children = []) =>
+    children.filter(child => !child.permission || hasPermission(child.permission))
+
+  return items
+    .map(item => ({
+      ...item,
+      children: sanitizeChildren(item.children)
+    }))
+    .filter(item => {
+      if (item.permission && !hasPermission(item.permission)) {
+        return false
+      }
+      if (item.children?.length) {
+        return true
+      }
+      return Boolean(item.path)
+    })
 })
 
-// Methods
-const toggleCollapse = () => {
-    collapsed.value = !collapsed.value
+const hoveredItem = ref(null)
+
+const drawerChildren = computed(() => hoveredItem.value?.children ?? [])
+const drawerTitle = computed(() => hoveredItem.value?.label ?? '')
+const drawerDescription = computed(() => hoveredItem.value?.description ?? '')
+
+const showDrawer = computed(() => {
+  if (isMobile.value) return false
+  return drawerChildren.value.length > 0
+})
+
+const sidebarClasses = computed(() => ({
+  sidebar: true,
+  'sidebar--mobile': isMobile.value,
+  'sidebar--mobile-open': isMobile.value && isMobileMenuOpen.value
+}))
+
+const containerClasses = computed(() => ({
+  'sidebar-container': true,
+  'sidebar-container--with-drawer': showDrawer.value
+}))
+
+const handleItemHover = (item) => {
+  if (isMobile.value) return
+  if (!item?.children?.length) {
+    hoveredItem.value = null
+    return
+  }
+  hoveredItem.value = item
 }
 
-const toggleMenuItem = (item) => {
-    if (activeMenuItems.value.has(item.label)) {
-        activeMenuItems.value.delete(item.label)
-    } else {
-        activeMenuItems.value.add(item.label)
-    }
+const clearHover = () => {
+  hoveredItem.value = null
 }
 
-const handleLogout = async () => {
-    try {
-        await fetch('/logout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            }
-        })
-        window.location.href = '/'
-    } catch (error) {
-        console.error('Logout failed:', error)
-        toast.value.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: 'Failed to logout',
-            life: 3000
-        })
-    }
-}
+watch(isMobile, (value) => {
+  if (value) {
+    clearHover()
+  }
+})
 
-const toggleUserMenu = (event) => {
-    userMenu.value.toggle(event)
-}
-
-const toggleCompanyMenu = (event) => {
-    companyMenu.value.toggle(event)
-}
-
-const isMenuItemActive = (item) => {
-    const currentPath = window.location.pathname
-    if (item.route === currentPath) return true
-    if (item.route && currentPath.startsWith(item.route)) return true
-    if (item.subItems) {
-        return item.subItems.some(subItem => 
-            subItem.route === currentPath || currentPath.startsWith(subItem.route)
-        )
-    }
-    return false
-}
-
-const isSubMenuItemActive = (item) => {
-    const currentPath = window.location.pathname
-    return item.route === currentPath || currentPath.startsWith(item.route)
-}
-
-const getMenuItemClasses = (item) => {
-    const isActive = isMenuItemActive(item)
-    const isExpanded = activeMenuItems.value.has(item.label)
-    
-    return [
-        'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-        collapsed.value ? 'justify-center' : '',
-        isActive 
-            ? 'bg-primary text-primary-contrast' 
-            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-    ]
-}
-
-const getSubMenuItemClasses = (item) => {
-    const isActive = isSubMenuItemActive(item)
-    return [
-        'flex items-center gap-3 px-8 py-2 rounded-md text-sm transition-colors',
-        collapsed.value ? 'justify-center px-4' : '',
-        isActive
-            ? 'bg-primary/20 text-primary dark:bg-primary/10'
-            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-    ]
-}
+onMounted(() => {
+  setSlim(true)
+})
 </script>
 
 <template>
-    <div class="sidebar-container">
-        <Toast ref="toast" />
-        
-        <!-- Sidebar -->
-        <aside 
-            :class="[
-                'h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300',
-                collapsed ? 'w-20' : 'w-64'
-            ]"
+  <div
+    :class="containerClasses"
+    @mouseleave="clearHover"
+  >
+    <div
+      v-if="isMobile && isMobileMenuOpen"
+      class="sidebar-overlay"
+      @click="closeMobileMenu"
+    />
+
+    <aside
+      :class="sidebarClasses"
+      role="navigation"
+      aria-label="Main navigation"
+    >
+      <div class="sidebar-top">
+        <Link href="/" class="sidebar-logo" aria-label="Go to dashboard">
+          <i class="fas fa-tachometer-alt" />
+        </Link>
+
+        <button
+          v-if="isMobile"
+          class="sidebar-mobile-close"
+          type="button"
+          aria-label="Close navigation"
+          @click="closeMobileMenu"
         >
-            <!-- Logo/Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                        <i class="pi pi-building text-white text-lg"></i>
-                    </div>
-                    <div v-if="!collapsed" class="font-bold text-lg text-gray-900 dark:text-white">
-                        Haasib
-                    </div>
-                </div>
-                <Button
-                    @click="toggleCollapse"
-                    icon="pi pi-bars"
-                    severity="secondary"
-                    outlined
-                    size="small"
-                />
-            </div>
+          <i class="fas fa-times" />
+        </button>
+      </div>
 
-            <!-- Company Context Switcher -->
-            <div v-if="hasCompanies" class="p-4 border-b border-gray-200 dark:border-gray-700">
-                <CompanyContextSwitcher />
-            </div>
+      <div class="sidebar-company">
+        <SidebarCompanySwitcher :is-slim="true" />
+      </div>
 
-            <!-- No Company State -->
-            <div v-else class="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div class="text-center">
-                    <Avatar
-                        label="?"
-                        class="bg-gray-400 text-white mx-auto mb-2"
-                    />
-                    <p v-if="!collapsed" class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                        No companies yet
-                    </p>
-                    <Link v-if="canCreateCompany" href="/companies/create">
-                        <Button
-                            v-if="!collapsed"
-                            icon="pi pi-plus"
-                            label="Create Company"
-                            size="small"
-                            class="w-full"
-                        />
-                        <Button
-                            v-else
-                            icon="pi pi-plus"
-                            size="small"
-                            v-tooltip="'Create Company'"
-                        />
-                    </Link>
-                </div>
-            </div>
+      <nav class="sidebar-nav" role="menu">
+        <ul class="sidebar-menu">
+          <SidebarMenuItem
+            v-for="item in navigation"
+            :key="item.label"
+            :item="item"
+            :depth="0"
+            @hover="handleItemHover"
+          />
+        </ul>
+      </nav>
+    </aside>
 
-            <!-- Main Navigation -->
-            <div class="flex-1 overflow-y-auto p-4">
-                <Accordion :activeIndex="activeMenuItems" @tab-open="toggleMenuItem">
-                    <!-- Basic Navigation (no accordion) -->
-                    <nav class="space-y-2">
-                        <Link
-                            v-for="item in mainNavigation"
-                            :key="item.label"
-                            :href="item.route"
-                            :class="getMenuItemClasses(item)"
-                        >
-                            <i :class="item.icon" />
-                            <span v-if="!collapsed" class="flex-1">{{ item.label }}</span>
-                            <i
-                                v-if="!collapsed && item.subItems"
-                                :class="[
-                                    'pi transition-transform',
-                                    activeMenuItems.has(item.label) ? 'pi-chevron-down' : 'pi-chevron-right'
-                                ]"
-                            />
-                        </Link>
-                    </nav>
+    <transition name="sidebar-drawer">
+      <div
+        v-if="showDrawer"
+        class="sidebar-drawer"
+        role="menu"
+      >
+        <header class="sidebar-drawer__header">
+          <span class="sidebar-drawer__title">{{ drawerTitle }}</span>
+          <p v-if="drawerDescription" class="sidebar-drawer__description">
+            {{ drawerDescription }}
+          </p>
+        </header>
 
-                    <!-- Sub Items for expanded menu items -->
-                    <nav
-                        v-for="item in mainNavigation.filter(item => item.subItems && activeMenuItems.has(item.label))"
-                        :key="item.label + '-sub'"
-                        class="mt-1 space-y-1"
-                    >
-                        <Link
-                            v-for="subItem in item.subItems"
-                            :key="subItem.label"
-                            :href="subItem.route"
-                            :class="getSubMenuItemClasses(subItem)"
-                        >
-                            <i :class="subItem.icon" />
-                            <span v-if="!collapsed">{{ subItem.label }}</span>
-                        </Link>
-                    </nav>
-
-                    <!-- Company Settings (only when company is selected) -->
-                    <div v-if="currentCompany && companySettings.length > 0" class="mt-6">
-                        <h3 v-if="!collapsed" class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                            Company Settings
-                        </h3>
-                        <nav class="space-y-2">
-                            <Link
-                                v-for="item in companySettings"
-                                :key="item.label"
-                                :href="item.route"
-                                :class="getMenuItemClasses(item)"
-                            >
-                                <i :class="item.icon" />
-                                <span v-if="!collapsed" class="flex-1">{{ item.label }}</span>
-                            </Link>
-                        </nav>
-                    </div>
-                </Accordion>
-            </div>
-
-            <!-- User Menu -->
-            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-                <Menu ref="userMenu" :model="userMenuItems" :popup="true">
-                    <template #start>
-                        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
-                            <div class="flex items-center gap-3">
-                                <Avatar
-                                    :label="userInitials"
-                                    class="bg-gray-600 text-white"
-                                />
-                                <div>
-                                    <p class="font-medium text-gray-900 dark:text-white">
-                                        {{ user?.name || 'User' }}
-                                    </p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                                        {{ user?.email }}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </Menu>
-
-                <div class="flex items-center gap-3 cursor-pointer" @click="toggleUserMenu">
-                    <Avatar
-                        :label="userInitials"
-                        class="bg-gray-600 text-white"
-                    />
-                    <div v-if="!collapsed" class="flex-1">
-                        <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {{ user?.name || 'User' }}
-                        </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {{ user?.system_role || 'employee' }}
-                        </p>
-                    </div>
-                    <i v-if="!collapsed" class="pi pi-chevron-down text-gray-400"></i>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Mobile Overlay -->
-        <div 
-            v-if="!collapsed && false" 
-            class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            @click="toggleCollapse"
-        />
-    </div>
+        <nav class="sidebar-drawer__nav" role="menu">
+          <ul class="sidebar-drawer__list">
+            <li
+              v-for="child in drawerChildren"
+              :key="child.path || child.label"
+              class="sidebar-drawer__item"
+              role="none"
+            >
+              <Link
+                :href="child.path"
+                class="sidebar-drawer__link"
+                role="menuitem"
+              >
+                <span class="sidebar-drawer__bullet" />
+                <span class="sidebar-drawer__label">{{ child.label }}</span>
+              </Link>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </transition>
+  </div>
 </template>
-
-<script>
-const userMenuItems = [
-    {
-        label: 'Profile',
-        icon: 'pi pi-user',
-        command: () => {
-            // Navigate to profile
-            window.location.href = '/profile'
-        }
-    },
-    {
-        label: 'Settings',
-        icon: 'pi pi-cog',
-        command: () => {
-            // Navigate to settings
-            window.location.href = '/settings'
-        }
-    },
-    {
-        separator: true
-    },
-    {
-        label: 'Logout',
-        icon: 'pi pi-sign-out',
-        command: () => {
-            // Handle logout
-            this.handleLogout()
-        }
-    }
-]
-</script>
 
 <style scoped>
 .sidebar-container {
-    @apply relative;
+  position: relative;
+  display: flex;
+  min-height: 100vh;
 }
 
-/* Custom scrollbar for sidebar */
-.sidebar-container aside::-webkit-scrollbar {
-    width: 6px;
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 45;
 }
 
-.sidebar-container aside::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+.sidebar {
+  width: 92px;
+  min-width: 92px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--p-surface-0, #ffffff);
+  border-right: 1px solid var(--surface-border, #e5e7eb);
+  padding: 1.5rem 1rem;
+  position: relative;
+  z-index: 50;
+  transition: transform 0.3s ease;
 }
 
-.sidebar-container aside::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+.sidebar--mobile {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translateX(-100%);
 }
 
-.sidebar-container aside::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
+.sidebar--mobile-open {
+  transform: translateX(0);
 }
 
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-    .sidebar-container aside {
-        @apply fixed left-0 top-0 z-50 transform transition-transform;
-    }
-    
-    .sidebar-container aside.collapsed {
-        @apply -translate-x-full;
-    }
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+}
+
+.sidebar-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #60A5FA, #2563EB);
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+.sidebar-logo i {
+  font-size: 1.25rem;
+}
+
+.sidebar-mobile-close {
+  border: none;
+  background: transparent;
+  color: #60A5FA;
+  padding: 0.25rem;
+  border-radius: 9999px;
+}
+
+.sidebar-mobile-close i {
+  font-size: 1rem;
+}
+
+.sidebar-company {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.sidebar-nav {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.sidebar-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sidebar-drawer-enter-active,
+.sidebar-drawer-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar-drawer-enter-from,
+.sidebar-drawer-leave-to {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.sidebar-drawer {
+  width: 260px;
+  height: 100vh;
+  background: var(--p-surface-0, #ffffff);
+  border-right: 1px solid var(--surface-border, #e5e7eb);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  left: 92px;
+  top: 0;
+  z-index: 40;
+}
+
+.sidebar-drawer__header {
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--surface-border, #e5e7eb);
+}
+
+.sidebar-drawer__title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-900, #0f172a);
+}
+
+.sidebar-drawer__description {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-500, #64748b);
+  line-height: 1.4;
+}
+
+.sidebar-drawer__nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 0.75rem 1.5rem;
+}
+
+.sidebar-drawer__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sidebar-drawer__item {
+  display: flex;
+}
+
+.sidebar-drawer__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  font-size: 0.9rem;
+  color: var(--text-800, #1e293b);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.sidebar-drawer__link:hover {
+  background: rgba(96, 165, 250, 0.12);
+  transform: translateX(2px);
+}
+
+.sidebar-drawer__bullet {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: rgba(37, 99, 235, 0.35);
+  flex-shrink: 0;
+}
+
+.sidebar-drawer__label {
+  flex: 1;
+}
+
+@media (max-width: 1023px) {
+  .sidebar-drawer {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sidebar--mobile {
+    position: static;
+    transform: none !important;
+  }
 }
 </style>

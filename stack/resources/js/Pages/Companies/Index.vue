@@ -5,6 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { useDynamicPageActions } from '@/composables/useDynamicPageActions'
 import { useBulkSelection } from '@/composables/useBulkSelection'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import PageActions from '@/Components/PageActions.vue'
 import CompanyCard from '@/Components/CompanyCard.vue'
 import CompanyRow from '@/Components/CompanyRow.vue'
 import CompanyCardSkeleton from '@/Components/CompanyCardSkeleton.vue'
@@ -108,6 +111,9 @@ const filteredCompanies = computed(() => {
 
 // Active menu state
 const activeMenu = ref(null)
+
+// Filter panel state
+const showFilters = ref(false)
 
 // Debounced search function
 const debouncedSearch = () => {
@@ -478,6 +484,39 @@ const setViewMode = (mode) => {
     viewMode.value = mode
 }
 
+// Define quick links for the companies page
+const quickLinks = [
+    {
+        label: 'Create Company',
+        url: '/companies/create',
+        icon: 'pi pi-plus'
+    },
+    {
+        label: 'Import Companies',
+        url: '#',
+        icon: 'pi pi-upload',
+        action: () => handleAction('import-companies')
+    },
+    {
+        label: 'Export Companies',
+        url: '#',
+        icon: 'pi pi-download',
+        action: () => handleAction('export-companies')
+    },
+    {
+        label: 'Company Settings',
+        url: currentCompany.value ? `/companies/${currentCompany.value.id}/settings` : '#',
+        icon: 'pi pi-cog',
+        disabled: !currentCompany.value
+    },
+    {
+        label: 'User Management',
+        url: currentCompany.value ? `/companies/${currentCompany.value.id}/users` : '#',
+        icon: 'pi pi-users',
+        disabled: !currentCompany.value
+    }
+]
+
 // Grid item selection
 const toggleGridSelection = (company) => {
     toggleItemSelection(company)
@@ -602,52 +641,50 @@ watch(viewMode, (newMode) => {
 })
 </script>
 
+
 <template>
     <LayoutShell>
         <Toast ref="toast" />
 
-        <!-- Simplified Header - Single Row -->
-        <header class="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <!-- Title Row -->
-                <div class="flex items-center justify-between h-16 gap-4">
-                    <!-- Left: Title + Current Company -->
-                    <div class="flex items-center gap-4 min-w-0">
-                        <h1 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                            <i class="fas fa-building text-gray-500 dark:text-gray-400" aria-hidden="true" />
-                            Companies
-                        </h1>
+        <!-- Universal Page Header -->
+        <UniversalPageHeader
+          title="Companies"
+          description="Manage your business entities and organizations"
+          subDescription="Create and configure company settings and preferences"
+          :show-search="true"
+          search-placeholder="Search companies..."
+        />
 
-                        <div v-if="currentCompany" class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-                            <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full" aria-hidden="true" />
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-                                {{ currentCompany.name }}
-                            </span>
-                        </div>
+        <PageActions />
+
+        <!-- Main Content Grid -->
+        <div class="content-grid-5-6">
+            <!-- Left Column - Main Content -->
+            <div class="main-content">
+                <!-- Controls Bar -->
+                <div class="card flex flex-col sm:flex-row gap-4 mb-6 p-4">
+                    <!-- Search Bar -->
+                    <div class="search-container">
+                        <IconField>
+                            <InputIcon class="fas fa-search" />
+                            <InputText
+                                v-model="filters.search"
+                                placeholder="Search companies..."
+                                type="search"
+                                class="w-full"
+                                @input="debouncedSearch"
+                            />
+                            <InputIcon v-if="filters.search" class="fas fa-times cursor-pointer" @click="clearSearch" />
+                        </IconField>
                     </div>
 
-                    <!-- Right: Search + Actions -->
-                    <div class="flex items-center gap-3">
-                        <!-- Search Bar -->
-                        <div class="hidden md:block">
-                            <IconField>
-                                <InputIcon class="fas fa-search" />
-                                <InputText
-                                    v-model="filters.search"
-                                    placeholder="Search companies..."
-                                    type="search"
-                                    class="w-64"
-                                    @input="debouncedSearch"
-                                />
-                                <InputIcon v-if="filters.search" class="fas fa-times cursor-pointer" @click="clearSearch" />
-                            </IconField>
-                        </div>
-
+                    <!-- View and Actions -->
+                    <div class="view-controls">
                         <!-- View toggle as radiogroup -->
                         <div
                             role="radiogroup"
                             aria-label="View mode"
-                            class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                            class="view-toggle"
                         >
                             <button
                                 type="button"
@@ -656,10 +693,8 @@ watch(viewMode, (newMode) => {
                                 aria-label="Grid view"
                                 @click="setViewMode('grid')"
                                 :class="[
-                                    'px-3 py-2 text-sm transition-colors',
-                                    viewMode === 'grid'
-                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    'view-toggle-button',
+                                    viewMode === 'grid' ? 'active' : ''
                                 ]"
                             >
                                 <i class="fas fa-th-large" aria-hidden="true" />
@@ -672,10 +707,8 @@ watch(viewMode, (newMode) => {
                                 aria-label="Table view"
                                 @click="setViewMode('table')"
                                 :class="[
-                                    'px-3 py-2 text-sm transition-colors',
-                                    viewMode === 'table'
-                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    'view-toggle-button',
+                                    viewMode === 'table' ? 'active' : ''
                                 ]"
                             >
                                 <i class="fas fa-list" aria-hidden="true" />
@@ -686,7 +719,7 @@ watch(viewMode, (newMode) => {
                         <Button
                             @click="handleAction('create-company')"
                             aria-label="Create new company"
-                            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                            class="create-button"
                         >
                             <i class="fas fa-plus" aria-hidden="true" />
                             <span class="hidden sm:inline">New Company</span>
@@ -694,22 +727,124 @@ watch(viewMode, (newMode) => {
                     </div>
                 </div>
 
-                <!-- Mobile Search Bar -->
-                <div class="pb-4 md:hidden">
-                    <IconField>
-                        <InputIcon class="fas fa-search" />
-                        <InputText
-                            v-model="filters.search"
-                            placeholder="Search companies..."
-                            type="search"
-                            class="w-full"
-                            @input="debouncedSearch"
-                        />
-                        <InputIcon v-if="filters.search" class="fas fa-times cursor-pointer" @click="clearSearch" />
-                    </IconField>
+                <!-- Grid/Table Content -->
+                <div class="content-area">
+                    <!-- Grid View -->
+                    <section v-if="viewMode === 'grid'" aria-label="Companies grid view">
+                        <ul role="list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Loading skeletons -->
+                        <template v-if="loading">
+                            <CompanyCardSkeleton v-for="i in 6" :key="`skeleton-${i}`" />
+                        </template>
+
+                        <!-- Actual company cards -->
+                        <li v-for="company in filteredCompanies" :key="company.id">
+                            <CompanyCard
+                                :company="company"
+                                :is-selected="selectedItems.some(item => item.id === company.id)"
+                                :is-current="company.id === currentCompany?.id"
+                                :user-role="getUserRoleForCompany(company)"
+                                @toggle-selection="toggleGridSelection(company)"
+                                @switch-company="switchToCompany(company)"
+                                @deactivate-company="deactivateCompany(company)"
+                            />
+                        </li>
+                        </ul>
+                    </section>
+
+                    <!-- Table View -->
+                    <section v-else aria-label="Companies table view">
+                        <div class="bw-table-container">
+                            <table class="bw-table" role="table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-12 text-left">
+                                            <input
+                                                type="checkbox"
+                                                class="w-4 h-4 rounded border border-gray-300 dark:border-gray-600"
+                                                @change="toggleAllSelection"
+                                                :checked="selectedItems.length === filteredCompanies.length && filteredCompanies.length > 0"
+                                            />
+                                        </th>
+                                        <th class="text-left">
+                                            Company
+                                        </th>
+                                        <th class="text-left">
+                                            Industry
+                                        </th>
+                                        <th class="text-left">
+                                            Country • Currency
+                                        </th>
+                                        <th class="text-left">
+                                            Role
+                                        </th>
+                                        <th class="text-left">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Loading skeletons -->
+                                    <template v-if="loading">
+                                        <CompanyRowSkeleton v-for="i in 5" :key="`skeleton-${i}`" />
+                                    </template>
+
+                                    <!-- Actual company rows -->
+                                    <CompanyRow
+                                        v-for="company in filteredCompanies"
+                                        :key="company.id"
+                                        :company="company"
+                                        :is-selected="selectedItems.some(item => item.id === company.id)"
+                                        :is-current="company.id === currentCompany?.id"
+                                        :user-role="getUserRoleForCompany(company)"
+                                        @toggle-selection="toggleGridSelection(company)"
+                                        @switch-company="switchToCompany(company)"
+                                        @deactivate-company="deactivateCompany(company)"
+                                    />
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Empty State -->
+                    <section v-if="filteredCompanies.length === 0 && !loading" aria-labelledby="empty-title" class="empty-state">
+                        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                            <i class="fas fa-building text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true" />
+                        </div>
+                        <h2 id="empty-title" class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                            {{ filters.search ? 'No companies found' : 'No companies yet' }}
+                        </h2>
+                        <p class="text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
+                            {{ filters.search
+                                ? 'Try adjusting your search terms'
+                                : 'Get started by creating your first company' }}
+                        </p>
+                        <div v-if="!filters.search && canCreateCompany">
+                            <Link href="/companies/create">
+                                <Button class="create-button">
+                                    <i class="fas fa-plus" aria-hidden="true" />
+                                    Create Company
+                                </Button>
+                            </Link>
+                        </div>
+                    </section>
+
+                    <!-- Initial Loading State -->
+                    <div v-if="loading && filteredCompanies.length === 0" class="loading-state">
+                        <div class="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-gray-900 dark:border-t-white rounded-full animate-spin mb-4"></div>
+                        <p class="text-gray-500 dark:text-gray-400">Loading companies...</p>
+                    </div>
                 </div>
             </div>
-        </header>
+
+            <!-- Right Column - Quick Links -->
+            <div class="sidebar-content">
+                <QuickLinks 
+                    :links="quickLinks" 
+                    title="Company Actions"
+                />
+            </div>
+        </div>
 
         <!-- Floating Selection Bar -->
         <Transition
@@ -751,118 +886,5 @@ watch(viewMode, (newMode) => {
                 </div>
             </div>
         </Transition>
-
-        <!-- Main Content Area -->
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <!-- Grid View -->
-            <section v-if="viewMode === 'grid'" aria-label="Companies grid view">
-                <ul role="list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Loading skeletons -->
-                <template v-if="loading">
-                    <CompanyCardSkeleton v-for="i in 6" :key="`skeleton-${i}`" />
-                </template>
-
-                <!-- Actual company cards -->
-                <li v-for="company in filteredCompanies" :key="company.id">
-                    <CompanyCard
-                        :company="company"
-                        :is-selected="selectedItems.some(item => item.id === company.id)"
-                        :is-current="company.id === currentCompany?.id"
-                        :user-role="getUserRoleForCompany(company)"
-                        @toggle-selection="toggleGridSelection(company)"
-                        @switch-company="switchToCompany(company)"
-                        @deactivate-company="deactivateCompany(company)"
-                    />
-                </li>
-                </ul>
-            </section>
-
-            <!-- Table View -->
-            <section v-else aria-label="Companies table view">
-                <div class="bw-table-container">
-                    <table class="bw-table" role="table">
-                    <thead>
-                        <tr>
-                            <th class="w-12 text-left">
-                                <input
-                                    type="checkbox"
-                                    class="w-4 h-4 rounded border border-gray-300 dark:border-gray-600"
-                                    @change="toggleAllSelection"
-                                    :checked="selectedItems.length === filteredCompanies.length && filteredCompanies.length > 0"
-                                />
-                            </th>
-                            <th class="text-left">
-                                Company
-                            </th>
-                            <th class="text-left">
-                                Industry
-                            </th>
-                            <th class="text-left">
-                                Country • Currency
-                            </th>
-                            <th class="text-left">
-                                Role
-                            </th>
-                            <th class="text-left">
-                                Actions
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Loading skeletons -->
-                        <template v-if="loading">
-                            <CompanyRowSkeleton v-for="i in 5" :key="`skeleton-${i}`" />
-                        </template>
-
-                        <!-- Actual company rows -->
-                        <CompanyRow
-                            v-for="company in filteredCompanies"
-                            :key="company.id"
-                            :company="company"
-                            :is-selected="selectedItems.some(item => item.id === company.id)"
-                            :is-current="company.id === currentCompany?.id"
-                            :user-role="getUserRoleForCompany(company)"
-                            @toggle-selection="toggleGridSelection(company)"
-                            @switch-company="switchToCompany(company)"
-                            @deactivate-company="deactivateCompany(company)"
-                        />
-                    </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Empty State -->
-            <section v-if="filteredCompanies.length === 0 && !loading" aria-labelledby="empty-title" class="flex flex-col items-center justify-center py-16 text-center">
-                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                    <i class="fas fa-building text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true" />
-                </div>
-                <h2 id="empty-title" class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    {{ filters.search ? 'No companies found' : 'No companies yet' }}
-                </h2>
-                <p class="text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
-                    {{ filters.search
-                        ? 'Try adjusting your search terms'
-                        : 'Get started by creating your first company' }}
-                </p>
-                <div v-if="!filters.search && canCreateCompany">
-                    <Link href="/companies/create">
-                        <Button
-                            type="button"
-                            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-                        >
-                            <i class="fas fa-plus" aria-hidden="true" />
-                            Create Company
-                        </Button>
-                    </Link>
-                </div>
-            </section>
-
-            <!-- Initial Loading State -->
-            <div v-if="loading && filteredCompanies.length === 0" class="flex flex-col items-center justify-center py-16">
-                <!-- Loading spinner -->
-                <div class="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-gray-900 dark:border-t-white rounded-full animate-spin mb-4"></div>
-                <p class="text-gray-500 dark:text-gray-400">Loading companies...</p>
-            </div>
-        </main>
     </LayoutShell>
 </template>

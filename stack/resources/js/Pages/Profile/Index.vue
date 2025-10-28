@@ -2,7 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
-import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Sidebar from '@/Layouts/Sidebar.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import TabView from 'primevue/tabview'
@@ -39,6 +42,53 @@ type UserProfile = {
 const page = usePage()
 const toast = useToast()
 const confirm = useConfirm()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'edit-profile',
+    label: 'Edit Profile',
+    icon: 'pi pi-user-edit',
+    severity: 'primary',
+    action: () => router.put('/profile')
+  },
+  {
+    key: 'account-settings',
+    label: 'Account Settings',
+    icon: 'pi pi-cog',
+    severity: 'secondary',
+    action: () => router.put('/settings')
+  }
+]
+
+// Define quick links for the profile page
+const quickLinks = [
+  {
+    label: 'Edit Profile',
+    url: '#',
+    icon: 'pi pi-user-edit',
+    action: () => router.put('/profile')
+  },
+  {
+    label: 'Account Settings',
+    url: '/settings',
+    icon: 'pi pi-cog'
+  },
+  {
+    label: 'Security Settings',
+    url: '/settings/security',
+    icon: 'pi pi-shield'
+  },
+  {
+    label: 'Notification Preferences',
+    url: '/settings/notifications',
+    icon: 'pi pi-bell'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 const props = defineProps<{
     auth: {
@@ -51,15 +101,15 @@ const invitations = ref<CompanyInvitation[]>([])
 const loading = ref(false)
 const refreshing = ref(false)
 
-const pendingInvitations = computed(() => 
+const pendingInvitations = computed(() =>
     invitations.value.filter(inv => inv.status === 'pending')
 )
 
-const acceptedInvitations = computed(() => 
+const acceptedInvitations = computed(() =>
     invitations.value.filter(inv => inv.status === 'accepted')
 )
 
-const rejectedInvitations = computed(() => 
+const rejectedInvitations = computed(() =>
     invitations.value.filter(inv => inv.status === 'rejected')
 )
 
@@ -83,9 +133,9 @@ const getStatusSeverity = (status: string): 'success' | 'warning' | 'danger' | '
 const formatDate = (dateString: string) => {
     try {
         const date = new Date(dateString)
-        return new Intl.DateTimeFormat('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
@@ -126,21 +176,21 @@ const handleAcceptInvitation = async (invitation: CompanyInvitation) => {
         accept: async () => {
             try {
                 await http.post(`/api/v1/user/invitations/${invitation.id}/accept`)
-                
+
                 toast.add({
                     severity: 'success',
                     summary: 'Invitation accepted',
                     detail: `You have joined ${invitation.company_name}`,
                     life: 3000
                 })
-                
+
                 await loadInvitations()
-                
+
                 // Optionally redirect to the company
                 setTimeout(() => {
                     router.visit(`/companies/${invitation.company_id}`)
                 }, 1500)
-                
+
             } catch (error: any) {
                 toast.add({
                     severity: 'error',
@@ -162,16 +212,16 @@ const handleRejectInvitation = async (invitation: CompanyInvitation) => {
         accept: async () => {
             try {
                 await http.post(`/api/v1/user/invitations/${invitation.id}/reject`)
-                
+
                 toast.add({
                     severity: 'success',
                     summary: 'Invitation rejected',
                     detail: `You have rejected the invitation from ${invitation.company_name}`,
                     life: 3000
                 })
-                
+
                 await loadInvitations()
-                
+
             } catch (error: any) {
                 toast.add({
                     severity: 'error',
@@ -215,8 +265,20 @@ onMounted(() => {
             <Sidebar title="Profile" />
         </template>
 
-        <section class="mx-auto w-full max-w-7xl px-4 pb-16">
-            <div class="space-y-6">
+        <!-- Universal Page Header -->
+        <UniversalPageHeader
+          title="Profile"
+          description="Manage your personal information and account settings"
+          subDescription="Update your profile and preferences"
+          :show-search="false"
+        />
+
+        <!-- Main Content Grid -->
+        <div class="content-grid-5-6">
+            <!-- Left Column - Main Content -->
+            <div class="main-content">
+                <section class="mx-auto w-full max-w-7xl px-4 pb-16">
+                    <div class="space-y-6">
                 <!-- Profile Header -->
                 <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
                     <div class="flex items-center gap-6">
@@ -232,21 +294,26 @@ onMounted(() => {
                             <p class="text-slate-600 dark:text-slate-400 mb-4">{{ userProfile.email }}</p>
                             <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-500">
                                 <span>Member since {{ formatDate(userProfile.created_at) }}</span>
-                                <Badge 
-                                    v-if="userProfile.email_verified_at" 
-                                    value="Verified" 
-                                    severity="success" 
+                                <Badge
+                                    v-if="userProfile.email_verified_at"
+                                    value="Verified"
+                                    severity="success"
                                     size="small"
                                 />
-                                <Badge 
-                                    v-else 
-                                    value="Not Verified" 
-                                    severity="warning" 
+                                <Badge
+                                    v-else
+                                    value="Not Verified"
+                                    severity="warning"
                                     size="small"
                                 />
                             </div>
                         </div>
-                        <div class="flex flex-col gap-2">
+                    </div>
+                </div>
+
+                <!-- Refresh Button -->
+                <div class="flex justify-end mb-4">
+                    <div class="flex flex-col gap-2">
                             <Button
                                 @click="refreshInvitations"
                                 variant="outline"
@@ -256,7 +323,6 @@ onMounted(() => {
                                 <i class="pi pi-refresh mr-2"></i>
                                 Refresh
                             </Button>
-                        </div>
                     </div>
                 </div>
 
@@ -269,13 +335,14 @@ onMounted(() => {
                                 <div class="flex items-center justify-between">
                                     <h3 class="text-lg font-medium text-slate-900 dark:text-white">
                                         Pending Invitations
-                                        <Badge 
-                                            v-if="pendingInvitations.length > 0" 
-                                            :value="pendingInvitations.length" 
+                                        <Badge
+                                            v-if="pendingInvitations.length > 0"
+                                            :value="pendingInvitations.length"
                                             severity="warning"
                                             class="ml-2"
                                         />
                                     </h3>
+
                                 </div>
 
                                 <!-- Loading State -->
@@ -299,8 +366,8 @@ onMounted(() => {
 
                                 <!-- Pending Invitations List -->
                                 <div v-else class="space-y-3">
-                                    <div 
-                                        v-for="invitation in pendingInvitations" 
+                                    <div
+                                        v-for="invitation in pendingInvitations"
                                         :key="invitation.id"
                                         class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 hover:shadow-sm transition-shadow"
                                     >
@@ -310,37 +377,37 @@ onMounted(() => {
                                                     <h4 class="font-medium text-slate-900 dark:text-white">
                                                         {{ invitation.company_name }}
                                                     </h4>
-                                                    <Badge 
-                                                        :value="invitation.role" 
+                                                    <Badge
+                                                        :value="invitation.role"
                                                         :severity="getRoleSeverity(invitation.role)"
                                                         size="small"
                                                     />
-                                                    <Badge 
-                                                        value="Pending" 
+                                                    <Badge
+                                                        value="Pending"
                                                         severity="warning"
                                                         size="small"
                                                     />
-                                                    <Badge 
+                                                    <Badge
                                                         v-if="isExpired(invitation.expires_at)"
-                                                        value="Expired" 
+                                                        value="Expired"
                                                         severity="danger"
                                                         size="small"
                                                     />
                                                 </div>
-                                                
+
                                                 <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">
                                                     Invited by {{ invitation.invited_by }} • {{ formatDate(invitation.created_at) }}
                                                 </p>
-                                                
+
                                                 <p v-if="invitation.message" class="text-sm text-slate-500 dark:text-slate-500 mb-3 italic">
                                                     "{{ invitation.message }}"
                                                 </p>
-                                                
+
                                                 <p v-if="invitation.expires_at" class="text-xs text-slate-500 dark:text-slate-500">
                                                     Expires: {{ formatDate(invitation.expires_at) }}
                                                 </p>
                                             </div>
-                                            
+
                                             <div class="flex gap-2 ml-4">
                                                 <Button
                                                     v-if="!isExpired(invitation.expires_at)"
@@ -372,9 +439,9 @@ onMounted(() => {
                             <div class="space-y-4">
                                 <h3 class="text-lg font-medium text-slate-900 dark:text-white">
                                     Accepted Invitations
-                                    <Badge 
-                                        v-if="acceptedInvitations.length > 0" 
-                                        :value="acceptedInvitations.length" 
+                                    <Badge
+                                        v-if="acceptedInvitations.length > 0"
+                                        :value="acceptedInvitations.length"
                                         severity="success"
                                         class="ml-2"
                                     />
@@ -395,8 +462,8 @@ onMounted(() => {
 
                                 <!-- Accepted List -->
                                 <div v-else class="space-y-3">
-                                    <div 
-                                        v-for="invitation in acceptedInvitations" 
+                                    <div
+                                        v-for="invitation in acceptedInvitations"
                                         :key="invitation.id"
                                         class="border border-slate-200 dark:border-slate-700 rounded-lg p-4"
                                     >
@@ -406,13 +473,13 @@ onMounted(() => {
                                                     <h4 class="font-medium text-slate-900 dark:text-white">
                                                         {{ invitation.company_name }}
                                                     </h4>
-                                                    <Badge 
-                                                        :value="invitation.role" 
+                                                    <Badge
+                                                        :value="invitation.role"
                                                         :severity="getRoleSeverity(invitation.role)"
                                                         size="small"
                                                     />
-                                                    <Badge 
-                                                        value="Accepted" 
+                                                    <Badge
+                                                        value="Accepted"
                                                         severity="success"
                                                         size="small"
                                                     />
@@ -440,9 +507,9 @@ onMounted(() => {
                             <div class="space-y-4">
                                 <h3 class="text-lg font-medium text-slate-900 dark:text-white">
                                     Rejected Invitations
-                                    <Badge 
-                                        v-if="rejectedInvitations.length > 0" 
-                                        :value="rejectedInvitations.length" 
+                                    <Badge
+                                        v-if="rejectedInvitations.length > 0"
+                                        :value="rejectedInvitations.length"
                                         severity="danger"
                                         class="ml-2"
                                     />
@@ -463,8 +530,8 @@ onMounted(() => {
 
                                 <!-- Rejected List -->
                                 <div v-else class="space-y-3">
-                                    <div 
-                                        v-for="invitation in rejectedInvitations" 
+                                    <div
+                                        v-for="invitation in rejectedInvitations"
                                         :key="invitation.id"
                                         class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 opacity-75"
                                     >
@@ -474,13 +541,13 @@ onMounted(() => {
                                                     <h4 class="font-medium text-slate-900 dark:text-white">
                                                         {{ invitation.company_name }}
                                                     </h4>
-                                                    <Badge 
-                                                        :value="invitation.role" 
+                                                    <Badge
+                                                        :value="invitation.role"
                                                         :severity="getRoleSeverity(invitation.role)"
                                                         size="small"
                                                     />
-                                                    <Badge 
-                                                        value="Rejected" 
+                                                    <Badge
+                                                        value="Rejected"
                                                         severity="danger"
                                                         size="small"
                                                     />
@@ -495,8 +562,19 @@ onMounted(() => {
                             </div>
                         </TabPanel>
                     </TabView>
+                    </div>
                 </div>
+            </section>
             </div>
-        </section>
+        </div>
+
+        <!-- Right Column - Quick Links -->
+        <div class="sidebar-content">
+            <QuickLinks
+                :links="quickLinks"
+                title="Quick Actions"
+            />
+        </div>
     </LayoutShell>
 </template>
+

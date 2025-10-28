@@ -1,35 +1,19 @@
 <template>
-  <AppLayout>
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            Report Templates
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Manage and customize report templates for different report types
-          </p>
-        </div>
-        
-        <div class="flex items-center space-x-3">
-          <!-- Create Button -->
-          <Button
-            icon="pi pi-plus"
-            label="Create Template"
-            @click="showCreateDialog = true"
-          />
-          
-          <!-- Reorder Button -->
-          <Button
-            icon="pi pi-sort"
-            label="Reorder"
-            severity="secondary"
-            @click="enableReordering"
-            :disabled="templates.length === 0"
-          />
-        </div>
-      </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Reports"
+      description="Generate and manage business reports"
+      subDescription="Create insightful reports for business analysis"
+      :show-search="true"
+      search-placeholder="Search reports..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <!-- Left Column - Main Content -->
+      <div class="main-content">
+        <div class="space-y-6">
 
       <!-- Filters -->
       <Card>
@@ -266,11 +250,18 @@
           @close="showPreviewDialog = false"
         />
       </Dialog>
+        </div>
+      </div>
 
-      <!-- Delete Confirmation -->
-      <ConfirmDialog />
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks title="Templates Quick Links" :links="templatesQuickLinks" />
+      </div>
     </div>
-  </AppLayout>
+
+    <!-- Delete Confirmation -->
+    <ConfirmDialog />
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -278,9 +269,28 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import AppLayout from '@/Layouts/AuthenticatedLayout.vue'
+import { usePageActions } from '@/composables/usePageActions'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
 import TemplateForm from '@/Components/Reporting/Templates/TemplateForm.vue'
 import TemplatePreview from '@/Components/Reporting/Templates/TemplatePreview.vue'
+
+// Set up page actions and quick links
+const { setPageActions } = usePageActions()
+
+const templatesQuickLinks = ref([
+  { title: 'Create Template', icon: 'pi pi-plus', route: '#', onClick: () => showCreateDialog.value = true },
+  { title: 'Import Template', icon: 'pi pi-upload', route: '#', onClick: handleImportTemplate },
+  { title: 'Export Templates', icon: 'pi pi-download', route: '#', onClick: handleExportTemplates },
+  { title: 'Template Gallery', icon: 'pi pi-images', route: '#', onClick: handleTemplateGallery }
+])
+
+// Initialize page actions
+setPageActions([
+  { title: 'Create Template', icon: 'pi pi-plus', onClick: () => showCreateDialog.value = true },
+  { title: 'Reorder', icon: 'pi pi-sort', onClick: enableReordering, disabled: templates.length === 0 }
+])
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -636,6 +646,34 @@ const canDelete = (template) => {
   return !template.is_default && template.usage_count === 0
 }
 
+// Quick link handlers
+const handleImportTemplate = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Import Template',
+    detail: 'Template import functionality would be implemented here',
+    life: 3000
+  })
+}
+
+const handleExportTemplates = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Export Templates',
+    detail: 'Template export functionality would be implemented here',
+    life: 3000
+  })
+}
+
+const handleTemplateGallery = () => {
+  toast.add({
+    severity: 'info',
+    summary: 'Template Gallery',
+    detail: 'Template gallery functionality would be implemented here',
+    life: 3000
+  })
+}
+
 // Watch for filter changes
 watch(filters, () => {
   // Filters are reactive through computed property
@@ -647,11 +685,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-</style>

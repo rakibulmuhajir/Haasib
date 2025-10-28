@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 import PrimeButton from 'primevue/button'
 import PrimeCard from 'primevue/card'
 import PrimeTabs from 'primevue/tabs'
@@ -35,6 +38,7 @@ const props = computed(() => page.props as any)
 
 // Use composables
 const periodId = computed(() => props.value.period?.id || '')
+const { actions } = usePageActions()
 const {
   isLoading,
   hasError,
@@ -64,6 +68,57 @@ const {
 const { useTaskUpdateForm, usePeriodCloseActionForm } = usePeriodCloseForms()
 const { form: taskForm, updateTask, reset: resetTaskForm } = useTaskUpdateForm()
 const { form: actionForm, executeAction, reset: resetActionForm } = usePeriodCloseActionForm()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => handleLoadPeriodClose()
+  },
+  {
+    key: 'back',
+    label: 'Back to Dashboard',
+    icon: 'pi pi-arrow-left',
+    severity: 'secondary',
+    routeName: 'ledger.period-close.index'
+  }
+]
+
+// Define quick links for period close details
+const quickLinks = [
+  {
+    label: 'Period Close Dashboard',
+    url: '/ledger/period-close',
+    icon: 'pi pi-th-large'
+  },
+  {
+    label: 'Bank Reconciliation',
+    url: '/ledger/bank-reconciliation',
+    icon: 'pi pi-bank'
+  },
+  {
+    label: 'Journal Entries',
+    url: '/accounting/journal-entries',
+    icon: 'pi pi-book'
+  },
+  {
+    label: 'Trial Balance',
+    url: '/ledger/trial-balance',
+    icon: 'pi pi-calculator'
+  },
+  {
+    label: 'Generate Reports',
+    url: '#',
+    icon: 'pi pi-file-pdf',
+    action: () => activeTabIndex.value = 3
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 // Toast notifications
 const toast = useToast()
@@ -359,36 +414,19 @@ function handleAction(action: string, data?: any) {
 <template>
   <Head title="Period Close Details" />
 
-  <AuthenticatedLayout>
-    <div class="container mx-auto px-4 py-6">
-      <!-- Header -->
-      <div class="mb-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-              {{ period?.name }}
-            </h1>
-            <p class="text-gray-600 dark:text-gray-400">
-              Monthly closing workflow for {{ period?.start_date }} - {{ period?.end_date }}
-            </p>
-          </div>
-          <div class="flex space-x-2">
-            <PrimeButton
-              label="Back to Dashboard"
-              icon="pi pi-arrow-left"
-              @click="router.visit('/ledger/period-close')"
-              severity="secondary"
-            />
-            <PrimeButton
-              label="Refresh"
-              icon="pi pi-refresh"
-              @click="handleLoadPeriodClose"
-              :loading="isLoading"
-              severity="secondary"
-            />
-          </div>
-        </div>
-      </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Period Close"
+      description="Manage monthly closing workflows"
+      subDescription="Complete accounting period closing procedures"
+      :show-search="true"
+      search-placeholder="Search periods..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
 
       <!-- Error Message -->
       <PrimeMessage v-if="hasError" severity="error" :closable="false" class="mb-4">
@@ -695,15 +733,15 @@ function handleAction(action: string, data?: any) {
         @reopen="handleReopenPeriod"
       />
     </div>
-  </AuthenticatedLayout>
+
+    <!-- Right Column - Quick Links -->
+    <div class="sidebar-content">
+      <QuickLinks 
+        :links="quickLinks" 
+        title="Period Actions"
+      />
+    </div>
+  </div>
+  </LayoutShell>
 </template>
 
-<style scoped>
-:deep(.p-tabs .p-tablist .p-tab) {
-  margin-right: 0;
-}
-
-:deep(.p-progressbar .p-progressbar-value) {
-  transition: width 0.3s ease-in-out;
-}
-</style>

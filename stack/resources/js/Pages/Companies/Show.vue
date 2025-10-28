@@ -2,7 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
-import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Sidebar from '@/Layouts/Sidebar.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import TabView from 'primevue/tabview'
@@ -171,7 +172,7 @@ const quickLinks = computed(() => [
         action: () => handleQuickAction('create-customer')
     },
     {
-        label: 'Add Vendor', 
+        label: 'Add Vendor',
         icon: 'pi pi-building',
         url: '/vendors/create',
         action: () => handleQuickAction('create-vendor')
@@ -248,14 +249,14 @@ const handleInviteMember = async (inviteData: { email: string; role: string; mes
             role: inviteData.role,
             message: inviteData.message
         })
-        
+
         toast.add({
             severity: 'success',
             summary: 'Invitation sent',
             detail: `Invitation sent to ${inviteData.email}`,
             life: 3000
         })
-        
+
         // Refresh company data to show updated invitations
         refreshCompany()
     } catch (err: any) {
@@ -276,14 +277,14 @@ const handleUpdateRole = async (member: CompanyUser, newRole: string) => {
         await http.patch(`/api/v1/companies/${companyData.value.id}/members/${member.id}/role`, {
             role: newRole
         })
-        
+
         toast.add({
             severity: 'success',
             summary: 'Role updated',
             detail: `${member.name}'s role updated to ${newRole}`,
             life: 3000
         })
-        
+
         // Refresh company data to show updated roles
         refreshCompany()
     } catch (err: any) {
@@ -518,52 +519,52 @@ onMounted(async () => {
                 <div class="space-y-6">
                     <div class="rounded-3xl border border-slate-100 bg-white/90 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
                         <TabView v-model:activeIndex="selectedTab" :lazy="true">
-                        <TabPanel header="Reports" value="reports">
-                            <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
-                                <div class="text-center py-12">
-                                    <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i class="pi pi-chart-line text-blue-500 dark:text-blue-400 text-xl"></i>
+                            <TabPanel header="Reports" value="reports">
+                                <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                                    <div class="text-center py-12">
+                                        <div class="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <i class="pi pi-chart-line text-blue-500 dark:text-blue-400 text-xl"></i>
+                                        </div>
+                                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                                            Financial Reports
+                                        </h3>
+                                        <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                                            Comprehensive financial reporting and analytics for your company.
+                                        </p>
                                     </div>
-                                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                                        Financial Reports
-                                    </h3>
-                                    <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                                        Comprehensive financial reporting and analytics for your company.
-                                    </p>
                                 </div>
-                            </div>
-                        </TabPanel>
+                            </TabPanel>
 
-                    <TabPanel header="People" value="people">
-                        <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
-                            <TeamMembers
-                                :members="companyUsers"
-                                :can-invite="canInvite"
-                                :can-manage="canManage"
-                                @invite="handleInvite"
-                                @manage-member="handleManageMember"
-                                @invite-member="handleInviteMember"
-                                @update-role="handleUpdateRole"
-                            />
-                        </div>
-                    </TabPanel>
+                            <TabPanel header="People" value="people">
+                                <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                                    <TeamMembers
+                                        :members="companyUsers"
+                                        :can-invite="canInvite"
+                                        :can-manage="canManage"
+                                        @invite="handleInvite"
+                                        @manage-member="handleManageMember"
+                                        @invite-member="handleInviteMember"
+                                        @update-role="handleUpdateRole"
+                                    />
+                                </div>
+                            </TabPanel>
 
-                    <TabPanel header="Activity" value="activity">
-                        <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
-                            <ActivityFeed
-                                :entries="auditEntries"
-                                :loading="auditLoading"
-                                :error="auditError"
-                                :has-more="hasMoreAuditEntries"
-                                @refresh="loadAuditEntries"
-                                @load-more="loadMoreAuditEntries"
-                            />
-                        </div>
-                    </TabPanel>
-                    </TabView>
+                            <TabPanel header="Activity" value="activity">
+                                <div class="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                                    <ActivityFeed
+                                        :entries="auditEntries"
+                                        :loading="auditLoading"
+                                        :error="auditError"
+                                        :has-more="hasMoreAuditEntries"
+                                        @refresh="loadAuditEntries"
+                                        @load-more="loadMoreAuditEntries"
+                                    />
+                                </div>
+                            </TabPanel>
+                        </TabView>
                     </div>
                 </div>
-                
+
                 <!-- Quick Links Sidebar -->
                 <div class="lg:sticky lg:top-6 h-fit">
                     <QuickLinks

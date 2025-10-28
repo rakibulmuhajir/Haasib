@@ -1,68 +1,18 @@
 <template>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Journal Entries"
+      description="Manage and process journal entry batches"
+      subDescription="Review, approve, and post accounting entries"
+      :show-search="true"
+      search-placeholder="Search journal entries..."
+    />
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
   <div class="batch-show-page">
-    <!-- Header Section -->
-    <div class="flex justify-between items-center mb-6">
-      <div class="flex items-center gap-4">
-        <Button
-          icon="pi pi-arrow-left"
-          label="Back to Batches"
-          @click="router.visit(route('journal-batches.index'))"
-          severity="secondary"
-        />
-        <div>
-          <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            {{ batch.name }}
-          </h2>
-          <div class="flex items-center gap-2 mt-1">
-            <Tag
-              :value="batch.status"
-              :severity="getStatusSeverity(batch.status)"
-              class="text-xs"
-            />
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              Created {{ formatDate(batch.created_at) }}
-            </span>
-          </div>
-        </div>
-      </div>
-      
-      <div class="flex gap-3">
-        <Button
-          v-if="statistics?.can_edit"
-          icon="pi pi-pencil"
-          label="Edit Batch"
-          @click="editBatch"
-          severity="secondary"
-        />
-        
-        <Button
-          v-if="statistics?.can_approve"
-          icon="pi pi-check"
-          label="Approve Batch"
-          @click="approveBatch"
-          severity="success"
-          :loading="approving"
-        />
-        
-        <Button
-          v-if="statistics?.can_post"
-          icon="pi pi-upload"
-          label="Post Batch"
-          @click="postBatch"
-          severity="primary"
-          :loading="posting"
-        />
-        
-        <Button
-          v-if="statistics?.can_delete"
-          icon="pi pi-trash"
-          label="Delete Batch"
-          @click="deleteBatch"
-          severity="danger"
-          :loading="deleting"
-        />
-      </div>
-    </div>
 
     <!-- Batch Statistics -->
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
@@ -344,12 +294,27 @@
     <!-- Toast -->
     <Toast />
   </div>
+    </div>
+
+    <!-- Right Column - Quick Links -->
+    <div class="sidebar-content">
+      <QuickLinks 
+        :links="quickLinks" 
+        title="Batch Actions"
+      />
+    </div>
+  </div>
+  </LayoutShell>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 // PrimeVue Components
 import Card from 'primevue/card'
@@ -366,6 +331,69 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'back',
+    label: 'Back to Batches',
+    icon: 'pi pi-arrow-left',
+    severity: 'secondary',
+    action: () => router.visit(route('journal-batches.index'))
+  },
+  {
+    key: 'edit',
+    label: 'Edit Batch',
+    icon: 'pi pi-pencil',
+    severity: 'secondary',
+    disabled: !statistics?.can_edit,
+    action: () => editBatch()
+  },
+  {
+    key: 'approve',
+    label: 'Approve Batch',
+    icon: 'pi pi-check',
+    severity: 'success',
+    disabled: !statistics?.can_approve,
+    action: () => approveBatch()
+  },
+  {
+    key: 'post',
+    label: 'Post Batch',
+    icon: 'pi pi-upload',
+    severity: 'primary',
+    disabled: !statistics?.can_post,
+    action: () => postBatch()
+  }
+]
+
+// Define quick links for batch details
+const quickLinks = [
+  {
+    label: 'Journal Batches',
+    url: '/accounting/journal-entries/batches',
+    icon: 'pi pi-folder'
+  },
+  {
+    label: 'Trial Balance',
+    url: '/accounting/journal-entries/trial-balance',
+    icon: 'pi pi-calculator'
+  },
+  {
+    label: 'New Journal Entry',
+    url: '/accounting/journal-entries/create',
+    icon: 'pi pi-plus'
+  },
+  {
+    label: 'Bank Reconciliation',
+    url: '/ledger/bank-reconciliation',
+    icon: 'pi pi-bank'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 
 const loading = ref(false)
 const approving = ref(false)
@@ -625,16 +653,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.batch-show-page {
-  @apply space-y-6;
-}
-
-.stat-card {
-  @apply transition-all duration-200 hover:shadow-lg;
-}
-
-.stat-card:hover {
-  @apply transform scale-105;
-}
-</style>

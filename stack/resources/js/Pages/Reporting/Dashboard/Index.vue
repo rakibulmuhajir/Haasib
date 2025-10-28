@@ -1,58 +1,43 @@
 <template>
-  <AppLayout>
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-            Financial Dashboard
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Real-time financial metrics and KPIs
-          </p>
-        </div>
+  <LayoutShell>
+    <!-- Universal Page Header -->
+    <UniversalPageHeader
+      title="Dashboard"
+      description="Comprehensive dashboard and analytics"
+      subDescription="Monitor your business performance and key metrics"
+      :show-search="false"
+    >
+      <div class="flex items-center gap-3">
+        <!-- Date Range Selector -->
+        <Calendar
+          v-model="dateRange"
+          selectionMode="range"
+          :manualInput="false"
+          showIcon
+          placeholder="Select date range"
+          class="w-64"
+          @change="onDateRangeChange"
+        />
         
-        <div class="flex items-center space-x-3">
-          <!-- Date Range Selector -->
-          <Calendar
-            v-model="dateRange"
-            selectionMode="range"
-            :manualInput="false"
-            showIcon
-            placeholder="Select date range"
-            class="w-64"
-            @change="onDateRangeChange"
-          />
-          
-          <!-- Layout Selector -->
-          <Dropdown
-            v-model="selectedLayoutId"
-            :options="layoutOptions"
-            optionLabel="name"
-            optionValue="layout_id"
-            placeholder="Select Layout"
-            class="w-48"
-            @change="onLayoutChange"
-          />
-          
-          <!-- Refresh Button -->
-          <Button
-            :loading="isRefreshing"
-            icon="pi pi-refresh"
-            label="Refresh"
-            @click="handleRefresh"
-            :disabled="!selectedLayoutId"
-          />
-          
-          <!-- Settings Button -->
-          <Button
-            icon="pi pi-cog"
-            severity="secondary"
-            text
-            @click="showSettings = true"
-          />
-        </div>
+        <!-- Layout Selector -->
+        <Dropdown
+          v-model="selectedLayoutId"
+          :options="layoutOptions"
+          optionLabel="name"
+          optionValue="layout_id"
+          placeholder="Select Layout"
+          class="w-48"
+          @change="onLayoutChange"
+        />
+        
+        <PageActions />
       </div>
+    </UniversalPageHeader>
+
+    <!-- Main Content Grid -->
+    <div class="content-grid-5-6">
+      <div class="main-content">
+        <div class="space-y-6">
 
       <!-- Alert for Errors -->
       <Message
@@ -498,7 +483,17 @@
         />
       </template>
     </Dialog>
-  </AppLayout>
+      </div>
+
+      <!-- Right Column - Quick Links -->
+      <div class="sidebar-content">
+        <QuickLinks 
+          :links="quickLinks" 
+          title="Dashboard Actions"
+        />
+      </div>
+    </div>
+  </LayoutShell>
 </template>
 
 <script setup>
@@ -506,10 +501,65 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import { useToast } from 'primevue/usetoast'
 import { useReportingDashboard } from '@/services/reportingDashboard'
-import AppLayout from '@/Layouts/AuthenticatedLayout.vue'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
+import QuickLinks from '@/Components/QuickLinks.vue'
+import { usePageActions } from '@/composables/usePageActions'
 
 const toast = useToast()
 const page = usePage()
+const { actions } = usePageActions()
+
+// Define page actions
+const pageActions = [
+  {
+    key: 'refresh',
+    label: 'Refresh',
+    icon: 'pi pi-refresh',
+    severity: 'secondary',
+    action: () => handleRefresh(),
+    disabled: !selectedLayoutId.value
+  },
+  {
+    key: 'settings',
+    label: 'Settings',
+    icon: 'pi pi-cog',
+    severity: 'secondary',
+    action: () => showSettings.value = true
+  }
+]
+
+// Define quick links for reporting dashboard
+const quickLinks = [
+  {
+    label: 'Financial Statements',
+    url: '/reporting/statements',
+    icon: 'pi pi-file-pdf'
+  },
+  {
+    label: 'Trial Balance',
+    url: '/accounting/journal-entries/trial-balance',
+    icon: 'pi pi-calculator'
+  },
+  {
+    label: 'Journal Entries',
+    url: '/accounting/journal-entries/batches',
+    icon: 'pi pi-book'
+  },
+  {
+    label: 'Period Close',
+    url: '/ledger/period-close',
+    icon: 'pi pi-calendar'
+  },
+  {
+    label: 'Generate Reports',
+    url: '/reporting/templates',
+    icon: 'pi pi-file-export'
+  }
+]
+
+// Set page actions
+actions.value = pageActions
 const { 
   fetchDashboard, 
   refreshDashboard, 
@@ -862,3 +912,4 @@ watch(selectedLayoutId, () => {
   }
 })
 </script>
+

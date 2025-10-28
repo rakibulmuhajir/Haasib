@@ -5,10 +5,10 @@ import { useSidebar } from '@/composables/useSidebar'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast from 'primevue/toast'
 import Topbar from './Topbar.vue'
-import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Sidebar from '@/Layouts/Sidebar.vue'
 
 const { initializeTheme } = useTheme()
-const { isSlim, initializeSidebar } = useSidebar()
+const { isSlim } = useSidebar()
 
 const wrapperClass = computed(() => ({
   'layout-wrapper': true,
@@ -18,7 +18,6 @@ const wrapperClass = computed(() => ({
 // Initialize theme and sidebar state
 onMounted(() => {
   initializeTheme()
-  initializeSidebar()
 })
 
 // Close mobile sidebar when clicking outside
@@ -29,32 +28,25 @@ const closeMobileSidebar = () => {
 
 <template>
   <div :class="wrapperClass">
-    <!-- Sidebar -->
-    <Sidebar />
-    
-    <!-- Main Content Area -->
-    <div class="layout-main">
-      <!-- Topbar -->
-      <Topbar />
-      
-      <!-- Page Content -->
-      <div class="layout-content">
-        <slot />
-      </div>
-      
-      <!-- Footer -->
-      <div class="layout-footer">
-        <slot name="footer" />
+    <Topbar />
+
+    <div class="layout-body">
+      <Sidebar />
+
+      <div class="layout-main">
+        <div class="layout-content">
+          <slot />
+        </div>
+
+        <div class="layout-footer">
+          <slot name="footer" />
+        </div>
       </div>
     </div>
 
-    <!-- Mobile Overlay -->
     <div class="layout-mask" @click="closeMobileSidebar" />
 
-    <!-- Toast container for notifications -->
     <Toast position="top-right" />
-    
-    <!-- Confirmation dialog container -->
     <ConfirmDialog />
   </div>
 </template>
@@ -62,24 +54,28 @@ const closeMobileSidebar = () => {
 <style scoped>
 .layout-wrapper {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background-color: var(--surface-ground);
+}
+
+.layout-body {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  padding-top: 4rem; /* height of fixed topbar */
 }
 
 .layout-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 0;
-  transition: none;
+  min-width: 0;
 }
-
-.layout-wrapper.layout-slim .layout-main { margin-left: 0; }
 
 .layout-content {
   flex: 1;
   padding: 1.5rem;
-  margin-top: 4rem; /* Account for fixed topbar */
 }
 
 .layout-footer {
@@ -108,5 +104,14 @@ const closeMobileSidebar = () => {
   pointer-events: auto;
 }
 
-@media (max-width: 991px) { }
+@media (max-width: 991px) {
+  .layout-body {
+    flex-direction: column;
+    padding-top: 4rem;
+  }
+
+  .layout-main {
+    width: 100%;
+  }
+}
 </style>

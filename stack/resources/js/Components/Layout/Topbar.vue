@@ -10,6 +10,7 @@ import SvgIcon from '@/Components/SvgIcon.vue'
 import Avatar from 'primevue/avatar'
 import Menu from 'primevue/menu'
 import CompanyContextSwitcher from '@/Components/Company/ContextSwitcher.vue'
+import Breadcrumb from '@/Components/Breadcrumb.vue'
 
 const { toggleTheme, isDark } = useTheme()
 const { toggleSidebar, closeMobileSidebar } = useSidebar()
@@ -127,11 +128,9 @@ const getUserInitials = () => {
       </button>
     </div>
 
-    <!-- Page Title -->
+    <!-- Breadcrumb -->
     <div class="layout-topbar-title">
-      <h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
-        {{ page.props.title || 'Dashboard' }}
-      </h1>
+      <Breadcrumb />
     </div>
 
     <!-- Topbar Actions -->

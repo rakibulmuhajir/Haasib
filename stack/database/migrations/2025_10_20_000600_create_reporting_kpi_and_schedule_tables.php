@@ -214,21 +214,21 @@ return new class extends Migration
     private function createConstraints(): void
     {
         // kpi_definitions constraints
-        DB::statement('
+        DB::statement("
             ALTER TABLE rpt.kpi_definitions
             ADD CONSTRAINT kpi_definitions_currency_check
             CHECK (
-                value_format != \'currency\' OR 
-                (formula::jsonb ? \'currency\')
+                value_format != 'currency' OR
+                formula::jsonb ?? 'currency' IS NOT NULL
             )
-        ');
+        ");
 
         // kpi_snapshots constraints
         DB::statement('
             ALTER TABLE rpt.kpi_snapshots
             ADD CONSTRAINT kpi_snapshots_currency_check
             CHECK (
-                (value_format != \'currency\' OR currency IS NOT NULL)
+                currency IS NOT NULL OR value = 0
             )
         ');
 

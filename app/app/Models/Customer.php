@@ -15,9 +15,9 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'hrm.customers';
+    protected $table = 'acct.customers';
 
-    protected $primaryKey = 'customer_id';
+    protected $primaryKey = 'id';
 
     protected $keyType = 'string';
 
@@ -30,12 +30,6 @@ class Customer extends Model
      */
     protected $appends = [
         'id',
-        'address_line_1',
-        'address_line_2',
-        'city',
-        'state_province',
-        'postal_code',
-        'country_id',
         'country_data',
         'currency_data',
         'outstanding_balance',
@@ -47,41 +41,35 @@ class Customer extends Model
      */
     public function getIdAttribute(): string
     {
-        return $this->attributes['customer_id'] ?? '';
+        return $this->attributes['id'] ?? '';
     }
 
     protected $fillable = [
-        'customer_id',
         'id',
         'company_id',
+        'customer_number',
         'name',
         'email',
         'phone',
-        'tax_number',
-        'billing_address',
-        'shipping_address',
-        'currency_id',
-        'is_active',
-        'created_by',
-        'updated_by',
+        'address',
+        'city',
+        'state',
+        'postal_code',
+        'country',
+        'tax_id',
         'website',
-        'customer_type',
-        'payment_terms',
-        'credit_limit',
-        'customer_number',
-        'tax_exempt',
-        'status',
         'notes',
-        'primary_contact_id',
+        'credit_limit',
+        'payment_terms',
+        'is_active',
+        'status',
+        'created_by_user_id',
     ];
 
     protected $casts = [
+        'id' => 'string',
         'company_id' => 'string',
-        'billing_address' => 'array',
-        'shipping_address' => 'array',
-        'currency_id' => 'string',
-        'created_by' => 'string',
-        'updated_by' => 'string',
+        'credit_limit' => 'decimal:2',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -97,20 +85,21 @@ class Customer extends Model
         parent::boot();
 
         static::creating(function ($model) {
-            // Generate UUID for customer_id if not set
-            if (! isset($model->customer_id)) {
-                $model->customer_id = (string) Str::uuid();
-            }
-            // Also set id attribute for compatibility
+            // Generate UUID for id if not set (database will auto-generate)
             if (! isset($model->id)) {
-                $model->id = $model->customer_id;
+                $model->id = (string) Str::uuid();
+            }
+
+            // Generate customer number if not set
+            if (! isset($model->customer_number)) {
+                $model->customer_number = $model->generateCustomerNumber();
             }
         });
     }
 
     public function getRouteKeyName(): string
     {
-        return 'customer_id';
+        return 'id';
     }
 
     public function company(): BelongsTo
@@ -125,17 +114,15 @@ class Customer extends Model
 
     public function country_relation(): BelongsTo
     {
-        return $this->belongsTo(Country::class, 'country_id', 'id');
+        return $this->belongsTo(Country::class, 'country', 'id');
     }
 
     public function getCountryDataAttribute()
     {
-        $countryId = $this->billing_address['country_id'] ?? null;
-        if ($countryId) {
+        if ($this->country) {
             // For table display, we only need code and name
-            $country = Country::find($countryId, ['id', 'code', 'name']);
-
-            return $country ? $country->only(['code', 'name']) : null;
+            $country = $this->country->only(['code', 'name']);
+            return $country;
         }
 
         return null;
@@ -170,22 +157,22 @@ class Customer extends Model
 
     public function invoices(): HasMany
     {
-        return $this->hasMany(Invoice::class, 'customer_id', 'customer_id');
+        return $this->hasMany(Invoice::class, 'customer_id', 'id');
     }
 
     public function payments(): HasMany
     {
-        return $this->hasMany(Payment::class, 'entity_id', 'customer_id')->where('entity_type', 'customer');
+        return $this->hasMany(Payment::class, 'customer_id', 'id');
     }
 
     public function accountsReceivable(): HasMany
     {
-        return $this->hasMany(AccountsReceivable::class, 'customer_id', 'customer_id');
+        return $this->hasMany(AccountsReceivable::class, 'customer_id', 'id');
     }
 
     public function contacts(): HasMany
     {
-        return $this->hasMany(Contact::class, 'customer_id', 'customer_id');
+        return $this->hasMany(Contact::class, 'customer_id', 'id');
     }
 
     public function interactions(): HasMany
@@ -195,7 +182,7 @@ class Customer extends Model
 
     public function primaryContact(): HasOne
     {
-        return $this->hasOne(Contact::class, 'customer_id', 'customer_id')->where('is_primary', true);
+        return $this->hasOne(Contact::class, 'customer_id', 'id')->where('is_primary', true);
     }
 
     public function scopeForCompany($query, $companyId)
@@ -208,78 +195,6 @@ class Customer extends Model
         return $query->where('is_active', true);
     }
 
-    // Accessors for address fields
-    public function getAddressLine1Attribute(): ?string
-    {
-        return $this->billing_address['address_line_1'] ?? null;
-    }
-
-    public function setAddressLine1Attribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['address_line_1'] = $value;
-        $this->billing_address = $address;
-    }
-
-    public function getAddressLine2Attribute(): ?string
-    {
-        return $this->billing_address['address_line_2'] ?? null;
-    }
-
-    public function setAddressLine2Attribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['address_line_2'] = $value;
-        $this->billing_address = $address;
-    }
-
-    public function getCityAttribute(): ?string
-    {
-        return $this->billing_address['city'] ?? null;
-    }
-
-    public function setCityAttribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['city'] = $value;
-        $this->billing_address = $address;
-    }
-
-    public function getStateProvinceAttribute(): ?string
-    {
-        return $this->billing_address['state_province'] ?? null;
-    }
-
-    public function setStateProvinceAttribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['state_province'] = $value;
-        $this->billing_address = $address;
-    }
-
-    public function getPostalCodeAttribute(): ?string
-    {
-        return $this->billing_address['postal_code'] ?? null;
-    }
-
-    public function setPostalCodeAttribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['postal_code'] = $value;
-        $this->billing_address = $address;
-    }
-
-    public function getCountryIdAttribute(): ?string
-    {
-        return $this->billing_address['country_id'] ?? null;
-    }
-
-    public function setCountryIdAttribute(?string $value): void
-    {
-        $address = $this->billing_address ?? [];
-        $address['country_id'] = $value;
-        $this->billing_address = $address;
-    }
 
     public function generateCustomerNumber(): string
     {
@@ -289,12 +204,21 @@ class Customer extends Model
         $prefix = $company->settings['customer_prefix'] ?? 'CUST';
         $pattern = $company->settings['customer_number_pattern'] ?? '{prefix}-{year}-{sequence:4}';
 
-        $latestCustomer = static::where('company_id', $company->id)
+        // Get all customers for this company in the current year and process in PHP
+        $customers = static::where('company_id', $company->id)
             ->whereYear('created_at', $year)
-            ->orderByRaw('CAST(SUBSTRING(customer_number FROM GREATEST(POSITION("-" IN customer_number), POSITION(" " IN customer_number)) + 1) AS UNSIGNED) DESC')
-            ->first();
+            ->get(['customer_number']);
 
-        $sequence = $latestCustomer ? ((int) preg_replace('/.*?(\d+)$/', '$1', $latestCustomer->customer_number)) + 1 : 1;
+        $maxSequence = 0;
+        foreach ($customers as $customer) {
+            // Extract the numeric part from the customer number
+            if (preg_match('/(\d+)$/', $customer->customer_number, $matches)) {
+                $sequence = (int) $matches[1];
+                $maxSequence = max($maxSequence, $sequence);
+            }
+        }
+
+        $sequence = $maxSequence + 1;
 
         return str_replace(
             ['{prefix}', '{year}', '{sequence:4}', '{sequence:5}', '{sequence:6}'],

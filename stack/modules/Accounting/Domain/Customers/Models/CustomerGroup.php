@@ -10,7 +10,7 @@ class CustomerGroup extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'invoicing.customer_groups';
+    protected $table = 'acct.customer_groups';
 
     protected $fillable = [
         'company_id',
@@ -45,7 +45,7 @@ class CustomerGroup extends Model
     {
         return $this->belongsToMany(
             \App\Models\Customer::class,
-            'invoicing.customer_group_members',
+            'acct.customer_group_members',
             'group_id',
             'customer_id'
         )->withTimestamps()

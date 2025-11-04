@@ -61,7 +61,7 @@ class LogCustomerCommunicationAction
     private function validate(CustomerCommunicationData $data, Customer $customer): void
     {
         $validator = Validator::make((array) $data, [
-            'contact_id' => 'nullable|exists:invoicing.customer_contacts,id',
+            'contact_id' => 'nullable|exists:acct.customer_contacts,id',
             'channel' => 'required|in:email,phone,meeting,note',
             'direction' => 'required|in:inbound,outbound,internal',
             'subject' => 'nullable|string|max:255',

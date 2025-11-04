@@ -493,7 +493,7 @@ class ReportScheduleController extends Controller
                       ->from('rpt.report_schedules')
                       ->where('schedule_id', $scheduleId);
             })
-            ->whereRaw('parameters->>\' . "'schedule_id' AND parameters->>' . '?::text', $scheduleId)
+            ->whereRaw("parameters->>'schedule_id' = ?", [$scheduleId])
             ->orderBy('created_at', 'desc')
             ->limit($limit)
             ->get(['report_id', 'name', 'status', 'created_at', 'generated_at', 'file_size'])

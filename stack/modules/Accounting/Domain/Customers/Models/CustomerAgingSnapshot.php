@@ -16,7 +16,7 @@ class CustomerAgingSnapshot extends Model
 {
     use HasFactory;
 
-    protected $table = 'invoicing.customer_aging_snapshots';
+    protected $table = 'acct.customer_aging_snapshots';
 
     protected $fillable = [
         'customer_id',

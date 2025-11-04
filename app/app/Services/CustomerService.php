@@ -54,7 +54,7 @@ class CustomerService
 
                     if ($existingCustomer) {
                         Log::info('Customer creation skipped due to idempotency key', [
-                            'customer_id' => $existingCustomer->customer_id,
+                            'customer_id' => $existingCustomer->id,
                             'idempotency_key' => $idempotencyKey,
                         ]);
 
@@ -63,26 +63,25 @@ class CustomerService
                 }
 
                 $customer = Customer::create([
-                    'customer_id' => (string) Str::uuid(),
                     'company_id' => $company->id,
                     'name' => $name,
                     'email' => $email,
                     'phone' => $phone,
                     'tax_id' => $taxId,
-                    'billing_address' => $billingAddress,
-                    'shipping_address' => $shippingAddress,
-                    'currency_id' => $currencyId,
+                    'address' => $billingAddress['address_line_1'] ?? null,
+                    'city' => $billingAddress['city'] ?? null,
+                    'state' => $billingAddress['state_province'] ?? null,
+                    'postal_code' => $billingAddress['postal_code'] ?? null,
+                    'country' => $billingAddress['country_id'] ?? null,
                     'credit_limit' => $creditLimit,
-                    'payment_terms' => $paymentTerms,
+                    'payment_terms' => (string) $paymentTerms,
                     'notes' => $notes,
                     'is_active' => $isActive,
-                    'metadata' => array_merge($metadata ?? [], [
-                        'idempotency_key' => $idempotencyKey,
-                    ]),
+                    'status' => $isActive ? 'active' : 'inactive',
                 ]);
 
                 Log::info('Customer created successfully', [
-                    'customer_id' => $customer->customer_id,
+                    'customer_id' => $customer->id,
                     'company_id' => $company->id,
                     'name' => $name,
                 ]);
@@ -139,39 +138,21 @@ class CustomerService
                 'name' => $name,
                 'email' => $email,
                 'phone' => $phone,
-                'tax_number' => $taxId,
-                'currency_id' => $currencyId,
+                'tax_id' => $taxId,
                 'status' => $status,
                 'website' => $website,
-                'customer_type' => $customerType,
-                'customer_number' => $customerNumber,
                 'payment_terms' => $paymentTerms,
                 'credit_limit' => $creditLimit,
-                'tax_exempt' => $taxExempt,
                 'notes' => $notes,
             ], fn ($value) => $value !== null && $value !== '');
 
-            // Only update billing_address if address data is provided
+            // Only update address fields if address data is provided
             if ($address) {
-                // Get existing billing address or empty array
-                $existingAddress = is_array($customer->billing_address)
-                    ? $customer->billing_address
-                    : json_decode($customer->billing_address ?: '{}', true);
-
-                // Merge new address data with existing
-                $mergedAddress = array_filter([
-                    'address_line_1' => $address['address_line_1'] ?? $existingAddress['address_line_1'] ?? null,
-                    'address_line_2' => $address['address_line_2'] ?? $existingAddress['address_line_2'] ?? null,
-                    'city' => $address['city'] ?? $existingAddress['city'] ?? null,
-                    'state_province' => $address['state_province'] ?? $existingAddress['state_province'] ?? null,
-                    'postal_code' => $address['postal_code'] ?? $existingAddress['postal_code'] ?? null,
-                    'country_id' => $address['country_id'] ?? $existingAddress['country_id'] ?? null,
-                ], fn ($value) => $value !== null && $value !== '');
-
-                // Only update if we have address data
-                if (! empty($mergedAddress)) {
-                    $updateData['billing_address'] = $mergedAddress;
-                }
+                $updateData['address'] = $address['address_line_1'] ?? null;
+                $updateData['city'] = $address['city'] ?? null;
+                $updateData['state'] = $address['state_province'] ?? null;
+                $updateData['postal_code'] = $address['postal_code'] ?? null;
+                $updateData['country'] = $address['country_id'] ?? null;
             }
 
             // Handle primary contact if provided
@@ -216,7 +197,7 @@ class CustomerService
             $customer->delete();
 
             Log::info('Customer deleted successfully', [
-                'customer_id' => $customer->customer_id,
+                'customer_id' => $customer->id,
             ]);
 
             return true;

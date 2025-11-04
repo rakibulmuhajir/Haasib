@@ -11,7 +11,7 @@ class CustomerCreditLimit extends Model
 {
     use CreditLimitScopes, HasFactory, SoftDeletes;
 
-    protected $table = 'customer_credit_limits';
+    protected $table = 'acct.customer_credit_limits';
 
     protected $fillable = [
         'customer_id',

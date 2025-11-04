@@ -29,11 +29,19 @@ class AccountingServiceProvider extends ServiceProvider
      */
     protected function registerRoutes(): void
     {
-        Route::middleware('api')
-            ->prefix('api')
-            ->group(__DIR__.'/../../Routes/api.php');
+        // Only load routes if files exist and have content
+        $apiFile = __DIR__.'/../../Routes/api.php';
+        $webFile = __DIR__.'/../../Routes/web.php';
 
-        Route::middleware('web')
-            ->group(__DIR__.'/../../Routes/web.php');
+        if (file_exists($apiFile) && filesize($apiFile) > 50) {
+            Route::middleware('api')
+                ->prefix('api')
+                ->group($apiFile);
+        }
+
+        if (file_exists($webFile) && filesize($webFile) > 50) {
+            Route::middleware('web')
+                ->group($webFile);
+        }
     }
 }

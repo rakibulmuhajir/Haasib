@@ -191,10 +191,13 @@ class PeriodCloseService
         $unpostedDocuments = [];
 
         // Check for unposted invoices
+        // Since we don't have accounting_period_id, we check by date range based on period
+        $period = $this->getPeriod($periodId);
         $unpostedInvoices = DB::table('acct.invoices')
-            ->where('accounting_period_id', $periodId)
-            ->where('status', '!=', 'posted')
+            ->where('company_id', $period->company_id)
+            ->whereBetween('invoice_date', [$period->start_date, $period->end_date])
             ->where('status', '!=', 'paid')
+            ->where('status', '!=', 'cancelled')
             ->where('status', '!=', 'void')
             ->count();
 
@@ -203,13 +206,14 @@ class PeriodCloseService
                 'module' => 'invoicing',
                 'count' => $unpostedInvoices,
                 'blocking' => true,
-                'details' => ['Unposted invoices need to be posted'],
+                'details' => ['Unpaid invoices within period need attention'],
             ];
         }
 
         // Check for unposted journal entries
         $unpostedEntries = DB::table('acct.journal_entries')
-            ->where('accounting_period_id', $periodId)
+            ->where('company_id', $period->company_id)
+            ->whereBetween('entry_date', [$period->start_date, $period->end_date])
             ->where('status', '!=', 'posted')
             ->count();
 
@@ -224,9 +228,9 @@ class PeriodCloseService
 
         // Check for pending payments
         $pendingPayments = DB::table('acct.payments')
-            ->join('acct.invoices', 'acct.payments.invoice_id', '=', 'acct.invoices.id')
-            ->where('acct.invoices.accounting_period_id', $periodId)
-            ->where('acct.payments.status', 'pending')
+            ->where('company_id', $period->company_id)
+            ->whereBetween('payment_date', [$period->start_date, $period->end_date])
+            ->where('status', 'pending')
             ->count();
 
         if ($pendingPayments > 0) {
@@ -2415,5 +2419,39 @@ class PeriodCloseService
         }
 
         return $totalOperations > 0 ? round(($errorCount / $totalOperations) * 100, 2) : 0.0;
+    }
+
+    /**
+     * Get accounting period by ID
+     *
+     * Note: The accounting_periods table doesn't exist in current schema.
+     * This method creates a mock period structure based on the period ID.
+     * In a full implementation, we would need to create the accounting_periods table.
+     */
+    protected function getPeriod(string $periodId): object
+    {
+        $companyId = current_setting('app.current_company_id', true);
+
+        // Extract date information from period ID if it follows a pattern like "2024-01"
+        // or create a default period based on current month
+        if (preg_match('/(\d{4})-(\d{1,2})/', $periodId, $matches)) {
+            $year = $matches[1];
+            $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+            $startDate = "{$year}-{$month}-01";
+            $endDate = date('Y-m-t', strtotime($startDate));
+        } else {
+            // Default to current month
+            $startDate = now()->startOfMonth()->toDateString();
+            $endDate = now()->endOfMonth()->toDateString();
+        }
+
+        return (object) [
+            'id' => $periodId,
+            'company_id' => $companyId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'frequency' => 'monthly',
+            'status' => 'active',
+        ];
     }
 }

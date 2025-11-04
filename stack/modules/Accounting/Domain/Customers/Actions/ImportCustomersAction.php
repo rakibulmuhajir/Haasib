@@ -112,7 +112,7 @@ class ImportCustomersAction
     private function generateImportBatchId(string $companyId): string
     {
         $today = now()->format('Ymd');
-        $sequence = DB::table('invoicing.customers')
+        $sequence = DB::table('acct.customers')
             ->where('company_id', $companyId)
             ->whereRaw("metadata->>'import_batch_id' LIKE ?", ["IMPORT-{$today}-%"])
             ->distinct(DB::raw("metadata->>'import_batch_id'"))
@@ -352,7 +352,7 @@ class ImportCustomersAction
      */
     private function isDuplicateCustomer(array $customerData, string $companyId): bool
     {
-        $query = DB::table('invoicing.customers')->where('company_id', $companyId);
+        $query = DB::table('acct.customers')->where('company_id', $companyId);
 
         if (! empty($customerData['email'])) {
             $query->orWhere('email', $customerData['email']);
@@ -430,13 +430,13 @@ class ImportCustomersAction
                 if ($updateExisting && $this->isDuplicateCustomer($customerData, $companyId)) {
                     // Update existing customer
                     $existing = $this->findExistingCustomer($customerData, $companyId);
-                    DB::table('invoicing.customers')
+                    DB::table('acct.customers')
                         ->where('id', $existing->id)
                         ->update($customerData);
                 } else {
                     // Create new customer
                     $customerData['id'] = Str::uuid();
-                    DB::table('invoicing.customers')->insert($customerData);
+                    DB::table('acct.customers')->insert($customerData);
                 }
 
                 $importedCount++;
@@ -466,7 +466,7 @@ class ImportCustomersAction
      */
     private function findExistingCustomer(array $customerData, string $companyId)
     {
-        $query = DB::table('invoicing.customers')->where('company_id', $companyId);
+        $query = DB::table('acct.customers')->where('company_id', $companyId);
 
         if (! empty($customerData['email'])) {
             $existing = $query->where('email', $customerData['email'])->first();

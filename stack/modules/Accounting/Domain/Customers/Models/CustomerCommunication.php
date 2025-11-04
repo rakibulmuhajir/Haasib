@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CustomerCommunication extends Model
 {
-    protected $table = 'invoicing.customer_communications';
+    protected $table = 'acct.customer_communications';
 
     protected $fillable = [
         'customer_id',

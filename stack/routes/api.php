@@ -206,7 +206,7 @@ Route::prefix('templates')->name('templates.')->group(function () {
     // Template Statistics and Data
     Route::get('/statistics', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'statistics'])->name('statistics');
     Route::get('/available-customers', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'availableCustomers'])->name('available-customers');
-    Route::post('/validate', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'validate'])->name('validate');
+    Route::post('/validate', [\App\Http\Controllers\Invoicing\InvoiceTemplateController::class, 'validateTemplate'])->name('validate');
 });
 
 // Invoicing requirements endpoint - uses web middleware for session authentication
@@ -315,7 +315,7 @@ Route::prefix('v1')->group(function () {
                     // Period close workflow routes
                     Route::prefix('/close')->name('close.')->group(function () {
                         Route::post('/start', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'start'])->name('start')->middleware('idempotent');
-                        Route::post('/validate', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'validate'])->name('validate')->middleware('idempotent');
+                        Route::post('/validate', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'runValidation'])->name('validate')->middleware('idempotent');
 
                         // Adjustment management
                         Route::post('/adjustments', [\App\Http\Controllers\Ledger\PeriodCloseController::class, 'createAdjustment'])->name('adjustments.create')->middleware('idempotent');

@@ -82,12 +82,10 @@ const iconWrapperClasses = computed(() => {
 })
 
 const handleMouseEnter = () => {
-  if (!hasChildren.value) return
   emit('hover', props.item)
 }
 
 const handleFocus = () => {
-  if (!hasChildren.value) return
   emit('hover', props.item)
 }
 </script>
@@ -105,7 +103,6 @@ const handleFocus = () => {
       :href="buildHref()"
       :class="linkClasses"
       @click="handleClick"
-      v-tooltip.right="props.item.label"
       :aria-label="props.item.label"
       role="menuitem"
     >
@@ -113,7 +110,6 @@ const handleFocus = () => {
         <span :class="iconWrapperClasses">
           <i v-if="props.item.icon" :class="`fas fa-${props.item.icon} sidebar-icon`" />
         </span>
-        <span :class="labelClasses">{{ props.item.label }}</span>
       </div>
     </Link>
 
@@ -122,7 +118,6 @@ const handleFocus = () => {
       type="button"
       :class="linkClasses"
       @click="handleClick"
-      v-tooltip.right="props.item.label"
       :aria-label="props.item.label"
       role="menuitem"
     >
@@ -130,7 +125,6 @@ const handleFocus = () => {
         <span :class="iconWrapperClasses">
           <i v-if="props.item.icon" :class="`fas fa-${props.item.icon} sidebar-icon`" />
         </span>
-        <span :class="labelClasses">{{ props.item.label }}</span>
       </div>
     </button>
   </li>
@@ -230,23 +224,6 @@ const handleFocus = () => {
   justify-content: center;
   flex-shrink: 0;
   opacity: 1;
-  min-width: 1.1rem;
-  min-height: 1.1rem;
   visibility: visible;
-}
-
-.sidebar-label {
-  white-space: nowrap;
-  font-size: 0.875rem;
-  font-weight: 500;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-  flex: 1;
-}
-
-.sidebar-label--visible {
-  opacity: 1;
-  pointer-events: auto;
 }
 </style>

@@ -373,7 +373,7 @@ class InvoiceTemplateController extends Controller
     /**
      * Validate template structure.
      */
-    public function validate(Request $request, ?InvoiceTemplate $template = null): JsonResponse
+    public function validateTemplate(Request $request, ?InvoiceTemplate $template = null): JsonResponse
     {
         $templateData = $request->validate([
             'name' => 'required|string|max:255',

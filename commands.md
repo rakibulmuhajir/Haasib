@@ -5,3 +5,5 @@
 # php artisan octane:start --server=swoole --watch
 # npm run dev &
 # npm run build
+# sudo lsof -i :8000
+# sudo kill -9 172714

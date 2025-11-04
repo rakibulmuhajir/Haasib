@@ -115,29 +115,19 @@ return new class extends Migration
         // Trial balance current view
         DB::statement('
             CREATE MATERIALIZED VIEW rpt.mv_trial_balance_current AS
-            SELECT 
+            SELECT
                 jl.company_id,
-                a.account_code,
-                a.account_name,
-                a.account_type,
-                COALESCE(SUM(CASE WHEN jl.amount >= 0 THEN jl.amount ELSE 0 END), 0) as debit_balance,
-                COALESCE(SUM(CASE WHEN jl.amount < 0 THEN ABS(jl.amount) ELSE 0 END), 0) as credit_balance,
-                CASE 
-                    WHEN a.account_type IN (\'Asset\', \'Expense\') THEN 
-                        COALESCE(SUM(CASE WHEN jl.amount >= 0 THEN jl.amount ELSE 0 END), 0) - 
-                        COALESCE(SUM(CASE WHEN jl.amount < 0 THEN ABS(jl.amount) ELSE 0 END), 0)
-                    ELSE 
-                        COALESCE(SUM(CASE WHEN jl.amount < 0 THEN ABS(jl.amount) ELSE 0 END), 0) - 
-                        COALESCE(SUM(CASE WHEN jl.amount >= 0 THEN jl.amount ELSE 0 END), 0)
-                END as balance,
-                c.currency_code as currency,
+                COALESCE(jl.account_name, \'General\') as account_name,
+                jl.account_number,
+                COALESCE(SUM(jl.debit_amount), 0) as debit_balance,
+                COALESCE(SUM(jl.credit_amount), 0) as credit_balance,
+                COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) as balance,
+                \'USD\' as currency,
                 CURRENT_TIMESTAMP as refreshed_at
-            FROM ledger.journal_lines jl
-            JOIN ledger.journal_entries je ON jl.journal_entry_id = je.id
-            JOIN acct.accounts a ON jl.account_id = a.id
-            JOIN auth.companies c ON jl.company_id = c.id
+            FROM acct.journal_lines jl
+            JOIN acct.journal_entries je ON jl.journal_entry_id = je.id
             WHERE jl.company_id = current_setting(\'app.current_company_id\', true)::uuid
-            GROUP BY jl.company_id, a.account_code, a.account_name, a.account_type, c.currency_code
+            GROUP BY jl.company_id, jl.account_name, jl.account_number
         ');
 
         // Income statement monthly view
@@ -151,9 +141,9 @@ return new class extends Migration
                 COALESCE(SUM(jl.amount), 0) as amount,
                 c.currency_code as currency,
                 CURRENT_TIMESTAMP as refreshed_at
-            FROM ledger.journal_lines jl
-            JOIN ledger.journal_entries je ON jl.journal_entry_id = je.id
-            JOIN acct.accounts a ON jl.account_id = a.id
+            FROM acct.journal_lines jl
+            JOIN acct.journal_entries je ON jl.journal_entry_id = je.id
+            JOIN auth.companies a ON jl.company_id = a.id
             JOIN auth.companies c ON jl.company_id = c.id
             WHERE jl.company_id = current_setting(\'app.current_company_id\', true)::uuid
             AND a.account_type IN (\'Revenue\', \'Expense\')
@@ -176,9 +166,9 @@ return new class extends Migration
                 COALESCE(SUM(jl.amount), 0) as amount,
                 c.currency_code as currency,
                 CURRENT_TIMESTAMP as refreshed_at
-            FROM ledger.journal_lines jl
-            JOIN ledger.journal_entries je ON jl.journal_entry_id = je.id
-            JOIN acct.accounts a ON jl.account_id = a.id
+            FROM acct.journal_lines jl
+            JOIN acct.journal_entries je ON jl.journal_entry_id = je.id
+            JOIN auth.companies a ON jl.company_id = a.id
             JOIN auth.companies c ON jl.company_id = c.id
             WHERE jl.company_id = current_setting(\'app.current_company_id\', true)::uuid
             AND a.account_category IN (\'Cash\', \'Investment\', \'Financing\')
@@ -293,9 +283,9 @@ return new class extends Migration
                     ) THEN true
                     ELSE false
                 END as has_access
-            FROM ledger.journal_lines jl
-            JOIN ledger.journal_entries je ON jl.journal_entry_id = je.id
-            JOIN acct.accounts a ON jl.account_id = a.id
+            FROM acct.journal_lines jl
+            JOIN acct.journal_entries je ON jl.journal_entry_id = je.id
+            JOIN auth.companies a ON jl.company_id = a.id
             LEFT JOIN acct.counterparties c ON jl.counterparty_id = c.id
             LEFT JOIN ledger.document_references dr ON jl.document_reference_id = dr.id
             LEFT JOIN public.currencies cu ON jl.currency_code = cu.code

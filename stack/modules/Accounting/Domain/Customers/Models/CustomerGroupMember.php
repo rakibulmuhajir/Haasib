@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 
 class CustomerGroupMember extends Pivot
 {
-    protected $table = 'invoicing.customer_group_members';
+    protected $table = 'acct.customer_group_members';
 
     protected $fillable = [
         'customer_id',
@@ -114,7 +114,7 @@ class CustomerGroupMember extends Pivot
             ->count();
 
         $groupBreakdown = static::select('customer_groups.name', \DB::raw('count(*) as count'))
-            ->join('invoicing.customer_groups', 'customer_group_members.group_id', '=', 'customer_groups.id')
+            ->join('acct.customer_groups', 'customer_group_members.group_id', '=', 'customer_groups.id')
             ->where('customer_group_members.company_id', $company->id)
             ->groupBy('customer_groups.id', 'customer_groups.name')
             ->orderBy('count', 'desc')

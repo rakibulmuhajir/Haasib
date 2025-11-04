@@ -34,7 +34,7 @@ class PeriodCloseController extends Controller
         // Apply middleware for period close permissions
         $this->middleware('permission:period-close.view')->only(['index', 'show']);
         $this->middleware('permission:period-close.start')->only(['start']);
-        $this->middleware('permission:period-close.validate')->only(['validate']);
+        $this->middleware('permission:period-close.validate')->only(['runValidation']);
         $this->middleware('permission:period-close.lock')->only(['lock']);
         $this->middleware('permission:period-close.complete')->only(['complete']);
         $this->middleware('permission:period-close.reopen')->only(['reopen', 'canReopen', 'getReopenHistory', 'extendReopenWindow']);
@@ -172,7 +172,7 @@ class PeriodCloseController extends Controller
     /**
      * Run period close validations.
      */
-    public function validate(Request $request, string $periodId): JsonResponse
+    public function runValidation(Request $request, string $periodId): JsonResponse
     {
         $user = Auth::user();
         $period = AccountingPeriod::findOrFail($periodId);

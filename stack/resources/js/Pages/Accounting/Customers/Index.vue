@@ -19,6 +19,7 @@ import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import Menu from 'primevue/menu'
 import Toast from 'primevue/toast'
+import { route } from 'ziggy-js'
 
 const props = defineProps({
     customers: Object,
@@ -60,52 +61,59 @@ const quickLinks = [
     {
         label: 'Add Customer',
         url: '/customers/create',
-        icon: 'pi pi-plus'
+        icon: 'fas fa-plus-circle',
+        color: 'text-green-600'
     },
     {
         label: 'Customer Statements',
         url: '/customers/statements',
-        icon: 'pi pi-file-text'
+        icon: 'fas fa-file-invoice',
+        color: 'text-blue-600'
     },
     {
         label: 'Export Data',
         url: '/customers/export',
-        icon: 'pi pi-download'
+        icon: 'fas fa-download',
+        color: 'text-purple-600'
     },
     {
         label: 'Customer Reports',
         url: '/customers/reports',
-        icon: 'pi pi-chart-bar'
+        icon: 'fas fa-chart-bar',
+        color: 'text-orange-600'
     },
     {
         label: 'Bulk Import',
         url: '#',
-        icon: 'pi pi-upload',
-        action: () => toast.add({
-            severity: 'info',
-            summary: 'Coming Soon',
-            detail: 'Bulk import will be available soon',
-            life: 3000
-        })
+        icon: 'fas fa-file-import',
+        color: 'text-indigo-600',
+        action: () => {
+            toast.add({
+                severity: 'info',
+                summary: 'Coming Soon',
+                detail: 'Bulk import will be available soon',
+                life: 3000
+            })
+        }
     }
 ]
 
 // Bulk actions configuration
 const bulkActionsConfig = [
     {
-        key: 'bulk-enable',
+        key: 'enable',
         label: 'Enable ({count})',
         icon: 'pi pi-check',
         severity: 'success'
     },
     {
-        key: 'bulk-disable', 
+        key: 'disable',
         label: 'Disable ({count})',
         icon: 'pi pi-times',
         severity: 'warning'
     },
     {
-        key: 'bulk-delete',
+        key: 'delete',
         label: 'Delete ({count})',
         icon: 'pi pi-trash',
         severity: 'danger'
@@ -128,17 +136,17 @@ const bulkActionType = ref('')
 const actionsMenu = ref([
     {
         label: 'Edit',
-        icon: 'pi pi-pencil',
+        icon: 'fas fa-edit',
         command: (customer) => router.get(route('customers.edit', customer.id))
     },
     {
         label: 'View Details',
-        icon: 'pi pi-eye',
+        icon: 'fas fa-eye',
         command: (customer) => router.get(route('customers.show', customer.id))
     },
     {
         label: 'Change Status',
-        icon: 'pi pi-refresh',
+        icon: 'fas fa-sync-alt',
         command: (customer) => changeStatus(customer)
     },
     {
@@ -146,7 +154,7 @@ const actionsMenu = ref([
     },
     {
         label: 'Delete',
-        icon: 'pi pi-trash',
+        icon: 'fas fa-trash',
         command: (customer) => confirmDelete(customer)
     }
 ])
@@ -169,11 +177,11 @@ const filteredCustomers = computed(() => props.customers)
 // Methods
 const applyFilters = () => {
     loading.value = true
-    
+
     const params = new URLSearchParams()
     if (searchQuery.value) params.append('search', searchQuery.value)
     if (statusFilter.value) params.append('status', statusFilter.value)
-    
+
     router.get(
         route('customers.index') + (params.toString() ? '?' + params.toString() : ''),
         {},
@@ -198,7 +206,7 @@ const confirmDelete = (customer) => {
 
 const deleteCustomer = () => {
     if (!customerToDelete.value) return
-    
+
     router.delete(route('customers.destroy', customerToDelete.value.id), {
         onSuccess: () => {
             deleteCustomerDialog.value = false
@@ -239,9 +247,9 @@ const exportCustomers = () => {
 // Bulk action methods
 const performBulkAction = (action) => {
     if (selectedCustomers.value.length === 0) return
-    
+
     bulkActionType.value = action
-    
+
     if (action === 'delete') {
         // Show confirmation dialog for delete
         bulkActionDialog.value = true
@@ -253,44 +261,105 @@ const performBulkAction = (action) => {
 
 const executeBulkAction = async (action) => {
     if (selectedCustomers.value.length === 0) return
-    
+
+    const customerIds = selectedCustomers.value
+        .map(customer => customer.id || customer.uuid)
+        .filter(Boolean)
+
+    if (customerIds.length === 0) {
+        toast.add({
+            severity: 'warn',
+            summary: 'No Customers',
+            detail: 'Unable to determine the selected customers. Please try again.',
+            life: 3000
+        })
+        clearSelection()
+        return
+    }
+
     loading.value = true
-    
-    const customerIds = selectedCustomers.value.map(customer => customer.id)
-    
+
+    let endpoint = ''
+    const payload = {
+        customer_ids: customerIds
+    }
+    let successDetail = ''
+    let errorDetail = ''
+
+    switch (action) {
+        case 'enable':
+            endpoint = resolveRoute('api.customers.bulk') || '/api/customers/bulk'
+            payload.action = 'status_change'
+            payload.status = 'active'
+            successDetail = `${customerIds.length} customers enabled successfully`
+            errorDetail = 'Failed to enable selected customers'
+            break
+        case 'disable':
+            endpoint = resolveRoute('api.customers.bulk') || '/api/customers/bulk'
+            payload.action = 'status_change'
+            payload.status = 'inactive'
+            successDetail = `${customerIds.length} customers disabled successfully`
+            errorDetail = 'Failed to disable selected customers'
+            break
+        case 'delete':
+            endpoint = resolveRoute('customers.bulk') || '/customers/bulk'
+            payload.action = 'delete'
+            successDetail = `${customerIds.length} customers deleted successfully`
+            errorDetail = 'Failed to delete selected customers'
+            break
+        default:
+            toast.add({
+                severity: 'info',
+                summary: 'Unsupported',
+                detail: 'This bulk action is not yet supported.',
+                life: 3000
+            })
+            loading.value = false
+            return
+    }
+
+    if (!endpoint) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Unable to resolve the bulk action endpoint.',
+            life: 3000
+        })
+        loading.value = false
+        return
+    }
+
     try {
-        const response = await fetch(route('customers.bulk-update'), {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             },
-            body: JSON.stringify({
-                customer_ids: customerIds,
-                action: action
-            })
+            body: JSON.stringify(payload)
         })
-        
-        if (response.ok) {
-            const actionText = action.charAt(0).toUpperCase() + action.slice(1)
-            toast.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: `${customerIds.length} customers ${actionText}d successfully`,
-                life: 3000
-            })
-            
-            // Clear selection and refresh data
-            clearSelection()
-            applyFilters()
-        } else {
-            throw new Error('Failed to perform bulk action')
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null)
+            throw new Error(errorData?.message || errorDetail)
         }
+
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: successDetail,
+            life: 3000
+        })
+
+        clearSelection()
+        applyFilters()
     } catch (error) {
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: `Failed to ${action} selected customers`,
+            detail: error.message || errorDetail,
             life: 3000
         })
     } finally {
@@ -367,6 +436,14 @@ const formatCurrency = (amount, currency = 'USD') => {
     }).format(amount || 0)
 }
 
+const resolveRoute = (name, params = {}) => {
+    try {
+        return route(name, params)
+    } catch (error) {
+        return null
+    }
+}
+
 const toggleActionsMenu = (event, customer) => {
     menuRef.value.toggle(event)
     menuRef.value.customer = customer
@@ -376,7 +453,7 @@ const toggleActionsMenu = (event, customer) => {
 <template>
   <LayoutShell>
     <Toast />
-    
+
     <!-- Universal Page Header -->
     <UniversalPageHeader
       title="Customers"
@@ -400,29 +477,29 @@ const toggleActionsMenu = (event, customer) => {
       <!-- Left Column - Main Content -->
       <div class="main-content">
         <!-- Statistics Cards -->
-        <div class="stats-grid-4">
+        <div class="stats-grid-4 my-6">
           <div class="stat-card bg-blue-50 border-blue-200">
             <div class="stat-label text-blue-600">Total Customers</div>
             <div class="stat-value text-blue-800">{{ statistics.total_customers }}</div>
           </div>
-          
+
           <div class="stat-card bg-green-50 border-green-200">
             <div class="stat-label text-green-600">Active</div>
             <div class="stat-value text-green-800">{{ statistics.active_customers }}</div>
           </div>
-          
+
           <div class="stat-card bg-yellow-50 border-yellow-200">
             <div class="stat-label text-yellow-600">Inactive</div>
             <div class="stat-value text-yellow-800">{{ statistics.inactive_customers }}</div>
           </div>
-          
+
           <div class="stat-card bg-red-50 border-red-200">
             <div class="stat-label text-red-600">Blocked</div>
             <div class="stat-value text-red-800">{{ statistics.blocked_customers }}</div>
           </div>
         </div>
 
-    
+
         <!-- Data Table -->
         <DataTable
           ref="dt"
@@ -441,66 +518,90 @@ const toggleActionsMenu = (event, customer) => {
           class="customers-table"
         >
           <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-          <Column field="customer_number" header="Customer #" sortable style="min-width: 8rem">
+          <Column field="name" header="Name" sortable style="min-width: 10rem">
             <template #body="{ data }">
-              <span class="font-mono text-sm">{{ data.customer_number }}</span>
-            </template>
-          </Column>
-          
-          <Column field="name" header="Name" sortable style="min-width: 12rem">
-            <template #body="{ data }">
-              <div>
-                <div class="font-medium">{{ data.name }}</div>
-                <div v-if="data.legal_name && data.legal_name !== data.name" 
-                     class="text-sm text-gray-500">{{ data.legal_name }}</div>
+              <div class="cursor-pointer hover:bg-gray-50 p-2 rounded -m-2 transition-colors duration-150" @click="router.get(route('customers.show', data.id || data.uuid))">
+                <div class="flex items-center">
+                  <i class="fas fa-user mr-2 text-gray-400"></i>
+                  <div>
+                    <div class="font-medium">{{ data.name }}</div>
+                    <div class="text-xs text-gray-500">{{ data.customer_number }}</div>
+                    <div v-if="data.email" class="text-xs text-blue-600 truncate flex items-center">
+                      <i class="fas fa-envelope mr-1 text-xs"></i>
+                      {{ data.email }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </template>
           </Column>
-          
-          <Column field="email" header="Email" style="min-width: 12rem">
-            <template #body="{ data }">
-              <span v-if="data.email">{{ data.email }}</span>
-              <span v-else class="text-gray-400 italic">No email</span>
-            </template>
-          </Column>
-          
+
           <Column field="status" header="Status" sortable style="min-width: 6rem">
             <template #body="{ data }">
-              <Tag :value="data.status" :severity="getSeverity(data.status)" />
+              <div class="cursor-pointer hover:bg-gray-50 p-2 rounded -m-2 transition-colors duration-150" @click="router.get(route('customers.show', data.id || data.uuid))">
+                <Tag :value="data.status" :severity="getSeverity(data.status)" />
+              </div>
             </template>
           </Column>
-          
-          <Column field="default_currency" header="Currency" sortable style="min-width: 4rem">
-            <template #body="{ data }">
-              <span class="font-mono">{{ data.default_currency }}</span>
-            </template>
-          </Column>
-          
+
           <Column field="credit_limit" header="Credit Limit" sortable style="min-width: 8rem">
             <template #body="{ data }">
-              <span v-if="data.credit_limit">
-                {{ formatCurrency(data.credit_limit, data.default_currency) }}
-              </span>
-              <span v-else class="text-gray-400 italic">No limit</span>
+              <div class="cursor-pointer hover:bg-gray-50 p-2 rounded -m-2 transition-colors duration-150" @click="router.get(route('customers.show', data.id || data.uuid))">
+                <div class="flex items-center">
+                  <i class="fas fa-credit-card mr-2 text-gray-400"></i>
+                  <div>
+                    <span v-if="data.credit_limit">
+                      {{ formatCurrency(data.credit_limit, data.default_currency) }}
+                    </span>
+                    <span v-else class="text-gray-400 italic">No limit</span>
+                    <div class="text-xs text-gray-500">{{ data.default_currency }}</div>
+                  </div>
+                </div>
+              </div>
             </template>
           </Column>
-          
-          <Column field="created_at" header="Created" sortable style="min-width: 6rem">
+
+          <Column header="Actions" style="min-width: 8rem">
             <template #body="{ data }">
-              {{ new Date(data.created_at).toLocaleDateString() }}
-            </template>
-          </Column>
-          
-          <Column header="Actions" style="min-width: 4rem">
-            <template #body="{ data }">
-              <Button
-                type="button"
-                icon="pi pi-ellipsis-v"
-                size="small"
-                text
-                @click="toggleActionsMenu($event, data)"
-              />
-              <Menu ref="menuRef" :model="actionsMenu" popup />
+              <div class="flex gap-1">
+                <Button
+                  type="button"
+                  icon="fas fa-eye"
+                  size="small"
+                  text
+                  @click="() => router.visit(route('customers.show', data.id || data.uuid))"
+                  v-tooltip="'View Details'"
+                  tooltip-options="{ position: 'top' }"
+                />
+                <Button
+                  type="button"
+                  icon="fas fa-edit"
+                  size="small"
+                  text
+                  @click="() => router.visit(route('customers.edit', data.id || data.uuid))"
+                  v-tooltip="'Edit Customer'"
+                  tooltip-options="{ position: 'top' }"
+                />
+                <Button
+                  type="button"
+                  icon="fas fa-ban"
+                  size="small"
+                  text
+                  @click="changeStatus(data)"
+                  v-tooltip="'Change Status'"
+                  tooltip-options="{ position: 'top' }"
+                />
+                <Button
+                  type="button"
+                  icon="fas fa-trash"
+                  size="small"
+                  text
+                  severity="danger"
+                  @click="confirmDelete(data)"
+                  v-tooltip="'Delete Customer'"
+                  tooltip-options="{ position: 'top' }"
+                />
+              </div>
             </template>
           </Column>
         </DataTable>
@@ -508,8 +609,8 @@ const toggleActionsMenu = (event, customer) => {
 
       <!-- Right Column - Quick Links -->
       <div class="sidebar-content">
-        <QuickLinks 
-          :links="quickLinks" 
+        <QuickLinks
+          :links="quickLinks"
           title="Customer Actions"
         />
       </div>
@@ -550,17 +651,17 @@ const toggleActionsMenu = (event, customer) => {
       <div class="confirmation-content">
         <i :class="getBulkActionIcon()" class="mr-3" style="font-size: 2rem" />
         <span>
-          Are you sure you want to {{ bulkActionType }} <strong>{{ selectedCustomers.length }}</strong> 
-          customer{{ selectedCustomers.length > 1 ? 's' : '' }}? 
+          Are you sure you want to {{ bulkActionType }} <strong>{{ selectedCustomers.length }}</strong>
+          customer{{ selectedCustomers.length > 1 ? 's' : '' }}?
           <span v-if="bulkActionType === 'delete'">This action cannot be undone.</span>
         </span>
       </div>
       <template #footer>
-        <Button 
-          label="Cancel" 
-          icon="pi pi-times" 
-          text 
-          @click="bulkActionDialog = false" 
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          text
+          @click="bulkActionDialog = false"
         />
         <Button
           :label="`Confirm ${bulkActionType}`"
@@ -573,4 +674,3 @@ const toggleActionsMenu = (event, customer) => {
     </Dialog>
   </LayoutShell>
 </template>
-

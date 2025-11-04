@@ -156,6 +156,7 @@ class CustomerController extends Controller
             'legal_name' => $validated['name'], // Use name as legal_name for now
             'status' => $validated['status'] ?? 'active',
             'default_currency' => $this->getCurrencyCode($validated['currency_id'] ?? 'USD'),
+            'credit_limit' => null, // Set default credit_limit to null
             'email' => null,
             'phone' => null,
         ];

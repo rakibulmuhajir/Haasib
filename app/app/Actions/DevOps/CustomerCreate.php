@@ -32,28 +32,23 @@ class CustomerCreate
 
         $customer = DB::transaction(function () use ($data, $actor) {
             $customerData = [
-                'customer_id' => $data['idempotency_key'] ?
-                    Customer::generateIdFromIdempotencyKey($data['idempotency_key']) :
-                    (string) Str::uuid(),
                 'company_id' => $data['company_id'],
                 'name' => $data['name'],
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
-                'tax_number' => $data['tax_number'] ?? null,
-                'billing_address' => $data['billing_address'] ?? null,
-                'shipping_address' => $data['shipping_address'] ?? null,
-                'currency_id' => $data['currency_id'] ?? null,
-                'payment_terms' => $data['payment_terms'] ?? 0,
+                'tax_id' => $data['tax_number'] ?? null,
+                'address' => $data['billing_address']['address_line_1'] ?? null,
+                'city' => $data['billing_address']['city'] ?? null,
+                'state' => $data['billing_address']['state_province'] ?? null,
+                'postal_code' => $data['billing_address']['postal_code'] ?? null,
+                'country' => $data['billing_address']['country_id'] ?? null,
+                'payment_terms' => (string) ($data['payment_terms'] ?? 0),
                 'credit_limit' => $data['credit_limit'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
-                'customer_number' => Customer::generateNextNumber($data['company_id']),
+                'status' => 'active',
                 'created_by_user_id' => $actor->id,
             ];
-
-            if ($data['idempotency_key']) {
-                $customerData['idempotency_key'] = $data['idempotency_key'];
-            }
 
             return Customer::create($customerData);
         });
@@ -61,7 +56,7 @@ class CustomerCreate
         return [
             'message' => 'Customer created',
             'data' => [
-                'id' => $customer->customer_id,
+                'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
                 'customer_number' => $customer->customer_number,

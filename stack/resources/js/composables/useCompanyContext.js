@@ -27,17 +27,45 @@ export function useCompanyContext() {
     
     const permissions = computed(() => {
         const companyPerms = companyPermissions.value
+        const systemPerms = systemPermissions.value
+        const allPerms = new Set([...(companyPerms || []), ...(systemPerms || [])])
+
+        const hasWildcard = allPerms.has('*')
+        const has = (key) => hasWildcard || allPerms.has(key)
+
+        const snapshot = {
+            companyPerms,
+            systemPerms,
+            combined: Array.from(allPerms)
+        }
+
+        if (process.env.NODE_ENV !== 'production') {
+            console.groupCollapsed('[Context] Company permissions snapshot')
+            console.info('Company perms', snapshot.companyPerms)
+            console.info('System perms', snapshot.systemPerms)
+            console.info('Combined', snapshot.combined)
+            console.groupEnd()
+        }
+
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('haasib:permissions:lastSnapshot', JSON.stringify(snapshot))
+            }
+        } catch (storageError) {
+            console.warn('Failed to persist permission snapshot', storageError)
+        }
+
         return {
-            canManage: companyPerms.includes('company.manage'),
-            canInvite: companyPerms.includes('company.invite'),
-            canViewSettings: companyPerms.includes('settings.manage'),
-            canViewUsers: companyPerms.includes('company.users.view'),
-            canManageUsers: companyPerms.includes('company.users.manage'),
-            canAccessInvoicing: companyPerms.includes('invoices.view'),
-            canManageInvoicing: companyPerms.includes('invoices.manage'),
-            canAccessAccounting: companyPerms.includes('accounting.view'),
-            canManageAccounting: companyPerms.includes('accounting.manage'),
-            canViewReports: companyPerms.includes('reports.view')
+            canManage: has('company.manage'),
+            canInvite: has('company.invite'),
+            canViewSettings: has('settings.manage'),
+            canViewUsers: has('company.users.view'),
+            canManageUsers: has('company.users.manage'),
+            canAccessInvoicing: has('invoices.view'),
+            canManageInvoicing: has('invoices.manage'),
+            canAccessAccounting: has('accounting.view'),
+            canManageAccounting: has('accounting.manage'),
+            canViewReports: has('reports.view')
         }
     })
 
@@ -133,11 +161,11 @@ export function useCompanyContext() {
         if (permissionsToCheck.length === 0) return true
 
         return permissionsToCheck.some((perm) => {
-            if (companyPermissions.value.includes(perm)) {
+            if (companyPermissions.value.includes('*') || companyPermissions.value.includes(perm)) {
                 return true
             }
 
-            if (systemPermissions.value.includes(perm)) {
+            if (systemPermissions.value.includes('*') || systemPermissions.value.includes(perm)) {
                 return true
             }
 

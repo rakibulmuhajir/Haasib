@@ -12,7 +12,7 @@ class CustomerContact extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'invoicing.customer_contacts';
+    protected $table = 'acct.customer_contacts';
 
     protected $fillable = [
         'customer_id',

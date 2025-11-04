@@ -78,13 +78,13 @@ class ProcessCustomerImport implements ShouldQueue
                     if ($updateExisting && $this->isDuplicateCustomer($customerData, $companyId)) {
                         // Update existing customer
                         $existing = $this->findExistingCustomer($customerData, $companyId);
-                        DB::table('invoicing.customers')
+                        DB::table('acct.customers')
                             ->where('id', $existing->id)
                             ->update($customerData);
                     } else {
                         // Create new customer
                         $customerData['id'] = \Illuminate\Support\Str::uuid();
-                        DB::table('invoicing.customers')->insert($customerData);
+                        DB::table('acct.customers')->insert($customerData);
                     }
 
                     $importedCount++;
@@ -135,7 +135,7 @@ class ProcessCustomerImport implements ShouldQueue
      */
     private function isDuplicateCustomer(array $customerData, string $companyId): bool
     {
-        $query = DB::table('invoicing.customers')->where('company_id', $companyId);
+        $query = DB::table('acct.customers')->where('company_id', $companyId);
 
         if (! empty($customerData['email'])) {
             $query->orWhere('email', $customerData['email']);
@@ -160,7 +160,7 @@ class ProcessCustomerImport implements ShouldQueue
      */
     private function findExistingCustomer(array $customerData, string $companyId)
     {
-        $query = DB::table('invoicing.customers')->where('company_id', $companyId);
+        $query = DB::table('acct.customers')->where('company_id', $companyId);
 
         if (! empty($customerData['email'])) {
             $existing = $query->where('email', $customerData['email'])->first();

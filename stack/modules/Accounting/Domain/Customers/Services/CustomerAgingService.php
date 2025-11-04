@@ -192,7 +192,7 @@ class CustomerAgingService
     {
         $asOfDate = $asOfDate ?? now()->subDay()->startOfDay();
 
-        $summary = DB::table('invoicing.customer_aging_snapshots')
+        $summary = DB::table('acct.customer_aging_snapshots')
             ->where('company_id', $companyId)
             ->where('snapshot_date', $asOfDate->toDateString())
             ->selectRaw('
@@ -228,7 +228,7 @@ class CustomerAgingService
      */
     private function calculateRiskDistribution($companyId, Carbon $asOfDate): array
     {
-        $distribution = DB::table('invoicing.customer_aging_snapshots')
+        $distribution = DB::table('acct.customer_aging_snapshots')
             ->where('company_id', $companyId)
             ->where('snapshot_date', $asOfDate->toDateString())
             ->selectRaw('

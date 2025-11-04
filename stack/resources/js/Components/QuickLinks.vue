@@ -1,15 +1,17 @@
 <template>
     <div class="simple-quick-links">
         <h3 class="quick-links-title">{{ title }}</h3>
-        
+
         <div class="quick-links-list">
             <a
                 v-for="link in quickLinks"
                 :key="link.label"
                 :href="link.url"
-                class="quick-link-text"
+                class="quick-link-text flex items-center"
+                :class="link.color || ''"
                 @click="handleLinkClick($event, link)"
             >
+                <i :class="link.icon" class="mr-2"></i>
                 {{ link.label }}
             </a>
         </div>
@@ -24,6 +26,7 @@ interface QuickLink {
     label: string
     icon: string
     url: string
+    color?: string
     action?: () => void
 }
 
@@ -68,13 +71,23 @@ const handleLinkClick = (event: MouseEvent, link: QuickLink) => {
 }
 
 .quick-link-text {
-    display: block;
-    padding: 0.25rem 0;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
     color: #3b82f6;
     text-decoration: none;
     font-size: 0.875rem;
     font-weight: 500;
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+}
+
+.quick-link-text:hover {
+    color: #2563eb;
+    text-decoration: none;
+    background-color: #f3f4f6;
+    border-color: #e5e7eb;
 }
 
 .quick-link-text:hover {
@@ -87,13 +100,15 @@ const handleLinkClick = (event: MouseEvent, link: QuickLink) => {
     .quick-links-title {
         color: #f9fafb;
     }
-    
+
     .quick-link-text {
         color: #60a5fa;
     }
-    
+
     .quick-link-text:hover {
         color: #93c5fd;
+        background-color: #374151;
+        border-color: #4b5563;
     }
 }
 </style>

@@ -95,9 +95,9 @@ class DashboardController extends Controller
     {
         $validated = $request->validate([
             'layout_id' => ['required', 'string', 'uuid'],
-            'invalidate_cache' => ['boolean', 'default: true],
-            'priority' => ['string', Rule::in(['low', 'normal', 'high'])],
-            'async' => ['boolean', 'default: true],
+            'invalidate_cache' => ['boolean', 'default: true'],
+            'priority' => ['nullable', 'string', Rule::in(['low', 'normal', 'high'])],
+            'async' => ['boolean', 'default: true'],
             'date_range.start' => ['nullable', 'date'],
             'date_range.end' => ['nullable', 'date'],
             'comparison' => ['nullable', 'string', Rule::in(['prior_period', 'prior_year', 'custom'])],
@@ -162,7 +162,7 @@ class DashboardController extends Controller
     public function refreshAll(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'invalidate_cache' => ['boolean', 'default: true],
+            'invalidate_cache' => ['boolean', 'default: true'],
         ]);
 
         $companyId = $request->user()->current_company_id;

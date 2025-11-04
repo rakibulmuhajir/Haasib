@@ -721,7 +721,7 @@ class CustomerController extends Controller
         $customer = $this->getCustomerWithPermission($request, $customerId);
 
         $validated = $request->validate([
-            'group_id' => 'required|uuid|exists:invoicing.customer_groups,id',
+            'group_id' => 'required|uuid|exists:acct.customer_groups,id',
         ]);
 
         try {
@@ -801,7 +801,7 @@ class CustomerController extends Controller
         $customer = $this->getCustomerWithPermission($request, $customerId);
 
         $validated = $request->validate([
-            'contact_id' => 'nullable|uuid|exists:invoicing.customer_contacts,id',
+            'contact_id' => 'nullable|uuid|exists:acct.customer_contacts,id',
             'channel' => 'required|in:email,phone,meeting,note',
             'direction' => 'required|in:inbound,outbound,internal',
             'subject' => 'nullable|string|max:255',

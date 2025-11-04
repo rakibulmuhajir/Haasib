@@ -18,6 +18,11 @@ const {
   hasPermission
 } = useCompanyContext()
 
+const applyPermissions = (items = []) => items.map(item => ({
+  ...item,
+  children: (item.children ?? []).filter(child => !child.permission || hasPermission(child.permission))
+}))
+
 const navigation = computed(() => {
   const companyId = currentCompany.value?.id
 
@@ -63,16 +68,15 @@ const navigation = computed(() => {
 
   const items = [
     {
-      label: 'Overview',
+      label: 'Overview & Insights',
       path: '/dashboard',
       icon: 'tachometer-alt',
-      description: 'Company KPIs and high-level metrics.'
+      description: 'Dashboard landing, KPIs, and announcements to anchor the workspace.'
     },
     {
       label: 'Sales & Receivables',
       icon: 'hand-holding-usd',
-      permission: 'canAccessInvoicing',
-      description: 'Quotes, invoices, and customer collections.',
+      description: 'Customer-facing cash flows: invoices, payments, and receivable health at a glance.',
       children: [
         {
           label: 'Invoices',
@@ -91,17 +95,28 @@ const navigation = computed(() => {
           path: '/customers',
           icon: 'users',
           permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Credit Limits',
+          path: '/customers/credit-limits',
+          icon: 'balance-scale',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Statements & Aging',
+          path: '/reports/statements',
+          icon: 'file-invoice-dollar',
+          permission: 'canAccessInvoicing'
         }
       ]
     },
     {
       label: 'Banking & Cash',
       icon: 'university',
-      permission: 'canAccessAccounting',
-      description: 'Statement imports and reconciliation.',
+      description: 'Manage reconciliations, statement imports, and bank-side reporting.',
       children: [
         {
-          label: 'Reconciliation',
+          label: 'Reconciliation Workspace',
           path: '/bank-reconciliation',
           icon: 'balance-scale',
           permission: 'canAccessAccounting'
@@ -117,14 +132,19 @@ const navigation = computed(() => {
           path: '/bank-reports',
           icon: 'chart-bar',
           permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Bank Accounts',
+          path: '/bank-accounts',
+          icon: 'university',
+          permission: 'canAccessAccounting'
         }
       ]
     },
     {
-      label: 'Accounting Ops',
+      label: 'Accounting Operations',
       icon: 'calculator',
-      permission: 'canAccessAccounting',
-      description: 'Journal entries, ledgers, and balances.',
+      description: 'Journal flows, ledgers, and trial balances accountants maintain daily.',
       children: [
         {
           label: 'Journal Entries',
@@ -143,17 +163,22 @@ const navigation = computed(() => {
           path: '/ledger',
           icon: 'book-open',
           permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Adjustments & Batches',
+          path: '/journal-entries/batches',
+          icon: 'layer-group',
+          permission: 'canAccessAccounting'
         }
       ]
     },
     {
-      label: 'Period Close',
+      label: 'Period Close & Compliance',
       icon: 'calendar-check',
-      permission: 'canAccessPeriodClose',
-      description: 'Checklist workflows and compliance tracking.',
+      description: 'Monthly and annual close, audit evidence, and reopen workflows.',
       children: [
         {
-          label: 'Period Close',
+          label: 'Period Close Checklist',
           path: '/period-close',
           icon: 'tasks',
           permission: 'canAccessPeriodClose'
@@ -165,7 +190,7 @@ const navigation = computed(() => {
           permission: 'canAccessPeriodClose'
         },
         {
-          label: 'Compliance',
+          label: 'Policy & Compliance',
           path: '/compliance',
           icon: 'shield-alt',
           permission: 'canAccessPeriodClose'
@@ -173,13 +198,12 @@ const navigation = computed(() => {
       ]
     },
     {
-      label: 'Reporting',
+      label: 'Reporting & Analytics',
       icon: 'chart-line',
-      permission: 'canViewReports',
-      description: 'Dashboards, statements, and saved templates.',
+      description: 'Dashboards, schedules, statements, and analytics tooling.',
       children: [
         {
-          label: 'Dashboard',
+          label: 'Reporting Dashboard',
           path: '/reports/dashboard',
           icon: 'chart-pie',
           permission: 'canViewReports'
@@ -188,6 +212,12 @@ const navigation = computed(() => {
           label: 'Financial Reports',
           path: '/reports/financial',
           icon: 'file-alt',
+          permission: 'canViewReports'
+        },
+        {
+          label: 'Reporting Schedules',
+          path: '/reports/schedules',
+          icon: 'calendar',
           permission: 'canViewReports'
         },
         {
@@ -205,21 +235,16 @@ const navigation = computed(() => {
       ]
     },
     {
-      label: 'Organization',
+      label: 'Organization & Administration',
       icon: 'building',
-      description: 'Manage entities, teams, and access.',
+      description: 'Manage companies, switch context, and administer users.',
       children: organizationChildren
     },
     {
       label: 'User & Settings',
       icon: 'user-cog',
-      description: 'Personal profile and workspace preferences.',
+      description: 'Global configuration for the workspace.',
       children: [
-        {
-          label: 'My Profile',
-          path: '/profile',
-          icon: 'user'
-        },
         {
           label: 'System Settings',
           path: '/settings',
@@ -230,23 +255,7 @@ const navigation = computed(() => {
     }
   ]
 
-  const sanitizeChildren = (children = []) =>
-    children.filter(child => !child.permission || hasPermission(child.permission))
-
-  return items
-    .map(item => ({
-      ...item,
-      children: sanitizeChildren(item.children)
-    }))
-    .filter(item => {
-      if (item.permission && !hasPermission(item.permission)) {
-        return false
-      }
-      if (item.children?.length) {
-        return true
-      }
-      return Boolean(item.path)
-    })
+  return applyPermissions(items)
 })
 
 const hoveredItem = ref(null)
@@ -255,9 +264,34 @@ const drawerChildren = computed(() => hoveredItem.value?.children ?? [])
 const drawerTitle = computed(() => hoveredItem.value?.label ?? '')
 const drawerDescription = computed(() => hoveredItem.value?.description ?? '')
 
+const footerNavigation = computed(() => applyPermissions([
+  {
+    label: 'Lifecycle Utilities',
+    icon: 'life-ring',
+    description: 'Onboarding, support resources, and product highlights.',
+    children: [
+      {
+        label: 'Getting Started',
+        path: '/welcome',
+        icon: 'rocket'
+      },
+      {
+        label: 'Help & Resources',
+        path: '/help',
+        icon: 'question-circle'
+      },
+      {
+        label: 'What’s New',
+        path: '/whats-new',
+        icon: 'star'
+      }
+    ]
+  }
+]))
+
 const showDrawer = computed(() => {
   if (isMobile.value) return false
-  return drawerChildren.value.length > 0
+  return Boolean(hoveredItem.value)
 })
 
 const sidebarClasses = computed(() => ({
@@ -273,10 +307,6 @@ const containerClasses = computed(() => ({
 
 const handleItemHover = (item) => {
   if (isMobile.value) return
-  if (!item?.children?.length) {
-    hoveredItem.value = null
-    return
-  }
   hoveredItem.value = item
 }
 
@@ -342,6 +372,20 @@ onMounted(() => {
           />
         </ul>
       </nav>
+
+      <div v-if="footerNavigation.length" class="sidebar-footer">
+        <nav role="menu" aria-label="Support navigation">
+          <ul class="sidebar-menu">
+            <SidebarMenuItem
+              v-for="item in footerNavigation"
+              :key="item.label"
+              :item="item"
+              :depth="0"
+              @hover="handleItemHover"
+            />
+          </ul>
+        </nav>
+      </div>
     </aside>
 
     <transition name="sidebar-drawer">
@@ -358,23 +402,28 @@ onMounted(() => {
         </header>
 
         <nav class="sidebar-drawer__nav" role="menu">
-          <ul class="sidebar-drawer__list">
-            <li
-              v-for="child in drawerChildren"
-              :key="child.path || child.label"
-              class="sidebar-drawer__item"
-              role="none"
-            >
-              <Link
-                :href="child.path"
-                class="sidebar-drawer__link"
-                role="menuitem"
+          <template v-if="drawerChildren.length">
+            <ul class="sidebar-drawer__list">
+              <li
+                v-for="child in drawerChildren"
+                :key="child.path || child.label"
+                class="sidebar-drawer__item"
+                role="none"
               >
-                <span class="sidebar-drawer__bullet" />
-                <span class="sidebar-drawer__label">{{ child.label }}</span>
-              </Link>
-            </li>
-          </ul>
+                <Link
+                  :href="child.path"
+                  class="sidebar-drawer__link"
+                  role="menuitem"
+                >
+                  <span class="sidebar-drawer__bullet" />
+                  <span class="sidebar-drawer__label">{{ child.label }}</span>
+                </Link>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="sidebar-drawer__empty">
+            No quick links available yet.
+          </p>
         </nav>
       </div>
     </transition>
@@ -572,6 +621,12 @@ onMounted(() => {
 
 .sidebar-drawer__label {
   flex: 1;
+}
+
+.sidebar-drawer__empty {
+  font-size: 0.85rem;
+  color: var(--text-500, #64748b);
+  padding: 1rem 1.25rem;
 }
 
 @media (max-width: 1023px) {

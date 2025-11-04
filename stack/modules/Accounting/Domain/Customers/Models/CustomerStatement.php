@@ -16,7 +16,7 @@ class CustomerStatement extends Model
 {
     use HasFactory;
 
-    protected $table = 'invoicing.customer_statements';
+    protected $table = 'acct.customer_statements';
 
     protected $fillable = [
         'customer_id',

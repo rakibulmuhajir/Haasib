@@ -7,7 +7,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
-use App\Services\PaymentService;
+use Modules\Accounting\Services\PaymentService;
 use Illuminate\Console\Command;
 
 class PaymentAllocate extends Command

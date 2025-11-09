@@ -449,7 +449,7 @@ class PeriodCloseController extends Controller
             'description' => 'required|string|max:500',
             'entry_date' => 'nullable|date',
             'lines' => 'required|array|min:1',
-            'lines.*.account_id' => 'required|string|exists:acct.accounts,id',
+            'lines.*.account_id' => 'required|string|exists:pgsql.acct.accounts,id',
             'lines.*.debit' => 'required|numeric|min:0',
             'lines.*.credit' => 'required|numeric|min:0',
             'lines.*.description' => 'required|string|max:255',

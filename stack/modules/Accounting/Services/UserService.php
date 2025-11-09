@@ -24,7 +24,7 @@ class UserService
     {
         $validator = Validator::make($userData, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:auth.users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
             'system_role' => ['sometimes', 'string', 'in:user,admin,superadmin'],
         ]);

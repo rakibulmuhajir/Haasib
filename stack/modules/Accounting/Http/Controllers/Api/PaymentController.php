@@ -2,20 +2,17 @@
 
 namespace Modules\Accounting\Http\Controllers\Api;
 
-use Illuminate\Http\Request;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
+use App\Models\PaymentBatch;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
-use App\Models\Payment;
-use App\Models\PaymentAllocation;
-use App\Models\PaymentBatch;
-use Modules\Accounting\Domain\Payments\Actions\RecordPaymentAction;
-use Modules\Accounting\Domain\Payments\Actions\AllocatePaymentAction;
-use Modules\Accounting\Domain\Payments\Actions\AutoAllocatePaymentAction;
+use Illuminate\Support\Facades\DB;
 use Modules\Accounting\Domain\Payments\Actions\CreatePaymentBatchAction;
 use Modules\Accounting\Domain\Payments\Services\PaymentReceiptService;
 
@@ -45,7 +42,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Add user context
@@ -107,9 +104,9 @@ class PaymentController extends Controller
         try {
             $payment = Payment::with([
                 'entity',
-                'currency', 
+                'currency',
                 'allocations.invoice',
-                'creator'
+                'creator',
             ])->findOrFail($paymentId);
 
             return response()->json([
@@ -166,7 +163,7 @@ class PaymentController extends Controller
 
         $validated = $request->validate([
             'allocations' => 'required|array|min:1',
-            'allocations.*.invoice_id' => 'required|uuid|exists:acct.invoices,invoice_id',
+            'allocations.*.invoice_id' => 'required|uuid|exists:pgsql.acct.invoices,invoice_id',
             'allocations.*.amount' => 'required|numeric|min:0.01',
             'allocations.*.notes' => 'nullable|string',
         ]);
@@ -175,7 +172,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Dispatch through command bus
@@ -232,7 +229,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Dispatch through command bus
@@ -278,7 +275,7 @@ class PaymentController extends Controller
 
         try {
             $payment = Payment::findOrFail($paymentId);
-            
+
             $allocations = $payment->allocations()
                 ->with(['invoice'])
                 ->orderBy('created_at')
@@ -326,19 +323,20 @@ class PaymentController extends Controller
                 ->findOrFail($paymentId);
 
             $format = $request->get('format', 'pdf');
-            $receiptService = new PaymentReceiptService();
+            $receiptService = new PaymentReceiptService;
 
             if ($format === 'json') {
                 $receiptData = $receiptService->generateReceiptData($payment);
+
                 return response()->json($receiptData);
             }
 
             if ($format === 'pdf') {
                 $pdfContent = $receiptService->generatePdfReceipt($payment);
-                
+
                 return response($pdfContent)
                     ->header('Content-Type', 'application/pdf')
-                    ->header('Content-Disposition', 'attachment; filename="receipt-R-' . $payment->payment_number . '.pdf"');
+                    ->header('Content-Disposition', 'attachment; filename="receipt-R-'.$payment->payment_number.'.pdf"');
             }
 
             return response()->json([
@@ -378,7 +376,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Add user context
@@ -433,7 +431,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Add user context
@@ -491,7 +489,7 @@ class PaymentController extends Controller
                 return response()->json([
                     'error' => 'Duplicate batch creation',
                     'message' => 'A batch with this idempotency key is already being processed',
-                    'existing_batch_id' => $existingBatch
+                    'existing_batch_id' => $existingBatch,
                 ], 409);
             }
         }
@@ -517,7 +515,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             // Add context to validated data
@@ -530,7 +528,7 @@ class PaymentController extends Controller
             }
 
             // Create batch through action
-            $action = new CreatePaymentBatchAction();
+            $action = new CreatePaymentBatchAction;
             $result = $action->execute($validated);
 
             // Store actual batch ID for idempotency
@@ -576,7 +574,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             $batch = PaymentBatch::with(['creator', 'payments'])
@@ -660,7 +658,7 @@ class PaymentController extends Controller
             // Set company context for RLS
             $companyId = $request->header('X-Company-Id');
             if ($companyId) {
-                DB::statement("SET app.current_company = ?", [$companyId]);
+                DB::statement('SET app.current_company = ?', [$companyId]);
             }
 
             $validated = $request->validate([
@@ -685,7 +683,7 @@ class PaymentController extends Controller
             }
 
             if (isset($validated['date_to'])) {
-                $query->where('created_at', '<=', $validated['date_to'] . ' 23:59:59');
+                $query->where('created_at', '<=', $validated['date_to'].' 23:59:59');
             }
 
             // Filter by source type in metadata

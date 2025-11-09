@@ -41,6 +41,16 @@ class CompanyScope implements Scope
             return (string) app('company.id');
         }
 
+        // Check RLS session variable as fallback
+        try {
+            $result = \Illuminate\Support\Facades\DB::selectOne("SELECT current_setting('app.current_company_id', true) as company_id");
+            if ($result && $result->company_id) {
+                return (string) $result->company_id;
+            }
+        } catch (\Exception $e) {
+            // Ignore if setting doesn't exist or can't be accessed
+        }
+
         return null;
     }
 }

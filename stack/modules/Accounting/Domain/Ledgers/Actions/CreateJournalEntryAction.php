@@ -2,10 +2,10 @@
 
 namespace Modules\Accounting\Domain\Ledgers\Actions;
 
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use App\Models\JournalEntry;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class CreateJournalEntryAction
 {
@@ -17,7 +17,7 @@ class CreateJournalEntryAction
         // Validate input data
         $validated = Validator::make($data, [
             'payment_id' => 'nullable|uuid|exists:invoicing.payments,payment_id',
-            'invoice_id' => 'nullable|uuid|exists:acct.invoices,invoice_id',
+            'invoice_id' => 'nullable|uuid|exists:pgsql.acct.invoices,invoice_id',
             'allocation_id' => 'nullable|uuid|exists:invoicing.payment_allocations,id',
             'company_id' => 'required|uuid|exists:public.companies,id',
             'entry_type' => 'required|string|in:payment,reversal,allocation,allocation_reversal',

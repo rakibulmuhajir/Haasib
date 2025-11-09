@@ -2,14 +2,14 @@
 
 namespace Modules\Accounting\Domain\Customers\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Modules\Accounting\Domain\Customers\Scopes\CreditLimitScopes;
 
 class CustomerCreditLimit extends Model
 {
-    use CreditLimitScopes, HasFactory, SoftDeletes;
+    use BelongsToCompany, HasFactory, SoftDeletes;
 
     protected $table = 'acct.customer_credit_limits';
 

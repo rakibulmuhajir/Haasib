@@ -24,7 +24,7 @@ class VoidJournalEntryAction
             'journal_entry_id' => $journalEntryId,
             'void_reason' => $voidReason,
         ], [
-            'journal_entry_id' => 'required|uuid|exists:acct.journal_entries,id',
+            'journal_entry_id' => 'required|uuid|exists:pgsql.acct.journal_entries,id',
             'void_reason' => 'required|string|max:1000',
         ]);
 

@@ -18,6 +18,11 @@ class Module extends Model
     protected $keyType = 'string';
 
     /**
+     * The database connection that should be used by the model.
+     */
+    protected $connection = 'pgsql';
+
+    /**
      * The table associated with the model.
      *
      * @var string

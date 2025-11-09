@@ -43,7 +43,7 @@ class CreateBankReconciliationAdjustmentRequest extends FormRequest
                 'nullable',
                 'string',
                 'uuid',
-                'exists:ops.bank_statement_lines,id',
+                'exists:pgsql.ops.bank_statement_lines,id',
             ],
             'post_journal_entry' => [
                 'boolean',
@@ -52,7 +52,7 @@ class CreateBankReconciliationAdjustmentRequest extends FormRequest
                 'nullable',
                 'string',
                 'uuid',
-                'exists:ledger.journal_entries,id',
+                'exists:pgsql.ledger.journal_entries,id',
             ],
         ];
     }

@@ -15,7 +15,7 @@ class CustomerCreate
         abort_unless($actor->isSuperAdmin(), 403);
 
         $data = Validator::make($p, [
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',

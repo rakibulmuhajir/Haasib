@@ -108,7 +108,7 @@ class UpdatePeriodCloseTemplateAction
     private function validateUpdateData(array $updateData, string $excludeTemplateId, string $companyId): void
     {
         $validator = validator($updateData, [
-            'name' => 'sometimes|string|max:255|unique:ledger.period_close_templates,name,'.$excludeTemplateId.',id,company_id,'.$companyId,
+            'name' => 'sometimes|string|max:255|unique:pgsql.ledger.period_close_templates,name,'.$excludeTemplateId.',id,company_id,'.$companyId,
             'description' => 'sometimes|string|nullable|max:1000',
             'frequency' => 'sometimes|in:monthly,quarterly,yearly,custom',
             'is_default' => 'sometimes|boolean',

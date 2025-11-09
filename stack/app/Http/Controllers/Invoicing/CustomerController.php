@@ -139,7 +139,7 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'customer_type' => 'nullable|string|max:50',
+            'customer_type' => 'required|string|max:50',
             'address_line_1' => 'nullable|string|max:255',
             'country_id' => 'nullable|string',
             'currency_id' => 'nullable|string',
@@ -153,16 +153,17 @@ class CustomerController extends Controller
         // Map form fields to the expected fields for CreateCustomerAction
         $customerData = [
             'name' => $validated['name'],
-            'legal_name' => $validated['name'], // Use name as legal_name for now
             'status' => $validated['status'] ?? 'active',
-            'default_currency' => $this->getCurrencyCode($validated['currency_id'] ?? 'USD'),
+            'currency' => $this->getCurrencyCode($validated['currency_id'] ?? 'USD'),
             'credit_limit' => null, // Set default credit_limit to null
             'email' => null,
             'phone' => null,
+            'address' => $validated['address_line_1'] ?? null,
+            'country' => $this->getCountryName($validated['country_id'] ?? null),
         ];
 
         // Determine if contact is email or phone
-        if (!empty($validated['contact'])) {
+        if (! empty($validated['contact'])) {
             if (filter_var($validated['contact'], FILTER_VALIDATE_EMAIL)) {
                 $customerData['email'] = $validated['contact'];
             } else {
@@ -184,15 +185,17 @@ class CustomerController extends Controller
                 ->with('success', 'Customer created successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Validation failed:', $e->errors());
+
             return redirect()
                 ->back()
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\Exception $e) {
             \Log::error('Customer creation failed:', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return redirect()
                 ->back()
-                ->with('error', 'Failed to create customer: ' . $e->getMessage())
+                ->with('error', 'Failed to create customer: '.$e->getMessage())
                 ->withInput();
         }
     }
@@ -469,7 +472,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'action' => 'required|in:delete,export',
             'customer_ids' => 'required|array',
-            'customer_ids.*' => 'required|uuid|exists:acct.customers,id',
+            'customer_ids.*' => 'required|uuid|exists:pgsql.acct.customers,id',
         ]);
 
         $currentCompany = $request->attributes->get('company');
@@ -540,6 +543,33 @@ class CustomerController extends Controller
 
         // Default to USD
         return 'USD';
+    }
+
+    /**
+     * Get country name from country ID or return the name directly.
+     */
+    private function getCountryName(?string $countryIdOrName): ?string
+    {
+        if (empty($countryIdOrName)) {
+            return null;
+        }
+
+        // If it's not a UUID, assume it's already a name
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $countryIdOrName)) {
+            return $countryIdOrName;
+        }
+
+        // Try to get from database if it's an ID
+        try {
+            $country = DB::table('countries')->where('id', $countryIdOrName)->first();
+            if ($country) {
+                return $country->name;
+            }
+        } catch (\Exception $e) {
+            // Ignore if table doesn't exist
+        }
+
+        return null;
     }
 
     /**

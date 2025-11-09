@@ -94,7 +94,7 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public, acct',
+            'search_path' => 'public, auth, acct',
             'sslmode' => 'prefer',
         ],
 

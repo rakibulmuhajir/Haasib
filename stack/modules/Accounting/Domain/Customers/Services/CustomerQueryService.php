@@ -26,7 +26,7 @@ class CustomerQueryService
         }
 
         if (! empty($filters['currency'])) {
-            $query->where('default_currency', $filters['currency']);
+            $query->where('currency', $filters['currency']);
         }
 
         // Order by most recent first
@@ -51,7 +51,7 @@ class CustomerQueryService
                 'createdBy',
                 'invoices' => function ($query) {
                     $query->where('status', '!=', 'paid')
-                        ->orderBy('issue_date', 'desc')
+                        ->orderBy('invoice_date', 'desc')
                         ->limit(10);
                 },
             ])

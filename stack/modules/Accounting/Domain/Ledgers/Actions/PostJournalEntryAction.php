@@ -25,7 +25,7 @@ class PostJournalEntryAction
             'journal_entry_id' => $journalEntryId,
             'post_note' => $postNote,
         ], [
-            'journal_entry_id' => 'required|uuid|exists:acct.journal_entries,id',
+            'journal_entry_id' => 'required|uuid|exists:pgsql.acct.journal_entries,id',
             'post_note' => 'nullable|string|max:1000',
         ]);
 

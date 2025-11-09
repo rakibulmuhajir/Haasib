@@ -1,75 +1,85 @@
 <template>
-    <!-- Executive Dashboard Header -->
-    <header class="executive-header">
-        <div class="max-w-7xl mx-auto px-6 py-3">
-
-            <!-- Company Hero Section -->
-            <div class="company-hero">
-                <div class="company-identity">
-                    <div class="company-logo-wrapper">
-                        <div class="company-logo">
-                            <span class="logo-text">{{ company.name?.charAt(0)?.toUpperCase() || '?' }}</span>
-                            <div 
-                                :class="[
-                                    'status-dot',
-                                    company.is_active ? 'status-active' : 'status-inactive'
-                                ]"
-                            >
-                                <i :class="company.is_active ? 'pi pi-check' : 'pi pi-pause'" class="status-icon"></i>
-                            </div>
-                        </div>
+    <!-- Improved Company Header -->
+    <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        <div class="px-6 py-8">
+            <div class="flex items-start justify-between">
+                <!-- Company Info -->
+                <div class="flex-1">
+                    <div class="flex items-center gap-4 mb-4">
+                        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                            {{ company.name }}
+                        </h1>
+                        <span :class="[
+                            'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium',
+                            company.is_active 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                        ]">
+                            {{ company.is_active ? 'Active' : 'Inactive' }}
+                        </span>
                     </div>
-                    
-                    <div class="company-info">
-                        <div class="company-name-row">
-                            <h1 class="company-name">{{ company.name }}</h1>
-                            <button 
-                                @click="copyCompanyId"
-                                class="copy-icon-btn"
-                                title="Copy ID"
-                            >
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
+                    <div class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                        <span v-if="company.industry" class="flex items-center">
+                            <i class="fas fa-industry mr-2"></i>
+                            {{ getIndustryLabel(company.industry) }}
+                        </span>
+                        <span v-if="company.country" class="flex items-center">
+                            <i class="fas fa-map-marker-alt mr-2"></i>
+                            {{ getCountryLabel(company.country) }}
+                        </span>
+                        <span v-if="company.base_currency" class="flex items-center">
+                            <i class="fas fa-coins mr-2"></i>
+                            {{ company.base_currency }}
+                        </span>
+                        <span v-if="company.user_role?.role" class="flex items-center">
+                            <i :class="getRoleIcon(company.user_role.role) + ' mr-2'"></i>
+                            <span class="capitalize">{{ company.user_role.role }}</span>
+                        </span>
                     </div>
                 </div>
-
-                <!-- Navigation Actions -->
-                <div class="nav-actions">
-                    
-                    <Button
+                
+                <!-- Primary Actions -->
+                <div class="flex items-center gap-3 ml-8">
+                    <button 
                         v-if="!isCurrentCompany && company.is_active"
-                        variant="ghost"
-                        size="small"
                         @click="$emit('switch-context')"
-                        class="nav-button"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200"
                     >
-                        <i class="pi pi-sign-in mr-2"></i>
+                        <i class="fas fa-sign-in-alt mr-2"></i>
                         Switch to Company
-                    </Button>
-                </div>
-
-                <!-- Quick Actions -->
-                <div v-if="company.is_active && quickActions.length > 0" class="quick-actions">
-                    <div class="quick-actions-label">Quick Actions</div>
-                    <div class="quick-actions-grid">
-                        <Button
-                            v-for="action in quickActions"
-                            :key="action.label"
-                            variant="ghost"
-                            size="small"
-                            @click="action.action"
-                            class="quick-action-btn"
-                        >
-                            <i :class="action.icon" class="mr-2"></i>
-                            {{ action.label }}
-                        </Button>
-                    </div>
+                    </button>
+                    <button 
+                        v-else-if="isCurrentCompany"
+                        disabled
+                        class="px-4 py-2 bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed"
+                    >
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Active Company
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
 
-          </div>
-    </header>
+    <!-- Improved Tab Navigation -->
+    <div class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+        <nav class="flex space-x-8 px-6" aria-label="Tabs">
+            <button
+                v-for="tab in tabOptions"
+                :key="tab.key"
+                @click="$emit('tab-change', tab.key)"
+                :class="[
+                    'py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200',
+                    activeTab === tab.key
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                ]"
+            >
+                <i :class="tab.icon + ' mr-2'"></i>
+                {{ tab.label }}
+            </button>
+        </nav>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -106,18 +116,33 @@ interface Action {
     action: () => void
 }
 
+interface TabOption {
+    key: string
+    label: string
+    icon: string
+}
+
 const props = defineProps<{
     company: Company
     isCurrentCompany?: boolean
     primaryActions?: Action[]
     secondaryActions?: Action[]
     quickActions?: Action[]
+    activeTab?: string
 }>()
 
 const emit = defineEmits<{
     'switch-context': []
     'toggle-status': []
+    'tab-change': [key: string]
 }>()
+
+// Tab options for navigation
+const tabOptions: TabOption[] = [
+    { key: 'reports', label: 'Reports', icon: 'fas fa-chart-line' },
+    { key: 'people', label: 'People', icon: 'fas fa-users' },
+    { key: 'activity', label: 'Activity', icon: 'fas fa-history' }
+]
 
 const toast = useToast()
 

@@ -32,7 +32,7 @@ class ReverseJournalEntryAction
 
         // Validate input
         $validator = Validator::make(array_merge(['journal_entry_id' => $journalEntryId], $options), [
-            'journal_entry_id' => 'required|uuid|exists:acct.journal_entries,id',
+            'journal_entry_id' => 'required|uuid|exists:pgsql.acct.journal_entries,id',
             'reversal_date' => 'required|date|after_or_equal:'.now()->toDateString(),
             'description_override' => 'nullable|string|max:500',
             'auto_post' => 'boolean',

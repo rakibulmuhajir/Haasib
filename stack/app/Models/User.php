@@ -24,6 +24,11 @@ class User extends Authenticatable
     protected $keyType = 'string';
 
     /**
+     * The database connection that should be used by the model.
+     */
+    protected $connection = 'pgsql';
+
+    /**
      * The table associated with the model.
      */
     protected $table = 'auth.users';

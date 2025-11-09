@@ -18,6 +18,11 @@ class Company extends Model
     protected $keyType = 'string';
 
     /**
+     * The database connection that should be used by the model.
+     */
+    protected $connection = 'pgsql';
+
+    /**
      * The table associated with the model.
      *
      * @var string
@@ -205,6 +210,29 @@ class Company extends Model
         data_set($settings, $key, $value);
         $this->settings = $settings;
         $this->save();
+    }
+
+    /**
+     * Boot the model.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($company) {
+            if (empty($company->slug)) {
+                $company->slug = \Illuminate\Support\Str::slug($company->name);
+                
+                // Ensure unique slug
+                $originalSlug = $company->slug;
+                $counter = 1;
+                
+                while (static::where('slug', $company->slug)->exists()) {
+                    $company->slug = $originalSlug . '-' . $counter;
+                    $counter++;
+                }
+            }
+        });
     }
 
     /**

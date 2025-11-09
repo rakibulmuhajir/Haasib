@@ -19,7 +19,7 @@ class CompanyCreateRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
-                'unique:auth.companies,name',
+                'unique:companies,name',
             ],
             'industry' => [
                 'required',
@@ -31,7 +31,7 @@ class CompanyCreateRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                'unique:auth.companies,slug',
+                'unique:companies,slug',
                 'regex:/^[a-z0-9-]+$/',
             ],
             'country' => [

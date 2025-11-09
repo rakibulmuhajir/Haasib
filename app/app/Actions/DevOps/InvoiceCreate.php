@@ -15,7 +15,7 @@ class InvoiceCreate
         abort_unless($actor->isSuperAdmin(), 403);
 
         $data = Validator::make($p, [
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
             'customer_id' => 'required|string|exists:customers,customer_id',
             'invoice_number' => 'nullable|string|max:50',
             'reference_number' => 'nullable|string|max:50',

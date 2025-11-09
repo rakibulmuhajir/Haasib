@@ -2,17 +2,17 @@
 
 namespace Modules\Accounting\Domain\Payments\Actions;
 
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Modules\Accounting\Domain\Payments\Telemetry\PaymentMetrics;
+use Modules\Accounting\Domain\Payments\Events\EarlyPaymentDiscountApplied;
 use Modules\Accounting\Domain\Payments\Events\PaymentAllocated;
 use Modules\Accounting\Domain\Payments\Events\PaymentAudited;
 use Modules\Accounting\Domain\Payments\Events\UnallocatedCashCreated;
-use Modules\Accounting\Domain\Payments\Events\EarlyPaymentDiscountApplied;
-use App\Models\Payment;
-use App\Models\PaymentAllocation;
-use App\Models\Invoice;
+use Modules\Accounting\Domain\Payments\Telemetry\PaymentMetrics;
 
 class AllocatePaymentAction
 {
@@ -26,9 +26,9 @@ class AllocatePaymentAction
             'payment_id' => $paymentId,
             'allocations' => $allocations,
         ], [
-            'payment_id' => 'required|uuid|exists:acct.payments,payment_id',
+            'payment_id' => 'required|uuid|exists:pgsql.acct.payments,payment_id',
             'allocations' => 'required|array|min:1',
-            'allocations.*.invoice_id' => 'required|uuid|exists:acct.invoices,invoice_id',
+            'allocations.*.invoice_id' => 'required|uuid|exists:pgsql.acct.invoices,invoice_id',
             'allocations.*.amount' => 'required|numeric|min:0.01',
             'allocations.*.apply_early_payment_discount' => 'nullable|boolean',
             'allocations.*.notes' => 'nullable|string',
@@ -36,23 +36,23 @@ class AllocatePaymentAction
 
         return DB::transaction(function () use ($paymentId, $validated) {
             $payment = Payment::findOrFail($paymentId);
-            
+
             // Check payment status
             if ($payment->status === 'completed') {
                 throw new \InvalidArgumentException('Payment is already fully allocated');
             }
-            
+
             if ($payment->status !== 'pending') {
-                throw new \InvalidArgumentException('Cannot allocate payment with status: ' . $payment->status);
+                throw new \InvalidArgumentException('Cannot allocate payment with status: '.$payment->status);
             }
 
             // Calculate total allocation amount
             $totalAllocationAmount = array_sum(array_column($validated['allocations'], 'amount'));
-            
+
             // Check for over-allocation
             $currentAllocated = $payment->allocations()->sum('allocated_amount') ?? 0;
             $remainingAmount = $payment->amount - $currentAllocated;
-            
+
             if ($totalAllocationAmount > $remainingAmount) {
                 throw new \InvalidArgumentException(sprintf(
                     'Allocation amount (%.2f) exceeds remaining payment amount (%.2f)',
@@ -69,22 +69,22 @@ class AllocatePaymentAction
                 $discountAmount = 0;
                 $discountPercent = 0;
                 $finalAllocatedAmount = $allocationData['amount'];
-                
+
                 // Check if early payment discount should be applied
-                if (!empty($allocationData['apply_early_payment_discount'])) {
+                if (! empty($allocationData['apply_early_payment_discount'])) {
                     $invoice = Invoice::findOrFail($allocationData['invoice_id']);
                     $discountInfo = $this->calculateEarlyPaymentDiscount($invoice, $allocationData['amount']);
-                    
+
                     if ($discountInfo['eligible']) {
                         $discountAmount = $discountInfo['discount_amount'];
                         $discountPercent = $discountInfo['discount_percent'];
                         $finalAllocatedAmount = $discountInfo['final_amount'];
                         $totalDiscountAmount += $discountAmount;
-                        
+
                         // Update invoice balance
                         $invoice->balance_due -= $finalAllocatedAmount;
                         $invoice->save();
-                        
+
                         // Fire discount applied event
                         EarlyPaymentDiscountApplied::dispatch([
                             'payment_id' => $paymentId,
@@ -200,7 +200,7 @@ class AllocatePaymentAction
     private function calculateEarlyPaymentDiscount(Invoice $invoice, float $paymentAmount): array
     {
         // Check if invoice has early payment discount terms
-        if (!$invoice->early_payment_discount_percent || !$invoice->early_payment_discount_days) {
+        if (! $invoice->early_payment_discount_percent || ! $invoice->early_payment_discount_days) {
             return [
                 'eligible' => false,
                 'reason' => 'No early payment discount terms',
@@ -259,7 +259,7 @@ class AllocatePaymentAction
 
         // Create unallocated cash record for the overage amount
         \App\Models\UnallocatedCash::createFromPayment($payment, $amount);
-        
+
         // Log the unallocated cash creation
         Log::info('Unallocated cash created from payment overage', [
             'payment_id' => $payment->id,

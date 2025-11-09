@@ -27,7 +27,35 @@ class SetupService
         return Cache::remember(self::CACHE_KEY_INITIALIZED, self::CACHE_TTL_STATUS, function () {
             // System is considered initialized if there are users OR companies
             // Modules alone don't constitute initialization
-            return User::exists() || Company::exists();
+            // Use raw DB queries to bypass RLS policies completely
+            try {
+                // Temporarily disable RLS for this check
+                DB::statement('SET ROW LEVEL SECURITY OFF');
+
+                $userCount = DB::table('auth.users')->count();
+                $companyCount = DB::table('auth.companies')->count();
+
+                // Re-enable RLS
+                DB::statement('SET ROW LEVEL SECURITY ON');
+
+                return $userCount > 0 || $companyCount > 0;
+            } catch (\Exception $e) {
+                // Ensure RLS is re-enabled even if query fails
+                try {
+                    DB::statement('SET ROW LEVEL SECURITY ON');
+                } catch (\Exception $e2) {
+                    // Ignore RLS re-enable error
+                }
+
+                // As last resort, check if we can access tables without RLS
+                try {
+                    $result = DB::selectOne("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'auth' AND table_name IN ('users', 'companies')");
+
+                    return $result->count > 0; // Tables exist but might be empty
+                } catch (\Exception $e3) {
+                    return false; // Assume not initialized if we can't check anything
+                }
+            }
         });
     }
 

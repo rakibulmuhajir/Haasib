@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Modules\Accounting\Domain\Payments\Actions\AllocatePaymentAction;
 
 class PaymentAllocate extends Command
 {
@@ -40,17 +39,19 @@ class PaymentAllocate extends Command
         try {
             // Set company context from environment or prompt
             $companyId = $this->getCompanyId();
-            if (!$companyId) {
+            if (! $companyId) {
                 $this->error('Company context is required. Set APP_COMPANY_ID environment variable or use --company option.');
+
                 return 1;
             }
 
-            DB::statement("SET app.current_company = ?", [$companyId]);
+            DB::statement('SET app.current_company = ?', [$companyId]);
 
             // Get payment ID
             $paymentId = $this->getPaymentId($this->argument('payment'));
-            if (!$paymentId) {
-                $this->error('Payment not found: ' . $this->argument('payment'));
+            if (! $paymentId) {
+                $this->error('Payment not found: '.$this->argument('payment'));
+
                 return 1;
             }
 
@@ -62,15 +63,15 @@ class PaymentAllocate extends Command
             }
 
         } catch (\Throwable $e) {
-            $this->error('Allocation failed: ' . $e->getMessage());
-            
+            $this->error('Allocation failed: '.$e->getMessage());
+
             if ($this->option('format') === 'json') {
                 $this->line(json_encode([
                     'success' => false,
                     'error' => $e->getMessage(),
                 ], JSON_PRETTY_PRINT));
             }
-            
+
             return 1;
         }
     }
@@ -86,11 +87,13 @@ class PaymentAllocate extends Command
 
         if (empty($invoices) || empty($amounts)) {
             $this->error('Both --invoices and --amounts are required for manual allocation');
+
             return 1;
         }
 
         if (count($invoices) !== count($amounts)) {
             $this->error('Number of invoices and amounts must match');
+
             return 1;
         }
 
@@ -98,8 +101,9 @@ class PaymentAllocate extends Command
         $allocations = [];
         foreach ($invoices as $i => $invoiceNumber) {
             $invoiceId = $this->getInvoiceId($invoiceNumber, $companyId);
-            if (!$invoiceId) {
-                $this->error('Invoice not found: ' . $invoiceNumber);
+            if (! $invoiceId) {
+                $this->error('Invoice not found: '.$invoiceNumber);
+
                 return 1;
             }
 
@@ -122,13 +126,14 @@ class PaymentAllocate extends Command
                     ];
                 }, $allocations)
             );
+
             return 0;
         }
 
         // Validate allocations
         $validator = Validator::make(['allocations' => $allocations], [
             'allocations' => 'required|array|min:1',
-            'allocations.*.invoice_id' => 'required|uuid|exists:acct.invoices,invoice_id',
+            'allocations.*.invoice_id' => 'required|uuid|exists:pgsql.acct.invoices,invoice_id',
             'allocations.*.amount' => 'required|numeric|min:0.01',
             'allocations.*.notes' => 'nullable|string',
         ]);
@@ -136,8 +141,9 @@ class PaymentAllocate extends Command
         if ($validator->fails()) {
             $this->error('Validation failed:');
             foreach ($validator->errors()->all() as $error) {
-                $this->error('  - ' . $error);
+                $this->error('  - '.$error);
             }
+
             return 1;
         }
 
@@ -169,12 +175,12 @@ class PaymentAllocate extends Command
 
             // Add receipt reference
             $output['receipt_url'] = "/api/payments/{$result['payment_id']}/receipt";
-            $output['receipt_number'] = 'R-' . $result['payment_id'] ?? '';
+            $output['receipt_number'] = 'R-'.$result['payment_id'] ?? '';
 
             $this->line(json_encode($output, JSON_PRETTY_PRINT));
         } else {
             $this->info('✓ Payment allocated successfully');
-            
+
             $tableData = [
                 ['Payment ID', $result['payment_id']],
                 ['Allocations Created', $result['allocations_created']],
@@ -195,13 +201,13 @@ class PaymentAllocate extends Command
             }
 
             $this->table(['Field', 'Value'], $tableData);
-            
+
             // Show receipt information
             $this->info('');
             $this->info('Receipt Information:');
-            $this->line('  Receipt Number: R-' . ($result['payment_id'] ?? ''));
-            $this->line('  Download JSON: GET /api/payments/' . ($result['payment_id'] ?? '') . '/receipt?format=json');
-            $this->line('  Download PDF:  GET /api/payments/' . ($result['payment_id'] ?? '') . '/receipt?format=pdf');
+            $this->line('  Receipt Number: R-'.($result['payment_id'] ?? ''));
+            $this->line('  Download JSON: GET /api/payments/'.($result['payment_id'] ?? '').'/receipt?format=json');
+            $this->line('  Download PDF:  GET /api/payments/'.($result['payment_id'] ?? '').'/receipt?format=pdf');
         }
 
         return 0;
@@ -216,7 +222,8 @@ class PaymentAllocate extends Command
         $options = []; // Could add strategy-specific options here
 
         if ($this->option('dry-run')) {
-            $this->info('Dry run - would auto-allocate with strategy: ' . $strategy);
+            $this->info('Dry run - would auto-allocate with strategy: '.$strategy);
+
             return 0;
         }
 
@@ -302,7 +309,7 @@ class PaymentAllocate extends Command
      */
     private function parseOptionList(?string $option): array
     {
-        if (!$option) {
+        if (! $option) {
             return [];
         }
 

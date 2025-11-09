@@ -172,7 +172,7 @@ class LedgerController extends Controller
             'description' => 'required|string',
             'date' => 'required|date',
             'lines' => 'required|array|min:2',
-            'lines.*.account_id' => 'required|uuid|exists:acct.ledger_accounts,id',
+            'lines.*.account_id' => 'required|uuid|exists:pgsql.acct.ledger_accounts,id',
             'lines.*.debit_amount' => 'required|numeric|min:0',
             'lines.*.credit_amount' => 'required|numeric|min:0',
         ]);

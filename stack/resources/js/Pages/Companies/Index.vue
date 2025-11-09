@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePage, router, Link } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
-import { useDynamicPageActions } from '@/composables/useDynamicPageActions'
+import { usePageActions } from '@/composables/usePageActions'
 import { useBulkSelection } from '@/composables/useBulkSelection'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
@@ -19,7 +19,7 @@ import InputIcon from 'primevue/inputicon'
 import Toast from 'primevue/toast'
 
 // Initialize dynamic page actions
-const { initializeActions } = useDynamicPageActions()
+const { setActions, clearActions } = usePageActions()
 
 // Initialize bulk selection
 const {
@@ -251,28 +251,6 @@ const toggleFilterPanel = () => {
     showFilters.value = !showFilters.value
 }
 
-// Action panel handlers
-const handleAction = (action) => {
-    switch (action) {
-        case 'create-company':
-            router.visit('/companies/create')
-            break
-        case 'import-companies':
-            // TODO: Implement import functionality
-            toast.value.add({
-                severity: 'info',
-                summary: 'Coming Soon',
-                detail: 'Import functionality will be available soon',
-                life: 3000
-            })
-            break
-        case 'export-companies':
-            exportCompanies()
-            break
-        default:
-            console.log('Unhandled action:', action)
-    }
-}
 
 const handleBulkAction = (action) => {
     switch (action) {
@@ -313,6 +291,11 @@ const exportCompanies = () => {
         detail: 'Companies export is being prepared',
         life: 3000
     })
+}
+
+const handleSearchFromHeader = (searchData) => {
+    filters.value.search = searchData.query || ''
+    applyFilters()
 }
 
 const bulkDeleteCompanies = async () => {
@@ -484,38 +467,44 @@ const setViewMode = (mode) => {
     viewMode.value = mode
 }
 
-// Define quick links for the companies page
-const quickLinks = [
-    {
-        label: 'Create Company',
-        url: '/companies/create',
-        icon: 'pi pi-plus'
-    },
-    {
-        label: 'Import Companies',
-        url: '#',
-        icon: 'pi pi-upload',
-        action: () => handleAction('import-companies')
-    },
-    {
+// Contextual quick links based on user permissions and current state
+const quickLinks = computed(() => {
+    const links = []
+
+    // Create Company
+    if (canCreateCompany.value) {
+        links.push({
+            label: 'Create Company',
+            url: '/companies/create',
+            icon: 'pi pi-plus'
+        })
+    }
+
+    // Export Companies
+    links.push({
         label: 'Export Companies',
         url: '#',
         icon: 'pi pi-download',
-        action: () => handleAction('export-companies')
-    },
-    {
-        label: 'Company Settings',
-        url: currentCompany.value ? `/companies/${currentCompany.value.id}/settings` : '#',
-        icon: 'pi pi-cog',
-        disabled: !currentCompany.value
-    },
-    {
-        label: 'User Management',
-        url: currentCompany.value ? `/companies/${currentCompany.value.id}/users` : '#',
-        icon: 'pi pi-users',
-        disabled: !currentCompany.value
+        action: exportCompanies
+    })
+
+    // Contextual company actions (only if there's a current company)
+    if (currentCompany.value) {
+        links.push({
+            label: 'Company Settings',
+            url: `/companies/${currentCompany.value.id}/settings`,
+            icon: 'pi pi-cog'
+        })
+
+        links.push({
+            label: 'User Management',
+            url: `/companies/${currentCompany.value.id}/users`,
+            icon: 'pi pi-users'
+        })
     }
-]
+
+    return links
+})
 
 // Grid item selection
 const toggleGridSelection = (company) => {
@@ -591,6 +580,49 @@ const handleKeyboardShortcuts = (event) => {
     }
 }
 
+// Setup dynamic page actions
+const setupPageActions = () => {
+    const actions = []
+
+    // Create Company action
+    if (canCreateCompany.value) {
+        actions.push({
+            key: 'create-company',
+            label: 'New Company',
+            icon: 'fas fa-plus',
+            severity: 'primary',
+            click: () => router.visit('/companies/create')
+        })
+    }
+
+    // Export Companies action
+    actions.push({
+        key: 'export-companies',
+        label: 'Export',
+        icon: 'fas fa-download',
+        severity: 'secondary',
+        click: exportCompanies
+    })
+
+    // Import Companies action (placeholder)
+    actions.push({
+        key: 'import-companies',
+        label: 'Import',
+        icon: 'fas fa-upload',
+        severity: 'secondary',
+        click: () => {
+            toast.value.add({
+                severity: 'info',
+                summary: 'Coming Soon',
+                detail: 'Import functionality will be available soon',
+                life: 3000
+            })
+        }
+    })
+
+    setActions(actions)
+}
+
 // Lifecycle
 onMounted(() => {
     // Initialize CSRF token once
@@ -598,7 +630,7 @@ onMounted(() => {
     csrfToken.value = csrfInput?.value || ''
     
     // Initialize dynamic page actions based on current route
-    initializeActions()
+    setupPageActions()
 
     // Initialize companies from page props
     if (page.props.companies) {
@@ -632,6 +664,7 @@ onUnmounted(() => {
 watch(currentCompany, (newCompany) => {
     if (newCompany) {
         loadCompanies()
+        setupPageActions() // Refresh actions when company context changes
     }
 })
 
@@ -653,79 +686,48 @@ watch(viewMode, (newMode) => {
           subDescription="Create and configure company settings and preferences"
           :show-search="true"
           search-placeholder="Search companies..."
+          @search="handleSearchFromHeader"
         />
 
-        <PageActions />
+        <!-- View Mode Toggle -->
+        <div class="flex justify-between items-center mb-6 px-1">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+                {{ companies.length }} companies total
+            </div>
+            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1 shadow-sm">
+                <button
+                    type="button"
+                    @click="setViewMode('grid')"
+                    :class="[
+                        'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all duration-200',
+                        viewMode === 'grid'
+                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ]"
+                >
+                    <i class="fas fa-th-large mr-2"></i>
+                    Grid
+                </button>
+                <button
+                    type="button"
+                    @click="setViewMode('table')"
+                    :class="[
+                        'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ml-0.5',
+                        viewMode === 'table'
+                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ]"
+                >
+                    <i class="fas fa-list mr-2"></i>
+                    Table
+                </button>
+            </div>
+        </div>
 
         <!-- Main Content Grid -->
         <div class="content-grid-5-6">
             <!-- Left Column - Main Content -->
-            <div class="main-content">
-                <!-- Controls Bar -->
-                <div class="card flex flex-col sm:flex-row gap-4 mb-6 p-4">
-                    <!-- Search Bar -->
-                    <div class="search-container">
-                        <IconField>
-                            <InputIcon class="fas fa-search" />
-                            <InputText
-                                v-model="filters.search"
-                                placeholder="Search companies..."
-                                type="search"
-                                class="w-full"
-                                @input="debouncedSearch"
-                            />
-                            <InputIcon v-if="filters.search" class="fas fa-times cursor-pointer" @click="clearSearch" />
-                        </IconField>
-                    </div>
-
-                    <!-- View and Actions -->
-                    <div class="view-controls">
-                        <!-- View toggle as radiogroup -->
-                        <div
-                            role="radiogroup"
-                            aria-label="View mode"
-                            class="view-toggle"
-                        >
-                            <button
-                                type="button"
-                                role="radio"
-                                :aria-checked="viewMode === 'grid'"
-                                aria-label="Grid view"
-                                @click="setViewMode('grid')"
-                                :class="[
-                                    'view-toggle-button',
-                                    viewMode === 'grid' ? 'active' : ''
-                                ]"
-                            >
-                                <i class="fas fa-th-large" aria-hidden="true" />
-                                <span class="sr-only">Grid view</span>
-                            </button>
-                            <button
-                                type="button"
-                                role="radio"
-                                :aria-checked="viewMode === 'table'"
-                                aria-label="Table view"
-                                @click="setViewMode('table')"
-                                :class="[
-                                    'view-toggle-button',
-                                    viewMode === 'table' ? 'active' : ''
-                                ]"
-                            >
-                                <i class="fas fa-list" aria-hidden="true" />
-                                <span class="sr-only">Table view</span>
-                            </button>
-                        </div>
-
-                        <Button
-                            @click="handleAction('create-company')"
-                            aria-label="Create new company"
-                            class="create-button"
-                        >
-                            <i class="fas fa-plus" aria-hidden="true" />
-                            <span class="hidden sm:inline">New Company</span>
-                        </Button>
-                    </div>
-                </div>
+            <div class="main-content bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
 
                 <!-- Grid/Table Content -->
                 <div class="content-area">
@@ -807,25 +809,26 @@ watch(viewMode, (newMode) => {
                     </section>
 
                     <!-- Empty State -->
-                    <section v-if="filteredCompanies.length === 0 && !loading" aria-labelledby="empty-title" class="empty-state">
-                        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-building text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true" />
+                    <section v-if="filteredCompanies.length === 0 && !loading" aria-labelledby="empty-title" class="text-center py-16">
+                        <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full mb-6">
+                            <i class="fas fa-building text-2xl text-gray-400 dark:text-gray-500"></i>
                         </div>
-                        <h2 id="empty-title" class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                        <h2 id="empty-title" class="text-xl font-semibold text-gray-900 dark:text-white mb-3">
                             {{ filters.search ? 'No companies found' : 'No companies yet' }}
                         </h2>
-                        <p class="text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
-                            {{ filters.search
-                                ? 'Try adjusting your search terms'
-                                : 'Get started by creating your first company' }}
+                        <p class="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
+                            {{ filters.search 
+                                ? 'Try adjusting your search terms or filters to find what you\'re looking for.' 
+                                : 'Get started by creating your first company using the actions above.' 
+                            }}
                         </p>
-                        <div v-if="!filters.search && canCreateCompany">
-                            <Link href="/companies/create">
-                                <Button class="create-button">
-                                    <i class="fas fa-plus" aria-hidden="true" />
-                                    Create Company
-                                </Button>
-                            </Link>
+                        <div v-if="filters.search" class="flex justify-center">
+                            <button 
+                                @click="clearFilters"
+                                class="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
+                            >
+                                Clear Filters
+                            </button>
                         </div>
                     </section>
 

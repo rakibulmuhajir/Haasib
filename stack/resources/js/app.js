@@ -3,6 +3,7 @@ import { createInertiaApp } from '@inertiajs/vue3'
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
+import Tooltip from 'primevue/tooltip'
 import Aura from '@primevue/themes/aura'
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { createI18n } from 'vue-i18n'
@@ -130,6 +131,7 @@ createInertiaApp({
             .use(ToastService)
             .use(ConfirmationService)
             .use(i18n)
+            .directive('tooltip', Tooltip)
             .component('font-awesome-icon', FontAwesomeIcon)
             .mount(el)
     },

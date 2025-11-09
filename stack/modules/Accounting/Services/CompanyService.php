@@ -22,7 +22,7 @@ class CompanyService
     {
         $validator = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255', 'unique:auth.companies,slug'],
+            'slug' => ['nullable', 'string', 'max:255', 'unique:companies,slug'],
             'country' => ['nullable', 'string', 'max:100'],
             'base_currency' => ['nullable', 'string', 'max:3'],
         ]);

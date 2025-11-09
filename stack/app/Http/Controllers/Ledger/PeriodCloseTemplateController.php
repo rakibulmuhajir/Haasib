@@ -132,7 +132,7 @@ class PeriodCloseTemplateController extends Controller
                 'is_default' => 'sometimes|boolean',
                 'active' => 'sometimes|boolean',
                 'tasks' => 'sometimes|array',
-                'tasks.*.id' => 'sometimes|integer|exists:ledger.period_close_template_tasks,id',
+                'tasks.*.id' => 'sometimes|integer|exists:pgsql.ledger.period_close_template_tasks,id',
                 'tasks.*.code' => 'required_with:tasks|string|max:100',
                 'tasks.*.title' => 'required_with:tasks|string|max:255',
                 'tasks.*.category' => 'required_with:tasks|in:trial_balance,reconciliations,compliance,reporting,adjustments,other',
@@ -195,7 +195,7 @@ class PeriodCloseTemplateController extends Controller
 
         try {
             $syncData = $request->validate([
-                'period_close_id' => 'required|string|exists:ledger.period_closes,id',
+                'period_close_id' => 'required|string|exists:pgsql.ledger.period_closes,id',
             ]);
 
             $result = $this->syncAction->execute($templateId, $syncData['period_close_id'], $user);

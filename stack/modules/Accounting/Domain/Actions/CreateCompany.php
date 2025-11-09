@@ -19,7 +19,7 @@ class CreateCompany
         // Validate input
         $validator = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['sometimes', 'string', 'max:255', 'unique:auth.companies,slug'],
+            'slug' => ['sometimes', 'string', 'max:255', 'unique:pgsql.auth.companies,slug'],
             'country' => ['sometimes', 'string', 'max:2'],
             'country_id' => ['sometimes', 'uuid', 'exists:countries,id'],
             'base_currency' => ['sometimes', 'string', 'max:3', 'size:3'],
@@ -28,7 +28,7 @@ class CreateCompany
             'language' => ['sometimes', 'string', 'max:10'],
             'locale' => ['sometimes', 'string', 'max:10'],
             'settings' => ['sometimes', 'array'],
-            'created_by_user_id' => ['sometimes', 'uuid', 'exists:auth.users,id'],
+            'created_by_user_id' => ['sometimes', 'uuid', 'exists:pgsql.auth.users,id'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
@@ -137,7 +137,7 @@ class CreateCompany
     {
         $validator = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['sometimes', 'string', 'max:255', 'unique:auth.companies,slug'],
+            'slug' => ['sometimes', 'string', 'max:255', 'unique:pgsql.auth.companies,slug'],
             'country' => ['sometimes', 'string', 'max:2'],
             'base_currency' => ['sometimes', 'string', 'max:3', 'size:3'],
             'language' => ['sometimes', 'string', 'max:10'],

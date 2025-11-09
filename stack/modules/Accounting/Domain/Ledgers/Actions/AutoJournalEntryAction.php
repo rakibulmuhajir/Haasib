@@ -38,14 +38,14 @@ class AutoJournalEntryAction
 
         // Validate input data
         $validator = Validator::make($data, [
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
             'description' => 'required|string|max:500',
             'date' => 'required|date',
             'type' => 'required|string|in:sales,purchase,payment,receipt,adjustment,automation',
             'currency' => 'required|string|max:3',
             'reference' => 'nullable|string|max:100',
             'lines' => 'required|array|min:2',
-            'lines.*.account_id' => 'required|uuid|exists:acct.accounts,id',
+            'lines.*.account_id' => 'required|uuid|exists:pgsql.acct.accounts,id',
             'lines.*.debit_credit' => 'required|string|in:debit,credit',
             'lines.*.amount' => 'required|numeric|min:0.01',
             'lines.*.description' => 'nullable|string|max:500',

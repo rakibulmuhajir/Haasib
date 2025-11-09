@@ -19,11 +19,11 @@ class RegisterUser
         // Validate input
         $validator = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:auth.users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:pgsql.auth.users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'system_role' => ['sometimes', 'string', 'in:user,admin,superadmin'],
             'is_active' => ['sometimes', 'boolean'],
-            'created_by_user_id' => ['sometimes', 'uuid', 'exists:auth.users,id'],
+            'created_by_user_id' => ['sometimes', 'uuid', 'exists:pgsql.auth.users,id'],
         ]);
 
         if ($validator->fails()) {
@@ -120,7 +120,7 @@ class RegisterUser
     {
         $validator = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:auth.users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:pgsql.auth.users,email'],
             'password' => ['required', 'string', 'min:8'],
             'password_confirmation' => ['required', 'string', 'same:password'],
             'system_role' => ['sometimes', 'string', 'in:user,admin,superadmin'],

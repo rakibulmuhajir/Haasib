@@ -97,7 +97,7 @@ class CompanyController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255', 'unique:auth.companies,slug'],
+            'slug' => ['nullable', 'string', 'max:255', 'unique:pgsql.auth.companies,slug'],
             'country' => ['required', 'string', 'size:2'],
             'base_currency' => ['required', 'string', 'size:3'],
             'settings' => ['sometimes', 'array'],
@@ -169,7 +169,7 @@ class CompanyController extends Controller
                 'sometimes',
                 'string',
                 'max:255',
-                Rule::unique('auth.companies', 'slug')->ignore($company->id),
+                Rule::unique('pgsql.auth.companies', 'slug')->ignore($company->id),
             ],
             'country' => ['sometimes', 'string', 'size:2'],
             'base_currency' => ['sometimes', 'string', 'size:3'],
@@ -454,7 +454,7 @@ class CompanyController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'new_owner_id' => ['required', 'exists:auth.users,id'],
+            'new_owner_id' => ['required', 'exists:pgsql.auth.users,id'],
         ]);
 
         if ($validator->fails()) {

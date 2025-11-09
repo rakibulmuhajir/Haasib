@@ -431,7 +431,7 @@ class CreditNoteService
     private function validateCreditNoteData(array $data, Company $company): void
     {
         $validator = validator($data, [
-            'invoice_id' => 'required|uuid|exists:acct.invoices,id',
+            'invoice_id' => 'required|uuid|exists:pgsql.acct.invoices,id',
             'reason' => 'required|string|max:500',
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',

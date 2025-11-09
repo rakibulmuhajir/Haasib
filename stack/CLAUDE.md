@@ -420,3 +420,32 @@ $pages->assertNoJavascriptErrors()->assertNoConsoleLogs();
 
 - Always use Tailwind CSS v3 - verify you're using only classes supported by this version.
 </laravel-boost-guidelines>
+
+## Database Setup Guidelines
+
+### Single Database Approach
+This project uses a **single PostgreSQL database** named `haasib_dev` for all environments. Do not create separate databases for testing purposes.
+
+### Schema Structure
+The database is organized using PostgreSQL schemas:
+- `public` - General tables and system data (cache, migrations, permissions, etc.)
+- `auth` - Authentication tables (users, companies, company_user, sessions, etc.)
+- `acct` - Accounting tables (customers, invoices, payments, journal entries, etc.)
+
+### Testing Guidelines
+- **NO SEPARATE TEST DATABASES**: Use the main database with proper cleanup via transactions
+- **CLEAN TESTING**: Use database transactions and cleanup methods rather than creating test databases
+- **ROW LEVEL SECURITY**: The database uses PostgreSQL RLS policies for multi-tenancy. Be aware of this when querying data
+- **SCHEMA ACCESS**: Database connection search path is configured as `public, auth, acct` (only these three schemas)
+
+### Database Credentials
+- **Development**: Uses `app_user` with password `AppP@ss123`
+- **Superadmin**: Uses `superadmin` with password `AcctP@ss` (for database creation/admin tasks)
+- **Connection**: PostgreSQL on `127.0.0.1:5432`
+- **Environment**: Set in `.env` file as `DB_DATABASE=haasib_dev`
+
+### Important Notes
+- Never manually create additional databases
+- All tables exist in appropriate schemas, not separate databases
+- Use transactions for data isolation during testing
+- Respect RLS policies - they ensure proper data isolation

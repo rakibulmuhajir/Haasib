@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Reporting;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Modules\Reporting\Actions\Schedules\CreateReportScheduleAction;
-use Modules\Reporting\Jobs\RunScheduledReportsJob;
 
 class ReportScheduleController extends Controller
 {
@@ -41,7 +40,7 @@ class ReportScheduleController extends Controller
 
         try {
             $filters = array_intersect_key($validated, array_flip([
-                'status', 'frequency', 'template_id', 'search'
+                'status', 'frequency', 'template_id', 'search',
             ]));
 
             $schedules = $this->scheduleAction->listSchedules($companyId, $filters);
@@ -74,7 +73,7 @@ class ReportScheduleController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'template_id' => ['required', 'exists:rpt.report_templates,template_id'],
+            'template_id' => ['required', 'exists:pgsql.rpt.report_templates,template_id'],
             'name' => ['required', 'string', 'max:255'],
             'frequency' => ['required', 'string', Rule::in(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])],
             'custom_cron' => ['required_if:frequency,custom', 'string', 'max:100'],
@@ -163,7 +162,7 @@ class ReportScheduleController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         $validated = $request->validate([
-            'template_id' => ['sometimes', 'exists:rpt.report_templates,template_id'],
+            'template_id' => ['sometimes', 'exists:pgsql.rpt.report_templates,template_id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'frequency' => ['sometimes', 'string', Rule::in(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])],
             'custom_cron' => ['required_if:frequency,custom', 'string', 'max:100'],
@@ -177,7 +176,7 @@ class ReportScheduleController extends Controller
         $userId = $request->user()->id;
 
         // Add updated by
-        if (!empty($validated)) {
+        if (! empty($validated)) {
             $validated['updated_by'] = $userId;
         }
 
@@ -389,8 +388,8 @@ class ReportScheduleController extends Controller
                 'failed_deliveries' => (int) $deliveryStats->failed_deliveries,
                 'pending_deliveries' => (int) $deliveryStats->pending_deliveries,
                 'last_delivery_at' => $deliveryStats->last_delivery_date,
-                'delivery_success_rate' => $deliveryStats->total_deliveries > 0 
-                    ? (($deliveryStats->successful_deliveries / $deliveryStats->total_deliveries) * 100) 
+                'delivery_success_rate' => $deliveryStats->total_deliveries > 0
+                    ? (($deliveryStats->successful_deliveries / $deliveryStats->total_deliveries) * 100)
                     : 0,
             ]);
 
@@ -490,8 +489,8 @@ class ReportScheduleController extends Controller
         return \Illuminate\Support\Facades\DB::table('rpt.reports')
             ->where('company_id', function ($query) use ($scheduleId) {
                 $query->select('company_id')
-                      ->from('rpt.report_schedules')
-                      ->where('schedule_id', $scheduleId);
+                    ->from('rpt.report_schedules')
+                    ->where('schedule_id', $scheduleId);
             })
             ->whereRaw("parameters->>'schedule_id' = ?", [$scheduleId])
             ->orderBy('created_at', 'desc')
@@ -506,7 +505,7 @@ class ReportScheduleController extends Controller
     private function getNextRuns(string $scheduleId, int $count = 5): array
     {
         $schedule = $this->scheduleAction->getSchedule($scheduleId, '');
-        
+
         $nextRuns = [];
         $nextRunAt = Carbon::parse($schedule['next_run_at']);
 

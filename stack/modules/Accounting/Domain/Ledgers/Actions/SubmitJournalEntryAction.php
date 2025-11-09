@@ -24,7 +24,7 @@ class SubmitJournalEntryAction
             'journal_entry_id' => $journalEntryId,
             'submit_note' => $submitNote,
         ], [
-            'journal_entry_id' => 'required|uuid|exists:acct.journal_entries,id',
+            'journal_entry_id' => 'required|uuid|exists:pgsql.acct.journal_entries,id',
             'submit_note' => 'nullable|string|max:1000',
         ]);
 

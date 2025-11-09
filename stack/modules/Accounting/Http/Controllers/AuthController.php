@@ -2,6 +2,8 @@
 
 namespace Modules\Accounting\Http\Controllers;
 
+use App\Services\AuthService;
+use App\Services\ContextService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -9,8 +11,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use Modules\Accounting\Models\Company;
 use Modules\Accounting\Models\User;
-use App\Services\AuthService;
-use App\Services\ContextService;
 use Modules\Accounting\Services\UserService;
 
 class AuthController extends Controller
@@ -113,7 +113,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:auth.users,email'],
+            'email' => ['required', 'email', 'unique:pgsql.auth.users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'company_name' => ['sometimes', 'string', 'max:255'],
             'company_country' => ['sometimes', 'string', 'size:2'],
@@ -211,7 +211,7 @@ class AuthController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'unique:auth.users,email,'.$user->id],
+            'email' => ['sometimes', 'email', 'unique:pgsql.auth.users,email,'.$user->id],
             'current_password' => ['required_with:password,password_confirmation', 'string'],
             'password' => ['sometimes', 'confirmed', Password::defaults()],
         ]);

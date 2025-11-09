@@ -24,7 +24,7 @@ class ApproveJournalEntryAction
             'journal_entry_id' => $journalEntryId,
             'approval_note' => $approvalNote,
         ], [
-            'journal_entry_id' => 'required|uuid|exists:acct.journal_entries,id',
+            'journal_entry_id' => 'required|uuid|exists:pgsql.acct.journal_entries,id',
             'approval_note' => 'nullable|string|max:1000',
         ]);
 

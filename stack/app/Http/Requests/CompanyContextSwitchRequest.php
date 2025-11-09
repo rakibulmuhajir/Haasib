@@ -17,7 +17,7 @@ class CompanyContextSwitchRequest extends FormRequest
             'company_id' => [
                 'required',
                 'uuid',
-                'exists:auth.companies,id',
+                'exists:pgsql.auth.companies,id',
             ],
         ];
     }

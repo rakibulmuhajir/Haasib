@@ -155,6 +155,7 @@ class PermissionSeeder extends Seeder
             Permission::updateOrCreate(
                 ['name' => $name],
                 [
+                    'id' => \Illuminate\Support\Str::uuid(),
                     'guard_name' => 'web',
                     'description' => $description,
                     'created_at' => now(),
@@ -179,6 +180,7 @@ class PermissionSeeder extends Seeder
             Role::updateOrCreate(
                 ['name' => $name],
                 [
+                    'id' => \Illuminate\Support\Str::uuid(),
                     'guard_name' => 'web',
                     'description' => $description,
                     'created_at' => now(),
@@ -372,7 +374,18 @@ class PermissionSeeder extends Seeder
         foreach ($rolePermissions as $roleName => $permissions) {
             $role = Role::where('name', $roleName)->first();
             if ($role) {
-                $role->syncPermissions($permissions);
+                $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
+                
+                // Sync permissions manually using UUIDs
+                \DB::table('public.role_has_permissions')->where('role_id', $role->id)->delete();
+                
+                foreach ($permissionIds as $permissionId) {
+                    \DB::table('public.role_has_permissions')->insert([
+                        'role_id' => $role->id,
+                        'permission_id' => $permissionId,
+                    ]);
+                }
+                
                 $this->command->info('✓ Assigned '.count($permissions)." permissions to role: {$roleName}");
             }
         }

@@ -46,7 +46,7 @@ class TrialBalanceController extends Controller
         $validator = Validator::make($request->all(), [
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
             'account_ids' => 'nullable|array',
             'account_ids.*' => 'uuid',
             'include_zero_balances' => 'boolean',
@@ -71,7 +71,7 @@ class TrialBalanceController extends Controller
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
             'format' => 'required|string|in:csv,xlsx',
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
             'account_ids' => 'nullable|array',
             'account_ids.*' => 'uuid',
             'include_zero_balances' => 'boolean',
@@ -102,7 +102,7 @@ class TrialBalanceController extends Controller
         $validator = Validator::make($request->all(), [
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
-            'company_id' => 'required|uuid|exists:auth.companies,id',
+            'company_id' => 'required|uuid|exists:pgsql.auth.companies,id',
         ]);
 
         if ($validator->fails()) {

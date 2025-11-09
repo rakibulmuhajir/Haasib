@@ -410,7 +410,7 @@ class CreateReportScheduleAction
     {
         return [
             'company_id' => ['required', 'uuid'],
-            'template_id' => ['required', 'exists:rpt.report_templates,template_id'],
+            'template_id' => ['required', 'exists:pgsql.rpt.report_templates,template_id'],
             'name' => ['required', 'string', 'max:255'],
             'frequency' => ['required', Rule::in(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])],
             'custom_cron' => ['required_if:frequency,custom', 'string', 'max:100'],
@@ -429,7 +429,7 @@ class CreateReportScheduleAction
     private function getUpdateRules(array $schedule): array
     {
         return [
-            'template_id' => ['sometimes', 'exists:rpt.report_templates,template_id'],
+            'template_id' => ['sometimes', 'exists:pgsql.rpt.report_templates,template_id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'frequency' => ['sometimes', Rule::in(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])],
             'custom_cron' => ['required_if:frequency,custom', 'string', 'max:100'],

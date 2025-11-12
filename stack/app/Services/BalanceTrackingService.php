@@ -7,8 +7,6 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
 class BalanceTrackingService
@@ -19,7 +17,7 @@ class BalanceTrackingService
     public function getCustomerBalanceSummary(Company $company, string $customerId, bool $useCache = true): array
     {
         $cacheKey = "customer_balance_{$company->id}_{$customerId}";
-        
+
         if ($useCache) {
             return Cache::remember($cacheKey, 300, function () use ($company, $customerId) {
                 return $this->calculateCustomerBalance($company, $customerId);
@@ -33,15 +31,15 @@ class BalanceTrackingService
      * Get balance history for a customer over time.
      */
     public function getCustomerBalanceHistory(
-        Company $company, 
-        string $customerId, 
-        \DateTime $startDate, 
+        Company $company,
+        string $customerId,
+        \DateTime $startDate,
         \DateTime $endDate,
         string $period = 'daily'
     ): array {
         // Generate date periods based on requested granularity
         $periods = $this->generateDatePeriods($startDate, $endDate, $period);
-        
+
         $balanceHistory = [];
 
         foreach ($periods as $period) {
@@ -68,14 +66,14 @@ class BalanceTrackingService
     public function getCompanyBalanceOverview(Company $company): array
     {
         $cacheKey = "company_balance_overview_{$company->id}";
-        
+
         return Cache::remember($cacheKey, 600, function () use ($company) {
             $totalBalanceDue = Invoice::where('company_id', $company->id)
                 ->where('status', '!=', 'paid')
                 ->where('status', '!=', 'cancelled')
                 ->sum('balance_due');
 
-        $totalAllocated = Invoice::join('acct.payment_allocations', 'acct.payment_allocations.invoice_id', '=', 'acct.invoices.id')
+            $totalAllocated = Invoice::join('acct.payment_allocations', 'acct.payment_allocations.invoice_id', '=', 'acct.invoices.id')
                 ->join('acct.payments', 'acct.payment_allocations.payment_id', '=', 'acct.payments.id')
                 ->where('acct.invoices.company_id', $company->id)
                 ->where('acct.invoices.status', '!=', 'paid')
@@ -131,7 +129,7 @@ class BalanceTrackingService
         foreach ($invoices as $invoice) {
             $daysOverdue = max(0, $invoice->days_overdue);
             $bucket = $this->getAgingBucket($daysOverdue);
-            
+
             $agingBuckets[$bucket]['amount'] += $invoice->balance_due;
             $agingBuckets[$bucket]['count']++;
             $agingBuckets[$bucket]['invoices'][] = [
@@ -169,18 +167,18 @@ class BalanceTrackingService
         $totalAllocatedAmount = $payments->sum('total_allocated');
         $totalUnallocatedAmount = $payments->sum('remaining_amount');
 
-        $fullyAllocatedPayments = $payments->filter(fn($p) => $p->is_fully_allocated)->count();
-        $partiallyAllocatedPayments = $payments->filter(fn($p) => $p->total_allocated > 0 && !$p->is_fully_allocated)->count();
-        $unallocatedPayments = $payments->filter(fn($p) => $p->total_allocated == 0)->count();
+        $fullyAllocatedPayments = $payments->filter(fn ($p) => $p->is_fully_allocated)->count();
+        $partiallyAllocatedPayments = $payments->filter(fn ($p) => $p->is_partially_allocated)->count();
+        $unallocatedPayments = $payments->filter(fn ($p) => $p->is_unallocated)->count();
 
         // Calculate allocation strategy usage
         $strategies = PaymentAllocation::whereHas('payment', function ($query) use ($company, $startDate, $endDate) {
-                $query->where('company_id', $company->id)
-                    ->whereBetween('created_at', [$startDate, $endDate]);
-            })
+            $query->where('company_id', $company->id)
+                ->whereBetween('created_at', [$startDate, $endDate]);
+        })
             ->whereNotNull('allocation_strategy')
             ->groupBy('allocation_strategy')
-            ->selectRaw('allocation_strategy, COUNT(*) as usage_count, SUM(allocated_amount) as total_amount')
+            ->selectRaw('allocation_strategy, COUNT(*) as usage_count, SUM(amount) as total_amount')
             ->get()
             ->keyBy('allocation_strategy');
 
@@ -370,7 +368,7 @@ class BalanceTrackingService
     private function getAgingSummary(Company $company): array
     {
         $agingReport = $this->getAgingReport($company);
-        
+
         return [
             'current' => $agingReport['buckets']['current']['amount'],
             '1_30_days' => $agingReport['buckets']['1_30_days']['amount'],
@@ -385,10 +383,19 @@ class BalanceTrackingService
      */
     private function getAgingBucket(int $daysOverdue): string
     {
-        if ($daysOverdue <= 0) return 'current';
-        if ($daysOverdue <= 30) return '1_30_days';
-        if ($daysOverdue <= 60) return '31_60_days';
-        if ($daysOverdue <= 90) return '61_90_days';
+        if ($daysOverdue <= 0) {
+            return 'current';
+        }
+        if ($daysOverdue <= 30) {
+            return '1_30_days';
+        }
+        if ($daysOverdue <= 60) {
+            return '31_60_days';
+        }
+        if ($daysOverdue <= 90) {
+            return '61_90_days';
+        }
+
         return 'over_90_days';
     }
 
@@ -415,7 +422,7 @@ class BalanceTrackingService
                 while ($current <= $endDate) {
                     $weekEnd = clone $current;
                     $weekEnd->addDays(6)->min($endDate);
-                    
+
                     $periods[] = [
                         'date' => clone $current,
                         'start' => clone $current,
@@ -428,7 +435,7 @@ class BalanceTrackingService
                 while ($current <= $endDate) {
                     $monthEnd = clone $current;
                     $monthEnd->endOfMonth()->min($endDate);
-                    
+
                     $periods[] = [
                         'date' => clone $current,
                         'start' => clone $current,

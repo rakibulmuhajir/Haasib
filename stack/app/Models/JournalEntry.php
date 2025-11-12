@@ -38,33 +38,15 @@ class JournalEntry extends Model
      */
     protected $fillable = [
         'company_id',
-        'batch_id',
-        'template_id',
-        'reference',
+        'entry_number',
         'description',
-        'date',
-        'type',
+        'reference',
+        'entry_date',
         'status',
-        'approval_note',
-        'created_by',
-        'approved_by',
+        'created_by_id',
+        'approved_by_id',
         'approved_at',
-        'posted_by',
         'posted_at',
-        'voided_by',
-        'voided_at',
-        'void_reason',
-        'currency',
-        'exchange_rate',
-        'fiscal_year_id',
-        'accounting_period_id',
-        'source_document_type',
-        'source_document_id',
-        'origin_command',
-        'auto_generated',
-        'reverse_of_entry_id',
-        'reversal_entry_id',
-        'attachments',
         'metadata',
     ];
 
@@ -74,13 +56,9 @@ class JournalEntry extends Model
     protected function casts(): array
     {
         return [
-            'date' => 'date',
+            'entry_date' => 'date',
             'approved_at' => 'datetime',
             'posted_at' => 'datetime',
-            'voided_at' => 'datetime',
-            'exchange_rate' => 'decimal:8',
-            'auto_generated' => 'boolean',
-            'attachments' => 'array',
             'metadata' => 'array',
             'company_id' => 'string',
         ];
@@ -122,7 +100,7 @@ class JournalEntry extends Model
      */
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by_id');
     }
 
     /**
@@ -130,7 +108,15 @@ class JournalEntry extends Model
      */
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by_id');
+    }
+
+    /**
+     * Get the user who created the journal entry (alias for createdBy).
+     */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_id');
     }
 
     /**
@@ -188,6 +174,14 @@ class JournalEntry extends Model
     {
         return $this->hasMany(JournalTransaction::class, 'journal_entry_id')
             ->orderBy('line_number');
+    }
+
+    /**
+     * Get the journal lines for this journal entry.
+     */
+    public function journalLines(): HasMany
+    {
+        return $this->hasMany(JournalLine::class, 'journal_entry_id');
     }
 
     /**
@@ -354,9 +348,9 @@ class JournalEntry extends Model
      */
     public function getTotalDebitsAttribute(): float
     {
-        return $this->transactions()
-            ->where('debit_credit', 'debit')
-            ->sum('amount');
+        return $this->journalLines()
+            ->where('debit_amount', '>', 0)
+            ->sum('debit_amount');
     }
 
     /**
@@ -364,9 +358,9 @@ class JournalEntry extends Model
      */
     public function getTotalCreditsAttribute(): float
     {
-        return $this->transactions()
-            ->where('debit_credit', 'credit')
-            ->sum('amount');
+        return $this->journalLines()
+            ->where('credit_amount', '>', 0)
+            ->sum('credit_amount');
     }
 
     /**

@@ -39,21 +39,16 @@ class JournalBatch extends Model
     protected $fillable = [
         'company_id',
         'batch_number',
+        'description',
+        'batch_date',
         'status',
-        'scheduled_post_at',
-        'total_entries',
         'total_debits',
         'total_credits',
-        'created_by',
-        'approved_by',
-        'approved_at',
-        'posted_by',
-        'posted_at',
-        'voided_by',
-        'voided_at',
-        'void_reason',
-        'attachments',
+        'total_entries',
         'metadata',
+        'created_by_user_id',
+        'posted_by_user_id',
+        'posted_at',
     ];
 
     /**
@@ -62,16 +57,12 @@ class JournalBatch extends Model
     protected function casts(): array
     {
         return [
-            'scheduled_post_at' => 'datetime',
-            'approved_at' => 'datetime',
+            'batch_date' => 'date',
             'posted_at' => 'datetime',
-            'voided_at' => 'datetime',
-            'total_entries' => 'integer',
+            'total_entries' => 'decimal:2',
             'total_debits' => 'decimal:2',
             'total_credits' => 'decimal:2',
-            'attachments' => 'array',
             'metadata' => 'array',
-            'company_id' => 'string',
         ];
     }
 
@@ -95,15 +86,7 @@ class JournalBatch extends Model
      */
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
-    /**
-     * Get the user who approved the batch.
-     */
-    public function approver(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     /**
@@ -111,15 +94,7 @@ class JournalBatch extends Model
      */
     public function poster(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'posted_by');
-    }
-
-    /**
-     * Get the user who voided the batch.
-     */
-    public function voider(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'voided_by');
+        return $this->belongsTo(User::class, 'posted_by_user_id');
     }
 
     /**

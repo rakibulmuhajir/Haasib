@@ -26,32 +26,52 @@ class AuditEntryFactory extends Factory
      */
     public function definition(): array
     {
+        $events = ['created', 'updated', 'deleted', 'restored', 'password_changed'];
+        $modelTypes = [
+            'App\Models\User',
+            'App\Models\Company',
+            'App\Models\Invoice',
+            'App\Models\Payment',
+            'App\Models\Customer',
+            'App\Models\Vendor',
+            'App\Models\Bill',
+            'App\Models\Expense',
+            'App\Models\JournalEntry',
+            'App\Models\Account',
+            'App\Models\PurchaseOrder',
+        ];
+
         return [
-            'action' => $this->faker->randomElement(['created', 'updated', 'deleted', 'login', 'logout']),
-            'entity_type' => $this->faker->randomElement(['user', 'company', 'invoice', 'customer', 'payment']),
-            'entity_id' => $this->faker->uuid(),
+            'event' => $this->faker->randomElement($events),
+            'model_type' => $this->faker->randomElement($modelTypes),
+            'model_id' => $this->faker->uuid(),
             'user_id' => User::factory(),
             'company_id' => Company::factory(),
             'old_values' => $this->faker->randomElement([
                 null,
-                ['name' => $this->faker->name(), 'email' => $this->faker->email()],
+                ['name' => $this->faker->name(), 'email' => $this->faker->email(), 'amount' => $this->faker->randomFloat(2, 0, 10000)],
             ]),
             'new_values' => $this->faker->randomElement([
                 null,
-                ['name' => $this->faker->name(), 'email' => $this->faker->email()],
+                ['name' => $this->faker->name(), 'email' => $this->faker->email(), 'amount' => $this->faker->randomFloat(2, 0, 10000)],
             ]),
             'ip_address' => $this->faker->ipv4(),
             'user_agent' => $this->faker->userAgent(),
-            'device_type' => $this->faker->randomElement(['desktop', 'mobile', 'tablet']),
-            'location' => $this->faker->randomElement([
-                null,
-                ['country' => $this->faker->country(), 'city' => $this->faker->city()],
-            ]),
+            'tags' => $this->faker->randomElements([
+                'financial', 'security', 'customer', 'vendor', 'invoice', 'payment',
+                'created', 'updated', 'deleted', 'access_control',
+            ], $this->faker->numberBetween(1, 3)),
             'metadata' => $this->faker->randomElement([
                 null,
-                ['session_id' => $this->faker->sha256(), 'request_id' => $this->faker->uuid()],
+                [
+                    'session_id' => $this->faker->sha256(),
+                    'request_id' => $this->faker->uuid(),
+                    'user_context' => [
+                        'id' => $this->faker->uuid(),
+                        'name' => $this->faker->name(),
+                    ],
+                ],
             ]),
-            'is_system_action' => $this->faker->boolean(20), // 20% chance of system action
         ];
     }
 
@@ -61,7 +81,7 @@ class AuditEntryFactory extends Factory
     public function created(): static
     {
         return $this->state(fn (array $attributes) => [
-            'action' => 'created',
+            'event' => 'created',
             'old_values' => null,
         ]);
     }
@@ -72,7 +92,7 @@ class AuditEntryFactory extends Factory
     public function updated(): static
     {
         return $this->state(fn (array $attributes) => [
-            'action' => 'updated',
+            'event' => 'updated',
         ]);
     }
 
@@ -82,30 +102,19 @@ class AuditEntryFactory extends Factory
     public function deleted(): static
     {
         return $this->state(fn (array $attributes) => [
-            'action' => 'deleted',
+            'event' => 'deleted',
             'new_values' => null,
-        ]);
-    }
-
-    /**
-     * Indicate that the audit entry is a system action.
-     */
-    public function systemAction(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'is_system_action' => true,
-            'user_id' => null,
         ]);
     }
 
     /**
      * Indicate that the audit entry is for a specific entity.
      */
-    public function forEntity(string $entityType, string $entityId): static
+    public function forEntity(string $modelType, string $modelId): static
     {
         return $this->state(fn (array $attributes) => [
-            'entity_type' => $entityType,
-            'entity_id' => $entityId,
+            'model_type' => $modelType,
+            'model_id' => $modelId,
         ]);
     }
 

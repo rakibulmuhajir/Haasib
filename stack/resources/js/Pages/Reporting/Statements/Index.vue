@@ -230,36 +230,50 @@
               <!-- Preview Content -->
               <div v-else-if="previewData" class="space-y-6">
                 <!-- Income Statement Preview -->
-                <IncomeStatementPreview
+                <!-- <IncomeStatementPreview
                   v-if="selectedReportType === 'income_statement'"
                   :data="previewData"
                   :currency="selectedCurrency"
                   @drilldown="handleDrilldown"
-                />
+                /> -->
 
                 <!-- Balance Sheet Preview -->
-                <BalanceSheetPreview
+                <!-- <BalanceSheetPreview
                   v-else-if="selectedReportType === 'balance_sheet'"
                   :data="previewData"
                   :currency="selectedCurrency"
                   @drilldown="handleDrilldown"
-                />
+                /> -->
 
                 <!-- Cash Flow Preview -->
-                <CashFlowPreview
+                <!-- <CashFlowPreview
                   v-else-if="selectedReportType === 'cash_flow'"
                   :data="previewData"
                   :currency="selectedCurrency"
                   @drilldown="handleDrilldown"
-                />
+                /> -->
 
                 <!-- Trial Balance Preview -->
-                <TrialBalancePreview
+                <!-- <TrialBalancePreview
                   v-else-if="selectedReportType === 'trial_balance'"
                   :data="previewData"
                   :currency="selectedCurrency"
                   @drilldown="handleDrilldown"
-                />
+                /> -->
+
+                <!-- Temporary placeholder -->
+                <div class="card">
+                  <div class="text-center p-8">
+                    <i class="pi pi-file text-4xl text-surface-400 mb-4"></i>
+                    <h3 class="text-xl font-semibold mb-2">Report Preview</h3>
+                    <p class="text-surface-600 mb-4">
+                      {{ selectedReportType?.replace('_', ' ').toUpperCase() || 'SELECTED REPORT' }}
+                    </p>
+                    <p class="text-sm text-surface-500">
+                      Report preview will be available once data is loaded
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </template>
@@ -452,11 +466,11 @@ import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 import QuickLinks from '@/Components/QuickLinks.vue'
 
 // Import preview components
-import IncomeStatementPreview from '@/components/Reporting/IncomeStatementPreview.vue'
-import BalanceSheetPreview from '@/components/Reporting/BalanceSheetPreview.vue'
-import CashFlowPreview from '@/components/Reporting/CashFlowPreview.vue'
-import TrialBalancePreview from '@/components/Reporting/TrialBalancePreview.vue'
-import TransactionDrilldownModal from '@/components/Reporting/TransactionDrilldownModal.vue'
+// import IncomeStatementPreview from '@/components/Reporting/IncomeStatementPreview.vue'
+// import BalanceSheetPreview from '@/components/Reporting/BalanceSheetPreview.vue'
+// import CashFlowPreview from '@/components/Reporting/CashFlowPreview.vue'
+// import TrialBalancePreview from '@/components/Reporting/TrialBalancePreview.vue'
+// import TransactionDrilldownModal from '@/components/Reporting/TransactionDrilldownModal.vue'
 
 // Set up page actions and quick links
 const { setPageActions } = usePageActions()

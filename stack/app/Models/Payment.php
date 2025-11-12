@@ -8,12 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Payment extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     protected $table = 'acct.payments';
 
@@ -28,7 +27,7 @@ class Payment extends Model
      *
      * @var list<string>
      */
-    protected $guarded = ['id', 'created_at', 'updated_at', 'deleted_at'];
+    protected $guarded = ['id', 'created_at', 'updated_at'];
 
     protected $casts = [
         'amount' => 'decimal:2',
@@ -37,11 +36,9 @@ class Payment extends Model
         'reconciled_date' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
     protected $hidden = [
-        'deleted_at',
     ];
 
     protected $dates = [
@@ -79,8 +76,15 @@ class Payment extends Model
      */
     public function allocations(): HasMany
     {
-        return $this->hasMany(PaymentAllocation::class, 'payment_id')
-            ->whereNull('reversed_at');
+        return $this->hasMany(PaymentAllocation::class, 'payment_id');
+    }
+
+    /**
+     * Get refunds for this payment.
+     */
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(PaymentRefund::class, 'payment_id');
     }
 
     /**
@@ -144,7 +148,13 @@ class Payment extends Model
      */
     public function getTotalAllocatedAttribute(): float
     {
-        return $this->allocations()->sum('allocated_amount');
+        // If allocations relationship is already loaded, use it
+        if ($this->relationLoaded('allocations')) {
+            return $this->allocations->sum('amount');
+        }
+
+        // Otherwise, query the database
+        return $this->allocations()->sum('amount');
     }
 
     /**
@@ -160,7 +170,59 @@ class Payment extends Model
      */
     public function getIsFullyAllocatedAttribute(): bool
     {
-        return $this->remaining_amount <= 0;
+        // Use a small epsilon for floating point comparison
+        $epsilon = 0.01; // 1 cent tolerance
+
+        return $this->remaining_amount <= $epsilon;
+    }
+
+    /**
+     * Check if the payment is partially allocated.
+     */
+    public function getIsPartiallyAllocatedAttribute(): bool
+    {
+        $epsilon = 0.01;
+
+        return $this->total_allocated > $epsilon && ! $this->is_fully_allocated;
+    }
+
+    /**
+     * Check if the payment is unallocated.
+     */
+    public function getIsUnallocatedAttribute(): bool
+    {
+        $epsilon = 0.01;
+
+        return $this->total_allocated <= $epsilon;
+    }
+
+    /**
+     * Get the allocation status as a string.
+     */
+    public function getAllocationStatusAttribute(): string
+    {
+        if ($this->is_fully_allocated) {
+            return 'fully_allocated';
+        } elseif ($this->is_partially_allocated) {
+            return 'partially_allocated';
+        } else {
+            return 'unallocated';
+        }
+    }
+
+    /**
+     * Auto-reconcile payment if fully allocated.
+     */
+    public function autoReconcileIfFullyAllocated(): bool
+    {
+        if ($this->is_fully_allocated && ! $this->reconciled) {
+            $this->reconciled = true;
+            $this->reconciled_date = now();
+
+            return $this->save();
+        }
+
+        return false;
     }
 
     /**
@@ -286,7 +348,7 @@ class Payment extends Model
     public function getAllocationSummaryAttribute(): array
     {
         $allocations = $this->allocations;
-        $totalAllocated = $allocations->sum('allocated_amount');
+        $totalAllocated = $allocations->sum('amount');
 
         return [
             'total_allocated' => $totalAllocated,
@@ -317,10 +379,10 @@ class Payment extends Model
                 throw new \InvalidArgumentException('Cannot change status of a reversed payment');
             }
         });
-    }
 
-    /**
-     * The attributes that are mass assignable.
-     */
-    protected $guarded = [];
+        // Auto-reconcile when allocations are updated
+        static::saved(function ($payment) {
+            $payment->autoReconcileIfFullyAllocated();
+        });
+    }
 }

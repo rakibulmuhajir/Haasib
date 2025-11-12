@@ -21,7 +21,7 @@ class Account extends Model
      *
      * @var string
      */
-    protected $table = 'acct.accounts';
+    protected $table = 'acct.chart_of_accounts';
 
     /**
      * The attributes that are not mass assignable.

@@ -111,6 +111,92 @@ const navigation = computed(() => {
       ]
     },
     {
+      label: 'Expense Cycle',
+      icon: 'shopping-cart',
+      description: 'Vendor management, purchase orders, bills, and expense processing.',
+      children: [
+        {
+          label: 'Vendors',
+          path: '/vendors',
+          icon: 'building',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Purchase Orders',
+          path: '/purchase-orders',
+          icon: 'file-invoice',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Bills',
+          path: '/bills',
+          icon: 'file-invoice-dollar',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Expense Reports',
+          path: '/expenses',
+          icon: 'receipt',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Expense Categories',
+          path: '/expense-categories',
+          icon: 'tags',
+          permission: 'canAccessInvoicing'
+        },
+        {
+          label: 'Vendor Payments',
+          path: '/vendor-payments',
+          icon: 'credit-card',
+          permission: 'canAccessInvoicing'
+        }
+      ]
+    },
+    {
+      label: 'Tax Management',
+      icon: 'receipt',
+      description: 'Tax agencies, rates, settings, and reporting for sales and purchase taxes.',
+      children: [
+        {
+          label: 'Tax Dashboard',
+          path: '/tax/dashboard',
+          icon: 'tachometer-alt',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Tax Agencies',
+          path: '/tax/agencies',
+          icon: 'building',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Tax Rates',
+          path: '/tax/rates',
+          icon: 'percent',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Tax Settings',
+          path: '/tax/settings',
+          icon: 'cog',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Tax Returns',
+          path: '/tax/returns',
+          icon: 'file-contract',
+          permission: 'canAccessAccounting'
+        },
+        {
+          label: 'Tax Reports',
+          path: '/tax/reports/sales-tax',
+          icon: 'chart-bar',
+          permission: 'canAccessAccounting'
+        }
+      ]
+    },
+    {
       label: 'Banking & Cash',
       icon: 'university',
       description: 'Manage reconciliations, statement imports, and bank-side reporting.',

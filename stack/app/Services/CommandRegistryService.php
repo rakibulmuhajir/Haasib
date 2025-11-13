@@ -7,20 +7,32 @@ use App\Models\Company;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-class CommandRegistryService
+class CommandRegistryService extends BaseService
 {
+    use AuditLogging;
+
     private array $commandCache = [];
 
-    private string $cacheKey = 'command_registry';
+    private string $cacheKey;
 
-    public function __construct()
+    public function __construct(ServiceContext $context)
     {
+        parent::__construct($context);
+        // Company-isolated cache key to prevent cross-tenant data leakage
+        $this->cacheKey = 'command_registry_' . ($this->getCompanyId() ?? 'system');
         $this->loadCommandRegistry();
     }
 
     public function synchronizeCommands(Company $company): void
     {
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Set RLS context
+        $this->setRlsContext($company->id);
+        
         $registryCommands = $this->getCommandBusRegistry();
+        $synchronizedCommands = [];
 
         foreach ($registryCommands as $name => $actionClass) {
             $metadata = $this->generateCommandMetadata($name, $actionClass);
@@ -37,19 +49,45 @@ class CommandRegistryService
                     'is_active' => true,
                 ]
             );
+            
+            $synchronizedCommands[] = $name;
         }
 
         $this->clearCache();
-        Log::info('Commands synchronized for company', ['company_id' => $company->id]);
+        
+        // Create audit entry for synchronization
+        $this->audit('command_registry.synchronized', [
+            'company_id' => $company->id,
+            'synchronized_commands_count' => count($synchronizedCommands),
+            'synchronized_commands' => $synchronizedCommands,
+            'synchronized_by_user_id' => $this->getUserId(),
+            'request_id' => $this->getRequestId(),
+        ]);
     }
 
     public function getAvailableCommands(Company $company): \Illuminate\Database\Eloquent\Collection
     {
-        return Command::query()
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Set RLS context
+        $this->setRlsContext($company->id);
+        
+        $commands = Command::query()
             ->where('company_id', $company->id)
             ->active()
             ->orderBy('name')
             ->get();
+
+        // Create audit entry for commands access
+        $this->audit('command_registry.commands_accessed', [
+            'company_id' => $company->id,
+            'commands_count' => $commands->count(),
+            'accessed_by_user_id' => $this->getUserId(),
+            'request_id' => $this->getRequestId(),
+        ]);
+
+        return $commands;
     }
 
     public function getCommandByName(Company $company, string $name): ?Command

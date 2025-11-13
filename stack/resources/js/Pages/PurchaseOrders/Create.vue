@@ -161,6 +161,14 @@ const cancel = () => {
     router.visit('/purchase-orders')
 }
 
+// Format currency utility
+const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+    }).format(amount)
+}
+
 // Auto-calculate totals when lines change
 const updateLineCalculations = () => {
     // Vue's reactivity will automatically update the computed totals
@@ -544,17 +552,3 @@ const updateLineCalculations = () => {
         </div>
     </LayoutShell>
 </template>
-
-<script>
-export default {
-    name: 'PurchaseOrderCreate',
-    methods: {
-        formatCurrency(amount) {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-            }).format(amount)
-        }
-    }
-}
-</script>

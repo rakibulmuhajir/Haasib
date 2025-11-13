@@ -6,13 +6,21 @@ use App\Models\Company;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 
-class CompanyPermissionService
+class CompanyPermissionService extends BaseService
 {
+    public function __construct(ServiceContext $context)
+    {
+        parent::__construct($context);
+    }
+
     /**
      * Check if a user has a specific permission within a company context
      */
     public function userHasCompanyPermission(User $user, Company $company, string $permission): bool
     {
+        // Validate company access for current context user
+        $this->validateCompanyAccess($company->id);
+        
         // First check if user has access to the company
         if (! $this->userHasAccessToCompany($user, $company)) {
             return false;
@@ -60,6 +68,15 @@ class CompanyPermissionService
     {
         // Super admins have all permissions
         if (in_array($user->system_role, ['system_owner', 'super_admin'])) {
+            // Log admin access for audit
+            $this->audit('permission.admin_access_granted', [
+                'company_id' => $company->id,
+                'user_id' => $user->id,
+                'permission' => $permission,
+                'role' => $user->system_role,
+                'checked_by_user_id' => $this->getUserId(),
+            ]);
+            
             return true;
         }
 
@@ -191,7 +208,18 @@ class CompanyPermissionService
      */
     public function clearPermissionCache(User $user, Company $company): void
     {
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
         $cacheKey = "user_{$user->id}_company_access_{$company->id}";
         Cache::forget($cacheKey);
+        
+        // Log cache invalidation for audit
+        $this->audit('permission.cache_cleared', [
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'cache_key' => $cacheKey,
+            'cleared_by_user_id' => $this->getUserId(),
+        ]);
     }
 }

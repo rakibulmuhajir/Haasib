@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { router, Link } from '@inertiajs/vue3'
 import { usePage } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
@@ -27,7 +27,7 @@ function applyFilters() {
     is_active: isActive.value,
   })
 
-  window.location.href = `/admin/users?${params.toString()}`
+  router.visit(`/admin/users?${params.toString()}`)
 }
 
 // Clear filters
@@ -101,12 +101,12 @@ const getStatusBadgeClass = (isActive) => {
 
 // Show user details
 function showUser(user) {
-  window.location.href = `/admin/users/${user.id}`
+  router.visit(`/admin/users/${user.id}`)
 }
 
 // Edit user
 function editUser(user) {
-  window.location.href = `/admin/users/${user.id}/edit`
+  router.visit(`/admin/users/${user.id}/edit`)
 }
 
 // Delete user (with confirmation)
@@ -124,7 +124,7 @@ function deleteUser(user) {
   })
   .then(response => {
     if (response.ok) {
-      window.location.href = '/admin/users'
+      router.visit('/admin/users')
     } else {
       alert('Failed to delete user')
     }

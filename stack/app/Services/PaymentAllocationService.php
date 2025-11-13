@@ -7,17 +7,25 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\User;
+use App\Traits\AuditLogging;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PaymentAllocationService
 {
+    use AuditLogging;
+
     protected AllocationStrategyService $strategyService;
 
-    public function __construct(AllocationStrategyService $strategyService)
-    {
+    private ServiceContext $context;
+
+    public function __construct(
+        AllocationStrategyService $strategyService,
+        ServiceContext $context
+    ) {
         $this->strategyService = $strategyService;
+        $this->context = $context;
     }
 
     /**
@@ -26,13 +34,33 @@ class PaymentAllocationService
     public function allocatePaymentAcrossInvoices(
         Payment $payment,
         array $allocations,
-        User $user,
+        ?User $user = null,
         string $method = 'manual',
         ?string $strategy = null
     ): array {
         return DB::transaction(function () use ($payment, $allocations, $user, $method, $strategy) {
+            // Use user from context if not provided
+            $actingUser = $user ?? $this->context->getUser();
+
+            // Validate company access
+            $this->validateCompanyAccess($payment->company_id);
+
+            // Set RLS context
+            $this->setRlsContext($payment->company_id);
+
             $results = [];
             $totalToAllocate = 0;
+            $beforeStates = [];
+
+            // Store before states for audit
+            foreach ($allocations as $allocation) {
+                $invoice = Invoice::findOrFail($allocation['invoice_id']);
+                $beforeStates[$invoice->id] = [
+                    'balance_due' => $invoice->balance_due,
+                    'total_allocated' => $invoice->total_allocated,
+                    'payment_status' => $invoice->payment_status,
+                ];
+            }
 
             // Validate total allocation amount
             foreach ($allocations as $allocation) {
@@ -57,7 +85,7 @@ class PaymentAllocationService
 
                 // Validate allocation amount
                 if ($amount <= 0) {
-                    throw new \InvalidArgumentException("Allocation amount must be greater than 0");
+                    throw new \InvalidArgumentException('Allocation amount must be greater than 0');
                 }
 
                 if ($amount > $invoice->balance_due) {
@@ -74,7 +102,7 @@ class PaymentAllocationService
                     $method,
                     $strategy,
                     $allocation['notes'] ?? null,
-                    $user
+                    $actingUser
                 );
 
                 $results[] = [
@@ -82,23 +110,51 @@ class PaymentAllocationService
                     'invoice_id' => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'allocated_amount' => $amount,
-                    'previous_balance' => $invoice->balance_due + $amount,
+                    'previous_balance' => $beforeStates[$invoice->id]['balance_due'],
                     'new_balance' => $invoice->fresh()->balance_due,
                 ];
             }
 
             // Update payment status if fully allocated
             if ($payment->fresh()->is_fully_allocated) {
+                $previousStatus = $payment->status;
                 $payment->status = 'completed';
                 $payment->save();
+
+                // Log payment status change
+                $this->audit('payment.status_changed', [
+                    'payment_id' => $payment->id,
+                    'previous_status' => $previousStatus,
+                    'new_status' => 'completed',
+                    'company_id' => $payment->company_id,
+                    'changed_by_user_id' => $actingUser->id,
+                    'reason' => 'Payment fully allocated',
+                ]);
             }
 
-            // Log the allocation
+            // Create comprehensive audit log entry
+            $this->audit('payment.allocated', [
+                'payment_id' => $payment->id,
+                'payment_number' => $payment->payment_number,
+                'total_allocated' => $totalToAllocate,
+                'allocation_count' => count($allocations),
+                'allocation_method' => $method,
+                'allocation_strategy' => $strategy,
+                'company_id' => $payment->company_id,
+                'allocated_by_user_id' => $actingUser->id,
+                'before_states' => $beforeStates,
+                'after_states' => $this->getAfterStates($allocations),
+                'ip_address' => $this->context->getIpAddress(),
+                'user_agent' => $this->context->getUserAgent(),
+            ]);
+
             Log::info('Payment allocated across multiple invoices', [
                 'payment_id' => $payment->id,
                 'total_allocated' => $totalToAllocate,
                 'allocation_count' => count($allocations),
-                'user_id' => $user->id,
+                'user_id' => $actingUser->id,
+                'company_id' => $payment->company_id,
+                'ip' => $this->context->getIpAddress(),
             ]);
 
             return $results;
@@ -111,15 +167,30 @@ class PaymentAllocationService
     public function applyAllocationStrategy(
         Payment $payment,
         string $strategy,
-        User $user,
+        ?User $user = null,
         array $options = []
     ): array {
-        $company = $payment->company;
-        
+        // Validate company access
+        $this->validateCompanyAccess($payment->company_id);
+
+        // Set RLS context
+        $this->setRlsContext($payment->company_id);
+
+        // Use user from context if not provided
+        $actingUser = $user ?? $this->context->getUser();
+
         // Get unpaid invoices for the customer
-        $unpaidInvoices = $this->getUnpaidInvoicesForCustomer($company, $payment->customer_id, $strategy);
+        $unpaidInvoices = $this->getUnpaidInvoicesForCustomer($payment->company, $payment->customer_id, $strategy);
 
         if ($unpaidInvoices->isEmpty()) {
+            $this->audit('payment.allocation_failed', [
+                'payment_id' => $payment->id,
+                'reason' => 'No unpaid invoices found for customer',
+                'strategy' => $strategy,
+                'company_id' => $payment->company_id,
+                'user_id' => $actingUser->id,
+            ]);
+
             return [];
         }
 
@@ -130,27 +201,36 @@ class PaymentAllocationService
             'overdue_first' => $this->strategyService->overdueFirst($unpaidInvoices, $payment->remaining_amount),
             'largest_first' => $this->strategyService->largestFirst($unpaidInvoices, $payment->remaining_amount),
             'percentage_based' => $this->strategyService->percentageBased(
-                $unpaidInvoices, 
-                $payment->remaining_amount, 
+                $unpaidInvoices,
+                $payment->remaining_amount,
                 $options['percentages'] ?? []
             ),
             'equal_distribution' => $this->strategyService->equalDistribution($unpaidInvoices, $payment->remaining_amount),
             'custom_priority' => $this->strategyService->customPriority(
-                $unpaidInvoices, 
-                $payment->remaining_amount, 
+                $unpaidInvoices,
+                $payment->remaining_amount,
                 $options['priority_order'] ?? []
             ),
             default => $this->calculateAllocations($unpaidInvoices, $payment->remaining_amount, $strategy, $options),
         };
 
         if (empty($allocations)) {
+            $this->audit('payment.allocation_failed', [
+                'payment_id' => $payment->id,
+                'reason' => 'Strategy returned no allocations',
+                'strategy' => $strategy,
+                'available_amount' => $payment->remaining_amount,
+                'company_id' => $payment->company_id,
+                'user_id' => $actingUser->id,
+            ]);
+
             return [];
         }
 
         return $this->allocatePaymentAcrossInvoices(
             $payment,
             $allocations,
-            $user,
+            $actingUser,
             'automatic',
             $strategy
         );
@@ -169,7 +249,7 @@ class PaymentAllocationService
 
             // Update payment status if no longer fully allocated
             $payment = $allocation->payment;
-            if (!$payment->is_fully_allocated && $payment->status === 'completed') {
+            if (! $payment->is_fully_allocated && $payment->status === 'completed') {
                 $payment->status = 'pending';
                 $payment->save();
             }
@@ -350,5 +430,62 @@ class PaymentAllocationService
         }
 
         return $allocations;
+    }
+
+    /**
+     * Validate user can access the company
+     */
+    private function validateCompanyAccess(string $companyId): void
+    {
+        $user = $this->context->getUser();
+
+        if (! $user) {
+            throw new \InvalidArgumentException('User context is required');
+        }
+
+        // Check if user belongs to this company
+        if (! $user->companies()->where('company_id', $companyId)->exists()) {
+            throw new \InvalidArgumentException('User does not have access to this company');
+        }
+
+        // Additional validation for active company membership
+        $companyMembership = $user->companies()
+            ->where('company_id', $companyId)
+            ->wherePivot('is_active', true)
+            ->first();
+
+        if (! $companyMembership) {
+            throw new \InvalidArgumentException('User access to this company is not active');
+        }
+    }
+
+    /**
+     * Set RLS context for database operations
+     */
+    private function setRlsContext(string $companyId): void
+    {
+        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        DB::statement('SET app.current_user_id = ?', [$this->context->getUserId()]);
+    }
+
+    /**
+     * Get after states for audit logging
+     */
+    private function getAfterStates(array $allocations): array
+    {
+        $afterStates = [];
+
+        foreach ($allocations as $allocation) {
+            $invoice = Invoice::find($allocation['invoice_id']);
+            if ($invoice) {
+                $afterStates[$invoice->id] = [
+                    'balance_due' => $invoice->balance_due,
+                    'total_allocated' => $invoice->total_allocated,
+                    'payment_status' => $invoice->payment_status,
+                ];
+            }
+        }
+
+        return $afterStates;
     }
 }

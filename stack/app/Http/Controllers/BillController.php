@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Bill;
 use App\Models\BillLine;
-use App\Models\PurchaseOrder;
+use App\Models\Acct\PurchaseOrder;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

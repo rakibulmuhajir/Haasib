@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { router } from '@inertiajs/vue3'
 import { usePage } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
@@ -116,15 +117,15 @@ const formatDate = (dateString) => {
 }
 
 const createInvoice = () => {
-    window.location.href = '/invoicing/create'
+    router.visit('/invoicing/create')
 }
 
 const viewAllInvoices = () => {
-    window.location.href = '/invoicing'
+    router.visit('/invoicing')
 }
 
 const viewModule = (moduleName) => {
-    window.location.href = `/modules/${moduleName.toLowerCase()}`
+    router.visit(`/modules/${moduleName.toLowerCase()}`)
 }
 
 // Lifecycle

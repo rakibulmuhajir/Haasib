@@ -38,7 +38,7 @@ class AuditEntryFactory extends Factory
             'App\Models\Expense',
             'App\Models\JournalEntry',
             'App\Models\Account',
-            'App\Models\PurchaseOrder',
+            'App\Models\Acct\PurchaseOrder',
         ];
 
         return [

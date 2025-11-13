@@ -378,7 +378,7 @@ const switchToCompany = async (company) => {
 
             // Redirect to companies page instead of reloading current URL
             setTimeout(() => {
-                  window.location.href = window.location.origin + '/companies'
+                  router.visit('/companies')
             }, 2000)
         } else {
             const errorText = await response.text()

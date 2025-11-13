@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
-import { Link } from '@inertiajs/vue3'
+import { router, Link } from '@inertiajs/vue3'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 
@@ -253,7 +253,7 @@ function changeTab(tabKey) {
 
 // Go to company selection
 function selectCompany() {
-    window.location.href = '/companies'
+    router.visit('/companies')
 }
 
 onMounted(() => {

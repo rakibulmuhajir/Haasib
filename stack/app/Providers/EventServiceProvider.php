@@ -10,7 +10,7 @@ use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
 use App\Models\Payment;
-use App\Models\PurchaseOrder;
+use App\Models\Acct\PurchaseOrder;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Observers\AuditObserver;

@@ -11,13 +11,18 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
-class SetupService
+class SetupService extends BaseService
 {
     private const CACHE_KEY_INITIALIZED = 'system:initialized';
 
     private const CACHE_KEY_STATUS = 'system:status';
 
     private const CACHE_TTL_STATUS = 300; // 5 minutes
+
+    public function __construct(ServiceContext $context)
+    {
+        parent::__construct($context);
+    }
 
     /**
      * Check if the system has been initialized.
@@ -96,11 +101,21 @@ class SetupService
      */
     public function initializeSystem(array $userData, array $companyData): array
     {
-        return DB::transaction(function () use ($userData, $companyData) {
+        return $this->executeInTransaction(function () use ($userData, $companyData) {
             $user = $this->createSystemOwnerCommand($userData);
             $company = $this->createCompanyCommand($companyData);
             $this->assignSystemOwnerToCompanies($user, [$company]);
             $modulesCreated = $this->createDefaultModules();
+
+            // Log system initialization
+            $this->audit('system.initialized', [
+                'system_owner_id' => $user->id,
+                'company_id' => $company->id,
+                'company_name' => $company->name,
+                'modules_created' => $modulesCreated,
+                'initialized_by_user_id' => $this->getUserId(),
+                'request_id' => $this->getRequestId(),
+            ]);
 
             // Clear caches
             Cache::forget(self::CACHE_KEY_INITIALIZED);
@@ -122,11 +137,21 @@ class SetupService
         // Validate input data
         $this->validateInitializationData($userData, $companiesData);
 
-        return DB::transaction(function () use ($userData, $companiesData) {
+        return $this->executeInTransaction(function () use ($userData, $companiesData) {
             $systemOwner = $this->createSystemOwner($userData);
             $companies = $this->createCompanies($companiesData);
             $this->assignSystemOwnerToCompanies($systemOwner, $companies);
             $modulesCreated = $this->createDefaultModules();
+
+            // Log system initialization
+            $this->audit('system.initialized_multi_company', [
+                'system_owner_id' => $systemOwner->id,
+                'companies_count' => count($companies),
+                'companies_created' => $companies,
+                'modules_created' => $modulesCreated,
+                'initialized_by_user_id' => $this->getUserId(),
+                'request_id' => $this->getRequestId(),
+            ]);
 
             // Clear caches
             Cache::forget(self::CACHE_KEY_INITIALIZED);

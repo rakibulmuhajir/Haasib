@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PurchaseOrder;
+use App\Models\Acct\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Vendor;
 use Illuminate\Http\Request;

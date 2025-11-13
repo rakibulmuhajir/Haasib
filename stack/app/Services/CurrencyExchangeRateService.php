@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CurrencyRate;
+use App\Traits\AuditLogging;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class CurrencyExchangeRateService
 {
+    use AuditLogging;
+
     /**
      * Real-time exchange rate providers and their endpoints.
      */
@@ -39,36 +42,73 @@ class CurrencyExchangeRateService
 
     private int $cacheTtl = 3600; // 1 hour
 
+    private ServiceContext $context;
+
+    public function __construct(ServiceContext $context)
+    {
+        $this->context = $context;
+    }
+
     /**
      * Get real-time exchange rate for a currency pair.
      */
-    public function getRealTimeExchangeRate(string $fromCurrency, string $toCurrency): ?float
+    public function getRealTimeExchangeRate(string $fromCurrency, string $toCurrency, ?string $companyId = null): ?float
     {
         if ($fromCurrency === $toCurrency) {
             return 1.0;
         }
 
-        $cacheKey = "exchange_rate_{$fromCurrency}_{$toCurrency}";
+        // Use company from context or provided ID
+        $targetCompanyId = $companyId ?? $this->context->getCompanyId();
 
-        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($fromCurrency, $toCurrency) {
+        if (! $targetCompanyId) {
+            throw new \InvalidArgumentException('Company context is required for exchange rate lookup');
+        }
+
+        // Validate company access
+        $this->validateCompanyAccess($targetCompanyId);
+
+        // Company-isolated cache key
+        $cacheKey = "exchange_rate_{$fromCurrency}_{$toCurrency}_company_{$targetCompanyId}";
+
+        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($fromCurrency, $toCurrency, $targetCompanyId) {
             // Try providers in order of preference
             foreach ($this->providers as $providerName => $config) {
                 try {
                     $rate = $this->fetchFromProvider($providerName, $fromCurrency, $toCurrency);
                     if ($rate !== null) {
-                        Log::info("Exchange rate fetched from {$providerName}: {$fromCurrency} to {$toCurrency} = {$rate}");
+                        Log::info("Exchange rate fetched from {$providerName}: {$fromCurrency} to {$toCurrency} = {$rate}", [
+                            'company_id' => $targetCompanyId,
+                            'user_id' => $this->context->getUserId(),
+                            'provider' => $providerName,
+                        ]);
+
+                        // Log rate access for audit
+                        $this->audit('exchange_rate.accessed', [
+                            'company_id' => $targetCompanyId,
+                            'from_currency' => $fromCurrency,
+                            'to_currency' => $toCurrency,
+                            'rate' => $rate,
+                            'provider' => $providerName,
+                            'accessed_by_user_id' => $this->context->getUserId(),
+                            'ip_address' => $this->context->getIpAddress(),
+                        ]);
 
                         return $rate;
                     }
                 } catch (\Exception $e) {
-                    Log::warning("Failed to fetch exchange rate from {$providerName}: {$e->getMessage()}");
+                    Log::warning("Failed to fetch exchange rate from {$providerName}: {$e->getMessage()}", [
+                        'company_id' => $targetCompanyId,
+                        'provider' => $providerName,
+                        'error' => $e->getMessage(),
+                    ]);
 
                     continue;
                 }
             }
 
             // Fallback to stored rates if real-time fetch fails
-            return $this->getStoredExchangeRate($fromCurrency, $toCurrency);
+            return $this->getStoredExchangeRate($fromCurrency, $toCurrency, $targetCompanyId);
         });
     }
 
@@ -120,8 +160,11 @@ class CurrencyExchangeRateService
     /**
      * Get stored exchange rate (fallback).
      */
-    private function getStoredExchangeRate(string $fromCurrency, string $toCurrency): ?float
+    private function getStoredExchangeRate(string $fromCurrency, string $toCurrency, string $companyId): ?float
     {
+        // Set RLS context
+        $this->setRlsContext($companyId);
+
         $rate = CurrencyRate::where('from_currency', $fromCurrency)
             ->where('to_currency', $toCurrency)
             ->where('valid_from', '<=', now())
@@ -133,7 +176,23 @@ class CurrencyExchangeRateService
             ->first();
 
         if ($rate) {
-            Log::info("Using stored exchange rate: {$fromCurrency} to {$toCurrency} = {$rate->rate}");
+            Log::info("Using stored exchange rate: {$fromCurrency} to {$toCurrency} = {$rate->rate}", [
+                'company_id' => $companyId,
+                'user_id' => $this->context->getUserId(),
+            ]);
+
+            // Log stored rate access
+            $this->audit('exchange_rate.stored_rate_accessed', [
+                'company_id' => $companyId,
+                'from_currency' => $fromCurrency,
+                'to_currency' => $toCurrency,
+                'rate' => $rate->rate,
+                'rate_id' => $rate->id,
+                'valid_from' => $rate->valid_from,
+                'valid_until' => $rate->valid_until,
+                'accessed_by_user_id' => $this->context->getUserId(),
+                'ip_address' => $this->context->getIpAddress(),
+            ]);
 
             return $rate->rate;
         }
@@ -144,13 +203,29 @@ class CurrencyExchangeRateService
     /**
      * Update exchange rates for all common currencies.
      */
-    public function updateExchangeRates(string $baseCurrency = 'USD'): array
+    public function updateExchangeRates(string $baseCurrency = 'USD', ?string $companyId = null): array
     {
+        // Use company from context or provided ID
+        $targetCompanyId = $companyId ?? $this->context->getCompanyId();
+
+        if (! $targetCompanyId) {
+            throw new \InvalidArgumentException('Company context is required for exchange rate updates');
+        }
+
+        // Validate company access
+        $this->validateCompanyAccess($targetCompanyId);
+
+        // Set RLS context
+        $this->setRlsContext($targetCompanyId);
+
         $results = [
             'updated' => 0,
             'failed' => 0,
             'errors' => [],
         ];
+
+        $totalUpdates = 0;
+        $totalFailures = 0;
 
         foreach ($this->commonCurrencies as $currency) {
             if ($currency === $baseCurrency) {
@@ -158,11 +233,11 @@ class CurrencyExchangeRateService
             }
 
             try {
-                $rate = $this->getRealTimeExchangeRate($baseCurrency, $currency);
+                $rate = $this->getRealTimeExchangeRate($baseCurrency, $currency, $targetCompanyId);
 
                 if ($rate !== null) {
                     // Store or update the rate
-                    CurrencyRate::updateOrCreate(
+                    $currencyRate = CurrencyRate::updateOrCreate(
                         [
                             'from_currency' => $baseCurrency,
                             'to_currency' => $currency,
@@ -173,23 +248,59 @@ class CurrencyExchangeRateService
                             'valid_until' => now()->endOfDay(),
                             'provider' => 'real_time',
                             'notes' => 'Updated via real-time fetch',
+                            'updated_by_user_id' => $this->context->getUserId(),
+                            'company_id' => $targetCompanyId,
                         ]
                     );
 
-                    // Clear cache
-                    Cache::forget("exchange_rate_{$baseCurrency}_{$currency}");
-                    Cache::forget("exchange_rate_{$currency}_{$baseCurrency}");
+                    // Clear company-isolated cache
+                    Cache::forget("exchange_rate_{$baseCurrency}_{$currency}_company_{$targetCompanyId}");
+                    Cache::forget("exchange_rate_{$currency}_{$baseCurrency}_company_{$targetCompanyId}");
 
                     $results['updated']++;
+                    $totalUpdates++;
+
+                    // Log individual rate update
+                    $this->audit('exchange_rate.updated', [
+                        'company_id' => $targetCompanyId,
+                        'from_currency' => $baseCurrency,
+                        'to_currency' => $currency,
+                        'rate' => $rate,
+                        'rate_id' => $currencyRate->id,
+                        'provider' => 'real_time',
+                        'updated_by_user_id' => $this->context->getUserId(),
+                        'ip_address' => $this->context->getIpAddress(),
+                    ]);
                 } else {
                     $results['failed']++;
+                    $totalFailures++;
                     $results['errors'][] = "Could not fetch rate for {$baseCurrency} to {$currency}";
                 }
             } catch (\Exception $e) {
                 $results['failed']++;
+                $totalFailures++;
                 $results['errors'][] = "Error updating {$baseCurrency} to {$currency}: {$e->getMessage()}";
             }
         }
+
+        // Log batch update completion
+        $this->audit('exchange_rate.batch_update_completed', [
+            'company_id' => $targetCompanyId,
+            'base_currency' => $baseCurrency,
+            'total_updated' => $totalUpdates,
+            'total_failed' => $totalFailures,
+            'updated_by_user_id' => $this->context->getUserId(),
+            'ip_address' => $this->context->getIpAddress(),
+        ]);
+
+        Log::info('Exchange rate batch update completed', [
+            'company_id' => $targetCompanyId,
+            'base_currency' => $baseCurrency,
+            'updated' => $totalUpdates,
+            'failed' => $totalFailures,
+            'user_id' => $this->context->getUserId(),
+            'ip' => $this->context->getIpAddress(),
+        ]);
 
         return $results;
     }
@@ -359,5 +470,41 @@ class CurrencyExchangeRateService
             'failed' => $results['failed'],
             'errors' => $results['errors'],
         ]);
+    }
+
+    /**
+     * Validate user can access the company
+     */
+    private function validateCompanyAccess(string $companyId): void
+    {
+        $user = $this->context->getUser();
+
+        if (! $user) {
+            throw new \InvalidArgumentException('User context is required');
+        }
+
+        // Check if user belongs to this company
+        if (! $user->companies()->where('company_id', $companyId)->exists()) {
+            throw new \InvalidArgumentException('User does not have access to this company');
+        }
+
+        // Additional validation for active company membership
+        $companyMembership = $user->companies()
+            ->where('company_id', $companyId)
+            ->wherePivot('is_active', true)
+            ->first();
+
+        if (! $companyMembership) {
+            throw new \InvalidArgumentException('User access to this company is not active');
+        }
+    }
+
+    /**
+     * Set RLS context for database operations
+     */
+    private function setRlsContext(string $companyId): void
+    {
+        \DB::statement('SET app.current_company_id = ?', [$companyId]);
+        \DB::statement('SET app.current_user_id = ?', [$this->context->getUserId()]);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\CommandBusService;
+use App\Services\ServiceContext;
 use Illuminate\Support\ServiceProvider;
 
 class CommandBusServiceProvider extends ServiceProvider
@@ -13,7 +14,14 @@ class CommandBusServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(CommandBusService::class, function ($app) {
-            return new CommandBusService();
+            // Create a default context for system-level operations
+            $context = new ServiceContext(
+                user: null,
+                company: null,
+                ipAddress: null,
+                userAgent: 'System'
+            );
+            return new CommandBusService($context);
         });
     }
 

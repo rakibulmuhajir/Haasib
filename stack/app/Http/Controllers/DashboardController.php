@@ -23,7 +23,7 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $company = $user->currentCompany;
+        $company = $user->currentCompany();
 
         if (! $company) {
             return Inertia::render('Dashboard', [
@@ -70,7 +70,7 @@ class DashboardController extends Controller
     public function metrics(Request $request): JsonResponse
     {
         $user = $request->user();
-        $company = $user->currentCompany;
+        $company = $user->currentCompany();
 
         if (! $company) {
             return response()->json([
@@ -110,7 +110,7 @@ class DashboardController extends Controller
     public function refresh(Request $request): JsonResponse
     {
         $user = $request->user();
-        $company = $user->currentCompany;
+        $company = $user->currentCompany();
 
         if (! $company) {
             return response()->json([

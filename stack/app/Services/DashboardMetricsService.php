@@ -8,34 +8,110 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
 use App\Models\Payment;
+use App\Traits\AuditLogging;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DashboardMetricsService
 {
+    use AuditLogging;
+
+    private ServiceContext $context;
+
+    public function __construct(ServiceContext $context)
+    {
+        $this->context = $context;
+    }
+
     /**
      * Get key dashboard metrics for a company
      */
-    public function getCompanyMetrics(Company $company): array
+    public function getCompanyMetrics(?Company $company = null): array
     {
-        $companyId = $company->id;
-        $currency = $company->currency_code ?? 'USD';
+        return DB::transaction(function () use ($company) {
+            // Use company from context or validate provided company
+            $targetCompany = $company ?? $this->context->getCompany();
 
-        return [
-            'cash_balance' => $this->getCashBalance($companyId, $currency),
-            'outstanding_invoices' => $this->getOutstandingInvoices($companyId, $currency),
-            'overdue_invoices' => $this->getOverdueInvoices($companyId, $currency),
-            'total_customers' => $this->getTotalCustomers($companyId),
-            'monthly_revenue' => $this->getMonthlyRevenue($companyId, $currency),
-            'monthly_expenses' => $this->getMonthlyExpenses($companyId, $currency),
-            'accounts_receivable' => $this->getAccountsReceivable($companyId, $currency),
-            'accounts_payable' => $this->getAccountsPayable($companyId, $currency),
-            'net_income' => $this->getNetIncome($companyId, $currency),
-            'profit_margin' => $this->getProfitMargin($companyId),
-            'collection_rate' => $this->getCollectionRate($companyId),
-            'recent_activity' => $this->getRecentActivity($companyId),
-            'top_customers' => $this->getTopCustomers($companyId, $currency),
-        ];
+            if (! $targetCompany) {
+                throw new \InvalidArgumentException('Company context is required');
+            }
+
+            // Validate user can access this company
+            $this->validateCompanyAccess($targetCompany);
+
+            $companyId = $targetCompany->id;
+            $currency = $targetCompany->currency_code ?? 'USD';
+
+            // Log metrics calculation
+            $this->audit('dashboard.metrics_generated', [
+                'company_id' => $companyId,
+                'generated_by_user_id' => $this->context->getUserId(),
+                'currency' => $currency,
+                'calculation_timestamp' => now()->toISOString(),
+            ]);
+
+            Log::info('Dashboard metrics generated', [
+                'company_id' => $companyId,
+                'user_id' => $this->context->getUserId(),
+                'ip' => $this->context->getIpAddress(),
+            ]);
+
+            return [
+                'cash_balance' => $this->getCashBalance($companyId, $currency),
+                'outstanding_invoices' => $this->getOutstandingInvoices($companyId, $currency),
+                'overdue_invoices' => $this->getOverdueInvoices($companyId, $currency),
+                'total_customers' => $this->getTotalCustomers($companyId),
+                'monthly_revenue' => $this->getMonthlyRevenue($companyId, $currency),
+                'monthly_expenses' => $this->getMonthlyExpenses($companyId, $currency),
+                'accounts_receivable' => $this->getAccountsReceivable($companyId, $currency),
+                'accounts_payable' => $this->getAccountsPayable($companyId, $currency),
+                'net_income' => $this->getNetIncome($companyId, $currency),
+                'profit_margin' => $this->getProfitMargin($companyId),
+                'collection_rate' => $this->getCollectionRate($companyId),
+                'recent_activity' => $this->getRecentActivity($companyId),
+                'top_customers' => $this->getTopCustomers($companyId, $currency),
+                'generated_at' => now()->toISOString(),
+                'company_id' => $companyId,
+                'currency' => $currency,
+            ];
+        });
+    }
+
+    /**
+     * Validate user can access the company
+     */
+    private function validateCompanyAccess(Company $company): void
+    {
+        $user = $this->context->getUser();
+
+        if (! $user) {
+            throw new \InvalidArgumentException('User context is required');
+        }
+
+        // Check if user belongs to this company
+        if (! $user->companies()->where('company_id', $company->id)->exists()) {
+            throw new \InvalidArgumentException('User does not have access to this company');
+        }
+
+        // Additional validation for active company membership
+        $companyMembership = $user->companies()
+            ->where('company_id', $company->id)
+            ->wherePivot('is_active', true)
+            ->first();
+
+        if (! $companyMembership) {
+            throw new \InvalidArgumentException('User access to this company is not active');
+        }
+    }
+
+    /**
+     * Set RLS context for database operations
+     */
+    private function setRlsContext(string $companyId): void
+    {
+        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        DB::statement('SET app.current_user_id = ?', [$this->context->getUserId()]);
     }
 
     /**
@@ -43,6 +119,9 @@ class DashboardMetricsService
      */
     private function getCashBalance(string $companyId, string $currency): float
     {
+        // Set RLS context for this query
+        $this->setRlsContext($companyId);
+
         $cashAccountIds = Account::where('company_id', $companyId)
             ->where('account_type', 'Asset')
             ->where(function ($query) {
@@ -57,11 +136,21 @@ class DashboardMetricsService
             return 0.0;
         }
 
-        return JournalEntry::join('journal_lines', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+        $balance = JournalEntry::join('journal_lines', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
             ->whereIn('journal_lines.account_id', $cashAccountIds)
             ->where('journal_entries.company_id', $companyId)
             ->where('journal_entries.post_date', '<=', now())
             ->sum(DB::raw('journal_lines.debit - journal_lines.credit'));
+
+        // Log cash balance calculation
+        $this->audit('dashboard.cash_balance_calculated', [
+            'company_id' => $companyId,
+            'amount' => $balance,
+            'currency' => $currency,
+            'calculated_by_user_id' => $this->context->getUserId(),
+        ]);
+
+        return $balance;
     }
 
     /**

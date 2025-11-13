@@ -5,13 +5,21 @@ namespace App\Services;
 use App\Models\TaxComponent;
 use App\Models\TaxRate;
 use App\Models\TaxSettings;
+use App\Traits\AuditLogging;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TaxCalculationService
 {
+    use AuditLogging;
+
     protected $taxSettings;
 
-    public function __construct()
+    private ServiceContext $context;
+
+    public function __construct(ServiceContext $context)
     {
+        $this->context = $context;
         $this->taxSettings = null;
     }
 
@@ -20,6 +28,12 @@ class TaxCalculationService
      */
     public function calculateTax($transaction, $items = null, $currency = 'USD')
     {
+        // Validate company access
+        $this->validateCompanyAccess($transaction->company_id);
+
+        // Set RLS context
+        $this->setRlsContext($transaction->company_id);
+
         $company = $transaction->company;
         $this->taxSettings = TaxSettings::getOrCreateForCompany($company->id);
 
@@ -31,6 +45,8 @@ class TaxCalculationService
         $items = $items ?? $this->getTransactionItems($transaction);
         $location = $this->getTransactionLocation($transaction);
         $transactionType = $this->getTransactionType($transaction);
+        $totalTaxableAmount = 0;
+        $totalTaxAmount = 0;
 
         foreach ($items as $item) {
             $applicableTaxRates = $this->getApplicableTaxRates($item, $location, $transactionType);
@@ -39,13 +55,17 @@ class TaxCalculationService
                 $taxAmount = $this->calculateTaxForItem($item, $taxRate, $taxComponents);
 
                 if ($taxAmount > 0) {
-                    $taxComponents[] = TaxComponent::createFromTransaction(
+                    $taxComponent = TaxComponent::createFromTransaction(
                         $transaction,
                         $taxRate,
                         $item['amount'],
                         $currency,
                         $item['id'] ?? null
                     );
+
+                    $taxComponents[] = $taxComponent;
+                    $totalTaxableAmount += $item['amount'];
+                    $totalTaxAmount += $taxAmount;
                 }
             }
         }
@@ -54,7 +74,34 @@ class TaxCalculationService
         if ($this->taxSettings->charge_tax_on_shipping && isset($transaction->shipping_amount)) {
             $shippingTaxComponents = $this->calculateTaxForShipping($transaction);
             $taxComponents = array_merge($taxComponents, $shippingTaxComponents);
+
+            // Add shipping tax to totals
+            foreach ($shippingTaxComponents as $component) {
+                $totalTaxAmount += $component->tax_amount;
+            }
         }
+
+        // Create audit log entry
+        $this->audit('tax.calculated', [
+            'transaction_type' => get_class($transaction),
+            'transaction_id' => $transaction->id,
+            'company_id' => $transaction->company_id,
+            'currency' => $currency,
+            'total_taxable_amount' => $totalTaxableAmount,
+            'total_tax_amount' => $totalTaxAmount,
+            'tax_components_count' => count($taxComponents),
+            'calculated_by_user_id' => $this->context->getUserId(),
+            'location' => $location,
+            'transaction_type_classification' => $transactionType,
+        ]);
+
+        Log::info('Tax calculation completed', [
+            'transaction_id' => $transaction->id,
+            'company_id' => $transaction->company_id,
+            'user_id' => $this->context->getUserId(),
+            'total_tax' => $totalTaxAmount,
+            'ip' => $this->context->getIpAddress(),
+        ]);
 
         return $taxComponents;
     }
@@ -78,7 +125,13 @@ class TaxCalculationService
      */
     public function getDefaultTaxRate($transactionType = 'sales')
     {
-        $this->taxSettings = TaxSettings::getOrCreateForCompany(auth()->user()->current_company_id);
+        $companyId = $this->context->getCompanyId();
+
+        if (! $companyId) {
+            throw new \InvalidArgumentException('Company context is required for tax rate lookup');
+        }
+
+        $this->taxSettings = TaxSettings::getOrCreateForCompany($companyId);
 
         if ($transactionType === 'sales') {
             return $this->taxSettings->defaultSalesTaxRate;
@@ -92,7 +145,13 @@ class TaxCalculationService
      */
     protected function getApplicableTaxRates($item, $location, $transactionType)
     {
-        $query = TaxRate::where('company_id', auth()->user()->current_company_id)
+        $companyId = $this->context->getCompanyId();
+
+        if (! $companyId) {
+            throw new \InvalidArgumentException('Company context is required for tax rate lookup');
+        }
+
+        $query = TaxRate::where('company_id', $companyId)
             ->active()
             ->where(function ($q) use ($transactionType) {
                 $q->where('tax_type', $transactionType)
@@ -295,5 +354,41 @@ class TaxCalculationService
         }
 
         return $summary;
+    }
+
+    /**
+     * Validate user can access the company
+     */
+    private function validateCompanyAccess(string $companyId): void
+    {
+        $user = $this->context->getUser();
+
+        if (! $user) {
+            throw new \InvalidArgumentException('User context is required');
+        }
+
+        // Check if user belongs to this company
+        if (! $user->companies()->where('company_id', $companyId)->exists()) {
+            throw new \InvalidArgumentException('User does not have access to this company');
+        }
+
+        // Additional validation for active company membership
+        $companyMembership = $user->companies()
+            ->where('company_id', $companyId)
+            ->wherePivot('is_active', true)
+            ->first();
+
+        if (! $companyMembership) {
+            throw new \InvalidArgumentException('User access to this company is not active');
+        }
+    }
+
+    /**
+     * Set RLS context for database operations
+     */
+    private function setRlsContext(string $companyId): void
+    {
+        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        DB::statement('SET app.current_user_id = ?', [$this->context->getUserId()]);
     }
 }

@@ -8,7 +8,7 @@ use App\Models\BillPayment;
 use App\Models\Company;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
-use App\Models\PurchaseOrder;
+use App\Models\Acct\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Vendor;
 use Illuminate\Console\Command;
@@ -123,7 +123,7 @@ class TestExpenseCycle extends Command
         ]);
     }
 
-    private function createTestPurchaseOrder(Company $company, Vendor $vendor): PurchaseOrder
+    private function createTestPurchaseOrder(Company $company, Vendor $vendor): \App\Models\Acct\PurchaseOrder
     {
         $poNumber = 'PO-'.time();
 

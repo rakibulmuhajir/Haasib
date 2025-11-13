@@ -7,16 +7,25 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
+use App\Traits\AuditLogging;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-class BalanceTrackingService
+class BalanceTrackingService extends BaseService
 {
+    use AuditLogging;
+
     /**
      * Get real-time customer balance summary.
      */
     public function getCustomerBalanceSummary(Company $company, string $customerId, bool $useCache = true): array
     {
-        $cacheKey = "customer_balance_{$company->id}_{$customerId}";
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Company-isolated cache key
+        $cacheKey = "customer_balance_{$company->id}_{$customerId}_company_{$this->getCompanyId()}";
 
         if ($useCache) {
             return Cache::remember($cacheKey, 300, function () use ($company, $customerId) {
@@ -294,6 +303,12 @@ class BalanceTrackingService
      */
     private function calculateCustomerBalance(Company $company, string $customerId): array
     {
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Set RLS context for database operations
+        $this->setRlsContext($company->id);
+
         $unpaidInvoices = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customerId)
             ->where('status', '!=', 'paid')
@@ -308,6 +323,18 @@ class BalanceTrackingService
             ->where('status', 'completed')
             ->get()
             ->sum('remaining_amount');
+
+        // Create audit log entry for balance calculation
+        $this->audit('balance.customer_calculated', [
+            'company_id' => $company->id,
+            'customer_id' => $customerId,
+            'total_balance_due' => $totalBalanceDue,
+            'total_allocated' => $totalAllocated,
+            'unallocated_payments' => $unallocatedPayments,
+            'net_balance' => $totalBalanceDue - $totalAllocated - $unallocatedPayments,
+            'calculated_by_user_id' => $this->getUserId(),
+            'invoice_count' => $unpaidInvoices->count(),
+        ]);
 
         return [
             'customer_id' => $customerId,
@@ -335,10 +362,37 @@ class BalanceTrackingService
     }
 
     /**
+     * Invalidate customer balance cache.
+     */
+    public function invalidateCustomerBalanceCache(Company $company, string $customerId): void
+    {
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Clear company-isolated cache
+        $cacheKey = "customer_balance_{$company->id}_{$customerId}_company_{$this->getCompanyId()}";
+        Cache::forget($cacheKey);
+        
+        // Log cache invalidation
+        $this->audit('balance.cache_invalidated', [
+            'company_id' => $company->id,
+            'customer_id' => $customerId,
+            'invalidated_by_user_id' => $this->getUserId(),
+            'cache_key' => $cacheKey,
+        ]);
+    }
+
+    /**
      * Get invoice statistics.
      */
     private function getInvoiceStatistics(Company $company): array
     {
+        // Validate company access
+        $this->validateCompanyAccess($company->id);
+        
+        // Set RLS context
+        $this->setRlsContext($company->id);
+        
         return [
             'total' => Invoice::where('company_id', $company->id)->count(),
             'draft' => Invoice::where('company_id', $company->id)->where('status', 'draft')->count(),

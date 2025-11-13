@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Invoicing;
 
 use App\Http\Controllers\Controller;
-use App\Models\Company;
+use App\Http\Requests\Invoices\StoreInvoiceRequest;
+use App\Http\Requests\Invoices\UpdateInvoiceRequest;
 use App\Models\Customer;
 use App\Models\Invoice;
-use Illuminate\Http\Request;
+use App\Services\ServiceContextHelper;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,249 +29,276 @@ class InvoiceController extends Controller
     /**
      * Display a listing of invoices.
      */
-    public function index(Request $request): Response
+    public function index(StoreInvoiceRequest $request): Response
     {
-        $company = $request->user()->currentCompany();
-        
-        $invoices = Invoice::where('company_id', $company->id)
-            ->with(['customer'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+        try {
+            $context = ServiceContextHelper::fromRequest($request);
+            $company = $context->getCompany();
 
-        return Inertia::render('Invoicing/Invoices/Index', [
-            'invoices' => $invoices,
-        ]);
+            $invoices = Invoice::where('company_id', $company->id)
+                ->with(['customer'])
+                ->orderBy('created_at', 'desc')
+                ->paginate(15);
+
+            return Inertia::render('Invoicing/Invoices/Index', [
+                'invoices' => $invoices,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Invoice listing failed', [
+                'error' => $e->getMessage(),
+                'user_id' => $request->user()->id,
+                'company_id' => $context->getCompanyId() ?? null,
+            ]);
+
+            return Inertia::render('Invoicing/Invoices/Index', [
+                'invoices' => collect(),
+                'error' => 'Failed to load invoices',
+            ]);
+        }
     }
 
     /**
      * Show the form for creating a new invoice.
      */
-    public function create(Request $request): Response
+    public function create(StoreInvoiceRequest $request): Response
     {
-        $company = $request->user()->currentCompany();
-        
-        $customers = Customer::where('company_id', $company->id)
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+        try {
+            $context = ServiceContextHelper::fromRequest($request);
+            $company = $context->getCompany();
 
-        return Inertia::render('Invoicing/Invoices/Create', [
-            'customers' => $customers,
-        ]);
+            $customers = Customer::where('company_id', $company->id)
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']);
+
+            return Inertia::render('Invoicing/Invoices/Create', [
+                'customers' => $customers,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Invoice creation form failed', [
+                'error' => $e->getMessage(),
+                'user_id' => $request->user()->id,
+            ]);
+
+            return Inertia::render('Invoicing/Invoices/Create', [
+                'customers' => collect(),
+                'error' => 'Failed to load creation form',
+            ]);
+        }
     }
 
     /**
      * Store a newly created invoice.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreInvoiceRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'customer_id' => 'required|uuid|exists:acct.customers,id',
-            'invoice_number' => 'required|string|max:50',
-            'issue_date' => 'required|date',
-            'due_date' => 'required|date|after:issue_date',
-            'currency' => 'required|string|size:3',
-            'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
-            'line_items' => 'required|array|min:1',
-            'line_items.*.description' => 'required|string',
-            'line_items.*.quantity' => 'required|numeric|min:0.01',
-            'line_items.*.unit_price' => 'required|numeric|min:0',
-            'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
-        ]);
+        try {
+            $context = ServiceContextHelper::fromRequest($request);
 
-        $company = $request->user()->currentCompany();
-        
-        $invoice = Invoice::create([
-            'company_id' => $company->id,
-            'customer_id' => $validated['customer_id'],
-            'invoice_number' => $validated['invoice_number'],
-            'issue_date' => $validated['issue_date'],
-            'due_date' => $validated['due_date'],
-            'currency' => $validated['currency'],
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
-            'status' => 'draft',
-            'subtotal' => $this->calculateSubtotal($validated['line_items']),
-            'tax_total' => $this->calculateTaxTotal($validated['line_items']),
-            'total' => $this->calculateTotal($validated['line_items']),
-            'created_by_user_id' => $request->user()->id,
-        ]);
+            $invoice = Bus::dispatch('invoices.create', [
+                'customer_id' => $request->validated('customer_id'),
+                'invoice_number' => $request->validated('invoice_number'),
+                'issue_date' => $request->validated('issue_date'),
+                'due_date' => $request->validated('due_date'),
+                'currency' => $request->validated('currency'),
+                'notes' => $request->validated('notes'),
+                'terms' => $request->validated('terms'),
+                'line_items' => $request->validated('line_items'),
+            ], $context);
 
-        // Create line items
-        foreach ($validated['line_items'] as $item) {
-            $invoice->lineItems()->create([
-                'description' => $item['description'],
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'tax_rate' => $item['tax_rate'] ?? 0,
-                'line_total' => ($item['quantity'] * $item['unit_price']) * (1 + ($item['tax_rate'] ?? 0) / 100),
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('success', 'Invoice created successfully.');
+
+        } catch (ValidationException $e) {
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput();
+
+        } catch (\Exception $e) {
+            Log::error('Invoice creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->user()->id,
+                'company_id' => $context->getCompanyId(),
             ]);
-        }
 
-        return redirect()->route('invoices.show', $invoice->id)
-            ->with('success', 'Invoice created successfully.');
+            return redirect()->back()
+                ->with('error', 'Failed to create invoice. Please try again.')
+                ->withInput();
+        }
     }
 
     /**
      * Display the specified invoice.
      */
-    public function show(Request $request, Invoice $invoice): Response
+    public function show(StoreInvoiceRequest $request, Invoice $invoice): Response
     {
-        $this->authorize('view', $invoice);
+        try {
+            $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'lineItems', 'payments']);
+            $invoice->load(['customer', 'lineItems', 'payments']);
 
-        return Inertia::render('Invoicing/Invoices/Show', [
-            'invoice' => $invoice,
-        ]);
+            return Inertia::render('Invoicing/Invoices/Show', [
+                'invoice' => $invoice,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Invoice display failed', [
+                'error' => $e->getMessage(),
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+            ]);
+
+            return redirect()->route('invoices.index')
+                ->with('error', 'Failed to load invoice');
+        }
     }
 
     /**
      * Show the form for editing the specified invoice.
      */
-    public function edit(Request $request, Invoice $invoice): Response
+    public function edit(UpdateInvoiceRequest $request, Invoice $invoice): Response
     {
-        $this->authorize('update', $invoice);
+        try {
+            if ($invoice->status !== 'draft') {
+                return redirect()->route('invoices.show', $invoice->id)
+                    ->with('error', 'Only draft invoices can be edited.');
+            }
 
-        if ($invoice->status !== 'draft') {
-            abort(403, 'Only draft invoices can be edited.');
+            $context = ServiceContextHelper::fromRequest($request);
+            $company = $context->getCompany();
+
+            $customers = Customer::where('company_id', $company->id)
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']);
+
+            $invoice->load(['lineItems']);
+
+            return Inertia::render('Invoicing/Invoices/Edit', [
+                'invoice' => $invoice,
+                'customers' => $customers,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Invoice edit form failed', [
+                'error' => $e->getMessage(),
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+            ]);
+
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('error', 'Failed to load edit form');
         }
-
-        $company = $request->user()->currentCompany();
-        
-        $customers = Customer::where('company_id', $company->id)
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'email']);
-
-        $invoice->load(['lineItems']);
-
-        return Inertia::render('Invoicing/Invoices/Edit', [
-            'invoice' => $invoice,
-            'customers' => $customers,
-        ]);
     }
 
     /**
      * Update the specified invoice.
      */
-    public function update(Request $request, Invoice $invoice): RedirectResponse
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        $this->authorize('update', $invoice);
+        try {
+            $context = ServiceContextHelper::fromRequest($request);
 
-        if ($invoice->status !== 'draft') {
-            abort(403, 'Only draft invoices can be edited.');
-        }
+            $updatedInvoice = Bus::dispatch('invoices.update', [
+                'id' => $invoice->id,
+                'customer_id' => $request->validated('customer_id'),
+                'invoice_number' => $request->validated('invoice_number'),
+                'issue_date' => $request->validated('issue_date'),
+                'due_date' => $request->validated('due_date'),
+                'currency' => $request->validated('currency'),
+                'notes' => $request->validated('notes'),
+                'terms' => $request->validated('terms'),
+                'line_items' => $request->validated('line_items'),
+            ], $context);
 
-        $validated = $request->validate([
-            'customer_id' => 'required|uuid|exists:acct.customers,id',
-            'invoice_number' => 'required|string|max:50',
-            'issue_date' => 'required|date',
-            'due_date' => 'required|date|after:issue_date',
-            'currency' => 'required|string|size:3',
-            'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
-            'line_items' => 'required|array|min:1',
-            'line_items.*.description' => 'required|string',
-            'line_items.*.quantity' => 'required|numeric|min:0.01',
-            'line_items.*.unit_price' => 'required|numeric|min:0',
-            'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
-        ]);
+            return redirect()->route('invoices.show', $updatedInvoice->id)
+                ->with('success', 'Invoice updated successfully.');
 
-        $invoice->update([
-            'customer_id' => $validated['customer_id'],
-            'invoice_number' => $validated['invoice_number'],
-            'issue_date' => $validated['issue_date'],
-            'due_date' => $validated['due_date'],
-            'currency' => $validated['currency'],
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
-            'subtotal' => $this->calculateSubtotal($validated['line_items']),
-            'tax_total' => $this->calculateTaxTotal($validated['line_items']),
-            'total' => $this->calculateTotal($validated['line_items']),
-        ]);
+        } catch (ValidationException $e) {
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput();
 
-        // Remove existing line items and create new ones
-        $invoice->lineItems()->delete();
-        
-        foreach ($validated['line_items'] as $item) {
-            $invoice->lineItems()->create([
-                'description' => $item['description'],
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'tax_rate' => $item['tax_rate'] ?? 0,
-                'line_total' => ($item['quantity'] * $item['unit_price']) * (1 + ($item['tax_rate'] ?? 0) / 100),
+        } catch (\Exception $e) {
+            Log::error('Invoice update failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+                'company_id' => $context->getCompanyId(),
             ]);
-        }
 
-        return redirect()->route('invoices.show', $invoice->id)
-            ->with('success', 'Invoice updated successfully.');
+            return redirect()->back()
+                ->with('error', 'Failed to update invoice. Please try again.')
+                ->withInput();
+        }
     }
 
     /**
      * Remove the specified invoice.
      */
-    public function destroy(Request $request, Invoice $invoice): RedirectResponse
+    public function destroy(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        $this->authorize('delete', $invoice);
+        try {
+            $context = ServiceContextHelper::fromRequest($request);
 
-        if ($invoice->status !== 'draft') {
-            abort(403, 'Only draft invoices can be deleted.');
+            Bus::dispatch('invoices.delete', [
+                'id' => $invoice->id,
+            ], $context);
+
+            return redirect()->route('invoices.index')
+                ->with('success', 'Invoice deleted successfully.');
+
+        } catch (\Exception $e) {
+            Log::error('Invoice deletion failed', [
+                'error' => $e->getMessage(),
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+                'company_id' => $context->getCompanyId(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Failed to delete invoice. Please try again.');
         }
-
-        $invoice->delete();
-
-        return redirect()->route('invoices.index')
-            ->with('success', 'Invoice deleted successfully.');
     }
 
     /**
      * Send invoice to customer.
      */
-    public function send(Request $request, Invoice $invoice): RedirectResponse
+    public function send(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        $this->authorize('update', $invoice);
+        try {
+            if ($invoice->status !== 'draft') {
+                return redirect()->route('invoices.show', $invoice->id)
+                    ->with('error', 'Only draft invoices can be sent.');
+            }
 
-        if ($invoice->status !== 'draft') {
-            abort(403, 'Only draft invoices can be sent.');
+            $context = ServiceContextHelper::fromRequest($request);
+
+            // For now, just update status - email sending will be implemented in command
+            $invoice->update(['status' => 'sent']);
+
+            Log::info('Invoice sent', [
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+                'company_id' => $context->getCompanyId(),
+            ]);
+
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('success', 'Invoice sent successfully.');
+
+        } catch (\Exception $e) {
+            Log::error('Invoice sending failed', [
+                'error' => $e->getMessage(),
+                'invoice_id' => $invoice->id,
+                'user_id' => $request->user()->id,
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Failed to send invoice. Please try again.');
         }
-
-        $invoice->update(['status' => 'sent']);
-
-        // TODO: Implement email sending logic
-
-        return redirect()->route('invoices.show', $invoice->id)
-            ->with('success', 'Invoice sent successfully.');
-    }
-
-    /**
-     * Calculate subtotal from line items.
-     */
-    protected function calculateSubtotal(array $lineItems): float
-    {
-        return array_reduce($lineItems, function ($total, $item) {
-            return $total + ($item['quantity'] * $item['unit_price']);
-        }, 0);
-    }
-
-    /**
-     * Calculate tax total from line items.
-     */
-    protected function calculateTaxTotal(array $lineItems): float
-    {
-        return array_reduce($lineItems, function ($total, $item) {
-            $itemTotal = $item['quantity'] * $item['unit_price'];
-            $taxRate = $item['tax_rate'] ?? 0;
-            return $total + ($itemTotal * ($taxRate / 100));
-        }, 0);
-    }
-
-    /**
-     * Calculate total from line items.
-     */
-    protected function calculateTotal(array $lineItems): float
-    {
-        return $this->calculateSubtotal($lineItems) + $this->calculateTaxTotal($lineItems);
     }
 }

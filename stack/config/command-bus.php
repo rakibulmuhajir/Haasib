@@ -29,14 +29,26 @@ return [
     'customer.import' => Modules\Accounting\Domain\Customers\Actions\ImportCustomersAction::class,
     'customer.export' => Modules\Accounting\Domain\Customers\Actions\ExportCustomersAction::class,
 
-    // Invoice actions
+    // Invoice actions - Constitutional compliant commands
+    'invoices.create' => App\Commands\Invoices\CreateAction::class,
+    'invoices.update' => App\Commands\Invoices\UpdateAction::class,
+    'invoices.delete' => App\Commands\Invoices\DeleteAction::class,
+    'invoices.send' => App\Commands\Invoices\SendAction::class,
+    
+    // Legacy invoice actions (keeping for compatibility)
     'invoice.create' => App\Actions\DevOps\InvoiceCreate::class,
     'invoice.update' => App\Actions\DevOps\InvoiceUpdate::class,
     'invoice.delete' => App\Actions\DevOps\InvoiceDelete::class,
     'invoice.post' => App\Actions\DevOps\InvoicePost::class,
     'invoice.cancel' => App\Actions\DevOps\InvoiceCancel::class,
 
-    // Journal entry actions - mapped to Accounting module actions
+    // Journal entry actions - Constitutional compliant commands
+    'journal_entries.create' => App\Commands\JournalEntries\CreateAction::class,
+    'journal_entries.update' => App\Commands\JournalEntries\UpdateAction::class,
+    'journal_entries.post' => App\Commands\JournalEntries\PostAction::class,
+    'journal_entries.void' => App\Commands\JournalEntries\VoidAction::class,
+    
+    // Legacy journal entry actions - mapped to Accounting module actions
     'journal.create' => Modules\Accounting\Domain\Ledgers\Actions\CreateManualJournalEntryAction::class,
     'journal.submit' => Modules\Accounting\Domain\Ledgers\Actions\SubmitJournalEntryAction::class,
     'journal.approve' => Modules\Accounting\Domain\Ledgers\Actions\ApproveJournalEntryAction::class,
@@ -99,6 +111,14 @@ return [
     'reporting.export.generate' => Modules\Reporting\Actions\Exports\GenerateReportExportAction::class,
     'reporting.export.deliver' => Modules\Reporting\Actions\Exports\DeliverReportExportAction::class,
 
+    // User Settings Commands
+    'user_settings.update' => App\Commands\UserSettings\UpdateAction::class,
+    
+    // User Management Commands - Constitutional compliant commands
+    'users.create' => App\Commands\Users\CreateAction::class,
+    'users.update' => App\Commands\Users\UpdateAction::class,
+    'users.reset_password' => App\Commands\Users\ResetPasswordAction::class,
+    
     // Reporting System actions
     'reporting.system.refresh_views' => Modules\Reporting\Actions\System\RefreshMaterializedViewsAction::class,
     'reporting.system.cleanup' => Modules\Reporting\Actions\System\CleanupExpiredReportsAction::class,

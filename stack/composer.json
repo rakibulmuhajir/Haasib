@@ -69,6 +69,20 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
+        ],
+        "quality": [
+            "@php artisan pint --test",
+            "@php artisan test --coverage",
+            "@php vendor/bin/pest --type=unit --type=feature"
+        ],
+        "quality-check": [
+            "@php artisan pint --dry-run --diff",
+            "@php artisan config:clear",
+            "@php artisan test --coverage --min=80"
+        ],
+        "quality-fix": [
+            "@php artisan pint",
+            "@php artisan config:clear"
         ]
     },
     "extra": {

@@ -235,7 +235,7 @@ Route::get('/health', function () {
 })->name('health');
 
 // API Documentation Route
-Route::get('/docs', [DocumentationController::class, 'index'])->name('api.docs');
+Route::get('/docs', [\App\Http\Controllers\Api\DocumentationController::class, 'index'])->name('api.docs');
 
 // Command Palette Routes - uses web middleware for session authentication
 Route::prefix('commands')->name('commands.')->middleware(['web', 'auth', 'company.context', 'api.rate.limit'])->group(function () {

@@ -205,15 +205,15 @@ function getSettingOptions(key) {
             return system?.available_number_formats || {}
         case 'currency_format':
             return {
-                'symbol' => 'Symbol ($)',
-                'code' => 'Code (USD)',
-                'none' => 'None'
+                symbol: 'Symbol ($)',
+                code: 'Code (USD)',
+                none: 'None'
             }
         case 'default_reporting_frequency':
             return {
-                'monthly' => 'Monthly',
-                'quarterly' => 'Quarterly',
-                'annually' => 'Annually'
+                monthly: 'Monthly',
+                quarterly: 'Quarterly',
+                annually: 'Annually'
             }
         default:
             return {}

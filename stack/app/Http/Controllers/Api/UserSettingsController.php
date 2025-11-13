@@ -106,7 +106,7 @@ class UserSettingsController extends Controller
             DB::beginTransaction();
 
             foreach ($validated['settings'] as $setting) {
-                $this->updateSetting($user, $company, $setting);
+                $this->updateSettingFromArray($user, $company, $setting);
             }
 
             DB::commit();
@@ -368,7 +368,7 @@ class UserSettingsController extends Controller
     /**
      * Update setting from array
      */
-    private function updateSetting(User $user, ?Company $company, array $setting): void
+    private function updateSettingFromArray(User $user, ?Company $company, array $setting): void
     {
         $this->updateSingleSetting($user, $company, $setting['group'], $setting['key'], $setting['value']);
     }

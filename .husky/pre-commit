@@ -1,0 +1,121 @@
+#!/bin/bash
+
+# Haasib Pre-commit Quality Gates
+# This script ensures code quality before allowing commits
+
+set -e  # Exit on any error
+
+echo "🔍 Running Haasib quality checks..."
+
+# Store the root directory
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STACK_DIR="$ROOT_DIR/stack"
+
+# Change to stack directory
+cd "$STACK_DIR"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+# Check if running from stack directory
+if [ ! -f "artisan" ]; then
+    print_error "Must be run from the Laravel stack directory"
+    exit 1
+fi
+
+# 1. PHP Code Formatting Check
+echo -e "\n📝 Checking PHP code formatting..."
+if ! php artisan pint --test; then
+    print_error "PHP code formatting issues found"
+    echo "Run 'composer quality-fix' to fix formatting issues"
+    exit 1
+fi
+print_success "PHP code formatting is correct"
+
+# 2. PHP Syntax Check
+echo -e "\n🔧 Checking PHP syntax..."
+if find app/ -name "*.php" -exec php -l {} \; | grep -q "Parse error"; then
+    print_error "PHP syntax errors found"
+    exit 1
+fi
+print_success "PHP syntax is valid"
+
+# 3. Run Unit Tests
+echo -e "\n🧪 Running unit tests..."
+if ! php artisan test --type=unit --type=feature --env=testing; then
+    print_error "Tests are failing"
+    echo "Please fix failing tests before committing"
+    exit 1
+fi
+print_success "All tests are passing"
+
+# 4. Check for TODO/FIXME comments (optional warning)
+echo -e "\n🔍 Checking for temporary comments..."
+TODO_COUNT=$(grep -r "TODO\|FIXME\|XXX" app/ resources/js/ --include="*.php" --include="*.vue" --include="*.js" --include="*.ts" | wc -l || true)
+if [ "$TODO_COUNT" -gt 0 ]; then
+    print_warning "Found $TODO_COUNT TODO/FIXME comments"
+    echo "Consider addressing these before finalizing the commit"
+fi
+
+# 5. Check database migrations
+echo -e "\n🗄️  Checking database migrations..."
+# Create a temporary database for testing migration checks
+TEST_DB="haasib_pre_commit_test_$(date +%s)"
+export DB_DATABASE="$TEST_DB"
+
+# Create test database
+PGPASSWORD="AppP@ss123" createdb "$TEST_DB" 2>/dev/null || {
+    print_warning "Could not create test database, skipping migration check"
+}
+
+if [ "$?" -eq 0 ]; then
+    # Run migrations in dry-run mode
+    if php artisan migrate:fresh --dry-run --force 2>/dev/null; then
+        print_success "Database migrations are valid"
+    else
+        print_error "Database migration issues found"
+        PGPASSWORD="AppP@ss123" dropdb "$TEST_DB" 2>/dev/null || true
+        exit 1
+    fi
+
+    # Clean up test database
+    PGPASSWORD="AppP@ss123" dropdb "$TEST_DB" 2>/dev/null || true
+fi
+
+# 6. Frontend Build Check (if package.json exists)
+if [ -f "package.json" ]; then
+    echo -e "\n🏗️  Checking frontend build..."
+    if ! npm run build; then
+        print_error "Frontend build failed"
+        exit 1
+    fi
+    print_success "Frontend build is successful"
+fi
+
+# 7. Security Audit Check
+echo -e "\n🔒 Running security audit..."
+if ! composer audit; then
+    print_warning "Security vulnerabilities found in dependencies"
+    echo "Please review and update dependencies"
+fi
+
+echo -e "\n🎉 All quality checks passed!"
+print_success "Ready to commit"
+
+exit 0

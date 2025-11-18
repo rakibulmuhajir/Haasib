@@ -3,24 +3,41 @@
 **Migration Date**: 2025-11-18  
 **Source**: `/home/banna/projects/Haasib/stack`  
 **Target**: `/home/banna/projects/Haasib/build`  
-**Objective**: Clean rebuild with constitutional compliance and zero drift
+**Objective**: Module-driven clean rebuild with constitutional compliance
 
 ---
 
 ## 📋 MIGRATION OVERVIEW
 
 ### Strategy
-- **Incremental Copy**: Layer-by-layer migration with testing at each step
-- **Constitutional Compliance**: All code follows CLAUDE.md standards
+- **Module-Driven**: Migrate complete self-contained modules (Core → Accounting → Future modules)
+- **Complete Module Testing**: Test full module functionality after migration
+- **Constitutional Compliance**: All code follows CLAUDE.md standards  
 - **Zero Drift**: Use exact templates from CLAUDE.md
-- **Rollback Ready**: Each step can be independently reverted
+- **Module Isolation**: Each module can be independently enabled/disabled
+- **Constitution as Source of Truth**: At the start of EVERY phase run `cat CLAUDE.md | head -n 120` and skim the relevant sections to confirm no instructions changed; log the timestamp in `migration-journal.md`.
+- **Change Journal**: Maintain `/home/banna/projects/Haasib/migration-journal.md` with phase name, commands executed, and blockers so later agents can audit the exact steps.
+
+### Current Architecture Analysis
+**Mixed Architecture Problem**: Current `/stack` mixes traditional Laravel structure with modular:
+- ❌ Controllers in both `/app/Http/Controllers/Accounting/` AND `/modules/Accounting/Http/Controllers/`
+- ❌ Models in both `/app/Models/` AND `/modules/Accounting/Models/`
+- ❌ Routes scattered across `/routes/web.php` AND `/modules/Accounting/Routes/`
+- ❌ Frontend all in `/resources/js/Pages/` instead of module-specific
+
+### Target Architecture
+**Pure Modular Structure**: Everything belongs to its module:
+- ✅ All Accounting components in `/modules/Accounting/`
+- ✅ Module-specific frontend in `/modules/Accounting/Resources/js/`
+- ✅ Self-contained routes, controllers, models, views per module
+- ✅ Clear module dependencies and boundaries
 
 ### Success Criteria
-- ✅ All migrations run successfully
-- ✅ All tests pass
-- ✅ Frontend builds without errors
-- ✅ Constitutional compliance verified
-- ✅ Performance matches or exceeds current
+- ✅ Each module works as complete business unit
+- ✅ Modules can be enabled/disabled independently
+- ✅ Constitutional compliance verified per module
+- ✅ No 403 permission errors
+- ✅ Clean module boundaries and dependencies
 
 ---
 
@@ -32,498 +49,453 @@
 mkdir -p /home/banna/projects/Haasib/build
 cd /home/banna/projects/Haasib/build
 
-# Fresh Laravel install
-composer create-project laravel/laravel . --prefer-dist
+# Fresh Laravel install with exact dependencies
+php -v # ensure PHP 8.2
+composer create-project laravel/laravel . "^12.0"
+# Freeze composer + npm metadata so future agents reuse exact lockfiles
+composer config minimum-stability stable
+composer config preferred-install dist
+npm pkg set type="module"
+# Record install metadata
+php artisan --version >> /home/banna/projects/Haasib/migration-journal.md
 ```
 
-**Testing Checkpoint**: Laravel welcome page loads
-
-### Step 1.2: Core Dependencies
+### Step 1.2: Core Dependencies & Configuration
 ```bash
-# Backend dependencies
-composer require inertiajs/inertia-laravel
-composer require laravel/sanctum
-composer require spatie/laravel-permission
-composer require spatie/laravel-activitylog
+# Backend dependencies (exact versions)
+composer require inertiajs/inertia-laravel:^2.0
+composer require laravel/sanctum:^4.0
+composer require spatie/laravel-permission:^6.0
+composer require spatie/laravel-activitylog:^4.0
 composer require predis/predis
 
 # Frontend dependencies  
-npm install @inertiajs/vue3 vue@next
+npm install @inertiajs/vue3@^2.0 vue@^3.0
 npm install primevue@^4.0.0
 npm install @primevue/themes
-npm install tailwindcss@latest
+npm install tailwindcss@^3.0
 npm install @vitejs/plugin-vue
-```
 
-**Testing Checkpoint**: Dependencies install without conflicts
-
-### Step 1.3: Environment Configuration
-```bash
-# Copy and modify environment files
-cp /home/banna/projects/Haasib/stack/.env.example /home/banna/projects/Haasib/build/.env
-cp /home/banna/projects/Haasib/stack/.env /home/banna/projects/Haasib/build/.env.backup
-
-# Update database name in .env
-sed -i 's/DB_DATABASE=.*/DB_DATABASE=haasib_build/' /home/banna/projects/Haasib/build/.env
-```
-
-**Testing Checkpoint**: Environment loads without errors
-
----
-
-## 📁 PHASE 2: CONFIGURATION LAYER
-
-### Step 2.1: Laravel Configuration Files
-```bash
-# Copy core config files (validate each)
+# Copy essential config files only
 cp stack/config/app.php build/config/
 cp stack/config/database.php build/config/
 cp stack/config/inertia.php build/config/
+cp stack/config/command-bus.php build/config/
 cp stack/config/permission.php build/config/
-cp stack/config/activitylog.php build/config/
-```
-
-**Files to Copy:**
-- ✅ `config/app.php`
-- ✅ `config/database.php`
-- ✅ `config/inertia.php` 
-- ✅ `config/permission.php`
-- ✅ `config/activitylog.php`
-- ✅ `config/auth.php`
-- ✅ `config/queue.php`
-- ✅ `config/cors.php`
-
-**Testing Checkpoint**: `php artisan config:cache` succeeds
-
-### Step 2.2: Composer Dependencies
-```bash
-# Copy composer.json and validate
-cp stack/composer.json build/
-cd build && composer install
-```
-
-**Testing Checkpoint**: All Composer packages install cleanly
-
-### Step 2.3: Frontend Configuration
-```bash
-# Copy frontend config files
+cp stack/config/theme.php build/config/ || echo "# theme.php exists only if added later"
 cp stack/package.json build/
 cp stack/vite.config.js build/
 cp stack/tailwind.config.js build/
-cp stack/postcss.config.js build/
+cp stack/validate-migration.sh build/
+cp -r stack/scripts build/
 
-cd build && npm install
+# Environment setup
+cp stack/.env.example build/.env
+sed -i 's/DB_DATABASE=.*/DB_DATABASE=haasib_build/' build/.env
 ```
 
-**Testing Checkpoint**: `npm run dev` starts without errors
-
----
-
-## 🗄️ PHASE 3: DATABASE LAYER
-
-### Step 3.1: Database Creation
+### Step 1.3: Database & Basic Structure Setup
 ```bash
 # Create clean database
 PGPASSWORD="AppP@ss123" createdb -h localhost -U postgres haasib_build
+
+# Install dependencies
+cd build && composer install && npm install
+cd build && composer validate
+cd build && npm run lint -- --max-warnings=0 || true # Document any lint blockers
+
+# Create basic schema structure
+cd build && php artisan migrate:fresh
+# Ensure core schemas exist with correct owner + RLS defaults
+PGPASSWORD="AppP@ss123" psql -h localhost -U postgres haasib_build <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION postgres;
+CREATE SCHEMA IF NOT EXISTS acct AUTHORIZATION postgres;
+CREATE SCHEMA IF NOT EXISTS crm AUTHORIZATION postgres;
+CREATE SCHEMA IF NOT EXISTS hsp AUTHORIZATION postgres;
+SQL
+# Seed baseline policies (see CLAUDE constitution refs)
+cd build && php artisan db:seed --class=PermissionSeeder
+cd build && php artisan migrate --path=database/migrations/2025_10_11_110306_enhance_company_rls_policies.php
 ```
 
-**Testing Checkpoint**: Database connects successfully
+**✅ Testing Checkpoint**: 
+- Laravel welcome page loads at `npm run dev`
+- Database connection successful
+- Basic Laravel installation functional
+- `php artisan test tests/Feature/Security/MultiTenantDataIsolationTest.php` passes (verifies RLS scaffold)
 
-### Step 3.2: Migration Files (Constitutional Order)
+---
+
+## 🏛️ PHASE 2: CORE MODULE SETUP
+
+### Step 2.1: Core System Infrastructure
 ```bash
-# Copy migrations in dependency order
-mkdir -p build/database/migrations
+# Create Core module structure
+mkdir -p build/modules/Core/{Http/Controllers,Models,Routes,Database,Services,CLI}
 
-# 1. System migrations first
+# Copy essential core models and infrastructure
+cp -r stack/modules/Core/* build/modules/Core/
+cp stack/app/Models/User.php build/app/Models/
+cp stack/app/Models/Company.php build/app/Models/
+cp stack/app/Models/Concerns/* build/app/Models/Concerns/
+
+# Copy authentication migrations
 cp stack/database/migrations/*_create_companies_table.php build/database/migrations/
 cp stack/database/migrations/*_create_users_table.php build/database/migrations/
 cp stack/database/migrations/*_create_permissions_tables.php build/database/migrations/
+cp stack/database/migrations/2025_10_11_110306_enhance_company_rls_policies.php build/database/migrations/
 
-# Test system migrations
-cd build && php artisan migrate --step
-
-# 2. Module schemas
-cp stack/database/migrations/*_create_acct_schema.php build/database/migrations/
-cp stack/database/migrations/*_create_hsp_schema.php build/database/migrations/
-cp stack/database/migrations/*_create_crm_schema.php build/database/migrations/
-
-# Test schema migrations
-php artisan migrate --step
-
-# 3. Module tables (one module at a time)
-# Copy acct module migrations
-cp stack/database/migrations/*_create_acct_*.php build/database/migrations/
-php artisan migrate --step
-
-# Copy hsp module migrations  
-cp stack/database/migrations/*_create_hsp_*.php build/database/migrations/
-php artisan migrate --step
-
-# Copy crm module migrations
-cp stack/database/migrations/*_create_crm_*.php build/database/migrations/
-php artisan migrate --step
-```
-
-**Testing Checkpoint**: All migrations run successfully, database schema validates
-
-### Step 3.3: Seeders
-```bash
-# Copy and run seeders
-cp -r stack/database/seeders/* build/database/seeders/
-cd build && php artisan db:seed
-```
-
-**Testing Checkpoint**: Seeders run without errors, basic data exists
-
----
-
-## 🏛️ PHASE 4: MODEL LAYER
-
-### Step 4.1: Base Models and Traits
-```bash
-# Copy foundational models first
-cp stack/app/Models/User.php build/app/Models/
-cp stack/app/Models/Company.php build/app/Models/
-cp stack/app/Models/BaseModel.php build/app/Models/
-
-# Copy model concerns/traits
-mkdir -p build/app/Models/Concerns
-cp stack/app/Models/Concerns/* build/app/Models/Concerns/
-```
-
-**Constitutional Validation**:
-- ✅ All models use `HasUuids` trait
-- ✅ All models use `BelongsToCompany` trait  
-- ✅ All models use `SoftDeletes` trait
-- ✅ No integer primary keys
-- ✅ Proper table schema prefixes
-
-**Testing Checkpoint**: Basic models load without errors
-
-### Step 4.2: Module Models (By Dependency)
-```bash
-# Copy models module by module
-mkdir -p build/app/Models/Acct
-cp stack/app/Models/Acct/* build/app/Models/Acct/
-
-mkdir -p build/app/Models/Hsp  
-cp stack/app/Models/Hsp/* build/app/Models/Hsp/
-
-mkdir -p build/app/Models/Crm
-cp stack/app/Models/Crm/* build/app/Models/Crm/
-```
-
-**Testing Checkpoint**: `php artisan tinker` - all models can be instantiated
-
----
-
-## 🛠️ PHASE 5: SERVICE LAYER
-
-### Step 5.1: Base Services and Context
-```bash
-# Copy service foundation
-mkdir -p build/app/Services
-cp stack/app/Services/ServiceContext.php build/app/Services/
-cp stack/app/Services/BaseService.php build/app/Services/
-```
-
-**Testing Checkpoint**: ServiceContext can be instantiated
-
-### Step 5.1.1: RBAC System Setup
-```bash
-# Copy RBAC components (CRITICAL FOR FIXING 403s)
+# Copy RBAC system (critical for 403 fixes)
+mkdir -p build/app/Constants
 cp stack/app/Constants/Permissions.php build/app/Constants/
+cp stack/app/Http/Requests/BaseFormRequest.php build/app/Http/Requests/
 cp stack/database/seeders/PermissionSeeder.php build/database/seeders/
-cp stack/app/Http/Requests/BaseFormRequest.php build/app/Http/Requests/
-
-# Run permission seeder immediately
-cd build && php artisan db:seed --class=PermissionSeeder
 ```
 
-**RBAC Validation Checklist**:
-- ✅ All permissions created with standardized naming
-- ✅ Role hierarchy established (super_admin → viewer)
-- ✅ BaseFormRequest has authorization helpers
-- ✅ Permission constants imported correctly
-
-**Testing Checkpoint**: Permission system resolves without 403 errors
-
-### Step 5.2: Command Bus Infrastructure
+### Step 2.2: Module Loading Infrastructure
 ```bash
-# Copy command bus setup
+# Copy module configuration and providers
+cp stack/config/modules.php build/config/ || echo "# Will create modules.php config"
+
+# Copy module service provider
+cp stack/app/Providers/ModuleServiceProvider.php build/app/Providers/ || echo "# Will create ModuleServiceProvider"
 cp stack/app/Providers/CommandBusServiceProvider.php build/app/Providers/
-mkdir -p build/app/Actions
-cp stack/app/Actions/BaseAction.php build/app/Actions/
+
+# Register modules in app.php
+echo "# Update bootstrap/providers.php with ModuleServiceProvider"
+# Register command bus + module providers
+echo "# Ensure config/app.php providers array includes CommandBusServiceProvider + ModuleServiceProvider"
+sed -i "s#App\\\\Providers\\\\RouteServiceProvider::class,#App\\\\Providers\\\\RouteServiceProvider::class,\n        App\\\\Providers\\\\ModuleServiceProvider::class,\n        App\\\\Providers\\\\CommandBusServiceProvider::class,#" build/config/app.php
+cd build && php artisan optimize:clear
+# Verify providers wired correctly
+cd build && php artisan about | rg -n \"ModuleServiceProvider\" || echo \"Provider missing\"
 ```
 
-**Testing Checkpoint**: Command bus resolves properly
-
-### Step 5.3: Module Services
+### Step 2.3: Core Authentication & Company Frontend
 ```bash
-# Copy module services
-mkdir -p build/app/Services/Acct
-cp stack/app/Services/Acct/* build/app/Services/Acct/
+# Copy essential frontend structure (shared across modules)
+mkdir -p build/resources/js/Components
+cp stack/resources/js/app.js build/resources/js/
+cp stack/resources/js/bootstrap.js build/resources/js/
 
-mkdir -p build/app/Services/Hsp
-cp stack/app/Services/Hsp/* build/app/Services/Hsp/
+# Copy layout components (strict compliance)
+cp stack/resources/js/Components/UniversalPageHeader.vue build/resources/js/Components/
+cp -r stack/resources/js/styles/ build/resources/js/
 
-mkdir -p build/app/Services/Crm  
-cp stack/app/Services/Crm/* build/app/Services/Crm/
+# Copy authentication pages (core functionality)
+mkdir -p build/resources/js/Pages/Auth
+cp stack/resources/js/Pages/Auth/* build/resources/js/Pages/Auth/
+
+# Copy core company management pages
+mkdir -p build/resources/js/Pages/Companies
+cp stack/resources/js/Pages/Companies/* build/resources/js/Pages/Companies/
 ```
 
-**Constitutional Validation**:
-- ✅ All services accept ServiceContext
-- ✅ No direct `auth()` or `request()` calls
-- ✅ Proper dependency injection
-
-**Testing Checkpoint**: Services can be resolved from container
-
----
-
-## 🎛️ PHASE 6: CONTROLLER LAYER
-
-### Step 6.1: Base Controllers
+### Step 2.4: Core Routes & Controllers
 ```bash
-# Copy controller foundation
-cp stack/app/Http/Controllers/Controller.php build/app/Http/Controllers/
-cp stack/app/Http/Controllers/BaseController.php build/app/Http/Controllers/
-```
+# Copy core authentication controllers
+mkdir -p build/app/Http/Controllers/Auth
+cp stack/app/Http/Controllers/Auth/* build/app/Http/Controllers/Auth/
 
-### Step 6.2: Form Requests
-```bash
-# Copy form requests
-mkdir -p build/app/Http/Requests
-cp stack/app/Http/Requests/BaseFormRequest.php build/app/Http/Requests/
-cp stack/app/Http/Requests/*.php build/app/Http/Requests/
-```
+# Copy core company controllers 
+cp stack/app/Http/Controllers/CompanyController.php build/app/Http/Controllers/
 
-**Constitutional Validation**:
-- ✅ All FormRequests extend BaseFormRequest
-- ✅ All have permission and RLS validation
-- ✅ No inline validation in controllers
-
-### Step 6.3: Module Controllers
-```bash
-# Copy controllers module by module
-mkdir -p build/app/Http/Controllers/Acct
-cp stack/app/Http/Controllers/Acct/* build/app/Http/Controllers/Acct/
-
-mkdir -p build/app/Http/Controllers/Hsp
-cp stack/app/Http/Controllers/Hsp/* build/app/Http/Controllers/Hsp/
-
-mkdir -p build/app/Http/Controllers/Crm
-cp stack/app/Http/Controllers/Crm/* build/app/Http/Controllers/Crm/
-```
-
-**Constitutional Validation**:
-- ✅ All controllers use Command Bus
-- ✅ All controllers use FormRequest validation
-- ✅ All controllers use ServiceContext
-- ✅ No direct service instantiation
-
-**Testing Checkpoint**: Controllers can be resolved, basic endpoints respond
-
----
-
-## 🛤️ PHASE 7: ROUTING LAYER
-
-### Step 7.1: Route Files
-```bash
-# Copy route files
+# Extract and copy core routes only
 cp stack/routes/web.php build/routes/
 cp stack/routes/api.php build/routes/
-cp stack/routes/console.php build/routes/
+# Manual cleanup: Remove module-specific routes, keep only auth & core
+rg -n "Accounting" -n "Invoice" build/routes/web.php # mark sections to move later
+sed -i '/Accounting/,+20d' build/routes/web.php # iterative removal; confirm diff
+cd build && php artisan route:list --columns=Method,URI,Name,Action | tee /tmp/core-routes.txt
 ```
 
-**Testing Checkpoint**: `php artisan route:list` shows all routes
-
-### Step 7.2: Middleware
-```bash
-# Copy middleware
-mkdir -p build/app/Http/Middleware
-cp stack/app/Http/Middleware/* build/app/Http/Middleware/
-```
-
-**Testing Checkpoint**: Middleware registers properly
+**✅ Core Module Testing Checkpoint**: 
+- [ ] User authentication works
+- [ ] Company management functional
+- [ ] Module loading infrastructure works
+- [ ] No 403 permission errors
+- [ ] Blue-whale theme applied correctly
+- [ ] RBAC system operational
 
 ---
 
-## 🎨 PHASE 8: FRONTEND LAYER
+## 📊 PHASE 3: ACCOUNTING MODULE MIGRATION
 
-### Step 8.1: Base Layout and Components
+### Step 3.1: Complete Accounting Module Structure
 ```bash
-# Copy core frontend structure
-mkdir -p build/resources/js
-cp -r stack/resources/js/app.js build/resources/js/
-cp -r stack/resources/js/bootstrap.js build/resources/js/
+# Create complete Accounting module directory structure
+mkdir -p build/modules/Accounting/{Http/Controllers,Models,Routes,Database/Migrations,Database/Seeders,Domain,Services,CLI/Commands,Resources/js}
 
-# Copy layout components first
-mkdir -p build/resources/js/Components/Layout
-cp stack/resources/js/Components/Layout/* build/resources/js/Components/Layout/
+# Copy the entire accounting module from existing modules structure
+cp -r stack/modules/Accounting/* build/modules/Accounting/
+
+# Copy any accounting components from traditional Laravel structure
+cp -r stack/app/Http/Controllers/Invoicing/* build/modules/Accounting/Http/Controllers/ || true
+cp -r stack/app/Http/Controllers/Accounting/* build/modules/Accounting/Http/Controllers/ || true
+
+# Copy accounting models from traditional structure to module
+cp stack/app/Models/Customer.php build/modules/Accounting/Models/ || true
+cp stack/app/Models/Invoice.php build/modules/Accounting/Models/ || true
+cp stack/app/Models/Product.php build/modules/Accounting/Models/ || true
+cp stack/app/Models/Acct/* build/modules/Accounting/Models/ || true
+# Update model namespaces/tables so every accounting model targets the `acct` schema,
+# keeps `HasUuids`, `BelongsToCompany`, `SoftDeletes`, and enforces guarded attributes per CLAUDE.md.
 ```
 
-### Step 8.2: Strict Layout Components (ZERO DEVIATION)
+### Step 3.2: Accounting Database Layer
 ```bash
-# Copy MANDATORY layout components in exact order
-cp stack/resources/js/Components/Layout/LayoutShell.vue build/resources/js/Components/Layout/
-cp stack/resources/js/Components/UniversalPageHeader.vue build/resources/js/Components/
-cp stack/resources/js/Components/PageActions.vue build/resources/js/Components/
-cp stack/resources/js/Components/QuickLinks.vue build/resources/js/Components/
-cp stack/resources/js/Components/InlineEditable.vue build/resources/js/Components/
+# Copy ALL accounting-related migrations
+cp stack/database/migrations/*_create_acct_*.php build/modules/Accounting/Database/Migrations/ || true
+cp stack/modules/Accounting/Database/Migrations/* build/modules/Accounting/Database/Migrations/ || true
+
+# Copy accounting seeders
+cp stack/database/seeders/*Customer*.php build/modules/Accounting/Database/Seeders/ || true
+cp stack/database/seeders/*Invoice*.php build/modules/Accounting/Database/Seeders/ || true
+
+# Recreate accounting schema + RLS (per CLAUDE constitution)
+PGPASSWORD="AppP@ss123" psql -h localhost -U postgres haasib_build <<'SQL'
+CREATE SCHEMA IF NOT EXISTS acct AUTHORIZATION postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA acct GRANT ALL ON TABLES TO postgres;
+SQL
+cd build && php artisan migrate --path=modules/Accounting/Database/Migrations
+cd build && php artisan db:seed --class=PermissionSeeder
+cd build && php artisan migrate --path=database/migrations/2025_10_11_110306_enhance_company_rls_policies.php
+
+# Run accounting migrations (ensures command-bus dispatched RLS safe operations)
+cd build && php artisan migrate
+# Validate tenant isolation for accounting models
+cd build && php artisan test tests/Feature/Security/MultiTenantDataIsolationTest.php
+PGPASSWORD="AppP@ss123" psql -h localhost -U postgres haasib_build -c "\\d acct.customers" | tee /tmp/acct-customers.txt
+PGPASSWORD="AppP@ss123" psql -h localhost -U postgres haasib_build -c "SELECT schemaname, tablename, policyname FROM pg_policies WHERE schemaname='acct';" | tee /tmp/acct-policies.txt
 ```
 
-**STRICT Layout Validation**:
-- ✅ All components use Composition API (`<script setup>`)
-- ✅ All components use PrimeVue only (NO HTML elements)
-- ✅ UniversalPageHeader uses single-row design
-- ✅ Proper import order (Vue → Inertia → PrimeVue → App → Utils)
-- ✅ Blu-whale theme applied to Sidebar
-- ✅ Grid layout follows 5/6 + 1/6 pattern
-
-### Step 8.2.1: Layout Standards Compliance Check
+### Step 3.3: Accounting Services & Business Logic
 ```bash
-# Verify layout component structure
-cd build && npm run build
+# Copy all accounting services
+cp -r stack/app/Services/Acct/* build/modules/Accounting/Services/ || true
+cp -r stack/app/Actions/Acct/* build/modules/Accounting/Domain/Actions/ || true
 
-# Check for forbidden patterns
-grep -r "table>" resources/js/Pages/ || echo "✅ No HTML tables found"
-grep -r "button>" resources/js/Pages/ || echo "✅ No HTML buttons found"
-grep -r "input>" resources/js/Pages/ || echo "✅ No HTML inputs found"
+# Copy command bus actions
+cp -r stack/app/Actions/Invoice* build/modules/Accounting/Domain/Actions/ || true
+cp -r stack/app/Actions/Customer* build/modules/Accounting/Domain/Actions/ || true
+cp -r stack/app/Actions/Payment* build/modules/Accounting/Domain/Actions/ || true
+# After copying, register each action in `config/command-bus.php` and confirm handlers
+# inject `ServiceContext`, dispatch via `Bus::dispatch()`, and call `audit_log()` for financial mutations.
+# Run `rg -n "auth\(" modules/Accounting` and `rg -n "request\(" modules/Accounting` to ensure no forbidden helpers remain.
 ```
 
-**Layout Compliance Checklist**:
-- ✅ Every page uses LayoutShell
-- ✅ Every page uses UniversalPageHeader
-- ✅ Single-row header design (title + search + actions)
-- ✅ Content grid follows standard pattern
-- ✅ Permission integration in all components
-
-### Step 8.3: Page Components  
+### Step 3.4: Accounting Frontend (Module-Specific)
 ```bash
-# Copy pages module by module
-mkdir -p build/resources/js/Pages/Acct
-cp stack/resources/js/Pages/Acct/* build/resources/js/Pages/Acct/
+# Create accounting module frontend structure
+mkdir -p build/modules/Accounting/Resources/js/{Pages,Components,Composables}
 
-mkdir -p build/resources/js/Pages/Hsp
-cp stack/resources/js/Pages/Hsp/* build/resources/js/Pages/Hsp/
+# Copy ALL accounting-related frontend pages to module
+cp -r stack/resources/js/Pages/Accounting/* build/modules/Accounting/Resources/js/Pages/ || true
+cp -r stack/resources/js/Pages/Invoicing/* build/modules/Accounting/Resources/js/Pages/ || true
+cp -r stack/resources/js/Pages/Payments/* build/modules/Accounting/Resources/js/Pages/ || true
 
-mkdir -p build/resources/js/Pages/Crm
-cp stack/resources/js/Pages/Crm/* build/resources/js/Pages/Crm/
+# Copy accounting-specific components
+mkdir -p build/modules/Accounting/Resources/js/Components
+cp -r stack/resources/js/Components/Acct/* build/modules/Accounting/Resources/js/Components/ || true
+# Refactor any Options API leftovers to `<script setup lang="ts">` and wrap every page in the blue-whale layout shell per CLAUDE.md.
+rg -l "<script>" build/modules/Accounting/Resources/js/Pages | xargs sed -n '1,40p' # inspect
+npm run lint -- --fix --rule "{\"vue/no-options-api\": \"error\"}"
+rg -n "data-theme" build/modules/Accounting/Resources/js/Pages | wc -l # ensure theme attribute exists everywhere
 ```
 
-**Constitutional Validation**:
-- ✅ All pages use LayoutShell
-- ✅ All pages use UniversalPageHeader
-- ✅ All pages follow mandatory structure
-- ✅ Inline editing rules followed
+### Step 3.5: Accounting Routes (Self-Contained)
+```bash
+# Extract accounting routes from main routes file
+cp stack/modules/Accounting/Routes/web.php build/modules/Accounting/Routes/ || echo "# Will extract from main web.php"
+cp stack/modules/Accounting/Routes/api.php build/modules/Accounting/Routes/ || echo "# Will extract from main api.php"
 
-**Testing Checkpoint**: `npm run build` succeeds, pages load properly
+# Extract all accounting routes from main routes and move to module
+# This includes: customers, invoices, payments, products, reports routes
+cd build && php artisan route:list --path=accounting | tee /tmp/accounting-routes-core.txt # should be empty after core cleanup
+cd build && php artisan module:enable accounting
+cd build && php artisan route:list --path=accounting | tee /tmp/accounting-routes-enabled.txt
+diff -u /tmp/accounting-routes-core.txt /tmp/accounting-routes-enabled.txt || true
+cd build && php artisan module:disable accounting # leave disabled until QA completes
+```
+
+### Step 3.6: Configure Accounting Module Loading
+```bash
+# Update module.json for accounting module
+echo '{
+  "name": "accounting", 
+  "description": "Complete Accounting Module",
+  "version": "1.0.0",
+  "provider": "Modules\\Accounting\\Providers\\AccountingServiceProvider",
+  "enabled": true,
+  "dependencies": ["core"]
+}' > build/modules/Accounting/module.json
+
+# Register accounting module in modules config
+echo "# Update config/modules.php to include accounting module"
+echo "# Register accounting command bus actions + bindings in config/command-bus.php"
+```
+
+**✅ Accounting Module Testing Checkpoint**: 
+- [ ] **Customer Management**: List, create, edit, delete customers
+- [ ] **Product Catalog**: Manage products and inventory  
+- [ ] **Invoice Management**: Complete invoice lifecycle (draft → sent → paid)
+- [ ] **Payment Processing**: Payment allocation and tracking
+- [ ] **Reporting**: Financial dashboards and reports
+- [ ] **Module Independence**: Can enable/disable accounting module
+- [ ] **Module Routes**: All accounting routes work independently
+- [ ] **Module Frontend**: All accounting pages render correctly
+- [ ] **Constitutional Compliance**: RBAC, layout standards, blue-whale theme
+- [ ] **Complete Workflow**: Customer → Invoice → Payment → Reporting works end-to-end
 
 ---
 
-## 🧪 PHASE 9: TESTING LAYER
+## 🏗️ PHASE 4: FUTURE MODULE PREPARATION
 
-### Step 9.1: Test Infrastructure
+### Step 4.1: Additional Module Scaffolding
 ```bash
-# Copy test setup
-cp stack/phpunit.xml build/
-cp stack/tests/TestCase.php build/tests/
-mkdir -p build/tests/Feature build/tests/Unit
+# Create placeholder structure for future modules
+mkdir -p build/modules/Reporting/{Http/Controllers,Models,Routes,Database,Services,Resources/js}
+mkdir -p build/modules/CRM/{Http/Controllers,Models,Routes,Database,Services,Resources/js}
+mkdir -p build/modules/Hospitality/{Http/Controllers,Models,Routes,Database,Services,Resources/js}
+
+# Copy any existing reporting components from stack
+cp -r stack/app/Http/Controllers/Reporting/* build/modules/Reporting/Http/Controllers/ || true
+cp -r stack/resources/js/Pages/Reporting/* build/modules/Reporting/Resources/js/Pages/ || true
+# Scaffold placeholder providers + module.json files to prevent runtime errors
+cat > build/modules/Reporting/module.json <<'JSON'
+{
+  "name": "reporting",
+  "provider": "Modules\\Reporting\\Providers\\ReportingServiceProvider",
+  "enabled": false,
+  "dependencies": ["accounting"]
+}
+JSON
+cat > build/modules/Reporting/Providers/ReportingServiceProvider.php <<'PHP'
+<?php
+
+namespace Modules\Reporting\Providers;
+
+use Illuminate\Support\ServiceProvider;
+
+class ReportingServiceProvider extends ServiceProvider
+{
+    public function register(): void {}
+    public function boot(): void {}
+}
+PHP
+# Repeat for CRM + Hospitality (flag them disabled by default)
+for module in CRM Hospitality; do
+  cat > build/modules/${module}/module.json <<JSON
+{
+  "name": "${module,,}",
+  "provider": "Modules\\\\${module}\\\\Providers\\\\${module}ServiceProvider",
+  "enabled": false,
+  "dependencies": ["core"]
+}
+JSON
+  mkdir -p build/modules/${module}/Providers
+  cat > build/modules/${module}/Providers/${module}ServiceProvider.php <<PHP
+<?php
+
+namespace Modules\\${module}\\Providers;
+
+use Illuminate\\Support\\ServiceProvider;
+
+class ${module}ServiceProvider extends ServiceProvider
+{
+    public function register(): void {}
+    public function boot(): void {}
+}
+PHP
+done
 ```
 
-### Step 9.2: Feature Tests
+### Step 4.2: Module Interdependencies Setup
 ```bash
-# Copy tests module by module
-cp stack/tests/Feature/Acct/* build/tests/Feature/Acct/ 2>/dev/null || true
-cp stack/tests/Feature/Hsp/* build/tests/Feature/Hsp/ 2>/dev/null || true  
-cp stack/tests/Feature/Crm/* build/tests/Feature/Crm/ 2>/dev/null || true
+# Configure module dependencies in each module.json
+echo "# Accounting module can work independently"
+echo "# Reporting module depends on Accounting" 
+echo "# CRM module depends on Accounting"
+echo "# Future modules can plug into this architecture"
+jq '.dependencies' build/modules/Accounting/module.json
+jq '.dependencies' build/modules/Reporting/module.json
+# Update config/modules.php entries for new modules
+rg -n "modules" build/config/modules.php
+cd build && php artisan module:list
+cd build && php artisan module:enable reporting && php artisan module:list && php artisan module:disable reporting
 ```
 
-**Testing Checkpoint**: `php artisan test` passes all copied tests
-
-### Step 9.3: Frontend Tests
-```bash
-# Copy frontend test setup
-cp stack/playwright.config.js build/ 2>/dev/null || true
-cp -r stack/tests/Browser build/tests/ 2>/dev/null || true
-```
-
-**Testing Checkpoint**: Frontend tests run successfully
+**✅ Future Modules Preparation**:
+- [ ] Module directories created
+- [ ] Module dependency system configured
+- [ ] Existing reporting components moved to Reporting module
+- [ ] Ready for future module additions
 
 ---
 
-## ✅ PHASE 10: VALIDATION & FINALIZATION
+## ✅ PHASE 5: VALIDATION & TESTING
 
-### Step 10.1: Constitutional Compliance Check
+### Step 5.1: Module Integration Testing
 ```bash
 cd build
 
-# Run all validation scripts
-php artisan constitutional:validate
-npm run lint
-npm run type-check
-```
+# Run all migrations and seeders
+php artisan migrate:fresh --seed
 
-### Step 10.1.1: RBAC & Permission Validation
-```bash
-# Test permission system
-php artisan tinker
->>> User::find(1)->getAllPermissions() // Should return standardized permissions
->>> exit
+# Test module loading system
+php artisan module:list
+php artisan module:enable accounting
+php artisan module:disable accounting
+php artisan module:enable accounting
 
-# Verify no 403 errors on basic routes
-php artisan test tests/Feature/PermissionTest.php
+# Run RBAC + theme validation
+bash validate-migration.sh
+npm run theme:validate
+# Enforce tenant isolation + accounting behaviors
+php artisan test tests/Feature/Security/MultiTenantDataIsolationTest.php
 
-# Check FormRequest authorization
-grep -r "authorize.*true" app/Http/Requests/ && echo "❌ Found bypassed authorization!" || echo "✅ All requests have proper authorization"
-```
-
-### Step 10.1.2: Layout Standards Validation  
-```bash
-# Check for layout compliance
-grep -r "LayoutShell" resources/js/Pages/ | wc -l # Should match page count
-grep -r "UniversalPageHeader" resources/js/Pages/ | wc -l # Should match page count
-
-# Verify strict standards
-grep -r "<table" resources/js/ && echo "❌ HTML tables found!" || echo "✅ PrimeVue DataTable only"
-grep -r "<button" resources/js/ && echo "❌ HTML buttons found!" || echo "✅ PrimeVue Button only"
-grep -r "<input" resources/js/ && echo "❌ HTML inputs found!" || echo "✅ PrimeVue inputs only"
-
-# Check permission integration
-grep -r "can\." resources/js/Pages/ | wc -l # Should match action count
-```
-
-**Enhanced Validation Checklist**:
-- ✅ All controllers use Command Bus
-- ✅ All models have proper traits  
-- ✅ All components use PrimeVue only
-- ✅ All inline editing follows rules
-- ✅ All responses follow format standards
-- ✅ **RBAC system functional (no 403 errors)**
-- ✅ **All FormRequests have proper authorization**
-- ✅ **Every page follows strict layout standards**
-- ✅ **Permission integration complete**
-- ✅ **Single-row header design enforced**
-
-### Step 10.2: Performance Validation
-```bash
-# Build and test performance
-npm run build
-php artisan optimize
-php artisan config:cache
-php artisan route:cache
-```
-
-**Testing Checkpoint**: Build performance equals or exceeds original
-
-### Step 10.3: Final Integration Tests
-```bash
-# Run full test suite
+# Test all modules
 php artisan test
+npm run lint
 npm run test:e2e
 ```
 
-**Testing Checkpoint**: All tests pass, no regressions
+### Step 5.2: Complete Module Workflow Testing
+**Module-Based Business Workflows**:
+- [ ] **Core Module**: Authentication → Company setup → User management
+- [ ] **Accounting Module**: Customer → Product → Invoice → Payment → Reporting
+- [ ] **Module Independence**: Accounting can be enabled/disabled independently
+- [ ] **Module Communication**: Modules interact correctly through defined interfaces
+- [ ] **Permission Integration**: RBAC works across all modules
+
+### Step 5.3: Constitutional Compliance & Module Standards
+```bash
+# Layout compliance validation per module
+php artisan layout:validate --module=accounting
+php artisan layout:validate --check-theme --json
+
+# RBAC validation across modules
+php artisan test tests/Feature/RbacTest.php
+
+# Module-specific frontend validation
+npm run build && echo "✅ All modules build successfully"
+
+# Validate module independence
+php artisan module:disable accounting
+php artisan route:list # Should show only core routes
+php artisan module:enable accounting  
+php artisan route:list # Should show core + accounting routes
+```
+
+**✅ Module Migration Success Criteria**: 
+- ✅ Core module handles authentication and company management
+- ✅ Accounting module provides complete business functionality independently
+- ✅ Modules can be enabled/disabled without breaking the system
+- ✅ No 403 permission errors across all modules
+- ✅ Every module page follows strict layout standards  
+- ✅ Module workflows complete successfully
+- ✅ Performance matches or exceeds original system
+- ✅ Ready for future module additions (CRM, Hospitality, etc.)
 
 ---
 
@@ -540,75 +512,112 @@ cd /home/banna/projects/Haasib/stack
 php artisan up
 ```
 
-### Phase-Specific Rollbacks
-- **Phase 1-3**: Delete build directory, restart
-- **Phase 4-6**: Reset to last working migration checkpoint  
-- **Phase 7-8**: Revert specific copied files
-- **Phase 9-10**: Fix validation issues, re-test
+### Module-Specific Rollbacks
+- **Phase 2 (Core)**: Reset to foundation, restart from core infrastructure
+- **Phase 3 (Accounting)**: Remove accounting module, revert to core-only
+- **Phase 4 (Future Modules)**: Remove future module scaffolding
+- **Phase 5 (Testing)**: Fix validation issues, re-test modules
+
+### Selective Module Disabling
+```bash
+# Disable specific module without full rollback
+php artisan module:disable accounting
+php artisan route:clear
+php artisan config:clear
+
+# Module will be disabled but files remain for easy re-enabling
+php artisan module:enable accounting
+```
 
 ---
 
 ## 📊 SUCCESS METRICS
 
-### Technical Metrics
-- ✅ Migration time: < 4 hours total
-- ✅ Test coverage: ≥ 80% maintained  
-- ✅ Build time: ≤ original stack performance
-- ✅ Zero constitutional violations
-- ✅ All features functional
+### Module Completion Metrics
+- ✅ **Core Module**: Authentication, company management, RBAC system working
+- ✅ **Accounting Module**: Complete business functionality (customers → invoices → payments → reporting)
+- ✅ **Module Independence**: Accounting module can be enabled/disabled independently
+- ✅ **Module Integration**: Modules communicate correctly through defined interfaces
+- ✅ **Future Module Ready**: Structure prepared for CRM, Hospitality, etc.
 
-### RBAC Success Metrics (NEW)
-- ✅ **Zero 403 permission errors**
-- ✅ **All FormRequests have proper authorization**
-- ✅ **Permission system resolves consistently**
-- ✅ **Role hierarchy functions correctly**
-- ✅ **Frontend permission checks integrated**
+### Module Architecture Metrics
+- ✅ Migration time: < 4 hours total (module-by-module)
+- ✅ Zero 403 permission errors across all modules
+- ✅ Every module page follows strict layout standards
+- ✅ No HTML form elements (PrimeVue only)
+- ✅ Blue-whale theme consistently applied across modules
+- ✅ Single-row header design enforced per module
 
-### Layout Standards Success Metrics (NEW)
-- ✅ **Every page uses exact layout hierarchy**
-- ✅ **Single-row header design enforced**
-- ✅ **Zero HTML form elements detected**
-- ✅ **PrimeVue components used exclusively**
-- ✅ **Blu-whale theme applied consistently**
-- ✅ **5/6 + 1/6 grid layout followed**
+### Module Business Workflow Metrics
+- ✅ **Core Module Workflows**: User auth → Company setup → Permission management
+- ✅ **Accounting Workflows**: Customer → Product → Invoice → Payment → Reports
+- ✅ **Cross-Module Integration**: Permissions work across module boundaries
+- ✅ **Module Isolation**: Disabling accounting doesn't break core functionality
+- ✅ **Module Scalability**: Easy to add new modules without affecting existing ones
 
-### Quality Metrics
-- ✅ Zero AI drift patterns detected
-- ✅ All templates followed exactly
-- ✅ Inline editing rules enforced
-- ✅ Response formats standardized
-- ✅ Import orders consistent
-- ✅ **Permission constants used throughout**
-- ✅ **Layout compliance 100%**
+### Constitutional Compliance Per Module
+- ✅ All module controllers use Command Bus patterns
+- ✅ All module models follow UUID + RLS standards
+- ✅ All module FormRequests extend BaseFormRequest
+- ✅ All module frontend uses Composition API + PrimeVue
+- ✅ Module-specific inline editing rules followed
+- ✅ Permission constants used throughout all modules
 
 ---
 
 ## 🔧 POST-MIGRATION CHECKLIST
 
-### Immediate Tasks
-- [ ] Update environment variables
-- [ ] Verify database connections
-- [ ] Test critical user journeys  
-- [ ] Monitor error logs
-- [ ] Validate performance metrics
+### Module Validation
+- [ ] Test complete core module functionality (auth, companies, users)
+- [ ] Validate accounting module end-to-end workflow
+- [ ] Verify module independence (enable/disable works correctly)
+- [ ] Test cross-module permission system integration
+- [ ] Validate blue-whale theme across all modules
+- [ ] Test responsive design on mobile devices per module
+
+### Module Performance Validation
+- [ ] Module page load times ≤ original system
+- [ ] Module-specific database query performance maintained
+- [ ] Module frontend build times acceptable
+- [ ] No console errors or warnings per module
+- [ ] Module loading/unloading performance
 
 ### Documentation Updates
-- [ ] Update README.md
-- [ ] Document any deviations
-- [ ] Record lessons learned
-- [ ] Update CLAUDE.md if needed
+- [ ] Update README with new modular architecture
+- [ ] Document module dependencies and interfaces
+- [ ] Record any deviations from modular plan
+- [ ] Update CLAUDE.md with module-specific patterns
+- [ ] Create module development guidelines
 
 ---
 
-## 📞 SUPPORT CONTACTS
+## 🎯 MODULE DEPENDENCY MAP
 
-**Migration Lead**: Development Team  
-**Database**: DBA Team  
-**Frontend**: Frontend Team  
-**DevOps**: Infrastructure Team
+```
+Foundation (Phase 1)
+    ↓
+Core Module (Phase 2)
+├── Authentication System
+├── Company Management  
+├── User Management
+├── RBAC System
+└── Module Loading Infrastructure
+    ↓
+Accounting Module (Phase 3)
+├── Customer Management
+├── Product Catalog
+├── Invoice Management
+├── Payment Processing
+└── Financial Reporting
+    ↓
+Future Modules (Phase 4+)
+├── CRM Module (depends on Core + Accounting)
+├── Reporting Module (depends on Accounting)
+├── Hospitality Module (depends on Core)
+└── Additional Business Modules
+```
 
----
-
-**Migration Status**: ⏸️ Ready to Execute  
-**Estimated Duration**: 3-4 hours  
-**Risk Level**: Low (incremental with rollbacks)
+**Migration Status**: ⏸️ Ready for Module-Driven Execution  
+**Estimated Duration**: 3-4 hours (with thorough module testing)  
+**Risk Level**: Low (module isolation + independent rollbacks)  
+**Approach**: Complete self-contained modules, not technical layers

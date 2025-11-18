@@ -1,74 +1,65 @@
 <template>
+  <!-- STRICT LAYOUT STANDARD: Single-row header design (NO DEVIATION ALLOWED) -->
   <div class="page-header">
-    <!-- Compact Header Row -->
-    <div class="flex items-center justify-between gap-4">
-      <!-- Left Section: Title with Tooltip -->
-      <div class="flex items-center gap-4 flex-1 min-w-0">
-        <div class="group relative">
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white cursor-help truncate">
+    <div class="flex items-center justify-between gap-3 py-3">
+      <!-- LEFT: Title (Minimal space) -->
+      <div class="flex items-center gap-2 min-w-0 flex-shrink">
+        <div class="group relative min-w-0">
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-white cursor-help truncate leading-tight">
             {{ title }}
           </h1>
-          <!-- Tooltip on hover -->
-          <div v-if="description" class="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-            <div class="font-medium mb-1">{{ description }}</div>
-            <div v-if="subDescription" class="text-xs opacity-75">{{ subDescription }}</div>
-            <!-- Tooltip arrow -->
-            <div class="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+          <!-- Compact tooltip -->
+          <div v-if="description" class="absolute bottom-full left-0 mb-1 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+            <div class="font-medium">{{ description }}</div>
+            <div v-if="subDescription" class="text-xs opacity-75 mt-0.5">{{ subDescription }}</div>
           </div>
         </div>
       </div>
       
-      <!-- Center Section: Search and Filters -->
-      <div v-if="showSearch" class="flex items-center gap-3 flex-shrink-0">
-        <!-- Search Bar -->
-        <div class="w-64 lg:w-80">
-          <IconField>
+      <!-- CENTER: Inline search and filters (Space efficient) -->
+      <div v-if="showSearch" class="flex items-center gap-2 flex-1 justify-center max-w-md">
+        <!-- Compact search -->
+        <div class="w-48 lg:w-56">
+          <IconField class="relative">
             <InputIcon>
-              <i class="pi pi-search" />
+              <i class="pi pi-search text-sm" />
             </InputIcon>
             <InputText
               v-model="searchQuery"
               :placeholder="searchPlaceholder"
               @keyup.enter="handleSearch"
-              class="w-full"
+              class="w-full text-sm h-9"
+              size="small"
             />
           </IconField>
         </div>
         
-        <!-- Status Filter (if provided) -->
+        <!-- Compact status filter -->
         <Dropdown
           v-if="statusOptions && statusOptions.length > 0"
           v-model="statusFilter"
           :options="statusOptions"
           optionLabel="label"
           optionValue="value"
-          placeholder="Status"
-          class="w-32 lg:w-40"
+          placeholder="Filter"
+          class="w-24 h-9"
           @change="handleFilter"
+          size="small"
         />
         
-        <!-- Filter Buttons -->
-        <div class="flex gap-2">
-          <Button
-            icon="pi pi-filter"
-            @click="handleSearch"
-            :loading="loading"
-            class="w-10 h-10 p-0"
-            v-tooltip="'Apply filters'"
-          />
-          
-          <Button
-            icon="pi pi-filter-slash"
-            severity="secondary"
-            @click="handleClearFilters"
-            :disabled="!hasActiveFilters"
-            class="w-10 h-10 p-0"
-            v-tooltip="'Clear filters'"
-          />
-        </div>
+        <!-- Minimal filter controls -->
+        <Button
+          v-if="hasActiveFilters"
+          icon="pi pi-times"
+          @click="handleClearFilters"
+          severity="secondary"
+          text
+          class="w-8 h-8 p-0"
+          v-tooltip="'Clear filters'"
+        />
       </div>
       
-      <!-- Right Section: Page Actions -->
+      <!-- RIGHT: Page actions (Inline, minimal) -->
       <div class="flex-shrink-0">
         <PageActions />
       </div>
@@ -245,14 +236,40 @@ defineExpose({
 </script>
 
 <style scoped>
-/* Additional styles if needed */
+/* STRICT LAYOUT STANDARD: Space-efficient header styles */
 .page-header {
-  @apply mb-6;
+  @apply mb-4 border-b border-gray-200 dark:border-gray-700;
+  /* Reduced margin and added subtle border for visual separation */
 }
 
-/* Ensure tooltips don't get cut off */
+/* Compact form elements */
+.page-header :deep(.p-inputtext) {
+  @apply text-sm;
+}
+
+.page-header :deep(.p-dropdown) {
+  @apply text-sm;
+}
+
+.page-header :deep(.p-button) {
+  @apply text-sm;
+}
+
+/* Ensure tooltips don't interfere with layout */
 .group:hover .tooltip {
   opacity: 1;
   visibility: visible;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .page-header {
+    @apply mb-3;
+  }
+  
+  /* Stack elements on mobile if needed */
+  .page-header .flex {
+    @apply flex-wrap gap-2;
+  }
 }
 </style>

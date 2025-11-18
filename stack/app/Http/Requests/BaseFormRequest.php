@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Constants\Permissions;
 use App\Services\ServiceContext;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -122,7 +123,7 @@ abstract class BaseFormRequest extends FormRequest
     {
         $context = $this->getServiceContext();
 
-        return $context->hasPermission('rls.context') &&
+        return $context->hasPermission(Permissions::RLS_CONTEXT) &&
                $context->hasCompany() &&
                $context->getCompanyId() !== null;
     }
@@ -285,5 +286,102 @@ abstract class BaseFormRequest extends FormRequest
         unset($data['_token'], $data['_method'], $data['files']);
 
         return $data;
+    }
+
+    /**
+     * Standard authorization pattern for customer-related operations.
+     */
+    protected function authorizeCustomerOperation(string $action = 'view'): bool
+    {
+        $permission = match($action) {
+            'view' => Permissions::ACCT_CUSTOMERS_VIEW,
+            'create' => Permissions::ACCT_CUSTOMERS_CREATE,
+            'update' => Permissions::ACCT_CUSTOMERS_UPDATE,
+            'delete' => Permissions::ACCT_CUSTOMERS_DELETE,
+            'manage_credit' => Permissions::ACCT_CUSTOMERS_MANAGE_CREDIT,
+            default => Permissions::ACCT_CUSTOMERS_VIEW,
+        };
+
+        return $this->hasCompanyPermission($permission) && $this->validateRlsContext();
+    }
+
+    /**
+     * Standard authorization pattern for invoice-related operations.
+     */
+    protected function authorizeInvoiceOperation(string $action = 'view'): bool
+    {
+        $permission = match($action) {
+            'view' => Permissions::ACCT_INVOICES_VIEW,
+            'create' => Permissions::ACCT_INVOICES_CREATE,
+            'update' => Permissions::ACCT_INVOICES_UPDATE,
+            'delete' => Permissions::ACCT_INVOICES_DELETE,
+            'void' => Permissions::ACCT_INVOICES_VOID,
+            'approve' => Permissions::ACCT_INVOICES_APPROVE,
+            default => Permissions::ACCT_INVOICES_VIEW,
+        };
+
+        return $this->hasCompanyPermission($permission) && $this->validateRlsContext();
+    }
+
+    /**
+     * Standard authorization pattern for payment-related operations.
+     */
+    protected function authorizePaymentOperation(string $action = 'view'): bool
+    {
+        $permission = match($action) {
+            'view' => Permissions::ACCT_PAYMENTS_VIEW,
+            'create' => Permissions::ACCT_PAYMENTS_CREATE,
+            'update' => Permissions::ACCT_PAYMENTS_UPDATE,
+            'delete' => Permissions::ACCT_PAYMENTS_DELETE,
+            'void' => Permissions::ACCT_PAYMENTS_VOID,
+            'process_batch' => Permissions::ACCT_PAYMENTS_PROCESS_BATCH,
+            default => Permissions::ACCT_PAYMENTS_VIEW,
+        };
+
+        return $this->hasCompanyPermission($permission) && $this->validateRlsContext();
+    }
+
+    /**
+     * Standard authorization pattern for company operations.
+     */
+    protected function authorizeCompanyOperation(string $action = 'view'): bool
+    {
+        $permission = match($action) {
+            'view' => Permissions::COMPANIES_VIEW,
+            'create' => Permissions::COMPANIES_CREATE,
+            'update' => Permissions::COMPANIES_UPDATE,
+            'delete' => Permissions::COMPANIES_DELETE,
+            'manage_users' => Permissions::COMPANIES_MANAGE_USERS,
+            default => Permissions::COMPANIES_VIEW,
+        };
+
+        return $this->hasCompanyPermission($permission);
+    }
+
+    /**
+     * Check if user has super admin privileges.
+     */
+    protected function isSuperAdmin(): bool
+    {
+        return $this->hasCompanyPermission(Permissions::SYSTEM_ADMIN);
+    }
+
+    /**
+     * Get standardized authorization failure response.
+     */
+    protected function getAuthorizationFailureResponse(string $action, string $resource): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => "You don't have permission to {$action} {$resource}",
+            'error_code' => 'PERMISSION_DENIED',
+            'meta' => [
+                'action' => $action,
+                'resource' => $resource,
+                'user_id' => $this->getServiceContext()->getUserId(),
+                'company_id' => $this->getServiceContext()->getCompanyId(),
+                'timestamp' => now()->toISOString(),
+            ],
+        ], 403);
     }
 }

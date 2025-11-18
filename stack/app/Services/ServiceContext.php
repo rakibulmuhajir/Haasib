@@ -93,13 +93,16 @@ class ServiceContext
     public function canAccessCompany(string $companyId): bool
     {
         if (! $this->user) {
+            \Log::warning('ServiceContext::canAccessCompany - No user found');
             return false;
         }
 
-        return $this->user->companies()
-            ->where('company_id', $companyId)
+        $hasAccess = $this->user->companies()
+            ->where('companies.id', $companyId)
             ->wherePivot('is_active', true)
             ->exists();
+
+        return $hasAccess;
     }
 
     /**
@@ -133,9 +136,13 @@ class ServiceContext
 
     public static function fromRequest(Request $request): self
     {
+        // Use the company set by SetCompanyContext middleware if available,
+        // otherwise fallback to user's current company
+        $company = $request->attributes->get('company') ?? $request->user()?->currentCompany();
+
         return new self(
             user: $request->user(),
-            company: $request->user()?->currentCompany(),
+            company: $company,
             ipAddress: $request->ip(),
             userAgent: $request->userAgent(),
             requestId: $request->header('X-Request-ID')

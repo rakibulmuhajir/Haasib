@@ -24,7 +24,8 @@ class TrialBalanceService
         $includeZeroBalances = $parameters['include_zero_balances'] ?? false;
 
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get current trial balance (in company base currency first)
@@ -343,7 +344,8 @@ class TrialBalanceService
         $dateRange = $this->parseDateRange($parameters);
         $currency = $parameters['currency'] ?? 'USD';
 
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get account details
@@ -442,7 +444,8 @@ class TrialBalanceService
     {
         $dateRange = $this->parseDateRange($parameters);
 
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get adjusting journal entries in the period

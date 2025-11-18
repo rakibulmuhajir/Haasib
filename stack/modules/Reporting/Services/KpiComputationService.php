@@ -24,7 +24,8 @@ class KpiComputationService
         $agingBuckets = $parameters['aging_buckets'] ?? [30, 60, 90, 120];
 
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Accounts Receivable Aging
@@ -63,7 +64,8 @@ class KpiComputationService
         $currency = $parameters['currency'] ?? 'USD';
 
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get budget data
@@ -105,7 +107,8 @@ class KpiComputationService
         $comparison = $parameters['comparison'] ?? 'prior_period';
 
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get financial data for current and comparison periods

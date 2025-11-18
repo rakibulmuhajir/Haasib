@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Invoicing;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Invoices\StoreInvoiceRequest;
 use App\Http\Requests\Invoices\UpdateInvoiceRequest;
+use App\Http\Requests\Invoices\ViewInvoiceRequest;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Services\ServiceContextHelper;
@@ -29,11 +30,15 @@ class InvoiceController extends Controller
     /**
      * Display a listing of invoices.
      */
-    public function index(StoreInvoiceRequest $request): Response
+    public function index(ViewInvoiceRequest $request): Response
     {
         try {
-            $context = ServiceContextHelper::fromRequest($request);
-            $company = $context->getCompany();
+            // Get company from request attributes (set by SetCompanyContext middleware)
+            $company = $request->attributes->get('company');
+            
+            if (!$company) {
+                throw new \Exception('Company context not found');
+            }
 
             $invoices = Invoice::where('company_id', $company->id)
                 ->with(['customer'])
@@ -48,12 +53,12 @@ class InvoiceController extends Controller
             Log::error('Invoice listing failed', [
                 'error' => $e->getMessage(),
                 'user_id' => $request->user()->id,
-                'company_id' => $context->getCompanyId() ?? null,
+                'company_id' => $company->id ?? null,
             ]);
 
             return Inertia::render('Invoicing/Invoices/Index', [
                 'invoices' => collect(),
-                'error' => 'Failed to load invoices',
+                'error' => 'Failed to load invoices: ' . $e->getMessage(),
             ]);
         }
     }
@@ -61,7 +66,7 @@ class InvoiceController extends Controller
     /**
      * Show the form for creating a new invoice.
      */
-    public function create(StoreInvoiceRequest $request): Response
+    public function create(ViewInvoiceRequest $request): Response
     {
         try {
             $context = ServiceContextHelper::fromRequest($request);
@@ -133,27 +138,24 @@ class InvoiceController extends Controller
     /**
      * Display the specified invoice.
      */
-    public function show(StoreInvoiceRequest $request, Invoice $invoice): Response
+    public function show(ViewInvoiceRequest $request, Invoice $invoice): Response
     {
+        $this->authorize('view', $invoice);
+
+        // Load relationships with error handling
         try {
-            $this->authorize('view', $invoice);
-
-            $invoice->load(['customer', 'lineItems', 'payments']);
-
-            return Inertia::render('Invoicing/Invoices/Show', [
-                'invoice' => $invoice,
-            ]);
-
+            $invoice->load(['customer', 'lineItems']);
         } catch (\Exception $e) {
-            Log::error('Invoice display failed', [
+            Log::warning('Failed to load some invoice relationships', [
                 'error' => $e->getMessage(),
                 'invoice_id' => $invoice->id,
                 'user_id' => $request->user()->id,
             ]);
-
-            return redirect()->route('invoices.index')
-                ->with('error', 'Failed to load invoice');
         }
+
+        return Inertia::render('Invoicing/Invoices/Show', [
+            'invoice' => $invoice,
+        ]);
     }
 
     /**

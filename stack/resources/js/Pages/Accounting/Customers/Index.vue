@@ -240,6 +240,25 @@ const changeStatus = (customer) => {
     })
 }
 
+const viewCustomer = (customer) => {
+    console.log('Viewing customer:', customer)
+    
+    // Make sure we have a valid customer ID
+    if (customer && (customer.id || customer.uuid)) {
+        const customerId = customer.id || customer.uuid
+        console.log('Navigating to customer:', customerId)
+        router.visit(route('customers.show', customerId))
+    } else {
+        console.warn('Invalid customer data:', customer)
+        toast.add({
+            severity: 'warn',
+            summary: 'Warning',
+            detail: 'Invalid customer data',
+            life: 3000
+        })
+    }
+}
+
 const exportCustomers = () => {
     window.location.href = route('customers.export')
 }
@@ -569,7 +588,7 @@ const toggleActionsMenu = (event, customer) => {
                   icon="fas fa-eye"
                   size="small"
                   text
-                  @click="() => router.visit(route('customers.show', data.id || data.uuid))"
+                  @click="viewCustomer(data)"
                   v-tooltip="'View Details'"
                   tooltip-options="{ position: 'top' }"
                 />

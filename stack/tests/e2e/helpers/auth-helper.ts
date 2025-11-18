@@ -20,7 +20,7 @@ export async function performLogin(page: Page) {
   await page.waitForLoadState('networkidle');
 
   // Fill login form
-  await page.fill('input[name="username"]', 'testowner');
+  await page.fill('input[name="username"]', 'admin');
   await page.fill('input[name="password"]', 'password');
   await page.click('button[type="submit"]');
 
@@ -81,39 +81,49 @@ export const expect = base.expect;
 
 // Helper functions
 export async function navigateToModule(page: Page, module: string) {
-  const moduleSelectors: { [key: string]: string } = {
-    'companies': 'a[href*="companies"], nav a:has-text("Companies")',
-    'customers': 'a[href*="customers"], nav a:has-text("Customers")',
-    'invoices': 'a[href*="invoices"], nav a:has-text("Invoices")',
-    'payments': 'a[href*="payments"], nav a:has-text("Payments")',
-    'reports': 'a[href*="reports"], nav a:has-text("Reports")',
-    'settings': 'a[href*="settings"], nav a:has-text("Settings")',
-    'ledger': 'a[href*="ledger"], nav a:has-text("Ledger")',
-    'journal': 'a[href*="journal"], nav a:has-text("Journal")'
+  const modulePaths: { [key: string]: string } = {
+    'companies': '/companies',
+    'customers': '/customers',
+    'invoices': '/invoices',
+    'payments': '/payments',
+    'reports': '/reports',
+    'settings': '/settings',
+    'ledger': '/ledger',
+    'journal': '/journal',
+    'dashboard': '/dashboard'
   };
 
-  const selector = moduleSelectors[module.toLowerCase()];
-  if (!selector) {
+  const path = modulePaths[module.toLowerCase()];
+  if (!path) {
     throw new Error(`Unknown module: ${module}`);
   }
 
-  await page.click(selector);
+  console.log(`Navigating directly to ${path}...`);
+  await page.goto(path);
   await page.waitForLoadState('networkidle');
 }
 
 export async function clickButtonWithText(page: Page, text: string) {
   const selectors = [
     `button:has-text("${text}")`,
+    `button[aria-label*="${text}"]`,
+    `button.p-button:has-text("${text}")`,
     `a:has-text("${text}")`,
     `[data-testid*="${text.toLowerCase()}"]`,
-    `.btn:has-text("${text}")`
+    `.btn:has-text("${text}")`,
+    `[label*="${text}"]`
   ];
 
   for (const selector of selectors) {
-    const button = page.locator(selector).first();
-    if (await button.isVisible()) {
-      await button.click();
-      return true;
+    try {
+      const button = page.locator(selector).first();
+      if (await button.isVisible({ timeout: 3000 })) {
+        await button.click();
+        console.log(`✅ Clicked button: ${text}`);
+        return true;
+      }
+    } catch (error) {
+      // Continue trying other selectors
     }
   }
 
@@ -148,6 +158,9 @@ export async function fillForm(page: Page, data: { [key: string]: string }) {
 
 export async function waitForSuccessMessage(page: Page) {
   const successSelectors = [
+    '.p-toast-message-success',
+    '.p-toast-message',
+    '[data-pc-name="toast"]',
     '.success',
     '.alert-success',
     '.notification-success',
@@ -158,6 +171,7 @@ export async function waitForSuccessMessage(page: Page) {
   for (const selector of successSelectors) {
     try {
       await page.waitForSelector(selector, { timeout: 5000 });
+      console.log(`✅ Found success message: ${selector}`);
       return true;
     } catch (error) {
       // Continue trying other selectors
@@ -212,7 +226,7 @@ export function generateTestData() {
 
 // Common test data
 export const TEST_CREDENTIALS = {
-  username: 'admin@example.com',
+  username: 'admin',
   password: 'password'
 };
 

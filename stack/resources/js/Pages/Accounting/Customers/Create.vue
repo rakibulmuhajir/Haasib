@@ -6,6 +6,7 @@ import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Dropdown from 'primevue/dropdown'
 import Toast from 'primevue/toast'
 
@@ -53,6 +54,7 @@ const form = useForm({
     country_id: null,
     currency_id: null,
     contact: '',
+    credit_limit: null,
     status: 'active',
 })
 
@@ -220,6 +222,32 @@ onMounted(() => {
                   class="w-full"
                 />
               </div>
+            </div>
+
+            <!-- Row 4: Credit Limit -->
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label">
+                  Credit Limit
+                </label>
+                <InputNumber
+                  v-model="form.credit_limit"
+                  mode="currency"
+                  currency="USD"
+                  locale="en-US"
+                  placeholder="Enter credit limit"
+                  class="w-full"
+                  :class="{ 'p-invalid': form.errors.credit_limit }"
+                  :minFractionDigits="2"
+                  :maxFractionDigits="2"
+                />
+                <div v-if="form.errors.credit_limit" class="form-error">
+                  {{ form.errors.credit_limit }}
+                </div>
+              </div>
+              
+              <!-- Empty second column to maintain grid layout -->
+              <div></div>
             </div>
 
             <!-- Hidden Status Field -->

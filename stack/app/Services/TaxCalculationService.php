@@ -388,7 +388,8 @@ class TaxCalculationService
      */
     private function setRlsContext(string $companyId): void
     {
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
         DB::statement('SET app.current_user_id = ?', [$this->context->getUserId()]);
     }
 }

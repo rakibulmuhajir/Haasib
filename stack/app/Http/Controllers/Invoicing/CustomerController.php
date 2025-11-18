@@ -144,6 +144,7 @@ class CustomerController extends Controller
             'country_id' => 'nullable|string',
             'currency_id' => 'nullable|string',
             'contact' => 'nullable|string|max:255',
+            'credit_limit' => 'nullable|numeric|min:0',
             'status' => 'nullable|in:active,inactive,blocked',
         ]);
 
@@ -155,7 +156,7 @@ class CustomerController extends Controller
             'name' => $validated['name'],
             'status' => $validated['status'] ?? 'active',
             'currency' => $this->getCurrencyCode($validated['currency_id'] ?? 'USD'),
-            'credit_limit' => null, // Set default credit_limit to null
+            'credit_limit' => $validated['credit_limit'] ?? null,
             'email' => null,
             'phone' => null,
             'address' => $validated['address_line_1'] ?? null,
@@ -216,20 +217,35 @@ class CustomerController extends Controller
             abort(404, 'Customer not found');
         }
 
-        // Get credit limit information if user has permission
+        // Get credit limit information if user has permission - DISABLED due to type mismatch issues
+        // TODO: Fix CustomerCreditService to work with App\Models\Customer or convert to domain model properly
         $creditData = null;
+        
+        // Temporarily disabled credit information to prevent TypeError
+        /*
         if ($user->hasPermissionTo('accounting.customers.manage_credit')) {
-            $creditService = app(\Modules\Accounting\Domain\Customers\Services\CustomerCreditService::class);
-            $creditLimit = $creditService->getCurrentCreditLimit($customer);
-            $currentExposure = $creditService->getCurrentExposure($customer);
+            try {
+                $creditService = app(\Modules\Accounting\Domain\Customers\Services\CustomerCreditService::class);
+                // We need the domain customer model for the credit service
+                $domainCustomer = $this->customerQueryService->getCustomerDetails($currentCompany, $customer->id);
+                $creditLimit = $creditService->getCurrentCreditLimit($domainCustomer);
+                $currentExposure = $creditService->getCurrentExposure($domainCustomer);
 
-            $creditData = [
-                'credit_limit' => $creditLimit,
-                'current_exposure' => $currentExposure,
-                'available_credit' => $creditLimit ? max(0, $creditLimit - $currentExposure) : null,
-                'utilization_percentage' => $creditLimit ? round(($currentExposure / $creditLimit) * 100, 1) : 0,
-            ];
+                $creditData = [
+                    'credit_limit' => $creditLimit,
+                    'current_exposure' => $currentExposure,
+                    'available_credit' => $creditLimit ? max(0, $creditLimit - $currentExposure) : null,
+                    'utilization_percentage' => $creditLimit ? round(($currentExposure / $creditLimit) * 100, 1) : 0,
+                ];
+            } catch (\Exception $e) {
+                \Log::warning('Failed to get credit information for customer', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage()
+                ]);
+                // Continue without credit data if service fails
+            }
         }
+        */
 
         return Inertia::render('Accounting/Customers/Show', [
             'customer' => $customer,

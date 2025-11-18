@@ -35,9 +35,21 @@ abstract class BaseFormRequest extends FormRequest
         // Log validation failure for audit trail
         $this->logValidationFailure($validator);
 
-        throw new HttpResponseException(
-            $this->formatValidationResponse($validator)
-        );
+        if ($this->isInertiaRequest() && $this->isInertiaVisit()) {
+            $response = redirect()
+                ->back()
+                ->withErrors($validator)
+                ->withInput();
+
+            // Inertia expects a 303 redirect after POST/PUT/PATCH/DELETE submissions
+            if (in_array($this->method(), ['POST', 'PUT', 'PATCH', 'DELETE'])) {
+                $response->setStatusCode(303);
+            }
+
+            throw new HttpResponseException($response);
+        }
+
+        throw new HttpResponseException($this->formatValidationResponse($validator));
     }
 
     /**
@@ -54,6 +66,22 @@ abstract class BaseFormRequest extends FormRequest
                 'timestamp' => now()->toISOString(),
             ],
         ], 422);
+    }
+
+    /**
+     * Determine if the request expects an Inertia response.
+     */
+    protected function isInertiaRequest(): bool
+    {
+        return $this->headers->has('X-Inertia');
+    }
+
+    /**
+     * Determine if the Inertia request is a full page visit (expects redirect) vs. partial reload.
+     */
+    protected function isInertiaVisit(): bool
+    {
+        return $this->headers->get('X-Inertia') === 'true';
     }
 
     /**
@@ -109,7 +137,8 @@ abstract class BaseFormRequest extends FormRequest
 
         // Set database session variable for RLS
         try {
-            \DB::statement('SET app.current_company_id = ?', [$companyId]);
+            $escapedCompanyId = addslashes($companyId);
+            \DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
         } catch (\Exception $e) {
             \Log::warning('Failed to set company context for RLS', [
                 'company_id' => $companyId,

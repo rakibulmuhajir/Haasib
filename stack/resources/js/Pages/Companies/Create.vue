@@ -135,6 +135,18 @@ const generateSlug = () => {
     return ''
 }
 
+const suggestAlternativeName = (originalName) => {
+    const currentYear = new Date().getFullYear()
+    const suggestions = [
+        `${originalName} ${currentYear}`,
+        `${originalName} Company`,
+        `${originalName} Ltd`,
+        `${originalName} Inc`,
+        `${originalName} Group`
+    ]
+    return suggestions
+}
+
 const setFiscalYearDefaults = () => {
     const today = new Date()
     const currentYear = today.getFullYear()
@@ -257,12 +269,24 @@ const submitForm = async () => {
                 }, 1500)
             },
             onError: (errors) => {
-                toast.value.add({
-                    severity: 'error',
-                    summary: 'Validation Error',
-                    detail: 'Please check the form for errors',
-                    life: 3000
-                })
+                // Check if it's a duplicate company name error
+                if (errors.name && typeof errors.name === 'string' && errors.name.includes('already exists')) {
+                    const suggestions = suggestAlternativeName(form.name)
+                    toast.value.add({
+                        severity: 'warn',
+                        summary: 'Company Already Exists',
+                        detail: `${errors.name} Try: "${suggestions[0]}" or "${suggestions[1]}"`,
+                        life: 7000
+                    })
+                } else {
+                    // Generic validation error
+                    toast.value.add({
+                        severity: 'error',
+                        summary: 'Validation Error',
+                        detail: 'Please check the form for errors and try again',
+                        life: 3000
+                    })
+                }
             },
             onFinish: () => {
                 submitting.value = false

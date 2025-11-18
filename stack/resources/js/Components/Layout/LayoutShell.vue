@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useSidebar } from '@/composables/useSidebar'
+import { useFlashMessages } from '@/composables/useFlashMessages'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast from 'primevue/toast'
 import Topbar from './Topbar.vue'
@@ -9,6 +10,7 @@ import Sidebar from '@/Layouts/Sidebar.vue'
 
 const { initializeTheme } = useTheme()
 const { isSlim } = useSidebar()
+const { } = useFlashMessages() // Initialize flash message handling
 
 const wrapperClass = computed(() => ({
   'layout-wrapper': true,

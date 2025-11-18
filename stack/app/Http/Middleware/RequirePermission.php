@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Company;
 use App\Services\CompanyPermissionService;
+use App\Services\ServiceContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,9 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RequirePermission
 {
-    public function __construct(
-        private CompanyPermissionService $permissionService
-    ) {}
+    public function __construct() {}
 
     public function handle(Request $request, Closure $next, string $permission): Response
     {
@@ -29,7 +28,11 @@ class RequirePermission
 
         // Check company-scoped permission if company context exists
         if ($company) {
-            if (! $this->permissionService->userHasCompanyPermission($user, $company, $permission)) {
+            // Create ServiceContext with current request context
+            $context = ServiceContext::fromRequest($request);
+            $permissionService = new CompanyPermissionService($context);
+            
+            if (! $permissionService->userHasCompanyPermission($user, $company, $permission)) {
                 return $this->unauthorizedResponse($request, "Insufficient permissions: {$permission} required for company '{$company->name}'");
             }
         } else {
@@ -50,6 +53,11 @@ class RequirePermission
                 'forbidden' => true,
                 'code' => 'INSUFFICIENT_PERMISSIONS',
             ], Response::HTTP_FORBIDDEN);
+        }
+
+        // For Inertia requests, redirect back with error flash message
+        if ($request->header('X-Inertia')) {
+            return back()->with('error', $message);
         }
 
         abort(Response::HTTP_FORBIDDEN, $message);

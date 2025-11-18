@@ -25,7 +25,15 @@ import ProgressSpinner from 'primevue/progressspinner'
 import CompanySwitcher from '@/Components/CompanySwitcher.vue'
 import CommandPalette from '@/Components/CommandPalette.vue'
 
-const { t } = useI18n()
+const { t: translate } = useI18n({ useScope: 'global' })
+const translateLabel = (key, fallback) => {
+    try {
+        const value = translate(key)
+        return typeof value === 'string' ? value : (fallback ?? key)
+    } catch (error) {
+        return fallback ?? key
+    }
+}
 const page = usePage()
 const { actions } = usePageActions()
 
@@ -221,15 +229,15 @@ const getSeverity = (status) => {
 
 const selectInvoice = (invoice) => {
     emit('invoice-selected', invoice)
-    router.visit(`/invoicing/${invoice.id}`)
+    router.visit(`/invoices/${invoice.id}`)
 }
 
 const createInvoice = () => {
-    router.visit('/invoicing/create')
+    router.visit('/invoices/create')
 }
 
 const editInvoice = (invoice) => {
-    router.visit(`/invoicing/${invoice.id}/edit`)
+    router.visit(`/invoices/${invoice.id}/edit`)
 }
 
 const duplicateInvoice = async (invoice) => {
@@ -524,7 +532,7 @@ onMounted(() => {
         <Card>
           <template #title>
             <div class="flex justify-between items-center">
-              <span>{{ t('invoicing.invoice_list') }}</span>
+              <span>{{ translateLabel('invoicing.invoice_list', 'Invoice List') }}</span>
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 {{ totalRecords }} total invoices
               </div>
@@ -548,7 +556,7 @@ onMounted(() => {
               <Button 
                 @click="createInvoice"
                 icon="fas fa-plus"
-                :label="t('invoicing.create_invoice')"
+                :label="translateLabel('invoicing.create_invoice', 'Create Invoice')"
               />
             </div>
 
@@ -701,7 +709,7 @@ onMounted(() => {
       <template #footer>
         <Button 
           @click="deleteDialog = false"
-          :label="$t('common.cancel')"
+          :label="translateLabel('common.cancel', 'Cancel')"
           text
         />
         <Button 
@@ -714,4 +722,3 @@ onMounted(() => {
     </Dialog>
   </LayoutShell>
 </template>
-

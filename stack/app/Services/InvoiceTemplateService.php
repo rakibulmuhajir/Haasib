@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceTemplate;
 use App\Models\User;
+use App\Traits\AuditLogging;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -27,7 +28,7 @@ class InvoiceTemplateService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($company->id);
-        
+
         // Set RLS context
         $this->setRlsContext($company->id);
 
@@ -71,7 +72,7 @@ class InvoiceTemplateService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($template->company_id);
-        
+
         // Set RLS context
         $this->setRlsContext($template->company_id);
 
@@ -120,14 +121,14 @@ class InvoiceTemplateService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($template->company_id);
-        
+
         // Set RLS context
         $this->setRlsContext($template->company_id);
 
         $this->executeInTransaction(function () use ($template, $user) {
             // Store template data for audit before deletion
             $templateData = $template->toArray();
-            
+
             $template->delete();
 
             // Create audit log entry
@@ -236,7 +237,7 @@ class InvoiceTemplateService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($company->id);
-        
+
         // Set RLS context
         $this->setRlsContext($company->id);
 
@@ -402,7 +403,7 @@ class InvoiceTemplateService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($company->id);
-        
+
         // Set RLS context
         $this->setRlsContext($company->id);
 

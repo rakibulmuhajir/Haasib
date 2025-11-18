@@ -114,16 +114,16 @@ class User extends Authenticatable
     public function isOwnerOfCompany(Company $company): bool
     {
         return $this->companies()
-            ->where('auth.company_user.company_id', $company->id)
-            ->where('auth.company_user.role', 'owner')
+            ->where('company_user.company_id', $company->id)
+            ->where('company_user.role', 'owner')
             ->exists();
     }
 
     public function ownsCompany(string $companyId): bool
     {
         return $this->companies()
-            ->where('auth.company_user.company_id', $companyId)
-            ->where('auth.company_user.role', 'owner')
+            ->where('company_user.company_id', $companyId)
+            ->where('company_user.role', 'owner')
             ->exists();
     }
 
@@ -133,8 +133,8 @@ class User extends Authenticatable
     public function isAdminOfCompany(Company $company): bool
     {
         return $this->companies()
-            ->where('auth.company_user.company_id', $company->id)
-            ->whereIn('auth.company_user.role', ['owner', 'admin'])
+            ->where('company_user.company_id', $company->id)
+            ->whereIn('company_user.role', ['owner', 'admin'])
             ->exists();
     }
 
@@ -189,7 +189,7 @@ class User extends Authenticatable
             }
 
             return $this->companies()
-                ->where('auth.companies.id', $companyId)
+                ->where('companies.id', $companyId)
                 ->first();
         }
 

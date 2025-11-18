@@ -154,16 +154,21 @@ class CustomerQueryService
      */
     public function generateNextCustomerNumber(Company $company): string
     {
-        $lastNumber = Customer::where('company_id', $company->id)
+        // Get all customer numbers with CUST- prefix
+        $customerNumbers = Customer::where('company_id', $company->id)
             ->where('customer_number', 'LIKE', 'CUST-%')
-            ->orderByRaw('CAST(SUBSTRING(customer_number, 6) AS INTEGER) DESC')
-            ->value('customer_number');
+            ->pluck('customer_number')
+            ->map(function ($number) {
+                // Extract numeric part after CUST-
+                $numericPart = str_replace('CUST-', '', $number);
+                return is_numeric($numericPart) ? (int) $numericPart : 0;
+            })
+            ->filter() // Remove non-numeric values
+            ->sort()
+            ->values();
 
-        if ($lastNumber) {
-            $sequence = (int) str_replace('CUST-', '', $lastNumber) + 1;
-        } else {
-            $sequence = 1;
-        }
+        // Find the next available number
+        $sequence = $customerNumbers->isEmpty() ? 1 : $customerNumbers->max() + 1;
 
         return 'CUST-'.str_pad($sequence, 4, '0', STR_PAD_LEFT);
     }

@@ -32,7 +32,8 @@ class DashboardMetricsService
     private function computeDashboardMetrics(string $companyId, string $layoutId, array $parameters = []): array
     {
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Get layout configuration

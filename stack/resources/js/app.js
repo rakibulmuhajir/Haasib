@@ -4,6 +4,7 @@ import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 import Tooltip from 'primevue/tooltip'
+import Ripple from 'primevue/ripple'
 import Aura from '@primevue/themes/aura'
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { createI18n } from 'vue-i18n'
@@ -132,6 +133,7 @@ createInertiaApp({
             .use(ConfirmationService)
             .use(i18n)
             .directive('tooltip', Tooltip)
+            .directive('ripple', Ripple)
             .component('font-awesome-icon', FontAwesomeIcon)
             .mount(el)
     },

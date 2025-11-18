@@ -124,7 +124,8 @@ abstract class BaseService
             throw new \InvalidArgumentException('Company ID is required for RLS context');
         }
 
-        DB::statement('SET app.current_company_id = ?', [$targetCompanyId]);
+        $escapedCompanyId = addslashes($targetCompanyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
         DB::statement('SET app.current_user_id = ?', [$this->getUserId()]);
     }
 

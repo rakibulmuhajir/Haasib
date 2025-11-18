@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 class PermissionSeeder extends Seeder
 {
@@ -74,6 +74,15 @@ class PermissionSeeder extends Seeder
             'accounting.invoices.update' => 'Update invoices',
             'accounting.invoices.delete' => 'Delete invoices',
             'accounting.invoices.approve' => 'Approve invoices',
+
+            // UI aliases required by middleware/PrimeVue flows
+            'invoices.view' => 'View invoices (UI)',
+            'invoices.create' => 'Create invoices (UI)',
+            'invoices.update' => 'Update invoices (UI)',
+            'invoices.delete' => 'Delete invoices (UI)',
+            'invoices.send' => 'Send invoices (UI)',
+            'invoices.export' => 'Export invoices (UI)',
+            'invoices.post' => 'Post invoices (UI)',
 
             'accounting.payments.view' => 'View payments',
             'accounting.payments.create' => 'Record payments',
@@ -152,16 +161,10 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $name => $description) {
-            Permission::updateOrCreate(
-                ['name' => $name],
-                [
-                    'id' => \Illuminate\Support\Str::uuid(),
-                    'guard_name' => 'web',
-                    'description' => $description,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]
-            );
+            Permission::updateOrCreate(['name' => $name], [
+                'guard_name' => 'web',
+                'description' => $description,
+            ]);
         }
 
         $this->command->info('✓ Created '.count($permissions).' permissions');
@@ -177,16 +180,10 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($roles as $name => $description) {
-            Role::updateOrCreate(
-                ['name' => $name],
-                [
-                    'id' => \Illuminate\Support\Str::uuid(),
-                    'guard_name' => 'web',
-                    'description' => $description,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]
-            );
+            Role::updateOrCreate(['name' => $name], [
+                'guard_name' => 'web',
+                'description' => $description,
+            ]);
         }
 
         $this->command->info('✓ Created '.count($roles).' roles');
@@ -212,6 +209,7 @@ class PermissionSeeder extends Seeder
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update', 'accounting.customers.delete',
                 'accounting.customers.manage_contacts', 'accounting.customers.manage_groups', 'accounting.customers.manage_comms', 'accounting.customers.manage_credit',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
+                'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.send', 'invoices.export', 'invoices.post',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update', 'accounting.chart_of_accounts.delete',
                 // Full journal entry access
@@ -260,6 +258,7 @@ class PermissionSeeder extends Seeder
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update', 'accounting.customers.delete',
                 'accounting.customers.manage_contacts', 'accounting.customers.manage_groups', 'accounting.customers.manage_comms', 'accounting.customers.manage_credit',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.delete', 'accounting.invoices.approve',
+                'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.send', 'invoices.export', 'invoices.post',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update', 'accounting.payments.delete', 'accounting.payments.refund',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.create', 'accounting.chart_of_accounts.update',
                 // Full journal entry access for company
@@ -308,6 +307,7 @@ class PermissionSeeder extends Seeder
                 'accounting.customers.view', 'accounting.customers.create', 'accounting.customers.update',
                 'accounting.customers.manage_contacts', 'accounting.customers.manage_comms',
                 'accounting.invoices.view', 'accounting.invoices.create', 'accounting.invoices.update', 'accounting.invoices.approve',
+                'invoices.view', 'invoices.create', 'invoices.update', 'invoices.post',
                 'accounting.payments.view', 'accounting.payments.create', 'accounting.payments.update',
                 'accounting.chart_of_accounts.view', 'accounting.chart_of_accounts.update',
                 // Full journal entry access
@@ -347,7 +347,7 @@ class PermissionSeeder extends Seeder
 
                 // Basic accounting view
                 'accounting.customers.view',
-                'accounting.invoices.view',
+                'accounting.invoices.view', 'invoices.view',
                 'accounting.payments.view',
                 'accounting.chart_of_accounts.view',
                 'accounting.journal_entries.view',

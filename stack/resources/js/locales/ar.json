@@ -28,7 +28,8 @@
     "companies": {
         "switch": "تبديل الشركة",
         "current": "الشركة الحالية",
-        "no_companies": "لا توجد شركات متاحة"
+        "no_companies": "لا توجد شركات متاحة",
+        "create_company": "إنشاء شركة"
     },
     "modules": {
         "title": "الوحدات",

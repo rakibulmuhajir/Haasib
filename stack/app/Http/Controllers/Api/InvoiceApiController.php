@@ -469,6 +469,24 @@ class InvoiceApiController extends Controller
     }
 
     /**
+     * Generate the next invoice number for the active company.
+     */
+    public function generateNumber(Request $request): JsonResponse
+    {
+        $company = $request->user()->currentCompany();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company context not found',
+            ], 422);
+        }
+
+        return response()->json([
+            'invoice_number' => $this->generateInvoiceNumber($company),
+        ]);
+    }
+
+    /**
      * Bulk operations on invoices.
      */
     public function bulk(Request $request): JsonResponse

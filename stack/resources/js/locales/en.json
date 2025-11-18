@@ -28,7 +28,8 @@
     "companies": {
         "switch": "Switch Company",
         "current": "Current Company",
-        "no_companies": "No companies available"
+        "no_companies": "No companies available",
+        "create_company": "Create Company"
     },
     "modules": {
         "title": "Modules",

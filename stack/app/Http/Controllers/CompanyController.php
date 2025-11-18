@@ -107,35 +107,93 @@ class CompanyController extends Controller
 
         $user = $request->user();
 
-        // Generate a unique slug
-        $slug = \Str::slug($request->name);
-        $originalSlug = $slug;
-        $counter = 1;
+        try {
+            // Check for existing company with same name and country
+            $existingCompany = Company::where('name', $request->name)
+                ->where('country', $request->country)
+                ->first();
 
-        while (Company::where('slug', $slug)->exists()) {
-            $slug = $originalSlug.'-'.$counter;
-            $counter++;
+            if ($existingCompany) {
+                $errorMessage = 'A company with the same name already exists in '.($request->country ?? 'this country').'. Please choose a different company name.';
+
+                if ($request->header('X-Inertia')) {
+                    return redirect()->back()
+                        ->withErrors(['name' => $errorMessage])
+                        ->withInput();
+                }
+
+                return response()->json([
+                    'message' => $errorMessage,
+                    'errors' => ['name' => [$errorMessage]],
+                ], 422);
+            }
+
+            // Generate a unique slug
+            $slug = \Str::slug($request->name);
+            $originalSlug = $slug;
+            $counter = 1;
+
+            while (Company::where('slug', $slug)->exists()) {
+                $slug = $originalSlug.'-'.$counter;
+                $counter++;
+            }
+
+            $company = Company::create([
+                'name' => $request->name,
+                'slug' => $slug,
+                'currency' => $request->currency,
+                'timezone' => $request->timezone,
+                'country' => $request->country,
+                'language' => $request->language ?? 'en',
+                'locale' => $request->locale ?? 'en_US',
+                'is_active' => true,
+            ]);
+
+            // Assign the user as owner
+            $company->users()->attach($user->id, [
+                'role' => 'owner',
+                'is_active' => true,
+            ]);
+
+            // Create fiscal year and chart of accounts
+            $this->createCompanyAccountingStructure($company);
+
+            // Set the new company as the active company context for the user
+            $this->contextService->setCurrentCompany($user, $company);
+
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            $errorMessage = 'A company with this name already exists in the selected country. Please choose a different name.';
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()
+                    ->withErrors(['name' => $errorMessage])
+                    ->withInput();
+            }
+
+            return response()->json([
+                'message' => $errorMessage,
+                'errors' => ['name' => [$errorMessage]],
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Company creation failed', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id,
+                'request_data' => $request->except(['password']),
+            ]);
+
+            $errorMessage = 'Failed to create company. Please try again.';
+
+            if ($request->header('X-Inertia')) {
+                return redirect()->back()
+                    ->with('error', $errorMessage)
+                    ->withInput();
+            }
+
+            return response()->json([
+                'message' => $errorMessage,
+                'error' => 'Internal server error',
+            ], 500);
         }
-
-        $company = Company::create([
-            'name' => $request->name,
-            'slug' => $slug,
-            'currency' => $request->currency,
-            'timezone' => $request->timezone,
-            'country' => $request->country,
-            'language' => $request->language ?? 'en',
-            'locale' => $request->locale ?? 'en_US',
-            'is_active' => true,
-        ]);
-
-        // Assign the user as owner
-        $company->users()->attach($user->id, [
-            'role' => 'owner',
-            'is_active' => true,
-        ]);
-
-        // Create fiscal year and chart of accounts
-        $this->createCompanyAccountingStructure($company);
 
         $response = [
             'data' => [

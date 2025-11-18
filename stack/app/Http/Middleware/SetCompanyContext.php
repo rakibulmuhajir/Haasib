@@ -121,19 +121,29 @@ class SetCompanyContext
 
     private function setRlsContext(Company $company, User $user): void
     {
-        // Set PostgreSQL session variables for RLS policies
-        DB::statement("SET app.current_company_id = '{$company->id}'");
-        DB::statement("SET app.current_user_id = '{$user->id}'");
-
-        // Set user's role in this specific company
-        $companyUser = $company->users()->where('user_id', $user->id)->first();
-        $roleInCompany = $companyUser?->role ?? 'member';
-
-        DB::statement("SET app.user_role = '{$roleInCompany}'");
-
-        // Set super admin status if applicable
-        $isSuperAdmin = $user->system_role === 'system_owner' || $user->system_role === 'super_admin';
-        DB::statement('SET app.is_super_admin = '.($isSuperAdmin ? 'true' : 'false'));
+        try {
+            // Use the RLS function - it should now exist
+            $isSuperAdmin = $user->system_role === 'system_owner' || $user->system_role === 'super_admin';
+            DB::statement('SELECT set_app_context(?, ?, ?)', [
+                $company->id,
+                $user->id,
+                $isSuperAdmin
+            ]);
+            
+            Log::info('RLS context set successfully', [
+                'company_id' => $company->id,
+                'user_id' => $user->id,
+                'is_super_admin' => $isSuperAdmin,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to set RLS context', [
+                'company_id' => $company->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+            
+            // Continue without RLS - don't break the request flow
+        }
     }
 
     private function clearRlsContext(): void

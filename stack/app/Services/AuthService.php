@@ -38,6 +38,12 @@ class AuthService
         // Authenticate the user for the session
         auth()->login($user, $remember);
 
+        // Set company context for the user
+        $company = $user->currentCompany();
+        if ($company) {
+            app(ContextService::class)->setCurrentCompany($user, $company);
+        }
+
         // TODO: Fix audit logging when audit_entries table schema is properly aligned
         // $this->logAudit('user_login', $user, [
         //     'username' => $user->username,
@@ -107,7 +113,7 @@ class AuthService
             return true;
         }
 
-        if (! $user->companies()->where('auth.companies.id', $company->id)->exists()) {
+        if (! $user->companies()->where('companies.id', $company->id)->exists()) {
             return false;
         }
 
@@ -145,7 +151,7 @@ class AuthService
     public function getUserRole(User $user, Company $company): ?string
     {
         return $user->companies()
-            ->where('auth.companies.id', $company->id)
+            ->where('companies.id', $company->id)
             ->first()?->pivot->role;
     }
 
@@ -303,7 +309,7 @@ class AuthService
         }
 
         $companyUser = $user->companies()
-            ->where('auth.companies.id', $company->id)
+            ->where('companies.id', $company->id)
             ->first();
 
         if (! $companyUser) {

@@ -64,7 +64,7 @@ class ContextService
         if ($companyId) {
             $company = $user->isSuperAdmin()
                 ? Company::find($companyId)
-                : $user->companies()->where('auth.companies.id', $companyId)->first();
+                : $user->companies()->where('companies.id', $companyId)->first();
 
             \Log::info('getCurrentCompany: Returning company', ['company_id' => $companyId, 'company_name' => $company?->name]);
 
@@ -114,7 +114,7 @@ class ContextService
             return;
         }
 
-        $user->companies()->pluck('auth.companies.id')->each(function (string $companyId) use ($user) {
+        $user->companies()->pluck('companies.id')->each(function (string $companyId) use ($user) {
             Cache::forget($this->permissionCacheKey($user->id, $companyId));
         });
     }
@@ -122,10 +122,10 @@ class ContextService
     public function getActiveCompanies(User $user)
     {
         return $user->companies()
-            ->where('auth.companies.is_active', true)
+            ->where('companies.is_active', true)
             ->withPivot('role', 'invited_by_user_id', 'is_active')
             ->wherePivot('is_active', true)
-            ->orderBy('auth.company_user.created_at')
+            ->orderBy('company_user.created_at')
             ->get();
     }
 

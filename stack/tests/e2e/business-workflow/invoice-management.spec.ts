@@ -13,7 +13,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Step 1: Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');
@@ -21,13 +21,32 @@ test.describe('Invoice Management E2E Tests', () => {
     // Step 2: First, create a customer for the invoice
     console.log('👤 Creating customer for invoice...');
     await navigateToModule(page, 'customers');
-    await clickButtonWithText(page, 'Add Customer');
+    await page.waitForTimeout(1000);
+    
+    // Navigate to customer creation page directly
+    await page.goto('/customers/create');
+    await page.waitForLoadState('networkidle');
 
     const customerData = testData.customer;
-    await page.fill('input[name="name"], input[id*="name"], [data-testid="customer-name"]', customerData.name);
-    await page.fill('input[name="email"], input[id*="email"], [data-testid="customer-email"]', customerData.email);
-    await page.fill('input[name="phone"], input[id*="phone"], [data-testid="customer-phone"]', customerData.phone);
-    await clickButtonWithText(page, 'Save');
+    
+    // Fill customer name field (PrimeVue InputText component)
+    await page.fill('input[placeholder="Enter customer name"]', customerData.name);
+    console.log(`✅ Filled customer name: ${customerData.name}`);
+    
+    // Select customer type
+    await page.click('[data-pc-name="dropdown"][aria-label="Select customer type"], .p-dropdown');
+    await page.waitForTimeout(500);
+    await page.click('li:has-text("Individual")');
+    console.log('✅ Selected customer type: Individual');
+    
+    // Fill contact field (email/phone)
+    await page.fill('input[placeholder="Email or phone number"]', customerData.contact || customerData.email);
+    console.log(`✅ Filled contact: ${customerData.email}`);
+    
+    await takeScreenshot(page, 'customer-form-filled');
+    
+    // Click Create Customer button
+    await clickButtonWithText(page, 'Create Customer');
     await page.waitForTimeout(2000);
 
     customerName = customerData.name;
@@ -174,7 +193,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');
@@ -267,7 +286,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');
@@ -344,7 +363,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');
@@ -438,7 +457,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');
@@ -516,7 +535,7 @@ test.describe('Invoice Management E2E Tests', () => {
 
     // Login
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard');

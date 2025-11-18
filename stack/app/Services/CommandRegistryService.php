@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Command;
 use App\Models\Company;
+use App\Traits\AuditLogging;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -19,7 +20,7 @@ class CommandRegistryService extends BaseService
     {
         parent::__construct($context);
         // Company-isolated cache key to prevent cross-tenant data leakage
-        $this->cacheKey = 'command_registry_' . ($this->getCompanyId() ?? 'system');
+        $this->cacheKey = 'command_registry_'.($this->getCompanyId() ?? 'system');
         $this->loadCommandRegistry();
     }
 
@@ -27,10 +28,10 @@ class CommandRegistryService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($company->id);
-        
+
         // Set RLS context
         $this->setRlsContext($company->id);
-        
+
         $registryCommands = $this->getCommandBusRegistry();
         $synchronizedCommands = [];
 
@@ -49,12 +50,12 @@ class CommandRegistryService extends BaseService
                     'is_active' => true,
                 ]
             );
-            
+
             $synchronizedCommands[] = $name;
         }
 
         $this->clearCache();
-        
+
         // Create audit entry for synchronization
         $this->audit('command_registry.synchronized', [
             'company_id' => $company->id,
@@ -69,10 +70,10 @@ class CommandRegistryService extends BaseService
     {
         // Validate company access
         $this->validateCompanyAccess($company->id);
-        
+
         // Set RLS context
         $this->setRlsContext($company->id);
-        
+
         $commands = Command::query()
             ->where('company_id', $company->id)
             ->active()

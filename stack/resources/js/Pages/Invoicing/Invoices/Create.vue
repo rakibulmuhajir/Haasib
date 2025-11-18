@@ -32,6 +32,8 @@ const saving = ref(false)
 const customers = ref([])
 const products = ref([])
 const taxRates = ref([])
+const customerSuggestions = ref([])
+const productSuggestions = ref([])
 const previewDialog = ref(false)
 const customerDialog = ref(false)
 
@@ -196,14 +198,15 @@ const selectCustomer = (customer) => {
     invoice.value.customer_id = customer.id
 }
 
-const searchCustomers = async (event) => {
-    const query = event.query.toLowerCase()
-    
+const searchCustomers = (event) => {
+    const query = event.query?.toLowerCase() ?? ''
+
     if (!query) {
-        return customers.value.slice(0, 10)
+        customerSuggestions.value = customers.value.slice(0, 10)
+        return
     }
 
-    return customers.value.filter(customer => 
+    customerSuggestions.value = customers.value.filter(customer =>
         customer.name.toLowerCase().includes(query) ||
         customer.email.toLowerCase().includes(query)
     ).slice(0, 10)
@@ -215,14 +218,15 @@ const selectProduct = (item, product) => {
     updateItemTotal(item)
 }
 
-const searchProducts = async (event) => {
-    const query = event.query.toLowerCase()
-    
+const searchProducts = (event) => {
+    const query = event.query?.toLowerCase() ?? ''
+
     if (!query) {
-        return products.value.slice(0, 10)
+        productSuggestions.value = products.value.slice(0, 10)
+        return
     }
 
-    return products.value.filter(product => 
+    productSuggestions.value = products.value.filter(product =>
         product.name.toLowerCase().includes(query) ||
         product.description.toLowerCase().includes(query)
     ).slice(0, 10)
@@ -460,7 +464,8 @@ onMounted(async () => {
                                     <div class="flex space-x-2">
                                         <AutoComplete 
                                             v-model="invoice.customer_id"
-                                            :suggestions="searchCustomers"
+                                            :suggestions="customerSuggestions"
+                                            @complete="searchCustomers"
                                             optionLabel="name"
                                             optionValue="id"
                                             placeholder="Search or select customer..."
@@ -591,7 +596,8 @@ onMounted(async () => {
                                             <div class="space-y-2">
                                                 <AutoComplete 
                                                     v-model="item.description"
-                                                    :suggestions="searchProducts"
+                                                    :suggestions="productSuggestions"
+                                                    @complete="searchProducts"
                                                     optionLabel="name"
                                                     placeholder="Search products or enter description..."
                                                     class="w-full"

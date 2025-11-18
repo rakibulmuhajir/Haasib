@@ -5,63 +5,12 @@ use App\Http\Controllers\Api\CurrencyApiController;
 use App\Http\Controllers\Api\InvoiceApiController;
 use App\Http\Controllers\Api\InvoicingRequirementsController;
 use App\Http\Controllers\Api\PaymentApiController;
+use App\Http\Controllers\Api\ProductApiController;
+use App\Http\Controllers\Api\TaxRateApiController;
 use App\Http\Controllers\InlineEditController;
 use Illuminate\Support\Facades\Route;
 
 // API Routes for Invoicing System
-// All routes require authentication and company context
-
-// Invoice Routes
-Route::prefix('invoices')->name('invoices.')->group(function () {
-    Route::get('/', [InvoiceApiController::class, 'index'])->name('index');
-    Route::post('/', [InvoiceApiController::class, 'store'])->name('store')->middleware('idempotent');
-    Route::get('/{id}', [InvoiceApiController::class, 'show'])->whereUuid('id')->name('show');
-    Route::put('/{id}', [InvoiceApiController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
-    Route::delete('/{id}', [InvoiceApiController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
-
-    // Invoice Actions
-    Route::post('/{id}/send', [InvoiceApiController::class, 'markAsSent'])->whereUuid('id')->name('send')->middleware('idempotent');
-    Route::post('/{id}/post', [InvoiceApiController::class, 'markAsPosted'])->whereUuid('id')->name('post')->middleware('idempotent');
-    Route::post('/{id}/cancel', [InvoiceApiController::class, 'cancel'])->whereUuid('id')->name('cancel')->middleware('idempotent');
-    Route::post('/{id}/generate-pdf', [InvoiceApiController::class, 'generatePdf'])->whereUuid('id')->name('generate-pdf')->middleware('idempotent');
-    Route::get('/{id}/pdf-exists', [InvoiceApiController::class, 'pdfExists'])->whereUuid('id')->name('pdf-exists');
-    Route::post('/{id}/send-email', [InvoiceApiController::class, 'sendEmail'])->whereUuid('id')->name('send-email')->middleware('idempotent');
-    Route::post('/{id}/duplicate', [InvoiceApiController::class, 'duplicate'])->whereUuid('id')->name('duplicate')->middleware('idempotent');
-
-    // Invoice Statistics
-    Route::get('/statistics', [InvoiceApiController::class, 'statistics'])->name('statistics');
-
-    // Bulk Operations
-    Route::post('/bulk', [InvoiceApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
-});
-
-// Payment Routes
-Route::prefix('payments')->name('payments.')->group(function () {
-    Route::get('/', [PaymentApiController::class, 'index'])->name('index');
-    Route::post('/', [PaymentApiController::class, 'store'])->name('store')->middleware('idempotent');
-    Route::get('/{id}', [PaymentApiController::class, 'show'])->whereUuid('id')->name('show');
-    Route::put('/{id}', [PaymentApiController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
-    Route::delete('/{id}', [PaymentApiController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
-
-    // Payment Actions
-    Route::post('/{id}/allocate', [PaymentApiController::class, 'allocate'])->whereUuid('id')->name('allocate')->middleware('idempotent');
-    Route::post('/{id}/auto-allocate', [PaymentApiController::class, 'autoAllocate'])->whereUuid('id')->name('auto-allocate')->middleware('idempotent');
-    // Payment Allocation explicit endpoints
-    Route::get('/{id}/allocations', [PaymentApiController::class, 'allocations'])->whereUuid('id')->name('allocations');
-    Route::post('/{id}/allocations', [PaymentApiController::class, 'allocate'])->whereUuid('id')->name('allocations.store')->middleware('idempotent');
-    Route::post('/{paymentId}/allocations/{allocationId}/void', [PaymentApiController::class, 'voidAllocation'])->whereUuid('paymentId')->whereUuid('allocationId')->name('allocations.void')->middleware('idempotent');
-    Route::post('/{paymentId}/allocations/{allocationId}/refund', [PaymentApiController::class, 'refundAllocation'])->whereUuid('paymentId')->whereUuid('allocationId')->name('allocations.refund')->middleware('idempotent');
-    Route::post('/{id}/void', [PaymentApiController::class, 'void'])->whereUuid('id')->name('void')->middleware('idempotent');
-    Route::post('/{id}/refund', [PaymentApiController::class, 'refund'])->whereUuid('id')->name('refund')->middleware('idempotent');
-
-    // Payment Statistics
-    Route::get('/statistics', [PaymentApiController::class, 'statistics'])->name('statistics');
-    Route::get('/{customerId}/summary', [PaymentApiController::class, 'customerSummary'])->whereUuid('customerId')->name('customer-summary');
-    Route::get('/{id}/allocation-suggestions', [PaymentApiController::class, 'allocationSuggestions'])->whereUuid('id')->name('allocation-suggestions');
-
-    // Bulk Operations
-    Route::post('/bulk', [PaymentApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
-});
 
 // Currency Routes - uses web middleware for session authentication
 Route::prefix('currencies')->name('api.currencies.')->middleware(['web', 'auth'])->group(function () {
@@ -275,6 +224,72 @@ Route::prefix('v1')->group(function () {
 
     // Authenticated routes - use session authentication like the old system
     Route::middleware(['web', 'auth', 'company.context'])->group(function () {
+        // Invoice Routes
+        Route::prefix('invoices')->name('invoices.')->group(function () {
+            Route::get('/', [InvoiceApiController::class, 'index'])->name('index');
+            Route::post('/', [InvoiceApiController::class, 'store'])->name('store')->middleware('idempotent');
+            Route::get('/{id}', [InvoiceApiController::class, 'show'])->whereUuid('id')->name('show');
+            Route::put('/{id}', [InvoiceApiController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
+            Route::delete('/{id}', [InvoiceApiController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+            Route::post('/generate-number', [InvoiceApiController::class, 'generateNumber'])->name('generate-number')->middleware('idempotent');
+
+            // Invoice Actions
+            Route::post('/{id}/send', [InvoiceApiController::class, 'markAsSent'])->whereUuid('id')->name('send')->middleware('idempotent');
+            Route::post('/{id}/post', [InvoiceApiController::class, 'markAsPosted'])->whereUuid('id')->name('post')->middleware('idempotent');
+            Route::post('/{id}/cancel', [InvoiceApiController::class, 'cancel'])->whereUuid('id')->name('cancel')->middleware('idempotent');
+            Route::post('/{id}/generate-pdf', [InvoiceApiController::class, 'generatePdf'])->whereUuid('id')->name('generate-pdf')->middleware('idempotent');
+            Route::get('/{id}/pdf-exists', [InvoiceApiController::class, 'pdfExists'])->whereUuid('id')->name('pdf-exists');
+            Route::post('/{id}/send-email', [InvoiceApiController::class, 'sendEmail'])->whereUuid('id')->name('send-email')->middleware('idempotent');
+            Route::post('/{id}/duplicate', [InvoiceApiController::class, 'duplicate'])->whereUuid('id')->name('duplicate')->middleware('idempotent');
+
+            // Invoice Statistics
+            Route::get('/statistics', [InvoiceApiController::class, 'statistics'])->name('statistics');
+
+            // Bulk Operations
+            Route::post('/bulk', [InvoiceApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
+        });
+
+        // Lightweight lookup endpoints used by the invoicing SPA
+        Route::get('/customers', [\Modules\Accounting\Http\Controllers\Api\CustomerController::class, 'index'])
+            ->name('customers.index')
+            ->middleware('permission:accounting.customers.view');
+
+        Route::get('/products', [ProductApiController::class, 'index'])
+            ->name('products.index')
+            ->middleware('permission:invoices.create');
+
+        Route::get('/tax-rates', [TaxRateApiController::class, 'index'])
+            ->name('tax-rates.index')
+            ->middleware('permission:invoices.create');
+
+        // Payment Routes
+        Route::prefix('payments')->name('payments.')->group(function () {
+            Route::get('/', [PaymentApiController::class, 'index'])->name('index');
+            Route::post('/', [PaymentApiController::class, 'store'])->name('store')->middleware('idempotent');
+            Route::get('/{id}', [PaymentApiController::class, 'show'])->whereUuid('id')->name('show');
+            Route::put('/{id}', [PaymentApiController::class, 'update'])->whereUuid('id')->name('update')->middleware('idempotent');
+            Route::delete('/{id}', [PaymentApiController::class, 'destroy'])->whereUuid('id')->name('destroy')->middleware('idempotent');
+
+            // Payment Actions
+            Route::post('/{id}/allocate', [PaymentApiController::class, 'allocate'])->whereUuid('id')->name('allocate')->middleware('idempotent');
+            Route::post('/{id}/auto-allocate', [PaymentApiController::class, 'autoAllocate'])->whereUuid('id')->name('auto-allocate')->middleware('idempotent');
+            // Payment Allocation explicit endpoints
+            Route::get('/{id}/allocations', [PaymentApiController::class, 'allocations'])->whereUuid('id')->name('allocations');
+            Route::post('/{id}/allocations', [PaymentApiController::class, 'allocate'])->whereUuid('id')->name('allocations.store')->middleware('idempotent');
+            Route::post('/{paymentId}/allocations/{allocationId}/void', [PaymentApiController::class, 'voidAllocation'])->whereUuid('paymentId')->whereUuid('allocationId')->name('allocations.void')->middleware('idempotent');
+            Route::post('/{paymentId}/allocations/{allocationId}/refund', [PaymentApiController::class, 'refundAllocation'])->whereUuid('paymentId')->whereUuid('allocationId')->name('allocations.refund')->middleware('idempotent');
+            Route::post('/{id}/void', [PaymentApiController::class, 'void'])->whereUuid('id')->name('void')->middleware('idempotent');
+            Route::post('/{id}/refund', [PaymentApiController::class, 'refund'])->whereUuid('id')->name('refund')->middleware('idempotent');
+
+            // Payment Statistics
+            Route::get('/statistics', [PaymentApiController::class, 'statistics'])->name('statistics');
+            Route::get('/{customerId}/summary', [PaymentApiController::class, 'customerSummary'])->whereUuid('customerId')->name('customer-summary');
+            Route::get('/{id}/allocation-suggestions', [PaymentApiController::class, 'allocationSuggestions'])->whereUuid('id')->name('allocation-suggestions');
+
+            // Bulk Operations
+            Route::post('/bulk', [PaymentApiController::class, 'bulk'])->name('bulk')->middleware('idempotent');
+        });
+
         // User routes (except login)
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');

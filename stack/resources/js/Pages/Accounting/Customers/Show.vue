@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
+import { route } from 'ziggy-js'
 import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
+import LayoutShell from '@/Components/Layout/LayoutShell.vue'
+import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import TabView from 'primevue/tabview'
@@ -31,38 +34,7 @@ const props = defineProps({
 const toast = useToast()
 const { t } = useI18n()
 
-const menuRef = ref()
 const showCreditLimitDialog = ref(false)
-const actionsMenu = ref([
-    {
-        label: 'Edit Customer',
-        icon: 'pi pi-pencil',
-        command: () => router.get(route('customers.edit', props.customer.id))
-    },
-    {
-        label: 'Adjust Credit Limit',
-        icon: 'pi pi-dollar',
-        command: () => showCreditLimitDialog.value = true
-    },
-    {
-        label: 'Change Status',
-        icon: 'pi pi-refresh',
-        command: () => changeStatus()
-    },
-    {
-        label: 'Generate Statement',
-        icon: 'pi pi-file-pdf',
-        command: () => generateStatement()
-    },
-    {
-        separator: true
-    },
-    {
-        label: 'Delete Customer',
-        icon: 'pi pi-trash',
-        command: () => deleteCustomer()
-    }
-])
 
 const currentBalance = computed(() => {
     // This would be calculated from invoices and payments
@@ -190,6 +162,35 @@ const onCreditLimitSaved = () => {
     })
 }
 
+// Define page actions for customer show page
+const customerShowActions = [
+    {
+        key: 'back',
+        label: 'Back to Customers',
+        icon: 'pi pi-arrow-left',
+        severity: 'secondary',
+        outlined: true,
+        action: () => router.visit(route('customers.index'))
+    },
+    {
+        key: 'edit',
+        label: 'Edit Customer',
+        icon: 'pi pi-pencil',
+        severity: 'primary',
+        action: () => router.visit(route('customers.edit', props.customer.id)),
+        visible: props.can.edit
+    },
+    {
+        key: 'credit_limit',
+        label: 'Adjust Credit Limit',
+        icon: 'pi pi-dollar',
+        severity: 'info',
+        outlined: true,
+        action: () => showCreditLimitDialog.value = true,
+        visible: props.can.manage_credit
+    }
+]
+
 const formatCurrency = (amount, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -203,10 +204,6 @@ const formatDate = (dateString) => {
 
 const formatPercentage = (value) => {
     return `${value}%`
-}
-
-const toggleActionsMenu = (event) => {
-    menuRef.value.toggle(event)
 }
 
 const changeStatus = () => {
@@ -283,6 +280,23 @@ const getCreditUtilizationColor = () => {
     return 'text-green-600'
 }
 
+const getStatusSeverity = (status) => {
+    if (!status) return 'success'
+    
+    switch (status.toLowerCase()) {
+        case 'active':
+            return 'success'
+        case 'inactive':
+            return 'warning'
+        case 'blocked':
+            return 'danger'
+        case 'pending':
+            return 'info'
+        default:
+            return 'info'
+    }
+}
+
 // Load credit data when component mounts
 onMounted(() => {
     loadCreditData()
@@ -290,31 +304,23 @@ onMounted(() => {
 </script>
 
 <template>
-    <div>
+    <LayoutShell>
         <Toast />
         
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900">{{ customer.name }}</h1>
-                <p class="text-gray-600 mt-1">Customer Details</p>
-            </div>
-            
-            <div class="flex gap-2">
-                <Link :href="route('customers.index')">
-                    <Button label="Back to Customers" icon="pi pi-arrow-left" text />
-                </Link>
-                
-                <Button
-                    type="button"
-                    icon="pi pi-ellipsis-v"
-                    @click="toggleActionsMenu"
-                />
-                <Menu ref="menuRef" :model="actionsMenu" popup />
-            </div>
-        </div>
+        <!-- Universal Page Header -->
+        <UniversalPageHeader
+            :title="customer.name"
+            description="Customer Details"
+            subDescription="View and manage customer information, credit limits, and transaction history"
+            :default-actions="customerShowActions"
+            :show-search="false"
+        />
 
-        <!-- Customer Overview Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <!-- Main Content Area -->
+        <div class="content-grid-1-1">
+            <div class="main-content">
+                <!-- Customer Overview Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <Card>
                 <template #content>
                     <div class="text-center">
@@ -660,14 +666,16 @@ onMounted(() => {
                 </div>
             </TabPanel>
         </TabView>
-    </div>
+            </div>
+        </div>
 
-    <!-- Credit Limit Dialog -->
-    <CreditLimitDialog
-        v-model:visible="showCreditLimitDialog"
-        :customer="customer"
-        :creditData="creditData"
-        @saved="onCreditLimitSaved"
-        @refresh="refreshCustomerData"
-    />
+        <!-- Credit Limit Dialog -->
+        <CreditLimitDialog
+            v-model:visible="showCreditLimitDialog"
+            :customer="customer"
+            :creditData="creditData"
+            @saved="onCreditLimitSaved"
+            @refresh="refreshCustomerData"
+        />
+    </LayoutShell>
 </template>

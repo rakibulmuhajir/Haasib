@@ -24,7 +24,8 @@ class FinancialStatementService
         $currency = $parameters['currency'] ?? 'USD';
 
         // Set company context for RLS
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Current period data
@@ -77,7 +78,8 @@ class FinancialStatementService
         $comparison = $parameters['comparison'] ?? 'prior_period';
         $currency = $parameters['currency'] ?? 'USD';
 
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Current period balance sheet
@@ -126,7 +128,8 @@ class FinancialStatementService
         $comparison = $parameters['comparison'] ?? 'prior_period';
         $currency = $parameters['currency'] ?? 'USD';
 
-        DB::statement('SET app.current_company_id = ?', [$companyId]);
+        $escapedCompanyId = addslashes($companyId);
+        DB::statement("SET app.current_company_id = '{$escapedCompanyId}'");
 
         try {
             // Current period cash flow

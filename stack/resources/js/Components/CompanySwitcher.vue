@@ -9,7 +9,15 @@ import Badge from 'primevue/badge'
 import Divider from 'primevue/divider'
 import ProgressSpinner from 'primevue/progressspinner'
 
-const { t } = useI18n()
+const { t: translate } = useI18n({ useScope: 'global' })
+const translateLabel = (key, fallback) => {
+    try {
+        const value = translate(key)
+        return typeof value === 'string' ? value : (fallback ?? key)
+    } catch (error) {
+        return fallback ?? key
+    }
+}
 const page = usePage()
 
 const menu = ref()
@@ -20,13 +28,17 @@ const currentCompany = ref(null)
 // Computed properties
 const user = computed(() => page.props.auth?.user)
 const hasCompanies = computed(() => companies.value.length > 0)
-const currentCompanyName = computed(() => currentCompany.value?.name || t('companies.no_companies'))
+const currentCompanyName = computed(() => currentCompany.value?.name || translateLabel('companies.no_companies', 'No companies'))
 
 // Methods
 const loadCompanies = async () => {
     loading.value = true
     try {
-        const response = await fetch('/api/v1/companies')
+        const response = await fetch('/api/v1/companies', {
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
         const data = await response.json()
         
         if (response.ok) {
@@ -89,7 +101,7 @@ const companyItems = computed(() => {
             icon: company.is_current ? 'fas fa-check-circle' : 'fas fa-building',
             command: () => switchCompany(company),
             class: company.is_current ? 'bg-blue-50 dark:bg-blue-900/20' : '',
-            badge: company.is_current ? t('companies.current') : null
+            badge: company.is_current ? translateLabel('companies.current', 'Current') : null
         })))
 
         items.push({
@@ -99,7 +111,7 @@ const companyItems = computed(() => {
 
     // Add create company option
     items.push({
-        label: t('companies.create_company'),
+        label: translateLabel('companies.create_company', 'Create Company'),
         icon: 'fas fa-plus',
         command: createCompany
     })
@@ -150,7 +162,7 @@ onMounted(() => {
             <div v-else class="flex items-center space-x-2">
                 <i class="fas fa-building text-gray-500"></i>
                 <span class="text-sm text-gray-600 dark:text-gray-400">
-                    {{ t('companies.no_companies') }}
+                    {{ translateLabel('companies.no_companies', 'No companies') }}
                 </span>
             </div>
             <i class="fas fa-chevron-down text-xs text-gray-500 ml-1"></i>
@@ -159,7 +171,7 @@ onMounted(() => {
         <!-- Loading State -->
         <div v-if="loading && !companies.length" class="flex items-center space-x-2 px-3 py-2">
             <ProgressSpinner style="width: 16px; height: 16px;" strokeWidth="4" />
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('common.loading') }}</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">{{ translateLabel('common.loading', 'Loading...') }}</span>
         </div>
 
         <!-- Company Menu -->
@@ -186,7 +198,7 @@ onMounted(() => {
             <div class="text-center">
                 <i class="fas fa-building text-3xl text-gray-400 mb-3"></i>
                 <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                    {{ t('companies.no_companies') }}
+                    {{ translateLabel('companies.no_companies', 'No companies') }}
                 </h4>
                 <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
                     Create your first company to get started
@@ -194,7 +206,7 @@ onMounted(() => {
                 <Button 
                     @click="createCompany"
                     icon="fas fa-plus"
-                    :label="t('companies.create_company')"
+                    :label="translateLabel('companies.create_company', 'Create Company')"
                     size="small"
                     class="w-full"
                 />

@@ -1,6 +1,6 @@
 # Haasib Development Instructions & Reference Guide
 
-**Last Updated**: 2025-11-13
+**Last Updated**: 2025-11-19
 **Auto-generated**: Comprehensive instruction dump for AI developers
 
 ---
@@ -30,6 +30,11 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
    - Use `audit_log()` helper for financial and security events
    - Surface key metrics via monitoring playbooks in `docs/monitoring/`
 
+5. **Hybrid Core Architecture**
+   - **Root Core Components**: Shared infrastructure accessible by all modules
+   - **Module-Specific Components**: Business logic isolated within modules
+   - **Clear Separation**: Core vs module boundaries well-defined
+
 ### Implementation Patterns
 - **UUID Primary Keys Only**: Never use integer IDs
 - **Command Bus Pattern**: All write operations via `Bus::dispatch()`
@@ -37,6 +42,7 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
 - **FormRequest Validation**: Never inject `Request` directly in controllers
 - **PrimeVue First**: Use PrimeVue v4 components exclusively in frontend
 - **Composition API**: All Vue components use `<script setup>` with TypeScript
+- **Hybrid Core Architecture**: Shared components in root, module-specific in `/modules/`
 
 ### Forbidden Patterns (DO NOT USE)
 - Direct service calls in controllers (`new Service()`)
@@ -1338,13 +1344,66 @@ Route::prefix('api/{module}')->name('api.{module}.')->middleware(['auth', 'verif
 
 ## 🚀 PROJECT STRUCTURE
 
+### Hybrid Core Architecture (CONSTITUTIONAL)
+
+**Core Principle**: Shared/foundational components in root, module-specific components in `/modules/`
+
+#### ✅ **Root Directory Components (Shared Across All Modules)**
+```
+app/
+├── Models/                    # Foundational entities (User, Company, shared traits)
+├── Http/Controllers/          # Core controllers (Auth, Company, User management)
+├── Http/Requests/             # BaseFormRequest, core validation classes
+├── Providers/                 # System providers (Module, CommandBus, App)
+├── Constants/                 # System-wide constants (Permissions)
+└── Console/Commands/          # Application-wide commands
+
+database/
+├── migrations/                # Core tables (users, companies, permissions)
+└── seeders/                   # System seeders (PermissionSeeder)
+
+resources/js/
+├── Components/                # Shared UI components (layouts, base components)
+├── styles/                    # Global styles and themes
+└── app.js                     # Main application entry point
+```
+
+#### ✅ **Module Directory Components (Business Logic)**
+```
+modules/{ModuleName}/
+├── Http/Controllers/          # Module-specific controllers
+├── Models/                    # Module-specific models
+├── Routes/                    # Module-specific routes
+├── Services/                  # Module business logic
+├── Domain/Actions/            # Module command actions
+├── Resources/js/              # Module-specific frontend
+├── Database/
+│   ├── Migrations/            # Module-specific tables
+│   └── Seeders/               # Module-specific data
+└── Tests/                     # Module-specific tests
+```
+
+#### 🎯 **Decision Rules: Root vs Module**
+
+**Place in ROOT when:**
+- Used by multiple modules (User, Company models)
+- System-wide infrastructure (RBAC, providers)
+- Cross-module shared components (authentication, layout)
+- Application-level configuration
+
+**Place in MODULE when:**
+- Business logic specific to that domain
+- Tables with module-specific schemas (`acct.`, `crm.`, etc.)
+- Module-specific UI pages and components
+- Domain-specific actions and services
+
 ### Working Directories
-- **Active Laravel**: `/stack` (main working directory)
+- **Active Laravel**: `/build` (current working directory)
+- **Migration Source**: `/stack` (source directory for copying)
 - **Feature Specs**: `/specs/` (feature specifications)
 - **Documentation**: `/docs/` (project documentation)
 - **AI Prompts**: `/AI_PROMPTS/` (AI development prompts)
 - **Templates**: `.specify/templates/` (consistency templates)
-- **Old Directory**: `/app` (deprecated, use `/stack` instead)
 
 ### Technology Stack
 - **Backend**: PHP 8.2+, Laravel 12, PostgreSQL 16

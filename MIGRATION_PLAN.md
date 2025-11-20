@@ -129,12 +129,17 @@ cd build && php artisan migrate --path=database/migrations/2025_10_11_110306_enh
 ## 🏛️ PHASE 2: CORE MODULE SETUP
 
 ### Step 2.1: Core System Infrastructure
-```bash
-# Create Core module structure
-mkdir -p build/modules/Core/{Http/Controllers,Models,Routes,Database,Services,CLI}
 
-# Copy essential core models and infrastructure
+**⚠️ ARCHITECTURAL UPDATE (2025-11-19)**: Following **Hybrid Core Architecture** - Core/shared components remain in root directory for multi-module accessibility, only module-specific business logic goes in `/modules/`.
+
+```bash
+# Create Core module structure (for module-specific services/commands only)
+mkdir -p build/modules/Core/{Services,CLI,Database}
+
+# Copy Core module-specific components
 cp -r stack/modules/Core/* build/modules/Core/
+
+# Copy shared models to ROOT (used across all modules)
 cp stack/app/Models/User.php build/app/Models/
 cp stack/app/Models/Company.php build/app/Models/
 cp stack/app/Models/Concerns/* build/app/Models/Concerns/
@@ -192,12 +197,15 @@ cp stack/resources/js/Pages/Companies/* build/resources/js/Pages/Companies/
 ```
 
 ### Step 2.4: Core Routes & Controllers
+
+**✅ HYBRID ARCHITECTURE**: Controllers remain in ROOT as they serve multiple modules and are part of shared infrastructure.
+
 ```bash
-# Copy core authentication controllers
+# Copy core authentication controllers to ROOT (shared across modules)
 mkdir -p build/app/Http/Controllers/Auth
 cp stack/app/Http/Controllers/Auth/* build/app/Http/Controllers/Auth/
 
-# Copy core company controllers 
+# Copy core company controllers to ROOT (used by all modules)
 cp stack/app/Http/Controllers/CompanyController.php build/app/Http/Controllers/
 
 # Extract and copy core routes only

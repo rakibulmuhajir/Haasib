@@ -1,0 +1,9 @@
+{
+    "name": "acct",
+    "description": "Acct module",
+    "version": "1.0.0",
+    "provider": "Modules\\Acct\\Providers\\AcctServiceProvider",
+    "aliases": [],
+    "dependencies": [],
+    "enabled": true
+}

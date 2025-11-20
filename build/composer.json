@@ -22,7 +22,6 @@
         "laravel/telescope": "^5.15",
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
-        "nwidart/laravel-modules": "*",
         "okonst/ofxparser": "^1.0",
         "spatie/laravel-permission": "^6.23",
         "symfony/yaml": "^7.3",
@@ -105,8 +104,7 @@
         "sort-packages": true,
         "allow-plugins": {
             "pestphp/pest-plugin": true,
-            "php-http/discovery": true,
-            "wikimedia/composer-merge-plugin": true
+            "php-http/discovery": true
         }
     },
     "minimum-stability": "stable",

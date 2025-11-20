@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { router } from '@inertiajs/vue3'
 import {
   BadgeCheck,
   Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
-  Sparkles,
 } from "lucide-vue-next"
 
 import {
@@ -38,6 +38,10 @@ const props = defineProps<{
 }>()
 
 const { isMobile } = useSidebar()
+
+const handleLogout = () => {
+  router.post('/logout')
+}
 </script>
 
 <template>
@@ -85,13 +89,6 @@ const { isMobile } = useSidebar()
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem>
-              <Sparkles />
-              Upgrade to Pro
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem>
               <BadgeCheck />
               Account
             </DropdownMenuItem>
@@ -105,7 +102,7 @@ const { isMobile } = useSidebar()
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
+          <DropdownMenuItem @click="handleLogout" class="text-red-600 focus:text-red-600">
             <LogOut />
             Log out
           </DropdownMenuItem>

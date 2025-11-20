@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3'
 import type { SidebarProps } from "@/components/ui/sidebar"
 import {
   AudioWaveform,
@@ -49,12 +50,16 @@ const props = withDefaults(defineProps<SidebarProps>(), {
   collapsible: "icon",
 })
 
+const page = usePage()
+const auth = page.props.auth as any
+const user = auth?.user
+
 // Dashboard navigation data
 const data = {
   user: {
-    name: "Admin User",
-    email: "admin@haasib.com", 
-    avatar: "/avatars/admin.jpg",
+    name: user?.name || "Admin User",
+    email: user?.email || "admin@haasib.com", 
+    avatar: user?.avatar || "/avatars/admin.jpg",
   },
   teams: [
     {

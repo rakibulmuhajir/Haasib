@@ -4,19 +4,39 @@ import {
   AudioWaveform,
   BookOpen,
   Bot,
+  Calendar,
+  Calculator,
+  CheckSquare,
+  ChevronRight,
+  ClipboardList,
   Command,
+  CreditCard,
+  DollarSign,
+  FileText,
   Frame,
   GalleryVerticalEnd,
+  HelpCircle,
+  Home,
+  Layers,
   Map,
   PieChart,
+  Receipt,
   Settings2,
+  ShieldAlt,
   SquareTerminal,
+  Star,
+  TachometerAlt,
+  Tags,
+  University,
+  UserCog,
+  Users,
 } from "lucide-vue-next"
 
 import NavMain from "@/components/dashboard/sidebar-07/NavMain.vue"
 import NavProjects from "@/components/dashboard/sidebar-07/NavProjects.vue"
 import NavUser from "@/components/dashboard/sidebar-07/NavUser.vue"
 import TeamSwitcher from "@/components/dashboard/sidebar-07/TeamSwitcher.vue"
+import { ThemeToggle } from "@/components/ui/theme"
 import {
   Sidebar,
   SidebarContent,
@@ -57,62 +77,188 @@ const data = {
     {
       title: "Dashboard",
       url: "/dashboard",
-      icon: SquareTerminal,
+      icon: Home,
       isActive: true,
-      items: [
-        {
-          title: "Overview",
-          url: "/dashboard",
-        },
-        {
-          title: "Analytics", 
-          url: "/dashboard/analytics",
-        },
-        {
-          title: "Reports",
-          url: "/dashboard/reports",
-        },
-      ],
+      items: [],
     },
     {
-      title: "Customers",
-      url: "/customers",
-      icon: Bot,
+      title: "Sales & Receivables",
+      url: "#",
+      icon: DollarSign,
       items: [
         {
-          title: "All Customers",
-          url: "/customers",
-        },
-        {
-          title: "Add Customer",
-          url: "/customers/create",
-        },
-        {
-          title: "Customer Types",
-          url: "/customers/types",
-        },
-      ],
-    },
-    {
-      title: "Invoices",
-      url: "/invoices", 
-      icon: BookOpen,
-      items: [
-        {
-          title: "All Invoices",
+          title: "Invoices",
           url: "/invoices",
         },
         {
-          title: "Create Invoice",
-          url: "/invoices/create",
+          title: "Payments",
+          url: "/payments",
+        },
+        {
+          title: "Customers",
+          url: "/customers",
+        },
+        {
+          title: "Credit Limits",
+          url: "/customers/credit-limits",
+        },
+        {
+          title: "Statements & Aging",
+          url: "/reports/statements",
+        },
+      ],
+    },
+    {
+      title: "Expense Cycle",
+      url: "#",
+      icon: FileText,
+      items: [
+        {
+          title: "Vendors",
+          url: "/vendors",
+        },
+        {
+          title: "Purchase Orders",
+          url: "/purchase-orders",
+        },
+        {
+          title: "Bills",
+          url: "/bills",
+        },
+        {
+          title: "Expense Reports",
+          url: "/expenses",
+        },
+        {
+          title: "Expense Categories",
+          url: "/expense-categories",
+        },
+        {
+          title: "Vendor Payments",
+          url: "/vendor-payments",
+        },
+      ],
+    },
+    {
+      title: "Tax Management",
+      url: "#",
+      icon: Receipt,
+      items: [
+        {
+          title: "Tax Dashboard",
+          url: "/tax/dashboard",
+        },
+        {
+          title: "Tax Agencies",
+          url: "/tax/agencies",
+        },
+        {
+          title: "Tax Rates",
+          url: "/tax/rates",
+        },
+        {
+          title: "Tax Settings",
+          url: "/tax/settings",
+        },
+        {
+          title: "Tax Returns",
+          url: "/tax/returns",
+        },
+        {
+          title: "Tax Reports",
+          url: "/tax/reports/sales-tax",
+        },
+      ],
+    },
+    {
+      title: "Banking & Cash",
+      url: "#",
+      icon: University,
+      items: [
+        {
+          title: "Reconciliation Workspace",
+          url: "/bank-reconciliation",
+        },
+        {
+          title: "Statement Import",
+          url: "/bank-import",
+        },
+        {
+          title: "Bank Reports",
+          url: "/bank-reports",
+        },
+        {
+          title: "Bank Accounts",
+          url: "/bank-accounts",
+        },
+      ],
+    },
+    {
+      title: "Accounting Operations",
+      url: "#",
+      icon: Calculator,
+      items: [
+        {
+          title: "Journal Entries",
+          url: "/journal-entries",
+        },
+        {
+          title: "Trial Balance",
+          url: "/trial-balance",
+        },
+        {
+          title: "Ledger",
+          url: "/ledger",
+        },
+        {
+          title: "Adjustments & Batches",
+          url: "/journal-entries/batches",
+        },
+      ],
+    },
+    {
+      title: "Period Close & Compliance",
+      url: "#",
+      icon: Calendar,
+      items: [
+        {
+          title: "Period Close Checklist",
+          url: "/period-close",
+        },
+        {
+          title: "Audit Trail",
+          url: "/audit-trail",
+        },
+        {
+          title: "Policy & Compliance",
+          url: "/compliance",
+        },
+      ],
+    },
+    {
+      title: "Reporting & Analytics",
+      url: "#",
+      icon: PieChart,
+      items: [
+        {
+          title: "Reporting Dashboard",
+          url: "/reports/dashboard",
+        },
+        {
+          title: "Financial Reports",
+          url: "/reports/financial",
+        },
+        {
+          title: "Reporting Schedules",
+          url: "/reports/schedules",
+        },
+        {
+          title: "Statements",
+          url: "/reports/statements",
         },
         {
           title: "Templates",
-          url: "/invoices/templates",
-        },
-        {
-          title: "Recurring",
-          url: "/invoices/recurring",
+          url: "/reports/templates",
         },
       ],
     },
@@ -156,6 +302,21 @@ const data = {
       url: "/projects/audit",
       icon: Map,
     },
+    {
+      name: "Getting Started",
+      url: "/welcome",
+      icon: Star,
+    },
+    {
+      name: "Help & Resources",
+      url: "/help",
+      icon: HelpCircle,
+    },
+    {
+      name: "What's New",
+      url: "/whats-new",
+      icon: HelpCircle,
+    },
   ],
 }
 </script>
@@ -170,7 +331,10 @@ const data = {
       <NavProjects :projects="data.projects" />
     </SidebarContent>
     <SidebarFooter>
-      <NavUser :user="data.user" />
+      <div class="flex items-center gap-2 px-2 py-1">
+        <ThemeToggle />
+        <NavUser :user="data.user" />
+      </div>
     </SidebarFooter>
     <SidebarRail />
   </Sidebar>

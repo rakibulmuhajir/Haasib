@@ -1,47 +1,89 @@
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import { dashboard } from '@/routes';
-import { type BreadcrumbItem } from '@/types';
+import UniversalLayout from '@/layouts/UniversalLayout.vue';
+import SectionCards from "@/components/dashboard/dashboard-01/SectionCards.vue"
+import ChartAreaInteractive from "@/components/dashboard/dashboard-01/ChartAreaInteractive.vue"
+import DataTable from "@/components/dashboard/dashboard-01/DataTable.vue"
 import { Head } from '@inertiajs/vue3';
-import PlaceholderPattern from '../components/PlaceholderPattern.vue';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard().url,
-    },
-];
+// Dashboard configuration
+const breadcrumbs = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Overview', active: true }
+]
+
+const headerActions = [
+    { label: 'Export Data', variant: 'outline' as const },
+    { label: 'Create Invoice', variant: 'default' as const }
+]
+
+// Sample invoice data
+const invoiceData = [
+  {
+    id: 1,
+    customer: "Acme Corporation",
+    invoice: "INV-2024-001",
+    amount: "$5,250.00",
+    status: "Paid",
+    date: "2024-11-15",
+    description: "Web development services",
+  },
+  {
+    id: 2,
+    customer: "Global Tech Solutions",
+    invoice: "INV-2024-002", 
+    amount: "$3,400.00",
+    status: "Pending",
+    date: "2024-11-18",
+    description: "System integration project",
+  },
+  {
+    id: 3,
+    customer: "StartupXYZ",
+    invoice: "INV-2024-003",
+    amount: "$1,200.00",
+    status: "Overdue",
+    date: "2024-10-28",
+    description: "Consulting services",
+  },
+  {
+    id: 4,
+    customer: "Enterprise Solutions Inc",
+    invoice: "INV-2024-004",
+    amount: "$8,750.00",
+    status: "Paid",
+    date: "2024-11-12",
+    description: "Custom software development",
+  },
+  {
+    id: 5,
+    customer: "Digital Marketing Pro",
+    invoice: "INV-2024-005",
+    amount: "$2,100.00",
+    status: "Pending",
+    date: "2024-11-20",
+    description: "SEO optimization package",
+  }
+]
 </script>
 
 <template>
     <Head title="Dashboard" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div
-            class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-        >
-            <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-            </div>
-            <div
-                class="relative min-h-[100vh] flex-1 rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border"
-            >
-                <PlaceholderPattern />
-            </div>
+    <UniversalLayout
+        title="Dashboard"
+        subtitle="Overview"
+        :breadcrumbs="breadcrumbs"
+        :header-actions="headerActions"
+    >
+        <!-- Analytics Cards -->
+        <SectionCards />
+        
+        <!-- Interactive Chart -->
+        <div class="px-4 lg:px-6">
+            <ChartAreaInteractive />
         </div>
-    </AppLayout>
+        
+        <!-- Data Table -->
+        <DataTable :data="invoiceData" />
+    </UniversalLayout>
 </template>

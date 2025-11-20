@@ -40,7 +40,8 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
 - **Command Bus Pattern**: All write operations via `Bus::dispatch()`
 - **ServiceContext**: Always inject user/company context explicitly
 - **FormRequest Validation**: Never inject `Request` directly in controllers
-- **PrimeVue First**: Use PrimeVue v4 components exclusively in frontend
+- **Universal Layout**: ALL pages MUST use UniversalLayout component (NO EXCEPTIONS)
+- **Shadcn/Vue Components**: Use Shadcn/Vue UI library exclusively in frontend
 - **Composition API**: All Vue components use `<script setup>` with TypeScript
 - **Hybrid Core Architecture**: Shared components in root, module-specific in `/modules/`
 
@@ -50,7 +51,8 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
 - Integer primary keys
 - Tables in `public` schema (except system tables)
 - Missing RLS policies on tenant module schemas (`acct`, `hsp`, `crm`, etc.)
-- Non-PrimeVue UI components
+- Custom layout components (MUST use UniversalLayout)
+- HTML elements instead of Shadcn/Vue components
 - Vue Options API (use Composition API)
 - Manual validation in controllers
 
@@ -118,67 +120,137 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
 - **Required**: `<script setup>`, PrimeVue components, error handling
 - **Forbidden**: Options API, HTML elements, fetch() calls
 
-**Mandatory Page Structure:**
-Every page MUST use this exact hierarchy:
+**Mandatory Page Structure - Universal Layout:**
+ALL pages MUST use the UniversalLayout component (NO EXCEPTIONS):
 
 ```vue
 <template>
-  <div class="page-container">
-    <!-- REQUIRED: Sidebar with blu-whale theme -->
-    <Sidebar theme="blu-whale" />
-    
-    <div class="main-content">
-      <!-- REQUIRED: PageHeader with actions -->
-      <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
-        <template #actionsRight>
-          <!-- Auto-managed by PageActions component -->
-        </template>
-      </PageHeader>
-      
-      <!-- CONDITIONAL: QuickLinks when applicable -->
-      <QuickLinks 
-        v-if="quickLinks.length"
-        :links="quickLinks"
-        :title="quickLinksTitle" 
-      />
-      
-      <div class="page-content">
-        <!-- Your content here using PrimeVue components ONLY -->
-      </div>
-    </div>
-  </div>
+  <Head title="Page Title" />
+  
+  <UniversalLayout
+    title="Page Title"
+    subtitle="Page Description"
+    :breadcrumbs="breadcrumbs"
+    :header-actions="headerActions"
+  >
+    <!-- Your page content here using Shadcn/Vue components ONLY -->
+  </UniversalLayout>
 </template>
+
+<script setup lang="ts">
+import { Head } from '@inertiajs/vue3'
+import UniversalLayout from '@/layouts/UniversalLayout.vue'
+
+const breadcrumbs = [
+  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'Page Name', active: true }
+]
+
+const headerActions = [
+  { label: 'Secondary Action', variant: 'outline' as const },
+  { label: 'Primary Action', variant: 'default' as const }
+]
+</script>
 ```
 
-**Component References:**
-- **Sidebar**: `@stack/resources/js/Components/Sidebar/`
-- **PageHeader**: `@stack/resources/js/Components/PageHeader.vue`  
-- **PageActions**: `@stack/resources/js/Components/PageActions.vue`
-- **QuickLinks**: `@stack/resources/js/Components/QuickLinks.vue`
-- **PrimeVue Docs**: `@docs/vendor/primevue-docs/apps/showcase/doc`
+**UniversalLayout Features:**
+- **Sidebar**: Shadcn/Vue sidebar-07 with collapsible navigation
+- **Company Switcher**: Haasib Accounting, Hospitality, Demo companies
+- **Navigation**: Dashboard, Customers, Invoices, Settings (expandable sections)
+- **Projects**: Quick access to Monthly Reporting, Tax Prep, Audit Trail
+- **User Profile**: Avatar with dropdown (Account, Billing, Notifications, Logout)
+- **Breadcrumbs**: Configurable navigation path
+- **Header Actions**: Configurable action buttons in header
+- **Responsive**: Mobile-friendly with sidebar toggle
 
-**UI Element Decision Framework:**
-Before adding ANY button/element, ask:
-1. **Purpose**: What specific user task does this solve?
-2. **Duplication**: Does PageActions/QuickLinks/Sidebar already handle this?
-3. **Placement**: Why here instead of existing components?
-4. **Value**: What happens if we remove it?
+**Component References:**
+- **UniversalLayout**: `/build/resources/js/layouts/UniversalLayout.vue`
+- **Sidebar Components**: `/build/resources/js/components/dashboard/sidebar-07/`
+- **Dashboard Components**: `/build/resources/js/components/dashboard/dashboard-01/`
+- **Shadcn/Vue UI**: `/build/resources/js/components/ui/`
+
+**Configuration Options:**
+```vue
+<UniversalLayout
+  title="Required page title"
+  subtitle="Optional page description"
+  :breadcrumbs="[
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Section', href: '/section' },
+    { label: 'Current Page', active: true }
+  ]"
+  :header-actions="[
+    { 
+      label: 'Export', 
+      variant: 'outline',
+      action: () => exportData() 
+    },
+    { 
+      label: 'Create New', 
+      variant: 'default',
+      href: '/create' 
+    }
+  ]"
+>
+```
+
+**Layout Hierarchy (Built-in):**
+- ✅ **Sidebar**: Accounting-focused navigation with company switcher
+- ✅ **Header**: Breadcrumbs + configurable action buttons
+- ✅ **Content Area**: Your page content (slot)
+- ✅ **Responsive**: Automatic mobile handling
 
 **Placement Rules:**
-- **Primary actions** → PageHeader actionsRight slot
-- **Quick access** → QuickLinks component  
-- **Navigation** → Sidebar component
-- **Context actions** → Inline with content
+- **Primary actions** → headerActions array with variant: 'default'
+- **Secondary actions** → headerActions array with variant: 'outline'
+- **Navigation** → Built into UniversalLayout sidebar
+- **Page content** → Inside UniversalLayout slot
 
-**Required PrimeVue Components:**
+**Required Shadcn/Vue Components:**
 ```vue
-<!-- ✅ USE THESE -->
-<DataTable /> <Column /> <Button /> 
-<InputText /> <Dropdown /> <Calendar />
-<Toast /> <Dialog /> <Panel />
+<!-- ✅ USE THESE SHADCN/VUE COMPONENTS -->
+<Table /> <TableBody /> <TableRow /> <TableCell />
+<Button /> <Input /> <Select /> <Calendar />
+<Dialog /> <Card /> <Badge />
+<Tabs /> <TabsList /> <TabsTrigger /> <TabsContent />
 
 <!-- ❌ NEVER USE HTML ELEMENTS -->
-<table> <input> <button> <select>
+<table> <input> <button> <select> <form>
+```
+
+**Universal Layout Examples:**
+```vue
+<!-- Dashboard Page Example -->
+<UniversalLayout
+  title="Dashboard"
+  subtitle="Business Overview"
+  :breadcrumbs="[{label: 'Dashboard', active: true}]"
+  :header-actions="[
+    {label: 'Export Data', variant: 'outline'},
+    {label: 'Create Invoice', variant: 'default'}
+  ]"
+>
+  <SectionCards />
+  <ChartAreaInteractive />
+  <DataTable :data="invoices" />
+</UniversalLayout>
+
+<!-- Customers Page Example -->
+<UniversalLayout
+  title="Customers"
+  subtitle="Manage Customer Relationships"
+  :breadcrumbs="[
+    {label: 'Dashboard', href: '/dashboard'},
+    {label: 'Customers', active: true}
+  ]"
+  :header-actions="[
+    {label: 'Import', variant: 'outline'},
+    {label: 'Add Customer', variant: 'default'}
+  ]"
+>
+  <CustomerStats />
+  <CustomerDirectory />
+</UniversalLayout>
 ```
 
 **When Creating Forms:**
@@ -1406,11 +1478,13 @@ modules/{ModuleName}/
 - **Templates**: `.specify/templates/` (consistency templates)
 
 ### Technology Stack
-- **Backend**: PHP 8.2+, Laravel 12, PostgreSQL 16
-- **Frontend**: Vue 3, Inertia.js v2, PrimeVue v4, Tailwind CSS
+- **Backend**: PHP 8.4+, Laravel 12, PostgreSQL 16
+- **High-Performance Server**: Laravel Octane + FrankenPHP (3-10x faster than standard server)
+- **Frontend**: Vue 3, Inertia.js v2, Shadcn/Vue + PrimeVue v4, Tailwind CSS
 - **Authentication**: Laravel Sanctum, Spatie Laravel Permission
 - **Testing**: PestPHP, Playwright
 - **Queue**: Redis + Laravel Horizon
+- **Development Server**: `php artisan octane:start --server=frankenphp --port=9001 --watch`
 
 ---
 
@@ -1461,6 +1535,58 @@ cd stack && php artisan layout:validate --json
 # Strict mode validation
 cd stack && php artisan layout:validate --strict
 ```
+
+---
+
+## 🚀 FRANKENPHP DEVELOPMENT SERVER (MANDATORY)
+
+### Primary Development Server
+**ALWAYS use FrankenPHP for development - it's 3-10x faster than standard Laravel server:**
+
+```bash
+# Primary development command (START HERE)
+php artisan octane:start --server=frankenphp --port=9001 --watch
+```
+
+### Performance Benefits
+- **Homepage**: 72ms (vs 200ms standard) = **3x faster**
+- **Dashboard**: 16ms (vs 170ms standard) = **10x faster**
+- **Burst requests**: 22-36ms (vs 167-247ms) = **5-8x faster**
+
+### FrankenPHP Commands (Reference)
+```bash
+# Start development server
+php artisan octane:start --server=frankenphp --port=9001 --watch
+
+# Restart server (when needed)
+php artisan octane:restart
+
+# Stop server
+php artisan octane:stop
+
+# Check server status
+php artisan octane:status
+```
+
+### Environment Configuration
+Your `.env` is automatically configured with:
+```env
+OCTANE_SERVER=frankenphp
+APP_URL=http://localhost:9001
+```
+
+### Development Workflow
+1. **Start FrankenPHP**: `php artisan octane:start --server=frankenphp --port=9001 --watch`
+2. **Start Vite**: `npm run dev` (separate terminal)
+3. **Access app**: http://localhost:5180 (Vite) or http://127.0.0.1:9001 (direct)
+
+### Fallback Server (Only if FrankenPHP fails)
+```bash
+# Only use if FrankenPHP has issues
+php artisan serve --port=9001
+```
+
+**Note**: All documentation examples assume FrankenPHP is running on port 9001.
 
 ---
 

@@ -2,6 +2,7 @@
 import type { Component } from "vue"
 import { ChevronsUpDown, Plus } from "lucide-vue-next"
 import { ref } from "vue"
+import { router } from '@inertiajs/vue3'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ const props = defineProps<{
     name: string
     logo: Component
     plan: string
+    url?: string
   }[]
 }>()
 
@@ -64,7 +66,7 @@ const activeTeam = ref(props.teams[0])
             v-for="(team, index) in teams"
             :key="team.name"
             class="gap-2 p-2"
-            @click="activeTeam = team"
+            @click="team.url ? router.visit(team.url) : (activeTeam = team)"
           >
             <div class="flex size-6 items-center justify-center rounded-sm border">
               <component :is="team.logo" class="size-3.5 shrink-0" />
@@ -73,7 +75,10 @@ const activeTeam = ref(props.teams[0])
             <DropdownMenuShortcut>⌘{{ index + 1 }}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem class="gap-2 p-2">
+          <DropdownMenuItem 
+            class="gap-2 p-2"
+            @click="router.visit('/companies/create')"
+          >
             <div class="flex size-6 items-center justify-center rounded-md border bg-transparent">
               <Plus class="size-4" />
             </div>

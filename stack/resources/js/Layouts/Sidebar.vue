@@ -66,7 +66,67 @@ const navigation = computed(() => {
         }
       ]
 
+  // Quick links for Phase 2 verification (core auth + company setup flows).
+  const phaseTwoChildren = [
+    {
+      label: 'Setup Wizard',
+      path: '/setup/page',
+      icon: 'clipboard-check'
+    },
+    {
+      label: 'Auth: Login',
+      path: '/login',
+      icon: 'sign-in-alt'
+    },
+    {
+      label: 'Auth: Register',
+      path: '/register',
+      icon: 'user-plus'
+    },
+    {
+      label: 'Auth: Forgot Password',
+      path: '/forgot-password',
+      icon: 'question-circle'
+    },
+    {
+      label: 'Auth: Verify Email',
+      path: '/verify-email',
+      icon: 'envelope-open'
+    },
+    {
+      label: 'Companies Directory',
+      path: '/companies',
+      icon: 'building'
+    },
+    {
+      label: 'Create Company',
+      path: '/companies/create',
+      icon: 'plus-square'
+    }
+  ]
+
+  if (companyId) {
+    phaseTwoChildren.push(
+      {
+        label: 'Active Company Modules',
+        path: `/companies/${companyId}/modules`,
+        icon: 'th-large'
+      },
+      {
+        label: 'Company Audit Center',
+        path: `/companies/${companyId}/audit`,
+        icon: 'clipboard-list'
+      }
+    )
+  }
+
   const items = [
+    {
+      label: 'Phase 2 QA Links',
+      icon: 'vials',
+      description: 'Direct access to Hybrid Core + RBAC routes outlined in the migration plan.',
+      children: phaseTwoChildren
+    },
     {
       label: 'Overview & Insights',
       path: '/dashboard',

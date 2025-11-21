@@ -1,350 +1,270 @@
 # RBAC Implementation Brief
 
-**Version**: 2.0  
-**Last Updated**: 2025-11-18  
-**Status**: Complete Implementation Guide
+**Version**: 3.0  
+**Last Updated**: 2025-11-20  
+**Status**: Canonical Implementation Guide  
+**Related Files**: `app/docs/briefs/rbac_implementation_brief.md` (workspace summary), `docs/system-users-design.md`, `app/database/seeders/RbacSeeder.php`
 
 ---
 
-## 🎯 Overview
+## 1. 🎯 Purpose & Scope
 
-This document provides comprehensive implementation guidance for Role-Based Access Control (RBAC) in the Haasib application. It addresses the common 403 permission errors and establishes standardized patterns for authorization throughout the system.
+This brief defines the Role-Based Access Control (RBAC) standard for Haasib across PHP (Laravel 12) and Vue (Inertia) surfaces. It unifies the previous briefs, seeders, and system-user design notes so every module can adopt the same security posture while remaining extensible. The document covers:
 
----
-
-## 🔐 Core RBAC Components
-
-### 1. **Permission Constants** (`app/Constants/Permissions.php`)
-
-All permissions follow the standardized naming pattern: `{module}.{resource}.{action}`
-
-```php
-// Examples
-Permissions::ACCT_CUSTOMERS_VIEW      // acct.customers.view
-Permissions::ACCT_INVOICES_CREATE     // acct.invoices.create  
-Permissions::LEDGER_ENTRIES_POST      // ledger.entries.post
-Permissions::COMPANIES_MANAGE_USERS   // companies.manage_users
-```
-
-### 2. **Permission Seeder** (`database/seeders/PermissionSeeder.php`)
-
-- Creates all standardized permissions
-- Sets up role hierarchy (super_admin, company_admin, accounting_manager, accounting_clerk, viewer)
-- Assigns appropriate permissions to each role
-
-### 3. **BaseFormRequest Authorization** (`app/Http/Requests/BaseFormRequest.php`)
-
-Enhanced with standardized authorization helpers:
-
-```php
-// Standard authorization patterns
-$this->authorizeCustomerOperation('create');
-$this->authorizeInvoiceOperation('update'); 
-$this->authorizePaymentOperation('void');
-$this->authorizeCompanyOperation('manage_users');
-```
+1. Permission naming, scoping, and lifecycle management
+2. Dual-tier role architecture (system vs company) with module-defined extensions
+3. Seeder, authorization, and frontend integration patterns
+4. Guidelines for future modules to introduce their own roles/permissions without breaking RLS or constitutional requirements
 
 ---
 
-## 🚨 Fixing 403 Permission Errors
+## 2. 🔐 Principles & Guardrails
 
-### **Root Causes of 403 Errors**
+1. **Permission Naming**  
+   Use `{domain}.{resource}.{action}` with lowercase dotted strings (`acct.invoices.create`, `system.audit.view`). Domain choices: `system`, `companies`, `acct`, `ledger`, `ops`, `rpt`, etc. Modules can register new domains (`edu`, `hsp`, `crm`).
 
-1. **Missing Authorization in FormRequests**
-2. **Inconsistent Permission Naming**
-3. **Missing RLS Context Validation**
-4. **Incorrect Permission Checks**
+2. **Scope Awareness**  
+   Every permission carries either a `system` scope (global operations) or `company` scope (requires `company_id`). Modules must declare scope when registering new permissions so middleware can enforce RLS automatically.
 
-### **Solution Pattern**
+3. **Spatie Permission + Team IDs**  
+   Roles are namespaced through Spatie’s team support:
+   - System roles use sentinel UUIDs from `docs/system-users-design.md`.
+   - Company roles use the tenant’s `company_id`.
 
-#### ✅ **CORRECT FormRequest Authorization**
+4. **RLS + ServiceContext**  
+   Company-scoped permissions never bypass RLS. Controllers and FormRequests must route through helpers in `BaseFormRequest` and command bus handlers must inject `ServiceContext`.
+
+5. **Auditable Impersonation**  
+   System roles interacting with tenant data must impersonate (or switch to) a company context, logging via `audit_log()` with both user UUID and source role.
+
+---
+
+## 3. 🧱 Permission Taxonomy
+
+| Domain            | Example Permissions                              | Default Scope | Notes                                                                 |
+|-------------------|---------------------------------------------------|---------------|-----------------------------------------------------------------------|
+| `system.*`        | `system.companies.create`, `system.audit.view`    | system        | Reserved for platform operations. Managed only by system roles.       |
+| `companies.*`     | `companies.settings.update`, `companies.currencies.enable` | company | Tenant administration (branding, base currency, invites).             |
+| `acct.*`          | `acct.invoices.create`, `acct.payments.post`      | company       | Accounting module. Use subresources (`acct.invoice-items.*`).         |
+| `ledger.*`        | `ledger.entries.post`, `ledger.period-close.execute` | company    | Ledger domain, including period close command-bus actions.            |
+| `ops.*`, `rpt.*`  | `ops.bank-statements.ingest`, `rpt.dashboard.view` | company      | Operational pipelines and reporting materializations.                 |
+| `module.*`        | e.g., `edu.classes.grade`, `edu.portal.view`      | declared      | Any module can add its own domain; must document scope + roles here.  |
+
+> **Tip:** Keep permission constants in `App\Constants\Permissions` for shared domains. Modules can ship their own constants classes (e.g., `Modules\Edu\Constants\Permissions`) but must follow the same naming rules.
+
+---
+
+## 4. 🧩 Role Architecture
+
+### 4.1 System Tier (Global)
+
+| Role            | Description                                                              | Team ID (from docs/system-users-design.md) | Key Permissions                                          |
+|-----------------|--------------------------------------------------------------------------|-------------------------------------------|-----------------------------------------------------------|
+| `super_admin`   | Full platform control, including schema/security overrides.              | `00000000-0000-0000-0000-000000000000`    | All `system.*` + `companies.*` + module seed operations.  |
+| `systemadmin`   | Day-to-day platform ops, minus restricted actions (manage super admins, edit schema, security keys). | `00000000-0000-0000-0000-000000000001` | All `system.*` except restricted list from RbacSeeder.    |
+| `system_manager` *(optional)* | Read/execute most platform tools, cannot mutate sensitive config. | Reserve new sentinel UUID                 | `system.companies.view`, `system.users.manage`, `system.audit.view`. |
+| `system_auditor` *(optional)* | Audit-only view into system logs and settings.              | Reserve sentinel UUID                     | `system.audit.view`, `system.reports.view`.               |
+
+**Rules:**
+- Maintain a restricted-permission list in code so `systemadmin` cannot escalate to `super_admin`.
+- Require MFA and audit logging for all system users.
+- When executing tenant operations, system users must select a company (for RLS) unless the action is purely system scoped.
+
+### 4.2 Company Tier (Tenant)
+
+| Role                | Purpose                                                     | Modules Covered                             |
+|---------------------|-------------------------------------------------------------|---------------------------------------------|
+| `company_owner`     | Full tenant control: invites, billing, integrations, accounting locking. | `companies.*`, `acct.*`, `ledger.*`, `ops.*`, `rpt.*`. |
+| `company_admin`     | Operates tenant settings, users, approvals. No destructive backups. | `companies.*` (except billing), `acct.*` (non-posting). |
+| `accounting_admin`  | Period close, posting, approvals, audits.                    | `acct.*`, `ledger.period-close.*`, `ledger.entries.post`. |
+| `accounting_operator` | Create/edit invoices/bills/payments, cannot post/void/close periods. | `acct.invoices.*` (except post/void), `acct.payments.allocate`. |
+| `accounting_viewer` | Read-only access to accounting + reporting.                  | `acct.*` view, `rpt.*` view.                 |
+| `sales_manager` / `sales_rep` *(optional)* | CRM-focused roles when modules require.         | `crm.*`, `customers.*`, `invoices.send`.    |
+| `portal_customer` / `portal_vendor` | External portal roles with limited permissions. | `portal.*` or `acct.portal.*`.              |
+
+> These roles are seeded per company (`team_id = company_id`). Tenants can clone/extend them but must not remove required RLS helpers or rename constants without updating documentation.
+
+### 4.3 Module-Defined Roles
+
+Modules may add role bundles when they introduce new domains:
+
+- **Educational Example**  
+  - `edu_teacher`: `edu.classes.grade`, `edu.assignments.review`, `edu.portal.view`.  
+  - `edu_student`: `edu.assignments.submit`, `edu.portal.view`.  
+  - `edu_parent`: `edu.portal.read`.  
+- Each module role declares:
+  1. **Scope** (`system` if managing the module globally, `company` if tenant-bound).  
+  2. **Permission bundle** (list of strings).  
+  3. **Seeder hook** or migration script to register roles/permissions.  
+  4. **Documentation entry** appended to this brief (section 8.3).
+
+---
+
+## 5. 🧪 Permission Lifecycle
+
+1. **Define Constants**
+   - Add to `App\Constants\Permissions` or module-specific constant file.
+   - Follow naming taxonomy and annotate scope (PHPDoc or array metadata).
+
+2. **Register via Seeder**
+   - Use `app/database/seeders/RbacSeeder.php` as the central orchestrator.  
+   - Break permissions into domain arrays to avoid monolithic lists.  
+   - For module packages, expose a `registerPermissions(RbacRegistrar $registrar)` method that RbacSeeder calls.
+
+3. **Assign to Roles**
+   - System roles: attach `team_id` sentinel values.  
+   - Company roles: attach permissions per company via pivot or `sync` calls in tenant bootstrapping logic.  
+   - Module roles: call the registrar with metadata so `artisan db:seed --class=RbacSeeder` remains the single command to generate everything.
+
+4. **Cache Invalidation**
+   - Always run `php artisan permission:cache-reset` after seeding.  
+   - CI pipeline should run seeder + cache reset + smoke tests.
+
+---
+
+## 6. ⚙️ Authorization Patterns (Laravel)
+
+### 6.1 BaseFormRequest Helpers
 
 ```php
-<?php
-
 use App\Constants\Permissions;
 
-class CreateCustomerRequest extends BaseFormRequest
+class StoreInvoiceRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        // Use standardized authorization helper
-        return $this->authorizeCustomerOperation('create');
-        
-        // OR manual pattern
-        return $this->hasCompanyPermission(Permissions::ACCT_CUSTOMERS_CREATE) &&
-               $this->validateRlsContext();
-    }
-}
-```
-
-#### ❌ **INCORRECT Patterns (Causes 403s)**
-
-```php
-// Missing authorization method
-public function authorize(): bool
-{
-    return true; // Always allows - security risk
-}
-
-// Wrong permission names
-return $this->hasCompanyPermission('customer.create'); // Wrong format
-
-// Missing RLS validation  
-return $this->hasCompanyPermission(Permissions::ACCT_CUSTOMERS_CREATE); // Missing RLS
-```
-
----
-
-## 📋 Implementation Checklist
-
-### **For Each FormRequest Class**
-
-- [ ] **Import Permissions**: `use App\Constants\Permissions;`
-- [ ] **Extend BaseFormRequest**: `extends BaseFormRequest`
-- [ ] **Implement authorize()**: Use standardized helpers
-- [ ] **Include RLS Validation**: Always validate company context
-- [ ] **Test Permission Boundaries**: Ensure 403s when unauthorized
-
-### **Example Implementation**
-
-```php
-<?php
-
-namespace App\Http\Requests;
-
-use App\Constants\Permissions;
-
-class UpdateInvoiceRequest extends BaseFormRequest
-{
-    public function authorize(): bool
-    {
-        // Standard pattern - fixes 403 errors
-        return $this->authorizeInvoiceOperation('update');
+        return $this->authorizeInvoiceOperation('create');
     }
 
     public function rules(): array
     {
         return [
+            'customer_id' => ['required', 'uuid'],
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'due_date' => ['required', 'date', 'after:today'],
-            // ... other validation rules
+            'issued_at' => ['required', 'date', 'before_or_equal:today'],
         ];
     }
 }
 ```
 
----
+**Checklist (per request/controller/command):**
+- ✅ Import permission constants
+- ✅ Call helper (`authorizeCustomerOperation`, `authorizeLedgerOperation`, etc.)
+- ✅ Always call `$this->validateRlsContext()` when the helper does not already do so
+- ✅ Wrap writes in command bus actions with ServiceContext injection
+- ❌ Never return `true` from `authorize()` just to bypass checks
 
-## 🎭 Role Definitions
-
-### **super_admin**
-- **Purpose**: System-wide administration
-- **Access**: All permissions across all companies
-- **Use Case**: Platform administrators
-
-### **company_admin** 
-- **Purpose**: Full company management
-- **Access**: All company-specific permissions
-- **Use Case**: Business owners, senior managers
-
-### **accounting_manager**
-- **Purpose**: Financial oversight and management
-- **Access**: Full accounting module + reporting + audit
-- **Use Case**: CFOs, accounting managers
-
-### **accounting_clerk**
-- **Purpose**: Day-to-day accounting operations  
-- **Access**: Data entry, basic accounting functions
-- **Use Case**: Bookkeepers, accounting staff
-
-### **viewer**
-- **Purpose**: Read-only access
-- **Access**: View permissions only
-- **Use Case**: Stakeholders, external accountants
+### 6.2 Policy & Middleware
+- Use policies when resources require dynamic checks beyond simple permissions (e.g., verifying invoice ownership).
+- Tenants switch companies via middleware that sets `current_company_id`; policies must derive company context from there.
 
 ---
 
-## 🔧 Frontend Permission Integration
+## 7. 🖥️ Frontend Integration (Vue + Inertia)
 
-### **Controller Data Passing**
-
-```php
-return Inertia::render('Customers/Index', [
-    'customers' => $customers,
-    'can' => [
-        'customers_create' => $user->hasPermissionTo(Permissions::ACCT_CUSTOMERS_CREATE),
-        'customers_update' => $user->hasPermissionTo(Permissions::ACCT_CUSTOMERS_UPDATE),
-        'customers_delete' => $user->hasPermissionTo(Permissions::ACCT_CUSTOMERS_DELETE),
-    ],
-]);
-```
-
-### **Vue Component Usage**
-
-```vue
-<template>
-  <div>
-    <!-- Conditional rendering based on permissions -->
-    <Button 
-      v-if="can.customers_create" 
-      @click="createCustomer"
-      label="Add Customer" 
-    />
-    
-    <Button 
-      v-if="can.customers_update" 
-      @click="editCustomer"
-      label="Edit" 
-    />
-  </div>
-</template>
-
-<script setup>
-const props = defineProps({
-  customers: Object,
-  can: Object, // Permission flags
-})
-</script>
-```
-
----
-
-## 🧪 Testing RBAC Implementation
-
-### **Permission Boundary Tests**
-
-```php
-// Test unauthorized access
-test('cannot create customer without permission', function () {
-    $user = User::factory()->create();
-    // Don't assign permission
-    
-    $this->actingAs($user)
-         ->postJson('/customers', $customerData)
-         ->assertStatus(403);
-});
-
-// Test authorized access
-test('can create customer with permission', function () {
-    $user = User::factory()->create();
-    $user->givePermissionTo(Permissions::ACCT_CUSTOMERS_CREATE);
-    
-    $this->actingAs($user)
-         ->postJson('/customers', $customerData)
-         ->assertStatus(201);
-});
-```
-
-### **RLS Context Tests**
-
-```php
-test('cannot access other company data', function () {
-    $company1 = Company::factory()->create();
-    $company2 = Company::factory()->create();
-    $user = User::factory()->create();
-    
-    // User belongs to company1
-    $user->companies()->attach($company1);
-    
-    // Try to access company2 data
-    $this->actingAs($user)
-         ->withSession(['current_company_id' => $company2->id])
-         ->getJson('/customers')
-         ->assertStatus(403);
-});
-```
-
----
-
-## 📈 Performance Considerations
-
-### **Permission Caching**
-- Permissions are cached by Spatie package
-- Clear cache after role/permission changes: `php artisan permission:cache-reset`
-
-### **Database Optimization**
-- RLS policies use indexes on `company_id`
-- Permission checks are optimized with proper foreign keys
-
-### **Frontend Optimization**
-- Pass permission flags in initial page props
-- Avoid API calls to check permissions in components
-
----
-
-## 🔍 Debugging Permission Issues
-
-### **Common Debug Steps**
-
-1. **Check User Permissions**:
+1. **Pass Permission Flags**
    ```php
-   $user->hasPermissionTo(Permissions::ACCT_CUSTOMERS_CREATE); // Should return true
+   return Inertia::render('Ledger/PeriodClose', [
+       'steps' => $steps,
+       'can' => [
+           'execute' => $user->hasPermissionTo(Permissions::LEDGER_PERIOD_CLOSE_EXECUTE),
+           'lock' => $user->hasPermissionTo(Permissions::LEDGER_PERIOD_CLOSE_LOCK),
+       ],
+   ]);
    ```
 
-2. **Verify Company Context**:
-   ```php
-   session('current_company_id'); // Should match user's company
+2. **Use Composition API Props**
+   ```vue
+   <script setup lang="ts">
+   const props = defineProps<{ can: { execute: boolean; lock: boolean } }>()
+   </script>
    ```
 
-3. **Test RLS Policies**:
-   ```sql
-   SELECT * FROM acct.customers WHERE company_id = 'current-company-id';
-   ```
+3. **Avoid API Permission Calls**  
+   Everything the component needs arrives via initial props. Use watchers only when permission state can change during the session.
 
-4. **Check FormRequest Authorization**:
-   - Ensure `authorize()` method exists and returns `true`
-   - Verify correct permission constants are used
+4. **Consistent UI**  
+   - Hide actions when `can.*` is false.  
+   - Disable buttons if action visibility must remain (e.g., show with tooltip explaining lack of permission).  
+   - Use PrimeVue + Tailwind per CLAUDE.md instructions.
 
-### **Debug Helper Commands**
+---
 
-```bash
-# Check user permissions
-php artisan tinker
->>> User::find(1)->getAllPermissions()
+## 8. 🔄 Module & Role Extension Workflow
 
-# Reset permission cache  
-php artisan permission:cache-reset
+### 8.1 Module RBAC Checklist
+1. Document roles/permissions in the module brief and append to Section 8.3 here.
+2. Create permission constants and register them with the RBAC registrar interface.
+3. Provide default role bundles (teacher/student, auditor, etc.).  
+4. Write feature tests that assert 403 boundaries for new endpoints.  
+5. Update Inertia props and components to respect new permission flags.
 
-# Seed permissions
-php artisan db:seed --class=PermissionSeeder
+### 8.2 Registrar Interface (Conceptual)
+
+```php
+interface ModuleRbacRegistrar
+{
+    public function registerPermissions(): array; // return ['edu.classes.grade', ...]
+    public function registerRoles(): array; // return [['name' => 'edu_teacher', 'scope' => 'company', 'permissions' => [...]]]
+}
 ```
 
----
+Modules implement this interface and RbacSeeder loops through registered modules to merge everything into Spatie.
 
-## 🚀 Migration Integration
+### 8.3 Registered Module Roles (Appendix)
 
-The RBAC system integrates with the migration plan:
+| Module | Scope   | Role           | Permissions (summary)                       | Notes |
+|--------|---------|----------------|---------------------------------------------|-------|
+| Accounting (core) | company | `accounting_admin` | Full `acct.*`, posting, period close | Default tenant financial controller |
+| Accounting (core) | company | `accounting_operator` | Create/update AR/AP, reconcile | No posting/voiding |
+| Accounting (core) | company | `accounting_viewer` | Read-only `acct.*`, `rpt.*` | Reports + audit read |
+| CRM (planned) | company | `sales_manager`, `sales_rep` | `crm.*`, `customers.*` | Example placeholder |
+| Education (example) | company | `edu_teacher`, `edu_student`, `edu_parent` | `edu.*` permissions | Documented when module ships |
 
-1. **Phase 1**: Copy permission files first
-2. **Phase 2**: Run permission seeder 
-3. **Phase 3**: Update all FormRequests to use new patterns
-4. **Phase 4**: Test permission boundaries
-5. **Phase 5**: Update frontend components with permission checks
-
----
-
-## 📚 Quick Reference
-
-### **Permission Naming Pattern**
-- System: `system.admin`, `system.audit`  
-- Company: `companies.view`, `companies.create`
-- Accounting: `acct.customers.view`, `acct.invoices.create`
-- Ledger: `ledger.entries.post`, `ledger.period_close.execute`
-
-### **Authorization Helpers**
-- `$this->authorizeCustomerOperation('create')`
-- `$this->authorizeInvoiceOperation('update')`  
-- `$this->authorizePaymentOperation('void')`
-- `$this->validateRlsContext()`
-
-### **Role Hierarchy**
-1. `super_admin` (full system access)
-2. `company_admin` (full company access)  
-3. `accounting_manager` (financial oversight)
-4. `accounting_clerk` (data entry)
-5. `viewer` (read-only)
+Add new rows whenever modules register additional roles.
 
 ---
 
-**Status**: ✅ **Implementation Complete - Ready for Migration**
+## 9. ✅ Testing & Auditing
+
+1. **Unit/Feature Tests**
+   - Unauthorized tests (expect 403).  
+   - Authorized tests (expect 200/201).  
+   - RLS negative tests (user from company A cannot touch company B).
+
+2. **Seeder Tests**
+   - Snapshot permission count to catch accidental removals.  
+   - Assert restricted permissions are not assigned to `systemadmin`.
+
+3. **Audit Logging**
+   - Log all role/permission changes using `audit_log()` with `user_id`, `company_id` (if any), `role`, `action`.
+   - Provide dashboards for system auditors to review modifications.
+
+4. **CI Gates**
+   - Run `php artisan db:seed --class=RbacSeeder`.  
+   - Run permission-focused test suite.  
+   - Validate no hard-coded `true` authorizations via lint scripts.
+
+---
+
+## 10. 🛠 Troubleshooting Cheatsheet
+
+- `php artisan tinker` → `User::find($id)->getAllPermissions();`
+- `session('current_company_id')` to verify tenant context.
+- `php artisan permission:cache-reset` when permissions seem stale.
+- SQL check: `SELECT * FROM acct.customers WHERE company_id = current_setting('app.current_company_id');`
+- Review `app/Http/Requests/BaseFormRequest.php` for helper implementations if 403s persist.
+
+---
+
+## 11. 📦 Implementation Roadmap
+
+1. **Phase 1** – Refactor `RbacSeeder` to use domain-specific arrays and registrar hooks.  
+2. **Phase 2** – Update all FormRequests/controllers to use new helpers.  
+3. **Phase 3** – Ensure Vue pages honor `can` flags.  
+4. **Phase 4** – Document any new module roles in Section 8.3 and corresponding module briefs.  
+5. **Phase 5** – Automate permission integrity tests in CI.
+
+---
+
+**Status**: ✅ Guide Approved – use this as the definitive reference for all RBAC-related work. Update both this file and `app/docs/briefs/rbac_implementation_brief.md` whenever rules change. Module teams must add their RBAC annex entries before merging features.***

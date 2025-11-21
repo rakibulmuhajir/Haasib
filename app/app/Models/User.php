@@ -34,11 +34,13 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'system_role',
         'is_active',
         'created_by_user_id',
+        'settings',
     ];
 
     /**
@@ -63,6 +65,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'created_by_user_id' => 'string',
             'is_active' => 'boolean',
+            'settings' => 'array',
         ];
     }
 

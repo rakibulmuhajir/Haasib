@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3'
+import { router } from '@inertiajs/vue3'
 import type { SidebarProps } from "@/components/ui/sidebar"
 import {
   AudioWaveform,
   BookOpen,
   Bot,
+  Building,
   Calendar,
   Calculator,
   CheckSquare,
@@ -44,7 +46,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  SidebarMenuButton,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 
 const props = withDefaults(defineProps<SidebarProps>(), {
   collapsible: "icon",
@@ -54,6 +58,25 @@ const page = usePage()
 const auth = page.props.auth as any
 const user = auth?.user
 
+// Get companies from page props if available
+const companies = (page.props.companies as Array<any>) || []
+
+// Create teams from companies
+const teams = companies.length > 0 ? companies.map((company: any) => ({
+  name: company.name,
+  logo: Building,
+  plan: company.industry || 'General',
+  url: "/companies",
+  id: company.id
+})) : [
+  {
+    name: "No Companies",
+    logo: Building,
+    plan: "Create your first company",
+    url: "/companies/create"
+  }
+]
+
 // Dashboard navigation data
 const data = {
   user: {
@@ -61,23 +84,7 @@ const data = {
     email: user?.email || "admin@haasib.com", 
     avatar: user?.avatar || "/avatars/admin.jpg",
   },
-  teams: [
-    {
-      name: "Haasib Accounting",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Haasib Hospitality", 
-      logo: AudioWaveform,
-      plan: "Professional",
-    },
-    {
-      name: "Demo Company",
-      logo: Command,
-      plan: "Starter",
-    },
-  ],
+  teams: teams,
   navMain: [
     {
       title: "Dashboard",

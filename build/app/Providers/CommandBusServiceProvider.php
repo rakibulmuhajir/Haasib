@@ -18,9 +18,10 @@ class CommandBusServiceProvider extends ServiceProvider
             $context = new ServiceContext(
                 user: null,
                 company: null,
-                ipAddress: null,
-                userAgent: 'System'
+                requestId: null,
+                metadata: ['source' => 'command-bus', 'user_agent' => 'System']
             );
+
             return new CommandBusService($context);
         });
     }

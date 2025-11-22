@@ -137,13 +137,25 @@ abstract class ModuleServiceProvider extends ServiceProvider
             return;
         }
 
-        Route::middleware(['web', 'auth'])
-            ->prefix('dashboard')
-            ->group($this->modulePath . '/routes/web.php');
+        $webRouteFile = file_exists("{$this->modulePath}/Routes/web.php")
+            ? "{$this->modulePath}/Routes/web.php"
+            : "{$this->modulePath}/routes/web.php";
 
-        Route::middleware(['api', 'auth:sanctum'])
-            ->prefix('api')
-            ->group($this->modulePath . '/routes/api.php');
+        if (file_exists($webRouteFile)) {
+            Route::middleware(['web', 'auth'])
+                ->prefix('dashboard')
+                ->group($webRouteFile);
+        }
+
+        $apiRouteFile = file_exists("{$this->modulePath}/Routes/api.php")
+            ? "{$this->modulePath}/Routes/api.php"
+            : "{$this->modulePath}/routes/api.php";
+
+        if (file_exists($apiRouteFile)) {
+            Route::middleware(['api', 'auth:sanctum'])
+                ->prefix('api')
+                ->group($apiRouteFile);
+        }
     }
 
     /**

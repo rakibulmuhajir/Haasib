@@ -120,7 +120,10 @@
     "include": [
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",
-        "resources/js/**/*.tsx", 
-        "resources/js/**/*.vue"
+        "resources/js/**/*.tsx",
+        "resources/js/**/*.vue",
+        "modules/Accounting/Resources/js/**/*.ts",
+        "modules/Accounting/Resources/js/**/*.d.ts",
+        "modules/Accounting/Resources/js/**/*.vue"
     ]
 }

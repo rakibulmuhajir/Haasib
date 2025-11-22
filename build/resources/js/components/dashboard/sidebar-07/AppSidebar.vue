@@ -155,12 +155,12 @@ const data = {
       icon: DollarSign,
       items: [
         {
-          title: "Invoices",
-          url: "/invoices",
+          title: "Accounting Home",
+          url: "/dashboard/accounting",
         },
         {
-          title: "Payments",
-          url: "/payments",
+          title: "Invoices",
+          url: "/invoices",
         },
         {
           title: "Customers",

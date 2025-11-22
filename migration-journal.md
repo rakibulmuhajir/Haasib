@@ -186,3 +186,31 @@ Ready to proceed with Phase 3: Accounting Module Foundation
 - Comprehensive command reference for all development scenarios
 
 Ready for Phase 3: Accounting Module Integration with blazing-fast FrankenPHP foundation
+
+🚩 Phase 3 Kickoff Prep (Sat Nov 22 17:24:21 PKT 2025)
+- Reviewed CLAUDE.md (head -n 120) to confirm guidelines and package versions.
+- Confirmed active app is /build with existing Acct module scaffold (module.json enabled).
+- Next actions: align Phase 3 tasks with existing Acct module (schema, routes, command-bus), ensure RLS/migrations, and register accounting providers per plan.
+
+🚧 Phase 3 (Income) Progress (Sat Nov 22 17:24:21 PKT 2025)
+- Added audit schema wrapper + trigger-friendly audit.audit_log overload (build/database/migrations/2025_11_22_180000_create_audit_schema_wrapper.php).
+- Added generate_uuid helper (build/database/migrations/2025_11_22_181000_create_generate_uuid_function.php).
+- Copied and applied income-side migrations from stack into build (customers, customer_contacts, invoices, payments, payment_allocations) with acct schema; adjusted payments to drop parent FK for now.
+- Copied Accounting module migrations into modules/Acct/Database/migrations and fixed schema/role assumptions (acct.* instead of invoicing/public, RLS uses app.current_company_id).
+- Applied Acct migrations: acct schema bootstrap, chart of accounts, fiscal periods, journal entries, payment reversals, payment receipt batches (function fixes, removed non-existent roles), RLS enabled.
+- ModuleServiceProvider updated to load Routes/ path casing for module routes.
+- TODO: verify Acct module routes/providers/command-bus registration, align frontend shell/routes, and handle any remaining role/permission wiring.
+
+🧭 Phase 3 (Income) Routing & Module Standardization (Sat Nov 22 17:24:21 PKT 2025)
+- Renamed module to Accounting (namespaces, module.json, config/modules.php, bootstrap/providers.php).
+- Routes now at /dashboard/accounting (accounting.index) and /api/accounting/ping (accounting.api.ping).
+- ModuleServiceProvider loads Routes/ casing correctly.
+
+📦 Phase 3 (Income) Frontend Moves (Sat Nov 22 17:24:21 PKT 2025)
+- Moved Customers.vue → modules/Accounting/Resources/js/Pages/Accounting/Customers.vue.
+- Moved Invoices.vue → modules/Accounting/Resources/js/Pages/Accounting/Invoices.vue.
+- Updated routes/web.php to render Accounting/Customers and Accounting/Invoices.
+- Sidebar updated: Sales & Receivables includes Accounting Home (/dashboard/accounting), Invoices (/invoices), Customers (/customers); removed non-existent payments link.
+
+🔌 Phase 3 (Income) Command Bus Adjustments (Sat Nov 22 17:24:21 PKT 2025)
+- Command-bus aliases temporarily empty to avoid missing model references; Accounting actions in place for future wiring.

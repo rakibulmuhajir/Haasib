@@ -3,13 +3,13 @@
 return array (
   'modules' => 
   array (
-    'acct' => 
+    'Accounting' => 
     array (
-      'name' => 'Acct',
-      'namespace' => 'Modules\\Acct',
-      'provider' => 'Modules\\Acct\\Providers\\AcctServiceProvider',
+      'name' => 'Accounting',
+      'namespace' => 'Modules\\Accounting',
+      'provider' => 'Modules\\Accounting\\Providers\\AccountingServiceProvider',
       'schema' => 'acct',
-      'description' => 'Acct module',
+      'description' => 'Accounting module',
       'version' => '1.0.0',
       'enabled' => true,
       'routes' => 

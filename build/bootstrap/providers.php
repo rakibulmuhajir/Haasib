@@ -5,5 +5,5 @@ return [
     App\Providers\FortifyServiceProvider::class,
     
     // Modules
-    Modules\Acct\Providers\AcctServiceProvider::class,
+    Modules\Accounting\Providers\AccountingServiceProvider::class,
 ];

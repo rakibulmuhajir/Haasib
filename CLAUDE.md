@@ -494,10 +494,13 @@ test('page uses primevue components only', function () {
 
 **When Implementing Security Features:**
 - **Reference Files**: 
-  - `stack/app/Constants/Permissions.php` - Standardized permission constants
-  - `stack/app/Http/Requests/BaseFormRequest.php` - Authorization helpers
-  - `stack/database/seeders/PermissionSeeder.php` - Role-based permission setup
-  - `docs/briefs/rbac_implementation_brief.md` - Complete RBAC guide
+  - `stack/app/Constants/Permissions.php` – Standardized permission constants and helper names
+  - `stack/app/Http/Requests/BaseFormRequest.php` – Authorization + RLS validation helpers
+  - `stack/database/seeders/PermissionSeeder.php` / `app/database/seeders/RbacSeeder.php` – Current seeder implementation
+  - `docs/briefs/rbac_implementation_brief.md` – Canonical dual-tier RBAC design (system vs company, module registrar pattern)
+  - `app/docs/briefs/rbac_implementation_brief.md` – Workspace-focused summary of the canonical guide
+  - `docs/system-users-design.md` – Sentinel team IDs & rules for super_admin/systemadmin
+  - `docs/briefs/rbac_permission_system_seeder.md` – Seeder blueprint + ModuleRbacRegistrar workflow
 
 **RBAC Implementation Pattern:**
 ```php
@@ -1393,7 +1396,7 @@ Route::prefix('api/{module}')->name('api.{module}.')->middleware(['auth', 'verif
 ### Theme & UI Standards
 - **Blue-Whale Theme CSS**: `stack/resources/js/styles/themes/blue-whale.css`
 - **UniversalPageHeader Component**: `stack/resources/js/Components/UniversalPageHeader.vue`
-- **RBAC Implementation Guide**: `docs/briefs/rbac_implementation_brief.md`
+- **RBAC Implementation Guide**: `docs/briefs/rbac_implementation_brief.md` (canonical two-tier model, module registrar). Workspace summary: `app/docs/briefs/rbac_implementation_brief.md`. Seeder reference: `docs/briefs/rbac_permission_system_seeder.md`. System user IDs: `docs/system-users-design.md`.
 
 ### RBAC & Security
 - **Permission Constants**: `stack/app/Constants/Permissions.php`

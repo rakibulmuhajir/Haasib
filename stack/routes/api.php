@@ -9,8 +9,44 @@ use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\TaxRateApiController;
 use App\Http\Controllers\InlineEditController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 // API Routes for Invoicing System
+
+// Company user assignment (session-authenticated)
+Route::middleware(['web', 'auth'])->prefix('companies')->group(function () {
+    Route::post('/{company}/users', function (\App\Models\Company $company) {
+        $validated = request()->validate([
+            'user_id' => ['required', 'uuid', 'exists:users,id'],
+            'role' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $role = $validated['role'] ?? 'member';
+
+        $pivot = \App\Models\CompanyUser::updateOrCreate(
+            [
+                'company_id' => $company->id,
+                'user_id' => $validated['user_id'],
+            ],
+            [
+                'id' => Str::uuid()->toString(),
+                'role' => $role,
+                'is_active' => true,
+                'joined_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'message' => 'User assigned to company successfully',
+            'data' => [
+                'company_id' => $pivot->company_id,
+                'user_id' => $pivot->user_id,
+                'role' => $pivot->role,
+                'is_active' => $pivot->is_active,
+            ],
+        ], 201);
+    });
+});
 
 // Currency Routes - uses web middleware for session authentication
 Route::prefix('currencies')->name('api.currencies.')->middleware(['web', 'auth'])->group(function () {

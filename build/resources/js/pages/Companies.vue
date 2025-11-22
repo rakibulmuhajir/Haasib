@@ -12,6 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+import { useToast } from '@/components/ui/toast/use-toast'
 
 const props = defineProps<{
     companies?: Array<any>
@@ -20,6 +21,8 @@ const props = defineProps<{
 
 // State management
 const activeCompanyId = ref<string | null>(props.activeCompanyId || null)
+
+const { toast } = useToast()
 
 const breadcrumbs = [
     { label: 'Dashboard', href: '/dashboard' },
@@ -37,15 +40,21 @@ const headerActions = [
 // Methods
 const activateCompany = (company: any) => {
     activeCompanyId.value = company.id
-    // Here you would typically make an API call to set the active company context
-    // For now, we'll just update the local state
-    router.patch(`/companies/${company.id}/activate`, {}, {
+    router.post(`/company/${company.id}/switch`, {}, {
+        preserveScroll: true,
         onSuccess: () => {
-            // Company activated successfully
+            toast({
+                title: 'Company Switched',
+                description: `${company.name} is now active.`,
+            })
         },
         onError: () => {
-            // Handle error
             activeCompanyId.value = null
+            toast({
+                title: 'Activation failed',
+                description: 'Unable to activate the company. Please try again.',
+                variant: 'destructive',
+            })
         }
     })
 }

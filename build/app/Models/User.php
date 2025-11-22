@@ -45,6 +45,7 @@ class User extends Authenticatable
         'is_active',
         'created_by_user_id',
         'settings',
+        'preferred_company_id',
     ];
 
     /**
@@ -126,6 +127,7 @@ class User extends Authenticatable
         'settings' => 'array',
         'is_active' => 'boolean',
         'created_by_user_id' => 'string',
+        'preferred_company_id' => 'string',
     ];
 
     /**
@@ -177,7 +179,7 @@ class User extends Authenticatable
     {
         return $this->companies()
             ->where('company_user.company_id', $company->id)
-            ->where('company_user.role', 'owner')
+            ->where('company_user.role', 'company_owner')
             ->exists();
     }
 
@@ -185,7 +187,7 @@ class User extends Authenticatable
     {
         return $this->companies()
             ->where('company_user.company_id', $companyId)
-            ->where('company_user.role', 'owner')
+            ->where('company_user.role', 'company_owner')
             ->exists();
     }
 
@@ -196,7 +198,7 @@ class User extends Authenticatable
     {
         return $this->companies()
             ->where('company_user.company_id', $company->id)
-            ->whereIn('company_user.role', ['owner', 'admin'])
+            ->whereIn('company_user.role', ['company_owner', 'company_admin'])
             ->exists();
     }
 
@@ -238,11 +240,12 @@ class User extends Authenticatable
         $request = request();
 
         if ($request && $request->hasSession()) {
-            $companyId = $request->session()->get('current_company_id');
+            $companyId = $request->session()->get('active_company_id')
+                ?? $request->session()->get('current_company_id');
         }
 
         if (! $companyId) {
-            $companyId = session('current_company_id');
+            $companyId = session('active_company_id') ?? session('current_company_id');
         }
 
         if ($companyId) {
@@ -312,5 +315,251 @@ class User extends Authenticatable
             $this->is_active = false;
             $this->save();
         }
+    }
+
+    /**
+     * Check if user has system-level permissions.
+     */
+    public function isSystemUser(): bool
+    {
+        return $this->hasAnyRole(['super_admin', 'systemadmin', 'system_manager', 'system_auditor']);
+    }
+
+    /**
+     * Get user's system role.
+     */
+    public function getSystemRole(): ?string
+    {
+        $systemRoles = ['super_admin', 'systemadmin', 'system_manager', 'system_auditor'];
+        
+        foreach ($systemRoles as $role) {
+            if ($this->hasRole($role)) {
+                return $role;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Assign user to company with specific role.
+     */
+    public function assignToCompany(Company $company, string $role): CompanyUser
+    {
+        // Check if user is already assigned to this company
+        $existingAssignment = $this->companyUsers()
+            ->where('company_id', $company->id)
+            ->first();
+
+        if ($existingAssignment) {
+            // Remove old company role
+            $this->removeCompanyRole($company, $existingAssignment->role);
+            
+            // Update existing assignment
+            $existingAssignment->update([
+                'role' => $role,
+                'is_active' => true,
+                'left_at' => null,
+            ]);
+        } else {
+            // Create new assignment
+            $existingAssignment = CompanyUser::create([
+                'company_id' => $company->id,
+                'user_id' => $this->id,
+                'role' => $role,
+                'is_active' => true,
+                'joined_at' => now(),
+            ]);
+        }
+
+        // Assign company-scoped Spatie role
+        $this->assignCompanyRole($company, $role);
+
+        return $existingAssignment;
+    }
+
+    /**
+     * Remove user from company.
+     */
+    public function removeFromCompany(Company $company): bool
+    {
+        $companyUser = $this->companyUsers()
+            ->where('company_id', $company->id)
+            ->first();
+
+        if (!$companyUser) {
+            return false;
+        }
+
+        // Remove company role
+        $this->removeCompanyRole($company, $companyUser->role);
+
+        // Deactivate assignment
+        $companyUser->update([
+            'is_active' => false,
+            'left_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Assign company-scoped role to user.
+     */
+    private function assignCompanyRole(Company $company, string $role): void
+    {
+        $companyScopedRoleName = "{$role}_{$company->id}";
+        $spatieRole = Role::where('name', $companyScopedRoleName)->first();
+        
+        if ($spatieRole && !$this->hasRole($companyScopedRoleName)) {
+            $this->assignRole($spatieRole);
+        }
+    }
+
+    /**
+     * Remove company-scoped role from user.
+     */
+    private function removeCompanyRole(Company $company, string $role): void
+    {
+        $companyScopedRoleName = "{$role}_{$company->id}";
+        
+        if ($this->hasRole($companyScopedRoleName)) {
+            $this->removeRole($companyScopedRoleName);
+        }
+    }
+
+    /**
+     * Switch to a different company context.
+     */
+    public function switchToCompany(?string $companyId): bool
+    {
+        if (!$companyId) {
+            session()->forget('active_company_id');
+            return true;
+        }
+
+        // Verify user has access to this company
+        if (!$this->canAccessCompany($companyId)) {
+            return false;
+        }
+
+        session(['active_company_id' => $companyId]);
+        return true;
+    }
+
+    /**
+     * Check if user can access a specific company.
+     */
+    public function canAccessCompany(string $companyId): bool
+    {
+        // System users can access any company
+        if ($this->isSystemUser()) {
+            return Company::where('id', $companyId)->exists();
+        }
+
+        // Regular users need active company assignment
+        return $this->companies()
+            ->where('company_id', $companyId)
+            ->wherePivot('is_active', true)
+            ->exists();
+    }
+
+    /**
+     * Get user's role in a specific company.
+     */
+    public function getRoleInCompany(string $companyId): ?string
+    {
+        $companyUser = $this->companyUsers()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->first();
+
+        return $companyUser?->role;
+    }
+
+    /**
+     * Check if user has permission in specific company context.
+     */
+    public function hasCompanyPermission(string $permission, string $companyId): bool
+    {
+        // System users have broader permissions
+        if ($this->isSystemUser() && $this->hasPermissionTo($permission)) {
+            return true;
+        }
+
+        // Check company-scoped permission
+        return $this->hasPermissionTo($permission, $companyId);
+    }
+
+    /**
+     * Invitations sent by this user.
+     */
+    public function sentInvitations()
+    {
+        return $this->hasMany(Invitation::class, 'inviter_user_id');
+    }
+
+    /**
+     * Pending invitations for this user's email.
+     */
+    public function pendingInvitations()
+    {
+        return Invitation::where('email', $this->email)
+                        ->where('status', 'pending')
+                        ->where('expires_at', '>', now());
+    }
+
+    /**
+     * Get all invitations for this user's email.
+     */
+    public function invitations()
+    {
+        return Invitation::where('email', $this->email);
+    }
+
+    /**
+     * Check if user has pending invitations.
+     */
+    public function hasPendingInvitations(): bool
+    {
+        return $this->pendingInvitations()->exists();
+    }
+
+    /**
+     * Get count of pending invitations.
+     */
+    public function getPendingInvitationsCount(): int
+    {
+        return $this->pendingInvitations()->count();
+    }
+
+    /**
+     * Get the user's preferred company.
+     */
+    public function preferredCompany()
+    {
+        return $this->belongsTo(Company::class, 'preferred_company_id');
+    }
+
+    /**
+     * Set the user's preferred company.
+     */
+    public function setPreferredCompany(?string $companyId): bool
+    {
+        // Verify user has access to this company if provided
+        if ($companyId && !$this->canAccessCompany($companyId)) {
+            return false;
+        }
+
+        $this->preferred_company_id = $companyId;
+        return $this->save();
+    }
+
+    /**
+     * Get the user's preferred company ID.
+     */
+    public function getPreferredCompanyId(): ?string
+    {
+        return $this->preferred_company_id;
     }
 }

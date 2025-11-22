@@ -69,7 +69,7 @@ class Company extends Model
      */
     public function invitations(): HasMany
     {
-        return $this->hasMany(CompanyInvitation::class, 'company_id');
+        return $this->hasMany(Invitation::class, 'company_id');
     }
 
     /**

@@ -79,9 +79,8 @@ class CompanyController extends Controller
 
         $companyModel->activate();
 
-        return response()->json([
-            'message' => 'Company activated successfully',
-        ]);
+        return redirect()->back()
+            ->with('success', "Company '{$companyModel->name}' activated successfully");
     }
 
     public function deactivate(string $company)
@@ -99,9 +98,8 @@ class CompanyController extends Controller
 
         $companyModel->deactivate();
 
-        return response()->json([
-            'message' => 'Company deactivated successfully',
-        ]);
+        return redirect()->back()
+            ->with('success', "Company '{$companyModel->name}' deactivated successfully");
     }
 
     public function destroy(string $company)
@@ -117,10 +115,10 @@ class CompanyController extends Controller
             $companyModel = Company::where('id', $company)->firstOrFail();
         }
 
+        $companyName = $companyModel->name;
         $companyModel->delete();
 
-        return response()->json([
-            'message' => 'Company deleted successfully',
-        ]);
+        return redirect()->route('companies')
+            ->with('success', "Company '{$companyName}' deleted successfully");
     }
 }

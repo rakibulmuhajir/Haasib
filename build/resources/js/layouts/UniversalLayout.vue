@@ -16,6 +16,8 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import Toaster from '@/components/ui/toast/Toaster.vue'
+import CompanyContextDebugger from '@/components/CompanyContextDebugger.vue'
 
 interface Props {
   title?: string
@@ -42,6 +44,13 @@ const props = withDefaults(defineProps<Props>(), {
     { label: 'Overview', active: true }
   ],
   headerActions: () => []
+})
+
+// Show debugger in development or when debug parameter is present
+const showDebugger = computed(() => {
+  return import.meta.env.DEV || 
+         window.location.search.includes('debug=company') ||
+         localStorage.getItem('company_debug') === 'true'
 })
 </script>
 
@@ -117,4 +126,9 @@ const props = withDefaults(defineProps<Props>(), {
       </div>
     </SidebarInset>
   </SidebarProvider>
+  
+  <!-- Company Context Debugger -->
+  <CompanyContextDebugger :show-debugger="showDebugger" />
+  
+  <Toaster />
 </template>

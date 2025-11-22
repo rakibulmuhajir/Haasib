@@ -94,7 +94,8 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
+            // Include auth schema so auth.users is reachable without switching connection
+            'search_path' => env('DB_SCHEMA', 'public,auth'),
             'sslmode' => 'prefer',
         ],
 

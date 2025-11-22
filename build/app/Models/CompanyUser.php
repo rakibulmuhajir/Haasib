@@ -126,7 +126,7 @@ class CompanyUser extends Pivot
      */
     public function isAdmin(): bool
     {
-        return in_array($this->role, ['owner', 'admin', 'super_admin']);
+        return in_array($this->role, ['company_owner', 'company_admin']);
     }
 
     /**
@@ -134,7 +134,7 @@ class CompanyUser extends Pivot
      */
     public function isOwner(): bool
     {
-        return $this->role === 'owner';
+        return $this->role === 'company_owner';
     }
 
     /**
@@ -143,12 +143,13 @@ class CompanyUser extends Pivot
     public function can(string $action): bool
     {
         $rolePermissions = [
-            'owner' => ['*'],
-            'admin' => ['manage_users', 'manage_settings', 'view_reports', 'manage_modules', 'manage_data'],
-            'manager' => ['view_reports', 'manage_team', 'manage_data'],
-            'accountant' => ['manage_entries', 'view_reports', 'reconcile'],
-            'clerk' => ['create_entries', 'view_reports'],
-            'viewer' => ['view_reports'],
+            'company_owner' => ['*'],
+            'company_admin' => ['manage_users', 'manage_settings', 'view_reports', 'manage_modules', 'manage_data'],
+            'accounting_admin' => ['manage_entries', 'view_reports', 'reconcile', 'period_close', 'audit'],
+            'accounting_operator' => ['create_entries', 'update_entries', 'view_reports'],
+            'accounting_viewer' => ['view_reports'],
+            'portal_customer' => ['view_invoices', 'view_payments'],
+            'portal_vendor' => ['submit_invoices', 'view_payments'],
         ];
 
         $userPermissions = $rolePermissions[$this->role] ?? [];

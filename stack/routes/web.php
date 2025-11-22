@@ -133,6 +133,39 @@ Route::middleware('auth')->group(function () {
     Route::get('/web/users/{user}', [\App\Http\Controllers\UserLookupController::class, 'show']);
     Route::get('/web/companies', [\App\Http\Controllers\CompanyLookupController::class, 'index']);
     Route::get('/web/companies/{company}/users', [\App\Http\Controllers\CompanyLookupController::class, 'users']);
+
+    // Assign user to company (API)
+    Route::post('/api/companies/{company}/users', function (\App\Models\Company $company) {
+        $validated = request()->validate([
+            'user_id' => ['required', 'uuid', 'exists:users,id'],
+            'role' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $role = $validated['role'] ?? 'member';
+
+        $pivot = \App\Models\CompanyUser::updateOrCreate(
+            [
+                'company_id' => $company->id,
+                'user_id' => $validated['user_id'],
+            ],
+            [
+                'id' => \Illuminate\Support\Str::uuid()->toString(),
+                'role' => $role,
+                'is_active' => true,
+                'joined_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'message' => 'User assigned to company successfully',
+            'data' => [
+                'company_id' => $pivot->company_id,
+                'user_id' => $pivot->user_id,
+                'role' => $pivot->role,
+                'is_active' => $pivot->is_active,
+            ],
+        ], 201);
+    });
     Route::get('/web/companies/{company}', [\App\Http\Controllers\CompanyLookupController::class, 'show']);
     Route::get('/web/customers/suggest', [\App\Http\Controllers\CustomerLookupController::class, 'suggest']);
     Route::get('/web/customers/{customer}', [\App\Http\Controllers\CustomerLookupController::class, 'show']);

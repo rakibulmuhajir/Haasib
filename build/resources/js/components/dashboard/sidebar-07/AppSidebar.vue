@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import type { SidebarProps } from "@/components/ui/sidebar"
 import {
   AudioWaveform,
@@ -38,7 +39,7 @@ import {
 import NavMain from "@/components/dashboard/sidebar-07/NavMain.vue"
 import NavProjects from "@/components/dashboard/sidebar-07/NavProjects.vue"
 import NavUser from "@/components/dashboard/sidebar-07/NavUser.vue"
-import TeamSwitcher from "@/components/dashboard/sidebar-07/TeamSwitcher.vue"
+import CompanySwitcher from "@/components/dashboard/sidebar-07/CompanySwitcher.vue"
 import { ThemeToggle } from "@/components/ui/theme"
 import {
   Sidebar,
@@ -49,6 +50,7 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { useToast } from '@/components/ui/toast/use-toast'
 
 const props = withDefaults(defineProps<SidebarProps>(), {
   collapsible: "icon",
@@ -57,18 +59,71 @@ const props = withDefaults(defineProps<SidebarProps>(), {
 const page = usePage()
 const auth = page.props.auth as any
 const user = auth?.user
+const { toast } = useToast()
 
-// Get companies from page props if available
-const companies = (page.props.companies as Array<any>) || []
+const companyList = computed(() => {
+  const companiesProp = (page.props.userCompanies as Array<any>) ?? (page.props.companies as Array<any>) ?? []
+  console.debug('[Sidebar] Companies prop payload:', companiesProp)
+  return companiesProp
+})
+const activeCompanyId = computed(() => page.props.activeCompanyId as string | null)
+console.debug('[Sidebar] activeCompanyId prop:', page.props.activeCompanyId, 'currentCompany:', page.props.currentCompany)
 
-// Create teams from companies
-const teams = companies.length > 0 ? companies.map((company: any) => ({
-  name: company.name,
-  logo: Building,
-  plan: company.industry || 'General',
-  url: "/companies",
-  id: company.id
-})) : [
+// Company switcher options
+const companyOptions = computed(() => {
+  const list = companyList.value ?? []
+
+  if (!list.length) {
+    return [
+      {
+        name: "No Companies",
+        logo: Building,
+        plan: "Create your first company",
+        url: "/companies/create"
+      }
+    ]
+  }
+
+  return list.map((company: any) => ({
+    name: company.name,
+    logo: Building,
+    plan: company.industry || 'General',
+    id: company.id,
+    isActive: company.isActive ?? (company.id === activeCompanyId.value),
+  }))
+})
+
+const selectCompany = (company: any) => {
+  if (!company) {
+    return
+  }
+
+  if (!company.id) {
+    if (company.url) {
+      router.visit(company.url)
+    }
+    return
+  }
+
+  router.post(`/company/${company.id}/switch`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast({
+        title: 'Company Switched',
+        description: `Switched to ${company.name}.`,
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Switch failed',
+        description: 'Unable to switch to the company. Please try again.',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+const fallbackTeams = [
   {
     name: "No Companies",
     logo: Building,
@@ -77,6 +132,8 @@ const teams = companies.length > 0 ? companies.map((company: any) => ({
   }
 ]
 
+const companiesForSwitcher = computed(() => companyOptions.value.length ? companyOptions.value : fallbackTeams)
+
 // Dashboard navigation data
 const data = {
   user: {
@@ -84,7 +141,6 @@ const data = {
     email: user?.email || "admin@haasib.com", 
     avatar: user?.avatar || "/avatars/admin.jpg",
   },
-  teams: teams,
   navMain: [
     {
       title: "Dashboard",
@@ -336,7 +392,11 @@ const data = {
 <template>
   <Sidebar v-bind="props">
     <SidebarHeader>
-      <TeamSwitcher :teams="data.teams" />
+      <CompanySwitcher
+        :companies="companiesForSwitcher"
+        :active-company-id="activeCompanyId"
+        @select="selectCompany"
+      />
     </SidebarHeader>
     <SidebarContent>
       <NavMain :items="data.navMain" />

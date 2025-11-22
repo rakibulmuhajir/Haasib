@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { useToast } from '@/components/ui/toast/use-toast'
 
 const props = defineProps<{
     companyId: string
@@ -30,21 +31,25 @@ interface CompanyUser {
 const users = ref<CompanyUser[]>([])
 const loading = ref(false)
 const error = ref('')
+const { toast } = useToast()
 
 // Assignment form
 const assignForm = ref({
     email: '',
-    role: 'member'
+    role: 'accounting_viewer'
 })
 
 const assignLoading = ref(false)
 const assignError = ref('')
 
 const roles = [
-    { value: 'owner', label: 'Owner' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'member', label: 'Member' },
-    { value: 'viewer', label: 'Viewer' }
+    { value: 'company_owner', label: 'Company Owner', description: 'Full tenant control: invites, billing, integrations, accounting locking' },
+    { value: 'company_admin', label: 'Company Admin', description: 'Operates tenant settings, users, approvals. No destructive backups' },
+    { value: 'accounting_admin', label: 'Accounting Admin', description: 'Period close, posting, approvals, audits' },
+    { value: 'accounting_operator', label: 'Accounting Operator', description: 'Create/edit invoices/bills/payments, cannot post/void' },
+    { value: 'accounting_viewer', label: 'Accounting Viewer', description: 'Read-only access to accounting + reporting' },
+    { value: 'portal_customer', label: 'Portal Customer', description: 'External customer portal access with limited permissions' },
+    { value: 'portal_vendor', label: 'Portal Vendor', description: 'External vendor portal access with limited permissions' }
 ]
 
 const loadUsers = async () => {
@@ -101,8 +106,12 @@ const assignUser = async () => {
         
         // Reset form and reload users
         assignForm.value.email = ''
-        assignForm.value.role = 'member'
+        assignForm.value.role = 'accounting_viewer'
         await loadUsers()
+        toast({
+            title: 'User assigned',
+            description: 'User was added to the company.',
+        })
     } catch (err) {
         assignError.value = err instanceof Error ? err.message : 'Failed to assign user'
     } finally {
@@ -137,10 +146,41 @@ const unassignUser = async (userId: string) => {
 
 const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-        case 'owner': return 'default'
-        case 'admin': return 'secondary'
-        case 'member': return 'outline'
+        case 'company_owner': return 'default'
+        case 'company_admin': return 'secondary'
+        case 'accounting_operator': return 'outline'
+        case 'accounting_viewer': return 'outline'
+        case 'portal_customer': return 'destructive'
+        case 'portal_vendor': return 'destructive'
         default: return 'outline'
+    }
+}
+
+const updateRole = async (userId: string, role: string) => {
+    try {
+        const response = await fetch(`/api/companies/${props.companyId}/users/${userId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({ role })
+        })
+
+        if (!response.ok) {
+            const data = await response.json()
+            throw new Error(data.message || 'Failed to update role')
+        }
+
+        await loadUsers()
+        toast({
+            title: 'Role updated',
+            description: 'User role has been changed.',
+        })
+    } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to update role'
     }
 }
 
@@ -227,13 +267,33 @@ onMounted(() => {
                                 </span>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-48">
+                                <Select
+                                    :model-value="companyUser.role"
+                                    :disabled="companyUser.role === 'company_owner'"
+                                    @update:model-value="(val) => updateRole(companyUser.user_id, val)"
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="role in roles" :key="role.value" :value="role.value">
+                                            {{ role.label }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="companyUser.role === 'company_owner'" class="text-xs text-muted-foreground mt-1">
+                                    Owner role is fixed. Contact system admin to transfer.
+                                </p>
+                            </div>
                             <Button
                                 variant="outline"
                                 size="sm"
+                                :disabled="companyUser.role === 'company_owner'"
                                 @click="unassignUser(companyUser.user_id)"
                             >
-                                Remove
+                                {{ companyUser.role === 'company_owner' ? 'Owner' : 'Remove' }}
                             </Button>
                         </div>
                     </div>

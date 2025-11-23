@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -23,7 +24,7 @@ Route::get('dashboard/custom', function () {
     return Inertia::render('DashboardCustom');
 })->middleware(['auth', 'verified'])->name('dashboard.custom');
 
-Route::get('customers', function () {
+Route::get('accounting/customers', function () {
     $companyId = session('active_company_id') ?? session('current_company_id');
 
     $customers = Customer::query()
@@ -33,12 +34,12 @@ Route::get('customers', function () {
         ->limit(50)
         ->get();
 
-    return Inertia::render('Accounting/Customers', [
+    return Inertia::render('Customers/Index', [
         'customers' => $customers,
     ]);
-})->middleware(['auth', 'verified'])->name('customers');
+})->middleware(['auth', 'verified'])->name('accounting.customers');
 
-Route::post('customers', function (Request $request) {
+Route::post('accounting/customers', function (Request $request) {
     $companyId = session('active_company_id') ?? session('current_company_id');
     if (! $companyId) {
         return back()->with('error', 'Select a company before creating customers.');
@@ -60,19 +61,19 @@ Route::post('customers', function (Request $request) {
         'name' => $validated['name'],
         'email' => $validated['email'] ?? null,
         'status' => 'active',
-        'created_by' => $request->user()->id,
+        'created_by_user_id' => $request->user()->id,
     ]);
 
-    return redirect()->route('customers')->with('success', 'Customer created.');
-})->middleware(['auth', 'verified'])->name('customers.store');
+    return redirect()->route('accounting.customers')->with('success', 'Customer created.');
+})->middleware(['auth', 'verified'])->name('accounting.customers.store');
 
-Route::get('invoices', function () {
+Route::get('accounting/invoices', function () {
     $companyId = session('active_company_id') ?? session('current_company_id');
 
     $invoices = Invoice::query()
         ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
         ->with('customer:id,name')
-        ->select('id', 'invoice_number', 'customer_id', 'total_amount', 'status', 'due_date', 'created_at')
+        ->select('id', 'invoice_number', 'customer_id', 'total_amount', 'status', 'due_date', 'invoice_date', 'created_at')
         ->orderByDesc('created_at')
         ->limit(50)
         ->get()
@@ -84,13 +85,14 @@ Route::get('invoices', function () {
                 'total_amount' => $invoice->total_amount,
                 'status' => $invoice->status,
                 'due_date' => optional($invoice->due_date)->toDateString(),
+          'issue_date' => optional($invoice->invoice_date)->toDateString(),
             ];
         });
 
-    return Inertia::render('Accounting/Invoices', [
+    return Inertia::render('Invoicing/Invoices/Index', [
         'invoices' => $invoices,
     ]);
-})->middleware(['auth', 'verified'])->name('invoices');
+})->middleware(['auth', 'verified'])->name('accounting.invoices');
 
 Route::get('companies', function () {
     // Query actual companies from database

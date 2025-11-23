@@ -26,16 +26,56 @@ createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) => {
         const appPages = import.meta.glob<DefineComponent>('./pages/**/*.vue');
-        // Module pages live outside resources/, climb two levels to /modules/Accounting/Resources/js/Pages
-        const accountingPages = import.meta.glob<DefineComponent>('../../modules/Accounting/Resources/js/Pages/**/*.vue');
+        
+        // Generic module resolver - handles any module (Accounting, CRM, etc.)
+        // Use absolute path from project root
+        const allModulePages = import.meta.glob<DefineComponent>('/modules/**/resources/js/pages/**/*.vue');
 
-        if (name.startsWith('Accounting/')) {
-            return resolvePageComponent(
-                `../../modules/Accounting/Resources/js/Pages/${name}.vue`,
-                accountingPages,
+        // Check if this is a module page (format: ModuleName/PageName)
+        const moduleMatch = name.match(/^([A-Z][a-zA-Z]+)\/(.+)$/);
+        if (moduleMatch) {
+            const [, moduleName, pagePath] = moduleMatch;
+            
+            // Try explicit feature structure first: /modules/ModuleName/resources/js/pages/{pagePath}.vue
+            // This handles: Customers/Customers -> /modules/Accounting/resources/js/pages/Customers/Customers.vue
+            let modulePath = `/modules/${moduleName}/resources/js/pages/${pagePath}.vue`;
+            
+            let resolvedFile = Object.keys(allModulePages).find(key => 
+                key.includes(modulePath)
             );
+            
+            if (resolvedFile) {
+                return resolvePageComponent(modulePath, allModulePages);
+            }
+            
+            // Fallback to Accounting module for feature-based components - Updated
+            // This handles: Invoicing/Invoices -> /modules/Accounting/resources/js/pages/Invoicing/Invoices.vue
+            // since Invoicing doesn't match a module name but is a feature within Accounting
+            if (moduleName === 'Invoicing' || moduleName === 'Customers' || moduleName === 'Vendors') {
+                modulePath = `/modules/Accounting/resources/js/pages/${moduleName}/${pagePath}.vue`;
+                
+                resolvedFile = Object.keys(allModulePages).find(key => 
+                    key.includes(modulePath)
+                );
+                
+                if (resolvedFile) {
+                    return resolvePageComponent(modulePath, allModulePages);
+                }
+            }
+            
+            // Fallback to old structure: /modules/ModuleName/resources/js/pages/ModuleName/{pagePath}.vue
+            modulePath = `/modules/${moduleName}/resources/js/pages/${moduleName}/${pagePath}.vue`;
+            
+            resolvedFile = Object.keys(allModulePages).find(key => 
+                key.includes(modulePath)
+            );
+            
+            if (resolvedFile) {
+                return resolvePageComponent(modulePath, allModulePages);
+            }
         }
 
+        // Default to app pages for non-module routes
         return resolvePageComponent(`./pages/${name}.vue`, appPages);
     },
     setup({ el, App, props, plugin }) {

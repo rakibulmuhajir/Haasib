@@ -122,8 +122,8 @@
         "resources/js/**/*.d.ts",
         "resources/js/**/*.tsx",
         "resources/js/**/*.vue",
-        "modules/Accounting/Resources/js/**/*.ts",
-        "modules/Accounting/Resources/js/**/*.d.ts",
-        "modules/Accounting/Resources/js/**/*.vue"
+        "modules/**/resources/js/**/*.ts",
+        "modules/**/resources/js/**/*.d.ts",
+        "modules/**/resources/js/**/*.vue"
     ]
 }

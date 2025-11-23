@@ -6,6 +6,10 @@
 @source '../../storage/framework/views/*.php';
 
 @custom-variant dark (&:is(.dark *));
+@variant sm (&:is(.sm *));
+@variant md (&:is(.md *));
+@variant lg (&:is(.lg *));
+@variant xl (&:is(.xl *));
 
 @theme inline {
     --font-sans:
@@ -16,7 +20,8 @@
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
-
+    
+    
     --color-background: var(--background);
     --color-foreground: var(--foreground);
 

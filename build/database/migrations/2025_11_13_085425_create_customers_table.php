@@ -38,7 +38,7 @@ return new class extends Migration
             $table->decimal('credit_limit', 12, 2)->default(0);
             $table->enum('payment_terms', ['net_15', 'net_30', 'net_45', 'net_60', 'due_on_receipt'])->default('net_30');
             $table->text('notes')->nullable();
-            $table->uuid('created_by');
+            $table->uuid('created_by_user_id');
 
             // Timestamps
             $table->timestamps();
@@ -49,7 +49,7 @@ return new class extends Migration
                   ->references('id')
                   ->on('auth.companies')
                   ->onDelete('cascade');
-            $table->foreign('created_by')
+            $table->foreign('created_by_user_id')
                   ->references('id')
                   ->on('auth.users')
                   ->onDelete('cascade');

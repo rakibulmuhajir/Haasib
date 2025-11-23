@@ -160,11 +160,11 @@ const data = {
         },
         {
           title: "Invoices",
-          url: "/invoices",
+          url: "/accounting/invoices",
         },
         {
           title: "Customers",
-          url: "/customers",
+          url: "/accounting/customers",
         },
         {
           title: "Credit Limits",

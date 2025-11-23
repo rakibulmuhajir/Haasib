@@ -16,8 +16,8 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import Toaster from '@/components/ui/toast/Toaster.vue'
-import CompanyContextDebugger from '@/components/CompanyContextDebugger.vue'
+import Toaster from '@/components/ui/sonner'
+// import CompanyContextDebugger from '@/components/CompanyContextDebugger.vue'
 
 interface Props {
   title?: string
@@ -128,7 +128,7 @@ const showDebugger = computed(() => {
   </SidebarProvider>
   
   <!-- Company Context Debugger -->
-  <CompanyContextDebugger :show-debugger="showDebugger" />
+  <!-- <CompanyContextDebugger :show-debugger="showDebugger" /> -->
   
   <Toaster />
 </template>

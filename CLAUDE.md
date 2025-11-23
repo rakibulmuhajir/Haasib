@@ -116,8 +116,8 @@ You MUST follow these constitutional requirements from `.specify/memory/constitu
 
 **When Creating New Vue Components:**
 - **Reference File**: `AI_PROMPTS/FRONTEND_COMPONENT_STANDARDS.md`
-- **Sample Code**: Component with Composition API, PrimeVue, Inertia.js
-- **Required**: `<script setup>`, PrimeVue components, error handling
+- **Sample Code**: Component with Composition API, shadcn-vue, Inertia.js
+- **Required**: `<script setup>`, shadcn-vue components, error handling
 - **Forbidden**: Options API, HTML elements, fetch() calls
 
 **Mandatory Page Structure - Universal Layout:**
@@ -126,7 +126,7 @@ ALL pages MUST use the UniversalLayout component (NO EXCEPTIONS):
 ```vue
 <template>
   <Head title="Page Title" />
-  
+
   <UniversalLayout
     title="Page Title"
     subtitle="Page Description"
@@ -180,15 +180,15 @@ const headerActions = [
     { label: 'Current Page', active: true }
   ]"
   :header-actions="[
-    { 
-      label: 'Export', 
+    {
+      label: 'Export',
       variant: 'outline',
-      action: () => exportData() 
+      action: () => exportData()
     },
-    { 
-      label: 'Create New', 
+    {
+      label: 'Create New',
       variant: 'default',
-      href: '/create' 
+      href: '/create'
     }
   ]"
 >
@@ -256,7 +256,7 @@ const headerActions = [
 **When Creating Forms:**
 - **Reference File**: `AI_PROMPTS/FORM_VALIDATION_PATTERNS.md`
 - **Sample Code**: Form with Inertia.js form helper, validation, toast notifications
-- **Required**: PrimeVue form components, loading states, error feedback
+- **Required**: shadcn-vue form components, loading states, error feedback
 
 ### 🖊️ INLINE EDITING SYSTEM
 
@@ -273,7 +273,7 @@ const headerActions = [
 // Simple, independent fields
 'name', 'email', 'phone', 'description', 'notes'
 
-// Status toggles  
+// Status toggles
 'is_active', 'is_featured', 'is_published'
 
 // Simple selections
@@ -283,7 +283,7 @@ const headerActions = [
 'due_date', 'start_date', 'issue_date'
 ```
 
-#### ❌ NEVER INLINE EDITABLE  
+#### ❌ NEVER INLINE EDITABLE
 ```php
 // Calculated/computed fields
 'total_amount', 'balance_due', 'outstanding_amount'
@@ -303,7 +303,7 @@ const headerActions = [
 // Permission-dependent
 'credit_limit' => user.hasPermissionTo('customers.manage_credit')
 
-// Status-dependent  
+// Status-dependent
 'due_date' => invoice.status === 'draft'
 
 // Relationship-dependent
@@ -340,7 +340,7 @@ const headerActions = [
 <!-- ✅ CORRECT: Use InlineEditable component -->
 <InlineEditable
   v-model="customer.name"
-  field="name" 
+  field="name"
   :model-id="customer.id"
   model-type="customer"
   :permissions="can"
@@ -367,7 +367,7 @@ All new records start with minimal forms (3-4 fields max):
 required_fields: ['name', 'type', 'currency']
 optional_fields: [] // Everything else via inline editing later
 
-// Invoice creation - MINIMAL ONLY  
+// Invoice creation - MINIMAL ONLY
 required_fields: ['customer_id', 'issue_date', 'due_date']
 optional_fields: [] // Line items, notes, etc. added after creation
 ```
@@ -399,7 +399,7 @@ Bulk operations:           → Full form with batch processing
 
 **GitHub-Style Patterns:**
 - Simple fields: name, description, notes → Inline
-- Complex data: address, settings → Forms  
+- Complex data: address, settings → Forms
 - Creation workflows: Always minimal form first
 - Bulk operations: Always full forms
 
@@ -463,7 +463,7 @@ test('inline edits use universal field saver', function () {
         'field' => 'name',
         'value' => 'New Name'
     ]);
-    
+
     $response->assertOk();
     expect($customer->refresh()->name)->toBe('New Name');
 });
@@ -479,10 +479,10 @@ test('page uses mandatory component structure', function () {
          ->assertSee('PageActions');
 });
 
-// Test PrimeVue component usage
-test('page uses primevue components only', function () {
+// Test shadcn-vue component usage
+test('page uses shadcn-vue components only', function () {
     $response = $this->get('/customers');
-    
+
     // Should not contain HTML form elements
     expect($response->content())->not->toContain('<table>');
     expect($response->content())->not->toContain('<button>');
@@ -493,7 +493,7 @@ test('page uses primevue components only', function () {
 ### 🔐 SECURITY & RBAC
 
 **When Implementing Security Features:**
-- **Reference Files**: 
+- **Reference Files**:
   - `stack/app/Constants/Permissions.php` – Standardized permission constants and helper names
   - `stack/app/Http/Requests/BaseFormRequest.php` – Authorization + RLS validation helpers
   - `stack/database/seeders/PermissionSeeder.php` / `app/database/seeders/RbacSeeder.php` – Current seeder implementation
@@ -505,7 +505,7 @@ test('page uses primevue components only', function () {
 **RBAC Implementation Pattern:**
 ```php
 // In FormRequest classes - COPY THIS PATTERN
-class CreateCustomerRequest extends BaseFormRequest 
+class CreateCustomerRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
@@ -579,17 +579,17 @@ Every page MUST follow this exact structure:
       :search-placeholder="searchPlaceholder"
       :default-actions="pageActions"
     />
-    
+
     <!-- REQUIRED: Content grid (5/6 + 1/6) -->
     <div class="content-grid-5-6">
       <!-- REQUIRED: Main content area -->
       <div class="main-content">
-        <!-- ONLY PrimeVue DataTable allowed -->
+        <!-- ONLY shadcn-vue DataTable allowed -->
         <DataTable>
           <Column />
         </DataTable>
       </div>
-      
+
       <!-- REQUIRED: Sidebar for quick actions -->
       <div class="sidebar-content">
         <QuickLinks :links="quickLinks" />
@@ -604,7 +604,7 @@ Every page MUST follow this exact structure:
 - HTML table/form elements
 - Custom grid layouts
 - Missing LayoutShell/UniversalPageHeader
-- Non-PrimeVue UI components
+- Non-shadcn-vue UI components
 
 ### **Component Placement Rules (STRICT)**
 
@@ -629,7 +629,7 @@ Every page MUST follow this exact structure:
 
 #### 5. **Main Content**
 - **Location**: Left content area (5/6 width)
-- **Component**: PrimeVue DataTable ONLY
+- **Component**: shadcn-vue DataTable ONLY
 - **Never**: HTML tables or custom layouts
 
 ### **Space-Saving Requirements**
@@ -662,7 +662,7 @@ Every page MUST follow this exact structure:
       <Column field="name" header="Name" sortable />
     </DataTable>
   </div>
-  
+
   <div class="sidebar-content">
     <QuickLinks
       :links="quickLinks"
@@ -746,11 +746,11 @@ return Inertia::render('Customers/Index', [
   .content-grid-5-6 {
     @apply flex-col; /* Stack on mobile */
   }
-  
+
   .sidebar-content {
     @apply order-first; /* QuickLinks on top */
   }
-  
+
   .page-header .flex {
     @apply flex-wrap gap-2; /* Wrap header elements */
   }
@@ -768,11 +768,11 @@ import { ref, computed } from 'vue'
 // 2. Inertia
 import { Link, router } from '@inertiajs/vue3'
 
-// 3. PrimeVue (alphabetical)
-import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import { useToast } from 'primevue/usetoast'
+// 3. shadcn-vue (alphabetical)
+import Button from 'shadcn-vue/button'
+import Column from 'shadcn-vue/column'
+import DataTable from 'shadcn-vue/datatable'
+import { useToast } from 'shadcn-vue/usetoast'
 
 // 4. App components (alphabetical)
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
@@ -861,14 +861,14 @@ public function index(Request $request): JsonResponse
 <script setup>
 import { ref, computed } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
-import { useToast } from 'primevue/usetoast'
+import { useToast } from 'shadcn-vue/usetoast'
 import { usePageActions } from '@/composables/usePageActions'
 import LayoutShell from '@/Components/Layout/LayoutShell.vue'
 import UniversalPageHeader from '@/Components/UniversalPageHeader.vue'
 import QuickLinks from '@/Components/QuickLinks.vue'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
+import DataTable from 'shadcn-vue/datatable'
+import Column from 'shadcn-vue/column'
+import Button from 'shadcn-vue/button'
 import { route } from 'ziggy-js'
 
 const props = defineProps({
@@ -963,7 +963,7 @@ const confirmDelete = (customer) => {
 ```
 
 ❌ FORBIDDEN: HTML elements, Options API, fetch() calls, missing mandatory structure
-✅ REQUIRED: `<script setup>`, LayoutShell, UniversalPageHeader, PrimeVue components only
+✅ REQUIRED: `<script setup>`, LayoutShell, UniversalPageHeader, shadcn-vue components only
 
 ---
 
@@ -1237,11 +1237,11 @@ import { ref, computed, onMounted } from 'vue'
 // 2. Inertia imports
 import { Link, router } from '@inertiajs/vue3'
 
-// 3. PrimeVue imports
-import { useToast } from 'primevue/usetoast'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
+// 3. shadcn-vue imports
+import { useToast } from 'shadcn-vue/usetoast'
+import DataTable from 'shadcn-vue/datatable'
+import Column from 'shadcn-vue/column'
+import Button from 'shadcn-vue/button'
 
 // 4. Application imports (@/)
 import { usePageActions } from '@/composables/usePageActions'
@@ -1317,9 +1317,9 @@ try {
 ```php
 try {
     DB::beginTransaction();
-    
+
     $result = $this->performAction($data);
-    
+
     DB::commit();
     return $result;
 } catch (\Exception $e) {
@@ -1353,7 +1353,7 @@ Route::prefix('api/{module}')->name('api.{module}.')->middleware(['auth', 'verif
     Route::get('/{model}', [{Model}ApiController::class, 'show'])->name('show');
     Route::put('/{model}', [{Model}ApiController::class, 'update'])->name('update');
     Route::delete('/{model}', [{Model}ApiController::class, 'destroy'])->name('destroy');
-    
+
     // Bulk operations
     Route::post('/bulk', [{Model}ApiController::class, 'bulk'])->name('bulk');
 });
@@ -1483,7 +1483,7 @@ modules/{ModuleName}/
 ### Technology Stack
 - **Backend**: PHP 8.4+, Laravel 12, PostgreSQL 16
 - **High-Performance Server**: Laravel Octane + FrankenPHP (3-10x faster than standard server)
-- **Frontend**: Vue 3, Inertia.js v2, Shadcn/Vue + PrimeVue v4, Tailwind CSS
+- **Frontend**: Vue 3, Inertia.js v2, Shadcn/Vue + shadcn-vue v4, Tailwind CSS
 - **Authentication**: Laravel Sanctum, Spatie Laravel Permission
 - **Testing**: PestPHP, Playwright
 - **Queue**: Redis + Laravel Horizon
@@ -1617,13 +1617,13 @@ php artisan serve --port=9001
 
 ### Controllers
 - ❌ Direct service injection in constructor (`new Service()`)
-- ❌ Inline validation (`$request->validate([])`) 
+- ❌ Inline validation (`$request->validate([])`)
 - ❌ Direct model access (`Model::create()`)
 - ❌ Missing ServiceContext injection
 - ❌ Bypassing Command Bus for write operations
 
 ### Frontend
-- ❌ HTML elements instead of PrimeVue components
+- ❌ HTML elements instead of shadcn-vue components
 - ❌ Custom inline edit implementations
 - ❌ Missing Sidebar, PageHeader, or component structure
 - ❌ Vue Options API (use Composition API only)
@@ -1653,10 +1653,10 @@ php artisan serve --port=9001
 - [ ] Identified inline vs form editing approach
 - [ ] Verified component reuse opportunities
 
-### 🔧 Implementation Phase  
+### 🔧 Implementation Phase
 - [ ] Using Command Bus for write operations
 - [ ] ServiceContext injected properly
-- [ ] PrimeVue components used exclusively
+- [ ] shadcn-vue components used exclusively
 - [ ] Mandatory page structure followed
 - [ ] Inline editing rules applied correctly
 
@@ -1682,18 +1682,18 @@ php artisan serve --port=9001
 </div>
 
 <!-- Dark mode support (automatic detection) -->
-<div :data-theme="isDark ? 'blue-whale-dark' : 'blue-whale'" 
+<div :data-theme="isDark ? 'blue-whale-dark' : 'blue-whale'"
      :class="isDark ? 'theme-blue-whale-dark' : 'theme-blue-whale'">
   <!-- All page content with dark mode support -->
 </div>
 ```
 
-#### PrimeVue Component Theme Integration
+#### shadcn-vue Component Theme Integration
 ```vue
 <!-- Sidebar MUST use blu-whale theme -->
 <Sidebar theme="blu-whale" />
 
-<!-- All PrimeVue components inherit theme automatically -->
+<!-- All shadcn-vue components inherit theme automatically -->
 <DataTable />  <!-- ✅ Inherits blue-whale theme -->
 <Button />     <!-- ✅ Inherits blue-whale theme -->
 <Dialog />     <!-- ✅ Inherits blue-whale theme -->
@@ -1722,7 +1722,7 @@ mediaQuery.addEventListener('change', (e) => {
 const themeOverride = ref(localStorage.getItem('theme-override'))
 
 export const useTheme = () => ({
-  isDark: computed(() => 
+  isDark: computed(() =>
     themeOverride.value === 'dark' ? true :
     themeOverride.value === 'light' ? false :
     isDark.value
@@ -1788,7 +1788,7 @@ const isThemeCompliant = computed(() => {
 --p-primary-500: #3b82f6;
 --p-primary-950: #1e3a8a;
 
-/* Dark mode */  
+/* Dark mode */
 --p-primary-50: #1e3a8a;
 --p-primary-500: #60a5fa;
 --p-primary-950: #eff6ff;
@@ -1812,7 +1812,7 @@ const isThemeCompliant = computed(() => {
 #### App.vue Integration
 ```vue
 <template>
-  <div 
+  <div
     :data-theme="currentTheme"
     :class="themeClass"
     class="app-container"
@@ -1829,11 +1829,11 @@ import { useTheme } from '@/composables/useTheme'
 
 const { isDark } = useTheme()
 
-const currentTheme = computed(() => 
+const currentTheme = computed(() =>
   isDark.value ? 'blue-whale-dark' : 'blue-whale'
 )
 
-const themeClass = computed(() => 
+const themeClass = computed(() =>
   isDark.value ? 'theme-blue-whale-dark' : 'theme-blue-whale'
 )
 </script>
@@ -1882,7 +1882,7 @@ bash stack/validate-migration.sh
   - Validates blue-whale theme usage, hard-coded colors, forbidden themes
   - Usage: `php artisan layout:validate --json`
 
-- **Migration Validation Script**: `stack/validate-migration.sh` 
+- **Migration Validation Script**: `stack/validate-migration.sh`
   - Bash script with comprehensive theme checks
   - Validates theme compliance before migration
   - Usage: `bash validate-migration.sh`
@@ -1901,21 +1901,21 @@ const path = require('path')
 const validateTheme = () => {
   const files = glob.sync('resources/js/**/*.vue')
   const errors = []
-  
+
   files.forEach(file => {
     const content = fs.readFileSync(file, 'utf8')
-    
+
     // Check for hard-coded colors
     if (content.match(/#[0-9a-f]{6}/gi)) {
       errors.push(`${file}: Hard-coded colors found`)
     }
-    
+
     // Check for missing theme attributes
     if (content.includes('<div') && !content.includes('data-theme')) {
       errors.push(`${file}: Missing theme attributes`)
     }
   })
-  
+
   return errors
 }
 ```

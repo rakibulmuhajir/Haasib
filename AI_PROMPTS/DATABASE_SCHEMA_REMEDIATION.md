@@ -1,103 +1,52 @@
-# Database Schema Remediation Prompt
+# Database Schema Remediation Guide
 
-## Task: Fix Database Schema Constitutional Violations
+**Task**: Fix database schema constitutional violations
+**Location**: `modules/{ModuleName}/Database/Migrations/`
 
-You are a **Database Architecture Expert** specialized in PostgreSQL schema remediation for multi-tenant systems.
+---
 
-## CURRENT VIOLATIONS TO FIX
+## 🎯 CRITICAL VIOLATIONS TO FIX
 
-### **Common Non-Compliant Patterns Found**
-
-#### **1. Integer Primary Keys (CRITICAL)**
+### 1. Integer Primary Keys → UUID
 ```php
-// BEFORE (VIOLATION)
-Schema::create('customers', function (Blueprint $table) {
-    $table->id(); // ❌ Integer primary key
-    $table->string('name');
-    $table->timestamps();
-});
+// ❌ BEFORE
+$table->id();
 
-// AFTER (CONSTITUTIONAL)
-Schema::create('acct.customers', function (Blueprint $table) {
-    $table->uuid('id')->primary(); // ✅ UUID primary key
-    $table->uuid('company_id'); // ✅ Tenant isolation
-    $table->string('customer_number', 50);
-    $table->string('name');
-    $table->timestamps();
-    $table->softDeletes();
-});
+// ✅ AFTER
+$table->uuid('id')->primary();
 ```
 
-#### **2. Missing Multi-Schema Structure (CRITICAL)**
+### 2. Wrong Schema → Correct Schema
 ```php
-// BEFORE (VIOLATION)
-Schema::create('customers', function (Blueprint $table) {
-    // No schema specified - goes to public schema
-});
+// ❌ BEFORE
+Schema::create('customers', ...)
 
-// AFTER (CONSTITUTIONAL)
-// 1. Create schema first
-DB::statement('CREATE SCHEMA IF NOT EXISTS acct');
-
-// 2. Create table in correct schema
-Schema::create('acct.customers', function (Blueprint $table) {
-    // Schema-compliant table definition
-});
+// ✅ AFTER
+Schema::create('acct.customers', ...)
 ```
 
-#### **3. Missing RLS Policies (CRITICAL)**
+### 3. Missing RLS → Enable RLS
 ```php
-// BEFORE (VIOLATION)
-Schema::create('acct.customers', function (Blueprint $table) {
-    // No RLS - cross-tenant data leak possible
-});
-
-// AFTER (CONSTITUTIONAL)
-Schema::create('acct.customers', function (Blueprint $table) {
-    // Table definition...
-});
-
-// Enable RLS (MANDATORY)
+// ✅ REQUIRED
 DB::statement('ALTER TABLE acct.customers ENABLE ROW LEVEL SECURITY');
 DB::statement('ALTER TABLE acct.customers FORCE ROW LEVEL SECURITY');
-
-// Create RLS policy
-DB::statement("
-    CREATE POLICY customers_company_policy ON acct.customers
-    FOR ALL
-    USING (company_id = current_setting('app.current_company_id', true)::uuid)
-    WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid)
-");
+DB::statement("CREATE POLICY customers_policy ON acct.customers
+    USING (company_id = current_setting('app.current_company_id')::uuid)");
 ```
 
-#### **4. Missing Company Context (CRITICAL)**
+### 4. Missing Company Context → Add company_id
 ```php
-// BEFORE (VIOLATION)
-Schema::create('acct.customers', function (Blueprint $table) {
-    $table->uuid('id')->primary();
-    $table->string('name');
-    // ❌ Missing company_id - no tenant isolation
-});
-
-// AFTER (CONSTITUTIONAL)
-Schema::create('acct.customers', function (Blueprint $table) {
-    $table->uuid('id')->primary();
-    $table->uuid('company_id'); // ✅ Tenant isolation
-    $table->string('customer_number', 50);
-    $table->string('name');
-
-    // ✅ Foreign key to auth.companies
-    $table->foreign('company_id')
-          ->references('id')
-          ->on('auth.companies')
-          ->onDelete('cascade');
-
-    // ✅ Unique constraints per company
-    $table->unique(['company_id', 'customer_number']);
-});
+// ✅ REQUIRED
+$table->uuid('company_id');
+$table->foreign('company_id')->references('id')->on('auth.companies')->onDelete('cascade');
+$table->unique(['company_id', 'email']);
 ```
 
-## COMPLETE MIGRATION TEMPLATE
+---
+
+## 📋 COMPLETE MIGRATION TEMPLATE
+
+**Copy this for every new table**:
 
 ```php
 <?php
@@ -111,7 +60,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Create schema if not exists
+        // Create schema if needed
         DB::statement('CREATE SCHEMA IF NOT EXISTS acct');
 
         Schema::create('acct.customers', function (Blueprint $table) {
@@ -121,39 +70,36 @@ return new class extends Migration
             // Tenant Isolation
             $table->uuid('company_id');
 
-            // Business Data
+            // Business Fields
             $table->string('customer_number', 50);
             $table->string('name');
             $table->string('email')->nullable();
-            $table->string('tax_id')->nullable();
-            $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
+            $table->enum('status', ['active', 'inactive'])->default('active');
             $table->decimal('credit_limit', 10, 2)->default(0);
 
             // Timestamps
             $table->timestamps();
             $table->softDeletes();
 
-            // Foreign Keys (cross-schema)
+            // Foreign Keys
             $table->foreign('company_id')
                   ->references('id')
                   ->on('auth.companies')
                   ->onDelete('cascade');
 
-            // Unique Constraints (per-tenant)
+            // Unique Constraints (per company)
             $table->unique(['company_id', 'customer_number']);
             $table->unique(['company_id', 'email']);
 
-            // Indexes for Performance
+            // Performance Indexes
             $table->index(['company_id', 'status']);
-            $table->index(['company_id', 'name']);
-            $table->index(['company_id', 'email']);
         });
 
-        // Enable RLS (Row Level Security)
+        // Enable RLS (MANDATORY)
         DB::statement('ALTER TABLE acct.customers ENABLE ROW LEVEL SECURITY');
         DB::statement('ALTER TABLE acct.customers FORCE ROW LEVEL SECURITY');
 
-        // Create RLS Policy
+        // RLS Policy
         DB::statement("
             CREATE POLICY customers_company_policy ON acct.customers
             FOR ALL
@@ -161,35 +107,16 @@ return new class extends Migration
             WITH CHECK (company_id = current_setting('app.current_company_id', true)::uuid)
         ");
 
-        // Create Audit Trigger (for financial/business tables)
+        // Audit Trigger (for business tables)
         DB::statement('
             CREATE TRIGGER customers_audit_trigger
             AFTER INSERT OR UPDATE OR DELETE ON acct.customers
             FOR EACH ROW EXECUTE FUNCTION audit.audit_log()
         ');
-
-        // Create Function for Customer Number Generation
-        DB::statement('
-            CREATE OR REPLACE FUNCTION acct.generate_customer_number(p_company_id UUID)
-            RETURNS TEXT AS $$
-            DECLARE
-                next_number INTEGER;
-            BEGIN
-                SELECT COALESCE(MAX(CAST(SUBSTRING(customer_number FROM 6) AS INTEGER)), 0) + 1
-                INTO next_number
-                FROM acct.customers
-                WHERE company_id = p_company_id;
-
-                RETURN \'CUST-\' || LPAD(next_number::TEXT, 5, \'0\');
-            END;
-            $$ LANGUAGE plpgsql;
-        ');
     }
 
     public function down(): void
     {
-        // Clean up in reverse order
-        DB::statement('DROP FUNCTION IF EXISTS acct.generate_customer_number(UUID)');
         DB::statement('DROP TRIGGER IF EXISTS customers_audit_trigger ON acct.customers');
         DB::statement('DROP POLICY IF EXISTS customers_company_policy ON acct.customers');
         Schema::dropIfExists('acct.customers');
@@ -197,54 +124,69 @@ return new class extends Migration
 };
 ```
 
-## CHECKLIST FOR EVERY MIGRATION
+---
 
-### **✅ Must Include:**
-- [ ] Schema specification (`auth/acct/ledger/ops`)
-- [ ] UUID primary key with `$table->uuid('id')->primary()`
-- [ ] `company_id` column for tenant tables
-- [ ] Cross-schema foreign key references
+## 🗂️ SCHEMA ASSIGNMENT RULES
+
+| Module | Schema | Examples |
+|--------|--------|----------|
+| **Core** | `auth` | users, companies, permissions |
+| **Accounting** | `acct` | customers, invoices, payments |
+| **Hospitality** | `hsp` | bookings, rooms, guests |
+| **CRM** | `crm` | leads, contacts, campaigns |
+
+**Rule**: If a module needs a new entity, it goes in that module's schema.
+
+---
+
+## ✅ MIGRATION CHECKLIST
+
+**Every migration MUST have**:
+- [ ] Schema prefix (`acct.`, `hsp.`, etc.)
+- [ ] UUID primary key
+- [ ] `company_id` column (tenant tables)
+- [ ] Cross-schema foreign keys
 - [ ] Unique constraints per company
-- [ ] Performance indexes
-- [ ] RLS enablement (`ENABLE ROW LEVEL SECURITY`)
-- [ ] RLS policy with `USING` and `WITH CHECK`
-- [ ] RLS forcing (`FORCE ROW LEVEL SECURITY`)
-- [ ] Audit trigger for business tables
-- [ ] Proper cleanup in `down()` method
+- [ ] RLS enabled + forced
+- [ ] RLS policy created
+- [ ] Audit trigger (business tables)
+- [ ] Proper `down()` cleanup
 
-### **❌ Must NOT Include:**
-- [ ] `$table->id()` (integer primary keys)
-- [ ] Tables in `public` schema (except system tables)
-- [ ] Missing RLS policies on tenant tables
-- [ ] Cross-schema foreign keys without proper references
-- [ ] UUID functions without pgcrypto extension
+---
 
-## VALIDATION COMMANDS
+## 🔍 VALIDATION COMMANDS
 
 ```bash
 # Test migration
-php artisan migrate
+cd stack && php artisan migrate
 
 # Check RLS policies
 php artisan tinker
 > DB::select("SELECT * FROM pg_policies WHERE tablename = 'customers'");
 
-# Check table schema
-php artisan tinker
-> \d acct.customers
-
 # Test RLS isolation
-php artisan tinker
-> DB::statement("SET app.current_company_id = 'your-company-uuid'");
-> DB::select("SELECT COUNT(*) FROM acct.customers");
+> DB::statement("SET app.current_company_id = 'company-uuid'");
+> DB::table('acct.customers')->count(); // Should only show that company's data
 ```
 
-## COMMON PITFALLS TO AVOID
+---
 
-1. **Never use `Schema::hasSchema()`** - doesn't exist in Laravel
-2. **Always enable pgcrypto before UUID functions** - `CREATE EXTENSION IF NOT EXISTS pgcrypto`
-3. **Test rollback** - `php artisan migrate:rollback` must work
-4. **Check for existing data** - migrations must be idempotent
-5. **Use correct UUID casting** - `current_setting(..., true)::uuid`
+## 🚫 COMMON MISTAKES
 
-Apply this template to ALL non-compliant migrations in your codebase.
+```php
+// ❌ Don't use Schema::hasSchema() - doesn't exist
+// ✅ Use DB::statement('CREATE SCHEMA IF NOT EXISTS ...')
+
+// ❌ Don't forget pgcrypto extension
+// ✅ Already enabled in base migration
+
+// ❌ Don't use wrong UUID casting
+// ✅ Use: current_setting(..., true)::uuid
+
+// ❌ Don't create tables in public schema
+// ✅ Always specify schema: acct.customers
+```
+
+---
+
+**Reference**: `.specify/memory/constitution.md` for architectural rationale

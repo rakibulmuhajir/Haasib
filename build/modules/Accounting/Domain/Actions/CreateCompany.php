@@ -2,6 +2,7 @@
 
 namespace Modules\Accounting\Domain\Actions;
 
+use App\Services\CurrencyService;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Modules\Accounting\Models\Company;
@@ -9,6 +10,10 @@ use Modules\Accounting\Models\User;
 
 class CreateCompany
 {
+    public function __construct(
+        private CurrencyService $currencyService
+    ) {}
+
     /**
      * Create a new company.
      *
@@ -67,6 +72,9 @@ class CreateCompany
 
         // Create company
         $company = Company::create($validated);
+
+        // Set up multi-currency system with base currency
+        $this->setupCompanyCurrency($company);
 
         // Enable core modules by default
         $this->enableCoreModules($company, $createdBy);
@@ -200,5 +208,30 @@ class CreateCompany
         ];
 
         return $this->executeWithOwner($data, $owner);
+    }
+
+    /**
+     * Set up multi-currency system for a new company.
+     */
+    protected function setupCompanyCurrency(Company $company): void
+    {
+        if (!$company->base_currency) {
+            return; // No base currency set, skip setup
+        }
+
+        try {
+            // Set up the base currency in the multi-currency system
+            $this->currencyService->setupBaseCurrency(
+                $company->id,
+                $company->base_currency
+            );
+        } catch (\Exception $e) {
+            // Log the error but don't fail company creation
+            \Log::warning('Failed to setup currency for new company', [
+                'company_id' => $company->id,
+                'base_currency' => $company->base_currency,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

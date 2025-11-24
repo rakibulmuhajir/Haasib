@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Services\ServiceContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -20,6 +21,13 @@ class SetCompanyContext
      */
     public function handle(Request $request, Closure $next): Response
     {
+        $user = $request->user();
+        
+        // Ensure company is always in session for authenticated users
+        if ($user) {
+            $this->ensureCompanyInContext($user, $request);
+        }
+        
         // Create service context from request
         $serviceContext = ServiceContext::fromRequest($request);
         
@@ -33,6 +41,34 @@ class SetCompanyContext
         $this->logContextSwitch($serviceContext);
 
         return $next($request);
+    }
+
+    /**
+     * Ensure a company is always set in the session for authenticated users.
+     */
+    private function ensureCompanyInContext(User $user, Request $request): void
+    {
+        $companyContextManager = app(\App\Services\CompanyContextManager::class);
+        
+        // Get current active company from session or auto-resolve one
+        $currentCompanyId = $request->session()->get('active_company_id');
+        
+        if (!$currentCompanyId) {
+            // Auto-select first available company if none in session
+            $userCompanies = $companyContextManager->getUserCompanies($user);
+            
+            if (!empty($userCompanies)) {
+                $firstCompany = $userCompanies[0];
+                $request->session()->put('active_company_id', $firstCompany['id']);
+                
+                Log::info('Auto-selected company for user', [
+                    'user_id' => $user->id,
+                    'company_id' => $firstCompany['id'],
+                    'company_name' => $firstCompany['name'],
+                    'reason' => 'no_active_company_in_session'
+                ]);
+            }
+        }
     }
 
     /**

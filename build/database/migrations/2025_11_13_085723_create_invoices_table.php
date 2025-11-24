@@ -22,22 +22,33 @@ return new class extends Migration
             // Business Data
             $table->string('invoice_number', 50);
             $table->uuid('customer_id');
-            $table->date('invoice_date');
+            $table->date('issue_date'); // renamed from invoice_date
             $table->date('due_date');
-            $table->uuid('created_by');
+            $table->uuid('created_by_user_id'); // renamed from created_by
             $table->enum('status', ['draft', 'sent', 'viewed', 'overdue', 'paid', 'void', 'write_off'])->default('draft');
+            $table->enum('payment_status', ['unpaid', 'partially_paid', 'paid', 'overdue'])->default('unpaid');
             $table->enum('type', ['invoice', 'credit_memo', 'debit_memo'])->default('invoice');
+            
+            // Financial Data
             $table->decimal('subtotal', 12, 2);
+            $table->decimal('discount_amount', 12, 2)->default(0);
             $table->decimal('tax_amount', 12, 2)->default(0);
             $table->decimal('total_amount', 12, 2);
             $table->decimal('paid_amount', 12, 2)->default(0);
             $table->decimal('balance_due', 12, 2);
-            $table->char('currency', 3)->default('USD');
+            
+            // Multi-Currency Support
+            $table->char('currency_code', 3)->default('USD');
+            $table->decimal('exchange_rate', 12, 6)->default(1.000000);
+            $table->decimal('base_currency_total', 12, 2)->nullable(); // total in company's base currency
+            
+            // Additional Fields
+            $table->string('po_number')->nullable(); // Purchase Order number
+            $table->decimal('shipping_amount', 12, 2)->default(0);
             $table->string('payment_terms')->nullable();
             $table->text('notes')->nullable();
             $table->text('terms_and_conditions')->nullable();
             $table->text('customer_notes')->nullable();
-            $table->json('line_items');
             $table->uuid('approved_by')->nullable();
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('sent_at')->nullable();
@@ -58,7 +69,7 @@ return new class extends Migration
                   ->references('id')
                   ->on('acct.customers')
                   ->onDelete('cascade');
-            $table->foreign('created_by')
+            $table->foreign('created_by_user_id')
                   ->references('id')
                   ->on('auth.users')
                   ->onDelete('cascade');
@@ -76,11 +87,14 @@ return new class extends Migration
 
             // Indexes for Performance
             $table->index(['company_id', 'status']);
+            $table->index(['company_id', 'payment_status']);
             $table->index(['company_id', 'customer_id']);
-            $table->index(['company_id', 'invoice_date']);
+            $table->index(['company_id', 'issue_date']);
             $table->index(['company_id', 'due_date']);
+            $table->index(['company_id', 'currency_code']);
             $table->index(['customer_id', 'status']);
             $table->index(['status', 'due_date']);
+            $table->index(['payment_status', 'due_date']);
         });
 
         // Enable RLS (Row Level Security)

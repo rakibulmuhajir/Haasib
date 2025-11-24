@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { LucideIcon } from "lucide-vue-next"
 import { ChevronRight } from "lucide-vue-next"
+import { reactive } from "vue"
 import {
   Collapsible,
   CollapsibleContent,
@@ -29,6 +30,8 @@ defineProps<{
     }[]
   }[]
 }>()
+
+const openStates = reactive<Record<string, boolean>>({})
 </script>
 
 <template>
@@ -39,7 +42,8 @@ defineProps<{
         v-for="item in items"
         :key="item.title"
         as-child
-        :default-open="item.isActive"
+        :open="item.isActive || openStates[item.title]"
+        @update:open="(value) => (openStates[item.title] = value)"
         class="group/collapsible"
       >
         <SidebarMenuItem>

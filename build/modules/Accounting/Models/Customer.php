@@ -4,10 +4,12 @@ namespace Modules\Accounting\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Company;
+use App\Models\CompanyCurrency;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -27,23 +29,21 @@ class Customer extends Model
         'company_id',
         'customer_number',
         'name',
-        'legal_name',
+        'display_name',
         'status',
         'email',
         'phone',
-        'default_currency',
+        'website',
+        'preferred_currency_code',
         'payment_terms',
         'credit_limit',
-        'credit_limit_effective_at',
         'tax_id',
-        'website',
         'notes',
-        'created_by_user_id',
+        'created_by',
     ];
 
     protected $casts = [
         'credit_limit' => 'decimal:2',
-        'credit_limit_effective_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -67,7 +67,16 @@ class Customer extends Model
      */
     public function createdBy()
     {
-        return $this->belongsTo(User::class, 'created_by_user_id');
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the preferred currency for the customer.
+     */
+    public function preferredCurrency(): BelongsTo
+    {
+        return $this->belongsTo(CompanyCurrency::class, 'preferred_currency_code', 'currency_code')
+            ->where('company_id', $this->company_id);
     }
 
     /**

@@ -13,6 +13,7 @@ import {
   CheckSquare,
   ChevronRight,
   ClipboardList,
+  Coins,
   Command,
   CreditCard,
   DollarSign,
@@ -135,6 +136,11 @@ const fallbackTeams = [
 const companiesForSwitcher = computed(() => companyOptions.value.length ? companyOptions.value : fallbackTeams)
 
 // Dashboard navigation data
+const currentPath = computed(() => {
+  const path = (page.url as string | undefined) || (typeof window !== 'undefined' ? window.location.pathname : '/')
+  return (path || '/').split('?')[0] || '/'
+})
+
 const data = {
   user: {
     name: user?.name || "Admin User",
@@ -146,7 +152,6 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: Home,
-      isActive: true,
       items: [],
     },
     {
@@ -351,6 +356,10 @@ const data = {
           title: "Integrations",
           url: "/settings/integrations",
         },
+        {
+          title: "Currencies",
+          url: "/settings/currencies",
+        },
       ],
     },
   ],
@@ -387,6 +396,19 @@ const data = {
     },
   ],
 }
+
+const navMain = computed(() => {
+  return data.navMain.map((item) => {
+    const subItems = item.items || []
+    const hasActiveChild = subItems.some((subItem) => currentPath.value.startsWith(subItem.url))
+    const isSelfActive = item.url && item.url !== '#' ? currentPath.value.startsWith(item.url) : false
+
+    return {
+      ...item,
+      isActive: Boolean(item.isActive || isSelfActive || hasActiveChild),
+    }
+  })
+})
 </script>
 
 <template>
@@ -399,7 +421,7 @@ const data = {
       />
     </SidebarHeader>
     <SidebarContent>
-      <NavMain :items="data.navMain" />
+      <NavMain :items="navMain" />
       <NavProjects :projects="data.projects" />
     </SidebarContent>
     <SidebarFooter>

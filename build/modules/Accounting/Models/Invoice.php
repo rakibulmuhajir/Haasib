@@ -4,6 +4,7 @@ namespace Modules\Accounting\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Company;
+use App\Models\CompanyCurrency;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -49,14 +50,22 @@ class Invoice extends Model
             'sent_at' => 'datetime',
             'paid_at' => 'datetime',
             'overdue_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'viewed_at' => 'datetime',
             'subtotal' => 'decimal:2',
-            'tax_amount' => 'decimal:2',
             'discount_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'shipping_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
+            'paid_amount' => 'decimal:2',
             'balance_due' => 'decimal:2',
+            'exchange_rate' => 'decimal:6',
+            'base_currency_total' => 'decimal:2',
             'company_id' => 'string',
             'customer_id' => 'string',
             'created_by_user_id' => 'string',
+            'approved_by' => 'string',
+            'paid_by' => 'string',
         ];
     }
 
@@ -82,6 +91,36 @@ class Invoice extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Approver relationship.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Payment processor relationship.
+     */
+    public function paidBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by');
+    }
+
+    /**
+     * Currency relationship.
+     */
+    public function currency(): BelongsTo
+    {
+        return $this->belongsTo(CompanyCurrency::class, 'currency_code', 'currency_code')
+            ->where('company_id', function($query) {
+                $query->select('company_id')
+                    ->from($this->getTable())
+                    ->whereColumn('id', $this->getQualifiedKeyName())
+                    ->limit(1);
+            });
     }
 
     /**
@@ -365,5 +404,79 @@ class Invoice extends Model
         }
 
         return 'unpaid';
+    }
+
+    /**
+     * Get the invoice currency code.
+     */
+    public function getCurrencyCode(): string
+    {
+        return $this->currency_code ?? 'USD';
+    }
+
+    /**
+     * Get the exchange rate for this invoice.
+     */
+    public function getExchangeRate(): float
+    {
+        return (float) ($this->exchange_rate ?? 1.000000);
+    }
+
+    /**
+     * Calculate base currency amount from invoice currency amount.
+     */
+    public function convertToBaseCurrency(float $amount): float
+    {
+        return $amount * $this->getExchangeRate();
+    }
+
+    /**
+     * Calculate invoice currency amount from base currency amount.
+     */
+    public function convertFromBaseCurrency(float $amount): float
+    {
+        $rate = $this->getExchangeRate();
+        return $rate > 0 ? $amount / $rate : $amount;
+    }
+
+    /**
+     * Update base currency total when amounts change.
+     */
+    public function updateBaseCurrencyTotal(): void
+    {
+        $this->base_currency_total = $this->convertToBaseCurrency($this->total_amount);
+        $this->save();
+    }
+
+    /**
+     * Check if invoice is in a foreign currency (not base currency).
+     */
+    public function isForeignCurrency(): bool
+    {
+        $company = $this->relationLoaded('company') ? $this->company : $this->company()->first();
+        $baseCurrency = $company?->getSetting('base_currency', 'USD');
+        
+        return $this->getCurrencyCode() !== $baseCurrency;
+    }
+
+    /**
+     * Get formatted currency amount.
+     */
+    public function getFormattedAmount(float $amount, ?string $currencyCode = null): string
+    {
+        $currency = $currencyCode ?? $this->getCurrencyCode();
+        
+        // Basic formatting - can be enhanced with proper currency formatter
+        $symbol = match($currency) {
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            'JPY' => '¥',
+            default => $currency . ' ',
+        };
+
+        $decimals = $currency === 'JPY' ? 0 : 2;
+        
+        return $symbol . number_format($amount, $decimals);
     }
 }

@@ -157,13 +157,30 @@ class ServiceContext
             return false;
         }
 
-        // For company-scoped permissions, check with team context
-        if ($this->hasCompany()) {
-            return $this->user->hasPermissionTo($permission, $this->getCompanyId());
+        // Check for system permissions first
+        if ($this->user->hasPermissionTo($permission)) {
+            return true;
         }
 
-        // For system permissions
-        return $this->user->hasPermissionTo($permission);
+        // For company-scoped permissions, check company-specific roles
+        if ($this->hasCompany()) {
+            // Get company-scoped role name
+            $userRole = $this->user->getRoleInCompany($this->getCompanyId());
+            
+            if ($userRole) {
+                $companyScopedRole = "{$userRole}_{$this->getCompanyId()}";
+                
+                if ($this->user->hasRole($companyScopedRole)) {
+                    // Check if the role has this permission
+                    $role = \App\Models\Role::where('name', $companyScopedRole)->first();
+                    if ($role) {
+                        return $role->hasPermissionTo($permission);
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     public function canAccessCompany(?string $companyId = null): bool

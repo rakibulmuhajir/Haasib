@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use Illuminate\Validation\Rule as ValidationRule;
 use Modules\Accounting\Models\Customer;
 use Modules\Accounting\Models\Invoice;
 use Illuminate\Http\Request;
@@ -17,82 +16,87 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('dashboard', function () {
-    return Inertia::render('Dashboard');
+    $companyId = session('active_company_id') ?? session('current_company_id');
+
+    // Get recent invoices with customer data
+    $invoices = Invoice::query()
+        ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+        ->with('customer:id,name')
+        ->select('id', 'invoice_number', 'customer_id', 'total_amount', 'balance_due', 'payment_status', 'status', 'issue_date', 'due_date', 'created_at')
+        ->orderBy('created_at', 'desc')
+        ->limit(10)
+        ->get();
+
+    // Transform invoices for frontend
+    $invoiceData = $invoices->map(function ($invoice) {
+        $status = strtolower($invoice->payment_status ?? $invoice->status ?? '');
+        $statusLabel = match ($status) {
+            'paid' => 'Paid',
+            'partially_paid' => 'Partially Paid',
+            'overdue' => 'Overdue',
+            'unpaid' => 'Unpaid',
+            default => 'Pending',
+        };
+
+        $referenceDate = $invoice->due_date ?? $invoice->issue_date ?? $invoice->created_at;
+        $amount = $invoice->balance_due ?? $invoice->total_amount ?? 0;
+
+        return [
+            'id' => $invoice->id,
+            'customer' => $invoice->customer->name ?? 'Unknown Customer',
+            'invoice' => $invoice->invoice_number,
+            'amount' => '$' . number_format((float) $amount, 2),
+            'status' => $statusLabel,
+            'date' => optional($referenceDate)->toDateString() ?? '',
+            'description' => $invoice->status ? ucfirst(str_replace('_', ' ', $invoice->status)) : 'Invoice',
+        ];
+    });
+
+    return Inertia::render('Dashboard', [
+        'invoices' => $invoiceData,
+    ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('dashboard/custom', function () {
     return Inertia::render('DashboardCustom');
 })->middleware(['auth', 'verified'])->name('dashboard.custom');
 
-Route::get('accounting/customers', function () {
-    $companyId = session('active_company_id') ?? session('current_company_id');
+// Customer Management Routes
+use Modules\Accounting\Http\Controllers\CustomerController;
 
-    $customers = Customer::query()
-        ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
-        ->select('id', 'customer_number', 'name', 'email', 'status', 'created_at')
-        ->orderBy('name')
-        ->limit(50)
-        ->get();
+Route::prefix('accounting')->middleware(['auth', 'verified'])->group(function () {
+    Route::get('customers', [CustomerController::class, 'index'])->name('customers');
+    Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+    Route::get('customers-search', [CustomerController::class, 'search'])->name('customers.search');
+});
 
-    return Inertia::render('Customers/Index', [
-        'customers' => $customers,
-    ]);
-})->middleware(['auth', 'verified'])->name('accounting.customers');
+// Currency Settings Routes
+use App\Http\Controllers\CurrencySettingsController;
 
-Route::post('accounting/customers', function (Request $request) {
-    $companyId = session('active_company_id') ?? session('current_company_id');
-    if (! $companyId) {
-        return back()->with('error', 'Select a company before creating customers.');
-    }
+Route::prefix('settings')->middleware(['auth', 'verified'])->group(function () {
+    Route::get('currencies', [CurrencySettingsController::class, 'index'])->name('settings.currencies');
+    Route::post('currencies', [CurrencySettingsController::class, 'store'])->name('settings.currencies.store');
+    Route::put('currencies/{companyCurrency}', [CurrencySettingsController::class, 'update'])->name('settings.currencies.update');
+    Route::delete('currencies/{companyCurrency}', [CurrencySettingsController::class, 'destroy'])->name('settings.currencies.destroy');
+    Route::put('currencies/{companyCurrency}/exchange-rate', [CurrencySettingsController::class, 'updateExchangeRate'])->name('settings.currencies.exchange-rate');
+    Route::post('currencies/toggle-multi-currency', [CurrencySettingsController::class, 'toggleMultiCurrency'])->name('settings.currencies.toggle-multi-currency');
+});
 
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['nullable', 'email', 'max:255'],
-    ]);
+// Invoice Management Routes  
+use Modules\Accounting\Http\Controllers\InvoiceController;
 
-    $nextNumber = Customer::query()
-        ->where('company_id', $companyId)
-        ->max(DB::raw("CAST(SUBSTRING(customer_number, 6) AS INTEGER)")) ?? 0;
-    $customerNumber = 'CUST-' . str_pad((string) ($nextNumber + 1), 5, '0', STR_PAD_LEFT);
+Route::prefix('accounting')->middleware(['auth', 'verified'])->group(function () {
+    Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices');
+    Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+    Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+    Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
+    Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+});
 
-    Customer::create([
-        'company_id' => $companyId,
-        'customer_number' => $customerNumber,
-        'name' => $validated['name'],
-        'email' => $validated['email'] ?? null,
-        'status' => 'active',
-        'created_by_user_id' => $request->user()->id,
-    ]);
 
-    return redirect()->route('accounting.customers')->with('success', 'Customer created.');
-})->middleware(['auth', 'verified'])->name('accounting.customers.store');
-
-Route::get('accounting/invoices', function () {
-    $companyId = session('active_company_id') ?? session('current_company_id');
-
-    $invoices = Invoice::query()
-        ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
-        ->with('customer:id,name')
-        ->select('id', 'invoice_number', 'customer_id', 'total_amount', 'status', 'due_date', 'invoice_date', 'created_at')
-        ->orderByDesc('created_at')
-        ->limit(50)
-        ->get()
-        ->map(function ($invoice) {
-            return [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'customer_name' => $invoice->customer?->name,
-                'total_amount' => $invoice->total_amount,
-                'status' => $invoice->status,
-                'due_date' => optional($invoice->due_date)->toDateString(),
-          'issue_date' => optional($invoice->invoice_date)->toDateString(),
-            ];
-        });
-
-    return Inertia::render('Invoicing/Invoices/Index', [
-        'invoices' => $invoices,
-    ]);
-})->middleware(['auth', 'verified'])->name('accounting.invoices');
 
 Route::get('companies', function () {
     // Query actual companies from database

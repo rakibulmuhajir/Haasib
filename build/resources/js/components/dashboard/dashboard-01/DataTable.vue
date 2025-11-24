@@ -4,7 +4,7 @@ import DraggableRow from "./DraggableRow.vue"
 import DragHandle from "./DragHandle.vue"
 
 export const schema = z.object({
-  id: z.number(),
+  id: z.string(),
   customer: z.string(),
   invoice: z.string(),
   amount: z.string(),
@@ -15,7 +15,7 @@ export const schema = z.object({
 </script>
 
 <script setup lang="ts">
-import { ref, h } from 'vue'
+import { ref, h, computed, watch } from 'vue'
 import type {
   ColumnDef,
   ColumnFiltersState,
@@ -85,7 +85,7 @@ const props = defineProps<{
 }>()
 
 interface TableData {
-  id: number
+  id: string
   customer: string
   invoice: string
   amount: string
@@ -93,6 +93,40 @@ interface TableData {
   date: string
   description: string
 }
+
+const tabViews = [
+  { value: "recent", label: "Recent Invoices", filter: (row: TableData) => true, empty: "No invoices found." },
+  { value: "pending", label: "Pending Payments", filter: (row: TableData) => {
+    const status = (row.status || '').toLowerCase()
+    return status.includes("pending") || status.includes("unpaid") || status.includes("draft") || status.includes("sent") || status.includes("partial")
+  }, empty: "No pending invoices found." },
+  { value: "overdue", label: "Overdue Items", filter: (row: TableData) => {
+    const status = (row.status || '').toLowerCase()
+    return status.includes("overdue")
+  }, empty: "No overdue invoices found." },
+]
+
+const activeTab = ref(tabViews[0].value)
+
+const filteredData = computed(() => {
+  const tab = tabViews.find(({ value }) => value === activeTab.value) ?? tabViews[0]
+  return (props.data || []).filter(tab.filter)
+})
+
+const statusCounts = computed(() => {
+  const normalized = (props.data || []).map((row) => (row.status || '').toLowerCase())
+
+  return {
+    pending: normalized.filter((status) =>
+      status.includes('pending') ||
+      status.includes('unpaid') ||
+      status.includes('draft') ||
+      status.includes('sent') ||
+      status.includes('partial')
+    ).length,
+    overdue: normalized.filter((status) => status.includes('overdue')).length,
+  }
+})
 
 const sorting = ref<SortingState>([])
 const columnFilters = ref<ColumnFiltersState>([])
@@ -140,13 +174,18 @@ const columns: ColumnDef<TableData>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string
+      const status = (row.getValue("status") as string) || ''
+      const normalized = status.toLowerCase().replace(/\s+/g, '_')
       const statusConfig = {
-        "Paid": { icon: IconCircleCheckFilled, class: "text-emerald-500", variant: "default" as const },
-        "Pending": { icon: IconClock, class: "text-yellow-500", variant: "secondary" as const },
-        "Overdue": { icon: IconAlertTriangle, class: "text-red-500", variant: "destructive" as const },
+        paid: { icon: IconCircleCheckFilled, class: "text-emerald-500", variant: "default" as const },
+        pending: { icon: IconClock, class: "text-yellow-500", variant: "secondary" as const },
+        unpaid: { icon: IconClock, class: "text-yellow-500", variant: "secondary" as const },
+        sent: { icon: IconClock, class: "text-yellow-500", variant: "secondary" as const },
+        draft: { icon: IconClock, class: "text-yellow-500", variant: "secondary" as const },
+        partially_paid: { icon: IconClock, class: "text-blue-500", variant: "secondary" as const },
+        overdue: { icon: IconAlertTriangle, class: "text-red-500", variant: "destructive" as const },
       }
-      const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Pending
+      const config = statusConfig[normalized as keyof typeof statusConfig] || statusConfig.pending
       
       return h("div", { class: "flex items-center gap-2" }, [
         h(config.icon, { class: `h-4 w-4 ${config.class}` }),
@@ -195,7 +234,7 @@ const columns: ColumnDef<TableData>[] = [
 
 const table = useVueTable({
   get data() {
-    return props.data
+    return filteredData.value
   },
   columns,
   getCoreRowModel: getCoreRowModel(),
@@ -229,18 +268,24 @@ const table = useVueTable({
     get rowSelection() { return rowSelection.value },
   },
 })
-</script>
+
+watch(activeTab, () => {
+  rowSelection.value = {}
+  table.setPageIndex(0)
+})
+  </script>
 
 <template>
   <Tabs
-    default-value="recent"
+    v-model:modelValue="activeTab"
+    :default-value="tabViews[0].value"
     class="w-full flex-col justify-start gap-6"
   >
     <div class="flex items-center justify-between px-4 lg:px-6">
       <Label for="view-selector" class="sr-only">
         View
       </Label>
-      <Select default-value="recent">
+      <Select v-model:modelValue="activeTab">
         <SelectTrigger
           id="view-selector"
           class="flex w-fit @4xl/main:hidden"
@@ -249,29 +294,27 @@ const table = useVueTable({
           <SelectValue placeholder="Select a view" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="recent">
-            Recent Invoices
-          </SelectItem>
-          <SelectItem value="pending">
-            Pending Payments
-          </SelectItem>
-          <SelectItem value="overdue">
-            Overdue Items
+          <SelectItem
+            v-for="tab in tabViews"
+            :key="tab.value"
+            :value="tab.value"
+          >
+            {{ tab.label }}
           </SelectItem>
         </SelectContent>
       </Select>
       <TabsList class="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
-        <TabsTrigger value="recent">
-          Recent Invoices
-        </TabsTrigger>
-        <TabsTrigger value="pending">
-          Pending Payments <Badge variant="secondary">
-            {{ data.filter(item => item.status === 'Pending').length }}
+        <TabsTrigger
+          v-for="tab in tabViews"
+          :key="tab.value"
+          :value="tab.value"
+        >
+          {{ tab.label }}
+          <Badge v-if="tab.value === 'pending'" variant="secondary">
+            {{ statusCounts.pending }}
           </Badge>
-        </TabsTrigger>
-        <TabsTrigger value="overdue">
-          Overdue Items <Badge variant="secondary">
-            {{ data.filter(item => item.status === 'Overdue').length }}
+          <Badge v-else-if="tab.value === 'overdue'" variant="secondary">
+            {{ statusCounts.overdue }}
           </Badge>
         </TabsTrigger>
       </TabsList>
@@ -305,7 +348,9 @@ const table = useVueTable({
       </div>
     </div>
     <TabsContent
-      value="recent"
+      v-for="tab in tabViews"
+      :key="tab.value"
+      :value="tab.value"
       class="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
     >
       <div class="overflow-hidden rounded-lg border">
@@ -327,7 +372,7 @@ const table = useVueTable({
                   :col-span="columns.length"
                   class="h-24 text-center"
                 >
-                  No invoices found.
+                  {{ tab.empty }}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -406,19 +451,6 @@ const table = useVueTable({
             </Button>
           </div>
         </div>
-      </div>
-    </TabsContent>
-    <TabsContent
-      value="pending"
-      class="flex flex-col px-4 lg:px-6"
-    >
-      <div class="aspect-video w-full flex-1 rounded-lg border border-dashed flex items-center justify-center">
-        <p class="text-muted-foreground">Pending payments view coming soon...</p>
-      </div>
-    </TabsContent>
-    <TabsContent value="overdue" class="flex flex-col px-4 lg:px-6">
-      <div class="aspect-video w-full flex-1 rounded-lg border border-dashed flex items-center justify-center">
-        <p class="text-muted-foreground">Overdue items view coming soon...</p>
       </div>
     </TabsContent>
   </Tabs>

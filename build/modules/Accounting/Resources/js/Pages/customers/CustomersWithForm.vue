@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import UniversalLayout from '@/layouts/UniversalLayout.vue'
 import { Head } from '@inertiajs/vue3'
-import { Button } from '@/components/ui/button'
-import { Form, Field } from '@/components/ui/form'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useForm } from '@inertiajs/vue3'
+import CustomerForm from '@/components/forms/CustomerForm.vue'
 
 const breadcrumbs = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -20,17 +18,24 @@ const props = defineProps<{
     email?: string | null
     status: string
   }>
+  isMultiCurrencyEnabled?: boolean
+  currencies?: Array<{
+    code: string
+    name: string
+    symbol: string
+    display_name: string
+    is_base?: boolean
+  }>
+  baseCurrency?: {
+    code: string
+    name: string
+    symbol: string
+  }
 }>()
 
-const form = useForm({
-  name: '',
-  email: '',
-})
-
-const submit = () => {
-  form.post('/customers', {
-    onSuccess: () => form.reset(),
-  })
+const handleFormSuccess = () => {
+  // Optionally refresh page or show success message
+  console.log('Customer created successfully!')
 }
 </script>
 
@@ -44,29 +49,18 @@ const submit = () => {
     <div class="p-6 space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold">Customers</h2>
-        <Form @submit.prevent="submit" class="flex items-center gap-2">
-          <Field name="name">
-            <input
-              v-model="form.name"
-              class="h-9 px-3 rounded border border-input bg-background text-sm"
-              type="text"
-              placeholder="Customer name"
-              required
-            />
-          </Field>
-          <Field name="email">
-            <input
-              v-model="form.email"
-              class="h-9 px-3 rounded border border-input bg-background text-sm"
-              type="email"
-              placeholder="Email (optional)"
-            />
-          </Field>
-          <Button type="submit" :disabled="form.processing || !form.name.trim()">
-            {{ form.processing ? 'Saving...' : 'Add Customer' }}
-          </Button>
-        </Form>
+        
+        <!-- Reusable Customer Form Component -->
+        <CustomerForm 
+          :initial-data="{ name: '', email: '' }"
+          :is-multi-currency-enabled="props.isMultiCurrencyEnabled"
+          :currencies="props.currencies"
+          :base-currency="props.baseCurrency"
+          submit-url="/accounting/customers"
+          @success="handleFormSuccess"
+        />
       </div>
+      
       <div class="border rounded-md">
         <Table>
           <TableHeader>

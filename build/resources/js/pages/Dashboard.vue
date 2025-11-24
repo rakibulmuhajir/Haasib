@@ -5,6 +5,19 @@ import ChartAreaInteractive from "@/components/dashboard/dashboard-01/ChartAreaI
 import DataTable from "@/components/dashboard/dashboard-01/DataTable.vue"
 import { Head } from '@inertiajs/vue3';
 
+// Props from backend
+const props = defineProps<{
+    invoices?: Array<{
+        id: string
+        customer: string
+        invoice: string
+        amount: string
+        status: string
+        date: string
+        description: string
+    }>
+}>()
+
 // Dashboard configuration
 const breadcrumbs = [
     { label: 'Dashboard', href: '/dashboard' },
@@ -16,54 +29,8 @@ const headerActions = [
     { label: 'Create Invoice', variant: 'default' as const }
 ]
 
-// Sample invoice data
-const invoiceData = [
-  {
-    id: 1,
-    customer: "Acme Corporation",
-    invoice: "INV-2024-001",
-    amount: "$5,250.00",
-    status: "Paid",
-    date: "2024-11-15",
-    description: "Web development services",
-  },
-  {
-    id: 2,
-    customer: "Global Tech Solutions",
-    invoice: "INV-2024-002", 
-    amount: "$3,400.00",
-    status: "Pending",
-    date: "2024-11-18",
-    description: "System integration project",
-  },
-  {
-    id: 3,
-    customer: "StartupXYZ",
-    invoice: "INV-2024-003",
-    amount: "$1,200.00",
-    status: "Overdue",
-    date: "2024-10-28",
-    description: "Consulting services",
-  },
-  {
-    id: 4,
-    customer: "Enterprise Solutions Inc",
-    invoice: "INV-2024-004",
-    amount: "$8,750.00",
-    status: "Paid",
-    date: "2024-11-12",
-    description: "Custom software development",
-  },
-  {
-    id: 5,
-    customer: "Digital Marketing Pro",
-    invoice: "INV-2024-005",
-    amount: "$2,100.00",
-    status: "Pending",
-    date: "2024-11-20",
-    description: "SEO optimization package",
-  }
-]
+// Use real invoice data from backend
+const invoiceData = props.invoices || []
 </script>
 
 <template>

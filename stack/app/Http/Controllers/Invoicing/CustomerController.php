@@ -182,7 +182,7 @@ class CustomerController extends Controller
             \Log::info('Customer created successfully:', ['id' => $customer->id, 'name' => $customer->name]);
 
             return redirect()
-                ->to('/customers')
+                ->to('/accounting/customers')
                 ->with('success', 'Customer created successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Validation failed:', $e->errors());

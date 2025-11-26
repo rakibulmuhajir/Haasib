@@ -282,6 +282,59 @@ Route::middleware('auth')->group(function () {
         Route::post('/bulk', [\App\Http\Controllers\Invoicing\CustomerController::class, 'bulk'])->name('bulk');
     });
 
+    // Accounting-prefixed aliases for invoices and customers (SPA compatibility)
+    Route::prefix('accounting')->group(function () {
+        Route::prefix('invoices')->name('accounting.invoices.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])
+                ->middleware('permission:invoices.view')->name('index');
+            Route::get('/export', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'export'])
+                ->middleware('permission:invoices.export')->name('export');
+            Route::get('/create', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])
+                ->middleware('permission:invoices.create')->name('create');
+            Route::post('/', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'store'])
+                ->middleware('permission:invoices.create')->name('store');
+            Route::get('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'show'])
+                ->whereUuid('invoice')->middleware('permission:invoices.view')->name('show');
+            Route::get('/{invoice}/edit', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'edit'])
+                ->whereUuid('invoice')->middleware('permission:invoices.update')->name('edit');
+            Route::put('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'update'])
+                ->whereUuid('invoice')->middleware('permission:invoices.update')->name('update');
+            Route::delete('/{invoice}', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'destroy'])
+                ->whereUuid('invoice')->middleware('permission:invoices.delete')->name('destroy');
+            Route::post('/{invoice}/status', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'updateStatus'])
+                ->whereUuid('invoice')->middleware('permission:invoices.update')->name('status');
+            Route::post('/{invoice}/send', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'sendEmail'])
+                ->whereUuid('invoice')->middleware('permission:invoices.send')->name('send-email');
+            Route::post('/{invoice}/duplicate', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'create'])
+                ->whereUuid('invoice')->middleware('permission:invoices.create')->name('duplicate');
+            Route::post('/bulk', [\App\Http\Controllers\Invoicing\InvoiceController::class, 'index'])->name('bulk');
+        });
+
+        Route::prefix('customers')->name('accounting.customers.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'index'])
+                ->middleware('permission:customers.view')->name('index');
+            Route::get('/export', [\App\Http\Controllers\Invoicing\CustomerController::class, 'export'])
+                ->middleware('permission:customers.export')->name('export');
+            Route::get('/create', [\App\Http\Controllers\Invoicing\CustomerController::class, 'create'])
+                ->middleware('permission:customers.create')->name('create');
+            Route::post('/', [\App\Http\Controllers\Invoicing\CustomerController::class, 'store'])
+                ->middleware('permission:customers.create')->name('store');
+            Route::get('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'show'])
+                ->whereUuid('customer')->middleware('permission:customers.view')->name('show');
+            Route::get('/{customer}/edit', [\App\Http\Controllers\Invoicing\CustomerController::class, 'edit'])
+                ->whereUuid('customer')->middleware('permission:customers.update')->name('edit');
+            Route::put('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'update'])
+                ->whereUuid('customer')->middleware('permission:customers.update')->name('update');
+            Route::delete('/{customer}', [\App\Http\Controllers\Invoicing\CustomerController::class, 'destroy'])
+                ->whereUuid('customer')->middleware('permission:customers.delete')->name('destroy');
+            Route::get('/{customer}/invoices', [\App\Http\Controllers\Invoicing\CustomerController::class, 'invoices'])->whereUuid('customer')->name('invoices');
+            Route::get('/{customer}/payments', [\App\Http\Controllers\Invoicing\CustomerController::class, 'payments'])->whereUuid('customer')->name('payments');
+            Route::get('/{customer}/statement', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statement'])->whereUuid('customer')->name('statement');
+            Route::get('/{customer}/statistics', [\App\Http\Controllers\Invoicing\CustomerController::class, 'statistics'])->whereUuid('customer')->name('statistics');
+            Route::post('/bulk', [\App\Http\Controllers\Invoicing\CustomerController::class, 'bulk'])->name('bulk');
+        });
+    });
+
     // Vendor Routes
     Route::prefix('vendors')->name('vendors.')->group(function () {
         Route::get('/', [\App\Http\Controllers\VendorController::class, 'index'])

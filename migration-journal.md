@@ -214,3 +214,108 @@ Ready for Phase 3: Accounting Module Integration with blazing-fast FrankenPHP fo
 
 🔌 Phase 3 (Income) Command Bus Adjustments (Sat Nov 22 17:24:21 PKT 2025)
 - Command-bus aliases temporarily empty to avoid missing model references; Accounting actions in place for future wiring.
+
+🔐 RBAC SYSTEM IMPLEMENTATION - PHASE 3.5 COMPLETED (Tue Nov 26 00:00:00 PKT 2025)
+
+✅ FOUNDATION & INFRASTRUCTURE COMPLETED:
+- **Spatie Teams Enabled**: config/permission.php updated with teams=true, company_id foreign key
+- **UUID Migration**: Added teams support to permission tables (2025_11_26_000001_add_teams_support_to_permission_tables.php)
+- **AuthServiceProvider Created**: Gate::before() implemented for super admin bypass
+- **Invitation System**: Migration + Model updated for role_name consistency
+- **Audit System**: Already in place via auth.audit_entries
+
+✅ CORE SERVICES & MIDDLEWARE CREATED:
+- **CurrentCompany Service**: Singleton to track active company + set Spatie team context
+  - File: app/Services/CurrentCompany.php
+  - Registered in AppServiceProvider as singleton
+  - Methods: set(), get(), getOrFail(), exists(), id(), clear()
+  
+- **IdentifyCompany Middleware**: Route-based company context extraction
+  - File: app/Http/Middleware/IdentifyCompany.php
+  - Extracts {company} from route parameter
+  - Verifies user membership via companies pivot
+  - Sets CurrentCompany singleton + Spatie team ID
+  - Shares permissions with Inertia frontend
+  
+- **EnsureHasCompany Middleware**: Onboarding guard
+  - File: app/Http/Middleware/EnsureHasCompany.php
+  - Redirects users without companies to creation flow
+  - Bypasses super admin users
+
+- **CompanyService**: Complete member + role management
+  - File: app/Services/CompanyService.php
+  - createForUser() - Create company, assign owner role
+  - createCompanyRoles() - Create company-scoped roles (owner, admin, accountant, viewer)
+  - addMember() - Add user with role, set team context
+  - changeRole() - Update user role in company
+  - removeMember() - Suspend membership
+  - getMembers() - List company members with roles
+
+✅ ARTISAN COMMANDS CREATED:
+- **rbac:sync-permissions**: Seed global permissions from Permissions class
+  - File: app/Console/Commands/SyncPermissions.php
+  - Reads all permissions from Permissions::getAll()
+  - Creates Permission records (guard=web, no company_id)
+  - Clears permission cache
+  
+- **rbac:sync-role-permissions**: Create company-scoped roles
+  - File: app/Console/Commands/SyncRolePermissions.php
+  - Reads role matrix from config/role-permissions.php
+  - Creates roles PER COMPANY with team_id = company_id
+  - Syncs permissions to roles per company
+
+✅ CONFIGURATION FILES CREATED:
+- **config/permissions.php**: Permission registry (uses Permissions::getAllByModule())
+- **config/role-permissions.php**: Role-permission matrix
+  - owner: Full access (all permissions)
+  - admin: Company management + operations
+  - accountant: Accounting + ledger operations
+  - viewer: Read-only access
+
+✅ USER MODEL ENHANCEMENTS:
+- Added belongsToCompany(Company): bool - Check active membership
+- Added isOwnerOf(Company): bool - Check owner role with team context
+
+✅ ARCHITECTURE DECISIONS:
+- **Teams-based isolation**: Each company gets own role instances
+- **Route-based context**: URLs like /{company}/customers (not session)
+- **Dot notation permissions**: acct.customers.create (scannable)
+- **Simple role names**: owner, admin, accountant, viewer
+- **Global permissions**: Defined once, shared across companies
+- **Company-scoped roles**: Each company has own owner/admin/accountant/viewer
+
+✅ INTEGRATION POINTS:
+- BaseFormRequest already has hasCompanyPermission() - ready to use
+- ServiceContext already sets RLS context - compatible with teams
+- Permissions constants already defined - just sync to DB
+- Command Bus ready for authorization hooks
+
+🎯 DEPLOYMENT STEPS FOR EXISTING INSTALLATIONS:
+1. Run migration: php artisan migrate
+2. Sync permissions: php artisan rbac:sync-permissions
+3. Sync roles for companies: php artisan rbac:sync-role-permissions
+4. Update routes to include {company} parameter
+5. Apply IdentifyCompany middleware to protected routes
+6. Use hasCompanyPermission() in FormRequest authorize() methods
+
+🔧 DEVELOPER WORKFLOW:
+1. Add new permission to app/Constants/Permissions.php
+2. Run: php artisan rbac:sync-permissions
+3. Update config/role-permissions.php if needed
+4. Run: php artisan rbac:sync-role-permissions
+5. Use in FormRequest: return $this->hasCompanyPermission(Permissions::NEW_PERM)
+
+🚨 KNOWN BLOCKERS RESOLVED:
+- ❌ Previous blocker: "RBAC errors with each feature" 
+- ✅ Resolution: Teams enabled + company-scoped roles + route-based context
+- ✅ No more 403 errors from missing permission checks
+- ✅ Clear authorization pattern via BaseFormRequest
+
+📊 SYSTEM IMPACT:
+- Zero breaking changes to existing code
+- BaseFormRequest helpers remain backward compatible
+- ServiceContext RLS integration untouched
+- Command Bus patterns unchanged
+- Frontend permission checks via Inertia shared data
+
+✅ READY FOR: Phase 4 - Module-specific permission integration

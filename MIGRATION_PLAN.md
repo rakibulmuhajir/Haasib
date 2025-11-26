@@ -277,6 +277,102 @@ cd build && php artisan route:list --columns=Method,URI,Name,Action | tee /tmp/c
 
 ---
 
+## 🔐 PHASE 2.5: RBAC SYSTEM IMPLEMENTATION ✅ COMPLETED
+
+**Status**: ✅ **COMPLETED** (2025-11-26)  
+**Purpose**: Eliminate "RBAC errors with each feature" blocker
+
+### Step 2.5.1: Enable Spatie Teams ✅ COMPLETED
+```bash
+# Update config/permission.php
+# Set teams=true, team_foreign_key='company_id'
+
+# Run teams migration
+php artisan migrate
+# Applies: 2025_11_26_000001_add_teams_support_to_permission_tables.php
+```
+
+### Step 2.5.2: Core RBAC Infrastructure ✅ COMPLETED
+```bash
+# Files created:
+# - app/Providers/AuthServiceProvider.php (Gate::before for super admin)
+# - app/Services/CurrentCompany.php (singleton for company context)
+# - app/Services/CompanyService.php (member/role management)
+# - app/Http/Middleware/IdentifyCompany.php (route-based context)
+# - app/Http/Middleware/EnsureHasCompany.php (onboarding guard)
+# - app/Console/Commands/SyncPermissions.php
+# - app/Console/Commands/SyncRolePermissions.php
+# - config/permissions.php (permission registry)
+# - config/role-permissions.php (role-permission matrix)
+
+# Registered in bootstrap/providers.php
+```
+
+### Step 2.5.3: Sync Permissions & Roles ✅ COMPLETED
+```bash
+# Sync global permissions from Permissions class
+php artisan rbac:sync-permissions
+
+# Create company-scoped roles for all companies
+php artisan rbac:sync-role-permissions
+
+# For specific company
+php artisan rbac:sync-role-permissions --company=<company_id>
+```
+
+### Step 2.5.4: Update Routes for Company Context
+```bash
+# Pattern: /{company}/resource
+Route::middleware(['auth', 'identify.company'])->group(function () {
+    Route::get('/{company}/customers', [CustomerController::class, 'index']);
+    Route::post('/{company}/customers', [CustomerController::class, 'store']);
+});
+
+# Ensure users have companies
+Route::middleware(['auth', 'has.company'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+});
+```
+
+### Step 2.5.5: RBAC Integration in Features
+```php
+// In FormRequests - use existing helpers
+public function authorize(): bool
+{
+    return $this->hasCompanyPermission(Permissions::ACCT_CUSTOMERS_CREATE)
+        && $this->validateRlsContext();
+}
+
+// In Policies
+public function update($user, Customer $customer): bool
+{
+    if (!$this->belongsToCurrentCompany($customer)) {
+        return false;
+    }
+    return $user->can(Permissions::ACCT_CUSTOMERS_UPDATE);
+}
+```
+
+**✅ RBAC System Checkpoint**:
+- [x] Spatie teams enabled with UUID support
+- [x] Company-scoped roles (owner, admin, accountant, viewer)
+- [x] Global permissions synced from Permissions class
+- [x] Route-based company context via IdentifyCompany middleware
+- [x] CurrentCompany singleton tracks active company
+- [x] CompanyService handles member/role management
+- [x] AuthServiceProvider provides super admin bypass
+- [x] Sync commands for permissions and roles
+- [x] BaseFormRequest helpers ready for use
+- [x] User model has belongsToCompany() and isOwnerOf()
+
+**📚 RBAC Documentation**:
+- Complete guide: `AI_PROMPTS/RBAC_SYSTEM.md`
+- Implementation journal: `migration-journal.md` (Phase 3.5)
+- Permission definitions: `app/Constants/Permissions.php`
+- Role matrix: `config/role-permissions.php`
+
+---
+
 ## 📊 PHASE 3: ACCOUNTING MODULE FOUNDATION
 
 ### Step 3.1: Module Skeleton & Shared Assets

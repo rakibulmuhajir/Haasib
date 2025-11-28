@@ -1,37 +1,380 @@
-# Haasib Development Guidelines
+# Haasib Development Standards
 
-Auto-generated from all feature plans. Last updated: 2025-10-16
+**Last Updated**: 2025-11-28
+**Purpose**: Single source of truth for AI-assisted development
 
-## Active Technologies
-- PHP 8.2 (Laravel 12) + Vue 3 (Inertia.js v2) with PrimeVue 4.3.9 UI for ledger period close workflows; adds `Modules\Ledger\Services\PeriodCloseService`, `ledger.period_closes*` tables, command-bus actions (`period-close.*`), and Inertia checklist/validation pages under `stack/resources/js/Pages/Ledger`. (008-period-close-monthly)
-- PHP 8.2 / Laravel 12 back-end within `stack/`, Vue 3 + Inertia.js v2 front-end, PrimeVue 4.3.9 UI; no deviations planned. + `Modules\Accounting` domain/services (e.g., `Services/PaymentService.php`, `Domain/Payments`), shared `App\Services\PaymentAllocationService`, new payment command-bus actions to register in `stack/config/command-bus.php`, and Inertia pages under `stack/resources/js/Pages/Invoicing`. (005-payment-processing-receipt)
-- PHP 8.2 (Laravel 12) within the monolithic `stack/` workspace. Front end delivered via Vue 3 + Inertia.js v2 single-page flows compiled by Vite. + PrimeVue 4.3.9 UI library, Tailwind CSS for layout utilities, Postgres `ILIKE` search (Laravel Scout not installed), Spatie Permission for RBAC, command bus infrastructure under `stack/config/command-bus.php`, and new customer services (statement/aging) instead of reusing `App\Services\PaymentAllocationService`. (006-customer-management-customer-work)
-- PostgreSQL 16 with canonical `invoicing.customers` table plus planned tables `invoicing.customer_contacts`, `invoicing.customer_addresses`, `invoicing.customer_credit_limits`, and `invoicing.customer_statements`; update `App\Models\Customer` and downstream queries to target the `invoicing` schema. (006-customer-management-customer-work)
-- PHP 8.2 (Laravel 12) and TypeScript/Vue 3 + Laravel framework, Inertia.js v2, PrimeVue 4.3.9, Tailwind CSS, Spatie Permission (007-journal-entries-manual)
-- PostgreSQL 16 (`invoicing` schema) (007-journal-entries-manual)
-- PHP 8.2 (Laravel 12), TypeScript/Vue 3 via Inertia.js v2 + Laravel command bus, Inertia.js, PrimeVue 4.3.9, Tailwind CSS, Spatie Permission (009-bank-reconciliation-statement)
-- PostgreSQL 16 (new `ops.bank_statements`/`ops.bank_statement_lines` staging tables referencing `ledger` transactions) (009-bank-reconciliation-statement)
-- PHP 8.2 (Laravel 12), TypeScript (Vue 3 + Inertia.js v2) + PrimeVue 4.3.9 (Chart.js), Tailwind CSS, Laravel command bus, Spatie Permission (010-reporting-dashboard-financial)
-- PostgreSQL 16 across `ledger`, `acct`, `ops`, plus `rpt` reporting schema with materialized snapshots and short-lived cache store (010-reporting-dashboard-financial)
+---
 
-## Project Structure
+## 🚨 BEFORE YOU START
+
+### Creating/Modifying Database
+1. **Read the schema contract**: `docs/contracts/{schema}-schema.md` (e.g., `auth-schema.md`, `acct-schema.md`)
+2. Schema contracts define: columns, types, defaults, FKs, `$fillable`, `$casts`, relationships
+3. **Do not invent columns** — if it's not in the contract, update the contract first
+4. After migration, update the contract to match
+
+### Creating Any Feature
+1. Read relevant contract in `docs/contracts/`
+2. Read `AI_PROMPTS/MASTER_REMEDIATION_PROMPT.md`
+3. Check Constitutional Rules below
+4. Use Template Skeletons at bottom
+
+---
+
+## 🏛️ CONSTITUTIONAL RULES
+
+These are non-negotiable. Violating any = restart.
+
+### Architecture
+| Rule | Detail |
+|------|--------|
+| Module structure | Business logic in `/build/modules/{Name}/` |
+| Root `/build/app` | Only shared infrastructure (User, Company, Auth, RBAC) |
+| Multi-schema | `auth`, `acct`, `hsp`, `crm`, `audit` — each with RLS |
+| UUID only | `$table->uuid('id')->primary()` — never `$table->id()` |
+| Company context | Route-based `/{company}/resource` — never session-based |
+
+### The Golden Patterns
+
+```php
+// ✅ THESE ARE MANDATORY
+Route::get('/{company}/resource', ...)->middleware(['auth', 'identify.company']);
+$company = app(CurrentCompany::class)->get();
+Bus::dispatch('action.name', $request->validated());
+$this->hasCompanyPermission(Permissions::RESOURCE_ACTION);
+Schema::create('{schema}.{table}', ...);  // e.g., 'acct.customers'
+
+// ❌ INSTANT REJECTION
+Route::get('/resource', ...);              // Missing {company}
+session('active_company_id');              // Session-based context
+new Service();                             // Direct instantiation
+$request->validate([...]);                 // Inline validation
+$table->id();                              // Integer PK
 ```
-backend/
-frontend/
-tests/
+
+### Frontend Rules
+- `<script setup lang="ts">` only — no Options API
+- Shadcn/Vue components only — no raw `<input>`, `<button>`
+- Inertia forms — no `fetch()` or `axios`
+
+---
+
+## 📋 TASK-SPECIFIC GUIDES
+
+### Database Work
+**Required reading**: `docs/contracts/{schema}-schema.md`, then `AI_PROMPTS/DATABASE_SCHEMA_REMEDIATION.md`
+
+### Controllers/Routes
+**Required reading**: `AI_PROMPTS/CONTROLLER_REMEDIATION.md`
+
+### Models
+**Required reading**: Schema contract first (for `$fillable`, `$casts`), then `AI_PROMPTS/MODEL_REMEDIATION.md`
+
+### Frontend/Vue
+**Required reading**: `AI_PROMPTS/FRONTEND_REMEDIATION.md`
+
+### RBAC/Permissions
+**Required reading**: `AI_PROMPTS/RBAC_SYSTEM.md`
+
+**Quick workflow**:
+```bash
+# 1. Add to app/Constants/Permissions.php
+# 2. php artisan rbac:sync-permissions
+# 3. Update config/role-permissions.php
+# 4. php artisan rbac:sync-role-permissions
 ```
 
-## Commands
-- Command bus `period-close:*` actions (start, validate, lock, complete, reopen) exposed via CLI and HTTP for monthly closing.
-- Journal entry CLI/API (`journal:*`) for period adjustment support (reuse from ledger module).
+---
 
-## Code Style
-PHP 8.2 / Laravel 12 back-end within `stack/`, Vue 3 + Inertia.js v2 front-end, PrimeVue 4.3.9 UI; no deviations planned.: Follow standard conventions
+## 🔐 RBAC ESSENTIALS
 
-## Recent Changes
-- 010-reporting-dashboard-financial: Added PHP 8.2 (Laravel 12), TypeScript (Vue 3 + Inertia.js v2) + PrimeVue 4.3.9 (Chart.js), Tailwind CSS, Laravel command bus, Spatie Permission
-- 009-bank-reconciliation-statement: Added PHP 8.2 (Laravel 12), TypeScript/Vue 3 via Inertia.js v2 + Laravel command bus, Inertia.js, PrimeVue 4.3.9, Tailwind CSS, Spatie Permission
-- 008-period-close-monthly: Added ledger period close service, checklist/task templates, command-bus actions, and Inertia dashboard with PrimeVue Steps.
+### Company Context Flow
+```
+URL: /{company}/resource
+  → IdentifyCompany middleware extracts slug
+  → Sets CurrentCompany singleton + Spatie team
+  → Controller: app(CurrentCompany::class)->get()
+```
 
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+### Authorization
+```php
+// In FormRequest authorize():
+return $this->hasCompanyPermission(Permissions::RESOURCE_ACTION)
+    && $this->validateRlsContext();
+```
+
+### God-Mode Users
+- UUID prefix `00000000-0000-0000-0000-` = bypass all checks
+- Super admin: `...000000000000`, System admins: `...000000000001`, `...000000000002`, etc.
+- No company memberships — access everything via `Gate::before()`
+- See `docs/god-mode-system.md` for details
+
+### Key Files
+| Purpose | File |
+|---------|------|
+| Permissions | `app/Constants/Permissions.php` |
+| Role matrix | `config/role-permissions.php` |
+| Auth helpers | `app/Http/Requests/BaseFormRequest.php` |
+| Company context | `app/Services/CurrentCompany.php` |
+
+---
+
+## ❌ COMMON MISTAKES (HIGH-COST ERRORS)
+
+These mistakes have caused restarts. Check every time.
+
+### Database
+```php
+❌ $table->id()                        // → uuid('id')->primary()
+❌ Schema::create('customers')         // → Schema::create('acct.customers')
+❌ Missing RLS policies                // → Always enable on tenant tables
+❌ Inventing columns not in contract   // → Update contract first
+```
+
+### Backend
+```php
+❌ session('active_company_id')        // → app(CurrentCompany::class)->get()
+❌ $user->currentCompany()             // → DEPRECATED, use CurrentCompany singleton
+❌ ServiceContext->currentCompany()    // → DEPRECATED, use CurrentCompany singleton
+❌ Route::get('/customers', ...)       // → Route::get('/{company}/customers', ...)
+❌ Missing identify.company middleware // → Always add to tenant routes
+❌ Customer::find($id) in controller   // → Move to service layer
+❌ new Service()                       // → Bus::dispatch()
+```
+
+### Models
+```php
+❌ protected $table = 'customers'      // → 'acct.customers' (schema prefix)
+❌ Missing $keyType = 'string'         // → Required for UUID
+❌ Missing $incrementing = false       // → Required for UUID
+❌ Guessing $fillable                  // → Copy from schema contract
+❌ Copying old code with currentCompany() // → Update to CurrentCompany singleton
+```
+
+### Frontend
+```vue
+❌ <input v-model="x">                 // → <Input v-model="x" />
+❌ <button @click="...">               // → <Button @click="...">
+❌ export default { data() }           // → <script setup lang="ts">
+❌ fetch('/api/...')                   // → Inertia form.post()
+```
+
+---
+
+## 🖊️ INLINE EDITING
+
+**Full guide**: `docs/inline-editing-system.md`
+
+| Field Type | Inline? | Reason |
+|------------|---------|--------|
+| `name`, `email`, `status` | ✅ | Simple, atomic, no side effects |
+| `total_amount`, `balance` | ❌ | Calculated fields |
+| `address`, `line_items` | ❌ | Complex/nested data |
+| `currency` | ❌ | Affects other calculations |
+
+**Rule**: If changing the field triggers recalculations or affects other fields, use a form.
+
+---
+
+## 🎯 DECISION TREES
+
+### Which Schema?
+```
+user/company/permission → auth
+financial/customer/invoice → acct
+hospitality/booking → hsp
+CRM/marketing → crm
+logs/history → audit
+```
+
+### Service vs Controller?
+```
+Business logic → Service/Action via Bus::dispatch()
+Validation → FormRequest
+HTTP coordination → Controller (thin, no logic)
+```
+
+### Root vs Module?
+```
+Multi-module shared → /build/app or /build/resources
+Module-specific → /build/modules/{Name}/
+```
+
+---
+
+## 📐 TEMPLATE SKELETONS
+
+### Migration
+```php
+// modules/{Module}/Database/Migrations/
+Schema::create('{schema}.{table}', function (Blueprint $table) {
+    $table->uuid('id')->primary();
+    $table->uuid('company_id');
+    $table->foreignUuid('company_id')->references('id')->on('auth.companies')->cascadeOnDelete();
+    // ... columns from schema contract
+    $table->timestamps();
+    $table->softDeletes();
+});
+
+DB::statement('ALTER TABLE {schema}.{table} ENABLE ROW LEVEL SECURITY');
+DB::statement("CREATE POLICY {table}_company_isolation ON {schema}.{table}
+    FOR ALL USING (company_id = current_setting('app.current_company_id')::uuid)");
+```
+
+### Model
+```php
+// modules/{Module}/Models/
+class Entity extends Model
+{
+    use HasFactory, HasUuids, SoftDeletes;
+
+    protected $connection = 'pgsql';
+    protected $table = '{schema}.{table}';
+    protected $keyType = 'string';
+    public $incrementing = false;
+
+    // Copy $fillable and $casts from schema contract
+    protected $fillable = [];
+    protected $casts = [];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}
+```
+
+### Controller
+```php
+// modules/{Module}/Http/Controllers/
+public function index(): Response
+{
+    $company = app(CurrentCompany::class)->get();
+    return Inertia::render('Module/Entity/Index', [
+        'entities' => Entity::where('company_id', $company->id)->get(),
+    ]);
+}
+
+public function store(StoreRequest $request): JsonResponse
+{
+    $result = Bus::dispatch('entity.create', $request->validated());
+    return response()->json(['success' => true, 'data' => $result], 201);
+}
+```
+
+### Routes
+```php
+Route::middleware(['auth', 'identify.company'])->group(function () {
+    Route::get('/{company}/entities', [EntityController::class, 'index']);
+    Route::post('/{company}/entities', [EntityController::class, 'store']);
+});
+```
+
+### FormRequest
+```php
+// modules/{Module}/Http/Requests/
+class StoreRequest extends BaseFormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->hasCompanyPermission(Permissions::MODULE_ENTITY_CREATE)
+            && $this->validateRlsContext();
+    }
+
+    public function rules(): array
+    {
+        // Rules from schema contract validation section
+        return [];
+    }
+}
+```
+
+### Vue Page
+```vue
+<!-- modules/{Module}/Resources/js/Pages/ -->
+<script setup lang="ts">
+import { Head } from '@inertiajs/vue3'
+import UniversalLayout from '@/layouts/UniversalLayout.vue'
+</script>
+
+<template>
+  <Head title="Page" />
+  <UniversalLayout title="Page">
+    <!-- Shadcn/Vue components only -->
+  </UniversalLayout>
+</template>
+```
+
+---
+
+## 🧪 VALIDATION
+
+### Pre-Commit
+```bash
+composer quality-check
+php artisan layout:validate --json
+bash validate-migration.sh
+```
+
+### Quick Checklist
+- [ ] Schema contract exists and is current
+- [ ] `$fillable`/`$casts` match contract
+- [ ] Routes have `/{company}` + `identify.company` middleware
+- [ ] FormRequest uses `hasCompanyPermission()`
+- [ ] UUID primary keys
+- [ ] RLS policies on tenant tables
+- [ ] Shadcn/Vue components (no raw HTML inputs)
+
+---
+
+## 🔄 FRESH START
+
+```bash
+php artisan migrate:fresh --seed --force
+# Super admin: admin@haasib.com / password
+# UUID: 00000000-0000-0000-0000-000000000000
+```
+
+### Critical Files (DO NOT DELETE)
+- `app/Models/User.php`
+- `app/Services/CurrentCompany.php`
+- `app/Http/Middleware/IdentifyCompany.php`
+- `database/migrations/0001_01_01_000000_create_users_table.php`
+- `database/migrations/2025_11_26_175213_create_permission_tables.php`
+
+---
+
+## 📚 REFERENCE INDEX
+
+| Task | Read First | Then |
+|------|-----------|------|
+| New table | `docs/contracts/{schema}-schema.md` | `AI_PROMPTS/DATABASE_SCHEMA_REMEDIATION.md` |
+| New model | Schema contract | `AI_PROMPTS/MODEL_REMEDIATION.md` |
+| New feature | Schema contract | `AI_PROMPTS/MASTER_REMEDIATION_PROMPT.md` |
+| RBAC | `AI_PROMPTS/RBAC_SYSTEM.md` | `docs/god-mode-system.md` |
+| Fix violations | `AI_PROMPTS/QUALITY_VALIDATION_PROMPT.md` | Pattern-specific file |
+
+---
+
+## 🚀 DEVELOPMENT SERVER
+
+```bash
+# Backend (3-10x faster than php artisan serve)
+php artisan octane:start --server=frankenphp --port=9001 --watch
+
+# Frontend
+npm run dev
+
+# Access via Vite proxy
+http://localhost:5180
+```
+
+---
+
+## 🛠️ STACK
+
+Laravel 12 / PHP 8.4 / PostgreSQL 16 / Octane+FrankenPHP / Vue 3 / Inertia v2 / Shadcn-Vue / Tailwind / Spatie Permissions
+
+---
+
+**Note**: This file is a hub. Schema contracts (`docs/contracts/`) are the source of truth for data structures. Remediation files (`AI_PROMPTS/`) have detailed examples.

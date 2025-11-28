@@ -33,6 +33,7 @@ These are non-negotiable. Violating any = restart.
 | Multi-schema | `auth`, `acct`, `hsp`, `crm`, `audit` — each with RLS |
 | UUID only | `$table->uuid('id')->primary()` — never `$table->id()` |
 | Company context | Route-based `/{company}/resource` — never session-based |
+| Multi-currency (Phase 1) | Follow `docs/contracts/multicurrency-rules.md`: code-as-PK in `public.currencies`, char(3) everywhere, manual rates, journals balance in base at 15,2, payment currency must equal invoice currency or base, account currency immutable after postings |
 
 ### The Golden Patterns
 

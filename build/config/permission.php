@@ -1,7 +1,5 @@
 <?php
 
-use Spatie\Permission\PermissionRegistrar;
-
 return [
 
     'models' => [
@@ -17,42 +15,27 @@ return [
         'role_has_permissions' => 'role_has_permissions',
     ],
 
+    'column_names' => [
+        'model_morph_key' => 'model_id',
+    ],
+
+    'register_permission_check_method' => true,
+
+    'display_permission_in_exception' => false,
+    'display_role_in_exception' => false,
+    'display_team_in_model' => true,
+
     'cache' => [
         'store' => 'default',
         'expiration_time' => \DateInterval::createFromDateString('24 hours'),
         'key' => 'spatie.permission.cache',
     ],
 
-    'display_permission_in_exception' => false,
+    'teams' => true,
+    'team_model' => App\Models\Company::class,
+    'team_foreign_key' => 'company_id',
 
-    'enabled' => true,
+    'enable_wildcard_permission' => false,
 
-    'register_permission_check_method' => true,
-
-'teams' => true,
-
-'team_model' => App\Models\Company::class,
-
-'team_foreign_key' => 'company_id',
-
-'column_names' => [
-    'model_morph_key' => 'model_id',
-],
-
-'display_team_in_model' => true,
-
-'wildcard_permission' => [
-    'enabled' => false,
-    'delimiter' => '.',
-],
-
-'inheritance' => [
-    'enabled' => false,
-],
-
-'enable_exception_handling' => false,
-
-'cache_duration' => PermissionRegistrar::CACHE_DURATION,
-
-'uuid' => true,
+    'uuid' => true,
 ];

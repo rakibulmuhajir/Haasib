@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('roles') || Schema::hasTable('permissions')) {
+            return;
+        }
+
         Schema::create('roles', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id')->nullable()->index();

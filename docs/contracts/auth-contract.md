@@ -9,7 +9,8 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - System role: prefer `super_admin`, `admin`, `user`, `guest` for platform-level permissions. Legacy values (`superadmin`, `system_owner`, `company_owner`, etc.) exist; new code must standardize on `super_admin` and avoid introducing new variants.
 - Company membership role enum is fixed: `owner`, `admin`, `accountant`, `viewer`, `member`.
 - Row Level Security is enabled; APIs must set `app.current_user_id` and `app.is_super_admin` session settings where required.
-- Reserved columns: `currency_id`, `exchange_rate_id` are placeholders for the future currency/exchange-rate modules—do not wire relationships or UI fields until those tables exist.
+- Currency: `base_currency` is a `char(3)` code (ISO 4217). No FK; validate against `public.currencies` (see currencies contract). `base_currency` is immutable once transactions exist.
+- Reserved columns: `exchange_rate_id` was previously reserved—do not use. All currency work follows the multi-currency contracts (codes only, no FK IDs).
 
 ## Tables
 
@@ -55,11 +56,9 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `id` uuid PK.  
   - `name` string(255) not null.  
   - `industry` string nullable.  
-  - `slug` string unique not null (auto-generated).  
+ - `slug` string unique not null (auto-generated).  
   - `country` string nullable; `country_id` uuid nullable.  
-  - `base_currency` char(3) not null default `USD`.  
-  - `currency_id` uuid nullable (reserved).  
-  - `exchange_rate_id` unsigned bigint nullable (reserved).  
+  - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
   - `language` string(10) default `en`; `locale` string(10) default `en_US`.  
   - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string). Do not add new keys without updating this contract.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
@@ -76,11 +75,11 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `$connection = 'pgsql';`  
   - `$table = 'auth.companies';`  
   - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'created_by_user_id'];`  
-  - `$casts = ['exchange_rate_id' => 'integer', 'settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'currency_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean'];`
+  - `$casts = ['settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean'];`
 - Relationships:  
   - belongsToMany User via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  
   - belongsTo User as creator via `created_by_user_id`.  
-  - hasMany CompanyInvitation, Module (via `auth.company_modules`), AuditEntry.
+  - hasMany CompanyInvitation, Module (via `auth.company_modules`), AuditEntry.  
 - Validation/DTO expectations:  
   - Required: `name` (<=255), `base_currency` (exactly 3 uppercase chars).  
   - Optional: `industry`, `country`, `language` (<=10), `locale` (<=10), `settings` (json).  
@@ -118,6 +117,26 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `user_id` uuid required, must exist.  
   - `role` in enum above.  
   - `is_active` boolean; `joined_at` optional timestamp on join; set `left_at` when deactivating membership.
+
+### auth.company_currencies (company currency enablement)
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid FK → `auth.companies.id` (CASCADE).
+  - `currency_code` char(3) not null (must exist and be active in `public.currencies`; no FK).
+  - `is_base` boolean not null default false (exactly one per company; matches `auth.companies.base_currency`).
+  - `enabled_at` timestamp not null default now().
+  - `created_at`, `updated_at`.
+- Constraints/Indexes:
+  - unique (`company_id`, `currency_code`).
+  - partial unique (`company_id`) where `is_base = true`.
+  - check currency exists in `public.currencies` and `is_active = true`.
+- RLS: company isolation policy (company_id match or super_admin).
+- Laravel model (canonical):
+  - `$connection = 'pgsql'; $table = 'auth.company_currencies'; $fillable = ['company_id','currency_code','is_base','enabled_at']; $casts = ['is_base'=>'boolean','enabled_at'=>'datetime'];`
+- Business rules:
+  - One base currency per company; base cannot be disabled.
+  - Cannot disable if accounts/transactions exist in that currency with balances open.
+  - On company create, insert base currency row with `is_base = true`.
 
 ## Usage Patterns
 - Models should use `protected $connection = 'pgsql'` and table names with schema (`auth.users`, `auth.companies`, `auth.company_user`).

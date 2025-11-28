@@ -11,11 +11,30 @@ class Company extends Model
 
     protected $connection = 'pgsql';
 
-    protected $table = 'companies';
+    protected $table = 'auth.companies';
 
     protected $keyType = 'string';
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $guarded = ['id', 'created_at', 'updated_at', 'is_active'];
+
+    protected $casts = [
+        'settings' => 'array',
+        'created_by_user_id' => 'string',
+        'is_active' => 'boolean',
+    ];
+
+    protected $fillable = [
+        'name',
+        'industry',
+        'slug',
+        'country',
+        'country_id',
+        'base_currency',
+        'language',
+        'locale',
+        'settings',
+        'created_by_user_id',
+    ];
 }

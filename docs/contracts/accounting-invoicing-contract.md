@@ -9,7 +9,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - Soft deletes via `deleted_at`; uniqueness constraints must be filtered on `deleted_at IS NULL`.
 - RLS required; include super-admin override and safe `current_setting(..., true)` calls.
 - Models must declare `$connection = 'pgsql'` and schema-qualified `$table`.
-- Money precision: `numeric(15,2)` for amounts; use `numeric(18,6)` for rates if added later.
+- Money precision (locked): `currency_amount numeric(18,6)`, `exchange_rate numeric(18,8)`, `base_amount numeric(15,2)`, `debit/credit numeric(15,2)`. Journals must balance at 15,2.
 - Settings JSON keys must be declared; no freeform additions without updating this contract.
 - Addresses: single billing/shipping JSON per customer in v1; multi-address support deferred.
 
@@ -91,13 +91,16 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `invoice_date` date not null default `current_date`.
   - `due_date` date not null.
   - `status` varchar(20) not null default `'draft'` (enum: draft, sent, viewed, partial, paid, overdue, void, cancelled).
-  - `base_currency` char(3) not null default `'USD'`.
-  - `subtotal` numeric(15,2) not null default 0.00.
-  - `tax_amount` numeric(15,2) not null default 0.00.
-  - `discount_amount` numeric(15,2) not null default 0.00.
-  - `total_amount` numeric(15,2) not null default 0.00.
-  - `paid_amount` numeric(15,2) not null default 0.00.
-  - `balance` numeric(15,2) not null default 0.00.
+  - `currency` char(3) not null default `'USD'` (transaction currency, must be enabled for company).
+  - `base_currency` char(3) not null (denormalized from company).
+  - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency; store as 1 foreign = X base).
+  - `subtotal` numeric(18,6) not null default 0.00 (transaction currency).
+  - `tax_amount` numeric(18,6) not null default 0.00 (transaction currency).
+  - `discount_amount` numeric(18,6) not null default 0.00 (transaction currency).
+  - `total_amount` numeric(18,6) not null default 0.00 (transaction currency).
+  - `paid_amount` numeric(18,6) not null default 0.00 (transaction currency).
+  - `balance` numeric(18,6) not null default 0.00 (transaction currency).
+  - `base_amount` numeric(15,2) not null default 0.00 (total in base currency).
   - `payment_terms` integer not null default 30.
   - `notes` text null.
   - `internal_notes` text null.
@@ -113,8 +116,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: same pattern as customers with company_id check + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.invoices'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','invoice_number','invoice_date','due_date','status','base_currency','subtotal','tax_amount','discount_amount','total_amount','paid_amount','balance','payment_terms','notes','internal_notes','sent_at','viewed_at','paid_at','voided_at','recurring_schedule_id','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','recurring_schedule_id'=>'string','invoice_date'=>'date','due_date'=>'date','subtotal'=>'decimal:2','tax_amount'=>'decimal:2','discount_amount'=>'decimal:2','total_amount'=>'decimal:2','paid_amount'=>'decimal:2','balance'=>'decimal:2','payment_terms'=>'integer','sent_at'=>'datetime','viewed_at'=>'datetime','paid_at'=>'datetime','voided_at'=>'datetime','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','invoice_number','invoice_date','due_date','status','currency','base_currency','exchange_rate','subtotal','tax_amount','discount_amount','total_amount','paid_amount','balance','base_amount','payment_terms','notes','internal_notes','sent_at','viewed_at','paid_at','voided_at','recurring_schedule_id','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','recurring_schedule_id'=>'string','invoice_date'=>'date','due_date'=>'date','subtotal'=>'decimal:6','tax_amount'=>'decimal:6','discount_amount'=>'decimal:6','total_amount'=>'decimal:6','paid_amount'=>'decimal:6','balance'=>'decimal:6','base_amount'=>'decimal:2','exchange_rate'=>'decimal:8','payment_terms'=>'integer','sent_at'=>'datetime','viewed_at'=>'datetime','paid_at'=>'datetime','voided_at'=>'datetime','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships:
   - belongsTo Company; belongsTo Customer; hasMany InvoiceLineItem; hasMany PaymentAllocation; hasMany Payment (if directly linked); belongsTo RecurringSchedule.
 - Validation:
@@ -123,19 +126,22 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `invoice_date`: required|date.
   - `due_date`: required|date|after_or_equal:invoice_date.
   - `status`: in:draft,sent,viewed,partial,paid,overdue,void,cancelled.
-  - `base_currency`: required|string|size:3|uppercase.
+  - `currency`: required|string|size:3|uppercase; must be enabled for company.
+  - `base_currency`: required|string|size:3|uppercase (company base).
+  - `exchange_rate`: nullable|numeric|min:0.00000001|max_digits:18|decimal:8 (required if currency != base_currency; NULL if currency = base_currency).
   - `payment_terms`: integer|min:0|max:365.
   - `notes`/`internal_notes`: nullable|string.
   - `line_items`: required|array|min:1 with validated fields below.
 - Business rules:
   - Invoice number unique per company.
   - Due date >= invoice date.
-  - Totals (`subtotal`, `tax_amount`, `discount_amount`, `total_amount`, `balance`, `paid_amount`) are calculated server-side; client should not send values.
-  - Balance = total_amount - paid_amount; enforce invariant.
+  - Totals in transaction currency; balance = total_amount - paid_amount.
+  - base_amount = ROUND(total_amount * COALESCE(exchange_rate,1), 2).
+  - exchange_rate required when currency != base_currency; must be NULL when currency = base_currency.
   - Default due_date is computed in service layer as `invoice_date + payment_terms` when not provided.
   - Status transitions: draft → sent → viewed → partial → paid; overdue when due_date < today and balance > 0; void/cancelled stop edits/payments.
   - Cannot modify line items after sent/paid; use credit notes for adjustments.
-  - Base currency must match customer base currency; enforce on create/update.
+  - Currency must be enabled for company.
 
 ### acct.invoice_line_items
 - Purpose: invoice lines.
@@ -184,8 +190,11 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `customer_id` uuid not null FK → `acct.customers.id` (RESTRICT/CASCADE).
   - `payment_number` varchar(50) not null; unique per company (filtered).
   - `payment_date` date not null default `current_date`.
-  - `amount` numeric(15,2) not null default 0.00.
-  - `base_currency` char(3) not null default `'USD'`.
+  - `amount` numeric(18,6) not null default 0.00 (payment currency).
+  - `currency` char(3) not null default `'USD'` (payment currency; must be enabled for company).
+  - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency; NULL if currency = base).
+  - `base_currency` char(3) not null (company base, denormalized).
+  - `base_amount` numeric(15,2) not null default 0.00 (amount in base currency).
   - `payment_method` varchar(50) not null; constrained values: cash, check, card, bank_transfer, other.
   - `reference_number` varchar(100) null.
   - `notes` text null.
@@ -199,21 +208,24 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.payments'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','payment_number','payment_date','amount','base_currency','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','payment_date'=>'date','amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; hasMany PaymentAllocation.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id.
   - `payment_number`: required|string|max:50 (unique per company, soft-delete aware).
   - `payment_date`: required|date|before_or_equal:today.
-  - `amount`: required|numeric|min:0.01.
-  - `base_currency`: required|string|size:3|uppercase.
+  - `amount`: required|numeric|min:0.01|decimal:6.
+  - `currency`: required|string|size:3|uppercase (enabled for company).
+  - `exchange_rate`: nullable|numeric|min:0.00000001|decimal:8 (required if currency != base_currency; NULL if currency = base).
+  - `base_currency`: required|string|size:3|uppercase (company base).
   - `payment_method`: required|in:cash,check,card,bank_transfer,other.
   - `reference_number`: nullable|string|max:100.
   - `notes`: nullable|string.
 - Business rules:
-  - Payment amount cannot exceed sum of allocations (see payment_allocations).
-  - Currency must match customer base currency.
+  - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
+  - Payment currency must match invoice currency or company base currency when allocating (see allocations).
+  - Payment amount cannot exceed sum of allocations.
   - Cannot delete payment with allocations; void instead if required.
 
 ### acct.payment_allocations
@@ -223,7 +235,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
   - `payment_id` uuid not null FK → `acct.payments.id` (CASCADE/CASCADE).
   - `invoice_id` uuid not null FK → `acct.invoices.id` (RESTRICT/CASCADE).
-  - `amount` numeric(15,2) not null.
+  - `amount_allocated` numeric(18,6) not null (invoice currency).
+  - `base_amount_allocated` numeric(15,2) not null default 0.00 (base currency).
   - `applied_at` timestamp not null default now().
   - `created_at`, `updated_at`.
 - Indexes/constraints:
@@ -231,13 +244,14 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.payment_allocations'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','payment_id','invoice_id','amount','applied_at'];`
-  - `$casts = ['company_id'=>'string','payment_id'=>'string','invoice_id'=>'string','amount'=>'decimal:2','applied_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','payment_id','invoice_id','amount_allocated','base_amount_allocated','applied_at'];`
+  - `$casts = ['company_id'=>'string','payment_id'=>'string','invoice_id'=>'string','amount_allocated'=>'decimal:6','base_amount_allocated'=>'decimal:2','applied_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Payment; belongsTo Invoice.
 - Business rules:
-  - `sum(amount) per payment` ≤ payment.amount; enforce in service layer and/or DB constraint.
-  - Allocation currency is implicitly the payment/base currency.
-  - On create/update/delete, recompute invoice `paid_amount`/`balance` and set invoice status/paid_at accordingly.
+  - `sum(amount_allocated) per payment` ≤ payment.amount; enforce in service layer and/or DB constraint.
+  - Payment currency must equal invoice currency or company base currency (Phase 1 rule).
+  - base_amount_allocated = ROUND(amount_allocated * payment.exchange_rate, 2) when currency differs from base.
+  - On create/update/delete, recompute invoice `paid_amount`/`balance` (transaction currency) and status/paid_at accordingly.
 
 ### acct.credit_notes
 - Purpose: credits/refunds.

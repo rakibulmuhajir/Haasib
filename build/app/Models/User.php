@@ -17,6 +17,8 @@ class User extends Authenticatable
 
     protected $connection = 'pgsql';
 
+    protected $table = 'auth.users';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -28,6 +30,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
     ];

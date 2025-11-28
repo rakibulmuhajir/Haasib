@@ -20,37 +20,18 @@ class CreateNewUser implements CreatesNewUsers
     {
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
-            'username' => [
-                'nullable',
-                'string',
-                'max:255',
-                'regex:/^[a-z0-9_-]+$/i',
-                Rule::unique(User::class, 'username'),
-            ],
             'email' => [
                 'required',
                 'string',
                 'email',
                 'max:255',
-                Rule::unique(User::class, 'email'),
+                Rule::unique(User::class),
             ],
             'password' => $this->passwordRules(),
         ])->validate();
 
-        // Generate username from email if not provided
-        $username = $input['username'] ?? strtolower(explode('@', $input['email'])[0]);
-        
-        // Ensure username is unique by appending random string if needed
-        $originalUsername = $username;
-        $counter = 1;
-        while (User::where('username', $username)->exists()) {
-            $username = $originalUsername . $counter;
-            $counter++;
-        }
-
         return User::create([
             'name' => $input['name'],
-            'username' => $username,
             'email' => $input['email'],
             'password' => $input['password'],
         ]);

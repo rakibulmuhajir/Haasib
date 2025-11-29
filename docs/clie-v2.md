@@ -24,10 +24,21 @@ Update — 2025-08-29: Entity-First Guided Flow (Foundations)
 
 ## 0) Product goals
 
-- **Speed**: keyboard-first, sub-300 ms command→result p50
-- **Safety**: server validation, transactions, idempotency, audit trail
-- **Learnability**: natural verbs, lightweight grammar, inline prompts
-- **Tenancy**: every action scoped to the active company (server-enforced)
+* **Blazing summon & focus**: conflict-free hotkeys (Ctrl+/, Cmd+/, double-Shift), ignores text inputs, mouse button fallback.
+* **Tiny grammar, big brains**: `<verb> [subject] [amount] [date] [flags]` plus fuzzy synonyms and natural-ish parsing; don’t make users memorize flags.
+* **Context awareness**: auto-scope to current company/record; suggest likely customers/invoices; prefill from page context.
+* **Inline prompts**: when info is missing, show compact, keyboardable fields in the dock instead of dumping validation errors.
+* **Preview before commit**: totals, taxes, GL impact, side-by-side; Enter to post, Esc to bail.
+* **Instant feedback**: optimistic UI, human messages (“INV-103 created”), links to open the record, no raw stack traces ever.
+* **Idempotency + undo**: every command has a key; repeats don’t double-post; quick rollback for fat-fingered entries.
+* **History, favorites, templates**: ↑/↓ to cycle, pin frequent commands, save macros like “month-end accrual.”
+* **Personalization**: user-configurable hotkey, recent entities first, locale-aware dates/currency, remember last choices.
+* **Safety rails**: strict RBAC, open-period locks, anomaly warnings on weird amounts, dry-run `--draft` everywhere.
+* **Discoverability**: `help` shows real examples; inline hints while typing; completion for verbs, entities, and flags.
+* **A11y done right**: focus trap, screen-reader announcements, visible focus states, respect reduced motion.
+* **Seamless GUI bridge**: every CLI result links to the full page; complex flows can “eject” to a form mid-command without losing state.
+* **Observability**: audit log (raw + parsed), latency metrics from keypress to commit, command usage analytics to prune and polish.
+* **Zero surprise performance**: keystroke→suggestions < 60 ms, Enter→posted < 300 ms p50; preloaded catalogs, workerized fuzzy search.
 
 ---
 

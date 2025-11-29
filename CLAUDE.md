@@ -77,6 +77,9 @@ $table->id();                              // Integer PK
 ### RBAC/Permissions
 **Required reading**: `AI_PROMPTS/RBAC_SYSTEM.md`
 
+### CLI & Command Palette
+**Required reading**: `cli-specs.md`, `cli-palette.md`
+
 **Quick workflow**:
 ```bash
 # 1. Add to app/Constants/Permissions.php

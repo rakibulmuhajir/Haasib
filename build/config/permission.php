@@ -17,6 +17,7 @@ return [
 
     'column_names' => [
         'model_morph_key' => 'model_id',
+        'team_foreign_key' => 'company_id',
     ],
 
     'register_permission_check_method' => true,

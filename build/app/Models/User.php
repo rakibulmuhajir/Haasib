@@ -57,4 +57,18 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function hasCompanyPermission(string $permission): bool
+    {
+        $company = app(\App\Services\CurrentCompany::class)->get();
+
+        if (!$company) {
+            return false;
+        }
+
+        // Set the team context for permission checking
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($company->id);
+
+        return $this->hasPermissionTo($permission, 'web');
+    }
 }

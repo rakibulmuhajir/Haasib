@@ -328,6 +328,9 @@ bash validate-migration.sh
 - [ ] UUID primary keys
 - [ ] RLS policies on tenant tables
 - [ ] Shadcn/Vue components (no raw HTML inputs)
+- [ ] **Palette Actions implement PaletteAction interface**
+- [ ] **Action permissions use App\Constants\Permissions**
+- [ ] **Commands route has identify.company middleware**
 
 ---
 

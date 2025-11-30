@@ -1,0 +1,2332 @@
+===== build/resources/js/app.ts =====
+import '../css/app.css';
+
+import { createInertiaApp } from '@inertiajs/vue3';
+import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import type { DefineComponent } from 'vue';
+import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted, ref } from 'vue';
+import { initializeTheme } from './composables/useAppearance';
+import CommandPalette from './components/palette/CommandPalette.vue';
+import type { PaletteMode } from '@/types/palette';
+
+const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+createInertiaApp({
+    title: (title) => (title ? `${title} - ${appName}` : appName),
+    resolve: (name) =>
+        resolvePageComponent(
+            `./pages/${name}.vue`,
+            import.meta.glob<DefineComponent>('./pages/**/*.vue'),
+        ),
+    setup({ el, App, props, plugin }) {
+        const Root = defineComponent(() => {
+            const paletteVisible = ref(false);
+            const paletteMode = ref<PaletteMode>('half');
+
+            function togglePalette() {
+                paletteVisible.value = !paletteVisible.value;
+            }
+
+            function closePalette() {
+                paletteVisible.value = false;
+            }
+
+            function handleKeydown(e: KeyboardEvent) {
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    togglePalette();
+                }
+
+                if (e.key === 'Escape' && paletteVisible.value) {
+                    closePalette();
+                }
+            }
+
+            onMounted(() => {
+                document.addEventListener('keydown', handleKeydown);
+            });
+
+            onBeforeUnmount(() => {
+                document.removeEventListener('keydown', handleKeydown);
+            });
+
+            return () =>
+                h(Fragment, [
+                    h(App, props),
+                    h(CommandPalette, {
+                        visible: paletteVisible.value,
+                        mode: paletteMode.value,
+                        'onUpdate:visible': (v: boolean) => (paletteVisible.value = v),
+                        'onUpdate:mode': (v: PaletteMode) => (paletteMode.value = v),
+                    }),
+                ]);
+        });
+
+        const app = createApp(Root);
+        
+        app.use(plugin);
+        app.mount(el);
+    },
+    progress: {
+        color: '#4B5563',
+    },
+});
+
+initializeTheme();
+
+===== build/resources/js/components/palette/CommandPalette.vue =====
+<script setup lang="ts">
+import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
+import { getCSSVariables, DEFAULT_THEME } from '@/palette/theme'
+import { Z_INDEX } from '@/palette/constants'
+import { usePalette } from '@/composables/usePalette'
+import type { PaletteMode } from '@/types/palette'
+import PaletteHeader from './PaletteHeader.vue'
+import PaletteOutput from './PaletteOutput.vue'
+import PaletteInput from './PaletteInput.vue'
+import { Progress } from '@/components/ui/progress'
+
+const props = defineProps<{
+  visible: boolean
+  mode?: PaletteMode
+}>()
+
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'update:mode': [value: PaletteMode]
+}>()
+
+const palette = usePalette()
+const containerRef = ref<HTMLElement | null>(null)
+const inputRef = ref<InstanceType<typeof PaletteInput> | null>(null)
+const envLabel = import.meta.env.MODE
+
+const themeVars = computed(() => getCSSVariables(DEFAULT_THEME))
+
+const containerClass = computed(() => ({
+  'palette': true,
+  'palette--visible': props.visible,
+  'palette--collapsed': palette.mode.value === 'collapsed',
+  'palette--half': palette.mode.value === 'half',
+  'palette--full': palette.mode.value === 'full',
+}))
+
+function handleToggleMode() {
+  palette.toggleMode()
+  emit('update:mode', palette.mode.value)
+}
+
+function handleClose() {
+  palette.close()
+  emit('update:visible', false)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!props.visible) return
+  
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    palette.handleHistoryPrev()
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    palette.handleHistoryNext()
+  }
+}
+
+watch(() => props.visible, (visible) => {
+  if (visible) {
+    palette.open()
+    inputRef.value?.focus()
+  } else {
+    palette.close()
+  }
+})
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('focusin', (event) => {
+    if (!props.visible) return
+    if (!containerRef.value) return
+    if (!containerRef.value.contains(event.target as Node)) {
+      inputRef.value?.focus()
+    }
+  })
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
+</script>
+
+<template>
+  <Teleport to="body">
+    <div
+      v-if="visible"
+      class="palette-backdrop"
+      @click="handleClose"
+    />
+    
+    <div
+      v-if="visible"
+      ref="containerRef"
+      :class="containerClass"
+      :style="themeVars"
+      role="dialog"
+      aria-modal="true"
+    >
+      <Progress v-if="palette.executing.value" :value="65" class="palette-progress" />
+
+      <PaletteHeader
+        v-if="palette.mode.value !== 'collapsed'"
+        :mode="palette.mode.value"
+        :executing="palette.executing.value"
+        :env="envLabel"
+        @toggle-mode="handleToggleMode"
+        @close="handleClose"
+      />
+      
+      <PaletteOutput
+        v-if="palette.mode.value !== 'collapsed'"
+        :lines="palette.outputLines.value"
+      />
+      
+      <PaletteInput
+        ref="inputRef"
+        v-model="palette.input.value"
+        :executing="palette.executing.value"
+        :suggestions="palette.suggestions.value"
+        @submit="palette.executeCommand"
+        @suggest="palette.handleSuggestion"
+      />
+      <div v-if="palette.mode.value !== 'collapsed'" class="palette-summary" aria-live="polite">
+        <span class="palette-summary__pill">{{ palette.parsed.value.entity || 'entity' }}</span>
+        <span class="palette-summary__pill palette-summary__pill--verb">{{ palette.parsed.value.verb || 'verb' }}</span>
+        <span v-if="Object.keys(palette.parsed.value.flags).length" class="palette-summary__flags">
+          <span v-for="(val, key) in palette.parsed.value.flags" :key="key" class="palette-summary__flag">
+            {{ key }}={{ val }}
+          </span>
+        </span>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.palette-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: v-bind('Z_INDEX.BACKDROP');
+  animation: fadeIn 0.15s ease;
+}
+
+.palette {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: v-bind('Z_INDEX.PALETTE');
+  background: var(--palette-background);
+  border: 1px solid var(--palette-secondary);
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  animation: slideIn 0.2s ease;
+}
+
+.palette--collapsed {
+  top: 20px;
+  width: 600px;
+  max-height: 56px;
+}
+
+.palette--half {
+  top: 10vh;
+  width: 700px;
+  height: 50vh;
+  max-height: 600px;
+}
+
+.palette--full {
+  top: 5vh;
+  width: 90vw;
+  max-width: 1200px;
+  height: 90vh;
+}
+
+.palette-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.palette-summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 16px 12px;
+  border-top: 1px solid var(--palette-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--palette-secondary);
+}
+
+.palette-summary__pill {
+  padding: 4px 8px;
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 6px;
+  color: #22d3ee;
+}
+
+.palette-summary__pill--verb {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+}
+
+.palette-summary__flags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.palette-summary__flag {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+</style>
+
+===== build/resources/js/components/palette/PaletteHeader.vue =====
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { PaletteMode } from '@/types/palette'
+import { usePage } from '@inertiajs/vue3'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+
+const props = defineProps<{
+  mode: PaletteMode
+  executing?: boolean
+  env?: string
+}>()
+
+const emit = defineEmits<{
+  'toggle-mode': []
+  'close': []
+}>()
+
+const page = usePage()
+
+const currentCompany = computed(() => {
+  return page.props.auth?.currentCompany || null
+})
+
+const currentUser = computed(() => {
+  return page.props.auth?.user || null
+})
+
+const modeIcon = computed(() => {
+  switch (props.mode) {
+    case 'collapsed': return '▁'
+    case 'half': return '▬'
+    case 'full': return '▣'
+  }
+})
+</script>
+
+<template>
+  <div class="palette-header">
+    <div class="palette-header__info">
+      <div class="palette-header__stack">
+        <span v-if="currentCompany" class="palette-header__company">
+          🏢 {{ currentCompany.name }}
+          <Badge variant="outline" class="palette-header__badge">{{ currentCompany.slug }}</Badge>
+        </span>
+        <span v-if="currentUser" class="palette-header__user">
+          {{ currentUser.email }}
+        </span>
+      </div>
+      <Badge variant="secondary" class="palette-header__env">
+        {{ env ?? 'dev' }}
+      </Badge>
+    </div>
+    
+    <div class="palette-header__actions">
+      <Spinner v-if="executing" class="palette-header__spinner" />
+      <button
+        class="palette-header__btn"
+        title="Toggle size (Ctrl+M)"
+        @click="emit('toggle-mode')"
+      >
+        {{ modeIcon }}
+      </button>
+      <button
+        class="palette-header__btn"
+        title="Close (Esc)"
+        @click="emit('close')"
+      >
+        ✕
+      </button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--palette-surface);
+  border-bottom: 1px solid var(--palette-secondary);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.palette-header__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.palette-header__company {
+  color: var(--palette-accent);
+  font-weight: 600;
+}
+
+.palette-header__user {
+  color: var(--palette-secondary);
+}
+
+.palette-header__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.palette-header__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.palette-header__badge {
+  margin-left: 8px;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.palette-header__env {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.palette-header__spinner {
+  color: var(--palette-accent);
+}
+
+.palette-header__btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--palette-secondary);
+  border-radius: 4px;
+  color: var(--palette-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.palette-header__btn:hover {
+  background: var(--palette-accent);
+  border-color: var(--palette-accent);
+  color: var(--palette-background);
+}
+</style>
+
+===== build/resources/js/components/palette/PaletteInput.vue =====
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { PROMPT, ANIMATION } from '@/palette/constants'
+import { Spinner } from '@/components/ui/spinner'
+
+const props = defineProps<{
+  modelValue: string
+  executing?: boolean
+  prompt?: string
+  suggestions?: string[]
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  'submit': []
+  'suggest': [partial: string]
+}>()
+
+const inputRef = ref<HTMLInputElement | null>(null)
+const cursorVisible = ref(true)
+const showAutocomplete = ref(false)
+const selectedSuggestion = ref(0)
+let cursorInterval: number | null = null
+
+const promptSymbol = computed(() => {
+  if (props.executing) return PROMPT.EXECUTING
+  return props.prompt || PROMPT.DEFAULT
+})
+
+const promptColor = computed(() => {
+  if (props.executing) return 'var(--palette-warning)'
+  return 'var(--palette-accent)'
+})
+
+function handleInput(e: Event) {
+  const target = e.target as HTMLInputElement
+  const value = target.value
+  emit('update:modelValue', value)
+  
+  if (value.trim()) {
+    emit('suggest', value)
+    showAutocomplete.value = props.suggestions && props.suggestions.length > 0
+    selectedSuggestion.value = 0
+  } else {
+    showAutocomplete.value = false
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (showAutocomplete.value && props.suggestions) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      selectedSuggestion.value = Math.min(selectedSuggestion.value + 1, props.suggestions.length - 1)
+      return
+    }
+    
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      selectedSuggestion.value = Math.max(selectedSuggestion.value - 1, 0)
+      return
+    }
+    
+    if (e.key === 'Tab' || (e.key === 'Enter' && props.suggestions.length > 0)) {
+      e.preventDefault()
+      const suggestion = props.suggestions[selectedSuggestion.value]
+      if (suggestion) {
+        emit('update:modelValue', suggestion)
+        showAutocomplete.value = false
+      }
+      
+      if (e.key === 'Enter') {
+        emit('submit')
+      }
+      return
+    }
+  }
+  
+  if (e.key === 'Escape') {
+    showAutocomplete.value = false
+    return
+  }
+  
+  if (e.key === 'Enter') {
+    showAutocomplete.value = false
+    emit('submit')
+  }
+}
+
+function selectSuggestion(suggestion: string) {
+  emit('update:modelValue', suggestion)
+  showAutocomplete.value = false
+  nextTick(() => {
+    inputRef.value?.focus()
+  })
+}
+
+function focus() {
+  inputRef.value?.focus()
+}
+
+onMounted(() => {
+  cursorInterval = window.setInterval(() => {
+    cursorVisible.value = !cursorVisible.value
+  }, ANIMATION.CURSOR_BLINK_MS)
+  
+  focus()
+})
+
+onUnmounted(() => {
+  if (cursorInterval) {
+    clearInterval(cursorInterval)
+  }
+})
+
+defineExpose({ focus })
+</script>
+
+<template>
+  <div class="palette-input">
+    <span class="palette-input__prompt" :style="{ color: promptColor }">
+      {{ promptSymbol }}
+    </span>
+    <div class="palette-input__container">
+      <input
+        ref="inputRef"
+        :value="modelValue"
+        type="text"
+        class="palette-input__field"
+        :disabled="executing"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        @input="handleInput"
+        @keydown="handleKeydown"
+      />
+      <Spinner v-if="executing" class="palette-input__spinner" />
+      
+      <!-- Autocomplete dropdown -->
+      <div v-if="showAutocomplete && suggestions?.length" class="palette-autocomplete">
+        <div
+          v-for="(suggestion, index) in suggestions"
+          :key="suggestion"
+          class="palette-autocomplete__item"
+          :class="{ 'palette-autocomplete__item--selected': index === selectedSuggestion }"
+          @click="selectSuggestion(suggestion)"
+        >
+          {{ suggestion }}
+        </div>
+      </div>
+      
+      <div class="palette-input__helper" aria-hidden="true">
+        <span>Enter to run</span>
+        <span>↑↓ history</span>
+        <span>Tab to autocomplete</span>
+        <span>Esc to close</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.palette-input {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--palette-secondary);
+  background: var(--palette-surface);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 14px;
+}
+
+.palette-input__prompt {
+  margin-right: 12px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.palette-input__container {
+  position: relative;
+  flex: 1;
+}
+
+.palette-input__field {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: inherit;
+  caret-color: var(--palette-accent);
+  padding-right: 32px;
+}
+
+.palette-input__field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.palette-input__spinner {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--palette-accent);
+}
+
+.palette-autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--palette-surface);
+  border: 1px solid var(--palette-secondary);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.palette-autocomplete__item {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--palette-secondary);
+  transition: all 0.15s ease;
+}
+
+.palette-autocomplete__item:hover,
+.palette-autocomplete__item--selected {
+  background: var(--palette-accent);
+  color: var(--palette-background);
+}
+
+.palette-input__helper {
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--palette-secondary);
+  opacity: 0.8;
+}
+
+@keyframes blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+</style>
+
+===== build/resources/js/components/palette/PaletteOutput.vue =====
+<script setup lang="ts">
+import { ref, watch, nextTick } from 'vue'
+import type { OutputLine } from '@/types/palette'
+import OutputLineComponent from './renderers/OutputLine.vue'
+import OutputTable from './renderers/OutputTable.vue'
+
+const props = defineProps<{
+  lines: OutputLine[]
+}>()
+
+const outputContainer = ref<HTMLDivElement | null>(null)
+
+watch(() => props.lines.length, async () => {
+  await nextTick()
+  if (outputContainer.value) {
+    outputContainer.value.scrollTop = outputContainer.value.scrollHeight
+  }
+})
+</script>
+
+<template>
+  <div
+    ref="outputContainer"
+    class="palette-output"
+    aria-live="polite"
+    aria-atomic="false"
+    role="log"
+  >
+    <template v-for="line in lines" :key="line.id">
+      <OutputTable
+        v-if="line.type === 'table' && typeof line.content !== 'string'"
+        :table="line.content"
+      />
+      <OutputLineComponent v-else :line="line" />
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.palette-output {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  min-height: 0;
+}
+
+.palette-output::-webkit-scrollbar {
+  width: 8px;
+}
+
+.palette-output::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-output::-webkit-scrollbar-thumb {
+  background: var(--palette-secondary);
+  border-radius: 4px;
+}
+
+.palette-output::-webkit-scrollbar-thumb:hover {
+  background: var(--palette-accent);
+}
+</style>
+
+===== build/resources/js/components/palette/renderers/OutputLine.vue =====
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { OutputLine } from '@/types/palette'
+import { formatOutput } from '@/palette/formatter'
+import { DEFAULT_THEME } from '@/palette/theme'
+
+const props = defineProps<{
+  line: OutputLine
+}>()
+
+const formattedContent = computed(() => {
+  if (typeof props.line.content === 'string') {
+    return formatOutput(props.line.content, DEFAULT_THEME)
+  }
+  return ''
+})
+
+const lineClass = computed(() => {
+  return {
+    'palette-line': true,
+    'palette-line--input': props.line.type === 'input',
+    'palette-line--output': props.line.type === 'output',
+    'palette-line--error': props.line.type === 'error',
+    'palette-line--success': props.line.type === 'success',
+    'palette-line--system': props.line.type === 'system',
+  }
+})
+</script>
+
+<template>
+  <div :class="lineClass">
+    <div
+      v-if="typeof line.content === 'string'"
+      class="palette-line__content"
+      v-html="formattedContent"
+    />
+  </div>
+</template>
+
+<style scoped>
+.palette-line {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 4px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.palette-line--input {
+  color: var(--palette-accent);
+}
+
+.palette-line--output {
+  color: #e2e8f0;
+}
+
+.palette-line--error {
+  color: var(--palette-error);
+}
+
+.palette-line--success {
+  color: var(--palette-success);
+}
+
+.palette-line--system {
+  color: var(--palette-secondary);
+  font-style: italic;
+}
+
+.palette-line__content {
+  margin: 0;
+}
+</style>
+
+===== build/resources/js/components/palette/renderers/OutputTable.vue =====
+<script setup lang="ts">
+import type { TableData } from '@/types/palette'
+import { formatOutput } from '@/palette/formatter'
+import { DEFAULT_THEME } from '@/palette/theme'
+import { Button } from '@/components/ui/button'
+
+const props = defineProps<{
+  table: TableData
+}>()
+
+function format(text: string) {
+  return formatOutput(text, DEFAULT_THEME)
+}
+
+function copyExample() {
+  navigator.clipboard?.writeText('company.create "Acme" USD')
+}
+</script>
+
+<template>
+  <div class="palette-table">
+    <template v-if="table.rows.length">
+      <table>
+        <thead v-if="table.headers">
+          <tr>
+            <th v-for="(header, i) in table.headers" :key="i">
+              {{ header }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, i) in table.rows" :key="i">
+            <td v-for="(cell, j) in row" :key="j" v-html="format(cell)" />
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="table.footer" class="palette-table__footer" v-html="format(table.footer)" />
+    </template>
+
+    <div v-else class="palette-table__empty">
+      <div class="palette-table__empty-title">No results</div>
+      <div class="palette-table__empty-subtitle">
+        Try another command or create a record to populate this view.
+      </div>
+      <div class="palette-table__actions">
+        <Button
+          variant="outline"
+          size="sm"
+          @click="copyExample"
+        >
+          Copy example: company.create "Acme" USD
+        </Button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.palette-table {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  padding: 8px 16px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #e2e8f0;
+}
+
+thead {
+  border-bottom: 1px solid var(--palette-secondary);
+}
+
+th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--palette-accent);
+}
+
+td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover {
+  background-color: rgba(100, 116, 139, 0.1);
+}
+
+.palette-table__footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--palette-secondary);
+  color: var(--palette-secondary);
+  font-size: 12px;
+}
+
+.palette-table__empty {
+  padding: 20px 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #e2e8f0;
+}
+
+.palette-table__empty-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.palette-table__empty-subtitle {
+  color: var(--palette-secondary);
+  margin-bottom: 12px;
+}
+
+.palette-table__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+</style>
+
+===== build/resources/js/composables/usePalette.ts =====
+import { ref, computed } from 'vue'
+import { useCommandParser } from './useCommandParser'
+import { useCommandHistory } from './useCommandHistory'
+import { useCommandExecutor } from './useCommandExecutor'
+import { useAutocomplete } from './useAutocomplete'
+import type { OutputLine, PaletteMode } from '@/types/palette'
+import { LIMITS } from '@/palette/constants'
+
+export function usePalette() {
+  const visible = ref(false)
+  const mode = ref<PaletteMode>('half')
+  const input = ref('')
+  const executing = ref(false)
+  const outputLines = ref<OutputLine[]>([])
+
+  const { parsed, isValid, hasErrors } = useCommandParser(input)
+  const history = useCommandHistory()
+  const executor = useCommandExecutor()
+  const autocomplete = useAutocomplete()
+
+  const canExecute = computed(() => {
+    return isValid.value && !executing.value && input.value.trim().length > 0
+  })
+
+  function open() {
+    visible.value = true
+  }
+
+  function close() {
+    visible.value = false
+    input.value = ''
+    history.reset()
+  }
+
+  function toggleMode() {
+    const modes: PaletteMode[] = ['collapsed', 'half', 'full']
+    const currentIndex = modes.indexOf(mode.value)
+    const nextIndex = (currentIndex + 1) % modes.length
+    mode.value = modes[nextIndex]
+  }
+
+  function addOutput(type: OutputLine['type'], content: string | any) {
+    const line: OutputLine = {
+      id: `${type}-${Date.now()}-${Math.random()}`,
+      type,
+      content,
+      timestamp: Date.now(),
+    }
+
+    outputLines.value.push(line)
+
+    if (outputLines.value.length > LIMITS.MAX_OUTPUT_LINES) {
+      outputLines.value = outputLines.value.slice(-LIMITS.MAX_OUTPUT_LINES)
+    }
+  }
+
+  async function executeCommand() {
+    if (!canExecute.value) {
+      if (hasErrors.value) {
+        addOutput('error', parsed.value.errors.join(', '))
+      }
+      return
+    }
+
+    const commandText = input.value
+    const commandParsed = parsed.value // Capture parsed result before clearing input
+    addOutput('input', `❯ ${commandText}`)
+
+    history.add(commandText)
+    input.value = ''
+    executing.value = true
+
+    try {
+      const response = await executor.execute(commandParsed)
+
+      if (response.ok) {
+        if (response.data && typeof response.data === 'object' && 'headers' in response.data) {
+          addOutput('table', response.data)
+        } else if (response.message) {
+          addOutput('success', response.message)
+        } else {
+          addOutput('success', 'Command executed successfully')
+        }
+
+        if (response.redirect) {
+          setTimeout(() => {
+            window.location.href = response.redirect!
+          }, 1000)
+        }
+      } else {
+        let errorMessage = response.message || 'Command failed'
+        
+        if (response.errors) {
+          const errorDetails = Object.entries(response.errors)
+            .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
+            .join('\n')
+          errorMessage += '\n' + errorDetails
+        }
+
+        if (response.debug) {
+          errorMessage += '\n[debug] ' + JSON.stringify(response.debug, null, 2)
+        }
+        
+        addOutput('error', errorMessage)
+      }
+    } catch (error) {
+      addOutput('error', error instanceof Error ? error.message : 'Unknown error')
+    } finally {
+      executing.value = false
+    }
+  }
+
+  function handleHistoryPrev() {
+    const prev = history.navigatePrevious()
+    if (prev !== null) {
+      input.value = prev
+    }
+  }
+
+  function handleHistoryNext() {
+    const next = history.navigateNext()
+    if (next !== null) {
+      input.value = next
+    }
+  }
+
+  function handleSuggestion(partial: string) {
+    autocomplete.updateSuggestions(partial)
+  }
+
+  function clear() {
+    outputLines.value = []
+  }
+
+  return {
+    visible,
+    mode,
+    input,
+    executing,
+    outputLines,
+    parsed,
+    canExecute,
+    suggestions: autocomplete.suggestions,
+    open,
+    close,
+    toggleMode,
+    executeCommand,
+    handleHistoryPrev,
+    handleHistoryNext,
+    handleSuggestion,
+    clear,
+  }
+}
+
+===== build/resources/js/composables/useCommandParser.ts =====
+import { computed, type Ref } from 'vue'
+import { parse } from '@/palette/parser'
+import type { ParsedCommand } from '@/types/palette'
+
+export function useCommandParser(input: Ref<string>) {
+  const parsed = computed<ParsedCommand>(() => {
+    return parse(input.value)
+  })
+
+  const isValid = computed(() => {
+    return parsed.value.complete && parsed.value.errors.length === 0
+  })
+
+  const hasErrors = computed(() => {
+    return parsed.value.errors.length > 0
+  })
+
+  return {
+    parsed,
+    isValid,
+    hasErrors,
+  }
+}
+
+===== build/resources/js/composables/useCommandExecutor.ts =====
+import { usePage } from '@inertiajs/vue3'
+import type { ParsedCommand, CommandResponse } from '@/types/palette'
+
+export function useCommandExecutor() {
+  const page = usePage()
+
+  async function execute(parsed: ParsedCommand): Promise<CommandResponse> {
+    const baseUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, '') || window.location.origin
+    const apiUrl = `${baseUrl}/api/commands`
+    const currentCompany = (page.props.auth as any)?.currentCompany
+    const slugFromCommand = typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null
+    const companySlug = slugFromCommand || currentCompany?.slug || ''
+
+    const action = `${parsed.entity}.${parsed.verb}`
+    const idemKey = parsed.idemKey || generateIdemKey(action, parsed.flags)
+
+    console.log('[Palette] Executing command:', {
+      action,
+      companySlug,
+      idemKey,
+      flags: parsed.flags,
+      auth: page.props.auth,
+      user: page.props.auth?.user,
+      cookies: document.cookie,
+      apiUrl,
+    })
+
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Action': action,
+        'X-Company-Slug': companySlug,
+        'X-Idempotency-Key': idemKey,
+        'X-CSRF-TOKEN': getCsrfToken(),
+      }
+
+      console.log('[Palette] Request headers:', headers)
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: JSON.stringify({
+          params: parsed.flags,
+        }),
+      })
+
+      console.log('[Palette] Response status:', response.status, response.statusText)
+      console.log('[Palette] Response headers:', Object.fromEntries(response.headers.entries()))
+
+      const responseText = await response.text()
+      console.log('[Palette] Response body:', responseText)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (e) {
+        console.error('[Palette] Failed to parse JSON response:', e)
+        return {
+          ok: false,
+          status: response.status,
+          code: 'PARSE_ERROR',
+          message: 'Invalid response format',
+          debug: { responseText },
+        }
+      }
+
+      if (!response.ok) {
+        console.error('[Palettes] API error:', data)
+        return {
+          ok: false,
+          status: response.status,
+          code: data.code || 'ERROR',
+          message: data.message || 'An error occurred',
+          errors: data.errors,
+          debug: data.debug,
+        }
+      }
+
+      console.log('[Palette] Success:', data)
+      return data
+    } catch (error) {
+      console.error('[Palette] Network error:', error)
+      return {
+        ok: false,
+        status: 0,
+        code: 'NETWORK_ERROR',
+        message: error instanceof Error ? error.message : 'Network error',
+        debug: {
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+          apiUrl,
+          action,
+        },
+      }
+    }
+  }
+
+  function getCsrfToken(): string {
+    const meta = document.querySelector('meta[name="csrf-token"]')
+    const token = meta?.getAttribute('content') || ''
+    console.log('[Palette] CSRF token:', token ? `${token.substring(0, 10)}...` : 'MISSING')
+    return token
+  }
+
+  function generateIdemKey(action: string, flags: Record<string, unknown>): string {
+    const parts = [
+      action,
+      Date.now(),
+      ...Object.entries(flags)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`),
+    ]
+    return btoa(parts.join('|')).substring(0, 32)
+  }
+
+  return {
+    execute,
+  }
+}
+
+===== build/resources/js/composables/useCommandHistory.ts =====
+import { ref } from 'vue'
+import { LIMITS } from '@/palette/constants'
+
+const STORAGE_KEY = 'palette-command-history'
+
+export function useCommandHistory() {
+  const history = ref<string[]>(loadHistory())
+  const historyIndex = ref(-1)
+
+  function add(command: string) {
+    if (!command.trim()) return
+
+    history.value = [command, ...history.value.filter(c => c !== command)]
+      .slice(0, LIMITS.MAX_HISTORY_ITEMS)
+    
+    historyIndex.value = -1
+    saveHistory()
+  }
+
+  function navigatePrevious(): string | null {
+    if (history.value.length === 0) return null
+    
+    if (historyIndex.value < history.value.length - 1) {
+      historyIndex.value++
+    }
+    
+    return history.value[historyIndex.value] || null
+  }
+
+  function navigateNext(): string | null {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+      return history.value[historyIndex.value]
+    }
+    
+    if (historyIndex.value === 0) {
+      historyIndex.value = -1
+      return ''
+    }
+    
+    return null
+  }
+
+  function reset() {
+    historyIndex.value = -1
+  }
+
+  function clear() {
+    history.value = []
+    historyIndex.value = -1
+    saveHistory()
+  }
+
+  function loadHistory(): string[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history.value))
+    } catch {
+      // Silently fail
+    }
+  }
+
+  return {
+    history,
+    add,
+    navigatePrevious,
+    navigateNext,
+    reset,
+    clear,
+  }
+}
+
+===== build/resources/js/composables/useAutocomplete.ts =====
+import { ref, computed } from 'vue'
+import { GRAMMAR } from '@/palette/grammar'
+
+export function useAutocomplete() {
+  const suggestions = ref<string[]>([])
+  
+  const allCommands = computed(() => {
+    const commands: string[] = []
+    
+    for (const [entityName, entityDef] of Object.entries(GRAMMAR)) {
+      // Add entity shortcuts
+      for (const shortcut of entityDef.shortcuts) {
+        commands.push(`${shortcut}`)
+      }
+      
+      // Add full entity name
+      commands.push(`${entityName}`)
+      
+      // Add entity.verb combinations
+      for (const verb of entityDef.verbs) {
+        commands.push(`${entityName} ${verb.name}`)
+        
+        // Add with shortcuts
+        for (const shortcut of entityDef.shortcuts) {
+          commands.push(`${shortcut} ${verb.name}`)
+        }
+        
+        // Add with aliases
+        for (const alias of verb.aliases) {
+          commands.push(`${entityName} ${alias}`)
+          
+          for (const shortcut of entityDef.shortcuts) {
+            commands.push(`${shortcut} ${alias}`)
+          }
+        }
+      }
+    }
+    
+    return [...new Set(commands)].sort()
+  })
+  
+  function generateSuggestions(input: string): string[] {
+    if (!input.trim()) {
+      return []
+    }
+    
+    const inputLower = input.toLowerCase()
+    const filtered = allCommands.value.filter(cmd => 
+      cmd.toLowerCase().startsWith(inputLower) && cmd !== input
+    )
+    
+    // Limit to 10 suggestions, prioritize exact matches and shorter commands
+    return filtered
+      .sort((a, b) => {
+        // Prioritize commands that start with the exact input (case sensitive)
+        const aExact = a.startsWith(input) ? 0 : 1
+        const bExact = b.startsWith(input) ? 0 : 1
+        if (aExact !== bExact) return aExact - bExact
+        
+        // Then prioritize shorter commands
+        return a.length - b.length
+      })
+      .slice(0, 10)
+  }
+  
+  function updateSuggestions(input: string) {
+    suggestions.value = generateSuggestions(input)
+  }
+  
+  return {
+    suggestions,
+    updateSuggestions,
+    allCommands,
+  }
+}
+
+===== build/resources/js/palette/parser.ts =====
+import type { ParsedCommand } from '@/types/palette'
+import { GRAMMAR, resolveEntityShortcut, resolveVerbAlias, getVerbDefinition } from './grammar'
+
+export function parse(input: string): ParsedCommand {
+  console.log('[Parser] Parsing input:', input)
+  
+  const result: ParsedCommand = {
+    raw: input.trim(),
+    entity: '',
+    verb: '',
+    flags: {},
+    complete: false,
+    confidence: 0,
+    errors: [],
+    idemKey: '',
+  }
+
+  if (!result.raw) {
+    result.errors.push('Empty command')
+    return result
+  }
+
+  const tokens = tokenize(result.raw)
+  console.log('[Parser] Tokens:', tokens)
+  
+  if (tokens.length === 0) {
+    result.errors.push('No tokens found')
+    return result
+  }
+
+  const first = tokens[0]
+  let rest = tokens.slice(1)
+  console.log('[Parser] First token:', first, 'Rest:', rest)
+
+  const entityVerb = parseEntityVerb(first, rest)
+  if (entityVerb) {
+    result.entity = entityVerb.entity
+    result.verb = entityVerb.verb
+    if (entityVerb.consumed > 1) {
+      rest = rest.slice(entityVerb.consumed - 1)
+    }
+  } else {
+    result.errors.push(`Unknown command: ${first}`)
+    return result
+  }
+
+  const { flags, remaining, flagErrors } = extractFlags(rest, result.entity, result.verb)
+  result.flags = flags
+  result.errors.push(...flagErrors)
+
+  if (remaining.length > 0) {
+    result.subject = remaining.join(' ')
+  }
+
+  inferFromSubject(result)
+
+  result.complete = isComplete(result)
+  result.confidence = calculateConfidence(result)
+  result.idemKey = generateIdemKey(result)
+
+  return result
+}
+
+function parseEntityVerb(token: string, remainingTokens: string[]): { entity: string; verb: string; consumed: number } | null {
+  console.log('[Parser] parseEntityVerb token:', token)
+  
+  if (token.includes('.')) {
+    const [entityPart, verbPart] = token.split('.')
+    console.log('[Parser] entityPart:', entityPart, 'verbPart:', verbPart)
+    
+    const entity = resolveEntityShortcut(entityPart)
+    console.log('[Parser] resolved entity:', entity)
+    
+    if (!entity) return null
+    
+    const verb = resolveVerbAlias(entity, verbPart)
+    console.log('[Parser] resolved verb:', verb)
+    
+    if (!verb) return null
+    
+    return { entity, verb, consumed: 1 }
+  }
+
+  const entity = resolveEntityShortcut(token)
+  if (entity) {
+    // If the next token looks like a verb, consume it
+    if (remainingTokens.length > 0) {
+      const candidateVerb = resolveVerbAlias(entity, remainingTokens[0])
+      if (candidateVerb) {
+        return { entity, verb: candidateVerb, consumed: 2 }
+      }
+    }
+
+    return { entity, verb: GRAMMAR[entity].defaultVerb, consumed: 1 }
+  }
+
+  return null
+}
+
+function tokenize(input: string): string[] {
+  console.log('[Parser] Tokenizing:', input)
+  
+  const tokens: string[] = []
+  let current = ''
+  let inQuotes = false
+  let quoteChar = ''
+
+  for (const char of input) {
+    if ((char === '"' || char === "'") && !inQuotes) {
+      inQuotes = true
+      quoteChar = char
+    } else if (char === quoteChar && inQuotes) {
+      inQuotes = false
+      quoteChar = ''
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+
+  if (current) tokens.push(current)
+  return tokens
+}
+
+function extractFlags(
+  tokens: string[],
+  entity: string,
+  verb: string
+): { flags: Record<string, unknown>; remaining: string[]; flagErrors: string[] } {
+  const flags: Record<string, unknown> = {}
+  const remaining: string[] = []
+  const errors: string[] = []
+
+  const verbDef = getVerbDefinition(entity, verb)
+  if (!verbDef) {
+    return { flags, remaining: tokens, flagErrors: errors }
+  }
+
+  let i = 0
+  while (i < tokens.length) {
+    const token = tokens[i]
+
+    if (token.startsWith('--')) {
+      const { name, value, consumed, error } = parseLongFlag(token, tokens[i + 1], verbDef.flags)
+      if (error) errors.push(error)
+      else if (name) flags[name] = value
+      i += consumed
+    } else if (token.startsWith('-') && token.length === 2) {
+      const { name, value, consumed, error } = parseShortFlag(token, tokens[i + 1], verbDef.flags)
+      if (error) errors.push(error)
+      else if (name) flags[name] = value
+      i += consumed
+    } else {
+      remaining.push(token)
+      i++
+    }
+  }
+
+  return { flags, remaining, flagErrors: errors }
+}
+
+function parseLongFlag(
+  token: string,
+  nextToken: string | undefined,
+  flagDefs: Array<{ name: string; shorthand?: string; type: string; required: boolean; default?: unknown }>
+): { name: string | null; value: unknown; consumed: number; error: string | null } {
+  const withoutDashes = token.substring(2)
+  
+  if (withoutDashes.includes('=')) {
+    const [name, ...valueParts] = withoutDashes.split('=')
+    const value = valueParts.join('=')
+    const flagDef = flagDefs.find(f => f.name === name)
+    
+    if (!flagDef) {
+      return { name: null, value: null, consumed: 1, error: `Unknown flag: --${name}` }
+    }
+    
+    return { name, value: coerceValue(value, flagDef.type), consumed: 1, error: null }
+  }
+
+  const flagDef = flagDefs.find(f => f.name === withoutDashes)
+  
+  if (!flagDef) {
+    return { name: null, value: null, consumed: 1, error: `Unknown flag: --${withoutDashes}` }
+  }
+
+  if (flagDef.type === 'boolean') {
+    return { name: withoutDashes, value: true, consumed: 1, error: null }
+  }
+
+  if (!nextToken || nextToken.startsWith('-')) {
+    return { name: null, value: null, consumed: 1, error: `Flag --${withoutDashes} requires a value` }
+  }
+
+  return { name: withoutDashes, value: coerceValue(nextToken, flagDef.type), consumed: 2, error: null }
+}
+
+function parseShortFlag(
+  token: string,
+  nextToken: string | undefined,
+  flagDefs: Array<{ name: string; shorthand?: string; type: string; required: boolean }>
+): { name: string | null; value: unknown; consumed: number; error: string | null } {
+  const shorthand = token[1]
+  const flagDef = flagDefs.find(f => f.shorthand === shorthand)
+  
+  if (!flagDef) {
+    return { name: null, value: null, consumed: 1, error: `Unknown flag: -${shorthand}` }
+  }
+
+  if (flagDef.type === 'boolean') {
+    return { name: flagDef.name, value: true, consumed: 1, error: null }
+  }
+
+  if (!nextToken || nextToken.startsWith('-')) {
+    return { name: null, value: null, consumed: 1, error: `Flag -${shorthand} requires a value` }
+  }
+
+  return { name: flagDef.name, value: coerceValue(nextToken, flagDef.type), consumed: 2, error: null }
+}
+
+function coerceValue(value: string, type: string): unknown {
+  if (type === 'number') {
+    const num = parseFloat(value)
+    return isNaN(num) ? value : num
+  }
+  
+  if (type === 'boolean') {
+    return value.toLowerCase() === 'true' || value === '1'
+  }
+  
+  return value
+}
+
+function inferFromSubject(result: ParsedCommand): void {
+  if (!result.subject) return
+
+  const verbDef = getVerbDefinition(result.entity, result.verb)
+  if (!verbDef) return
+
+  const words = result.subject.split(/\s+/)
+
+  if (result.entity === 'company' && result.verb === 'create') {
+    if (!result.flags.name && words.length > 0) {
+      const nameWords: string[] = []
+      let currencyIndex = -1
+      
+      for (let i = 0; i < words.length; i++) {
+        if (words[i].length === 3 && words[i].toUpperCase() === words[i]) {
+          currencyIndex = i
+          break
+        }
+      }
+      
+      if (currencyIndex >= 0) {
+        result.flags.name = words.slice(0, currencyIndex).join(' ')
+        result.flags.currency = words[currencyIndex].toUpperCase()
+      } else {
+        result.flags.name = words.slice(0, -1).join(' ')
+        result.flags.currency = words[words.length - 1].toUpperCase()
+      }
+    }
+  }
+
+  if (result.entity === 'user' && result.verb === 'invite') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailWord = words.find(w => emailRegex.test(w))
+    
+    if (emailWord && !result.flags.email) {
+      result.flags.email = emailWord
+    }
+  }
+
+  if ((result.entity === 'company' || result.entity === 'user') && 
+      (result.verb === 'delete' || result.verb === 'switch' || result.verb === 'deactivate')) {
+    if (!result.flags.slug && !result.flags.email && words.length > 0) {
+      const identifier = words.join(' ')
+      if (result.entity === 'company') {
+        result.flags.slug = identifier
+      } else if (identifier.includes('@')) {
+        result.flags.email = identifier
+      }
+    }
+  }
+}
+
+function isComplete(result: ParsedCommand): boolean {
+  if (result.errors.length > 0) return false
+  if (!result.entity || !result.verb) return false
+
+  const verbDef = getVerbDefinition(result.entity, result.verb)
+  if (!verbDef) return false
+
+  const requiredFlags = verbDef.flags.filter(f => f.required)
+  for (const flag of requiredFlags) {
+    if (!(flag.name in result.flags)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function calculateConfidence(result: ParsedCommand): number {
+  if (!result.entity || !result.verb) return 0
+  if (result.errors.length > 0) return 0.3
+
+  const verbDef = getVerbDefinition(result.entity, result.verb)
+  if (!verbDef) return 0
+
+  const totalFlags = verbDef.flags.length
+  const providedFlags = Object.keys(result.flags).length
+
+  if (totalFlags === 0) return 1
+
+  const flagScore = providedFlags / totalFlags
+  return result.complete ? 1 : Math.min(0.9, flagScore)
+}
+
+function generateIdemKey(result: ParsedCommand): string {
+  if (!result.complete) return ''
+  
+  const parts = [
+    result.entity,
+    result.verb,
+    ...Object.entries(result.flags)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`),
+  ]
+  
+  return btoa(parts.join('|')).substring(0, 32)
+}
+
+===== build/resources/js/palette/grammar.ts =====
+import type { EntityDefinition } from '@/types/palette'
+
+export const GRAMMAR: Record<string, EntityDefinition> = {
+  company: {
+    name: 'company',
+    shortcuts: ['co', 'comp'],
+    defaultVerb: 'list',
+    verbs: [
+      {
+        name: 'create',
+        aliases: ['new', 'add'],
+        requiresSubject: true,
+        flags: [
+          { name: 'name', type: 'string', required: true },
+          { name: 'currency', type: 'string', required: true },
+          { name: 'industry', type: 'string', required: false },
+          { name: 'country', type: 'string', required: false },
+        ],
+      },
+      {
+        name: 'list',
+        aliases: ['ls', 'show', 'all'],
+        requiresSubject: false,
+        flags: [],
+      },
+      {
+        name: 'switch',
+        aliases: ['sw', 'change', 'use'],
+        requiresSubject: true,
+        flags: [
+          { name: 'slug', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'delete',
+        aliases: ['del', 'rm', 'remove'],
+        requiresSubject: true,
+        flags: [
+          { name: 'slug', type: 'string', required: true },
+        ],
+      },
+    ],
+  },
+
+  user: {
+    name: 'user',
+    shortcuts: ['u', 'usr'],
+    defaultVerb: 'list',
+    verbs: [
+      {
+        name: 'invite',
+        aliases: ['inv', 'add', 'new'],
+        requiresSubject: true,
+        flags: [
+          { name: 'email', type: 'string', required: true },
+          { name: 'role', type: 'string', required: false, default: 'member' },
+          { name: 'name', type: 'string', required: false },
+        ],
+      },
+      {
+        name: 'list',
+        aliases: ['ls', 'show', 'all'],
+        requiresSubject: false,
+        flags: [],
+      },
+      {
+        name: 'assign-role',
+        aliases: ['assign', 'grant'],
+        requiresSubject: true,
+        flags: [
+          { name: 'email', type: 'string', required: true },
+          { name: 'role', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'remove-role',
+        aliases: ['revoke', 'unassign'],
+        requiresSubject: true,
+        flags: [
+          { name: 'email', type: 'string', required: true },
+          { name: 'role', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'deactivate',
+        aliases: ['disable', 'suspend'],
+        requiresSubject: true,
+        flags: [
+          { name: 'email', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'delete',
+        aliases: ['del', 'rm', 'remove'],
+        requiresSubject: true,
+        flags: [
+          { name: 'email', type: 'string', required: true },
+        ],
+      },
+    ],
+  },
+
+  role: {
+    name: 'role',
+    shortcuts: ['r'],
+    defaultVerb: 'list',
+    verbs: [
+      {
+        name: 'list',
+        aliases: ['ls', 'show', 'all'],
+        requiresSubject: false,
+        flags: [],
+      },
+      {
+        name: 'assign',
+        aliases: ['grant', 'give'],
+        requiresSubject: true,
+        flags: [
+          { name: 'permission', type: 'string', required: true },
+          { name: 'role', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'revoke',
+        aliases: ['remove', 'take'],
+        requiresSubject: true,
+        flags: [
+          { name: 'permission', type: 'string', required: true },
+          { name: 'role', type: 'string', required: true },
+        ],
+      },
+    ],
+  },
+}
+
+export function resolveEntityShortcut(shortcut: string): string | null {
+  const normalized = shortcut.toLowerCase()
+  
+  for (const [entity, def] of Object.entries(GRAMMAR)) {
+    if (entity === normalized || def.shortcuts.includes(normalized)) {
+      return entity
+    }
+  }
+  
+  return null
+}
+
+export function resolveVerbAlias(entity: string, verb: string): string | null {
+  const entityDef = GRAMMAR[entity]
+  if (!entityDef) return null
+  
+  const normalized = verb.toLowerCase()
+  
+  for (const verbDef of entityDef.verbs) {
+    if (verbDef.name === normalized || verbDef.aliases.includes(normalized)) {
+      return verbDef.name
+    }
+  }
+  
+  return null
+}
+
+export function isValidVerb(entity: string, verb: string): boolean {
+  return resolveVerbAlias(entity, verb) !== null
+}
+
+export function getVerbDefinition(entity: string, verb: string) {
+  const entityDef = GRAMMAR[entity]
+  if (!entityDef) return null
+  
+  const resolvedVerb = resolveVerbAlias(entity, verb)
+  if (!resolvedVerb) return null
+  
+  return entityDef.verbs.find(v => v.name === resolvedVerb) || null
+}
+
+===== build/resources/js/palette/constants.ts =====
+export const KEYBINDINGS = {
+  TOGGLE: 'k',
+  TOGGLE_WITH_META: true,
+  CLOSE: 'Escape',
+  SUBMIT: 'Enter',
+  HISTORY_PREV: 'ArrowUp',
+  HISTORY_NEXT: 'ArrowDown',
+  SUGGESTION_PREV: 'ArrowUp',
+  SUGGESTION_NEXT: 'ArrowDown',
+  SUGGESTION_ACCEPT: 'Tab',
+  MODE_TOGGLE: 'm',
+  MODE_TOGGLE_WITH_CTRL: true,
+  CLEAR: 'l',
+  CLEAR_WITH_CTRL: true,
+} as const
+
+export const LIMITS = {
+  MAX_OUTPUT_LINES: 500,
+  MAX_HISTORY_ITEMS: 100,
+  MAX_SUGGESTIONS: 10,
+  DEBOUNCE_MS: 150,
+  UNDO_TIMEOUT_MS: 10000,
+} as const
+
+export const ANIMATION = {
+  CURSOR_BLINK_MS: 530,
+  FADE_IN_MS: 150,
+  FADE_OUT_MS: 100,
+  SLIDE_IN_MS: 200,
+} as const
+
+export const PROMPT = {
+  DEFAULT: '❯',
+  EXECUTING: '⋯',
+  ERROR: '✗',
+  SUCCESS: '✓',
+} as const
+
+export const Z_INDEX = {
+  BACKDROP: 9998,
+  PALETTE: 9999,
+} as const
+
+===== build/resources/js/palette/theme.ts =====
+export interface PaletteTheme {
+  name: string
+  primary: string
+  secondary: string
+  accent: string
+  background: string
+  surface: string
+  error: string
+  success: string
+  warning: string
+}
+
+export const THEME_GALAXY: PaletteTheme = {
+  name: 'galaxy',
+  primary: '#6366f1',
+  secondary: '#64748b',
+  accent: '#22d3ee',
+  background: '#0f172a',
+  surface: '#1e293b',
+  error: '#f43f5e',
+  success: '#10b981',
+  warning: '#f59e0b',
+}
+
+export const THEME_MONOKAI: PaletteTheme = {
+  name: 'monokai',
+  primary: '#a6e22e',
+  secondary: '#75715e',
+  accent: '#66d9ef',
+  background: '#272822',
+  surface: '#3e3d32',
+  error: '#f92672',
+  success: '#a6e22e',
+  warning: '#fd971f',
+}
+
+export const THEME_NORD: PaletteTheme = {
+  name: 'nord',
+  primary: '#88c0d0',
+  secondary: '#4c566a',
+  accent: '#8fbcbb',
+  background: '#2e3440',
+  surface: '#3b4252',
+  error: '#bf616a',
+  success: '#a3be8c',
+  warning: '#ebcb8b',
+}
+
+export const DEFAULT_THEME = THEME_GALAXY
+
+export function getCSSVariables(theme: PaletteTheme): Record<string, string> {
+  return {
+    '--palette-primary': theme.primary,
+    '--palette-secondary': theme.secondary,
+    '--palette-accent': theme.accent,
+    '--palette-background': theme.background,
+    '--palette-surface': theme.surface,
+    '--palette-error': theme.error,
+    '--palette-success': theme.success,
+    '--palette-warning': theme.warning,
+  }
+}
+
+===== build/resources/js/palette/formatter.ts =====
+import { THEME_GALAXY, type PaletteTheme } from './theme'
+
+export function formatOutput(text: string, theme: PaletteTheme = THEME_GALAXY): string {
+  const tagPattern = /\{(success|error|warning|accent|primary|secondary)(?::([^}]+))?\}(.*?)\{\/\}/g
+  
+  let formatted = text
+  
+  formatted = formatted.replace(tagPattern, (match, colorKey, style, content) => {
+    const color = theme[colorKey as keyof PaletteTheme] || theme.primary
+    const extraStyle = style ? `; ${style}` : ''
+    return `<span style="color: ${color}${extraStyle}">${content}</span>`
+  })
+
+  formatted = formatted.replace(/\{b\}(.*?)\{\/b\}/g, '<strong>$1</strong>')
+  formatted = formatted.replace(/\{i\}(.*?)\{\/i\}/g, '<em>$1</em>')
+  formatted = formatted.replace(/\{u\}(.*?)\{\/u\}/g, '<u>$1</u>')
+
+  return formatted
+}
+
+export function stripTags(text: string): string {
+  return text.replace(/\{[^}]+\}/g, '')
+}
+
+export function measureTextWidth(text: string): number {
+  return stripTags(text).length
+}
+
+===== build/resources/js/types/palette.ts =====
+export type PaletteMode = 'collapsed' | 'half' | 'full'
+
+export type OutputType = 'input' | 'output' | 'error' | 'success' | 'table' | 'progress' | 'system'
+
+export interface PaletteState {
+  mode: PaletteMode
+  visible: boolean
+  inputFocused: boolean
+  
+  input: string
+  cursorPosition: number
+  
+  commandHistory: string[]
+  historyIndex: number
+  
+  outputLines: OutputLine[]
+  maxOutputLines: number
+  
+  suggestions: Suggestion[]
+  suggestionIndex: number
+  showSuggestions: boolean
+  
+  executing: boolean
+  pendingUndo: UndoAction | null
+}
+
+export interface OutputLine {
+  id: string
+  type: OutputType
+  content: string | TableData
+  timestamp: number
+}
+
+export interface TableData {
+  headers: string[]
+  rows: string[][]
+  footer?: string
+}
+
+export interface Suggestion {
+  type: 'command' | 'entity' | 'history' | 'flag'
+  value: string
+  label: string
+  description?: string
+  icon?: string
+}
+
+export interface UndoAction {
+  action: string
+  params: Record<string, unknown>
+  expiresAt: number
+  message: string
+}
+
+export interface ParsedCommand {
+  raw: string
+  entity: string
+  verb: string
+  flags: Record<string, unknown>
+  subject?: string
+  complete: boolean
+  confidence: number
+  errors: string[]
+  idemKey: string
+}
+
+export interface CommandResponse {
+  ok: boolean
+  code?: string
+  message?: string
+  data?: unknown
+  meta?: unknown
+  redirect?: string
+  undo?: UndoAction
+  errors?: Record<string, string[]>
+  replayed?: boolean
+  status?: number
+  debug?: Record<string, unknown>
+}
+
+export interface EntityDefinition {
+  name: string
+  shortcuts: string[]
+  verbs: VerbDefinition[]
+  defaultVerb: string
+}
+
+export interface VerbDefinition {
+  name: string
+  aliases: string[]
+  flags: FlagDefinition[]
+  requiresSubject: boolean
+}
+
+export interface FlagDefinition {
+  name: string
+  shorthand?: string
+  type: 'boolean' | 'string' | 'number'
+  required: boolean
+  default?: unknown
+}
+
+===== build/resources/js/components/ui/spinner/Spinner.vue =====
+<script setup lang="ts">
+import type { HTMLAttributes } from "vue"
+import { Loader2Icon } from "lucide-vue-next"
+import { cn } from "@/lib/utils"
+
+const props = defineProps<{
+  class?: HTMLAttributes["class"]
+}>()
+</script>
+
+<template>
+  <Loader2Icon
+    role="status"
+    aria-label="Loading"
+    :class="cn('size-4 animate-spin', props.class)"
+  />
+</template>
+
+===== build/resources/js/components/ui/spinner/index.ts =====
+export { default as Spinner } from "./Spinner.vue"
+
+===== build/resources/js/components/ui/progress/Progress.vue =====
+<script setup lang="ts">
+import { computed } from "vue"
+import type { HTMLAttributes } from "vue"
+import { cn } from "@/lib/utils"
+
+const props = withDefaults(defineProps<{
+  value?: number
+  class?: HTMLAttributes["class"]
+}>(), {
+  value: 0,
+})
+
+const width = computed(() => `${Math.min(Math.max(props.value ?? 0, 0), 100)}%`)
+</script>
+
+<template>
+  <div
+    role="progressbar"
+    :aria-valuemin="0"
+    :aria-valuemax="100"
+    :aria-valuenow="value"
+    :class="cn(
+      'relative h-1 w-full overflow-hidden rounded-full bg-slate-800/70',
+      props.class,
+    )"
+  >
+    <div
+      class="h-full w-full flex-1 bg-cyan-400 transition-all duration-200"
+      :style="{ width }"
+    />
+  </div>
+</template>
+
+===== build/resources/js/components/ui/progress/index.ts =====
+export { default as Progress } from "./Progress.vue"
+
+===== build/resources/js/components/ui/badge/Badge.vue =====
+<script setup lang="ts">
+import type { PrimitiveProps } from "reka-ui"
+import type { HTMLAttributes } from "vue"
+import type { BadgeVariants } from "."
+import { reactiveOmit } from "@vueuse/core"
+import { Primitive } from "reka-ui"
+import { cn } from "@/lib/utils"
+import { badgeVariants } from "."
+
+const props = defineProps<PrimitiveProps & {
+  variant?: BadgeVariants["variant"]
+  class?: HTMLAttributes["class"]
+}>()
+
+const delegatedProps = reactiveOmit(props, "class")
+</script>
+
+<template>
+  <Primitive
+    data-slot="badge"
+    :class="cn(badgeVariants({ variant }), props.class)"
+    v-bind="delegatedProps"
+  >
+    <slot />
+  </Primitive>
+</template>
+
+===== build/resources/js/components/ui/badge/index.ts =====
+import type { VariantProps } from "class-variance-authority"
+import { cva } from "class-variance-authority"
+
+export { default as Badge } from "./Badge.vue"
+
+export const badgeVariants = cva(
+  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+        destructive:
+         "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+)
+export type BadgeVariants = VariantProps<typeof badgeVariants>
+

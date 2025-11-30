@@ -1017,7 +1017,7 @@ interface CommandRequest {
     'Authorization': `Bearer ${token}` | session
     'X-Action': string              // e.g., 'invoice.create'
     'X-Idempotency-Key': string     // SHA256 hash
-    'X-Company-Id'?: number         // Optional, uses active company
+    'X-Company-Slug': string        // Company slug from URL
   }
   body: {
     params: Record<string, unknown>
@@ -1549,11 +1549,14 @@ Single endpoint. Config-based routing. No magic.
 
 ```php
 // routes/api.php
-Route::post('/commands', \App\Http\Controllers\CommandController::class)
-    ->middleware(['auth', 'throttle:commands']);
 
-// Separate throttle for catalog (higher limit)
-Route::middleware(['auth', 'throttle:catalog'])->prefix('palette')->group(function () {
+// Commands use header-based company context (X-Company-Slug)
+// identify.company middleware sets context from header if present
+Route::post('/commands', \App\Http\Controllers\CommandController::class)
+    ->middleware(['auth', 'identify.company', 'throttle:commands']);
+
+// Catalog endpoints also need company context
+Route::middleware(['auth', 'identify.company', 'throttle:catalog'])->prefix('palette')->group(function () {
     Route::get('/customers', [PaletteCatalogController::class, 'customers']);
     Route::get('/vendors', [PaletteCatalogController::class, 'vendors']);
     Route::get('/accounts', [PaletteCatalogController::class, 'accounts']);
@@ -1564,6 +1567,16 @@ Route::middleware(['auth', 'throttle:catalog'])->prefix('palette')->group(functi
 RateLimiter::for('commands', fn($request) => Limit::perMinute(120)->by($request->user()->id));
 RateLimiter::for('catalog', fn($request) => Limit::perMinute(300)->by($request->user()->id));
 ```
+
+> **Note:** The `identify.company` middleware reads `X-Company-Slug` header and calls
+> `CurrentCompany::setBySlug()`. If your middleware only reads from URL params,
+> extend it to also check headers:
+>
+> ```php
+> // In IdentifyCompanyMiddleware::handle()
+> $slug = $request->route('company')
+>     ?? $request->header('X-Company-Slug');
+> ```
 
 **Routing Config:**
 
@@ -1687,13 +1700,13 @@ class CommandController extends Controller
             return $this->error('NOT_FOUND', "Unknown command: {$action}", 404);
         }
 
-        // 3. Set company context (from header or session)
-        $companySlug = $request->header('X-Company-Slug');
-        if ($companySlug) {
-            $company = app(CurrentCompany::class)->setBySlug($companySlug);
-            if (!$company) {
-                return $this->error('NOT_FOUND', "Company not found: {$companySlug}", 404);
-            }
+        // 3. Verify company context (set by identify.company middleware)
+        //    Middleware reads X-Company-Slug header and calls setBySlug()
+        $currentCompany = app(CurrentCompany::class);
+        $company = $currentCompany->get();
+
+        if (!$company) {
+            return $this->error('BAD_REQUEST', 'Company context required. Set X-Company-Slug header.', 400);
         }
 
         // 4. Check idempotency (skip for queries)
@@ -1772,7 +1785,7 @@ class CommandController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'params' => $request->input('params'),
                 'user' => $request->user()?->id,
-                'company' => app(CurrentCompany::class)->get()?->id,
+                'company' => $company->id,
             ]);
 
             return $this->error(
@@ -1929,9 +1942,9 @@ return new class extends Migration
 namespace App\Modules\Accounting\Actions\Invoice;
 
 use App\Contracts\PaletteAction;
+use App\Constants\Permissions;  // Per CLAUDE.md conventions
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Permissions;
 use App\Services\CurrentCompany;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
@@ -2045,9 +2058,9 @@ class CreateAction implements PaletteAction
 namespace App\Modules\Accounting\Actions\Invoice;
 
 use App\Contracts\PaletteAction;
+use App\Constants\Permissions;  // Per CLAUDE.md conventions
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Permissions;
 use App\Services\CurrentCompany;
 use App\Support\PaletteFormatter;
 
@@ -2582,7 +2595,7 @@ database/migrations/
 
 ---
 
-*Document version: 3.2 (Final)*
+*Document version: 3.3 (Final)*
 *Stack: Custom Vue 3, no external terminal libraries*
 *Theming: Posting.sh-inspired 7-color semantic system (galaxy, monokai, nord, dracula)*
 *Backend: Laravel command bus pattern with Action classes*

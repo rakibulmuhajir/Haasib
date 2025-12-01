@@ -24,12 +24,7 @@ class DeactivateAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        
         $company = CompanyContext::requireCompany();
-
-        if (!$company) {
-            throw new \Exception('No company context set');
-        }
 
         $user = User::where('email', $params['email'])->firstOrFail();
 

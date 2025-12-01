@@ -72,10 +72,6 @@ class CreateAction implements PaletteAction
             // Ensure company-scoped roles exist and carry permissions, then assign owner to creator
             CompanyContext::withContext($company, function () use ($company) {
                 $this->syncRolesForCompany($company);
-            });
-
-            // Assign owner role to creator
-            CompanyContext::withContext($company, function () {
                 CompanyContext::assignRole(Auth::user(), 'owner');
             });
 

@@ -21,12 +21,7 @@ class IndexAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        
         $company = CompanyContext::requireCompany();
-
-        if (!$company) {
-            throw new \Exception('No company context set');
-        }
 
         $users = DB::table('auth.users as u')
             ->join('auth.company_user as cu', 'u.id', '=', 'cu.user_id')

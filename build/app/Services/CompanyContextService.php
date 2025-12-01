@@ -174,7 +174,6 @@ class CompanyContextService
     public function withContext(Company $company, callable $callback): mixed
     {
         $previousCompany = $this->company;
-        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
 
         try {
             $this->setContext($company);
@@ -186,7 +185,6 @@ class CompanyContextService
             } else {
                 $this->clearContext();
             }
-            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
         }
     }
 

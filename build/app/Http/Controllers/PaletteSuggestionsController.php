@@ -70,11 +70,21 @@ class PaletteSuggestionsController extends Controller
      */
     private function getRoleSuggestions(string $query, string $verb, $company): array
     {
+        // No suggestions if no company context
+        if (!$company) {
+            return [];
+        }
+
+        $baseQuery = Role::where(function ($q) use ($company) {
+            $q->where('company_id', $company->id)
+              ->orWhereNull('company_id');  // Include global roles
+        });
+
         if (!$query || strlen($query) < 1) {
-            // Show common roles
-            $roles = Role::limit(8)->get();
+            $roles = $baseQuery->limit(8)->get();
         } else {
-            $roles = Role::where('name', 'ILIKE', "%{$query}%")
+            $roles = $baseQuery
+                ->where('name', 'ILIKE', "%{$query}%")
                 ->limit(5)
                 ->get();
         }

@@ -40,6 +40,7 @@ class CommandController extends Controller
             'company.create',
             'company.switch',
             'company.view',
+            'company.delete',
         ];
 
         if (!$company && !in_array($action, $companyOptionalCommands)) {

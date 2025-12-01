@@ -19,12 +19,22 @@ class DeleteAction implements PaletteAction
 
     public function permission(): ?string
     {
-        return Permissions::COMPANY_DELETE;
+        // Permission check handled manually in handle() for the specific company being deleted
+        return null;
     }
 
     public function handle(array $params): array
     {
         $company = Company::where('slug', $params['slug'])->firstOrFail();
+
+        // Check permission in the context of the company being deleted
+        $hasPermission = CompanyContext::withContext($company, function () use ($company) {
+            return \Illuminate\Support\Facades\Auth::user()->hasCompanyPermission(Permissions::COMPANY_DELETE);
+        });
+
+        if (!$hasPermission) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('Permission denied: ' . Permissions::COMPANY_DELETE);
+        }
 
         return DB::transaction(function () use ($company) {
             DB::table('auth.company_user')

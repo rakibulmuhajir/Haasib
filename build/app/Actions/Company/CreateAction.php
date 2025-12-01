@@ -4,10 +4,10 @@ namespace App\Actions\Company;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\Role;
-use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -70,16 +70,17 @@ class CreateAction implements PaletteAction
             ]);
 
             // Ensure company-scoped roles exist and carry permissions, then assign owner to creator
-            $this->syncRolesForCompany($company);
-            $ownerRole = Role::where('name', 'owner')
-                ->where('company_id', $company->id)
-                ->first();
-            if ($ownerRole && Auth::user()) {
-                app(PermissionRegistrar::class)->setPermissionsTeamId($company->id);
-                Auth::user()->assignRole($ownerRole, $company);
-            }
+            CompanyContext::withContext($company, function () use ($company) {
+                $this->syncRolesForCompany($company);
+            });
 
-            app(CurrentCompany::class)->set($company);
+            // Assign owner role to creator
+            CompanyContext::withContext($company, function () {
+                CompanyContext::assignRole(Auth::user(), 'owner');
+            });
+
+            // Set as active context
+            CompanyContext::setContext($company);
 
             return [
                 'message' => "Company created: {$company->name} ({$company->slug})",
@@ -111,11 +112,16 @@ class CreateAction implements PaletteAction
                 'company_id' => $company->id,
             ]);
 
-            $permissions = Permission::whereIn('name', $permissionNames)
+            $permissionIds = Permission::whereIn('name', $permissionNames)
                 ->where('guard_name', 'web')
-                ->get();
+                ->pluck('id')
+                ->filter()
+                ->all();
 
-            $role->syncPermissions($permissions);
+            if (!empty($permissionIds)) {
+                // Use direct sync on relation to avoid any stray null/zero IDs
+                $role->permissions()->sync($permissionIds);
+            }
         }
 
         $registrar->forgetCachedPermissions();

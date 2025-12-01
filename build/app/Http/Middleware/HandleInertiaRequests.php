@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -38,7 +38,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
-        $currentCompany = app(CurrentCompany::class)->get();
+        $currentCompany = CompanyContext::getCompany();
 
         return [
             ...parent::share($request),

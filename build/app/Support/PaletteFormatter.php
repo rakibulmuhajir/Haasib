@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use NumberFormatter;
 
 class PaletteFormatter
@@ -19,8 +19,8 @@ class PaletteFormatter
 
     public static function money(float $amount, ?string $currency = null): string
     {
-        $currency = $currency ?? app(CurrentCompany::class)->get()?->base_currency ?? 'USD';
-        $locale = app(CurrentCompany::class)->get()?->locale ?? 'en_US';
+        $currency = $currency ?? CompanyContext::getCompany()?->base_currency ?? 'USD';
+        $locale = CompanyContext::getCompany()?->locale ?? 'en_US';
 
         $formatter = new NumberFormatter($locale, NumberFormatter::CURRENCY);
         return $formatter->formatCurrency($amount, $currency);

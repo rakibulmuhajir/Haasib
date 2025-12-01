@@ -5,7 +5,7 @@ namespace App\Actions\User;
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Models\User;
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use Illuminate\Support\Facades\DB;
 
 class DeactivateAction implements PaletteAction
@@ -24,7 +24,8 @@ class DeactivateAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = app(CurrentCompany::class)->get();
+        
+        $company = CompanyContext::requireCompany();
 
         if (!$company) {
             throw new \Exception('No company context set');

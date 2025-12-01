@@ -1,0 +1,1651 @@
+
+===== build/app/Actions/Company/CreateAction.php =====
+<?php
+
+namespace App\Actions\Company;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\Company;
+use App\Models\CompanyCurrency;
+use App\Models\Role;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
+
+class CreateAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'name' => 'required|string|max:255',
+            'currency' => 'required|string|size:3',
+            'industry' => 'nullable|string|max:255',
+            'country' => 'nullable|string|size:2',
+            'language' => 'nullable|string|size:2',
+            'locale' => 'nullable|string|max:10',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_CREATE;
+    }
+
+    public function handle(array $params): array
+    {
+        $params['currency'] = strtoupper($params['currency']);
+        $slug = Str::slug($params['name']);
+
+        return DB::transaction(function () use ($params, $slug) {
+            $company = Company::create([
+                'name' => $params['name'],
+                'industry' => $params['industry'] ?? null,
+                'slug' => $slug,
+                'country' => $params['country'] ?? null,
+                'base_currency' => $params['currency'],
+                'language' => $params['language'] ?? 'en',
+                'locale' => $params['locale'] ?? 'en_US',
+                'created_by_user_id' => Auth::id(),
+                'is_active' => true,
+            ]);
+
+            CompanyCurrency::create([
+                'company_id' => $company->id,
+                'currency_code' => $params['currency'],
+                'is_base' => true,
+                'enabled_at' => now(),
+            ]);
+
+            DB::table('auth.company_user')->insert([
+                'company_id' => $company->id,
+                'user_id' => Auth::id(),
+                'role' => 'owner',
+                'invited_by_user_id' => Auth::id(),
+                'joined_at' => now(),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Ensure company-scoped roles exist and carry permissions, then assign owner to creator
+            CompanyContext::withContext($company, function () use ($company) {
+                $this->syncRolesForCompany($company);
+            });
+
+            // Assign owner role to creator
+            CompanyContext::withContext($company, function () {
+                CompanyContext::assignRole(Auth::user(), 'owner');
+            });
+
+            // Set as active context
+            CompanyContext::setContext($company);
+
+            return [
+                'message' => "Company created: {$company->name} ({$company->slug})",
+                'data' => [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'currency' => $company->base_currency,
+                ],
+                'redirect' => "/{$company->slug}/dashboard",
+            ];
+        });
+    }
+
+    private function syncRolesForCompany(Company $company): void
+    {
+        $matrix = config('role-permissions', []);
+        if (empty($matrix)) {
+            return;
+        }
+
+        $registrar = app(PermissionRegistrar::class);
+        $registrar->setPermissionsTeamId($company->id);
+
+        foreach ($matrix as $roleName => $permissionNames) {
+            $role = Role::firstOrCreate([
+                'name' => $roleName,
+                'guard_name' => 'web',
+                'company_id' => $company->id,
+            ]);
+
+            $permissionIds = Permission::whereIn('name', $permissionNames)
+                ->where('guard_name', 'web')
+                ->pluck('id')
+                ->filter()
+                ->all();
+
+            if (!empty($permissionIds)) {
+                // Use direct sync on relation to avoid any stray null/zero IDs
+                $role->permissions()->sync($permissionIds);
+            }
+        }
+
+        $registrar->forgetCachedPermissions();
+    }
+}
+
+===== build/app/Actions/Company/DeleteAction.php =====
+<?php
+
+namespace App\Actions\Company;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\Company;
+use Illuminate\Support\Facades\DB;
+
+class DeleteAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'slug' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_DELETE;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = Company::where('slug', $params['slug'])->firstOrFail();
+
+        return DB::transaction(function () use ($company) {
+            DB::table('auth.company_user')
+                ->where('company_id', $company->id)
+                ->update(['is_active' => false, 'updated_at' => now()]);
+
+            $company->update(['is_active' => false]);
+
+            $currentCompany = CompanyContext::getCompany();
+            if ($currentCompany && $currentCompany->id === $company->id) {
+                CompanyContext::clearContext();
+            }
+
+            return [
+                'message' => "Company deleted: {$company->name}",
+                'data' => ['id' => $company->id],
+                'redirect' => '/dashboard',
+            ];
+        });
+    }
+}
+
+===== build/app/Actions/Company/SwitchAction.php =====
+<?php
+
+namespace App\Actions\Company;
+
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\Company;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class SwitchAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'slug' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return null;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = Company::where('slug', $params['slug'])->firstOrFail();
+
+        $membership = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', Auth::id())
+            ->where('is_active', true)
+            ->first();
+
+        if (!$membership) {
+            throw new \Exception("You are not a member of {$company->name}");
+        }
+
+        CompanyContext::setContext($company);
+
+        $userCount = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('is_active', true)
+            ->count();
+
+        return [
+            'message' => "Switched to {$company->name}",
+            'data' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+                'user_count' => $userCount,
+                'status' => $company->is_active ? 'active' : 'inactive',
+                'summary' => [
+                    'invoices_due' => 0,
+                    'open_bills' => 0,
+                ],
+            ],
+            'redirect' => "/{$company->slug}/dashboard",
+        ];
+    }
+}
+
+===== build/app/Actions/Role/AssignPermissionAction.php =====
+<?php
+
+namespace App\Actions\Role;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Facades\CompanyContext;
+
+class AssignPermissionAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'permission' => 'required|string',
+            'role' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_ROLES;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        $role = Role::where('name', $params['role'])
+            ->where(fn($q) => $q->where('company_id', $company?->id)->orWhereNull('company_id'))
+            ->firstOrFail();
+
+        $permission = Permission::where('name', $params['permission'])->firstOrFail();
+
+        $role->givePermissionTo($permission);
+
+        return [
+            'message' => "Permission assigned: {$permission->name} \u2192 {$role->name}",
+            'data' => [
+                'role' => $role->name,
+                'permission' => $permission->name,
+            ],
+        ];
+    }
+}
+
+===== build/app/Actions/Role/IndexAction.php =====
+<?php
+
+namespace App\Actions\Role;
+
+use App\Contracts\PaletteAction;
+use App\Models\Role;
+use App\Support\PaletteFormatter;
+use App\Facades\CompanyContext;
+
+class IndexAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [];
+    }
+
+    public function permission(): ?string
+    {
+        return null;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        $roles = Role::with('permissions')
+            ->when($company, fn($query) => $query->where(fn($inner) => $inner
+                ->where('company_id', $company->id)
+                ->orWhereNull('company_id')
+            ))
+            ->orderBy('name')
+            ->get();
+
+        return [
+            'data' => PaletteFormatter::table(
+                headers: ['Role', 'Permissions', 'Users'],
+                rows: $roles->map(fn($r) => [
+                    $r->name,
+                    $r->permissions->pluck('name')->implode(', ') ?: '{secondary}None{/}',
+                    $r->users()
+                        ->when($company, fn($users) => $users->wherePivot('company_id', $company->id))
+                        ->count(),
+                ])->toArray(),
+                footer: $roles->count() . ' roles'
+            ),
+        ];
+    }
+}
+
+===== build/app/Actions/Role/RevokePermissionAction.php =====
+<?php
+
+namespace App\Actions\Role;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Facades\CompanyContext;
+
+class RevokePermissionAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'permission' => 'required|string',
+            'role' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_ROLES;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        $role = Role::where('name', $params['role'])
+            ->where(fn($q) => $q->where('company_id', $company?->id)->orWhereNull('company_id'))
+            ->firstOrFail();
+
+        $permission = Permission::where('name', $params['permission'])->firstOrFail();
+
+        $role->revokePermissionTo($permission);
+
+        return [
+            'message' => "Permission revoked: {$permission->name} \u2190 {$role->name}",
+            'data' => [
+                'role' => $role->name,
+                'permission' => $permission->name,
+            ],
+        ];
+    }
+}
+
+===== build/app/Actions/User/AssignRoleAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+
+class AssignRoleAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+            'role' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_ROLES;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = CompanyContext::requireCompany();
+
+        $user = User::where('email', $params['email'])->firstOrFail();
+
+        $membership = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$membership) {
+            throw new \Exception("User {$params['email']} is not a member of {$company->name}");
+        }
+
+        CompanyContext::assignRole($user, $params['role']);
+
+        return [
+            'message' => "Role assigned: {$params['role']} \u2192 {$user->email}",
+            'data' => [
+                'user' => $user->email,
+                'role' => $params['role'],
+            ],
+        ];
+    }
+}
+
+===== build/app/Actions/User/DeactivateAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Models\User;
+use App\Facades\CompanyContext;
+use Illuminate\Support\Facades\DB;
+
+class DeactivateAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_USERS;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        if (!$company) {
+            throw new \Exception('No company context set');
+        }
+
+        $user = User::where('email', $params['email'])->firstOrFail();
+
+        DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->update(['is_active' => false, 'updated_at' => now()]);
+
+        return [
+            'message' => "User deactivated: {$user->email}",
+            'data' => ['user' => $user->email],
+        ];
+    }
+}
+
+===== build/app/Actions/User/DeleteAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Models\User;
+use App\Facades\CompanyContext;
+use Illuminate\Support\Facades\DB;
+
+class DeleteAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_DELETE_USER;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        if (!$company) {
+            throw new \Exception('No company context set');
+        }
+        
+        $user = User::where('email', $params['email'])->firstOrFail();
+
+        return DB::transaction(function () use ($user, $company) {
+            DB::table('auth.company_user')
+                ->where('company_id', $company->id)
+                ->where('user_id', $user->id)
+                ->delete();
+
+            $otherMemberships = DB::table('auth.company_user')
+                ->where('user_id', $user->id)
+                ->count();
+
+            if ($otherMemberships === 0) {
+                $user->delete();
+                $message = "User deleted permanently: {$user->email}";
+            } else {
+                $message = "User removed from company: {$user->email}";
+            }
+
+            return [
+                'message' => $message,
+                'data' => ['user' => $user->email],
+            ];
+        });
+    }
+}
+
+===== build/app/Actions/User/IndexAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Support\PaletteFormatter;
+use Illuminate\Support\Facades\DB;
+
+class IndexAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [];
+    }
+
+    public function permission(): ?string
+    {
+        return null;
+    }
+
+    public function handle(array $params): array
+    {
+        
+        $company = CompanyContext::requireCompany();
+
+        if (!$company) {
+            throw new \Exception('No company context set');
+        }
+
+        $users = DB::table('auth.users as u')
+            ->join('auth.company_user as cu', 'u.id', '=', 'cu.user_id')
+            ->where('cu.company_id', $company->id)
+            ->select('u.email', 'u.name', 'cu.role', 'cu.is_active', 'cu.joined_at')
+            ->orderBy('u.name')
+            ->get();
+
+        return [
+            'data' => PaletteFormatter::table(
+                headers: ['Email', 'Name', 'Role', 'Status', 'Joined'],
+                rows: $users->map(fn($u) => [
+                    $u->email,
+                    $u->name,
+                    ucfirst($u->role),
+                    $u->is_active ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
+                    $u->joined_at ? date('M d, Y', strtotime($u->joined_at)) : '-',
+                ])->toArray(),
+                footer: $users->count() . ' users'
+            ),
+        ];
+    }
+}
+
+===== build/app/Actions/User/InviteAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+class InviteAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+            'role' => 'nullable|string',
+            'name' => 'nullable|string|max:255',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_INVITE_USER;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = CompanyContext::requireCompany();
+
+        $role = $params['role'] ?? 'member';
+
+        return DB::transaction(function () use ($params, $company, $role) {
+            $user = User::where('email', $params['email'])->first();
+
+            if (!$user) {
+                $user = User::create([
+                    'name' => $params['name'] ?? explode('@', $params['email'])[0],
+                    'email' => $params['email'],
+                    'username' => Str::slug(explode('@', $params['email'])[0]) . '-' . Str::random(4),
+                    'password' => Hash::make(Str::random(32)),
+                ]);
+            }
+
+            $existing = DB::table('auth.company_user')
+                ->where('company_id', $company->id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existing) {
+                throw new \Exception("User {$params['email']} is already a member");
+            }
+
+            DB::table('auth.company_user')->insert([
+                'company_id' => $company->id,
+                'user_id' => $user->id,
+                'role' => $role,
+                'invited_by_user_id' => Auth::id(),
+                'joined_at' => now(),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            CompanyContext::assignRole($user, $role);
+
+            return [
+                'message' => "User invited: {$user->email} (" . ucfirst($role) . ")",
+                'data' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'role' => $role,
+                ],
+            ];
+        });
+    }
+}
+
+===== build/app/Actions/User/RemoveRoleAction.php =====
+<?php
+
+namespace App\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use App\Models\User;
+
+class RemoveRoleAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+            'role' => 'required|string',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_ROLES;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = CompanyContext::requireCompany();
+
+        $user = User::where('email', $params['email'])->firstOrFail();
+
+        CompanyContext::removeRole($user, $params['role']);
+
+        return [
+            'message' => "Role removed: {$params['role']} \u2190 {$user->email}",
+            'data' => [
+                'user' => $user->email,
+                'role' => $params['role'],
+            ],
+        ];
+    }
+}
+
+===== build/app/Http/Controllers/CommandController.php =====
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+
+class CommandController extends Controller
+{
+    public function __invoke(Request $request): JsonResponse
+    {
+        $action = $request->header('X-Action');
+        $debugContext = $this->debugContext($request, $action, null);
+
+        if (!$action || !preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
+            return $this->error('BAD_REQUEST', 'Invalid or missing X-Action header', 400, $debugContext);
+        }
+
+        $actionClass = config("command-bus.{$action}")
+            ?? config("command_bus.{$action}")
+            ?? $this->fallbackCommandMap()[$action] ?? null;
+
+        if (!$actionClass || !class_exists($actionClass)) {
+            return $this->error('NOT_FOUND', "Unknown command: {$action}", 404, [
+                ...$debugContext,
+                'registered_actions' => array_keys(config('command-bus', []) ?: config('command_bus', []) ?: $this->fallbackCommandMap()),
+            ]);
+        }
+
+        $company = CompanyContext::getCompany();
+        $debugContext['company_id'] = $company?->id;
+
+        $companyOptionalCommands = [
+            'company.list',
+            'company.create',
+            'company.switch',
+            'company.view',
+        ];
+
+        if (!$company && !in_array($action, $companyOptionalCommands)) {
+            return $this->error('BAD_REQUEST', 'Company context required. Set X-Company-Slug header.', 400, $debugContext);
+        }
+
+        $idemKey = $request->header('X-Idempotency-Key');
+        $isQuery = str_ends_with($action, '.list') ||
+                   str_ends_with($action, '.view') ||
+                   str_starts_with($action, 'report.');
+
+        if ($idemKey && !$isQuery) {
+            $previous = $this->checkIdempotency($idemKey);
+            if ($previous) {
+                return response()->json([
+                    'ok' => true,
+                    'replayed' => true,
+                    ...$previous,
+                    ...($this->includeDebug() ? ['debug' => $debugContext] : []),
+                ], 200);
+            }
+        }
+
+        try {
+            $actionInstance = app($actionClass);
+            if (!$actionInstance instanceof PaletteAction) {
+                return $this->error('SERVER_ERROR', 'Invalid command handler', 500);
+            }
+            $params = $request->input('params', []);
+
+            if ($rules = $actionInstance->rules()) {
+                $params = Validator::make($params, $rules)->validate();
+            }
+
+            if ($permission = $actionInstance->permission()) {
+                // Allow company-optional commands to run without company permission (onboarding path)
+                if (!($company === null && in_array($action, $companyOptionalCommands))) {
+                    if (!$request->user()->hasCompanyPermission($permission)) {
+                        throw new \Illuminate\Auth\Access\AuthorizationException(
+                            "Permission denied: {$permission}"
+                        );
+                    }
+                }
+            }
+
+            $result = $actionInstance->handle($params);
+
+            if ($idemKey && !$isQuery) {
+                $this->storeIdempotency($idemKey, $result);
+            }
+
+            return $this->formatResponse($result, $action);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'VALIDATION',
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'FORBIDDEN',
+                'message' => $e->getMessage(),
+            ], 403);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'NOT_FOUND',
+                'message' => 'Record not found',
+            ], 404);
+
+        } catch (\Exception $e) {
+            Log::error("Command execution failed: {$action}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $request->input('params'),
+                'user' => $request->user()?->id,
+                'company' => $company?->id,
+            ]);
+
+            return $this->error(
+                'SERVER_ERROR',
+                app()->environment('production') ? 'An error occurred' : $e->getMessage(),
+                500,
+                $debugContext + ['exception' => $e->getMessage()]
+            );
+        }
+    }
+
+    private function formatResponse(array $result, string $action): JsonResponse
+    {
+        $isQuery = str_ends_with($action, '.list') ||
+                   str_ends_with($action, '.view') ||
+                   str_starts_with($action, 'report.');
+
+        if ($isQuery) {
+            return response()->json([
+                'ok' => true,
+                'data' => $result['data'] ?? $result,
+                'meta' => $result['meta'] ?? null,
+            ], 200);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $result['message'] ?? 'Success',
+            'data' => $result['data'] ?? null,
+            'redirect' => $result['redirect'] ?? null,
+            'undo' => $result['undo'] ?? null,
+        ], 201);
+    }
+
+    private function checkIdempotency(string $key): ?array
+    {
+        $record = DB::table('command_idempotency')
+            ->where('key', hash('sha256', $key))
+            ->where('created_at', '>', now()->subHours(24))
+            ->first();
+
+        return $record ? json_decode($record->result, true) : null;
+    }
+
+    private function storeIdempotency(string $key, array $result): void
+    {
+        DB::table('command_idempotency')->updateOrInsert(
+            ['key' => hash('sha256', $key)],
+            [
+                'result' => json_encode($result),
+                'created_at' => now(),
+            ]
+        );
+    }
+
+    private function error(string $code, string $message, int $status, array $debug = []): JsonResponse
+    {
+        $payload = [
+            'ok' => false,
+            'code' => $code,
+            'message' => $message,
+        ];
+
+        if ($this->includeDebug()) {
+            $payload['debug'] = $debug;
+            $payload['status'] = $status;
+        }
+
+        return response()->json($payload, $status);
+    }
+
+    private function fallbackCommandMap(): array
+    {
+        return [
+            'company.create' => \App\Actions\Company\CreateAction::class,
+            'company.list' => \App\Actions\Company\IndexAction::class,
+            'company.switch' => \App\Actions\Company\SwitchAction::class,
+            'company.view' => \App\Actions\Company\ViewAction::class,
+            'company.delete' => \App\Actions\Company\DeleteAction::class,
+            'user.invite' => \App\Actions\User\InviteAction::class,
+            'user.list' => \App\Actions\User\IndexAction::class,
+            'user.assign-role' => \App\Actions\User\AssignRoleAction::class,
+            'user.remove-role' => \App\Actions\User\RemoveRoleAction::class,
+            'user.deactivate' => \App\Actions\User\DeactivateAction::class,
+            'user.delete' => \App\Actions\User\DeleteAction::class,
+            'role.list' => \App\Actions\Role\IndexAction::class,
+            'role.assign' => \App\Actions\Role\AssignPermissionAction::class,
+            'role.revoke' => \App\Actions\Role\RevokePermissionAction::class,
+        ];
+    }
+
+    private function debugContext(Request $request, ?string $action, $company): array
+    {
+        return [
+            'user_id' => $request->user()?->id,
+            'company_id' => $company?->id,
+            'company_slug_header' => $request->header('X-Company-Slug'),
+            'action' => $action,
+            'params' => $request->input('params', []),
+            'headers' => collect($request->headers->all())
+                ->only(['x-action', 'x-company-slug', 'x-idempotency-key'])
+                ->toArray(),
+        ];
+    }
+
+    private function includeDebug(): bool
+    {
+        return config('app.debug', false) && !app()->environment('production');
+    }
+}
+
+===== build/app/Http/Controllers/PaletteSuggestionsController.php =====
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Facades\CompanyContext;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Spatie\Permission\Models\Role;
+
+class PaletteSuggestionsController extends Controller
+{
+    /**
+     * Get dynamic suggestions for command palette
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $entity = $request->query('entity');
+        $verb = $request->query('verb');
+        $query = $request->query('q', '');
+
+        $company = CompanyContext::getCompany();
+
+        $suggestions = match($entity) {
+            'user' => $this->getUserSuggestions($query, $verb, $company),
+            'role' => $this->getRoleSuggestions($query, $verb, $company),
+            'company' => $this->getCompanySuggestions($query, $verb, $company),
+            default => [],
+        };
+
+        return response()->json([
+            'suggestions' => $suggestions,
+        ]);
+    }
+
+    /**
+     * Get user suggestions
+     */
+    private function getUserSuggestions(string $query, string $verb, $company): array
+    {
+        if (!$query || strlen($query) < 2) {
+            return [];
+        }
+
+        // For invite - suggest email format
+        if ($verb === 'invite') {
+            // Don't suggest from existing users - they're inviting new people
+            return [];
+        }
+
+        // For other verbs - suggest existing users
+        $users = User::query()
+            ->where(function ($q) use ($query) {
+                $q->where('email', 'ILIKE', "%{$query}%")
+                  ->orWhere('name', 'ILIKE', "%{$query}%");
+            })
+            ->limit(5)
+            ->get();
+
+        return $users->map(fn($u) => [
+            'value' => $u->email,
+            'label' => $u->name ?? $u->email,
+            'description' => $u->email,
+            'icon' => '👤',
+        ])->toArray();
+    }
+
+    /**
+     * Get role suggestions
+     */
+    private function getRoleSuggestions(string $query, string $verb, $company): array
+    {
+        if (!$query || strlen($query) < 1) {
+            // Show common roles
+            $roles = Role::limit(8)->get();
+        } else {
+            $roles = Role::where('name', 'ILIKE', "%{$query}%")
+                ->limit(5)
+                ->get();
+        }
+
+        return $roles->map(fn($r) => [
+            'value' => $r->name,
+            'label' => ucfirst($r->name),
+            'description' => "Role: {$r->name}",
+            'icon' => '🔑',
+        ])->toArray();
+    }
+
+    /**
+     * Get company suggestions
+     */
+    private function getCompanySuggestions(string $query, string $verb, $company): array
+    {
+        // For create - suggest currency codes
+        if ($verb === 'create') {
+            if (!$query || strlen($query) < 1) {
+                return $this->getCurrencySuggestions('');
+            }
+
+            // If query is 3 chars and uppercase, it's probably a currency
+            if (strlen($query) === 3 && strtoupper($query) === $query) {
+                return $this->getCurrencySuggestions($query);
+            }
+
+            return [];
+        }
+
+        // For view/switch/delete - suggest company slugs
+        // This would need a Company model - for now return empty
+        return [];
+    }
+
+    /**
+     * Get currency suggestions
+     */
+    private function getCurrencySuggestions(string $query): array
+    {
+        $currencies = [
+            ['code' => 'USD', 'name' => 'US Dollar'],
+            ['code' => 'EUR', 'name' => 'Euro'],
+            ['code' => 'GBP', 'name' => 'British Pound'],
+            ['code' => 'JPY', 'name' => 'Japanese Yen'],
+            ['code' => 'CAD', 'name' => 'Canadian Dollar'],
+            ['code' => 'AUD', 'name' => 'Australian Dollar'],
+            ['code' => 'CHF', 'name' => 'Swiss Franc'],
+            ['code' => 'CNY', 'name' => 'Chinese Yuan'],
+        ];
+
+        if ($query) {
+            $currencies = array_filter($currencies, function($c) use ($query) {
+                return stripos($c['code'], $query) === 0;
+            });
+        }
+
+        return array_values(array_map(fn($c) => [
+            'value' => $c['code'],
+            'label' => $c['code'],
+            'description' => $c['name'],
+            'icon' => '💱',
+        ], $currencies));
+    }
+}
+
+===== build/app/Http/Middleware/HandleInertiaRequests.php =====
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Facades\CompanyContext;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Http\Request;
+use Inertia\Middleware;
+
+class HandleInertiaRequests extends Middleware
+{
+    /**
+     * The root template that's loaded on the first page visit.
+     *
+     * @see https://inertiajs.com/server-side-setup#root-template
+     *
+     * @var string
+     */
+    protected $rootView = 'app';
+
+    /**
+     * Determines the current asset version.
+     *
+     * @see https://inertiajs.com/asset-versioning
+     */
+    public function version(Request $request): ?string
+    {
+        return parent::version($request);
+    }
+
+    /**
+     * Define the props that are shared by default.
+     *
+     * @see https://inertiajs.com/shared-data
+     *
+     * @return array<string, mixed>
+     */
+    public function share(Request $request): array
+    {
+        [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $currentCompany = CompanyContext::getCompany();
+
+        return [
+            ...parent::share($request),
+            'name' => config('app.name'),
+            'quote' => ['message' => trim($message), 'author' => trim($author)],
+            'auth' => [
+                'user' => $request->user(),
+                'currentCompany' => $currentCompany,
+            ],
+            'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+        ];
+    }
+}
+
+===== build/app/Http/Middleware/IdentifyCompany.php =====
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Facades\CompanyContext;
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+
+class IdentifyCompany
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        CompanyContext::clearContext();
+
+        $user = $request->user();
+
+        if ($user) {
+            DB::select("SELECT set_config('app.current_user_id', ?, true)", [$user->id]);
+            DB::select("SELECT set_config('app.is_super_admin', ?, true)", [
+                str_starts_with($user->id, '00000000-0000-0000-0000-') ? 'true' : 'false',
+            ]);
+        } else {
+            DB::select("SELECT set_config('app.current_user_id', NULL, true)");
+            DB::select("SELECT set_config('app.is_super_admin', 'false', true)");
+        }
+
+        $slug = $request->route('company') ?? $request->header('X-Company-Slug');
+
+        if ($slug) {
+            try {
+                CompanyContext::setContextBySlug($slug);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => false,
+                        'code' => 'INVALID_COMPANY',
+                        'message' => "Company not found: {$slug}",
+                    ], 404);
+                }
+
+                abort(404, "Company not found: {$slug}");
+            }
+        }
+
+        return $next($request);
+    }
+}
+
+===== build/app/Models/User.php =====
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+// use Laravel\Fortify\TwoFactorAuthenticatable;
+use Spatie\Permission\Traits\HasRoles;
+
+class User extends Authenticatable
+{
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, HasRoles, HasUuids, Notifiable;
+
+    protected $connection = 'pgsql';
+
+    protected $table = 'auth.users';
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'username',
+        'email',
+        'password',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+
+    public function hasCompanyPermission(string $permission): bool
+    {
+        return \App\Facades\CompanyContext::userHasPermission($this, $permission);
+    }
+}
+
+===== build/app/Providers/AppServiceProvider.php =====
+<?php
+
+namespace App\Providers;
+
+use App\Services\CompanyContextService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        // Register CompanyContextService as scoped singleton (one instance per request)
+        $this->app->scoped(CompanyContextService::class);
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        RateLimiter::for('commands', fn($request) =>
+            Limit::perMinute(120)->by($request->user()?->id ?: $request->ip())
+        );
+
+        RateLimiter::for('catalog', fn($request) =>
+            Limit::perMinute(300)->by($request->user()?->id ?: $request->ip())
+        );
+    }
+}
+
+===== build/app/Support/PaletteFormatter.php =====
+<?php
+
+namespace App\Support;
+
+use App\Facades\CompanyContext;
+use NumberFormatter;
+
+class PaletteFormatter
+{
+    public static function table(array $headers, array $rows, ?string $footer = null): array
+    {
+        return [
+            'type' => 'table',
+            'headers' => $headers,
+            'rows' => $rows,
+            'footer' => $footer,
+        ];
+    }
+
+    public static function money(float $amount, ?string $currency = null): string
+    {
+        $currency = $currency ?? CompanyContext::getCompany()?->base_currency ?? 'USD';
+        $locale = CompanyContext::getCompany()?->locale ?? 'en_US';
+
+        $formatter = new NumberFormatter($locale, NumberFormatter::CURRENCY);
+        return $formatter->formatCurrency($amount, $currency);
+    }
+
+    public static function status(string $status): string
+    {
+        return match ($status) {
+            'paid' => '{success}● Paid{/}',
+            'pending' => '{warning}◐ Pending{/}',
+            'sent' => '{accent}◑ Sent{/}',
+            'overdue' => '{error}⚠ Overdue{/}',
+            'draft' => '{secondary}○ Draft{/}',
+            'void' => '{secondary}⊘ Void{/}',
+            default => $status,
+        };
+    }
+
+    public static function relativeDate(\DateTimeInterface $date): string
+    {
+        $diff = now()->diffInDays($date, false);
+
+        return match (true) {
+            $diff === 0 => 'Today',
+            $diff === 1 => 'Tomorrow',
+            $diff === -1 => 'Yesterday',
+            $diff > 0 && $diff <= 7 => "In {$diff} days",
+            $diff < 0 && $diff >= -7 => abs($diff) . ' days ago',
+            default => $date->format('M j'),
+        };
+    }
+
+    public static function success(string $message): string
+    {
+        return "{success}✓{/} {$message}";
+    }
+
+    public static function error(string $message): string
+    {
+        return "{error}✗{/} {$message}";
+    }
+
+    public static function warning(string $message): string
+    {
+        return "{warning}⚠{/} {$message}";
+    }
+}
+
+===== build/app/Services/CompanyContextService.php =====
+<?php
+
+namespace App\Services;
+
+use App\Models\Company;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Spatie\Permission\PermissionRegistrar;
+
+class CompanyContextService
+{
+    private ?Company $company = null;
+    private PermissionRegistrar $permissionRegistrar;
+
+    public function __construct(PermissionRegistrar $permissionRegistrar)
+    {
+        $this->permissionRegistrar = $permissionRegistrar;
+    }
+
+    // ============================================================================
+    // CONTEXT MANAGEMENT
+    // ============================================================================
+
+    public function setContext(Company $company): void
+    {
+        $this->company = $company;
+        $this->updateSystemContext($company->id);
+
+        Log::debug('Company context set', [
+            'company_id' => $company->id,
+            'company_name' => $company->name,
+        ]);
+    }
+
+    public function setContextBySlug(string $slug): void
+    {
+        $company = Company::where('slug', $slug)->firstOrFail();
+        $this->setContext($company);
+    }
+
+    public function setContextById(string $id): void
+    {
+        $company = Company::findOrFail($id);
+        $this->setContext($company);
+    }
+
+    public function clearContext(): void
+    {
+        $this->company = null;
+        $this->updateSystemContext(null);
+
+        Log::debug('Company context cleared');
+    }
+
+    public function getCompany(): ?Company
+    {
+        return $this->company;
+    }
+
+    public function getCompanyId(): ?string
+    {
+        return $this->company?->id;
+    }
+
+    public function requireCompany(): Company
+    {
+        if (!$this->company) {
+            throw new \RuntimeException('Company context required but not set');
+        }
+        return $this->company;
+    }
+
+    // ============================================================================
+    // ROLE OPERATIONS
+    // ============================================================================
+
+    public function assignRole(User $user, string|Role $role): void
+    {
+        $company = $this->requireCompany();
+
+        // Resolve role if string
+        if (is_string($role)) {
+            $role = $this->resolveRole($role, $company);
+        }
+
+        // Set team context and assign
+        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
+        try {
+            $this->permissionRegistrar->setPermissionsTeamId($company->id);
+            $user->assignRole($role);  // ✅ CORRECT: No second parameter
+
+            Log::info('Role assigned', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'role' => $role->name,
+                'company_id' => $company->id,
+            ]);
+        } finally {
+            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
+        }
+    }
+
+    public function removeRole(User $user, string|Role $role): void
+    {
+        $company = $this->requireCompany();
+
+        // Resolve role if string
+        if (is_string($role)) {
+            $role = $this->resolveRole($role, $company);
+        }
+
+        // Set team context and remove
+        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
+        try {
+            $this->permissionRegistrar->setPermissionsTeamId($company->id);
+            $user->removeRole($role);  // ✅ CORRECT: Role object, not Company
+
+            Log::info('Role removed', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'role' => $role->name,
+                'company_id' => $company->id,
+            ]);
+        } finally {
+            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
+        }
+    }
+
+    public function syncRoles(User $user, array $roles): void
+    {
+        $company = $this->requireCompany();
+
+        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
+        try {
+            $this->permissionRegistrar->setPermissionsTeamId($company->id);
+            $user->syncRoles($roles);
+
+            Log::info('Roles synced', [
+                'user_id' => $user->id,
+                'roles' => $roles,
+                'company_id' => $company->id,
+            ]);
+        } finally {
+            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
+        }
+    }
+
+    // ============================================================================
+    // PERMISSION CHECKS
+    // ============================================================================
+
+    public function userHasPermission(User $user, string $permission): bool
+    {
+        $company = $this->getCompany();
+        if (!$company) {
+            return false;
+        }
+
+        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
+        try {
+            $this->permissionRegistrar->setPermissionsTeamId($company->id);
+            return $user->hasPermissionTo($permission, 'web');
+        } finally {
+            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
+        }
+    }
+
+    // ============================================================================
+    // NESTED CONTEXT
+    // ============================================================================
+
+    public function withContext(Company $company, callable $callback): mixed
+    {
+        $previousCompany = $this->company;
+        $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
+
+        try {
+            $this->setContext($company);
+            return $callback();
+        } finally {
+            // Restore previous context
+            if ($previousCompany) {
+                $this->setContext($previousCompany);
+            } else {
+                $this->clearContext();
+            }
+            $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
+        }
+    }
+
+    // ============================================================================
+    // PRIVATE HELPERS
+    // ============================================================================
+
+    private function updateSystemContext(?string $companyId): void
+    {
+        // Update PostgreSQL session variable
+        if ($companyId) {
+            DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+        } else {
+            DB::select("SELECT set_config('app.current_company_id', NULL, true)");
+        }
+
+        // Update Spatie team context
+        $this->permissionRegistrar->setPermissionsTeamId($companyId);
+    }
+
+    private function resolveRole(string $roleName, Company $company): Role
+    {
+        return Role::where('name', $roleName)
+            ->where(fn($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
+            ->orderByRaw('CASE WHEN company_id = ? THEN 0 ELSE 1 END', [$company->id])
+            ->firstOrFail();
+    }
+}
+
+===== build/app/Facades/CompanyContext.php =====
+<?php
+
+namespace App\Facades;
+
+use Illuminate\Support\Facades\Facade;
+
+/**
+ * @method static void setContext(\App\Models\Company $company)
+ * @method static void setContextBySlug(string $slug)
+ * @method static void setContextById(string $id)
+ * @method static void clearContext()
+ * @method static \App\Models\Company|null getCompany()
+ * @method static string|null getCompanyId()
+ * @method static \App\Models\Company requireCompany()
+ * @method static void assignRole(\App\Models\User $user, string|\App\Models\Role $role)
+ * @method static void removeRole(\App\Models\User $user, string|\App\Models\Role $role)
+ * @method static void syncRoles(\App\Models\User $user, array $roles)
+ * @method static bool userHasPermission(\App\Models\User $user, string $permission)
+ * @method static mixed withContext(\App\Models\Company $company, callable $callback)
+ *
+ * @see \App\Services\CompanyContextService
+ */
+class CompanyContext extends Facade
+{
+    protected static function getFacadeAccessor(): string
+    {
+        return \App\Services\CompanyContextService::class;
+    }
+}

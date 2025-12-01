@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\PaletteAction;
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,8 +32,7 @@ class CommandController extends Controller
             ]);
         }
 
-        $currentCompany = app(CurrentCompany::class);
-        $company = $currentCompany->get();
+        $company = CompanyContext::getCompany();
         $debugContext['company_id'] = $company?->id;
 
         $companyOptionalCommands = [

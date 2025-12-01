@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,8 +12,7 @@ class IdentifyCompany
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $currentCompany = app(CurrentCompany::class);
-        $currentCompany->clear();
+        CompanyContext::clearContext();
 
         $user = $request->user();
 
@@ -31,7 +30,7 @@ class IdentifyCompany
 
         if ($slug) {
             try {
-                $currentCompany->setBySlug($slug);
+                CompanyContext::setContextBySlug($slug);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 if ($request->expectsJson()) {
                     return response()->json([

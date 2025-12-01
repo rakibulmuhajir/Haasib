@@ -6,7 +6,7 @@ use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 
 class AssignPermissionAction implements PaletteAction
 {
@@ -25,7 +25,8 @@ class AssignPermissionAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = app(CurrentCompany::class)->get();
+        
+        $company = CompanyContext::requireCompany();
 
         $role = Role::where('name', $params['role'])
             ->where(fn($q) => $q->where('company_id', $company?->id)->orWhereNull('company_id'))

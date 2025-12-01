@@ -4,8 +4,8 @@ namespace App\Actions\Company;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
 use App\Models\Company;
-use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\DB;
 
 class DeleteAction implements PaletteAction
@@ -33,9 +33,9 @@ class DeleteAction implements PaletteAction
 
             $company->update(['is_active' => false]);
 
-            $currentCompany = app(CurrentCompany::class)->get();
+            $currentCompany = CompanyContext::getCompany();
             if ($currentCompany && $currentCompany->id === $company->id) {
-                app(CurrentCompany::class)->clear();
+                CompanyContext::clearContext();
             }
 
             return [

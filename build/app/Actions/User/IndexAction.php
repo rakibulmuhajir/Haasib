@@ -3,7 +3,7 @@
 namespace App\Actions\User;
 
 use App\Contracts\PaletteAction;
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
@@ -21,7 +21,8 @@ class IndexAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = app(CurrentCompany::class)->get();
+        
+        $company = CompanyContext::requireCompany();
 
         if (!$company) {
             throw new \Exception('No company context set');

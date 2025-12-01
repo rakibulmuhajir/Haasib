@@ -5,7 +5,7 @@ namespace App\Actions\Role;
 use App\Contracts\PaletteAction;
 use App\Models\Role;
 use App\Support\PaletteFormatter;
-use App\Services\CurrentCompany;
+use App\Facades\CompanyContext;
 
 class IndexAction implements PaletteAction
 {
@@ -21,7 +21,8 @@ class IndexAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = app(CurrentCompany::class)->get();
+        
+        $company = CompanyContext::requireCompany();
 
         $roles = Role::with('permissions')
             ->when($company, fn($query) => $query->where(fn($inner) => $inner

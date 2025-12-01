@@ -3,8 +3,8 @@
 namespace App\Actions\Company;
 
 use App\Contracts\PaletteAction;
+use App\Facades\CompanyContext;
 use App\Models\Company;
-use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -37,7 +37,7 @@ class SwitchAction implements PaletteAction
             throw new \Exception("You are not a member of {$company->name}");
         }
 
-        app(CurrentCompany::class)->set($company);
+        CompanyContext::setContext($company);
 
         $userCount = DB::table('auth.company_user')
             ->where('company_id', $company->id)

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Facades\CompanyContext;
 use App\Models\User;
-use App\Services\CurrentCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
@@ -19,7 +19,7 @@ class PaletteSuggestionsController extends Controller
         $verb = $request->query('verb');
         $query = $request->query('q', '');
 
-        $company = app(CurrentCompany::class)->get();
+        $company = CompanyContext::getCompany();
 
         $suggestions = match($entity) {
             'user' => $this->getUserSuggestions($query, $verb, $company),

@@ -4,9 +4,8 @@ namespace App\Actions\User;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
-use App\Models\Role;
+use App\Facades\CompanyContext;
 use App\Models\User;
-use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -30,11 +29,7 @@ class InviteAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = app(CurrentCompany::class)->get();
-
-        if (!$company) {
-            throw new \Exception('No company context set');
-        }
+        $company = CompanyContext::requireCompany();
 
         $role = $params['role'] ?? 'member';
 
@@ -70,13 +65,7 @@ class InviteAction implements PaletteAction
                 'updated_at' => now(),
             ]);
 
-            $roleModel = Role::where('name', $role)
-                ->where(fn($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
-                ->orderByRaw('CASE WHEN company_id = ? THEN 0 ELSE 1 END', [$company->id])
-                ->first();
-            if ($roleModel) {
-                $user->assignRole($roleModel, $company);
-            }
+            CompanyContext::assignRole($user, $role);
 
             return [
                 'message' => "User invited: {$user->email} (" . ucfirst($role) . ")",

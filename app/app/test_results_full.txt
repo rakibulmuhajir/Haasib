@@ -1,1 +1,0 @@
-/bin/bash: line 1: ./vendor/bin/pest: No such file or directory

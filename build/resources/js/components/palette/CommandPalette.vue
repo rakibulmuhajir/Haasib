@@ -34,6 +34,7 @@ const quickActions = ref<QuickAction[]>([])
 const showSubPrompt = ref(false)
 const subPromptAction = ref<QuickAction | null>(null)
 const subPromptInput = ref('')
+const pendingRefreshEntity = ref<string | null>(null)
 
 // Parsed command (reactive)
 const parsed = computed(() => parse(input.value))
@@ -456,6 +457,11 @@ async function executeCommand(parsed: ParsedCommand) {
         addOutput('success', '{success}✓{/} Done')
       }
 
+      // After deletes, refresh the list to show updated rows
+      if (parsed.verb === 'delete' && parsed.entity) {
+        pendingRefreshEntity.value = parsed.entity
+      }
+
       // Handle redirect
       if (data.redirect) {
         addOutput('output', `{link:${data.redirect}}→ Open in GUI{/}`)
@@ -486,7 +492,13 @@ async function executeCommand(parsed: ParsedCommand) {
     addOutput('error', `{error}✗{/} Network error: ${e instanceof Error ? e.message : 'Unknown'}`)
   } finally {
     executing.value = false
+    const refreshEntity = pendingRefreshEntity.value
+    pendingRefreshEntity.value = null
     focusInput()
+    if (refreshEntity) {
+      input.value = `${refreshEntity} list`
+      execute()
+    }
   }
 }
 

@@ -102,11 +102,20 @@ class CreateAction implements PaletteAction
         $registrar->setPermissionsTeamId($company->id);
 
         foreach ($matrix as $roleName => $permissionNames) {
-            $role = Role::firstOrCreate([
-                'name' => $roleName,
-                'guard_name' => 'web',
-                'company_id' => $company->id,
-            ]);
+            // Create role if missing (raw to avoid team scoping issues)
+            $role = Role::where('name', $roleName)
+                ->where('guard_name', 'web')
+                ->where('company_id', $company->id)
+                ->first();
+
+            if (!$role) {
+                $role = Role::forceCreate([
+                    'id' => (string) \Illuminate\Support\Str::orderedUuid(),
+                    'name' => $roleName,
+                    'guard_name' => 'web',
+                    'company_id' => $company->id,
+                ]);
+            }
 
             $permissionIds = Permission::whereIn('name', $permissionNames)
                 ->where('guard_name', 'web')
@@ -114,9 +123,16 @@ class CreateAction implements PaletteAction
                 ->filter()
                 ->all();
 
-            if (!empty($permissionIds)) {
-                // Use direct sync on relation to avoid any stray null/zero IDs
-                $role->permissions()->sync($permissionIds);
+            // Manually sync permissions to avoid null IDs or team context issues
+            DB::table('role_has_permissions')
+                ->where('role_id', $role->id)
+                ->delete();
+
+            foreach ($permissionIds as $permissionId) {
+                DB::table('role_has_permissions')->insert([
+                    'permission_id' => $permissionId,
+                    'role_id' => $role->id,
+                ]);
             }
         }
 

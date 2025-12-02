@@ -30,39 +30,55 @@ const navigation = computed(() => {
     ? [
         {
           label: 'Company Overview',
-          path: `/companies/${companyId}`,
+          path: `/${currentCompany.value.slug}`,
           icon: 'id-badge'
         },
         {
+          label: 'Company Settings',
+          path: `/${currentCompany.value.slug}/settings`,
+          icon: 'cog',
+          permission: 'canManage'
+        },
+        {
+          label: 'Team Members',
+          path: `/${currentCompany.value.slug}/users`,
+          icon: 'users',
+          permission: 'canViewUsers'
+        },
+        {
+          label: 'Switch Company',
+          path: '/companies',
+          icon: 'exchange-alt'
+        },
+        {
           label: 'Fiscal Year',
-          path: `/companies/${companyId}/fiscal-year`,
+          path: `/${currentCompany.value.slug}/fiscal-year`,
           icon: 'calendar-alt',
           permission: 'canManage'
         },
         {
           label: 'Modules',
-          path: `/companies/${companyId}/modules`,
+          path: `/${currentCompany.value.slug}/modules`,
           icon: 'th-large',
           permission: 'canManage'
         },
         {
           label: 'Audit Log',
-          path: `/companies/${companyId}/audit`,
+          path: `/${currentCompany.value.slug}/audit`,
           icon: 'clipboard-list',
           permission: 'canManage'
-        },
-        {
-          label: 'Users & Roles',
-          path: '/companies/users',
-          icon: 'users-cog',
-          permission: 'canViewUsers'
         }
       ]
     : [
         {
-          label: 'Companies',
+          label: 'My Companies',
           path: '/companies',
           icon: 'building'
+        },
+        {
+          label: 'Create Company',
+          path: '/companies/create',
+          icon: 'plus-square'
         }
       ]
 
@@ -389,8 +405,13 @@ const navigation = computed(() => {
     {
       label: 'User & Settings',
       icon: 'user-cog',
-      description: 'Global configuration for the workspace.',
+      description: 'User profile and global configuration.',
       children: [
+        {
+          label: 'My Profile',
+          path: '/settings/profile',
+          icon: 'user'
+        },
         {
           label: 'System Settings',
           path: '/settings',

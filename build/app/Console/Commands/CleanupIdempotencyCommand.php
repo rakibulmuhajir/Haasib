@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Constants\Tables;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -12,7 +13,7 @@ class CleanupIdempotencyCommand extends Command
 
     public function handle(): int
     {
-        $deleted = DB::table('command_idempotency')
+        $deleted = DB::table(Tables::COMMAND_IDEMPOTENCY)
             ->where('created_at', '<', now()->subHours(24))
             ->delete();
 

@@ -3,6 +3,7 @@
 namespace App\Actions\Company;
 
 use App\Constants\Permissions;
+use App\Constants\Tables;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Company;
@@ -37,7 +38,7 @@ class DeleteAction implements PaletteAction
         }
 
         return DB::transaction(function () use ($company) {
-            DB::table('auth.company_user')
+            DB::table(Tables::COMPANY_USER)
                 ->where('company_id', $company->id)
                 ->update(['is_active' => false, 'updated_at' => now()]);
 
@@ -50,7 +51,10 @@ class DeleteAction implements PaletteAction
 
             return [
                 'message' => "Company deleted: {$company->name}",
-                'data' => ['id' => $company->id],
+                'data' => [
+                    'id' => $company->id,
+                    'slug' => $company->slug,
+                ],
                 'redirect' => '/dashboard',
             ];
         });

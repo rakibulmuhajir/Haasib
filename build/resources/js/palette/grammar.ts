@@ -65,7 +65,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
       },
       {
         name: 'list',
-        aliases: [],
+        aliases: ['ls', 'all', 'show'],
         requiresSubject: false,
         flags: [],
       },
@@ -79,7 +79,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
       },
       {
         name: 'switch',
-        aliases: [],
+        aliases: ['sw', 'use', 'select'],
         requiresSubject: true,
         flags: [
           { name: 'slug', type: 'string', required: true },
@@ -87,7 +87,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
       },
       {
         name: 'delete',
-        aliases: [],
+        aliases: ['del', 'rm', 'remove'],
         requiresSubject: true,
         flags: [
           { name: 'slug', type: 'string', required: true },
@@ -103,7 +103,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
     verbs: [
       {
         name: 'invite',
-        aliases: [],
+        aliases: ['add', 'new'],
         requiresSubject: true,
         flags: [
           { name: 'email', type: 'string', required: true },
@@ -113,7 +113,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
       },
       {
         name: 'list',
-        aliases: [],
+        aliases: ['ls', 'all', 'show'],
         requiresSubject: false,
         flags: [],
       },
@@ -161,7 +161,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
       },
       {
         name: 'delete',
-        aliases: [],
+        aliases: ['del', 'rm', 'remove'],
         requiresSubject: true,
         flags: [
           { name: 'email', type: 'string', required: true },
@@ -177,7 +177,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
     verbs: [
       {
         name: 'list',
-        aliases: [],
+        aliases: ['ls', 'all', 'show'],
         requiresSubject: false,
         flags: [],
       },

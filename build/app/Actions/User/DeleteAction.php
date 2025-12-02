@@ -3,6 +3,7 @@
 namespace App\Actions\User;
 
 use App\Constants\Permissions;
+use App\Constants\Tables;
 use App\Contracts\PaletteAction;
 use App\Models\User;
 use App\Facades\CompanyContext;
@@ -29,12 +30,12 @@ class DeleteAction implements PaletteAction
         $user = User::where('email', $params['email'])->firstOrFail();
 
         return DB::transaction(function () use ($user, $company) {
-            DB::table('auth.company_user')
+            DB::table(Tables::COMPANY_USER)
                 ->where('company_id', $company->id)
                 ->where('user_id', $user->id)
                 ->delete();
 
-            $otherMemberships = DB::table('auth.company_user')
+            $otherMemberships = DB::table(Tables::COMPANY_USER)
                 ->where('user_id', $user->id)
                 ->count();
 

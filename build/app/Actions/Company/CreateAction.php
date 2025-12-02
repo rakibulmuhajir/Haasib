@@ -3,6 +3,7 @@
 namespace App\Actions\Company;
 
 use App\Constants\Permissions;
+use App\Constants\Tables;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Company;
@@ -36,7 +37,7 @@ class CreateAction implements PaletteAction
     public function handle(array $params): array
     {
         $params['currency'] = strtoupper($params['currency']);
-        $slug = Str::slug($params['name']);
+        $slug = $this->uniqueSlug(Str::slug($params['name']));
 
         return DB::transaction(function () use ($params, $slug) {
             $company = Company::create([
@@ -58,7 +59,7 @@ class CreateAction implements PaletteAction
                 'enabled_at' => now(),
             ]);
 
-            DB::table('auth.company_user')->insert([
+            DB::table(Tables::COMPANY_USER)->insert([
                 'company_id' => $company->id,
                 'user_id' => Auth::id(),
                 'role' => 'owner',
@@ -124,12 +125,12 @@ class CreateAction implements PaletteAction
                 ->all();
 
             // Manually sync permissions to avoid null IDs or team context issues
-            DB::table('role_has_permissions')
+            DB::table(Tables::ROLE_HAS_PERMISSIONS)
                 ->where('role_id', $role->id)
                 ->delete();
 
             foreach ($permissionIds as $permissionId) {
-                DB::table('role_has_permissions')->insert([
+                DB::table(Tables::ROLE_HAS_PERMISSIONS)->insert([
                     'permission_id' => $permissionId,
                     'role_id' => $role->id,
                 ]);
@@ -137,5 +138,18 @@ class CreateAction implements PaletteAction
         }
 
         $registrar->forgetCachedPermissions();
+    }
+
+    private function uniqueSlug(string $base): string
+    {
+        $slug = $base;
+        $counter = 1;
+
+        while (Company::where('slug', $slug)->exists()) {
+            $slug = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $slug;
     }
 }

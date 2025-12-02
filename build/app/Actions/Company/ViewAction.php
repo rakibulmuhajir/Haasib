@@ -3,6 +3,7 @@
 namespace App\Actions\Company;
 
 use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +24,8 @@ class ViewAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $company = DB::table('auth.companies as c')
-            ->join('auth.company_user as cu', 'c.id', '=', 'cu.company_id')
+        $company = DB::table(Tables::COMPANIES.' as c')
+            ->join(Tables::COMPANY_USER.' as cu', 'c.id', '=', 'cu.company_id')
             ->where('c.slug', $params['slug'])
             ->where('cu.user_id', Auth::id())
             ->where('cu.is_active', true)
@@ -46,7 +47,7 @@ class ViewAction implements PaletteAction
             throw new \Exception('Company not found or you do not have access.');
         }
 
-        $userCount = DB::table('auth.company_user')
+        $userCount = DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)
             ->where('is_active', true)
             ->count();

@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CommandBus;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
 
 class CompaniesPageController extends Controller
 {
@@ -41,7 +41,11 @@ class CompaniesPageController extends Controller
             'slug' => ['required', 'string'],
         ]);
 
-        $result = Bus::dispatch('company.switch', $data);
+        $commandBus = app(CommandBus::class);
+        $result = $commandBus->dispatch('company.switch', $data, $request->user(), true);
+
+        // Update session to remember this as the last accessed company
+        session(['last_company_slug' => $data['slug']]);
 
         return redirect()->back()->with('success', $result['message'] ?? 'Switched company.');
     }

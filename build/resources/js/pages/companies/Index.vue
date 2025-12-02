@@ -53,7 +53,7 @@ const companyToDelete = ref<CompanyRow | null>(null)
 
 const createForm = useForm({
   name: '',
-  currency: 'USD',
+  base_currency: 'USD',
 })
 
 const switchForm = useForm({
@@ -75,6 +75,8 @@ const filteredCompanies = computed(() => {
 })
 
 function submitCreate() {
+  createForm.base_currency = createForm.base_currency?.toUpperCase?.() ?? ''
+
   createForm.post('/companies', {
     onSuccess: () => {
       createForm.reset()
@@ -112,12 +114,12 @@ function handleDelete() {
   <PageShell
     title="Companies"
     description="Manage organizations you have access to"
-    :icon="Building2"
-    :breadcrumbs="breadcrumbs"
-    searchable
-    v-model:search-model-value="searchQuery"
-    search-placeholder="Search companies by name, slug, or role..."
-  >
+  :icon="Building2"
+  :breadcrumbs="breadcrumbs"
+  searchable
+  v-model:search="searchQuery"
+  search-placeholder="Search companies by name, slug, or role..."
+>
     <template #actions>
       <Button @click="showCreateForm = !showCreateForm" size="sm">
         <Plus class="mr-2 h-4 w-4" />
@@ -148,16 +150,19 @@ function handleDelete() {
             </p>
           </div>
           <div class="space-y-2">
-            <Label for="currency">Base Currency</Label>
+            <Label for="base_currency">Base Currency</Label>
             <Input
-              id="currency"
-              v-model="createForm.currency"
+              id="base_currency"
+              v-model="createForm.base_currency"
+              @update:modelValue="
+                (value) => (createForm.base_currency = String(value ?? '').toUpperCase())
+              "
               placeholder="USD"
               maxlength="3"
               class="border-zinc-300 uppercase"
             />
-            <p v-if="createForm.errors.currency" class="text-xs text-red-600">
-              {{ createForm.errors.currency }}
+            <p v-if="createForm.errors.base_currency" class="text-xs text-red-600">
+              {{ createForm.errors.base_currency }}
             </p>
           </div>
         </div>

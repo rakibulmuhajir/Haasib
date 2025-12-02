@@ -3,6 +3,7 @@
 namespace App\Actions\User;
 
 use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Facades\CompanyContext;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +24,8 @@ class IndexAction implements PaletteAction
     {
         $company = CompanyContext::requireCompany();
 
-        $users = DB::table('auth.users as u')
-            ->join('auth.company_user as cu', 'u.id', '=', 'cu.user_id')
+        $users = DB::table(Tables::USERS.' as u')
+            ->join(Tables::COMPANY_USER.' as cu', 'u.id', '=', 'cu.user_id')
             ->where('cu.company_id', $company->id)
             ->select('u.email', 'u.name', 'cu.role', 'cu.is_active', 'cu.joined_at')
             ->orderBy('u.name')

@@ -40,6 +40,27 @@ class HandleInertiaRequests extends Middleware
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
         $currentCompany = CompanyContext::getCompany();
 
+        // Get user's companies
+        $companies = $request->user()
+            ? \DB::table('auth.company_user as cu')
+                ->join('auth.companies as c', 'cu.company_id', '=', 'c.id')
+                ->where('cu.user_id', $request->user()->id)
+                ->where('cu.is_active', true)
+                ->where('c.is_active', true)
+                ->select('c.id', 'c.name', 'c.slug', 'c.base_currency')
+                ->orderBy('c.name')
+                ->get()
+            : [];
+
+        // If no current company (on global routes), use last accessed company for display
+        if (! $currentCompany && $request->user() && session('last_company_slug')) {
+            $currentCompany = \DB::table('auth.companies')
+                ->where('slug', session('last_company_slug'))
+                ->where('is_active', true)
+                ->select('id', 'name', 'slug', 'base_currency')
+                ->first();
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -47,6 +68,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'currentCompany' => $currentCompany,
+                'companies' => $companies,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

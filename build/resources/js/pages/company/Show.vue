@@ -7,8 +7,6 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +29,6 @@ import {
   Mail,
   Calendar,
   Shield,
-  Settings,
   MoreVertical,
   Trash2,
   UserCog,
@@ -56,6 +53,17 @@ interface Stats {
   admins: number
 }
 
+interface PendingInvitation {
+  id: string
+  email: string
+  role: string
+  expires_at: string
+  created_at: string
+  inviter_name: string | null
+  inviter_email: string | null
+  token: string
+}
+
 interface User {
   id: string
   name: string | null
@@ -70,6 +78,7 @@ const props = defineProps<{
   stats: Stats
   users: User[]
   currentUserRole: string
+  pendingInvitations: PendingInvitation[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -78,21 +87,14 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.company.name },
 ])
 
-const editDialogOpen = ref(false)
 const inviteDialogOpen = ref(false)
 const roleDialogOpen = ref(false)
 const removeDialogOpen = ref(false)
 const selectedUser = ref<User | null>(null)
 
-const editForm = useForm({
-  name: props.company.name,
-  industry: props.company.industry || '',
-  country: props.company.country || '',
-})
-
 const inviteForm = useForm({
   email: '',
-  role: 'user',
+  role: 'member',
 })
 
 const roleForm = useForm({
@@ -104,24 +106,17 @@ const removeForm = useForm({})
 
 const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRole))
 
-const availableRoles = ['owner', 'admin', 'manager', 'user']
+const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
 const getRoleBadgeVariant = (role: string) => {
   const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     owner: 'default',
     admin: 'default',
-    manager: 'secondary',
-    user: 'outline',
+    accountant: 'secondary',
+    viewer: 'outline',
+    member: 'outline',
   }
   return variants[role.toLowerCase()] || 'outline'
-}
-
-const handleEditCompany = () => {
-  editForm.put(`/${props.company.slug}`, {
-    onSuccess: () => {
-      editDialogOpen.value = false
-    },
-  })
 }
 
 const handleInvite = () => {
@@ -190,10 +185,6 @@ const tableColumns = [
     </template>
 
     <template #actions>
-      <Button v-if="canManage" variant="outline" size="sm" @click="editDialogOpen = true">
-        <Settings class="mr-2 h-4 w-4" />
-        Settings
-      </Button>
     </template>
 
     <div class="space-y-6">
@@ -230,14 +221,47 @@ const tableColumns = [
         </Card>
       </div>
 
-      <!-- Company Details Card -->
+      <!-- Pending Invitations (visible to owners/admins) -->
+      <Card v-if="currentUserRole === 'owner'" class="border-amber-100 bg-amber-50">
+        <CardHeader class="pb-3">
+          <CardTitle class="text-amber-900">Pending Invitations</CardTitle>
+          <CardDescription class="text-amber-700">
+            Invites sent from {{ company.name }}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div v-if="pendingInvitations.length === 0" class="text-sm text-amber-700">
+            No pending invitations.
+          </div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="invite in pendingInvitations"
+              :key="invite.id"
+              class="flex flex-col gap-1 rounded-lg border border-amber-200/80 bg-white px-4 py-3 shadow-xs"
+            >
+              <div class="flex items-center justify-between">
+                <div class="font-medium text-amber-900">{{ invite.email }}</div>
+                <Badge variant="outline" class="capitalize text-amber-800">
+                  {{ invite.role }}
+                </Badge>
+              </div>
+              <div class="text-xs text-amber-700">
+                Expires {{ new Date(invite.expires_at).toLocaleDateString() }}
+                <span v-if="invite.inviter_name"> • Invited by {{ invite.inviter_name }}</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Company Details Card (read-only) -->
       <Card class="border-zinc-200/80 bg-white">
         <CardHeader>
           <div class="flex items-center justify-between">
             <div>
               <CardTitle class="text-zinc-900">Company Details</CardTitle>
               <CardDescription class="text-zinc-500">
-                Basic information about your organization
+                Created values cannot be changed
               </CardDescription>
             </div>
           </div>
@@ -346,59 +370,6 @@ const tableColumns = [
         </template>
       </DataTable>
     </div>
-
-    <!-- Edit Company Dialog -->
-    <Dialog v-model:open="editDialogOpen">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle class="text-zinc-900">Edit Company</DialogTitle>
-          <DialogDescription class="text-zinc-500">
-            Update your company information
-          </DialogDescription>
-        </DialogHeader>
-        <div class="space-y-4 py-4">
-          <div class="space-y-2">
-            <Label for="name" class="text-zinc-700">Company Name</Label>
-            <Input
-              id="name"
-              v-model="editForm.name"
-              class="border-zinc-200"
-            />
-            <p v-if="editForm.errors.name" class="text-xs text-red-600">
-              {{ editForm.errors.name }}
-            </p>
-          </div>
-          <div class="space-y-2">
-            <Label for="industry" class="text-zinc-700">Industry</Label>
-            <Input
-              id="industry"
-              v-model="editForm.industry"
-              placeholder="e.g., Technology, Healthcare"
-              class="border-zinc-200"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="country" class="text-zinc-700">Country Code</Label>
-            <Input
-              id="country"
-              v-model="editForm.country"
-              placeholder="US"
-              maxlength="2"
-              class="border-zinc-200 uppercase"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="editDialogOpen = false" :disabled="editForm.processing">
-            Cancel
-          </Button>
-          <Button @click="handleEditCompany" :disabled="editForm.processing">
-            <span v-if="editForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Save Changes
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <!-- Invite User Dialog -->
     <Dialog v-model:open="inviteDialogOpen">

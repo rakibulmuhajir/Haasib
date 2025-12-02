@@ -3,6 +3,7 @@
 namespace App\Actions\User;
 
 use App\Constants\Permissions;
+use App\Constants\Tables;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\User;
@@ -29,7 +30,7 @@ class AssignRoleAction implements PaletteAction
 
         $user = User::where('email', $params['email'])->firstOrFail();
 
-        $membership = DB::table('auth.company_user')
+        $membership = DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)
             ->where('user_id', $user->id)
             ->first();

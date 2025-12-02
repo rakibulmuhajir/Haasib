@@ -3,6 +3,7 @@
 namespace App\Actions\Company;
 
 use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +22,8 @@ class IndexAction implements PaletteAction
 
     public function handle(array $params): array
     {
-        $companies = DB::table('auth.companies as c')
-            ->join('auth.company_user as cu', 'c.id', '=', 'cu.company_id')
+        $companies = DB::table(Tables::COMPANIES.' as c')
+            ->join(Tables::COMPANY_USER.' as cu', 'c.id', '=', 'cu.company_id')
             ->where('cu.user_id', Auth::id())
             ->where('cu.is_active', true)
             ->select('c.name', 'c.slug', 'c.base_currency', 'cu.role', 'c.is_active')

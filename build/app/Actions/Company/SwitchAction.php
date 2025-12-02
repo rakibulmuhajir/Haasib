@@ -5,6 +5,7 @@ namespace App\Actions\Company;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Company;
+use App\Constants\Tables;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -27,7 +28,7 @@ class SwitchAction implements PaletteAction
     {
         $company = Company::where('slug', $params['slug'])->firstOrFail();
 
-        $membership = DB::table('auth.company_user')
+        $membership = DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
             ->where('is_active', true)
@@ -39,7 +40,7 @@ class SwitchAction implements PaletteAction
 
         CompanyContext::setContext($company);
 
-        $userCount = DB::table('auth.company_user')
+        $userCount = DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)
             ->where('is_active', true)
             ->count();

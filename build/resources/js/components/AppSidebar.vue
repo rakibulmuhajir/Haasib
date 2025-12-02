@@ -18,8 +18,6 @@ import { usePage } from '@inertiajs/vue3'
 import {
   LayoutGrid,
   Building2,
-  Users,
-  Settings,
   FileText,
   BookOpen,
   Folder,
@@ -36,10 +34,15 @@ withDefaults(defineProps<Props>(), {
 })
 
 const page = usePage()
-const currentCompany = computed(() => (page.props.auth as any)?.currentCompany || null)
+const authProps = computed(() => (page.props.auth as any) || {})
+const currentCompany = computed(() => authProps.value.currentCompany || null)
+const userCompanies = computed(() => authProps.value.companies || [])
 const slugFromUrl = computed(() => {
   const match = page.url.match(/^\/([^/]+)/)
-  return match ? match[1] : null
+  const possibleSlug = match ? match[1] : null
+  if (!possibleSlug) return null
+
+  return userCompanies.value.find((company: any) => company.slug === possibleSlug)?.slug || null
 })
 
 const mainNavItems = computed<NavItem[]>(() => {
@@ -58,11 +61,6 @@ const mainNavItems = computed<NavItem[]>(() => {
         title: 'Company',
         href: `/${slug}`,
         icon: Building2,
-      },
-      {
-        title: 'Users',
-        href: `/${slug}/users`,
-        icon: Users,
       }
     )
   }
@@ -78,11 +76,6 @@ const mainNavItems = computed<NavItem[]>(() => {
 })
 
 const secondaryNavItems: NavItem[] = [
-  {
-    title: 'Settings',
-    href: '/settings/profile',
-    icon: Settings,
-  },
   {
     title: 'Documentation',
     href: 'https://laravel.com/docs',

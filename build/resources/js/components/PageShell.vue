@@ -32,6 +32,9 @@ interface Props {
   }
   searchable?: boolean
   searchPlaceholder?: string
+  /** Canonical v-model prop for search */
+  search?: string
+  /** Legacy support for search v-model */
   searchModelValue?: string
   loading?: boolean
   /** Use compact layout without the content card wrapper */
@@ -47,20 +50,26 @@ const props = withDefaults(defineProps<Props>(), {
   backButton: undefined,
   searchable: false,
   searchPlaceholder: 'Search...',
+  search: undefined,
   searchModelValue: '',
   loading: false,
   compact: false,
 })
 
 const emit = defineEmits<{
+  'update:search': [value: string]
   'update:searchModelValue': [value: string]
   'search': [value: string]
 }>()
 
-const handleSearchUpdate = (value: string) => {
-  emit('update:searchModelValue', value)
-  emit('search', value)
-}
+const searchValue = computed({
+  get: () => props.search ?? props.searchModelValue,
+  set: (value: string) => {
+    emit('update:search', value)
+    emit('update:searchModelValue', value)
+    emit('search', value)
+  },
+})
 </script>
 
 <template>
@@ -92,10 +101,10 @@ const handleSearchUpdate = (value: string) => {
         >
           <SearchBar
             v-if="searchable"
-            :model-value="searchModelValue"
+            :model-value="searchValue"
             :placeholder="searchPlaceholder"
             :loading="loading"
-            @update:model-value="handleSearchUpdate"
+            @update:model-value="(value) => (searchValue = value)"
             class="w-full sm:max-w-sm"
           />
           

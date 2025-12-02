@@ -31,6 +31,10 @@ class IdentifyCompany
         if ($slug) {
             try {
                 CompanyContext::setContextBySlug($slug);
+                // Remember this as the last accessed company
+                if ($user) {
+                    session(['last_company_slug' => $slug]);
+                }
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 if ($request->expectsJson()) {
                     return response()->json([

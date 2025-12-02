@@ -4,14 +4,9 @@ import { useForm, Link } from '@inertiajs/vue3'
 
 const form = useForm({
     name: '',
-    username: '',
     email: '',
     password: '',
     password_confirmation: '',
-    company_name: '',
-    company_email: '',
-    company_phone: '',
-    company_website: '',
 })
 
 const register = () => {
@@ -34,13 +29,16 @@ const register = () => {
                     <i class="fas fa-chart-line text-blue-600 dark:text-blue-400"></i>
                 </div>
                 <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-                    Create your Haasib account
+                    Create your account
                 </h2>
                 <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
                     Already have an account?
                     <Link href="/login" class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
                         Sign in here
                     </Link>
+                </p>
+                <p class="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+                    After registration, create a company or wait for an invitation
                 </p>
             </div>
 
@@ -73,18 +71,8 @@ const register = () => {
             </div>
             
             <form class="mt-8 space-y-6" @submit.prevent="register">
-                <!-- Personal Information Section -->
-                <div class="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:px-6">
-                    <div class="mb-4">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                            Personal Information
-                        </h3>
-                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Information about your account
-                        </p>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg px-4 py-5 sm:px-6">
+                    <div class="space-y-6">
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Full Name
@@ -95,7 +83,8 @@ const register = () => {
                                 name="name"
                                 type="text"
                                 required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                                autocomplete="name"
+                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 placeholder="John Doe"
                                 :disabled="form.processing"
                             >
@@ -105,27 +94,8 @@ const register = () => {
                         </div>
 
                         <div>
-                            <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Username
-                            </label>
-                            <input
-                                id="username"
-                                v-model="form.username"
-                                name="username"
-                                type="text"
-                                required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="johndoe"
-                                :disabled="form.processing"
-                            >
-                            <div v-if="form.errors.username" class="text-red-600 dark:text-red-400 text-sm mt-1">
-                                {{ form.errors.username }}
-                            </div>
-                        </div>
-
-                        <div>
                             <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Email
+                                Email Address
                             </label>
                             <input
                                 id="email"
@@ -133,7 +103,8 @@ const register = () => {
                                 name="email"
                                 type="email"
                                 required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                                autocomplete="email"
+                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 placeholder="john@example.com"
                                 :disabled="form.processing"
                             >
@@ -152,16 +123,20 @@ const register = () => {
                                 name="password"
                                 type="password"
                                 required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                                autocomplete="new-password"
+                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 placeholder="••••••••"
                                 :disabled="form.processing"
                             >
                             <div v-if="form.errors.password" class="text-red-600 dark:text-red-400 text-sm mt-1">
                                 {{ form.errors.password }}
                             </div>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Must be at least 8 characters
+                            </p>
                         </div>
 
-                        <div class="sm:col-span-2">
+                        <div>
                             <label for="password_confirmation" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Confirm Password
                             </label>
@@ -171,89 +146,9 @@ const register = () => {
                                 name="password_confirmation"
                                 type="password"
                                 required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                                autocomplete="new-password"
+                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 placeholder="••••••••"
-                                :disabled="form.processing"
-                            >
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Company Information Section -->
-                <div class="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:px-6">
-                    <div class="mb-4">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                            Company Information
-                        </h3>
-                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Your company will be created automatically
-                        </p>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                        <div class="sm:col-span-2">
-                            <label for="company_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Company Name <span class="text-red-500">*</span>
-                            </label>
-                            <input
-                                id="company_name"
-                                v-model="form.company_name"
-                                name="company_name"
-                                type="text"
-                                required
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Acme Corporation"
-                                :disabled="form.processing"
-                            >
-                            <div v-if="form.errors.company_name" class="text-red-600 dark:text-red-400 text-sm mt-1">
-                                {{ form.errors.company_name }}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="company_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Company Email
-                            </label>
-                            <input
-                                id="company_email"
-                                v-model="form.company_email"
-                                name="company_email"
-                                type="email"
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="contact@acme.com"
-                                :disabled="form.processing"
-                            >
-                            <div v-if="form.errors.company_email" class="text-red-600 dark:text-red-400 text-sm mt-1">
-                                {{ form.errors.company_email }}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="company_phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Company Phone
-                            </label>
-                            <input
-                                id="company_phone"
-                                v-model="form.company_phone"
-                                name="company_phone"
-                                type="tel"
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="+1 (555) 123-4567"
-                                :disabled="form.processing"
-                            >
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <label for="company_website" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Company Website
-                            </label>
-                            <input
-                                id="company_website"
-                                v-model="form.company_website"
-                                name="company_website"
-                                type="url"
-                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="https://www.acme.com"
                                 :disabled="form.processing"
                             >
                         </div>

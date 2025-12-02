@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import Sidebar from '@/Components/Sidebar/Sidebar.vue'
+import Sidebar from '@/Layouts/Sidebar.vue'
 import PageHeader from '@/Components/PageHeader.vue'
 import PageActions from '@/Components/PageActions.vue'
 import Button from 'primevue/button'

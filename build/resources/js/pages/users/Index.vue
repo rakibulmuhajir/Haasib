@@ -81,8 +81,9 @@ const getRoleBadgeVariant = (role: string) => {
   const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     owner: 'default',
     admin: 'default',
-    manager: 'secondary',
-    user: 'outline',
+    accountant: 'secondary',
+    viewer: 'outline',
+    member: 'outline',
   }
   return variants[role.toLowerCase()] || 'outline'
 }
@@ -94,10 +95,10 @@ const roleForm = useForm({
 
 const inviteForm = useForm({
   email: '',
-  role: 'user',
+  role: 'member',
 })
 
-const availableRoles = ['owner', 'admin', 'manager', 'user']
+const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
 const openRoleDialog = (user: UserRow) => {
   selectedUser.value = user
@@ -164,8 +165,8 @@ const tableColumns = [
       onClick: () => router.visit('/companies'),
       icon: ArrowLeft,
     }"
-    searchable
-    v-model:search-model-value="searchQuery"
+  searchable
+  v-model:search="searchQuery"
     search-placeholder="Search users by name, email, or role..."
   >
     <template #description>

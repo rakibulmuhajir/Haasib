@@ -2,13 +2,12 @@
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { parse } from '@/palette/parser'
 import { generateSuggestions } from '@/palette/autocomplete'
-import { formatTable } from '@/palette/table'
 import { getHelp } from '@/palette/help'
 import { formatText } from '@/palette/formatter'
 import { getCommandExample } from '@/palette/grammar'
 import { getQuickActions, resolveQuickActionCommand, getQuickActionLabel } from '@/palette/quick-actions'
 import { usePage } from '@inertiajs/vue3'
-import type { ParsedCommand, Suggestion, QuickAction, TableState } from '@/types/palette'
+import type { ParsedCommand, Suggestion, QuickAction, TableState, OutputLine } from '@/types/palette'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ 'update:visible': [v: boolean] }>()
@@ -86,13 +85,6 @@ const page = usePage()
 const initialCompany = computed(() => (page.props.auth as any)?.currentCompany)
 const activeCompany = ref(initialCompany.value || null)
 const companySlug = computed(() => activeCompany.value?.slug || '')
-
-interface OutputLine {
-  type: 'input' | 'output' | 'error' | 'success' | 'table'
-  content: string | string[][]
-  headers?: string[]
-  footer?: string
-}
 
 // Focus on open
 watch(() => props.visible, (v) => {
@@ -861,16 +853,17 @@ function focusInput() {
             </div>
           </div>
           <!-- Text lines -->
-          <div
-            v-else
-            class="palette-line"
-            :class="{
-              'palette-line--input': line.type === 'input',
-              'palette-line--error': line.type === 'error',
-              'palette-line--success': line.type === 'success',
-            }"
-            v-html="formatText(String(line.content))"
-          ></div>
+      <div
+        v-else
+        class="palette-line"
+        :class="{
+          'palette-line--input': line.type === 'input',
+          'palette-line--error': line.type === 'error',
+          'palette-line--success': line.type === 'success',
+          'palette-line--warning': line.type === 'warning',
+        }"
+        v-html="formatText(String(line.content))"
+      ></div>
         </template>
       </div>
 
@@ -1196,6 +1189,9 @@ function focusInput() {
 
 .palette-line--success {
   color: #10b981;
+}
+.palette-line--warning {
+  color: #f59e0b;
 }
 
 .palette-table {

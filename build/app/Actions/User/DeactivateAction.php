@@ -4,6 +4,7 @@ namespace App\Actions\User;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Models\User;
 use App\Facades\CompanyContext;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class DeactivateAction implements PaletteAction
 
         $user = User::where('email', $params['email'])->firstOrFail();
 
-        DB::table('auth.company_user')
+        DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)
             ->where('user_id', $user->id)
             ->update(['is_active' => false, 'updated_at' => now()]);

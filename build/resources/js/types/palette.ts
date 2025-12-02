@@ -104,7 +104,7 @@ export interface FlagDefinition {
 // Output Types
 // ============================================================================
 
-export type OutputType = 'input' | 'output' | 'error' | 'success' | 'table'
+export type OutputType = 'input' | 'output' | 'error' | 'success' | 'warning' | 'table'
 
 export interface OutputLine {
   /** Line type for styling */

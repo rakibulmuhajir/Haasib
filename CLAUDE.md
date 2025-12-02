@@ -363,7 +363,20 @@ php artisan migrate:fresh --seed --force
 | Fix violations | `AI_PROMPTS/QUALITY_VALIDATION_PROMPT.md` | Pattern-specific file |
 
 ---
+## Completing Features
 
+Every user-facing action must handle the full request cycle. Before marking work done, verify:
+
+1. **Success path** - Response handled, user sees feedback (toast), UI updates or redirects
+2. **Error path** - Validation errors shown inline, server errors shown as toast
+3. **Loading state** - Button disabled, spinner if >300ms expected
+
+For toast notifications, use Sonner. See `AI_PRMPTS/toast.md` for implementation.
+
+For Inertia actions specifically:
+- Redirects: Return `redirect()->with('success', '...')`, frontend flash handler shows toast
+- Stay on page: Return `back()->with('success', '...')`
+- Never return raw JSON from routes that Inertia components call
 ## 🚀 DEVELOPMENT SERVER
 
 ```bash

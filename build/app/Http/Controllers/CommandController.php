@@ -2,33 +2,36 @@
 
 namespace App\Http\Controllers;
 
-use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Facades\CompanyContext;
+use App\Services\CommandBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 
 class CommandController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
         $action = $request->header('X-Action');
+        $commandBus = app(CommandBus::class);
         $debugContext = $this->debugContext($request, $action, null);
 
-        if (!$action || !preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
+        if (! $action || ! preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
             return $this->error('BAD_REQUEST', 'Invalid or missing X-Action header', 400, $debugContext);
         }
 
-        $actionClass = config("command-bus.{$action}")
-            ?? config("command_bus.{$action}")
-            ?? $this->fallbackCommandMap()[$action] ?? null;
+        if (! $commandBus->has($action)) {
+            $similar = $this->findSimilarCommands($action, $commandBus->registered());
+            $message = "Unknown command: {$action}";
+            if (! empty($similar)) {
+                $message .= '. Did you mean: '.implode(', ', $similar).'?';
+            }
 
-        if (!$actionClass || !class_exists($actionClass)) {
-            return $this->error('NOT_FOUND', "Unknown command: {$action}", 404, [
+            return $this->error('NOT_FOUND', $message, 404, [
                 ...$debugContext,
-                'registered_actions' => array_keys(config('command-bus', []) ?: config('command_bus', []) ?: $this->fallbackCommandMap()),
+                'registered_actions' => $commandBus->registered(),
             ]);
         }
 
@@ -43,7 +46,7 @@ class CommandController extends Controller
             'company.delete',
         ];
 
-        if (!$company && !in_array($action, $companyOptionalCommands)) {
+        if (! $company && ! in_array($action, $companyOptionalCommands)) {
             return $this->error('BAD_REQUEST', 'Company context required. Set X-Company-Slug header.', 400, $debugContext);
         }
 
@@ -52,7 +55,7 @@ class CommandController extends Controller
                    str_ends_with($action, '.view') ||
                    str_starts_with($action, 'report.');
 
-        if ($idemKey && !$isQuery) {
+        if ($idemKey && ! $isQuery) {
             $previous = $this->checkIdempotency($idemKey);
             if ($previous) {
                 return response()->json([
@@ -65,30 +68,11 @@ class CommandController extends Controller
         }
 
         try {
-            $actionInstance = app($actionClass);
-            if (!$actionInstance instanceof PaletteAction) {
-                return $this->error('SERVER_ERROR', 'Invalid command handler', 500);
-            }
             $params = $request->input('params', []);
+            $skipPermission = $company === null && in_array($action, $companyOptionalCommands);
+            $result = $commandBus->dispatch($action, $params, $request->user(), $skipPermission);
 
-            if ($rules = $actionInstance->rules()) {
-                $params = Validator::make($params, $rules)->validate();
-            }
-
-            if ($permission = $actionInstance->permission()) {
-                // Allow company-optional commands to run without company permission (onboarding path)
-                if (!($company === null && in_array($action, $companyOptionalCommands))) {
-                    if (!$request->user()->hasCompanyPermission($permission)) {
-                        throw new \Illuminate\Auth\Access\AuthorizationException(
-                            "Permission denied: {$permission}"
-                        );
-                    }
-                }
-            }
-
-            $result = $actionInstance->handle($params);
-
-            if ($idemKey && !$isQuery) {
+            if ($idemKey && ! $isQuery) {
                 $this->storeIdempotency($idemKey, $result);
             }
 
@@ -141,11 +125,13 @@ class CommandController extends Controller
                    str_starts_with($action, 'report.');
 
         if ($isQuery) {
-            return response()->json([
+            $response = response()->json([
                 'ok' => true,
                 'data' => $result['data'] ?? $result,
                 'meta' => $result['meta'] ?? null,
             ], 200);
+
+            return $response->header('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
 
         return response()->json([
@@ -159,7 +145,7 @@ class CommandController extends Controller
 
     private function checkIdempotency(string $key): ?array
     {
-        $record = DB::table('command_idempotency')
+        $record = DB::table(Tables::COMMAND_IDEMPOTENCY)
             ->where('key', hash('sha256', $key))
             ->where('created_at', '>', now()->subHours(24))
             ->first();
@@ -169,7 +155,7 @@ class CommandController extends Controller
 
     private function storeIdempotency(string $key, array $result): void
     {
-        DB::table('command_idempotency')->updateOrInsert(
+        DB::table(Tables::COMMAND_IDEMPOTENCY)->updateOrInsert(
             ['key' => hash('sha256', $key)],
             [
                 'result' => json_encode($result),
@@ -194,26 +180,6 @@ class CommandController extends Controller
         return response()->json($payload, $status);
     }
 
-    private function fallbackCommandMap(): array
-    {
-        return [
-            'company.create' => \App\Actions\Company\CreateAction::class,
-            'company.list' => \App\Actions\Company\IndexAction::class,
-            'company.switch' => \App\Actions\Company\SwitchAction::class,
-            'company.view' => \App\Actions\Company\ViewAction::class,
-            'company.delete' => \App\Actions\Company\DeleteAction::class,
-            'user.invite' => \App\Actions\User\InviteAction::class,
-            'user.list' => \App\Actions\User\IndexAction::class,
-            'user.assign-role' => \App\Actions\User\AssignRoleAction::class,
-            'user.remove-role' => \App\Actions\User\RemoveRoleAction::class,
-            'user.deactivate' => \App\Actions\User\DeactivateAction::class,
-            'user.delete' => \App\Actions\User\DeleteAction::class,
-            'role.list' => \App\Actions\Role\IndexAction::class,
-            'role.assign' => \App\Actions\Role\AssignPermissionAction::class,
-            'role.revoke' => \App\Actions\Role\RevokePermissionAction::class,
-        ];
-    }
-
     private function debugContext(Request $request, ?string $action, $company): array
     {
         return [
@@ -230,6 +196,15 @@ class CommandController extends Controller
 
     private function includeDebug(): bool
     {
-        return config('app.debug', false) && !app()->environment('production');
+        return config('app.debug', false) && ! app()->environment('production');
+    }
+
+    private function findSimilarCommands(string $action, array $registered): array
+    {
+        return collect($registered)
+            ->filter(fn ($cmd) => levenshtein($action, $cmd) <= 3)
+            ->take(3)
+            ->values()
+            ->all();
     }
 }

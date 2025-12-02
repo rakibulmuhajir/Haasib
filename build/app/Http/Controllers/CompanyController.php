@@ -6,11 +6,11 @@ use App\Facades\CompanyContext;
 use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
-use Illuminate\Http\RedirectResponse;
+use App\Services\CommandBus;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -61,14 +61,52 @@ class CompanyController extends Controller
                 );
             }
 
-            return redirect()->route('dashboard')
+            return redirect()->route('companies.index')
                 ->with('success', 'Company created successfully.');
         });
+    }
+
+    /**
+     * Show the company settings page.
+     */
+    public function settings(Request $request): Response
+    {
+        $company = CompanyContext::getCompany();
+
+        // Get current user's role
+        $currentUserRole = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', Auth::id())
+            ->value('role');
+
+        return Inertia::render('company/Settings', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'industry' => $company->industry,
+                'country' => $company->country,
+                'base_currency' => $company->base_currency,
+                'is_active' => $company->is_active,
+            ],
+            'currentUserRole' => $currentUserRole,
+        ]);
     }
 
     public function show(Request $request): Response
     {
         $company = CompanyContext::getCompany();
+
+        // Guard: only company members (or god-mode) may view
+        $isGodMode = str_starts_with(Auth::id() ?? '', '00000000-0000-0000-0000-');
+        $isMember = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', Auth::id())
+            ->exists();
+
+        if (! $isGodMode && ! $isMember) {
+            abort(403, 'You are not a member of this company.');
+        }
 
         // Get user statistics
         $userStats = DB::table('auth.company_user')
@@ -101,6 +139,28 @@ class CompanyController extends Controller
             ->where('user_id', Auth::id())
             ->value('role');
 
+        // Get pending invitations for this company (for inviter view)
+        $pendingInvitations = [];
+        if ($currentUserRole === 'owner') {
+            $pendingInvitations = DB::table('auth.company_invitations as ci')
+                ->leftJoin('auth.users as inviter', 'ci.invited_by_user_id', '=', 'inviter.id')
+                ->where('ci.company_id', $company->id)
+                ->where('ci.status', 'pending')
+                ->where('ci.expires_at', '>', now())
+                ->select(
+                    'ci.id',
+                    'ci.token',
+                    'ci.email',
+                    'ci.role',
+                    'ci.expires_at',
+                    'ci.created_at',
+                    'inviter.name as inviter_name',
+                    'inviter.email as inviter_email'
+                )
+                ->orderBy('ci.created_at', 'desc')
+                ->get();
+        }
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -119,36 +179,14 @@ class CompanyController extends Controller
             ],
             'users' => $users,
             'currentUserRole' => $currentUserRole,
+            'pendingInvitations' => $pendingInvitations,
         ]);
     }
 
     public function update(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255'],
-            'industry' => ['nullable', 'string', 'max:255'],
-            'country' => ['nullable', 'string', 'size:2'],
-        ]);
-
-        $company = CompanyContext::getCompany();
-
-        // Check if user is owner or admin
-        $membership = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', Auth::id())
-            ->first();
-
-        if (!$membership || !in_array($membership->role, ['owner', 'admin'])) {
-            abort(403, 'Only company owners and admins can update company details.');
-        }
-
-        $company->update($data);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Company updated successfully.',
-            'data' => $company,
-        ]);
+        // Company metadata (name/industry/base currency) is immutable after creation
+        abort(403, 'Company details cannot be edited after creation.');
     }
 
     public function destroy(string $companyId): JsonResponse
@@ -161,11 +199,12 @@ class CompanyController extends Controller
             ->where('user_id', Auth::id())
             ->first();
 
-        if (!$membership || $membership->role !== 'owner') {
+        if (! $membership || $membership->role !== 'owner') {
             abort(403, 'Only company owners can delete companies.');
         }
 
-        $result = Bus::dispatch('company.delete', ['id' => $companyId]);
+        $commandBus = app(CommandBus::class);
+        $result = $commandBus->dispatch('company.delete', ['id' => $companyId], $request->user());
 
         return response()->json([
             'success' => true,

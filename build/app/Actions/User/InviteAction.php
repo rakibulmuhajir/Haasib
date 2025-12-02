@@ -4,6 +4,7 @@ namespace App\Actions\User;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;
+use App\Constants\Tables;
 use App\Facades\CompanyContext;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -45,7 +46,7 @@ class InviteAction implements PaletteAction
                 ]);
             }
 
-            $existing = DB::table('auth.company_user')
+            $existing = DB::table(Tables::COMPANY_USER)
                 ->where('company_id', $company->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -54,7 +55,7 @@ class InviteAction implements PaletteAction
                 throw new \Exception("User {$params['email']} is already a member");
             }
 
-            DB::table('auth.company_user')->insert([
+            DB::table(Tables::COMPANY_USER)->insert([
                 'company_id' => $company->id,
                 'user_id' => $user->id,
                 'role' => $role,

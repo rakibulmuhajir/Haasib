@@ -49,6 +49,13 @@ const stage = ref<Stage>('entity')
 const frecencyScores = ref<Record<string, number>>(getFrecencyScores())
 const contextRecords = ref<ContextRecord[]>([])
 const contextTitle = ref('')
+const scaffoldState = computed(() => {
+  const schema = getSchema(parsed.value.entity, parsed.value.verb)
+  return buildScaffold(parsed.value, schema, {
+    companyName: activeCompany.value?.name,
+    companyCurrency: activeCompany.value?.base_currency ?? activeCompany.value?.currency,
+  })
+})
 
 // Parsed command (reactive)
 const parsed = computed(() => parse(input.value))
@@ -367,6 +374,13 @@ function applyContextRecord(record: ContextRecord) {
   input.value = `${entity} ${verb} --invoice=${record.value} `
   stage.value = 'verb'
   showSuggestions.value = false
+  focusInput()
+}
+
+function applyFlagChip(flag: { name: string; value?: string }) {
+  const existing = input.value.trim()
+  const append = flag.value ? ` --${flag.name}=${flag.value}` : ` --${flag.name}=`
+  input.value = `${existing}${append}`.trim() + ' '
   focusInput()
 }
 
@@ -1005,6 +1019,34 @@ function focusInput() {
           </div>
         </div>
 
+        <!-- Skeleton zone -->
+        <div v-if="scaffoldState" class="palette-skeleton">
+          <div class="skeleton-row">
+            <span class="skeleton-text">{{ scaffoldState.skeleton }}</span>
+          </div>
+          <div class="skeleton-pointer">
+            <span class="skeleton-arrow">↑</span>
+            <span class="skeleton-hint">{{ scaffoldState.pointerLabel }}</span>
+          </div>
+          <div class="skeleton-flags">
+            <button
+              v-for="flag in scaffoldState.optionalFlags"
+              :key="flag.name"
+              class="flag-chip"
+              @click="applyFlagChip(flag)"
+            >
+              --{{ flag.name }}
+              <span v-if="flag.value" class="flag-value">={{ flag.value }}</span>
+              <span v-if="flag.source" class="flag-source">*</span>
+            </button>
+          </div>
+          <div class="skeleton-status">
+            <span v-if="scaffoldState.requiredRemaining.length">Required: {{ scaffoldState.requiredRemaining.join(', ') }}</span>
+            <span v-else>Ready</span>
+            <span class="status-optional">Optional: flags</span>
+          </div>
+        </div>
+
         <!-- Dropdown below input -->
         <div v-if="showSuggestions && suggestions.length" class="palette-dropdown">
           <div
@@ -1509,6 +1551,77 @@ function focusInput() {
   display: flex;
   gap: 16px;
   margin-left: auto;
+}
+
+.palette-skeleton {
+  padding: 10px 14px 8px;
+  border-top: 1px solid #334155;
+  background: rgba(34, 211, 238, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeleton-row {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.skeleton-pointer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.skeleton-arrow {
+  color: #22d3ee;
+}
+
+.skeleton-flags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flag-chip {
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: rgba(34, 211, 238, 0.08);
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  transition: all 0.12s;
+}
+
+.flag-chip:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(34, 211, 238, 0.14);
+}
+
+.flag-value {
+  color: #22d3ee;
+}
+
+.flag-source {
+  color: #fbbf24;
+}
+
+.skeleton-status {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.status-optional {
+  color: #64748b;
 }
 
 .palette-context {

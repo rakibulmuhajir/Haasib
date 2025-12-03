@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\Role;
+namespace App\Modules\Accounting\Actions\Role;
 
 use App\Contracts\PaletteAction;
 use App\Models\Role;

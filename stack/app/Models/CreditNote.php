@@ -33,22 +33,23 @@ class CreditNote extends Model
      */
     protected $fillable = [
         'company_id',
+        'customer_id',
         'invoice_id',
         'credit_note_number',
+        'credit_date',
         'reason',
         'amount',
-        'tax_amount',
-        'total_amount',
-        'currency',
+        'base_currency',
         'status',
         'notes',
         'terms',
         'sent_at',
         'posted_at',
-        'cancelled_at',
+        'voided_at',
         'cancellation_reason',
         'journal_entry_id',
         'created_by_user_id',
+        'updated_by_user_id',
     ];
 
     /**
@@ -59,16 +60,21 @@ class CreditNote extends Model
     protected function casts(): array
     {
         return [
+            'credit_date' => 'date',
             'sent_at' => 'datetime',
             'posted_at' => 'datetime',
-            'cancelled_at' => 'datetime',
+            'voided_at' => 'datetime',
             'amount' => 'decimal:2',
-            'tax_amount' => 'decimal:2',
-            'total_amount' => 'decimal:2',
+            'base_currency' => 'string',
             'company_id' => 'string',
+            'customer_id' => 'string',
             'invoice_id' => 'string',
             'journal_entry_id' => 'string',
             'created_by_user_id' => 'string',
+            'updated_by_user_id' => 'string',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 
@@ -83,6 +89,14 @@ class CreditNote extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the customer this credit note belongs to.
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     /**

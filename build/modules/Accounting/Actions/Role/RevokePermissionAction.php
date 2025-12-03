@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\Role;
+namespace App\Modules\Accounting\Actions\Role;
 
 use App\Constants\Permissions;
 use App\Contracts\PaletteAction;

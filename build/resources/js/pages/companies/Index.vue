@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
   Building2,
@@ -53,8 +54,81 @@ const companyToDelete = ref<CompanyRow | null>(null)
 
 const createForm = useForm({
   name: '',
+  industry: '',
+  country: '',
   base_currency: 'USD',
 })
+
+const countryCurrencyMap: Record<string, string> = {
+  US: 'USD',
+  CA: 'CAD',
+  GB: 'GBP',
+  UK: 'GBP',
+  AU: 'AUD',
+  NZ: 'NZD',
+  EU: 'EUR',
+  FR: 'EUR',
+  DE: 'EUR',
+  ES: 'EUR',
+  IT: 'EUR',
+  NL: 'EUR',
+  BE: 'EUR',
+  CH: 'CHF',
+  JP: 'JPY',
+  CN: 'CNY',
+  SG: 'SGD',
+  HK: 'HKD',
+  AE: 'AED',
+  SA: 'SAR',
+  IN: 'INR',
+  BR: 'BRL',
+  MX: 'MXN',
+  SE: 'SEK',
+  NO: 'NOK',
+  DK: 'DKK',
+}
+
+const countries = [
+  { code: 'US', name: 'United States' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'CN', name: 'China' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'EU', name: 'European Union' },
+  { code: 'FR', name: 'France' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'IN', name: 'India' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'SG', name: 'Singapore' },
+]
+
+const industries = [
+  'AI',
+  'Education',
+  'Energy',
+  'Healthcare',
+  'Manufacturing',
+  'Media',
+  'Medical',
+  'Research',
+  'Retail',
+  'Technology',
+  'Transportation',
+]
 
 const switchForm = useForm({
   slug: '',
@@ -138,6 +212,33 @@ function handleDelete() {
       <CardContent class="space-y-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-2">
+            <Label for="country">Country</Label>
+            <Select
+              v-model="createForm.country"
+              @update:modelValue="
+                (code) => {
+                  createForm.country = code
+                  const suggested = countryCurrencyMap[code]
+                  if (suggested) {
+                    createForm.base_currency = suggested
+                  }
+                }
+              "
+            >
+              <SelectTrigger id="country" class="border-zinc-300">
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in countries" :key="c.code" :value="c.code">
+                  {{ c.name }} ({{ c.code }})
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="createForm.errors.country" class="text-xs text-red-600">
+              {{ createForm.errors.country }}
+            </p>
+          </div>
+          <div class="space-y-2">
             <Label for="name">Company Name</Label>
             <Input
               id="name"
@@ -147,6 +248,22 @@ function handleDelete() {
             />
             <p v-if="createForm.errors.name" class="text-xs text-red-600">
               {{ createForm.errors.name }}
+            </p>
+          </div>
+          <div class="space-y-2">
+            <Label for="industry">Industry</Label>
+            <Select v-model="createForm.industry">
+              <SelectTrigger id="industry" class="border-zinc-300">
+                <SelectValue placeholder="Select industry" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="ind in industries" :key="ind" :value="ind">
+                  {{ ind }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="createForm.errors.industry" class="text-xs text-red-600">
+              {{ createForm.errors.industry }}
             </p>
           </div>
           <div class="space-y-2">

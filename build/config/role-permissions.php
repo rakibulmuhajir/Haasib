@@ -17,88 +17,63 @@
 return [
 
     'owner' => [
-        // Full access to everything
+        // All permissions
+        '*',
+    ],
 
-        // Accounts
-        'accounts_account_view',
-        'accounts_account_create',
-        'accounts_account_update',
-        'accounts_account_delete',
+    'admin' => [
+        // Company
+        'company:invite-user',
+        'company:manage-users',
+        'company:manage-roles',
 
-        'accounts_journal_view',
-        'accounts_journal_create',
-        'accounts_journal_update',
-        'accounts_journal_delete',
-        'accounts_journal_post',
-        'accounts_journal_reverse',
+        // Customer
+        'customer:create',
+        'customer:view',
+        'customer:update',
+        'customer:delete',
 
-        'accounts_invoice_view',
-        'accounts_invoice_create',
-        'accounts_invoice_update',
-        'accounts_invoice_delete',
-        'accounts_invoice_approve',
-        'accounts_invoice_void',
-        'accounts_invoice_send',
+        // Invoice
+        'invoice:create',
+        'invoice:view',
+        'invoice:update',
+        'invoice:send',
+        'invoice:void',
 
-        'accounts_report_view',
-        'accounts_report_export',
-
-        // Company management
-        'company.create',
-        'company.view',
-        'company.update',
-        'company.delete',
-        'company.invite-user',
-        'company.manage-users',
-        'company.delete-user',
-        'company.manage-roles',
-        'company_settings_view',
-        'company_settings_update',
-        'company_members_view',
-        'company_members_invite',
-        'company_members_update_role',
-        'company_members_remove',
+        // Payment
+        'payment:create',
+        'payment:view',
+        'payment:void',
     ],
 
     'accountant' => [
-        // Can do accounting work, cannot manage company
+        // Customer
+        'customer:create',
+        'customer:view',
+        'customer:update',
 
-        'accounts_account_view',
-        'accounts_account_create',
-        'accounts_account_update',
-        // No delete
+        // Invoice
+        'invoice:create',
+        'invoice:view',
+        'invoice:update',
+        'invoice:send',
+        'invoice:void',
 
-        'accounts_journal_view',
-        'accounts_journal_create',
-        'accounts_journal_update',
-        'accounts_journal_post',
-        // No delete, no reverse
-
-        'accounts_invoice_view',
-        'accounts_invoice_create',
-        'accounts_invoice_update',
-        'accounts_invoice_approve',
-        'accounts_invoice_send',
-        // No delete, no void
-
-        'accounts_report_view',
-        'accounts_report_export',
-
-        // Limited company access
-        'company_settings_view',
-        'company_members_view',
+        // Payment
+        'payment:create',
+        'payment:view',
+        'payment:void',
     ],
 
-    'viewer' => [
-        // Read-only access
+    'member' => [
+        // Customer (read only)
+        'customer:view',
 
-        'accounts_account_view',
-        'accounts_journal_view',
-        'accounts_invoice_view',
-        'accounts_report_view',
+        // Invoice (read only)
+        'invoice:view',
 
-        'company_settings_view',
-        'company_members_view',
+        // Payment (read only)
+        'payment:view',
     ],
 
 ];

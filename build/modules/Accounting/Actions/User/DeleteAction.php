@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\User;
+namespace App\Modules\Accounting\Actions\User;
 
 use App\Constants\Permissions;
 use App\Constants\Tables;

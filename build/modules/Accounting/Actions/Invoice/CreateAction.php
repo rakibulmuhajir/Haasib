@@ -5,8 +5,8 @@ namespace App\Modules\Accounting\Actions\Invoice;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
-use App\Models\Invoice;
-use App\Modules\Accounting\Domain\Customers\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Customer;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +20,7 @@ class CreateAction implements PaletteAction
         return [
             'customer' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0.01|max:999999999.99',
+            'currency' => 'required|string|size:3|uppercase',
             'due' => 'nullable|date|after_or_equal:today',
             'description' => 'nullable|string|max:1000',
             'draft' => 'nullable|boolean',
@@ -54,6 +55,10 @@ class CreateAction implements PaletteAction
                 ? 'draft'
                 : 'sent'; // Use 'sent' instead of 'pending' to match existing flow
 
+            $currency = strtoupper($params['currency']);
+            $baseCurrency = $company->base_currency ?? $currency;
+            $exchangeRate = ($currency === $baseCurrency) ? 1.0 : ($params['exchange_rate'] ?? null);
+
             // Create invoice
             $invoice = Invoice::create([
                 'company_id' => $company->id,
@@ -67,8 +72,9 @@ class CreateAction implements PaletteAction
                 'discount_amount' => 0,
                 'total_amount' => $params['amount'],
                 'balance_due' => $params['amount'],
-                'currency' => $customer->currency,
-                'exchange_rate' => 1.0,
+                'currency' => $currency,
+                'base_currency' => $baseCurrency,
+                'exchange_rate' => $exchangeRate ?? 1.0,
                 'status' => $status,
                 'payment_status' => $status === 'draft' ? 'draft' : 'unpaid',
                 'notes' => $params['description'] ?? null,

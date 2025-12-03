@@ -10,6 +10,8 @@ export const ENTITY_ICONS: Record<string, string> = {
   customer: '👥',
   invoice: '📄',
   payment: '💰',
+  account: '📒',
+  journal: '📔',
 }
 
 /**
@@ -56,6 +58,15 @@ export const COMMAND_DESCRIPTIONS: Record<string, string> = {
   'payment.create': 'Record a payment on an invoice',
   'payment.list': 'List payment history',
   'payment.void': 'Void/reverse a payment',
+
+  // Accounting
+  'account.list': 'Chart of accounts',
+  'account.view': 'View account details',
+  'account.create': 'Create a new account',
+
+  'journal.create': 'Create a journal entry',
+  'journal.list': 'List journal entries',
+  'journal.view': 'View journal entry',
 
   'help': 'Show available commands',
   'clear': 'Clear output history',
@@ -313,6 +324,7 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
         flags: [
           { name: 'customer', shorthand: 'c', type: 'string', required: true },
           { name: 'amount', shorthand: 'a', type: 'number', required: true },
+          { name: 'currency', shorthand: null, type: 'string', required: false },
           { name: 'due', shorthand: 'd', type: 'string', required: false },
           { name: 'description', type: 'string', required: false },
           { name: 'reference', shorthand: 'r', type: 'string', required: false },
@@ -411,6 +423,72 @@ export const GRAMMAR: Record<string, EntityDefinition> = {
         flags: [
           { name: 'id', type: 'string', required: true },
           { name: 'reason', type: 'string', required: false },
+        ],
+      },
+    ],
+  },
+
+  account: {
+    name: 'account',
+    shortcuts: ['coa', 'acct'],
+    defaultVerb: 'list',
+    verbs: [
+      {
+        name: 'list',
+        aliases: ['ls', 'all', 'chart'],
+        requiresSubject: false,
+        flags: [],
+      },
+      {
+        name: 'view',
+        aliases: ['get', 'show'],
+        requiresSubject: true,
+        flags: [
+          { name: 'id', type: 'string', required: true },
+        ],
+      },
+      {
+        name: 'create',
+        aliases: ['new', 'add'],
+        requiresSubject: true,
+        flags: [
+          { name: 'name', type: 'string', required: true },
+          { name: 'code', type: 'string', required: true },
+          { name: 'type', type: 'string', required: true },
+        ],
+      },
+    ],
+  },
+
+  journal: {
+    name: 'journal',
+    shortcuts: ['jr', 'jnl'],
+    defaultVerb: 'list',
+    verbs: [
+      {
+        name: 'create',
+        aliases: ['new', 'add'],
+        requiresSubject: true,
+        flags: [
+          { name: 'date', type: 'string', required: false },
+          { name: 'reference', type: 'string', required: false },
+        ],
+      },
+      {
+        name: 'list',
+        aliases: ['ls', 'all'],
+        requiresSubject: false,
+        flags: [
+          { name: 'from', type: 'string', required: false },
+          { name: 'to', type: 'string', required: false },
+        ],
+      },
+      {
+        name: 'view',
+        aliases: ['get', 'show'],
+        requiresSubject: true,
+        flags: [
+          { name: 'id', type: 'string', required: true },
         ],
       },
     ],
@@ -525,6 +603,12 @@ export const COMMAND_EXAMPLES: Record<string, string> = {
   'role.view': 'role view admin',
   'role.assign': 'role assign users:create admin',
   'role.revoke': 'role revoke users:create admin',
+
+  // Accounting
+  'account.list': 'account list',
+  'account.create': 'account create 1200 --name="Cash" --type=asset',
+  'journal.create': 'journal create --reference=JV-1001',
+  'journal.list': 'journal list --from=2024-01-01 --to=2024-01-31',
 }
 
 /**

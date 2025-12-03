@@ -58,6 +58,16 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Companies the user belongs to.
+     */
+    public function companies()
+    {
+        return $this->belongsToMany(Company::class, 'auth.company_user')
+            ->withPivot(['role', 'invited_by_user_id', 'is_active'])
+            ->withTimestamps();
+    }
+
     public function hasCompanyPermission(string $permission): bool
     {
         return \App\Facades\CompanyContext::userHasPermission($this, $permission);

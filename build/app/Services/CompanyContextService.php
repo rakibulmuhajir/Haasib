@@ -49,7 +49,14 @@ class CompanyContextService
     public function clearContext(): void
     {
         $this->company = null;
-        $this->updateSystemContext(null);
+
+        $conn = DB::connection();
+        if ($conn->transactionLevel() > 0) {
+            $conn->afterCommit(fn () => $this->updateSystemContextImmediate(null));
+            $conn->afterRollback(fn () => $this->updateSystemContextImmediate(null));
+        } else {
+            $this->updateSystemContextImmediate(null);
+        }
 
         Log::debug('Company context cleared');
     }
@@ -198,11 +205,23 @@ class CompanyContextService
         if ($companyId) {
             DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
         } else {
-            DB::select("SELECT set_config('app.current_company_id', NULL, true)");
+            $this->updateSystemContextImmediate(null);
         }
 
         // Update Spatie team context
         $this->permissionRegistrar->setPermissionsTeamId($companyId);
+    }
+
+    /**
+     * Reset or set config immediately (no deferral).
+     */
+    private function updateSystemContextImmediate(?string $companyId): void
+    {
+        if ($companyId) {
+            DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+        } else {
+            DB::statement("RESET app.current_company_id");
+        }
     }
 
     private function resolveRole(string $roleName, Company $company): Role

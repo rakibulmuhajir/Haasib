@@ -1,22 +1,42 @@
-import { GRAMMAR, ENTITY_ICONS, COMMAND_DESCRIPTIONS } from './grammar'
+import { GRAMMAR, ENTITY_ICONS, COMMAND_DESCRIPTIONS, resolveEntityShortcut } from './grammar'
+import { getPresetShortcuts } from './shortcuts'
 import type { Suggestion } from '@/types/palette'
+
+export interface GenerateSuggestionOptions {
+  maxResults?: number
+  stage?: 'entity' | 'verb'
+  entity?: string
+  frecencyScores?: Record<string, number>
+}
 
 /**
  * Generate command suggestions based on partial input
  */
-export function generateSuggestions(input: string, maxResults = 8): Suggestion[] {
-  if (!input.trim()) return getQuickStartSuggestions()
+export function generateSuggestions(input: string, options: GenerateSuggestionOptions = {}): Suggestion[] {
+  const maxResults = options.maxResults ?? 8
+  const stage = options.stage ?? 'entity'
+  const trimmed = input.trim()
+  const frecencyScores = options.frecencyScores || {}
+
+  if (!trimmed && stage === 'entity') {
+    return getQuickStartSuggestions(frecencyScores).slice(0, maxResults)
+  }
 
   const inputLower = input.toLowerCase()
-  const suggestions: Suggestion[] = []
+  const suggestions: Array<Suggestion & { commandKey?: string }> = []
 
-  // Generate all possible completions
-  const completions = getAllCompletions()
+  const targetEntity = options.entity || resolveEntityShortcut(trimmed.split(/\s+/)[0] || '') || ''
+  const completions = stage === 'verb'
+    ? (targetEntity ? getVerbCompletions(targetEntity) : getEntityCompletions())
+    : getEntityCompletions()
 
   for (const completion of completions) {
     const score = scoreSuggestion(inputLower, completion.value.toLowerCase())
     if (score > 0) {
-      suggestions.push({ ...completion, score })
+      const frecencyBoost = completion.commandKey
+        ? (frecencyScores[completion.commandKey] || 0) * 50
+        : 0
+      suggestions.push({ ...completion, score: score + frecencyBoost })
     }
   }
 
@@ -32,8 +52,30 @@ export function generateSuggestions(input: string, maxResults = 8): Suggestion[]
 /**
  * Quick start suggestions when input is empty
  */
-function getQuickStartSuggestions(): Suggestion[] {
+function getQuickStartSuggestions(frecencyScores: Record<string, number>): Suggestion[] {
+  const topFrequent = Object.entries(frecencyScores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([command]) => ({
+      type: 'history' as const,
+      value: `${command} `,
+      label: command,
+      description: 'Recent favorite',
+      icon: '⏱',
+    }))
+
+  const presets = getPresetShortcuts()
+  const shortcutPicks = Object.entries(presets).slice(0, 3).map(([shortcut, cmd]) => ({
+    type: 'command' as const,
+    value: `${cmd.entity} ${cmd.verb} `,
+    label: `${cmd.entity} ${cmd.verb}`,
+    description: `Shortcut: ${shortcut}`,
+    icon: ENTITY_ICONS[cmd.entity] || '⌨️',
+  }))
+
   return [
+    ...topFrequent,
+    ...shortcutPicks,
     {
       type: 'command',
       value: 'company list',
@@ -99,11 +141,8 @@ function scoreSuggestion(input: string, completion: string): number {
   return inputIdx === input.length ? score : 0
 }
 
-/**
- * Get all possible command completions from grammar
- */
-function getAllCompletions(): Suggestion[] {
-  const completions: Suggestion[] = []
+function getEntityCompletions(): Array<Suggestion & { commandKey?: string }> {
+  const completions: Array<Suggestion & { commandKey?: string }> = []
 
   for (const [entityName, entity] of Object.entries(GRAMMAR)) {
     // Entity alone
@@ -111,24 +150,25 @@ function getAllCompletions(): Suggestion[] {
       type: 'entity',
       value: `${entityName} `,
       label: entityName,
-      description: `${entity.verbs.length} commands available`,
+      description: '',
       icon: ENTITY_ICONS[entityName] || '📦',
+      commandKey: `${entityName}.list`,
     })
+  }
 
-    // Entity verb combinations (canonical only)
-    for (const verb of entity.verbs) {
-      const commandKey = `${entityName}.${verb.name}`
-      const description = COMMAND_DESCRIPTIONS[commandKey] || `${verb.name} ${entityName}`
-
-      // Only suggest canonical verb name, not aliases
-      completions.push({
-        type: 'command',
-        value: `${entityName} ${verb.name} `,
-        label: `${entityName} ${verb.name}`,
-        description,
-        icon: ENTITY_ICONS[entityName] || '📦',
-      })
-    }
+  // Preset shortcuts as explicit items
+  const presets = getPresetShortcuts()
+  for (const [shortcut, cmd] of Object.entries(presets)) {
+    const commandKey = `${cmd.entity}.${cmd.verb}`
+    const description = COMMAND_DESCRIPTIONS[commandKey] || `${cmd.verb} ${cmd.entity}`
+    completions.push({
+      type: 'command',
+      value: `${cmd.entity} ${cmd.verb} `,
+      label: `${cmd.entity} ${cmd.verb}`,
+      description: `Shortcut: ${shortcut} — ${description}`,
+      icon: ENTITY_ICONS[cmd.entity] || '⌨️',
+      commandKey,
+    })
   }
 
   // Built-in commands
@@ -138,6 +178,7 @@ function getAllCompletions(): Suggestion[] {
     label: 'help',
     description: COMMAND_DESCRIPTIONS['help'] || 'Show help',
     icon: '❓',
+    commandKey: 'help',
   })
 
   completions.push({
@@ -146,9 +187,28 @@ function getAllCompletions(): Suggestion[] {
     label: 'clear',
     description: COMMAND_DESCRIPTIONS['clear'] || 'Clear output',
     icon: '🗑️',
+    commandKey: 'clear',
   })
 
   return completions
+}
+
+function getVerbCompletions(entityName: string): Array<Suggestion & { commandKey?: string }> {
+  const entity = GRAMMAR[entityName]
+  if (!entity) return []
+
+  return entity.verbs.map((verb) => {
+    const commandKey = `${entityName}.${verb.name}`
+    const description = COMMAND_DESCRIPTIONS[commandKey] || ''
+    return {
+      type: 'verb' as const,
+      value: `${entityName} ${verb.name} `,
+      label: `${verb.name}`,
+      description,
+      icon: ENTITY_ICONS[entityName] || '📦',
+      commandKey,
+    }
+  })
 }
 
 /**

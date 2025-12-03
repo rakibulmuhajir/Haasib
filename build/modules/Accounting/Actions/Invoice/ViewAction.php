@@ -4,8 +4,8 @@ namespace App\Modules\Accounting\Actions\Invoice;
 
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
-use App\Models\Invoice;
-use App\Models\Payment;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Payment;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 

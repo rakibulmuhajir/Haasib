@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('acct.invoice_line_items')) {
+            return;
+        }
+
         Schema::create('acct.invoice_line_items', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');

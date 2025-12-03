@@ -4,7 +4,7 @@ namespace App\Modules\Accounting\Actions\Customer;
 
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
-use App\Modules\Accounting\Domain\Customers\Models\Customer;
+use App\Modules\Accounting\Models\Customer;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
@@ -69,8 +69,8 @@ class IndexAction implements PaletteAction
                     $c->name,
                     $c->email ?? '{secondary}—{/}',
                     $c->phone ?? '{secondary}—{/}',
-                    $this->formatBalance($invoiceTotals[$c->id] ?? 0, $c->currency),
-                    $c->status === 'active' ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
+                    $this->formatBalance($invoiceTotals[$c->id] ?? 0, $c->base_currency ?? 'USD'),
+                    ($c->status ?? 'active') === 'active' ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
                 ])->toArray(),
                 footer: $customers->count() . ' customers'
             ),

@@ -1,5 +1,12 @@
 import { GRAMMAR } from './grammar'
 
+const MODULE_GROUPS: Record<string, string[]> = {
+  sales: ['customer', 'invoice', 'payment'],
+  purchases: [],
+  accounting: ['account', 'journal'],
+  settings: ['company', 'user', 'role'],
+}
+
 /**
  * Get help text for a topic
  */
@@ -9,6 +16,19 @@ export function getHelp(topic?: string): string {
   }
 
   const topicLower = topic.toLowerCase()
+
+  if (topicLower === '?' || topicLower === 'help') {
+    return getGroupedHelp()
+  }
+
+  if (topicLower.startsWith('?')) {
+    const group = topicLower.replace('?', '').trim()
+    return getGroupedHelp(group)
+  }
+
+  if (MODULE_GROUPS[topicLower]) {
+    return getGroupedHelp(topicLower)
+  }
 
   // Help for specific entity
   if (GRAMMAR[topicLower]) {
@@ -61,6 +81,7 @@ function getGeneralHelp(): string {
   lines.push('BUILT-IN COMMANDS:')
   lines.push('')
   lines.push('  help [topic]     Show help (e.g., help company)')
+  lines.push("  ? [group]        List namespaces by group (e.g., '? sales')")
   lines.push('  clear            Clear output')
   lines.push('')
   lines.push('SHORTCUTS:')
@@ -78,6 +99,45 @@ function getGeneralHelp(): string {
   lines.push('  user.invite john@example.com    Invite user')
   lines.push('')
   lines.push('Type "help <entity>" for detailed help (e.g., help company)')
+
+  return lines.join('\n')
+}
+
+function getGroupedHelp(group?: string): string {
+  const lines: string[] = ['COMMAND CATALOG', '════════════════', '']
+
+  if (!group) {
+    lines.push('Groups: sales, purchases, accounting, settings')
+    lines.push("Type '? sales' to filter to that group.")
+    lines.push('')
+  }
+
+  const targetGroups = group ? [group] : Object.keys(MODULE_GROUPS)
+
+  for (const groupName of targetGroups) {
+    const entities = MODULE_GROUPS[groupName]
+    const hasEntities = entities && entities.length > 0
+    if (!hasEntities) {
+      if (group) {
+        lines.push(`${groupName.toUpperCase()}`)
+        lines.push('  (no commands yet)')
+        lines.push('')
+      }
+      continue
+    }
+
+    lines.push(`${groupName.toUpperCase()}`)
+    lines.push('─'.repeat(groupName.length))
+
+    entities.forEach((entityName) => {
+      const entity = GRAMMAR[entityName]
+      if (!entity) return
+      const verbs = entity.verbs.map((v) => v.name).join(', ')
+      lines.push(`  ${entityName} (${verbs})`)
+    })
+
+    lines.push('')
+  }
 
   return lines.join('\n')
 }

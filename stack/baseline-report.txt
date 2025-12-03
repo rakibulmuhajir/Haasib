@@ -1,5 +1,0 @@
-> @php artisan pint --dry-run --diff
-
-   ERROR  Command "pint" is not defined.  
-
-Script @php artisan pint --dry-run --diff handling the quality-check event returned with error code 1

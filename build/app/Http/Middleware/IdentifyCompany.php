@@ -22,7 +22,7 @@ class IdentifyCompany
                 str_starts_with($user->id, '00000000-0000-0000-0000-') ? 'true' : 'false',
             ]);
         } else {
-            DB::select("SELECT set_config('app.current_user_id', NULL, true)");
+            DB::statement("RESET app.current_user_id");
             DB::select("SELECT set_config('app.is_super_admin', 'false', true)");
         }
 

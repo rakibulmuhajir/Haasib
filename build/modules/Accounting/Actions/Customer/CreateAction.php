@@ -5,7 +5,7 @@ namespace App\Modules\Accounting\Actions\Customer;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
-use App\Modules\Accounting\Domain\Customers\Models\Customer;
+use App\Modules\Accounting\Models\Customer;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -50,7 +50,8 @@ class CreateAction implements PaletteAction
             'name' => trim($params['name']),
             'email' => $params['email'] ?? null,
             'phone' => $params['phone'] ?? null,
-            'currency' => strtoupper($params['currency'] ?? $company->base_currency),
+            'base_currency' => strtoupper($params['currency'] ?? $company->base_currency),
+            'payment_terms' => $params['payment_terms'] ?? 30,
             'status' => 'active',
             'created_by_user_id' => Auth::id(),
         ]);
@@ -61,7 +62,7 @@ class CreateAction implements PaletteAction
                 'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
-                'currency' => $customer->currency,
+                'currency' => $customer->base_currency,
             ],
         ];
     }

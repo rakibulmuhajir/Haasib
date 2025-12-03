@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('acct.credit_notes')) {
+            return;
+        }
+
         Schema::create('acct.credit_notes', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');

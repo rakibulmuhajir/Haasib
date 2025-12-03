@@ -5,7 +5,7 @@ namespace App\Modules\Accounting\Actions\Invoice;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
-use App\Models\Invoice;
+use App\Modules\Accounting\Models\Invoice;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 

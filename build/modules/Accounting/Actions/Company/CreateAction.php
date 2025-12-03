@@ -9,6 +9,7 @@ use App\Facades\CompanyContext;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\Role;
+use App\Services\RolePermissionSynchronizer;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -78,6 +79,12 @@ class CreateAction implements PaletteAction
 
             // Set as active context
             CompanyContext::setContext($company);
+
+            // Seed role-permission matrix for this company (handles wildcard expansion)
+            $matrix = config('role-permissions', []);
+            if (!empty($matrix)) {
+                app(RolePermissionSynchronizer::class)->syncForCompany($company, $matrix);
+            }
 
             return [
                 'message' => "Company created: {$company->name} ({$company->slug})",

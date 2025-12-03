@@ -1,12 +1,14 @@
 import type { ParsedCommand } from '@/types/palette'
 import { GRAMMAR, resolveEntityShortcut, resolveVerbAlias, getVerbDefinition } from './grammar'
+import { expandPresetShortcut } from './shortcuts'
 
 /**
  * Parse a command string into a structured ParsedCommand
  */
 export function parse(input: string): ParsedCommand {
+  const normalizedInput = expandPresetShortcut(input)
   const result: ParsedCommand = {
-    raw: input.trim(),
+    raw: normalizedInput.trim(),
     entity: '',
     verb: '',
     flags: {},
@@ -261,6 +263,81 @@ function inferFromSubject(result: ParsedCommand): void {
   if (!result.subject) return
 
   const words = result.subject.split(/\s+/)
+
+  // Customer create: accept positional name [email] [currency]
+  if (result.entity === 'customer' && result.verb === 'create') {
+    let email: string | undefined
+    let currency: string | undefined
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!email && emailRegex.test(word)) {
+        email = word
+        continue
+      }
+      if (
+        !currency &&
+        word.length === 3 &&
+        /^[A-Za-z]{3}$/.test(word)
+      ) {
+        currency = word.toUpperCase()
+        continue
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.email && email) {
+      result.flags.email = email
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.name) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.name = name
+      }
+    }
+  }
+
+  // Invoice create: positional customer, amount, currency
+  if (result.entity === 'invoice' && result.verb === 'create') {
+    let amount: number | undefined
+    let currency: string | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+
+      if (!currency && /^[A-Za-z]{3}$/.test(word)) {
+        currency = word.toUpperCase()
+        continue
+      }
+
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.customer) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.customer = name
+      }
+    }
+  }
 
   // Company create: "company.create Acme Corp USD"
   if (result.entity === 'company' && result.verb === 'create') {

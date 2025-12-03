@@ -12,6 +12,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('acct.recurring_schedules')) {
+            return;
+        }
         Schema::create('acct.recurring_schedules', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('company_id');

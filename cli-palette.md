@@ -442,6 +442,14 @@ export function usePaletteInput() {
 }
 ```
 
+### 3.4 Progressive Scaffold (scaffold zone)
+
+- Schema-driven skeletons for revenue commands (`invoice`, `payment`, `customer`, `company` verbs) render under the input with required args and optional flags.
+- Active pointer/hint tracks the next required arg; Tab/Shift+Tab moves through required args. If no suggestions, a placeholder hint appears.
+- Flag chips show defaults with source labels (company/customer currency, invoice balance, payment terms) and insert flag stubs on click/tab.
+- Parser infers positional args: `invoice create Acme 1200 USD` → `customer=Acme, amount=1200, currency=USD`; `payment create INV-1001 500` → `invoice=INV-1001, amount=500`; `customer create Acme USD` → `name=Acme, currency=USD`.
+- Field-aware suggestions surface current-field data (customers, invoices, currencies) using palette catalog endpoints; scaffold consumes schema + company context + resolved defaults.
+
 ---
 
 ## 4. Grammar

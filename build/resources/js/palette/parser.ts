@@ -339,6 +339,33 @@ function inferFromSubject(result: ParsedCommand): void {
     }
   }
 
+  // Payment create: positional invoice, amount
+  if (result.entity === 'payment' && result.verb === 'create') {
+    let amount: number | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.invoice) {
+      const invoiceToken = parts.join(' ').trim()
+      if (invoiceToken) {
+        result.flags.invoice = invoiceToken
+      }
+    }
+  }
+
   // Company create: "company.create Acme Corp USD"
   if (result.entity === 'company' && result.verb === 'create') {
     if (!result.flags.name && words.length > 0) {

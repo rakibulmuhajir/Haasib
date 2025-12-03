@@ -49,16 +49,46 @@ const stage = ref<Stage>('entity')
 const frecencyScores = ref<Record<string, number>>(getFrecencyScores())
 const contextRecords = ref<ContextRecord[]>([])
 const contextTitle = ref('')
+const defaults = ref<Record<string, { value: string; source?: string }>>({})
+const defaultsAbort = ref<AbortController | null>(null)
+const cursorIndex = ref(0)
+const defaultsLoading = ref(false)
 const scaffoldState = computed(() => {
   const schema = getSchema(parsed.value.entity, parsed.value.verb)
-  return buildScaffold(parsed.value, schema, {
+  const activeArg = getActiveArgFromCursor(schema)
+  const flagsWithState = schema?.flags?.map(flag => ({
+    ...flag,
+    loading: defaultsLoading.value && !defaults.value[flag.name]?.value,
+  })) || []
+  return buildScaffold(parsed.value, schema ? { ...schema, flags: flagsWithState } : null, {
     companyName: activeCompany.value?.name,
     companyCurrency: activeCompany.value?.base_currency ?? activeCompany.value?.currency,
-  })
+    defaults: defaults.value,
+  }, activeArg)
+})
+
+const validationHint = computed(() => {
+  const missing = resolvedMissingArgs.value
+  if (!missing.length) return ''
+  if (missing.length === 1) {
+    const arg = missing[0]
+    return `Need ${arg.name}${arg.hint ? ` (${arg.hint})` : ''}`
+  }
+  return `Need: ${missing.map(arg => arg.name).join(', ')}`
 })
 
 // Parsed command (reactive)
 const parsed = computed(() => parse(input.value))
+
+const resolvedFlags = computed(() => mergeFlagsWithDefaults(parsed.value.flags))
+const resolvedMissingArgs = computed(() => getMissingRequiredArgs(getSchema(parsed.value.entity, parsed.value.verb), resolvedFlags.value))
+const resolvedComplete = computed(() =>
+  parsed.value.errors.length === 0 &&
+  !!parsed.value.entity &&
+  !!parsed.value.verb &&
+  getSchema(parsed.value.entity, parsed.value.verb) !== null &&
+  resolvedMissingArgs.value.length === 0
+)
 
 // Inline placeholder hint (ghosted text showing example)
 const placeholderHint = computed(() => {
@@ -96,7 +126,7 @@ const fetchAbort = ref<AbortController | null>(null)
 
 const tabActionLabel = computed(() => {
   if (showSuggestions.value) return 'select'
-  if (parsed.value.complete) return 'run'
+  if (resolvedComplete.value) return 'run'
   return 'select'
 })
 
@@ -132,6 +162,7 @@ watch(() => output.value.length, () => {
 
 watch(parsed, (val) => {
   handleContextRecords(val)
+  resolveDefaults(val)
 })
 
 // Update suggestions on input
@@ -225,15 +256,27 @@ async function refreshSuggestions(val: string) {
   }
 
   const suggestionStage: Stage = stage.value === 'verb' && inferredEntity ? 'verb' : 'entity'
-  const baseSuggestions = generateSuggestions(trimmed, {
-    stage: suggestionStage,
-    entity: inferredEntity,
-    frecencyScores: frecencyScores.value,
-  })
+  const baseSuggestions = await generateFieldSuggestions(trimmed, parsedCmd, suggestionStage, inferredEntity)
 
   suggestions.value = baseSuggestions
   showSuggestions.value = baseSuggestions.length > 0
   suggestionIndex.value = 0
+
+  // If no suggestions and scaffold has a current arg, show a placeholder hint
+  if (!showSuggestions.value) {
+    const scaffold = scaffoldState.value
+    if (scaffold?.currentArg) {
+      suggestions.value = [{
+        type: 'command',
+        value: val,
+        label: `<${scaffold.currentArg}>`,
+        description: scaffold.pointerLabel,
+        icon: '⌨️',
+      }]
+      showSuggestions.value = true
+      suggestionIndex.value = 0
+    }
+  }
 
   if (!parsedCmd.entity || !parsedCmd.verb) return
   if (tokens.length <= 2) return
@@ -384,6 +427,189 @@ function applyFlagChip(flag: { name: string; value?: string }) {
   focusInput()
 }
 
+function handleCursor() {
+  const el = inputEl.value
+  if (el) {
+    cursorIndex.value = el.selectionStart || 0
+  }
+}
+
+function getActiveArgFromCursor(schema: any): string | undefined {
+  if (!schema || !input.value) return undefined
+  // Remove prompt parts
+  const beforeCursor = input.value.slice(0, cursorIndex.value)
+  const tokens = beforeCursor.trimEnd().split(/\s+/).filter(Boolean)
+  // tokens[0] = entity, tokens[1] = verb, args follow
+  const argIndex = Math.max(0, tokens.length - 2)
+  const args = schema.args || []
+  return args[argIndex]?.name
+}
+
+async function generateFieldSuggestions(
+  trimmed: string,
+  parsedCmd: ParsedCommand,
+  stage: 'entity' | 'verb',
+  inferredEntity: string
+): Promise<Suggestion[]> {
+  // Default grammar-based suggestions
+  const base = generateSuggestions(trimmed, {
+    stage,
+    entity: inferredEntity,
+    frecencyScores: frecencyScores.value,
+  })
+
+  const schema = getSchema(parsedCmd.entity, parsedCmd.verb)
+  const currentArg = scaffoldState.value?.currentArg
+
+  if (!schema || !currentArg) return base
+
+  // Field-aware suggestions
+  if (parsedCmd.entity === 'invoice' && parsedCmd.verb === 'create') {
+    if (currentArg === 'customer') {
+      const q = trimmed.split(/\s+/).pop() || ''
+      const customers = await fetchCatalog(`/api/palette/customers?q=${encodeURIComponent(q)}`)
+      const mapped = customers.slice(0, 5).map((c: any) => ({
+        type: 'entity' as const,
+        value: `${schema.entity} ${schema.verb} ${c.name} `,
+        label: c.name,
+        description: c.meta?.outstanding,
+        icon: '👤',
+      }))
+      return mapped.length ? mapped : base
+    }
+    if (currentArg === 'currency') {
+      const currency = activeCompany.value?.base_currency
+      if (currency) {
+        return [{
+          type: 'flag',
+          value: `${trimmed} ${currency}`.trim(),
+          label: currency,
+          description: 'Company base currency',
+          icon: '💱',
+        }]
+      }
+    }
+  }
+
+  if (parsedCmd.entity === 'payment' && parsedCmd.verb === 'create') {
+    if (currentArg === 'invoice') {
+      const q = trimmed.split(/\s+/).pop() || ''
+      const invoices = await fetchCatalog('/api/palette/invoices/recent')
+      const filtered = invoices.filter((i: any) =>
+        i.number?.toLowerCase().includes(q.toLowerCase()) ||
+        i.meta?.customer?.toLowerCase().includes(q.toLowerCase())
+      )
+      const mapped = filtered.slice(0, 5).map((i: any) => ({
+        type: 'entity' as const,
+        value: `${schema.entity} ${schema.verb} ${i.number} `,
+        label: i.number,
+        description: `${i.meta?.customer || ''} ${i.meta?.amount ? `· ${i.meta.amount}` : ''}`,
+        icon: '📄',
+      }))
+      return mapped.length ? mapped : base
+    }
+  }
+
+  if (parsedCmd.entity === 'customer' && parsedCmd.verb === 'create') {
+    if (currentArg === 'currency') {
+      const currency = activeCompany.value?.base_currency
+      if (currency) {
+        return [{
+          type: 'flag',
+          value: `${trimmed} ${currency}`.trim(),
+          label: currency,
+          description: 'Company base currency',
+          icon: '💱',
+        }]
+      }
+    }
+  }
+
+  return base
+}
+
+async function fetchCatalog(url: string, signal?: AbortSignal): Promise<any[]> {
+  try {
+    const res = await fetch(url, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+      signal,
+    })
+    if (!res.ok) return []
+    return await res.json()
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return []
+    console.error('Catalog fetch failed', e)
+    return []
+  }
+}
+
+async function resolveDefaults(parsedCmd: ParsedCommand) {
+  const schema = getSchema(parsedCmd.entity, parsedCmd.verb)
+  if (!schema) {
+    defaultsAbort.value?.abort()
+    defaultsAbort.value = null
+    defaults.value = {}
+    defaultsLoading.value = false
+    return
+  }
+
+  defaultsAbort.value?.abort()
+  const controller = new AbortController()
+  defaultsAbort.value = controller
+
+  defaultsLoading.value = true
+  const nextDefaults: Record<string, { value: string; source?: string }> = {}
+
+  // Invoice create: customer currency/payment_terms
+  if (parsedCmd.entity === 'invoice' && parsedCmd.verb === 'create') {
+    const customerName = parsedCmd.flags?.customer as string
+    if (customerName) {
+      const customers = await fetchCatalog(`/api/palette/customers?q=${encodeURIComponent(customerName)}`, controller.signal)
+      if (controller.signal.aborted) return
+      const match = customers.find((c: any) =>
+        c.name?.toLowerCase() === customerName.toLowerCase() ||
+        c.id === customerName
+      )
+      if (match?.meta?.currency) {
+        nextDefaults.currency = { value: match.meta.currency, source: 'customer' }
+      } else if (activeCompany.value?.base_currency) {
+        nextDefaults.currency = { value: activeCompany.value.base_currency, source: 'company' }
+      }
+      if (match?.meta?.payment_terms) {
+        nextDefaults.due = { value: `+${match.meta.payment_terms}d`, source: 'customer' }
+      }
+    } else if (activeCompany.value?.base_currency) {
+      nextDefaults.currency = { value: activeCompany.value.base_currency, source: 'company' }
+    }
+  }
+
+  // Payment create: invoice balance/currency
+  if (parsedCmd.entity === 'payment' && parsedCmd.verb === 'create') {
+    const invoiceToken = parsedCmd.flags?.invoice as string
+    if (invoiceToken) {
+      const invoices = await fetchCatalog('/api/palette/invoices/recent', controller.signal)
+      if (controller.signal.aborted) return
+      const match = invoices.find((i: any) =>
+        i.number?.toLowerCase() === invoiceToken.toLowerCase() ||
+        i.id === invoiceToken
+      )
+      if (match?.meta?.amount) {
+        nextDefaults.amount = { value: match.meta.amount.replace(/[^\d.]/g, ''), source: 'invoice.balance' }
+      }
+      if (match?.meta?.amount_currency) {
+        nextDefaults.currency = { value: match.meta.amount_currency, source: 'invoice' }
+      }
+    }
+  }
+
+  if (defaultsAbort.value === controller) {
+    defaults.value = nextDefaults
+    defaultsLoading.value = false
+    defaultsAbort.value = null
+  }
+}
+
 // Destructive actions requiring confirmation
 const DESTRUCTIVE_ACTIONS = [
   'company.delete',
@@ -462,6 +688,19 @@ async function execute() {
     return
   }
 
+  const flagsWithDefaults = mergeFlagsWithDefaults(parsed.flags)
+  const schema = getSchema(parsed.entity, parsed.verb)
+  const missingArgs = getMissingRequiredArgs(schema, flagsWithDefaults)
+  const parsedWithDefaults: ParsedCommand = { ...parsed, flags: flagsWithDefaults, complete: missingArgs.length === 0 }
+
+  if (missingArgs.length > 0) {
+    addOutput('input', `❯ ${cmd}`)
+    addOutput('error', `{error}✗{/} Need ${missingArgs.map(a => a.name).join(', ')}`)
+    input.value = ''
+    focusInput()
+    return
+  }
+
   // Check if destructive
   const actionKey = `${parsed.entity}.${parsed.verb}`
   if (DESTRUCTIVE_ACTIONS.includes(actionKey)) {
@@ -473,7 +712,7 @@ async function execute() {
 
     awaitingConfirmation.value = {
       original: cmd,
-      parsed: parsed,
+      parsed: parsedWithDefaults,
       message: `Confirm deletion`,
     }
     addToHistory(cmd)
@@ -483,7 +722,7 @@ async function execute() {
   }
 
   // Normal execution
-  await executeCommand(parsed)
+  await executeCommand(parsedWithDefaults)
   input.value = ''
   focusInput()
 }
@@ -492,6 +731,7 @@ async function executeCommand(parsed: ParsedCommand) {
   const cmd = parsed.raw
   const resolvedCompanySlug = getRequestCompanySlug(parsed)
   const requiresCompany = needsCompanyContext(parsed)
+  const params = mergeFlagsWithDefaults(parsed.flags)
 
   // Clear quick actions when new command executes
   tableState.value = null
@@ -547,7 +787,7 @@ async function executeCommand(parsed: ParsedCommand) {
       credentials: 'same-origin',
       cache: 'no-store', // Prevent browser caching
       headers,
-      body: JSON.stringify({ params: parsed.flags }),
+      body: JSON.stringify({ params }),
     })
 
     const data = await res.json()
@@ -634,11 +874,11 @@ function handleKeydown(e: KeyboardEvent) {
 
   // Enter - execute or accept suggestion
   if (e.key === 'Enter') {
-    if (showSuggestions.value && suggestions.value.length > 0) {
-      e.preventDefault()
-      acceptSuggestion()
-    } else {
-      execute()
+  if (showSuggestions.value && suggestions.value.length > 0) {
+    e.preventDefault()
+    acceptSuggestion()
+  } else {
+    execute()
     }
     return
   }
@@ -658,6 +898,7 @@ function handleKeydown(e: KeyboardEvent) {
   // Tab - accept suggestion or execute complete command; keep focus inside palette
   if (e.key === 'Tab') {
     e.preventDefault()
+    const backwards = e.shiftKey
     if (showSuggestions.value && suggestions.value.length > 0) {
       const wasEntityStage = stage.value === 'entity'
       acceptSuggestion(wasEntityStage)
@@ -666,11 +907,36 @@ function handleKeydown(e: KeyboardEvent) {
         if (wasEntityStage) {
           stage.value = 'verb'
           refreshSuggestions(input.value)
-        } else if (stage.value === 'verb' && newParsed.complete) {
+        } else if (stage.value === 'verb' && isCompleteWithDefaults(newParsed)) {
           execute()
         }
       })
-    } else if (parsed.value.complete) {
+      return
+    }
+
+    // No suggestions: move through required args in order
+    const scaffold = scaffoldState.value
+    if (scaffold) {
+      const schema = getSchema(parsed.value.entity, parsed.value.verb)
+      const argOrder = schema?.args.filter(a => a.required).map(a => a.name) || []
+      const current = scaffold.currentArg
+      let target = current
+      if (argOrder.length) {
+        const idx = argOrder.indexOf(current || '')
+        if (backwards) {
+          target = argOrder[Math.max(0, idx <= 0 ? argOrder.length - 1 : idx - 1)]
+        } else {
+          target = argOrder[Math.min(argOrder.length - 1, idx < 0 ? 0 : idx + 1)]
+        }
+      }
+      if (target) {
+        moveCursorToArg(target)
+        refreshSuggestions(input.value)
+      }
+      return
+    }
+
+    if (resolvedComplete.value) {
       execute()
     }
     return
@@ -744,6 +1010,14 @@ function acceptSuggestion(advanceStage = false) {
   showSuggestions.value = false
   stage.value = advanceStage ? 'verb' : determineStage(input.value)
   nextTick(() => inputEl.value?.focus())
+}
+
+function moveCursorToArg(arg: string) {
+  // Simple strategy: append placeholder if missing
+  if (!input.value.includes(` ${arg}`) && !input.value.includes(`--${arg}`)) {
+    input.value = `${input.value.trim()} ${arg} `.trim()
+  }
+  focusInput()
 }
 
 function selectSuggestion(index: number) {
@@ -884,6 +1158,36 @@ function confirmSubPrompt() {
   execute()
 }
 
+function mergeFlagsWithDefaults(flags: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  Object.entries(defaults.value).forEach(([key, meta]) => {
+    if (meta?.value !== undefined && meta?.value !== null) {
+      merged[key] = meta.value
+    }
+  })
+  return { ...merged, ...flags }
+}
+
+function hasValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  return true
+}
+
+function getMissingRequiredArgs(schema: any, flags: Record<string, unknown>): Array<{ name: string; hint?: string }> {
+  if (!schema) return []
+  const missingArgs = schema.args.filter((arg: any) => arg.required && !hasValue(flags[arg.name]))
+  const missingFlags = (schema.flags || []).filter((flag: any) => flag.required && !hasValue(flags[flag.name]))
+  return [...missingArgs, ...missingFlags]
+}
+
+function isCompleteWithDefaults(parsedCmd: ParsedCommand): boolean {
+  if (!parsedCmd.entity || !parsedCmd.verb || parsedCmd.errors.length > 0) return false
+  const schema = getSchema(parsedCmd.entity, parsedCmd.verb)
+  const flags = mergeFlagsWithDefaults(parsedCmd.flags)
+  return getMissingRequiredArgs(schema, flags).length === 0
+}
+
 // Click outside to close suggestions
 function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
@@ -1004,13 +1308,21 @@ function focusInput() {
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
+              @click="handleCursor"
+              @keyup="handleCursor"
+              @keydown="handleCursor"
             />
             <span
-              v-if="placeholderHint"
+              v-if="scaffoldState?.ghosts?.length"
               class="palette-placeholder-hint"
               :style="{ '--typed-text-width': typedTextWidth }"
             >
-              {{ placeholderHint }}
+              <template v-for="ghost in scaffoldState.ghosts" :key="ghost.label">
+                <span :class="ghost.completed ? 'ghost-complete' : 'ghost-pending'">
+                  {{ ghost.completed ? ghost.label : `<${ghost.label}>` }}
+                </span>
+                <span class="ghost-sep"> </span>
+              </template>
             </span>
           </div>
           <div v-if="executing" class="palette-loading">
@@ -1027,6 +1339,7 @@ function focusInput() {
           <div class="skeleton-pointer">
             <span class="skeleton-arrow">↑</span>
             <span class="skeleton-hint">{{ scaffoldState.pointerLabel }}</span>
+            <span v-if="cursorIndex" class="skeleton-cursor">cursor: {{ cursorIndex }}</span>
           </div>
           <div class="skeleton-flags">
             <button
@@ -1037,13 +1350,15 @@ function focusInput() {
             >
               --{{ flag.name }}
               <span v-if="flag.value" class="flag-value">={{ flag.value }}</span>
-              <span v-if="flag.source" class="flag-source">*</span>
+              <span v-if="flag.source" class="flag-source" :title="flag.source">*</span>
+              <span v-if="defaultsLoading && !flag.value" class="flag-loading">…</span>
             </button>
           </div>
           <div class="skeleton-status">
             <span v-if="scaffoldState.requiredRemaining.length">Required: {{ scaffoldState.requiredRemaining.join(', ') }}</span>
             <span v-else>Ready</span>
             <span class="status-optional">Optional: flags</span>
+            <span v-if="validationHint" class="status-hint">{{ validationHint }}</span>
           </div>
         </div>
 
@@ -1441,11 +1756,23 @@ function focusInput() {
   transform: translateY(-50%);
   pointer-events: none;
   color: #475569;
-  opacity: 0.4;
+  opacity: 0.5;
   white-space: nowrap;
   font: inherit;
   z-index: 1;
   padding-left: var(--typed-text-width, 0);
+}
+
+.ghost-complete {
+  color: #64748b;
+}
+
+.ghost-pending {
+  color: #94a3b8;
+}
+
+.ghost-sep {
+  opacity: 0;
 }
 
 /* Helper */
@@ -1613,6 +1940,11 @@ function focusInput() {
   color: #fbbf24;
 }
 
+.flag-loading {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
 .skeleton-status {
   display: flex;
   gap: 12px;
@@ -1622,6 +1954,11 @@ function focusInput() {
 
 .status-optional {
   color: #64748b;
+}
+
+.status-hint {
+  color: #f59e0b;
+  margin-left: auto;
 }
 
 .palette-context {

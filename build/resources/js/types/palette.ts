@@ -93,11 +93,13 @@ export interface FlagDefinition {
   /** Short form (used with -n) */
   shorthand?: string
   /** Value type */
-  type: 'boolean' | 'string' | 'number'
+  type: 'boolean' | 'string' | 'number' | 'date' | 'currency' | 'enum' | 'reference'
   /** Whether flag must be provided */
   required: boolean
   /** Default value if not provided */
   default?: unknown
+  /** Allowed values (for enums) */
+  values?: string[]
 }
 
 // ============================================================================

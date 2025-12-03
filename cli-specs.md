@@ -137,6 +137,14 @@ Legend:
 [⛶] = Fullscreen mode
 ```
 
+### 2.3 Progressive Scaffold (current)
+
+- Schema-driven scaffolds for revenue commands (`invoice`, `payment`, `customer`, `company`) render skeleton + pointer + status below the input.
+- Flag chips show defaults with source labels (company/customer currency, invoice balance, payment terms) and insert flag stubs; status line tracks remaining required args.
+- Parser infers positional args for invoice/payment (customer/invoice, amount, currency) to reduce flag typing.
+- Field-aware suggestions target the active arg (customers, invoices, currencies) via palette catalogs; placeholder hints appear when no dropdown results.
+- Extendable: add schemas in `palette/schemas.ts`; scaffold auto-renders for new commands as schemas are registered.
+
 ### 2.3 State Persistence
 
 | State | Storage | Lifetime |

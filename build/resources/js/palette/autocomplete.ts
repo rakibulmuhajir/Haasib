@@ -152,43 +152,8 @@ function getEntityCompletions(): Array<Suggestion & { commandKey?: string }> {
       label: entityName,
       description: '',
       icon: ENTITY_ICONS[entityName] || '📦',
-      commandKey: `${entityName}.list`,
     })
   }
-
-  // Preset shortcuts as explicit items
-  const presets = getPresetShortcuts()
-  for (const [shortcut, cmd] of Object.entries(presets)) {
-    const commandKey = `${cmd.entity}.${cmd.verb}`
-    const description = COMMAND_DESCRIPTIONS[commandKey] || `${cmd.verb} ${cmd.entity}`
-    completions.push({
-      type: 'command',
-      value: `${cmd.entity} ${cmd.verb} `,
-      label: `${cmd.entity} ${cmd.verb}`,
-      description: `Shortcut: ${shortcut} — ${description}`,
-      icon: ENTITY_ICONS[cmd.entity] || '⌨️',
-      commandKey,
-    })
-  }
-
-  // Built-in commands
-  completions.push({
-    type: 'command',
-    value: 'help',
-    label: 'help',
-    description: COMMAND_DESCRIPTIONS['help'] || 'Show help',
-    icon: '❓',
-    commandKey: 'help',
-  })
-
-  completions.push({
-    type: 'command',
-    value: 'clear',
-    label: 'clear',
-    description: COMMAND_DESCRIPTIONS['clear'] || 'Clear output',
-    icon: '🗑️',
-    commandKey: 'clear',
-  })
 
   return completions
 }

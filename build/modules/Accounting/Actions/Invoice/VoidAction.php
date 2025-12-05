@@ -31,8 +31,8 @@ class VoidAction implements PaletteAction
         $invoice = $this->resolveInvoice($params['id'], $company->id);
 
         // Validate current status
-        if ($invoice->status === 'cancelled') {
-            throw new \Exception("Invoice is already cancelled");
+        if (in_array($invoice->status, ['cancelled', 'void'])) {
+            throw new \Exception("Invoice is already void/cancelled");
         }
 
         if ($invoice->status === 'paid') {
@@ -40,7 +40,7 @@ class VoidAction implements PaletteAction
         }
 
         // Check for payments
-        $amountPaid = $invoice->total_amount - $invoice->balance_due;
+        $amountPaid = $invoice->total_amount - $invoice->balance;
         if ($amountPaid > 0) {
             throw new \Exception(
                 "Invoice has payments totaling " .
@@ -51,10 +51,9 @@ class VoidAction implements PaletteAction
 
         // Update invoice status
         $invoice->update([
-            'status' => 'cancelled',
-            'balance_due' => 0,
-            'payment_status' => 'cancelled',
-            'cancelled_at' => now(),
+            'status' => 'void',
+            'balance' => 0,
+            'voided_at' => now(),
             'notes' => ($invoice->notes ?? '') .
                 ($params['reason'] ? "\n\nVoid reason: {$params['reason']}" : ''),
         ]);

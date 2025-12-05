@@ -117,6 +117,8 @@ export interface OutputLine {
   headers?: string[]
   /** Table footer (if type is 'table') */
   footer?: string
+  /** Row identifiers (if type is 'table') - for quick actions */
+  rowIds?: string[]
 }
 
 export interface TableData {
@@ -177,4 +179,6 @@ export interface TableState {
   entity: string
   /** Which verb produced this table */
   verb: string
+  /** Row identifiers (UUIDs) for quick actions - matches rows array by index */
+  rowIds?: string[]
 }

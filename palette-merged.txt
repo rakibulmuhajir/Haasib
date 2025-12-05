@@ -1,181 +1,3 @@
-===== build/resources/js/palette/autocomplete.ts =====
-import { GRAMMAR, ENTITY_ICONS, COMMAND_DESCRIPTIONS } from './grammar'
-import type { Suggestion } from '@/types/palette'
-
-/**
- * Generate command suggestions based on partial input
- */
-export function generateSuggestions(input: string, maxResults = 8): Suggestion[] {
-  if (!input.trim()) return getQuickStartSuggestions()
-
-  const inputLower = input.toLowerCase()
-  const suggestions: Suggestion[] = []
-
-  // Generate all possible completions
-  const completions = getAllCompletions()
-
-  for (const completion of completions) {
-    const score = scoreSuggestion(inputLower, completion.value.toLowerCase())
-    if (score > 0) {
-      suggestions.push({ ...completion, score })
-    }
-  }
-
-  // Sort by score (higher = better match), then by length (shorter = simpler)
-  return suggestions
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score! - a.score!
-      return a.value.length - b.value.length
-    })
-    .slice(0, maxResults)
-}
-
-/**
- * Quick start suggestions when input is empty
- */
-function getQuickStartSuggestions(): Suggestion[] {
-  return [
-    {
-      type: 'command',
-      value: 'company list',
-      label: 'company list',
-      description: 'View all companies',
-      icon: ENTITY_ICONS.company,
-    },
-    {
-      type: 'command',
-      value: 'user invite ',
-      label: 'user invite',
-      description: 'Invite a new user',
-      icon: ENTITY_ICONS.user,
-    },
-    {
-      type: 'command',
-      value: 'user list',
-      label: 'user list',
-      description: 'View all users',
-      icon: ENTITY_ICONS.user,
-    },
-    {
-      type: 'command',
-      value: 'help',
-      label: 'help',
-      description: 'Show all commands',
-      icon: '❓',
-    },
-  ]
-}
-
-/**
- * Score how well input matches a completion
- * Higher score = better match
- */
-function scoreSuggestion(input: string, completion: string): number {
-  // Exact prefix match - highest score
-  if (completion.startsWith(input)) {
-    return 100 + (input.length / completion.length) * 50
-  }
-
-  // Match after the dot (e.g., "list" matches "company.list")
-  const dotIndex = completion.indexOf('.')
-  if (dotIndex > 0) {
-    const afterDot = completion.substring(dotIndex + 1)
-    if (afterDot.startsWith(input)) {
-      return 80 + (input.length / afterDot.length) * 30
-    }
-  }
-
-  // Fuzzy match - each character in order
-  let inputIdx = 0
-  let score = 0
-  for (let i = 0; i < completion.length && inputIdx < input.length; i++) {
-    if (completion[i] === input[inputIdx]) {
-      // Bonus for consecutive matches
-      score += (i === 0 || completion[i - 1] === '.' || completion[i - 1] === ' ') ? 10 : 5
-      inputIdx++
-    }
-  }
-
-  // Only return score if all input chars were found
-  return inputIdx === input.length ? score : 0
-}
-
-/**
- * Get all possible command completions from grammar
- */
-function getAllCompletions(): Suggestion[] {
-  const completions: Suggestion[] = []
-
-  for (const [entityName, entity] of Object.entries(GRAMMAR)) {
-    // Entity alone
-    completions.push({
-      type: 'entity',
-      value: `${entityName} `,
-      label: entityName,
-      description: `${entity.verbs.length} commands available`,
-      icon: ENTITY_ICONS[entityName] || '📦',
-    })
-
-    // Entity verb combinations (canonical only)
-    for (const verb of entity.verbs) {
-      const commandKey = `${entityName}.${verb.name}`
-      const description = COMMAND_DESCRIPTIONS[commandKey] || `${verb.name} ${entityName}`
-
-      // Only suggest canonical verb name, not aliases
-      completions.push({
-        type: 'command',
-        value: `${entityName} ${verb.name} `,
-        label: `${entityName} ${verb.name}`,
-        description,
-        icon: ENTITY_ICONS[entityName] || '📦',
-      })
-    }
-  }
-
-  // Built-in commands
-  completions.push({
-    type: 'command',
-    value: 'help',
-    label: 'help',
-    description: COMMAND_DESCRIPTIONS['help'] || 'Show help',
-    icon: '❓',
-  })
-
-  completions.push({
-    type: 'command',
-    value: 'clear',
-    label: 'clear',
-    description: COMMAND_DESCRIPTIONS['clear'] || 'Clear output',
-    icon: '🗑️',
-  })
-
-  return completions
-}
-
-/**
- * Get suggestions for flag values (for future use with entity catalogs)
- */
-export function getFlagSuggestions(
-  entity: string,
-  verb: string,
-  flag: string,
-  partial: string,
-  catalog: Record<string, string[]> = {}
-): string[] {
-  // For now, just return from catalog if available
-  const key = `${entity}.${flag}`
-  const values = catalog[key] || []
-
-  if (!partial) return values.slice(0, 5)
-
-  const partialLower = partial.toLowerCase()
-  return values
-    .filter(v => v.toLowerCase().includes(partialLower))
-    .slice(0, 5)
-}
-
-
-===== build/resources/js/palette/formatter.ts =====
 /**
  * Format text with semantic color tags
  * Supports: {success}, {error}, {warning}, {accent}, {primary}, {secondary}, {link:url}
@@ -274,326 +96,279 @@ export function formatDate(date: string | Date): string {
   }).format(d)
 }
 
-
-===== build/resources/js/palette/grammar.ts =====
-import type { EntityDefinition } from '@/types/palette'
-
 /**
- * Entity icons
+ * Format data as an ASCII table
  */
-export const ENTITY_ICONS: Record<string, string> = {
-  company: '🏢',
-  user: '👤',
-  role: '🔑',
+export function formatTable(
+  rows: string[][],
+  headers?: string[],
+  footer?: string
+): string {
+  if (rows.length === 0 && !headers) {
+    return '(no results)'
+  }
+
+  // Calculate column widths
+  const allRows = headers ? [headers, ...rows] : rows
+  const colCount = Math.max(...allRows.map(r => r.length))
+  const colWidths: number[] = []
+
+  for (let col = 0; col < colCount; col++) {
+    let maxWidth = 0
+    for (const row of allRows) {
+      const cell = stripAnsi(row[col] || '')
+      maxWidth = Math.max(maxWidth, cell.length)
+    }
+    // Cap column width at 40 chars
+    colWidths.push(Math.min(maxWidth, 40))
+  }
+
+  const lines: string[] = []
+
+  // Top border
+  lines.push(formatBorder(colWidths, '┌', '┬', '┐'))
+
+  // Header
+  if (headers) {
+    lines.push(formatRow(headers, colWidths))
+    lines.push(formatBorder(colWidths, '├', '┼', '┤'))
+  }
+
+  // Rows
+  for (let i = 0; i < rows.length; i++) {
+    lines.push(formatRow(rows[i], colWidths))
+  }
+
+  // Bottom border
+  lines.push(formatBorder(colWidths, '└', '┴', '┘'))
+
+  // Footer
+  if (footer) {
+    lines.push('')
+    lines.push(footer)
+  }
+
+  return lines.join('\n')
 }
 
 /**
- * Command descriptions
+ * Format a single row
  */
-export const COMMAND_DESCRIPTIONS: Record<string, string> = {
-  'company.create': 'Create a new company',
-  'company.list': 'Show all companies you have access to',
-  'company.view': 'View company details',
-  'company.switch': 'Switch to a different company',
-  'company.delete': 'Delete a company (cannot be undone)',
+function formatRow(cells: string[], widths: number[]): string {
+  const parts: string[] = []
 
-  'user.invite': 'Invite a new user to the company',
-  'user.list': 'Show all users in the company',
-  'user.view': 'View user details',
-  'user.assign-role': 'Assign a role to a user',
-  'user.remove-role': 'Remove a role from a user',
-  'user.deactivate': 'Deactivate a user account',
-  'user.activate': 'Activate a deactivated user',
-  'user.delete': 'Delete a user (cannot be undone)',
+  for (let i = 0; i < widths.length; i++) {
+    const cell = cells[i] || ''
+    const stripped = stripAnsi(cell)
+    const padded = stripped.padEnd(widths[i])
+    // Truncate if too long
+    const final = padded.length > widths[i] 
+      ? padded.substring(0, widths[i] - 1) + '…'
+      : padded
+    parts.push(final)
+  }
 
-  'role.list': 'Show all available roles',
-  'role.view': 'View role details and permissions',
-  'role.assign': 'Assign a permission to a role',
-  'role.revoke': 'Revoke a permission from a role',
-
-  'help': 'Show available commands',
-  'clear': 'Clear output history',
+  return '│ ' + parts.join(' │ ') + ' │'
 }
 
 /**
- * Command grammar definitions
+ * Format a border line
+ */
+function formatBorder(widths: number[], left: string, mid: string, right: string): string {
+  const segments = widths.map(w => '─'.repeat(w + 2))
+  return left + segments.join(mid) + right
+}
+
+/**
+ * Strip ANSI codes and our custom tags from text
+ */
+function stripAnsi(text: string): string {
+  // Remove ANSI escape codes
+  let result = text.replace(/\x1b\[[0-9;]*m/g, '')
+  // Remove our {tag}...{/} format
+  result = result.replace(/\{[^}]+\}/g, '')
+  return result
+}
+
+/**
+ * Simple table format (no borders) for compact output
+ */
+export function formatSimpleTable(
+  rows: string[][],
+  headers?: string[]
+): string {
+  if (rows.length === 0) return '(no results)'
+
+  const allRows = headers ? [headers, ...rows] : rows
+  const colCount = Math.max(...allRows.map(r => r.length))
+  const colWidths: number[] = []
+
+  for (let col = 0; col < colCount; col++) {
+    let maxWidth = 0
+    for (const row of allRows) {
+      const cell = stripAnsi(row[col] || '')
+      maxWidth = Math.max(maxWidth, cell.length)
+    }
+    colWidths.push(Math.min(maxWidth, 40))
+  }
+
+  const lines: string[] = []
+
+  if (headers) {
+    lines.push(formatSimpleRow(headers, colWidths))
+    lines.push(colWidths.map(w => '─'.repeat(w)).join('  '))
+  }
+
+  for (const row of rows) {
+    lines.push(formatSimpleRow(row, colWidths))
+  }
+
+  return lines.join('\n')
+}
+
+function formatSimpleRow(cells: string[], widths: number[]): string {
+  return cells
+    .map((cell, i) => {
+      const stripped = stripAnsi(cell || '')
+      return stripped.padEnd(widths[i] || 0)
+    })
+    .join('  ')
+}
+
+/**
+ * Format key-value pairs (for single record display)
+ */
+export function formatKeyValue(data: Record<string, unknown>): string {
+  const maxKeyLen = Math.max(...Object.keys(data).map(k => k.length))
+
+  return Object.entries(data)
+    .map(([key, value]) => {
+      const paddedKey = key.padEnd(maxKeyLen)
+      const displayValue = formatValue(value)
+      return `${paddedKey}  ${displayValue}`
+    })
+    .join('\n')
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return value.toLocaleString()
+  if (value instanceof Date) return value.toLocaleDateString()
+  if (Array.isArray(value)) return value.join(', ')
+  return String(value)
+}
+
+/**
+ * Preset shortcuts (non-configurable)
  *
- * Each entity defines:
- * - name: canonical name
- * - shortcuts: short aliases (e.g., "co" for "company")
- * - defaultVerb: verb used when only entity is specified
- * - verbs: available operations with their flags
+ * Examples:
+ *  ic -> invoice create
+ *  il -> invoice list
  */
-export const GRAMMAR: Record<string, EntityDefinition> = {
-  company: {
-    name: 'company',
-    shortcuts: ['co', 'comp'],
-    defaultVerb: 'list',
-    verbs: [
-      {
-        name: 'create',
-        aliases: ['new', 'add'],
-        requiresSubject: true,
-        flags: [
-          { name: 'name', type: 'string', required: true },
-          { name: 'currency', type: 'string', required: true },
-          { name: 'industry', type: 'string', required: false },
-          { name: 'country', type: 'string', required: false },
-        ],
-      },
-      {
-        name: 'list',
-        aliases: [],
-        requiresSubject: false,
-        flags: [],
-      },
-      {
-        name: 'view',
-        aliases: ['get', 'info'],
-        requiresSubject: true,
-        flags: [
-          { name: 'slug', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'switch',
-        aliases: [],
-        requiresSubject: true,
-        flags: [
-          { name: 'slug', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'delete',
-        aliases: [],
-        requiresSubject: true,
-        flags: [
-          { name: 'slug', type: 'string', required: true },
-        ],
-      },
-    ],
-  },
-
-  user: {
-    name: 'user',
-    shortcuts: ['u', 'usr'],
-    defaultVerb: 'list',
-    verbs: [
-      {
-        name: 'invite',
-        aliases: [],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-          { name: 'role', type: 'string', required: false, default: 'member' },
-          { name: 'name', type: 'string', required: false },
-        ],
-      },
-      {
-        name: 'list',
-        aliases: [],
-        requiresSubject: false,
-        flags: [],
-      },
-      {
-        name: 'view',
-        aliases: ['get', 'info'],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'assign-role',
-        aliases: ['assign', 'grant'],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-          { name: 'role', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'remove-role',
-        aliases: ['revoke', 'unassign'],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-          { name: 'role', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'deactivate',
-        aliases: ['disable', 'suspend'],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'activate',
-        aliases: ['enable', 'restore'],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'delete',
-        aliases: [],
-        requiresSubject: true,
-        flags: [
-          { name: 'email', type: 'string', required: true },
-        ],
-      },
-    ],
-  },
-
-  role: {
-    name: 'role',
-    shortcuts: ['r'],
-    defaultVerb: 'list',
-    verbs: [
-      {
-        name: 'list',
-        aliases: [],
-        requiresSubject: false,
-        flags: [],
-      },
-      {
-        name: 'view',
-        aliases: ['get', 'info'],
-        requiresSubject: true,
-        flags: [
-          { name: 'name', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'assign',
-        aliases: ['grant', 'give'],
-        requiresSubject: true,
-        flags: [
-          { name: 'permission', type: 'string', required: true },
-          { name: 'role', type: 'string', required: true },
-        ],
-      },
-      {
-        name: 'revoke',
-        aliases: ['remove', 'take'],
-        requiresSubject: true,
-        flags: [
-          { name: 'permission', type: 'string', required: true },
-          { name: 'role', type: 'string', required: true },
-        ],
-      },
-    ],
-  },
+const PRESET_SHORTCUTS: Record<string, { entity: string; verb: string }> = {
+  ic: { entity: 'invoice', verb: 'create' },
+  il: { entity: 'invoice', verb: 'list' },
+  pc: { entity: 'payment', verb: 'create' },
+  pl: { entity: 'payment', verb: 'list' },
+  cc: { entity: 'customer', verb: 'create' },
+  cl: { entity: 'customer', verb: 'list' },
+  jc: { entity: 'journal', verb: 'create' },
 }
 
 /**
- * Resolve entity shortcut to canonical name
+ * Expand preset shortcut to canonical "entity verb" string.
+ * Unknown shortcuts return the original input unchanged.
  */
-export function resolveEntityShortcut(shortcut: string): string | null {
-  const normalized = shortcut.toLowerCase()
-  
-  for (const [entity, def] of Object.entries(GRAMMAR)) {
-    if (entity === normalized || def.shortcuts.includes(normalized)) {
-      return entity
-    }
+export function expandPresetShortcut(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return trimmed
+
+  const [first, ...rest] = trimmed.split(/\s+/)
+  const preset = PRESET_SHORTCUTS[first.toLowerCase()]
+  if (!preset) return trimmed
+
+  const tail = rest.join(' ')
+  const expanded = `${preset.entity} ${preset.verb}`.trim()
+  return tail ? `${expanded} ${tail}` : `${expanded} `
+}
+
+/**
+ * Check if token is a preset shortcut.
+ */
+export function isPresetShortcut(token: string): boolean {
+  return Boolean(PRESET_SHORTCUTS[token.toLowerCase()])
+}
+
+/**
+ * Expose preset map (read-only) for suggestion displays.
+ */
+export function getPresetShortcuts(): Record<string, { entity: string; verb: string }> {
+  return { ...PRESET_SHORTCUTS }
+}
+
+export interface FrecencyEntry {
+  command: string
+  count: number
+  lastUsed: number
+}
+
+const STORAGE_KEY = 'palette-frecency-v1'
+
+function load(): Record<string, FrecencyEntry> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
   }
-  
-  return null
 }
 
-/**
- * Resolve verb alias to canonical name
- */
-export function resolveVerbAlias(entity: string, verb: string): string | null {
-  const entityDef = GRAMMAR[entity]
-  if (!entityDef) return null
-  
-  const normalized = verb.toLowerCase()
-  
-  for (const verbDef of entityDef.verbs) {
-    if (verbDef.name === normalized || verbDef.aliases.includes(normalized)) {
-      return verbDef.name
-    }
+function save(entries: Record<string, FrecencyEntry>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
+  } catch {
+    /* ignore storage errors */
   }
-  
-  return null
 }
 
-/**
- * Check if verb is valid for entity
- */
-export function isValidVerb(entity: string, verb: string): boolean {
-  return resolveVerbAlias(entity, verb) !== null
+export function recordCommandUse(command: string): void {
+  const entries = load()
+  const key = command.trim()
+  if (!key) return
+
+  const existing = entries[key] || { command: key, count: 0, lastUsed: Date.now() }
+  entries[key] = {
+    command: key,
+    count: existing.count + 1,
+    lastUsed: Date.now(),
+  }
+
+  save(entries)
 }
 
-/**
- * Get full verb definition
- */
-export function getVerbDefinition(entity: string, verb: string) {
-  const entityDef = GRAMMAR[entity]
-  if (!entityDef) return null
-  
-  const resolvedVerb = resolveVerbAlias(entity, verb)
-  if (!resolvedVerb) return null
-  
-  return entityDef.verbs.find(v => v.name === resolvedVerb) || null
+export function getFrecencyScores(): Record<string, number> {
+  const now = Date.now()
+  const entries = load()
+  const scores: Record<string, number> = {}
+
+  Object.values(entries).forEach((entry) => {
+    const daysSince = (now - entry.lastUsed) / (1000 * 60 * 60 * 24)
+    const recencyWeight = Math.max(0.2, 1 - daysSince / 7) // decays over 7 days
+    scores[entry.command] = entry.count * recencyWeight
+  })
+
+  return scores
 }
 
-/**
- * Get all entities
- */
-export function getEntities(): string[] {
-  return Object.keys(GRAMMAR)
-}
-
-/**
- * Get all verbs for an entity
- */
-export function getVerbs(entity: string): string[] {
-  const entityDef = GRAMMAR[entity]
-  if (!entityDef) return []
-  return entityDef.verbs.map(v => v.name)
-}
-
-/**
- * Command examples for inline placeholder hints
- */
-export const COMMAND_EXAMPLES: Record<string, string> = {
-  'company.create': 'company create Acme Inc USD',
-  'company.list': 'company list',
-  'company.view': 'company view acme-corp',
-  'company.switch': 'company switch acme-corp',
-  'company.delete': 'company delete acme-corp',
-
-  'user.invite': 'user invite john@example.com',
-  'user.list': 'user list',
-  'user.view': 'user view john@example.com',
-  'user.assign-role': 'user assign-role john@example.com admin',
-  'user.remove-role': 'user remove-role john@example.com admin',
-  'user.deactivate': 'user deactivate john@example.com',
-  'user.activate': 'user activate john@example.com',
-  'user.delete': 'user delete john@example.com',
-
-  'role.list': 'role list',
-  'role.view': 'role view admin',
-  'role.assign': 'role assign users:create admin',
-  'role.revoke': 'role revoke users:create admin',
-}
-
-/**
- * Get command example for inline placeholder
- */
-export function getCommandExample(entity: string, verb: string): string {
-  const key = `${entity}.${verb}`
-  return COMMAND_EXAMPLES[key] || ''
-}
-
-
-===== build/resources/js/palette/help.ts =====
 import { GRAMMAR } from './grammar'
+
+const MODULE_GROUPS: Record<string, string[]> = {
+  sales: ['customer', 'invoice', 'payment'],
+  purchases: [],
+  accounting: ['account', 'journal'],
+  settings: ['company', 'user', 'role'],
+}
 
 /**
  * Get help text for a topic
@@ -604,6 +379,19 @@ export function getHelp(topic?: string): string {
   }
 
   const topicLower = topic.toLowerCase()
+
+  if (topicLower === '?' || topicLower === 'help') {
+    return getGroupedHelp()
+  }
+
+  if (topicLower.startsWith('?')) {
+    const group = topicLower.replace('?', '').trim()
+    return getGroupedHelp(group)
+  }
+
+  if (MODULE_GROUPS[topicLower]) {
+    return getGroupedHelp(topicLower)
+  }
 
   // Help for specific entity
   if (GRAMMAR[topicLower]) {
@@ -656,6 +444,7 @@ function getGeneralHelp(): string {
   lines.push('BUILT-IN COMMANDS:')
   lines.push('')
   lines.push('  help [topic]     Show help (e.g., help company)')
+  lines.push("  ? [group]        List namespaces by group (e.g., '? sales')")
   lines.push('  clear            Clear output')
   lines.push('')
   lines.push('SHORTCUTS:')
@@ -673,6 +462,45 @@ function getGeneralHelp(): string {
   lines.push('  user.invite john@example.com    Invite user')
   lines.push('')
   lines.push('Type "help <entity>" for detailed help (e.g., help company)')
+
+  return lines.join('\n')
+}
+
+function getGroupedHelp(group?: string): string {
+  const lines: string[] = ['COMMAND CATALOG', '════════════════', '']
+
+  if (!group) {
+    lines.push('Groups: sales, purchases, accounting, settings')
+    lines.push("Type '? sales' to filter to that group.")
+    lines.push('')
+  }
+
+  const targetGroups = group ? [group] : Object.keys(MODULE_GROUPS)
+
+  for (const groupName of targetGroups) {
+    const entities = MODULE_GROUPS[groupName]
+    const hasEntities = entities && entities.length > 0
+    if (!hasEntities) {
+      if (group) {
+        lines.push(`${groupName.toUpperCase()}`)
+        lines.push('  (no commands yet)')
+        lines.push('')
+      }
+      continue
+    }
+
+    lines.push(`${groupName.toUpperCase()}`)
+    lines.push('─'.repeat(groupName.length))
+
+    entities.forEach((entityName) => {
+      const entity = GRAMMAR[entityName]
+      if (!entity) return
+      const verbs = entity.verbs.map((v) => v.name).join(', ')
+      lines.push(`  ${entityName} (${verbs})`)
+    })
+
+    lines.push('')
+  }
 
   return lines.join('\n')
 }
@@ -868,17 +696,17 @@ function buildExample(
   return [base, subjectHint, requiredFlags].filter(Boolean).join(' ').trim()
 }
 
-
-===== build/resources/js/palette/parser.ts =====
 import type { ParsedCommand } from '@/types/palette'
 import { GRAMMAR, resolveEntityShortcut, resolveVerbAlias, getVerbDefinition } from './grammar'
+import { expandPresetShortcut } from './shortcuts'
 
 /**
  * Parse a command string into a structured ParsedCommand
  */
 export function parse(input: string): ParsedCommand {
+  const normalizedInput = expandPresetShortcut(input)
   const result: ParsedCommand = {
-    raw: input.trim(),
+    raw: normalizedInput.trim(),
     entity: '',
     verb: '',
     flags: {},
@@ -1134,6 +962,108 @@ function inferFromSubject(result: ParsedCommand): void {
 
   const words = result.subject.split(/\s+/)
 
+  // Customer create: accept positional name [email] [currency]
+  if (result.entity === 'customer' && result.verb === 'create') {
+    let email: string | undefined
+    let currency: string | undefined
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!email && emailRegex.test(word)) {
+        email = word
+        continue
+      }
+      if (
+        !currency &&
+        word.length === 3 &&
+        /^[A-Za-z]{3}$/.test(word)
+      ) {
+        currency = word.toUpperCase()
+        continue
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.email && email) {
+      result.flags.email = email
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.name) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.name = name
+      }
+    }
+  }
+
+  // Invoice create: positional customer, amount, currency
+  if (result.entity === 'invoice' && result.verb === 'create') {
+    let amount: number | undefined
+    let currency: string | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+
+      if (!currency && /^[A-Za-z]{3}$/.test(word)) {
+        currency = word.toUpperCase()
+        continue
+      }
+
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.customer) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.customer = name
+      }
+    }
+  }
+
+  // Payment create: positional invoice, amount
+  if (result.entity === 'payment' && result.verb === 'create') {
+    let amount: number | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.invoice) {
+      const invoiceToken = parts.join(' ').trim()
+      if (invoiceToken) {
+        result.flags.invoice = invoiceToken
+      }
+    }
+  }
+
   // Company create: "company.create Acme Corp USD"
   if (result.entity === 'company' && result.verb === 'create') {
     if (!result.flags.name && words.length > 0) {
@@ -1239,8 +1169,1176 @@ function generateIdemKey(result: ParsedCommand): string {
   return btoa(parts.join('|')).substring(0, 32)
 }
 
+import { GRAMMAR, ENTITY_ICONS, COMMAND_DESCRIPTIONS, resolveEntityShortcut } from './grammar'
+import { getPresetShortcuts } from './shortcuts'
+import type { Suggestion } from '@/types/palette'
 
-===== build/resources/js/palette/quick-actions.ts =====
+export interface GenerateSuggestionOptions {
+  maxResults?: number
+  stage?: 'entity' | 'verb'
+  entity?: string
+  frecencyScores?: Record<string, number>
+}
+
+/**
+ * Generate command suggestions based on partial input
+ */
+export function generateSuggestions(input: string, options: GenerateSuggestionOptions = {}): Suggestion[] {
+  const maxResults = options.maxResults ?? 8
+  const stage = options.stage ?? 'entity'
+  const trimmed = input.trim()
+  const frecencyScores = options.frecencyScores || {}
+
+  if (!trimmed && stage === 'entity') {
+    return getQuickStartSuggestions(frecencyScores).slice(0, maxResults)
+  }
+
+  const inputLower = input.toLowerCase()
+  const suggestions: Array<Suggestion & { commandKey?: string }> = []
+
+  const targetEntity = options.entity || resolveEntityShortcut(trimmed.split(/\s+/)[0] || '') || ''
+  const completions = stage === 'verb'
+    ? (targetEntity ? getVerbCompletions(targetEntity) : getEntityCompletions())
+    : getEntityCompletions()
+
+  for (const completion of completions) {
+    const score = scoreSuggestion(inputLower, completion.value.toLowerCase())
+    if (score > 0) {
+      const frecencyBoost = completion.commandKey
+        ? (frecencyScores[completion.commandKey] || 0) * 50
+        : 0
+      suggestions.push({ ...completion, score: score + frecencyBoost })
+    }
+  }
+
+  // Sort by score (higher = better match), then by length (shorter = simpler)
+  return suggestions
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score! - a.score!
+      return a.value.length - b.value.length
+    })
+    .slice(0, maxResults)
+}
+
+/**
+ * Quick start suggestions when input is empty
+ */
+function getQuickStartSuggestions(frecencyScores: Record<string, number>): Suggestion[] {
+  const topFrequent = Object.entries(frecencyScores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([command]) => ({
+      type: 'history' as const,
+      value: `${command} `,
+      label: command,
+      description: 'Recent favorite',
+      icon: '⏱',
+    }))
+
+  const presets = getPresetShortcuts()
+  const shortcutPicks = Object.entries(presets).slice(0, 3).map(([shortcut, cmd]) => ({
+    type: 'command' as const,
+    value: `${cmd.entity} ${cmd.verb} `,
+    label: `${cmd.entity} ${cmd.verb}`,
+    description: `Shortcut: ${shortcut}`,
+    icon: ENTITY_ICONS[cmd.entity] || '⌨️',
+  }))
+
+  return [
+    ...topFrequent,
+    ...shortcutPicks,
+    {
+      type: 'command',
+      value: 'company list',
+      label: 'company list',
+      description: 'View all companies',
+      icon: ENTITY_ICONS.company,
+    },
+    {
+      type: 'command',
+      value: 'user invite ',
+      label: 'user invite',
+      description: 'Invite a new user',
+      icon: ENTITY_ICONS.user,
+    },
+    {
+      type: 'command',
+      value: 'user list',
+      label: 'user list',
+      description: 'View all users',
+      icon: ENTITY_ICONS.user,
+    },
+    {
+      type: 'command',
+      value: 'help',
+      label: 'help',
+      description: 'Show all commands',
+      icon: '❓',
+    },
+  ]
+}
+
+/**
+ * Score how well input matches a completion
+ * Higher score = better match
+ */
+function scoreSuggestion(input: string, completion: string): number {
+  // Exact prefix match - highest score
+  if (completion.startsWith(input)) {
+    return 100 + (input.length / completion.length) * 50
+  }
+
+  // Match after the dot (e.g., "list" matches "company.list")
+  const dotIndex = completion.indexOf('.')
+  if (dotIndex > 0) {
+    const afterDot = completion.substring(dotIndex + 1)
+    if (afterDot.startsWith(input)) {
+      return 80 + (input.length / afterDot.length) * 30
+    }
+  }
+
+  // Fuzzy match - each character in order
+  let inputIdx = 0
+  let score = 0
+  for (let i = 0; i < completion.length && inputIdx < input.length; i++) {
+    if (completion[i] === input[inputIdx]) {
+      // Bonus for consecutive matches
+      score += (i === 0 || completion[i - 1] === '.' || completion[i - 1] === ' ') ? 10 : 5
+      inputIdx++
+    }
+  }
+
+  // Only return score if all input chars were found
+  return inputIdx === input.length ? score : 0
+}
+
+function getEntityCompletions(): Array<Suggestion & { commandKey?: string }> {
+  const completions: Array<Suggestion & { commandKey?: string }> = []
+
+  for (const [entityName, entity] of Object.entries(GRAMMAR)) {
+    // Entity alone
+    completions.push({
+      type: 'entity',
+      value: `${entityName} `,
+      label: entityName,
+      description: '',
+      icon: ENTITY_ICONS[entityName] || '📦',
+    })
+  }
+
+  return completions
+}
+
+function getVerbCompletions(entityName: string): Array<Suggestion & { commandKey?: string }> {
+  const entity = GRAMMAR[entityName]
+  if (!entity) return []
+
+  return entity.verbs.map((verb) => {
+    const commandKey = `${entityName}.${verb.name}`
+    const description = COMMAND_DESCRIPTIONS[commandKey] || ''
+    return {
+      type: 'verb' as const,
+      value: `${entityName} ${verb.name} `,
+      label: `${verb.name}`,
+      description,
+      icon: ENTITY_ICONS[entityName] || '📦',
+      commandKey,
+    }
+  })
+}
+
+/**
+ * Get suggestions for flag values (for future use with entity catalogs)
+ */
+export function getFlagSuggestions(
+  entity: string,
+  verb: string,
+  flag: string,
+  partial: string,
+  catalog: Record<string, string[]> = {}
+): string[] {
+  // For now, just return from catalog if available
+  const key = `${entity}.${flag}`
+  const values = catalog[key] || []
+
+  if (!partial) return values.slice(0, 5)
+
+  const partialLower = partial.toLowerCase()
+  return values
+    .filter(v => v.toLowerCase().includes(partialLower))
+    .slice(0, 5)
+}
+
+import type { ParsedCommand } from '@/types/palette'
+import type { CommandSchema } from './schemas'
+
+export interface ArgState {
+  name: string
+  displayValue: string
+  status: 'current' | 'filled' | 'default' | 'pending'
+  hint?: string
+}
+
+export interface ScaffoldState {
+  args: ArgState[]
+  currentArg?: string
+  requiredRemaining: string[]
+  optionalFlags: Array<{ name: string; value?: string; source?: string; loading?: boolean; hint?: string }>
+  statusMessage: string
+  optionalHint: string
+  isReady: boolean
+  pointerHint: string
+}
+
+export function buildScaffold(
+  parsed: ParsedCommand,
+  schema: CommandSchema | null,
+  context: {
+    companyName?: string
+    companyCurrency?: string
+    defaults?: Record<string, { value: string; source?: string }>
+  },
+  activeArg?: string
+): ScaffoldState | null {
+  if (!schema) return null
+
+  const args: ArgState[] = []
+  const requiredRemaining: string[] = []
+
+  // Determine which arg is current (first unfilled required arg, or activeArg)
+  let firstUnfilledRequired: string | undefined
+
+  // First pass: find first unfilled required arg
+  schema.args.forEach(arg => {
+    const userValue = parsed.flags?.[arg.name]
+    const defaultMeta = context.defaults?.[arg.name]
+    const hasUserValue = userValue !== undefined && userValue !== null && String(userValue).trim() !== ''
+    const hasDefault = defaultMeta?.value !== undefined && defaultMeta?.value !== null
+
+    if (arg.required && !hasUserValue && !hasDefault && !firstUnfilledRequired) {
+      firstUnfilledRequired = arg.name
+    }
+  })
+
+  const currentArgName = activeArg || firstUnfilledRequired
+
+  // Second pass: build arg states
+  schema.args.forEach(arg => {
+    const userValue = parsed.flags?.[arg.name]
+    const defaultMeta = context.defaults?.[arg.name]
+    const defaultValue = defaultMeta?.value
+    const hasUserValue = userValue !== undefined && userValue !== null && String(userValue).trim() !== ''
+    const hasDefault = defaultValue !== undefined && defaultValue !== null && String(defaultValue).trim() !== ''
+
+    // Track missing required args
+    if (arg.required && !hasUserValue && !hasDefault) {
+      requiredRemaining.push(arg.name)
+    }
+
+    // Determine status
+    let status: ArgState['status']
+    let displayValue: string
+
+    if (arg.name === currentArgName && !hasUserValue) {
+      status = 'current'
+      displayValue = hasDefault ? `${defaultValue}` : arg.name
+    } else if (hasUserValue) {
+      status = 'filled'
+      displayValue = String(userValue)
+    } else if (hasDefault) {
+      status = 'default'
+      displayValue = `${defaultValue}`
+    } else {
+      status = 'pending'
+      displayValue = arg.name
+    }
+
+    args.push({
+      name: arg.name,
+      displayValue,
+      status,
+      hint: arg.hint,
+    })
+  })
+
+  // Build flag chips
+  const flagChips = schema.flags.map(flag => {
+    const defaultMeta = context.defaults?.[flag.name]
+    const userValue = parsed.flags?.[flag.name] as string | undefined
+    const value = userValue || defaultMeta?.value
+    const source = userValue ? 'user' : defaultMeta?.source
+    return {
+      name: flag.name,
+      value,
+      source,
+      hint: flag.hint,
+      loading: false,
+    }
+  })
+
+  const isReady = requiredRemaining.length === 0
+
+  // Build pointer hint
+  let pointerHint = ''
+  if (currentArgName) {
+    const argDef = schema.args.find(a => a.name === currentArgName)
+    pointerHint = argDef?.hint || ''
+  }
+
+  // Build status message
+  let statusMessage: string
+  if (isReady) {
+    statusMessage = 'Ready — press Enter to execute'
+  } else if (requiredRemaining.length === 1) {
+    statusMessage = `Enter ${requiredRemaining[0]}`
+  } else {
+    statusMessage = `Need: ${requiredRemaining.join(', ')}`
+  }
+
+  // Build optional hint
+  let optionalHint = ''
+  if (flagChips.length > 0) {
+    const flagNames = flagChips.slice(0, 3).map(f => `--${f.name}`).join(', ')
+    const moreCount = flagChips.length > 3 ? ` +${flagChips.length - 3} more` : ''
+    optionalHint = `Optional: ${flagNames}${moreCount}`
+  }
+
+  return {
+    args,
+    currentArg: currentArgName,
+    requiredRemaining,
+    optionalFlags: flagChips,
+    statusMessage,
+    optionalHint,
+    isReady,
+    pointerHint,
+  }
+}
+
+/**
+ * Command Palette Schemas
+ *
+ * This file defines the schema for each entity+verb combination.
+ * Adding new accounting modules (bills, vendors, reports, etc.) is as simple
+ * as adding entries to the SCHEMAS object.
+ *
+ * Schema Structure:
+ * - entity: string - The entity name (invoice, bill, vendor, etc.)
+ * - verb: string - The action (create, list, view, delete, etc.)
+ * - args: Array - Required positional arguments
+ * - flags: Array - Optional named flags
+ *
+ * Arg/Flag Properties:
+ * - name: string - Field name (used as key in API params)
+ * - required: boolean - Whether field is required
+ * - hint: string - Help text shown to user
+ * - hasDropdown: boolean - Whether to show dropdown with suggestions
+ * - enum: string[] - Static list of allowed values (optional)
+ * - options: string - API endpoint to fetch dynamic options (optional)
+ */
+
+export interface ArgDef {
+  name: string
+  required: boolean
+  hint?: string
+  hasDropdown?: boolean
+  enum?: string[]
+  options?: string
+}
+
+export interface FlagDef {
+  name: string
+  hint?: string
+  hasDropdown?: boolean
+  enum?: string[]
+  options?: string
+}
+
+export interface CommandSchema {
+  entity: string
+  verb: string
+  args: ArgDef[]
+  flags: FlagDef[]
+}
+
+// ============================================================================
+// Schema Definitions
+// ============================================================================
+
+const SCHEMAS: Record<string, CommandSchema> = {
+  // --------------------------------------------------------------------------
+  // COMPANY
+  // --------------------------------------------------------------------------
+  'company.create': {
+    entity: 'company',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Company name' },
+      { name: 'currency', required: true, hint: 'Base currency', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'industry', hint: 'Industry sector', hasDropdown: true },
+      { name: 'country', hint: 'Country code', hasDropdown: true },
+      { name: 'tax_id', hint: 'Tax identification number' },
+    ],
+  },
+  'company.list': {
+    entity: 'company',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'status', hint: 'Filter by status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'company.view': {
+    entity: 'company',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Company ID or slug' },
+    ],
+    flags: [],
+  },
+  'company.switch': {
+    entity: 'company',
+    verb: 'switch',
+    args: [
+      { name: 'id', required: true, hint: 'Company ID or slug', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // CUSTOMER
+  // --------------------------------------------------------------------------
+  'customer.create': {
+    entity: 'customer',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Customer name' },
+    ],
+    flags: [
+      { name: 'email', hint: 'Email address' },
+      { name: 'phone', hint: 'Phone number' },
+      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
+      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
+      { name: 'type', hint: 'Customer type', hasDropdown: true, enum: ['business', 'individual'] },
+      { name: 'country', hint: 'Country', hasDropdown: true },
+    ],
+  },
+  'customer.list': {
+    entity: 'customer',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'search', hint: 'Search by name' },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'customer.view': {
+    entity: 'customer',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Customer ID or name', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // INVOICE
+  // --------------------------------------------------------------------------
+  'invoice.create': {
+    entity: 'invoice',
+    verb: 'create',
+    args: [
+      { name: 'customer', required: true, hint: 'Customer name', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Invoice amount' },
+    ],
+    flags: [
+      { name: 'currency', hint: 'Currency code', hasDropdown: true },
+      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)' },
+      { name: 'description', hint: 'Invoice description' },
+      { name: 'reference', hint: 'External reference' },
+    ],
+  },
+  'invoice.list': {
+    entity: 'invoice',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'customer', hint: 'Filter by customer', hasDropdown: true },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'] },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'invoice.view': {
+    entity: 'invoice',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true },
+    ],
+    flags: [],
+  },
+  'invoice.send': {
+    entity: 'invoice',
+    verb: 'send',
+    args: [
+      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'email', hint: 'Override recipient email' },
+      { name: 'message', hint: 'Custom message' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // PAYMENT
+  // --------------------------------------------------------------------------
+  'payment.create': {
+    entity: 'payment',
+    verb: 'create',
+    args: [
+      { name: 'invoice', required: true, hint: 'Invoice number', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Payment amount' },
+    ],
+    flags: [
+      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
+      { name: 'reference', hint: 'Payment reference' },
+      { name: 'date', hint: 'Payment date' },
+      { name: 'notes', hint: 'Notes' },
+    ],
+  },
+  'payment.list': {
+    entity: 'payment',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'invoice', hint: 'Filter by invoice', hasDropdown: true },
+      { name: 'customer', hint: 'Filter by customer', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // VENDOR (NEW)
+  // --------------------------------------------------------------------------
+  'vendor.create': {
+    entity: 'vendor',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Vendor name' },
+    ],
+    flags: [
+      { name: 'email', hint: 'Email address' },
+      { name: 'phone', hint: 'Phone number' },
+      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
+      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
+      { name: 'type', hint: 'Vendor type', hasDropdown: true, enum: ['supplier', 'contractor', 'service'] },
+      { name: 'country', hint: 'Country', hasDropdown: true },
+      { name: 'tax_id', hint: 'Tax ID' },
+    ],
+  },
+  'vendor.list': {
+    entity: 'vendor',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'search', hint: 'Search by name' },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'vendor.view': {
+    entity: 'vendor',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Vendor ID or name', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // BILL (NEW - Vendor Invoices)
+  // --------------------------------------------------------------------------
+  'bill.create': {
+    entity: 'bill',
+    verb: 'create',
+    args: [
+      { name: 'vendor', required: true, hint: 'Vendor name', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Bill amount' },
+    ],
+    flags: [
+      { name: 'currency', hint: 'Currency code', hasDropdown: true },
+      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)' },
+      { name: 'bill_number', hint: 'Vendor bill number' },
+      { name: 'description', hint: 'Bill description' },
+      { name: 'category', hint: 'Expense category', hasDropdown: true },
+    ],
+  },
+  'bill.list': {
+    entity: 'bill',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'pending', 'paid', 'overdue', 'cancelled'] },
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'bill.pay': {
+    entity: 'bill',
+    verb: 'pay',
+    args: [
+      { name: 'id', required: true, hint: 'Bill ID or number', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'amount', hint: 'Payment amount (partial payment)' },
+      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
+      { name: 'reference', hint: 'Payment reference' },
+      { name: 'date', hint: 'Payment date' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // EXPENSE (NEW)
+  // --------------------------------------------------------------------------
+  'expense.create': {
+    entity: 'expense',
+    verb: 'create',
+    args: [
+      { name: 'amount', required: true, hint: 'Expense amount' },
+      { name: 'category', required: true, hint: 'Expense category', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'vendor', hint: 'Vendor (if applicable)', hasDropdown: true },
+      { name: 'date', hint: 'Expense date' },
+      { name: 'description', hint: 'Description' },
+      { name: 'receipt', hint: 'Receipt reference' },
+      { name: 'currency', hint: 'Currency', hasDropdown: true },
+      { name: 'payment_method', hint: 'Payment method', hasDropdown: true },
+    ],
+  },
+  'expense.list': {
+    entity: 'expense',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // REPORT (NEW)
+  // --------------------------------------------------------------------------
+  'report.generate': {
+    entity: 'report',
+    verb: 'generate',
+    args: [
+      { name: 'type', required: true, hint: 'Report type', hasDropdown: true, enum: [
+        'profit_loss', 'balance_sheet', 'cash_flow', 'aged_receivables',
+        'aged_payables', 'tax_summary', 'sales_by_customer', 'expenses_by_category'
+      ]},
+    ],
+    flags: [
+      { name: 'from', hint: 'Start date' },
+      { name: 'to', hint: 'End date' },
+      { name: 'period', hint: 'Period', hasDropdown: true, enum: ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom'] },
+      { name: 'format', hint: 'Output format', hasDropdown: true, enum: ['table', 'csv', 'pdf'] },
+      { name: 'compare', hint: 'Compare with previous period', hasDropdown: true, enum: ['none', 'previous_period', 'previous_year'] },
+    ],
+  },
+  'report.list': {
+    entity: 'report',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by report type', hasDropdown: true },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // ACCOUNT (Chart of Accounts)
+  // --------------------------------------------------------------------------
+  'account.create': {
+    entity: 'account',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Account name' },
+      { name: 'type', required: true, hint: 'Account type', hasDropdown: true, enum: [
+        'asset', 'liability', 'equity', 'revenue', 'expense'
+      ]},
+    ],
+    flags: [
+      { name: 'code', hint: 'Account code' },
+      { name: 'parent', hint: 'Parent account', hasDropdown: true },
+      { name: 'description', hint: 'Description' },
+      { name: 'currency', hint: 'Currency (for multi-currency)', hasDropdown: true },
+    ],
+  },
+  'account.list': {
+    entity: 'account',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] },
+      { name: 'search', hint: 'Search by name or code' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // JOURNAL (Manual Journal Entries)
+  // --------------------------------------------------------------------------
+  'journal.create': {
+    entity: 'journal',
+    verb: 'create',
+    args: [
+      { name: 'description', required: true, hint: 'Entry description' },
+    ],
+    flags: [
+      { name: 'date', hint: 'Entry date' },
+      { name: 'reference', hint: 'Reference number' },
+    ],
+  },
+  'journal.list': {
+    entity: 'journal',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // PRODUCT/SERVICE
+  // --------------------------------------------------------------------------
+  'product.create': {
+    entity: 'product',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Product/service name' },
+      { name: 'price', required: true, hint: 'Unit price' },
+    ],
+    flags: [
+      { name: 'type', hint: 'Type', hasDropdown: true, enum: ['product', 'service'] },
+      { name: 'sku', hint: 'SKU code' },
+      { name: 'description', hint: 'Description' },
+      { name: 'category', hint: 'Category', hasDropdown: true },
+      { name: 'tax_rate', hint: 'Tax rate %', hasDropdown: true },
+      { name: 'unit', hint: 'Unit of measure', hasDropdown: true, enum: ['unit', 'hour', 'day', 'kg', 'meter', 'liter'] },
+    ],
+  },
+  'product.list': {
+    entity: 'product',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['product', 'service', 'all'] },
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'search', hint: 'Search by name' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // TAX
+  // --------------------------------------------------------------------------
+  'tax.create': {
+    entity: 'tax',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Tax name (e.g., VAT, GST)' },
+      { name: 'rate', required: true, hint: 'Tax rate %' },
+    ],
+    flags: [
+      { name: 'type', hint: 'Tax type', hasDropdown: true, enum: ['sales', 'purchase', 'both'] },
+      { name: 'account', hint: 'Tax account', hasDropdown: true },
+    ],
+  },
+  'tax.list': {
+    entity: 'tax',
+    verb: 'list',
+    args: [],
+    flags: [],
+  },
+}
+
+// ============================================================================
+// Exports
+// ============================================================================
+
+export function getSchema(entity: string, verb: string): CommandSchema | null {
+  const key = `${entity}.${verb}`
+  return SCHEMAS[key] || null
+}
+
+export function getEntities(): string[] {
+  const entities = new Set<string>()
+  Object.keys(SCHEMAS).forEach(key => {
+    entities.add(key.split('.')[0])
+  })
+  return Array.from(entities).sort()
+}
+
+export function getVerbsForEntity(entity: string): string[] {
+  const verbs: string[] = []
+  Object.keys(SCHEMAS).forEach(key => {
+    const [e, v] = key.split('.')
+    if (e === entity) verbs.push(v)
+  })
+  return verbs
+}
+
+export function getAllSchemas(): CommandSchema[] {
+  return Object.values(SCHEMAS)
+}
+
+// Helper to check if a field has dropdown
+export function fieldHasDropdown(entity: string, verb: string, fieldName: string): boolean {
+  const schema = getSchema(entity, verb)
+  if (!schema) return false
+
+  const arg = schema.args.find(a => a.name === fieldName)
+  if (arg) return !!arg.hasDropdown
+
+  const flag = schema.flags.find(f => f.name === fieldName)
+  if (flag) return !!flag.hasDropdown
+
+  return false
+}
+
+/**
+ * Command Palette Grammar
+ *
+ * Defines entities, verbs, shortcuts, and icons.
+ * This file should be auto-generated from schemas.ts or kept in sync manually.
+ */
+
+import { getEntities, getVerbsForEntity, getSchema, getAllSchemas } from './schemas'
+
+// ============================================================================
+// Entity Icons
+// ============================================================================
+
+export const ENTITY_ICONS: Record<string, string> = {
+  // Core entities
+  company: '🏢',
+  customer: '👤',
+  invoice: '📄',
+  payment: '💳',
+
+  // Payables
+  vendor: '🏪',
+  bill: '📋',
+  expense: '💸',
+
+  // Accounting
+  account: '📊',
+  journal: '📒',
+  report: '📈',
+
+  // Inventory & Sales
+  product: '📦',
+  service: '🛠️',
+  tax: '🏛️',
+
+  // Settings
+  user: '👥',
+  settings: '⚙️',
+
+  // Default
+  default: '📄',
+}
+
+// ============================================================================
+// Entity Shortcuts (for power users)
+// ============================================================================
+
+const ENTITY_SHORTCUTS: Record<string, string> = {
+  // Single letter
+  c: 'company',
+  i: 'invoice',
+  p: 'payment',
+  v: 'vendor',
+  b: 'bill',
+  e: 'expense',
+  r: 'report',
+  a: 'account',
+
+  // Two letter
+  co: 'company',
+  cu: 'customer',
+  in: 'invoice',
+  pa: 'payment',
+  ve: 'vendor',
+  bi: 'bill',
+  ex: 'expense',
+  re: 'report',
+  ac: 'account',
+  jo: 'journal',
+  pr: 'product',
+  ta: 'tax',
+
+  // Common abbreviations
+  inv: 'invoice',
+  cust: 'customer',
+  comp: 'company',
+  pay: 'payment',
+  vend: 'vendor',
+  exp: 'expense',
+  rep: 'report',
+  acct: 'account',
+  prod: 'product',
+}
+
+// ============================================================================
+// Verb Shortcuts
+// ============================================================================
+
+const VERB_SHORTCUTS: Record<string, string> = {
+  c: 'create',
+  l: 'list',
+  v: 'view',
+  d: 'delete',
+  e: 'edit',
+  s: 'send',
+  g: 'generate',
+
+  // Common abbreviations
+  cr: 'create',
+  ls: 'list',
+  vw: 'view',
+  del: 'delete',
+  ed: 'edit',
+  gen: 'generate',
+}
+
+// ============================================================================
+// Functions
+// ============================================================================
+
+/**
+ * Resolve entity shortcut to full entity name
+ */
+export function resolveEntityShortcut(input: string): string | null {
+  const lower = input.toLowerCase().trim()
+
+  // Check direct shortcut
+  if (ENTITY_SHORTCUTS[lower]) {
+    return ENTITY_SHORTCUTS[lower]
+  }
+
+  // Check if it's already a valid entity
+  const entities = getEntities()
+  if (entities.includes(lower)) {
+    return lower
+  }
+
+  // Check partial match
+  const match = entities.find(e => e.startsWith(lower))
+  if (match) {
+    return match
+  }
+
+  return null
+}
+
+/**
+ * Resolve verb shortcut to full verb name
+ */
+export function resolveVerbShortcut(input: string, entity: string): string | null {
+  const lower = input.toLowerCase().trim()
+  const verbs = getVerbsForEntity(entity)
+
+  // Check direct shortcut
+  if (VERB_SHORTCUTS[lower] && verbs.includes(VERB_SHORTCUTS[lower])) {
+    return VERB_SHORTCUTS[lower]
+  }
+
+  // Check if it's already a valid verb
+  if (verbs.includes(lower)) {
+    return lower
+  }
+
+  // Check partial match
+  const match = verbs.find(v => v.startsWith(lower))
+  if (match) {
+    return match
+  }
+
+  return null
+}
+
+/**
+ * Get available verbs for an entity
+ */
+export function getVerbs(entity: string): string[] {
+  return getVerbsForEntity(entity)
+}
+
+/**
+ * Get icon for an entity
+ */
+export function getEntityIcon(entity: string): string {
+  return ENTITY_ICONS[entity] || ENTITY_ICONS.default
+}
+
+/**
+ * Get all available entities
+ */
+export function getAllEntities(): string[] {
+  return getEntities()
+}
+
+/**
+ * Get command example for help text
+ */
+export function getCommandExample(entity: string, verb: string): string {
+  const examples: Record<string, string> = {
+    'company.create': 'company create "Acme Corp" USD',
+    'company.list': 'company list --status=active',
+    'customer.create': 'customer create "John Doe" --email=john@example.com',
+    'invoice.create': 'invoice create "Acme Corp" 1000 --currency=USD',
+    'invoice.list': 'invoice list --status=unpaid',
+    'payment.create': 'payment create INV-001 500',
+    'vendor.create': 'vendor create "Supplier Inc"',
+    'bill.create': 'bill create "Supplier Inc" 500',
+    'expense.create': 'expense create 50 "Office Supplies"',
+    'report.generate': 'report generate profit_loss --period=this_month',
+  }
+
+  return examples[`${entity}.${verb}`] || `${entity} ${verb}`
+}
+
+/**
+ * Check if input matches a preset shortcut (e.g., "inv" for invoice)
+ */
+export function isPresetShortcut(input: string): boolean {
+  const lower = input.toLowerCase().trim()
+  return !!ENTITY_SHORTCUTS[lower]
+}
+
+// ============================================================================
+// GRAMMAR Export (for autocomplete.ts compatibility)
+// ============================================================================
+
+interface VerbDef {
+  name: string
+  args?: string[]
+  flags?: string[]
+}
+
+interface EntityDef {
+  verbs: VerbDef[]
+}
+
+/**
+ * Build GRAMMAR object from schemas
+ * This provides backwards compatibility with autocomplete.ts
+ */
+function buildGrammar(): Record<string, EntityDef> {
+  const grammar: Record<string, EntityDef> = {}
+  const schemas = getAllSchemas()
+
+  // Group schemas by entity
+  const byEntity: Record<string, typeof schemas> = {}
+  schemas.forEach(schema => {
+    if (!byEntity[schema.entity]) {
+      byEntity[schema.entity] = []
+    }
+    byEntity[schema.entity].push(schema)
+  })
+
+  // Build grammar structure
+  Object.entries(byEntity).forEach(([entity, entitySchemas]) => {
+    grammar[entity] = {
+      verbs: entitySchemas.map(schema => ({
+        name: schema.verb,
+        args: schema.args.map(a => a.name),
+        flags: schema.flags.map(f => f.name),
+      }))
+    }
+  })
+
+  return grammar
+}
+
+export const GRAMMAR = buildGrammar()
+
+// ============================================================================
+// COMMAND_DESCRIPTIONS Export (for autocomplete.ts compatibility)
+// ============================================================================
+
+/**
+ * Build command descriptions from schemas
+ */
+function buildCommandDescriptions(): Record<string, string> {
+  const descriptions: Record<string, string> = {}
+  const schemas = getAllSchemas()
+
+  schemas.forEach(schema => {
+    const key = `${schema.entity}.${schema.verb}`
+    // Generate description from args
+    const requiredArgs = schema.args.filter(a => a.required).map(a => a.name)
+    const optionalFlags = schema.flags.slice(0, 2).map(f => f.name)
+
+    let desc = ''
+    if (requiredArgs.length) {
+      desc = `Requires: ${requiredArgs.join(', ')}`
+    }
+    if (optionalFlags.length) {
+      desc += desc ? '. ' : ''
+      desc += `Options: ${optionalFlags.join(', ')}${schema.flags.length > 2 ? '...' : ''}`
+    }
+
+    descriptions[key] = desc || `${schema.verb} ${schema.entity}`
+  })
+
+  return descriptions
+}
+
+export const COMMAND_DESCRIPTIONS = buildCommandDescriptions()
+
+// ============================================================================
+// Verb Helper Functions
+// ============================================================================
+
+/**
+ * Resolve verb shortcut to full verb name (alias for resolveVerbShortcut)
+ */
+export function resolveVerbAlias(entity: string, input: string): string | null {
+  return resolveVerbShortcut(input, entity)
+}
+
+/**
+ * Get verb definition from GRAMMAR
+ */
+export function getVerbDefinition(entity: string, verb: string): { args: any[]; flags: any[] } | null {
+  const grammar = GRAMMAR[entity]
+  if (!grammar) return null
+
+  const verbDef = grammar.verbs.find((v: any) => v.name === verb)
+  if (!verbDef) return null
+
+  return {
+    args: verbDef.args || [],
+    flags: verbDef.flags || []
+  }
+}
+
 import type { QuickAction, TableState } from '@/types/palette'
 
 /**
@@ -1257,6 +2355,9 @@ export function getQuickActions(entity: string, verb: string): QuickAction[] {
   const key = `${entity}.${verb}`
 
   switch (key) {
+    // --------------------------------------------------------------------------
+    // COMPANY
+    // --------------------------------------------------------------------------
     case 'company.list':
       return [
         {
@@ -1290,9 +2391,13 @@ export function getQuickActions(entity: string, verb: string): QuickAction[] {
           label: 'Delete company',
           command: 'company delete {slug}',
           needsRow: true,
+          prompt: 'Type "confirm" to delete this company permanently',
         },
       ]
 
+    // --------------------------------------------------------------------------
+    // USER
+    // --------------------------------------------------------------------------
     case 'user.list':
       return [
         {
@@ -1313,6 +2418,7 @@ export function getQuickActions(entity: string, verb: string): QuickAction[] {
           label: 'Deactivate user',
           command: 'user deactivate {email}',
           needsRow: true,
+          prompt: 'Type "confirm" to deactivate this user',
         },
         {
           key: '4',
@@ -1344,6 +2450,407 @@ export function getQuickActions(entity: string, verb: string): QuickAction[] {
           command: 'role revoke',
           needsRow: true,
           prompt: 'Enter permission name',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // CUSTOMER
+    // --------------------------------------------------------------------------
+    case 'customer.list':
+      return [
+        {
+          key: '1',
+          label: 'Create invoice',
+          command: 'invoice create {name}',
+          needsRow: true,
+          prompt: 'Enter invoice amount',
+        },
+        {
+          key: '2',
+          label: 'View customer',
+          command: 'customer view {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'View invoices',
+          command: 'invoice list --customer={name}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'View payments',
+          command: 'payment list --customer={name}',
+          needsRow: true,
+        },
+        {
+          key: '5',
+          label: 'Create new customer',
+          command: 'customer create',
+          needsRow: false,
+          prompt: 'Enter customer name',
+        },
+        {
+          key: '0',
+          label: 'Delete customer',
+          command: 'customer delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this customer',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // INVOICE
+    // --------------------------------------------------------------------------
+    case 'invoice.list':
+      return [
+        {
+          key: '1',
+          label: 'View invoice',
+          command: 'invoice view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Record payment',
+          command: 'payment create {id}',
+          needsRow: true,
+          prompt: 'Enter payment amount',
+        },
+        {
+          key: '3',
+          label: 'Send invoice',
+          command: 'invoice send {id}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Duplicate invoice',
+          command: 'invoice duplicate {id}',
+          needsRow: true,
+        },
+        {
+          key: '5',
+          label: 'Create new invoice',
+          command: 'invoice create',
+          needsRow: false,
+          prompt: 'Enter customer name and amount (e.g., Acme Corp 1500)',
+        },
+        {
+          key: '0',
+          label: 'Void invoice',
+          command: 'invoice void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this invoice',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // PAYMENT
+    // --------------------------------------------------------------------------
+    case 'payment.list':
+      return [
+        {
+          key: '1',
+          label: 'View payment',
+          command: 'payment view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'View invoice',
+          command: 'invoice view {invoice}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Record new payment',
+          command: 'payment create',
+          needsRow: false,
+          prompt: 'Enter invoice number and amount (e.g., INV-001 500)',
+        },
+        {
+          key: '0',
+          label: 'Void payment',
+          command: 'payment void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this payment',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // VENDOR
+    // --------------------------------------------------------------------------
+    case 'vendor.list':
+      return [
+        {
+          key: '1',
+          label: 'Create bill',
+          command: 'bill create {name}',
+          needsRow: true,
+          prompt: 'Enter bill amount',
+        },
+        {
+          key: '2',
+          label: 'View vendor',
+          command: 'vendor view {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'View bills',
+          command: 'bill list --vendor={name}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Create new vendor',
+          command: 'vendor create',
+          needsRow: false,
+          prompt: 'Enter vendor name',
+        },
+        {
+          key: '0',
+          label: 'Delete vendor',
+          command: 'vendor delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this vendor',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // BILL
+    // --------------------------------------------------------------------------
+    case 'bill.list':
+      return [
+        {
+          key: '1',
+          label: 'View bill',
+          command: 'bill view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Pay bill',
+          command: 'bill pay {id}',
+          needsRow: true,
+          prompt: 'Enter payment amount (leave empty for full payment)',
+        },
+        {
+          key: '3',
+          label: 'View vendor',
+          command: 'vendor view {vendor}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Create new bill',
+          command: 'bill create',
+          needsRow: false,
+          prompt: 'Enter vendor name and amount (e.g., Supplier Inc 500)',
+        },
+        {
+          key: '0',
+          label: 'Void bill',
+          command: 'bill void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this bill',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // EXPENSE
+    // --------------------------------------------------------------------------
+    case 'expense.list':
+      return [
+        {
+          key: '1',
+          label: 'View expense',
+          command: 'expense view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Duplicate expense',
+          command: 'expense duplicate {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create new expense',
+          command: 'expense create',
+          needsRow: false,
+          prompt: 'Enter amount and category (e.g., 50 Office Supplies)',
+        },
+        {
+          key: '0',
+          label: 'Delete expense',
+          command: 'expense delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this expense',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // PRODUCT
+    // --------------------------------------------------------------------------
+    case 'product.list':
+      return [
+        {
+          key: '1',
+          label: 'View product',
+          command: 'product view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Edit product',
+          command: 'product edit {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create invoice with product',
+          command: 'invoice create --product={name}',
+          needsRow: true,
+          prompt: 'Enter customer name',
+        },
+        {
+          key: '4',
+          label: 'Create new product',
+          command: 'product create',
+          needsRow: false,
+          prompt: 'Enter product name and price (e.g., Widget 29.99)',
+        },
+        {
+          key: '0',
+          label: 'Delete product',
+          command: 'product delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this product',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // ACCOUNT (Chart of Accounts)
+    // --------------------------------------------------------------------------
+    case 'account.list':
+      return [
+        {
+          key: '1',
+          label: 'View account',
+          command: 'account view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'View transactions',
+          command: 'journal list --account={code}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create sub-account',
+          command: 'account create --parent={code}',
+          needsRow: true,
+          prompt: 'Enter account name and type',
+        },
+        {
+          key: '4',
+          label: 'Create new account',
+          command: 'account create',
+          needsRow: false,
+          prompt: 'Enter account name and type (e.g., Cash asset)',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // JOURNAL
+    // --------------------------------------------------------------------------
+    case 'journal.list':
+      return [
+        {
+          key: '1',
+          label: 'View entry',
+          command: 'journal view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Reverse entry',
+          command: 'journal reverse {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to create reversal entry',
+        },
+        {
+          key: '3',
+          label: 'Create new entry',
+          command: 'journal create',
+          needsRow: false,
+          prompt: 'Enter description',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // REPORT
+    // --------------------------------------------------------------------------
+    case 'report.list':
+      return [
+        {
+          key: '1',
+          label: 'Generate report',
+          command: 'report generate {type}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Profit & Loss',
+          command: 'report generate profit_loss --period=this_month',
+          needsRow: false,
+        },
+        {
+          key: '3',
+          label: 'Balance Sheet',
+          command: 'report generate balance_sheet',
+          needsRow: false,
+        },
+        {
+          key: '4',
+          label: 'Aged Receivables',
+          command: 'report generate aged_receivables',
+          needsRow: false,
+        },
+        {
+          key: '5',
+          label: 'Aged Payables',
+          command: 'report generate aged_payables',
+          needsRow: false,
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // TAX
+    // --------------------------------------------------------------------------
+    case 'tax.list':
+      return [
+        {
+          key: '1',
+          label: 'View tax',
+          command: 'tax view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Edit tax rate',
+          command: 'tax edit {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create new tax',
+          command: 'tax create',
+          needsRow: false,
+          prompt: 'Enter tax name and rate (e.g., VAT 15)',
         },
       ]
 
@@ -1490,3210 +2997,3 @@ export function getQuickActionLabel(
   // Append identifier to label
   return `${action.label}: ${identifier}`
 }
-
-
-===== build/resources/js/palette/table.ts =====
-/**
- * Format data as an ASCII table
- */
-export function formatTable(
-  rows: string[][],
-  headers?: string[],
-  footer?: string
-): string {
-  if (rows.length === 0 && !headers) {
-    return '(no results)'
-  }
-
-  // Calculate column widths
-  const allRows = headers ? [headers, ...rows] : rows
-  const colCount = Math.max(...allRows.map(r => r.length))
-  const colWidths: number[] = []
-
-  for (let col = 0; col < colCount; col++) {
-    let maxWidth = 0
-    for (const row of allRows) {
-      const cell = stripAnsi(row[col] || '')
-      maxWidth = Math.max(maxWidth, cell.length)
-    }
-    // Cap column width at 40 chars
-    colWidths.push(Math.min(maxWidth, 40))
-  }
-
-  const lines: string[] = []
-
-  // Top border
-  lines.push(formatBorder(colWidths, '┌', '┬', '┐'))
-
-  // Header
-  if (headers) {
-    lines.push(formatRow(headers, colWidths))
-    lines.push(formatBorder(colWidths, '├', '┼', '┤'))
-  }
-
-  // Rows
-  for (let i = 0; i < rows.length; i++) {
-    lines.push(formatRow(rows[i], colWidths))
-  }
-
-  // Bottom border
-  lines.push(formatBorder(colWidths, '└', '┴', '┘'))
-
-  // Footer
-  if (footer) {
-    lines.push('')
-    lines.push(footer)
-  }
-
-  return lines.join('\n')
-}
-
-/**
- * Format a single row
- */
-function formatRow(cells: string[], widths: number[]): string {
-  const parts: string[] = []
-
-  for (let i = 0; i < widths.length; i++) {
-    const cell = cells[i] || ''
-    const stripped = stripAnsi(cell)
-    const padded = stripped.padEnd(widths[i])
-    // Truncate if too long
-    const final = padded.length > widths[i] 
-      ? padded.substring(0, widths[i] - 1) + '…'
-      : padded
-    parts.push(final)
-  }
-
-  return '│ ' + parts.join(' │ ') + ' │'
-}
-
-/**
- * Format a border line
- */
-function formatBorder(widths: number[], left: string, mid: string, right: string): string {
-  const segments = widths.map(w => '─'.repeat(w + 2))
-  return left + segments.join(mid) + right
-}
-
-/**
- * Strip ANSI codes and our custom tags from text
- */
-function stripAnsi(text: string): string {
-  // Remove ANSI escape codes
-  let result = text.replace(/\x1b\[[0-9;]*m/g, '')
-  // Remove our {tag}...{/} format
-  result = result.replace(/\{[^}]+\}/g, '')
-  return result
-}
-
-/**
- * Simple table format (no borders) for compact output
- */
-export function formatSimpleTable(
-  rows: string[][],
-  headers?: string[]
-): string {
-  if (rows.length === 0) return '(no results)'
-
-  const allRows = headers ? [headers, ...rows] : rows
-  const colCount = Math.max(...allRows.map(r => r.length))
-  const colWidths: number[] = []
-
-  for (let col = 0; col < colCount; col++) {
-    let maxWidth = 0
-    for (const row of allRows) {
-      const cell = stripAnsi(row[col] || '')
-      maxWidth = Math.max(maxWidth, cell.length)
-    }
-    colWidths.push(Math.min(maxWidth, 40))
-  }
-
-  const lines: string[] = []
-
-  if (headers) {
-    lines.push(formatSimpleRow(headers, colWidths))
-    lines.push(colWidths.map(w => '─'.repeat(w)).join('  '))
-  }
-
-  for (const row of rows) {
-    lines.push(formatSimpleRow(row, colWidths))
-  }
-
-  return lines.join('\n')
-}
-
-function formatSimpleRow(cells: string[], widths: number[]): string {
-  return cells
-    .map((cell, i) => {
-      const stripped = stripAnsi(cell || '')
-      return stripped.padEnd(widths[i] || 0)
-    })
-    .join('  ')
-}
-
-/**
- * Format key-value pairs (for single record display)
- */
-export function formatKeyValue(data: Record<string, unknown>): string {
-  const maxKeyLen = Math.max(...Object.keys(data).map(k => k.length))
-
-  return Object.entries(data)
-    .map(([key, value]) => {
-      const paddedKey = key.padEnd(maxKeyLen)
-      const displayValue = formatValue(value)
-      return `${paddedKey}  ${displayValue}`
-    })
-    .join('\n')
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'number') return value.toLocaleString()
-  if (value instanceof Date) return value.toLocaleDateString()
-  if (Array.isArray(value)) return value.join(', ')
-  return String(value)
-}
-
-
-===== build/resources/js/components/palette/CommandPalette.vue =====
-<script setup lang="ts">
-import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
-import { parse } from '@/palette/parser'
-import { generateSuggestions } from '@/palette/autocomplete'
-import { formatTable } from '@/palette/table'
-import { getHelp } from '@/palette/help'
-import { formatText } from '@/palette/formatter'
-import { getCommandExample } from '@/palette/grammar'
-import { getQuickActions, resolveQuickActionCommand, getQuickActionLabel } from '@/palette/quick-actions'
-import { usePage } from '@inertiajs/vue3'
-import type { ParsedCommand, Suggestion, QuickAction, TableState } from '@/types/palette'
-
-const props = defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ 'update:visible': [v: boolean] }>()
-
-// State
-const input = ref('')
-const output = ref<OutputLine[]>([])
-const history = ref<string[]>(loadHistory())
-const historyIndex = ref(-1)
-const executing = ref(false)
-const suggestions = ref<Suggestion[]>([])
-const suggestionIndex = ref(0)
-const showSuggestions = ref(false)
-const awaitingConfirmation = ref<{
-  original: string
-  parsed: ParsedCommand
-  message: string
-} | null>(null)
-
-// Quick actions state
-const tableState = ref<TableState | null>(null)
-const quickActions = ref<QuickAction[]>([])
-const showSubPrompt = ref(false)
-const subPromptAction = ref<QuickAction | null>(null)
-const subPromptInput = ref('')
-const pendingRefreshEntity = ref<string | null>(null)
-
-// Parsed command (reactive)
-const parsed = computed(() => parse(input.value))
-
-// Parsed display helpers
-const hasFlags = computed(() => Object.keys(parsed.value.flags).length > 0)
-const flagEntries = computed(() => Object.entries(parsed.value.flags))
-
-// Inline placeholder hint (ghosted text showing example)
-const placeholderHint = computed(() => {
-  // Don't show if suggestions are visible
-  if (showSuggestions.value) return ''
-
-  // Don't show if executing
-  if (executing.value) return ''
-
-  // Don't show if awaiting confirmation
-  if (awaitingConfirmation.value) return ''
-
-  const trimmed = input.value.trim()
-  const parsedCmd = parse(trimmed)
-
-  // Only show if we have entity + verb
-  if (!parsedCmd.entity || !parsedCmd.verb) return ''
-
-  const example = getCommandExample(parsedCmd.entity, parsedCmd.verb)
-
-  // Only show the remaining part (what user hasn't typed yet)
-  if (example && example.startsWith(trimmed)) {
-    return example.slice(trimmed.length)
-  }
-
-  return ''
-})
-
-// Width of typed text for positioning ghost text
-const typedTextWidth = ref('0px')
-
-// Dynamic suggestions fetch timeout
-const fetchTimeout = ref<number | null>(null)
-
-// Refs
-const inputEl = ref<HTMLInputElement>()
-const outputEl = ref<HTMLDivElement>()
-const subPromptInputEl = ref<HTMLInputElement>()
-
-// Company context
-const page = usePage()
-const initialCompany = computed(() => (page.props.auth as any)?.currentCompany)
-const activeCompany = ref(initialCompany.value || null)
-const companySlug = computed(() => activeCompany.value?.slug || '')
-
-interface OutputLine {
-  type: 'input' | 'output' | 'error' | 'success' | 'table'
-  content: string | string[][]
-  headers?: string[]
-  footer?: string
-}
-
-// Focus on open
-watch(() => props.visible, (v) => {
-  if (v) {
-    nextTick(() => inputEl.value?.focus())
-    document.addEventListener('keydown', handleKeydown)
-  } else {
-    showSuggestions.value = false
-    historyIndex.value = -1
-    document.removeEventListener('keydown', handleKeydown)
-  }
-})
-
-// Auto-scroll output
-watch(() => output.value.length, () => {
-  nextTick(() => {
-    if (outputEl.value) outputEl.value.scrollTop = outputEl.value.scrollHeight
-  })
-})
-
-// Update suggestions on input
-watch(input, async (val) => {
-  const trimmed = val.trim()
-
-  // Calculate text width for ghost text positioning
-  if (inputEl.value) {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      const style = window.getComputedStyle(inputEl.value)
-      ctx.font = style.font
-      const width = ctx.measureText(val).width
-      typedTextWidth.value = `${width}px`
-    }
-  }
-
-  if (!trimmed) {
-    showSuggestions.value = false
-    return
-  }
-
-  const words = trimmed.split(/\s+/)
-  const parsedCmd = parse(trimmed)
-
-  // Special case: If we have entity + verb and input ends with space,
-  // show placeholder hint instead of suggestions
-  if (words.length === 2 && val.endsWith(' ') && parsedCmd.entity && parsedCmd.verb) {
-    showSuggestions.value = false
-    return
-  }
-
-  // If less than 3 words, use static grammar-based suggestions
-  if (words.length < 3) {
-    suggestions.value = generateSuggestions(val)
-    showSuggestions.value = suggestions.value.length > 0
-    suggestionIndex.value = 0
-    return
-  }
-
-  // 3+ words: fetch dynamic suggestions
-  if (!parsedCmd.entity || !parsedCmd.verb) {
-    suggestions.value = generateSuggestions(val)
-    showSuggestions.value = suggestions.value.length > 0
-    suggestionIndex.value = 0
-    return
-  }
-
-  // Extract partial value (everything after entity and verb)
-  const partialValue = words.slice(2).join(' ')
-
-  // Fetch dynamic suggestions
-  await fetchDynamicSuggestions(parsedCmd.entity, parsedCmd.verb, partialValue)
-})
-
-// Watch output for table data to populate tableState
-watch(output, (newOutput) => {
-  const lastTable = newOutput.slice().reverse().find(line => line.type === 'table')
-
-  if (!lastTable) {
-    tableState.value = null
-    return
-  }
-
-  // Get the last command that was executed
-  const lastInput = newOutput.slice().reverse().find(line => line.type === 'input')
-  if (!lastInput) {
-    return
-  }
-
-  // Parse the command to get entity and verb
-  const cmd = String(lastInput.content).replace('❯ ', '')
-  const parsedCmd = parse(cmd)
-
-  if (!parsedCmd.entity || !parsedCmd.verb) {
-    return
-  }
-
-  // Populate tableState
-  tableState.value = {
-    headers: lastTable.headers || [],
-    rows: lastTable.content as string[][],
-    selectedRowIndex: 0,
-    entity: parsedCmd.entity,
-    verb: parsedCmd.verb,
-  }
-}, { deep: true })
-
-// Watch tableState to update quickActions
-watch(tableState, (newState) => {
-  if (!newState) {
-    quickActions.value = []
-    return
-  }
-
-  const actions = getQuickActions(newState.entity, newState.verb)
-  quickActions.value = actions
-})
-
-function close() {
-  emit('update:visible', false)
-  input.value = ''
-  if (fetchTimeout.value) clearTimeout(fetchTimeout.value)
-}
-
-/**
- * Fetch dynamic suggestions from backend
- */
-async function fetchDynamicSuggestions(
-  entity: string,
-  verb: string,
-  partial: string
-) {
-  // Clear existing timeout
-  if (fetchTimeout.value) clearTimeout(fetchTimeout.value)
-
-  // Debounce to avoid excessive requests
-  fetchTimeout.value = setTimeout(async () => {
-    try {
-      const params = new URLSearchParams({
-        entity,
-        verb,
-        q: partial,
-      })
-
-      const res = await fetch(`/api/palette/suggestions?${params}`, {
-        credentials: 'same-origin',
-        headers: {
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      })
-
-      if (!res.ok) {
-        // Fallback to static suggestions on error
-        suggestions.value = generateSuggestions(input.value)
-        showSuggestions.value = suggestions.value.length > 0
-        return
-      }
-
-      const data = await res.json()
-
-      // Merge dynamic suggestions with static ones
-      const dynamicSuggestions = (data.suggestions || []).map((s: any) => ({
-        type: 'value' as const,
-        value: `${entity} ${verb} ${s.value}`,
-        label: s.label,
-        description: s.description,
-        icon: s.icon,
-      }))
-
-      const staticSuggestions = generateSuggestions(input.value)
-
-      // Combine and deduplicate
-      suggestions.value = [...dynamicSuggestions, ...staticSuggestions].slice(0, 8)
-      showSuggestions.value = suggestions.value.length > 0
-      suggestionIndex.value = 0
-
-    } catch (e) {
-      console.error('Failed to fetch palette suggestions:', e)
-      // Fallback to static suggestions
-      suggestions.value = generateSuggestions(input.value)
-      showSuggestions.value = suggestions.value.length > 0
-    }
-  }, 300) // 300ms debounce
-}
-
-function addOutput(type: OutputLine['type'], content: string | string[][], headers?: string[], footer?: string) {
-  output.value.push({ type, content, headers, footer })
-  // Keep max 200 lines
-  if (output.value.length > 200) {
-    output.value = output.value.slice(-200)
-  }
-}
-
-// Destructive actions requiring confirmation
-const DESTRUCTIVE_ACTIONS = [
-  'company.delete',
-  'user.delete',
-  'role.delete',
-  'user.deactivate',
-]
-
-async function execute() {
-  const cmd = input.value.trim()
-  if (!cmd || executing.value) return
-
-  showSuggestions.value = false
-
-  // Check if we're awaiting confirmation
-  if (awaitingConfirmation.value) {
-    if (cmd.toLowerCase() === 'yes') {
-      // User confirmed - execute the original command
-      const { parsed } = awaitingConfirmation.value
-      awaitingConfirmation.value = null
-      await executeCommand(parsed)
-    } else {
-      // User cancelled
-      addOutput('output', '{secondary}Cancelled{/}')
-      awaitingConfirmation.value = null
-    }
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  // Handle built-in commands
-  if (cmd === 'clear' || cmd === 'cls') {
-    output.value = []
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  if (cmd === 'help' || cmd.startsWith('help ')) {
-    const topic = cmd.slice(5).trim() || undefined
-    const helpText = getHelp(topic)
-    addOutput('output', helpText)
-    addToHistory(cmd)
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  // Parse command
-  const parsed = parse(cmd)
-
-  if (parsed.errors.length > 0) {
-    addOutput('input', `❯ ${cmd}`)
-    addOutput('error', `{error}✗{/} ${parsed.errors.join(', ')}`)
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  if (!parsed.entity || !parsed.verb) {
-    addOutput('input', `❯ ${cmd}`)
-    addOutput('error', `{error}✗{/} Unknown command. Type 'help' for available commands.`)
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  // Check if destructive
-  const actionKey = `${parsed.entity}.${parsed.verb}`
-  if (DESTRUCTIVE_ACTIONS.includes(actionKey)) {
-    // Show confirmation prompt
-    const entityName = String(parsed.flags.slug || parsed.flags.email || parsed.flags.name || 'this item')
-    addOutput('input', `❯ ${cmd}`)
-    addOutput('warning', `{warning}⚠️  Delete ${entityName}?{/}`)
-    addOutput('warning', `{warning}Type 'yes' to confirm, or anything else to cancel{/}`)
-
-    awaitingConfirmation.value = {
-      original: cmd,
-      parsed: parsed,
-      message: `Confirm deletion`,
-    }
-    addToHistory(cmd)
-    input.value = ''
-    focusInput()
-    return
-  }
-
-  // Normal execution
-  await executeCommand(parsed)
-  input.value = ''
-  focusInput()
-}
-
-async function executeCommand(parsed: ParsedCommand) {
-  const cmd = parsed.raw
-  const resolvedCompanySlug = getRequestCompanySlug(parsed)
-  const requiresCompany = needsCompanyContext(parsed)
-
-  // Clear quick actions when new command executes
-  tableState.value = null
-  quickActions.value = []
-  showSubPrompt.value = false
-  subPromptAction.value = null
-  subPromptInput.value = ''
-
-  addOutput('input', `❯ ${cmd}`)
-  addToHistory(cmd)
-  executing.value = true
-
-  try {
-    // Require company context for tenant commands
-    if (requiresCompany && !resolvedCompanySlug) {
-      addOutput('error', `{error}✗{/} Company context required. Switch into a company or include --slug.`)
-      return
-    }
-
-    // Read-only verbs that shouldn't use idempotency (always fetch fresh)
-    const readOnlyVerbs = ['list', 'view', 'get', 'show']
-    const isReadOnly = readOnlyVerbs.includes(parsed.verb)
-
-    // For read operations, add timestamp to ensure fresh data
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-Action': `${parsed.entity}.${parsed.verb}`,
-      'X-CSRF-TOKEN': getCsrfToken(),
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-    }
-
-    if (resolvedCompanySlug) {
-      headers['X-Company-Slug'] = resolvedCompanySlug
-    }
-
-    // Only use idempotency for write operations
-    if (!isReadOnly) {
-      // ALWAYS generate a fresh idempotency key with timestamp
-      // Don't use parsed.idemKey as it's deterministic (same command = same key)
-      headers['X-Idempotency-Key'] = generateIdemKey(parsed)
-    } else {
-      // For read ops, add timestamp to bust any backend caching
-      headers['X-Request-Time'] = Date.now().toString()
-    }
-
-    const res = await fetch('/api/commands', {
-      method: 'POST',
-      credentials: 'same-origin',
-      cache: 'no-store', // Prevent browser caching
-      headers,
-      body: JSON.stringify({ params: parsed.flags }),
-    })
-
-    const data = await res.json()
-
-    if (data.ok) {
-      // Table response
-      if (data.data?.headers && data.data?.rows) {
-        addOutput('table', data.data.rows, data.data.headers, data.data.footer)
-      } 
-      // Message response
-      else if (data.message) {
-        addOutput('success', `{success}✓{/} ${data.message}`)
-      }
-      // Generic success
-      else {
-        addOutput('success', '{success}✓{/} Done')
-      }
-
-      // After deletes, refresh the list to show updated rows
-      if (parsed.verb === 'delete' && parsed.entity) {
-        pendingRefreshEntity.value = parsed.entity
-      }
-
-      // Handle redirect
-      if (data.redirect) {
-        addOutput('output', `{link:${data.redirect}}→ Open in GUI{/}`)
-      }
-
-      // Update active company after switch
-      if (parsed.entity === 'company' && parsed.verb === 'switch') {
-        const payload = data.data || {}
-        activeCompany.value = {
-          id: payload.id || '',
-          name: payload.name || '',
-          slug: payload.slug || '',
-          user_count: payload.user_count,
-          base_currency: payload.base_currency,
-          status: payload.status,
-        }
-      }
-    } else {
-      const friendly = normalizePermissionError(data.message)
-      addOutput('error', `{error}✗{/} ${friendly}`)
-      if (data.errors) {
-        Object.entries(data.errors).forEach(([field, messages]) => {
-          addOutput('error', `{error}  ${field}:{/} ${(messages as string[]).join(', ')}`)
-        })
-      }
-    }
-  } catch (e) {
-    addOutput('error', `{error}✗{/} Network error: ${e instanceof Error ? e.message : 'Unknown'}`)
-  } finally {
-    executing.value = false
-    const refreshEntity = pendingRefreshEntity.value
-    pendingRefreshEntity.value = null
-    focusInput()
-    if (refreshEntity) {
-      input.value = `${refreshEntity} list`
-      execute()
-    }
-  }
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (!props.visible) return
-
-  if (showSubPrompt.value) {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      closeSubPrompt()
-    }
-    return
-  }
-
-  // Escape - close
-  if (e.key === 'Escape') {
-    if (showSuggestions.value) {
-      showSuggestions.value = false
-    } else {
-      close()
-    }
-    return
-  }
-
-  // Enter - execute or accept suggestion
-  if (e.key === 'Enter') {
-    if (showSuggestions.value && suggestions.value.length > 0) {
-      e.preventDefault()
-      acceptSuggestion()
-    } else {
-      execute()
-    }
-    return
-  }
-
-  // Tab - accept suggestion or execute complete command; keep focus inside palette
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    if (showSuggestions.value && suggestions.value.length > 0) {
-      acceptSuggestion()
-      return
-    }
-    const parsedCmd = parsed.value
-    if (
-      parsedCmd.entity &&
-      parsedCmd.verb &&
-      parsedCmd.errors.length === 0
-    ) {
-      const noFlags = Object.keys(parsedCmd.flags || {}).length === 0
-      if (parsedCmd.complete || noFlags) {
-        execute()
-      } else {
-        focusInput()
-      }
-    } else {
-      focusInput()
-    }
-    return
-  }
-
-  // Arrow navigation
-  if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    if (showSuggestions.value) {
-      suggestionIndex.value = Math.max(0, suggestionIndex.value - 1)
-    } else if (tableState.value && tableState.value.rows.length > 0) {
-      // Navigate table rows
-      const newIndex = Math.max(0, tableState.value.selectedRowIndex - 1)
-      tableState.value.selectedRowIndex = newIndex
-    } else if (history.value.length && historyIndex.value < history.value.length - 1) {
-      historyIndex.value++
-      input.value = history.value[historyIndex.value]
-    }
-    return
-  }
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    if (showSuggestions.value) {
-      suggestionIndex.value = Math.min(suggestions.value.length - 1, suggestionIndex.value + 1)
-    } else if (tableState.value && tableState.value.rows.length > 0) {
-      // Navigate table rows
-      const newIndex = Math.min(tableState.value.rows.length - 1, tableState.value.selectedRowIndex + 1)
-      tableState.value.selectedRowIndex = newIndex
-    } else if (historyIndex.value > 0) {
-      historyIndex.value--
-      input.value = history.value[historyIndex.value]
-    } else if (historyIndex.value === 0) {
-      historyIndex.value = -1
-      input.value = ''
-    }
-    return
-  }
-
-  // Number keys (0-9) - trigger quick actions
-  if (quickActions.value.length > 0 && /^[0-9]$/.test(e.key)) {
-    const action = quickActions.value.find(a => a.key === e.key)
-    if (action) {
-      e.preventDefault()
-      handleQuickAction(action)
-      return
-    }
-  }
-
-  // Ctrl+L - clear
-  if (e.key === 'l' && e.ctrlKey) {
-    e.preventDefault()
-    output.value = []
-    return
-  }
-
-  // Ctrl+U - clear input
-  if (e.key === 'u' && e.ctrlKey) {
-    e.preventDefault()
-    input.value = ''
-    return
-  }
-}
-
-function acceptSuggestion() {
-  const suggestion = suggestions.value[suggestionIndex.value] || suggestions.value[0]
-  if (!suggestion) return
-
-  // Use the value from the suggestion
-  input.value = suggestion.value
-  showSuggestions.value = false
-  nextTick(() => inputEl.value?.focus())
-}
-
-function selectSuggestion(index: number) {
-  suggestionIndex.value = index
-  acceptSuggestion()
-}
-
-function addToHistory(cmd: string) {
-  history.value = [cmd, ...history.value.filter(h => h !== cmd)].slice(0, 100)
-  historyIndex.value = -1
-  saveHistory()
-}
-
-function loadHistory(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem('palette-history') || '[]')
-  } catch {
-    return []
-  }
-}
-
-function saveHistory() {
-  try {
-    localStorage.setItem('palette-history', JSON.stringify(history.value))
-  } catch { /* ignore */ }
-}
-
-function getCsrfToken(): string {
-  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-}
-
-function generateIdemKey(parsed: ParsedCommand): string {
-  const parts = [parsed.entity, parsed.verb, Date.now(), JSON.stringify(parsed.flags)]
-  return btoa(parts.join('|')).substring(0, 32)
-}
-
-function needsCompanyContext(parsed: ParsedCommand): boolean {
-  const key = `${parsed.entity}.${parsed.verb}`
-  const globalCommands = new Set([
-    'company.list',
-    'company.create',
-    'company.switch',
-    'help',
-    'clear',
-  ])
-  return !globalCommands.has(key)
-}
-
-function normalizePermissionError(message?: string): string {
-  if (!message) return 'Command failed'
-  if (message.includes('There is no permission named')) {
-    return `${message} (permissions cache likely stale — run app:sync-permissions and app:sync-role-permissions)`
-  }
-  return message
-}
-
-function getRequestCompanySlug(parsed: ParsedCommand): string {
-  const flags = parsed.flags as Record<string, unknown>
-  const fromFlags = ['slug', 'company', 'id'].map((key) => {
-    const val = flags?.[key]
-    return typeof val === 'string' ? val.trim() : ''
-  }).find(Boolean) || ''
-
-  return companySlug.value || fromFlags || getSlugFromTableState()
-}
-
-function getSlugFromTableState(): string {
-  const state = tableState.value
-  if (!state) return ''
-
-  const rowIndex = state.selectedRowIndex
-  if (rowIndex < 0 || rowIndex >= state.rows.length) return ''
-
-  const slugIndex = state.headers.findIndex(h => h.toLowerCase().replace(/\s+/g, '') === 'slug')
-  if (slugIndex === -1) return ''
-
-  return state.rows[rowIndex]?.[slugIndex] || ''
-}
-
-// Handle quick action click
-function handleQuickAction(action: QuickAction) {
-  // Check if action needs row selection
-  if (action.needsRow && (!tableState.value || tableState.value.selectedRowIndex < 0)) {
-    return
-  }
-
-  // Check if action needs sub-prompt
-  if (action.prompt) {
-    subPromptAction.value = action
-    subPromptInput.value = ''
-    showSubPrompt.value = true
-    nextTick(() => subPromptInputEl.value?.focus())
-    return
-  }
-
-  // Execute directly
-  const resolved = resolveQuickActionCommand(action.command, tableState.value)
-  if (resolved) {
-    input.value = resolved
-    execute()
-  }
-}
-
-// Select row in table
-function selectRow(rowIndex: number) {
-  if (tableState.value) {
-    tableState.value.selectedRowIndex = rowIndex
-  }
-  focusInput()
-}
-
-// Close sub-prompt modal
-function closeSubPrompt() {
-  showSubPrompt.value = false
-  subPromptAction.value = null
-  subPromptInput.value = ''
-  focusInput()
-}
-
-// Confirm sub-prompt and execute
-function confirmSubPrompt() {
-  if (!subPromptAction.value || !subPromptInput.value.trim()) return
-
-  // Resolve command with row data first
-  let resolved = resolveQuickActionCommand(subPromptAction.value.command, tableState.value)
-
-  // If command still has placeholders or is null, use the base command
-  if (!resolved) {
-    resolved = subPromptAction.value.command
-  }
-
-  // Append the user input
-  const finalCommand = `${resolved} ${subPromptInput.value.trim()}`
-
-  // Execute
-  input.value = finalCommand
-  closeSubPrompt()
-  execute()
-}
-
-// Click outside to close suggestions
-function handleClickOutside(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (!target.closest('.palette-autocomplete') && !target.closest('.palette-input')) {
-    showSuggestions.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-  document.removeEventListener('keydown', handleKeydown)
-})
-
-function focusInput() {
-  nextTick(() => inputEl.value?.focus())
-}
-</script>
-
-<template>
-  <Teleport to="body">
-    <!-- Backdrop -->
-    <div v-if="visible" class="palette-backdrop" @click="close" />
-
-    <!-- Palette -->
-    <div v-if="visible" class="palette">
-      <!-- Header - minimal, just company context -->
-      <div class="palette-header">
-        <span class="palette-company">
-          <span class="palette-company-icon">●</span>
-          {{ activeCompany?.name || 'No company' }}
-        </span>
-        <div v-if="activeCompany" class="palette-company-meta">
-          <span class="palette-chip">Slug: {{ activeCompany.slug }}</span>
-          <span v-if="activeCompany.id" class="palette-chip">ID: {{ activeCompany.id }}</span>
-          <span v-if="activeCompany.user_count !== undefined" class="palette-chip">Users: {{ activeCompany.user_count }}</span>
-        </div>
-        <div class="palette-header-right">
-          <span class="palette-shortcut">Esc to close</span>
-        </div>
-      </div>
-
-      <!-- Main content area with sidebar -->
-      <div class="palette-body">
-        <!-- Main output and input area -->
-        <div class="palette-main">
-          <!-- Output -->
-          <div ref="outputEl" class="palette-output">
-        <template v-if="output.length === 0">
-          <div class="palette-empty">
-            Type a command or <span class="palette-cmd">help</span> for available commands
-          </div>
-        </template>
-        <template v-for="(line, i) in output" :key="i">
-          <!-- Table with row selection -->
-          <div v-if="line.type === 'table'" class="palette-table">
-            <div class="table-wrapper">
-              <!-- Table headers -->
-              <div v-if="line.headers && line.headers.length" class="table-header">
-                <div
-                  v-for="(header, colIndex) in line.headers"
-                  :key="colIndex"
-                  class="table-cell table-cell--header"
-                >
-                  {{ header }}
-                </div>
-              </div>
-              <!-- Table rows -->
-              <div
-                v-for="(row, rowIndex) in (line.content as string[][])"
-                :key="rowIndex"
-                class="table-row"
-                :class="{
-                  'table-row--selected': tableState && i === output.length - 1 && rowIndex === tableState.selectedRowIndex
-                }"
-                @click="selectRow(rowIndex)"
-              >
-                <div
-                  v-for="(cell, colIndex) in row"
-                  :key="colIndex"
-                  class="table-cell"
-                >
-                  {{ cell }}
-                </div>
-              </div>
-              <!-- Table footer -->
-              <div v-if="line.footer" class="table-footer">
-                {{ line.footer }}
-              </div>
-            </div>
-          </div>
-          <!-- Text lines -->
-          <div
-            v-else
-            class="palette-line"
-            :class="{
-              'palette-line--input': line.type === 'input',
-              'palette-line--error': line.type === 'error',
-              'palette-line--success': line.type === 'success',
-            }"
-            v-html="formatText(String(line.content))"
-          ></div>
-        </template>
-      </div>
-
-      <!-- Input area -->
-      <div class="palette-input-area">
-        <!-- Autocomplete dropdown (above input) -->
-        <div v-if="showSuggestions && suggestions.length" class="palette-autocomplete">
-          <div
-            v-for="(suggestion, index) in suggestions"
-            :key="suggestion.value"
-            class="palette-autocomplete-item"
-            :class="{ 'palette-autocomplete-item--selected': index === suggestionIndex }"
-            @click="selectSuggestion(index)"
-            @mouseenter="suggestionIndex = index"
-          >
-            <span class="suggestion-icon">{{ suggestion.icon || '📦' }}</span>
-            <div class="suggestion-content">
-              <span class="suggestion-label">{{ suggestion.label }}</span>
-              <span v-if="suggestion.description" class="suggestion-desc">{{ suggestion.description }}</span>
-            </div>
-            <kbd v-if="index === suggestionIndex">Tab</kbd>
-          </div>
-        </div>
-
-        <!-- Input row -->
-        <div class="palette-input-row">
-          <span class="palette-prompt" :class="{ 'palette-prompt--busy': executing }">
-            {{ executing ? '⋯' : '❯' }}
-          </span>
-          <div class="palette-input-container">
-            <input
-              ref="inputEl"
-              v-model="input"
-              type="text"
-              class="palette-input"
-              :disabled="executing"
-              placeholder="Type a command..."
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-            />
-            <span
-              v-if="placeholderHint"
-              class="palette-placeholder-hint"
-              :style="{ '--typed-text-width': typedTextWidth }"
-            >
-              {{ placeholderHint }}
-            </span>
-          </div>
-          <div v-if="executing" class="palette-loading">
-            <div class="palette-spinner"></div>
-            <span class="palette-loading-text">Executing...</span>
-          </div>
-        </div>
-
-        <!-- Helper text -->
-        <div class="palette-helper">
-          <template v-if="showSuggestions">
-            <span><kbd>↑↓</kbd> navigate</span>
-            <span><kbd>Tab</kbd> accept</span>
-          </template>
-          <template v-else>
-            <span><kbd>Enter</kbd> run</span>
-            <span><kbd>↑↓</kbd> history</span>
-            <span><kbd>Ctrl+L</kbd> clear</span>
-          </template>
-        </div>
-
-        <!-- Parsed status bar -->
-        <div v-if="input.trim()" class="palette-parsed">
-          <span 
-            class="palette-parsed__pill" 
-            :class="{ 'palette-parsed__pill--valid': parsed.entity }"
-          >
-            {{ parsed.entity || 'entity' }}
-          </span>
-          <span class="palette-parsed__dot">.</span>
-          <span 
-            class="palette-parsed__pill palette-parsed__pill--verb"
-            :class="{ 'palette-parsed__pill--valid': parsed.verb }"
-          >
-            {{ parsed.verb || 'verb' }}
-          </span>
-          
-          <template v-if="hasFlags">
-            <span class="palette-parsed__flags">
-              <span 
-                v-for="[key, val] in flagEntries" 
-                :key="key" 
-                class="palette-parsed__flag"
-              >
-                --{{ key }}={{ val }}
-              </span>
-            </span>
-          </template>
-
-          <span v-if="parsed.errors.length" class="palette-parsed__error">
-            ✗ {{ parsed.errors[0] }}
-          </span>
-          <span v-else-if="parsed.complete" class="palette-parsed__ready">
-            ✓ ready
-          </span>
-        </div>
-      </div>
-        </div>
-
-        <!-- Quick Actions Sidebar -->
-        <div v-if="quickActions.length > 0" class="palette-sidebar">
-          <div class="sidebar-header">
-            Quick Actions
-            <span v-if="tableState" class="sidebar-debug">
-              ({{ tableState.entity }}.{{ tableState.verb }})
-            </span>
-          </div>
-          <div class="sidebar-actions">
-            <div
-              v-for="action in quickActions"
-              :key="action.key"
-              class="sidebar-action"
-              :class="{
-                'sidebar-action--needs-row': action.needsRow && !tableState,
-                'sidebar-action--disabled': action.needsRow && (!tableState || tableState.selectedRowIndex < 0)
-              }"
-              @click="handleQuickAction(action)"
-            >
-              <span class="action-key">{{ action.key }}</span>
-              <span class="action-label">{{ getQuickActionLabel(action, tableState) }}</span>
-            </div>
-        </div>
-        <div class="sidebar-hint">
-          Press the shown number keys (0-9)
-          <template v-if="tableState">
-            <br />
-            <span class="hint-small">Use ↑↓ to select row</span>
-          </template>
-        </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sub-Prompt Modal -->
-    <div v-if="showSubPrompt && subPromptAction" class="subprompt-backdrop" @click="closeSubPrompt">
-      <div class="subprompt-modal" @click.stop>
-        <div class="subprompt-header">
-          <span class="subprompt-title">{{ subPromptAction.label }}</span>
-          <button class="subprompt-close" @click="closeSubPrompt">✕</button>
-        </div>
-        <div class="subprompt-body">
-          <p class="subprompt-prompt">{{ subPromptAction.prompt }}</p>
-          <input
-            ref="subPromptInputEl"
-            v-model="subPromptInput"
-            type="text"
-            class="subprompt-input"
-            placeholder="Enter value..."
-            @keydown.enter="confirmSubPrompt"
-            @keydown.esc="closeSubPrompt"
-          />
-        </div>
-        <div class="subprompt-footer">
-          <button class="subprompt-btn subprompt-btn--cancel" @click="closeSubPrompt">
-            Cancel
-          </button>
-          <button class="subprompt-btn subprompt-btn--confirm" @click="confirmSubPrompt">
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-</template>
-
-<style scoped>
-/* Single dark theme - no switching */
-.palette-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 9998;
-}
-
-.palette {
-  position: fixed;
-  top: 8vh;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1100px;
-  max-width: calc(100vw - 40px);
-  max-height: 80vh;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
-  font-size: 14px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 20px 50px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-/* Body with sidebar */
-.palette-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.palette-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-/* Header */
-.palette-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  font-size: 13px;
-}
-
-.palette-company {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #e2e8f0;
-  font-weight: 500;
-}
-
-.palette-company-icon {
-  color: #22d3ee;
-  font-size: 10px;
-}
-
-.palette-company-meta {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-left: 12px;
-}
-
-.palette-chip {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 3px 8px;
-  border-radius: 6px;
-  color: #cbd5e1;
-  font-size: 11px;
-}
-
-.palette-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.palette-shortcut {
-  color: #64748b;
-  font-size: 12px;
-}
-
-/* Output */
-.palette-output {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 14px;
-  min-height: 120px;
-  max-height: 400px;
-}
-
-.palette-output::-webkit-scrollbar {
-  width: 6px;
-}
-
-.palette-output::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.palette-output::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
-}
-
-.palette-output::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-.palette-empty {
-  color: #64748b;
-  text-align: center;
-  padding: 40px 20px;
-}
-
-.palette-cmd {
-  color: #22d3ee;
-  background: rgba(34, 211, 238, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.palette-line {
-  color: #e2e8f0;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.palette-line--input {
-  color: #22d3ee;
-}
-
-.palette-line--error {
-  color: #f43f5e;
-}
-
-.palette-line--success {
-  color: #10b981;
-}
-
-.palette-table {
-  margin: 8px 0;
-}
-
-.palette-table pre {
-  margin: 0;
-  color: #e2e8f0;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-x: auto;
-}
-
-/* Custom table with row selection */
-.table-wrapper {
-  border: 1px solid #334155;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.table-header {
-  display: flex;
-  background: rgba(34, 211, 238, 0.1);
-  border-bottom: 1px solid #334155;
-}
-
-.table-row {
-  display: flex;
-  border-bottom: 1px solid #334155;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.table-row:last-child {
-  border-bottom: none;
-}
-
-.table-row:hover {
-  background: rgba(34, 211, 238, 0.05);
-}
-
-.table-row--selected {
-  background: rgba(34, 211, 238, 0.15) !important;
-  border-left: 3px solid #22d3ee;
-}
-
-.table-cell {
-  flex: 1;
-  padding: 8px 12px;
-  color: #e2e8f0;
-  font-size: 12px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.table-cell--header {
-  font-weight: 600;
-  color: #22d3ee;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.5px;
-}
-
-.table-footer {
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid #334155;
-  color: #64748b;
-  font-size: 11px;
-  text-align: right;
-}
-
-/* Input area */
-.palette-input-area {
-  position: relative;
-  border-top: 1px solid #334155;
-  background: #1e293b;
-}
-
-.palette-input-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-}
-
-.palette-prompt {
-  color: #22d3ee;
-  margin-right: 10px;
-  font-weight: 600;
-  transition: color 0.15s;
-  flex-shrink: 0;
-}
-
-.palette-prompt--busy {
-  color: #f59e0b;
-}
-
-.palette-input-container {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-.palette-input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #e2e8f0;
-  font: inherit;
-  caret-color: #22d3ee;
-  position: relative;
-  z-index: 2;
-}
-
-.palette-input::placeholder {
-  color: #475569;
-}
-
-.palette-input:disabled {
-  opacity: 0.5;
-}
-
-.palette-placeholder-hint {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: #475569;
-  opacity: 0.4;
-  white-space: nowrap;
-  font: inherit;
-  z-index: 1;
-  padding-left: var(--typed-text-width, 0);
-}
-
-/* Helper */
-.palette-helper {
-  display: flex;
-  gap: 16px;
-  padding: 0 14px 10px;
-  font-size: 11px;
-  color: #64748b;
-}
-
-.palette-helper kbd {
-  display: inline-block;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 1px 5px;
-  border-radius: 3px;
-  margin-right: 4px;
-  font-family: inherit;
-  font-size: 10px;
-}
-
-/* Autocomplete */
-.palette-autocomplete {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  right: 0;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  max-height: 220px;
-  overflow-y: auto;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.palette-autocomplete-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  color: #e2e8f0;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.palette-autocomplete-item:hover,
-.palette-autocomplete-item--selected {
-  background: rgba(34, 211, 238, 0.1);
-}
-
-.palette-autocomplete-item--selected .suggestion-label {
-  color: #22d3ee;
-}
-
-.suggestion-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-  width: 20px;
-  text-align: center;
-}
-
-.suggestion-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.suggestion-label {
-  font-weight: 500;
-  color: #e2e8f0;
-  font-size: 13px;
-}
-
-.suggestion-desc {
-  font-size: 11px;
-  color: #64748b;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.palette-autocomplete-item kbd {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: rgba(34, 211, 238, 0.2);
-  border-radius: 3px;
-  color: #22d3ee;
-  flex-shrink: 0;
-}
-
-/* Parsed status bar */
-.palette-parsed {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 14px;
-  border-top: 1px solid #334155;
-  background: rgba(0, 0, 0, 0.2);
-  font-size: 12px;
-  flex-wrap: wrap;
-}
-
-.palette-parsed__pill {
-  padding: 3px 8px;
-  background: rgba(100, 116, 139, 0.2);
-  border: 1px solid rgba(100, 116, 139, 0.3);
-  border-radius: 4px;
-  color: #64748b;
-  font-family: inherit;
-}
-
-.palette-parsed__pill--valid {
-  background: rgba(34, 211, 238, 0.1);
-  border-color: rgba(34, 211, 238, 0.3);
-  color: #22d3ee;
-}
-
-.palette-parsed__pill--verb.palette-parsed__pill--valid {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #a5b4fc;
-}
-
-.palette-parsed__dot {
-  color: #475569;
-  font-weight: 600;
-}
-
-.palette-parsed__flags {
-  display: flex;
-  gap: 6px;
-  margin-left: 8px;
-  flex-wrap: wrap;
-}
-
-.palette-parsed__flag {
-  padding: 2px 6px;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-radius: 4px;
-  color: #fbbf24;
-  font-size: 11px;
-}
-
-.palette-parsed__error {
-  margin-left: auto;
-  color: #f43f5e;
-  font-size: 11px;
-}
-
-.palette-parsed__ready {
-  margin-left: auto;
-  color: #10b981;
-  font-size: 11px;
-}
-
-/* Loading indicator */
-.palette-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 12px;
-  color: #f59e0b;
-  font-size: 13px;
-}
-
-.palette-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(34, 211, 238, 0.2);
-  border-top-color: #22d3ee;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.palette-loading-text {
-  color: #22d3ee;
-  font-size: 12px;
-}
-
-/* Semantic formatting classes */
-.fmt-success {
-  color: #10b981;
-}
-
-.fmt-error {
-  color: #f43f5e;
-}
-
-.fmt-warning {
-  color: #f59e0b;
-}
-
-.fmt-accent {
-  color: #22d3ee;
-}
-
-.fmt-primary {
-  color: #6366f1;
-}
-
-.fmt-secondary {
-  color: #64748b;
-}
-
-.fmt-dim {
-  opacity: 0.5;
-}
-
-.fmt-code {
-  background: rgba(34, 211, 238, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 13px;
-}
-
-.fmt-link {
-  color: #22d3ee;
-  text-decoration: none;
-  border-bottom: 1px dotted #22d3ee;
-  cursor: pointer;
-}
-
-.fmt-link:hover {
-  text-decoration: underline;
-  border-bottom-style: solid;
-}
-
-/* Quick Actions Sidebar */
-.palette-sidebar {
-  width: 260px;
-  background: #1e293b;
-  border-left: 1px solid #334155;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.sidebar-header {
-  padding: 12px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #334155;
-}
-
-.sidebar-debug {
-  display: block;
-  font-size: 10px;
-  color: #fbbf24;
-  text-transform: none;
-  margin-top: 4px;
-  font-weight: normal;
-}
-
-.sidebar-actions {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.sidebar-action {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  background: rgba(34, 211, 238, 0.05);
-  border: 1px solid rgba(34, 211, 238, 0.2);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.sidebar-action:hover {
-  background: rgba(34, 211, 238, 0.1);
-  border-color: rgba(34, 211, 238, 0.3);
-}
-
-.sidebar-action--disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.sidebar-action--disabled:hover {
-  background: rgba(34, 211, 238, 0.05);
-  border-color: rgba(34, 211, 238, 0.2);
-}
-
-.action-key {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: rgba(34, 211, 238, 0.2);
-  color: #22d3ee;
-  border-radius: 4px;
-  font-weight: 600;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.action-label {
-  flex: 1;
-  color: #e2e8f0;
-  font-size: 12px;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.sidebar-hint {
-  padding: 12px 14px;
-  border-top: 1px solid #334155;
-  font-size: 11px;
-  color: #64748b;
-  line-height: 1.5;
-}
-
-.hint-small {
-  font-size: 10px;
-  opacity: 0.7;
-}
-
-/* Sub-Prompt Modal */
-.subprompt-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.subprompt-modal {
-  width: 480px;
-  max-width: calc(100vw - 40px);
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
-}
-
-.subprompt-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px;
-  border-bottom: 1px solid #334155;
-}
-
-.subprompt-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.subprompt-close {
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: none;
-  color: #64748b;
-  font-size: 18px;
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.subprompt-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-}
-
-.subprompt-body {
-  padding: 20px 18px;
-}
-
-.subprompt-prompt {
-  margin: 0 0 14px 0;
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.5;
-}
-
-.subprompt-input {
-  width: 100%;
-  padding: 12px 14px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #e2e8f0;
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.subprompt-input:focus {
-  border-color: #22d3ee;
-}
-
-.subprompt-input::placeholder {
-  color: #475569;
-}
-
-.subprompt-footer {
-  display: flex;
-  gap: 10px;
-  padding: 16px 18px;
-  border-top: 1px solid #334155;
-  justify-content: flex-end;
-}
-
-.subprompt-btn {
-  padding: 8px 16px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: none;
-}
-
-.subprompt-btn--cancel {
-  background: transparent;
-  color: #64748b;
-  border: 1px solid #334155;
-}
-
-.subprompt-btn--cancel:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
-}
-
-.subprompt-btn--confirm {
-  background: #22d3ee;
-  color: #0f172a;
-}
-
-.subprompt-btn--confirm:hover {
-  background: #06b6d4;
-}
-</style>
-
-
-===== build/app/Services/CommandBus.php =====
-<?php
-
-namespace App\Services;
-
-use App\Contracts\PaletteAction;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Facades\Validator;
-use InvalidArgumentException;
-
-class CommandBus
-{
-    /**
-     * @var array<string, class-string>
-     */
-    private array $map;
-
-    public function __construct(?array $map = null)
-    {
-        $this->map = $map
-            ?? config('command-bus')
-            ?? config('command_bus')
-            ?? $this->fallbackMap();
-    }
-
-    /**
-     * Dispatch a command by name.
-     */
-    public function dispatch(string $action, array $params = [], $user = null, bool $skipPermission = false): array
-    {
-        $handler = $this->resolveHandler($action);
-
-        $rules = $handler->rules();
-        if (! empty($rules)) {
-            $params = Validator::make($params, $rules)->validate();
-        }
-
-        $permission = $handler->permission();
-        if ($permission && ! $skipPermission && $user && method_exists($user, 'hasCompanyPermission')) {
-            if (! $user->hasCompanyPermission($permission)) {
-                throw new AuthorizationException("Permission denied: {$permission}");
-            }
-        }
-
-        return $handler->handle($params);
-    }
-
-    /**
-     * List registered command names.
-     *
-     * @return array<int, string>
-     */
-    public function registered(): array
-    {
-        return array_keys($this->map);
-    }
-
-    /**
-     * Check if a command is registered and its handler class is loadable.
-     */
-    public function has(string $action): bool
-    {
-        return isset($this->map[$action]) && class_exists($this->map[$action]);
-    }
-
-    private function resolveHandler(string $action): PaletteAction
-    {
-        $class = $this->map[$action] ?? null;
-        if (! $class) {
-            throw new InvalidArgumentException("Unknown command: {$action}");
-        }
-
-        if (! class_exists($class)) {
-            throw new InvalidArgumentException("Command handler class not found: {$class}");
-        }
-
-        $handler = app($class);
-        if (! $handler instanceof PaletteAction) {
-            throw new InvalidArgumentException("Invalid handler for command: {$action}");
-        }
-
-        return $handler;
-    }
-
-    private function fallbackMap(): array
-    {
-        return [
-            'company.create' => \App\Actions\Company\CreateAction::class,
-            'company.list' => \App\Actions\Company\IndexAction::class,
-            'company.switch' => \App\Actions\Company\SwitchAction::class,
-            'company.view' => \App\Actions\Company\ViewAction::class,
-            'company.delete' => \App\Actions\Company\DeleteAction::class,
-            'user.invite' => \App\Actions\User\InviteAction::class,
-            'user.list' => \App\Actions\User\IndexAction::class,
-            'user.assign-role' => \App\Actions\User\AssignRoleAction::class,
-            'user.remove-role' => \App\Actions\User\RemoveRoleAction::class,
-            'user.deactivate' => \App\Actions\User\DeactivateAction::class,
-            'user.delete' => \App\Actions\User\DeleteAction::class,
-            'role.list' => \App\Actions\Role\IndexAction::class,
-            'role.assign' => \App\Actions\Role\AssignPermissionAction::class,
-            'role.revoke' => \App\Actions\Role\RevokePermissionAction::class,
-        ];
-    }
-}
-
-
-===== build/app/Http/Controllers/CommandController.php =====
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Facades\CompanyContext;
-use App\Services\CommandBus;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-
-class CommandController extends Controller
-{
-    public function __invoke(Request $request): JsonResponse
-    {
-        $action = $request->header('X-Action');
-        $commandBus = app(CommandBus::class);
-        $debugContext = $this->debugContext($request, $action, null);
-
-        if (! $action || ! preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
-            return $this->error('BAD_REQUEST', 'Invalid or missing X-Action header', 400, $debugContext);
-        }
-
-        if (! $commandBus->has($action)) {
-            return $this->error('NOT_FOUND', "Unknown command: {$action}", 404, [
-                ...$debugContext,
-                'registered_actions' => $commandBus->registered(),
-            ]);
-        }
-
-        $company = CompanyContext::getCompany();
-        $debugContext['company_id'] = $company?->id;
-
-        $companyOptionalCommands = [
-            'company.list',
-            'company.create',
-            'company.switch',
-            'company.view',
-            'company.delete',
-        ];
-
-        if (! $company && ! in_array($action, $companyOptionalCommands)) {
-            return $this->error('BAD_REQUEST', 'Company context required. Set X-Company-Slug header.', 400, $debugContext);
-        }
-
-        $idemKey = $request->header('X-Idempotency-Key');
-        $isQuery = str_ends_with($action, '.list') ||
-                   str_ends_with($action, '.view') ||
-                   str_starts_with($action, 'report.');
-
-        if ($idemKey && ! $isQuery) {
-            $previous = $this->checkIdempotency($idemKey);
-            if ($previous) {
-                return response()->json([
-                    'ok' => true,
-                    'replayed' => true,
-                    ...$previous,
-                    ...($this->includeDebug() ? ['debug' => $debugContext] : []),
-                ], 200);
-            }
-        }
-
-        try {
-            $params = $request->input('params', []);
-            $skipPermission = $company === null && in_array($action, $companyOptionalCommands);
-            $result = $commandBus->dispatch($action, $params, $request->user(), $skipPermission);
-
-            if ($idemKey && ! $isQuery) {
-                $this->storeIdempotency($idemKey, $result);
-            }
-
-            return $this->formatResponse($result, $action);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'VALIDATION',
-                'message' => 'Validation failed',
-                'errors' => $e->errors(),
-            ], 422);
-
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'FORBIDDEN',
-                'message' => $e->getMessage(),
-            ], 403);
-
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'NOT_FOUND',
-                'message' => 'Record not found',
-            ], 404);
-
-        } catch (\Exception $e) {
-            Log::error("Command execution failed: {$action}", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'params' => $request->input('params'),
-                'user' => $request->user()?->id,
-                'company' => $company?->id,
-            ]);
-
-            return $this->error(
-                'SERVER_ERROR',
-                app()->environment('production') ? 'An error occurred' : $e->getMessage(),
-                500,
-                $debugContext + ['exception' => $e->getMessage()]
-            );
-        }
-    }
-
-    private function formatResponse(array $result, string $action): JsonResponse
-    {
-        $isQuery = str_ends_with($action, '.list') ||
-                   str_ends_with($action, '.view') ||
-                   str_starts_with($action, 'report.');
-
-        if ($isQuery) {
-            return response()->json([
-                'ok' => true,
-                'data' => $result['data'] ?? $result,
-                'meta' => $result['meta'] ?? null,
-            ], 200);
-        }
-
-        return response()->json([
-            'ok' => true,
-            'message' => $result['message'] ?? 'Success',
-            'data' => $result['data'] ?? null,
-            'redirect' => $result['redirect'] ?? null,
-            'undo' => $result['undo'] ?? null,
-        ], 201);
-    }
-
-    private function checkIdempotency(string $key): ?array
-    {
-        $record = DB::table('command_idempotency')
-            ->where('key', hash('sha256', $key))
-            ->where('created_at', '>', now()->subHours(24))
-            ->first();
-
-        return $record ? json_decode($record->result, true) : null;
-    }
-
-    private function storeIdempotency(string $key, array $result): void
-    {
-        DB::table('command_idempotency')->updateOrInsert(
-            ['key' => hash('sha256', $key)],
-            [
-                'result' => json_encode($result),
-                'created_at' => now(),
-            ]
-        );
-    }
-
-    private function error(string $code, string $message, int $status, array $debug = []): JsonResponse
-    {
-        $payload = [
-            'ok' => false,
-            'code' => $code,
-            'message' => $message,
-        ];
-
-        if ($this->includeDebug()) {
-            $payload['debug'] = $debug;
-            $payload['status'] = $status;
-        }
-
-        return response()->json($payload, $status);
-    }
-
-    private function debugContext(Request $request, ?string $action, $company): array
-    {
-        return [
-            'user_id' => $request->user()?->id,
-            'company_id' => $company?->id,
-            'company_slug_header' => $request->header('X-Company-Slug'),
-            'action' => $action,
-            'params' => $request->input('params', []),
-            'headers' => collect($request->headers->all())
-                ->only(['x-action', 'x-company-slug', 'x-idempotency-key'])
-                ->toArray(),
-        ];
-    }
-
-    private function includeDebug(): bool
-    {
-        return config('app.debug', false) && ! app()->environment('production');
-    }
-}
-
-
-===== build/config/command-bus.php =====
-<?php
-
-return [
-    'company.create' => \App\Actions\Company\CreateAction::class,
-    'company.list' => \App\Actions\Company\IndexAction::class,
-    'company.switch' => \App\Actions\Company\SwitchAction::class,
-    'company.view' => \App\Actions\Company\ViewAction::class,
-    'company.delete' => \App\Actions\Company\DeleteAction::class,
-
-    'user.invite' => \App\Actions\User\InviteAction::class,
-    'user.list' => \App\Actions\User\IndexAction::class,
-    'user.assign-role' => \App\Actions\User\AssignRoleAction::class,
-    'user.remove-role' => \App\Actions\User\RemoveRoleAction::class,
-    'user.deactivate' => \App\Actions\User\DeactivateAction::class,
-    'user.delete' => \App\Actions\User\DeleteAction::class,
-
-    'role.list' => \App\Actions\Role\IndexAction::class,
-    'role.assign' => \App\Actions\Role\AssignPermissionAction::class,
-    'role.revoke' => \App\Actions\Role\RevokePermissionAction::class,
-];
-
-
-===== build/app/Contracts/PaletteAction.php =====
-<?php
-
-namespace App\Contracts;
-
-interface PaletteAction
-{
-    /**
-     * Execute the action.
-     *
-     * @param array $params Validated parameters from palette
-     * @return array Response with 'message', 'data', 'redirect', 'undo' keys
-     * @throws \Illuminate\Validation\ValidationException
-     * @throws \Illuminate\Auth\Access\AuthorizationException
-     */
-    public function handle(array $params): array;
-
-    /**
-     * Validation rules for this action.
-     */
-    public function rules(): array;
-
-    /**
-     * Permission required (null = no check).
-     */
-    public function permission(): ?string;
-}
-
-
-===== build/app/Actions/Company/CreateAction.php =====
-<?php
-
-namespace App\Actions\Company;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\Company;
-use App\Models\CompanyCurrency;
-use App\Models\Role;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\PermissionRegistrar;
-
-class CreateAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'name' => 'required|string|max:255',
-            'currency' => 'required|string|size:3',
-            'industry' => 'nullable|string|max:255',
-            'country' => 'nullable|string|size:2',
-            'language' => 'nullable|string|size:2',
-            'locale' => 'nullable|string|max:10',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_CREATE;
-    }
-
-    public function handle(array $params): array
-    {
-        $params['currency'] = strtoupper($params['currency']);
-        $slug = Str::slug($params['name']);
-
-        return DB::transaction(function () use ($params, $slug) {
-            $company = Company::create([
-                'name' => $params['name'],
-                'industry' => $params['industry'] ?? null,
-                'slug' => $slug,
-                'country' => $params['country'] ?? null,
-                'base_currency' => $params['currency'],
-                'language' => $params['language'] ?? 'en',
-                'locale' => $params['locale'] ?? 'en_US',
-                'created_by_user_id' => Auth::id(),
-                'is_active' => true,
-            ]);
-
-            CompanyCurrency::create([
-                'company_id' => $company->id,
-                'currency_code' => $params['currency'],
-                'is_base' => true,
-                'enabled_at' => now(),
-            ]);
-
-            DB::table('auth.company_user')->insert([
-                'company_id' => $company->id,
-                'user_id' => Auth::id(),
-                'role' => 'owner',
-                'invited_by_user_id' => Auth::id(),
-                'joined_at' => now(),
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            // Ensure company-scoped roles exist and carry permissions, then assign owner to creator
-            CompanyContext::withContext($company, function () use ($company) {
-                $this->syncRolesForCompany($company);
-                CompanyContext::assignRole(Auth::user(), 'owner');
-            });
-
-            // Set as active context
-            CompanyContext::setContext($company);
-
-            return [
-                'message' => "Company created: {$company->name} ({$company->slug})",
-                'data' => [
-                    'id' => $company->id,
-                    'name' => $company->name,
-                    'slug' => $company->slug,
-                    'currency' => $company->base_currency,
-                ],
-                'redirect' => "/{$company->slug}/dashboard",
-            ];
-        });
-    }
-
-    private function syncRolesForCompany(Company $company): void
-    {
-        $matrix = config('role-permissions', []);
-        if (empty($matrix)) {
-            return;
-        }
-
-        $registrar = app(PermissionRegistrar::class);
-        $registrar->setPermissionsTeamId($company->id);
-
-        foreach ($matrix as $roleName => $permissionNames) {
-            // Create role if missing (raw to avoid team scoping issues)
-            $role = Role::where('name', $roleName)
-                ->where('guard_name', 'web')
-                ->where('company_id', $company->id)
-                ->first();
-
-            if (!$role) {
-                $role = Role::forceCreate([
-                    'id' => (string) \Illuminate\Support\Str::orderedUuid(),
-                    'name' => $roleName,
-                    'guard_name' => 'web',
-                    'company_id' => $company->id,
-                ]);
-            }
-
-            $permissionIds = Permission::whereIn('name', $permissionNames)
-                ->where('guard_name', 'web')
-                ->pluck('id')
-                ->filter()
-                ->all();
-
-            // Manually sync permissions to avoid null IDs or team context issues
-            DB::table('role_has_permissions')
-                ->where('role_id', $role->id)
-                ->delete();
-
-            foreach ($permissionIds as $permissionId) {
-                DB::table('role_has_permissions')->insert([
-                    'permission_id' => $permissionId,
-                    'role_id' => $role->id,
-                ]);
-            }
-        }
-
-        $registrar->forgetCachedPermissions();
-    }
-}
-
-
-===== build/app/Actions/Company/IndexAction.php =====
-<?php
-
-namespace App\Actions\Company;
-
-use App\Contracts\PaletteAction;
-use App\Support\PaletteFormatter;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-
-class IndexAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [];
-    }
-
-    public function permission(): ?string
-    {
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        $companies = DB::table('auth.companies as c')
-            ->join('auth.company_user as cu', 'c.id', '=', 'cu.company_id')
-            ->where('cu.user_id', Auth::id())
-            ->where('cu.is_active', true)
-            ->select('c.name', 'c.slug', 'c.base_currency', 'cu.role', 'c.is_active')
-            ->orderBy('c.name')
-            ->get();
-
-        return [
-            'data' => PaletteFormatter::table(
-                headers: ['Name', 'Slug', 'Currency', 'Role', 'Status'],
-                rows: $companies->map(fn($c) => [
-                    $c->name,
-                    $c->slug,
-                    $c->base_currency,
-                    ucfirst($c->role),
-                    $c->is_active ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
-                ])->toArray(),
-                footer: $companies->count() . ' companies'
-            ),
-        ];
-    }
-}
-
-
-===== build/app/Actions/Company/SwitchAction.php =====
-<?php
-
-namespace App\Actions\Company;
-
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\Company;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-
-class SwitchAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'slug' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = Company::where('slug', $params['slug'])->firstOrFail();
-
-        $membership = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', Auth::id())
-            ->where('is_active', true)
-            ->first();
-
-        if (!$membership) {
-            throw new \Exception("You are not a member of {$company->name}");
-        }
-
-        CompanyContext::setContext($company);
-
-        $userCount = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('is_active', true)
-            ->count();
-
-        return [
-            'message' => "Switched to {$company->name}",
-            'data' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
-                'user_count' => $userCount,
-                'status' => $company->is_active ? 'active' : 'inactive',
-                'summary' => [
-                    'invoices_due' => 0,
-                    'open_bills' => 0,
-                ],
-            ],
-            'redirect' => "/{$company->slug}/dashboard",
-        ];
-    }
-}
-
-
-===== build/app/Actions/Company/ViewAction.php =====
-<?php
-
-namespace App\Actions\Company;
-
-use App\Contracts\PaletteAction;
-use App\Support\PaletteFormatter;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-
-class ViewAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'slug' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = DB::table('auth.companies as c')
-            ->join('auth.company_user as cu', 'c.id', '=', 'cu.company_id')
-            ->where('c.slug', $params['slug'])
-            ->where('cu.user_id', Auth::id())
-            ->where('cu.is_active', true)
-            ->select(
-                'c.id',
-                'c.name',
-                'c.slug',
-                'c.base_currency',
-                'c.country',
-                'c.language',
-                'c.locale',
-                'c.is_active',
-                'cu.role',
-                'c.created_at'
-            )
-            ->first();
-
-        if (!$company) {
-            throw new \Exception('Company not found or you do not have access.');
-        }
-
-        $userCount = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('is_active', true)
-            ->count();
-
-        return [
-            'data' => PaletteFormatter::table(
-                headers: ['Field', 'Value'],
-                rows: [
-                    ['Name', $company->name],
-                    ['Slug', $company->slug],
-                    ['Status', $company->is_active ? '{success}Active{/}' : '{secondary}Inactive{/}'],
-                    ['Role', ucfirst($company->role)],
-                    ['Base Currency', $company->base_currency],
-                    ['Country', $company->country ?? '—'],
-                    ['Language', $company->language ?? '—'],
-                    ['Locale', $company->locale ?? '—'],
-                    ['Users', (string) $userCount],
-                    ['Created', optional($company->created_at)->toDateTimeString() ?? '—'],
-                ],
-                footer: 'Company details'
-            ),
-        ];
-    }
-}
-
-
-===== build/app/Actions/Company/DeleteAction.php =====
-<?php
-
-namespace App\Actions\Company;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\Company;
-use Illuminate\Support\Facades\DB;
-
-class DeleteAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'slug' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        // Permission check handled manually in handle() for the specific company being deleted
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = Company::where('slug', $params['slug'])->firstOrFail();
-
-        // Check permission in the context of the company being deleted
-        $hasPermission = CompanyContext::withContext($company, function () use ($company) {
-            return \Illuminate\Support\Facades\Auth::user()->hasCompanyPermission(Permissions::COMPANY_DELETE);
-        });
-
-        if (!$hasPermission) {
-            throw new \Illuminate\Auth\Access\AuthorizationException('Permission denied: ' . Permissions::COMPANY_DELETE);
-        }
-
-        return DB::transaction(function () use ($company) {
-            DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->update(['is_active' => false, 'updated_at' => now()]);
-
-            $company->update(['is_active' => false]);
-
-            $currentCompany = CompanyContext::getCompany();
-            if ($currentCompany && $currentCompany->id === $company->id) {
-                CompanyContext::clearContext();
-            }
-
-            return [
-                'message' => "Company deleted: {$company->name}",
-                'data' => ['id' => $company->id],
-                'redirect' => '/dashboard',
-            ];
-        });
-    }
-}
-
-
-===== build/app/Actions/User/InviteAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\User;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-
-class InviteAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'email' => 'required|email',
-            'role' => 'nullable|string',
-            'name' => 'nullable|string|max:255',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_INVITE_USER;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $role = $params['role'] ?? 'member';
-
-        return DB::transaction(function () use ($params, $company, $role) {
-            $user = User::where('email', $params['email'])->first();
-
-            if (!$user) {
-                $user = User::create([
-                    'name' => $params['name'] ?? explode('@', $params['email'])[0],
-                    'email' => $params['email'],
-                    'username' => Str::slug(explode('@', $params['email'])[0]) . '-' . Str::random(4),
-                    'password' => Hash::make(Str::random(32)),
-                ]);
-            }
-
-            $existing = DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if ($existing) {
-                throw new \Exception("User {$params['email']} is already a member");
-            }
-
-            DB::table('auth.company_user')->insert([
-                'company_id' => $company->id,
-                'user_id' => $user->id,
-                'role' => $role,
-                'invited_by_user_id' => Auth::id(),
-                'joined_at' => now(),
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            CompanyContext::assignRole($user, $role);
-
-            return [
-                'message' => "User invited: {$user->email} (" . ucfirst($role) . ")",
-                'data' => [
-                    'id' => $user->id,
-                    'email' => $user->email,
-                    'name' => $user->name,
-                    'role' => $role,
-                ],
-            ];
-        });
-    }
-}
-
-
-===== build/app/Actions/User/IndexAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Support\PaletteFormatter;
-use Illuminate\Support\Facades\DB;
-
-class IndexAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [];
-    }
-
-    public function permission(): ?string
-    {
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $users = DB::table('auth.users as u')
-            ->join('auth.company_user as cu', 'u.id', '=', 'cu.user_id')
-            ->where('cu.company_id', $company->id)
-            ->select('u.email', 'u.name', 'cu.role', 'cu.is_active', 'cu.joined_at')
-            ->orderBy('u.name')
-            ->get();
-
-        return [
-            'data' => PaletteFormatter::table(
-                headers: ['Email', 'Name', 'Role', 'Status', 'Joined'],
-                rows: $users->map(fn($u) => [
-                    $u->email,
-                    $u->name,
-                    ucfirst($u->role),
-                    $u->is_active ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
-                    $u->joined_at ? date('M d, Y', strtotime($u->joined_at)) : '-',
-                ])->toArray(),
-                footer: $users->count() . ' users'
-            ),
-        ];
-    }
-}
-
-
-===== build/app/Actions/User/AssignRoleAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
-
-class AssignRoleAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'email' => 'required|email',
-            'role' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_MANAGE_ROLES;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $user = User::where('email', $params['email'])->firstOrFail();
-
-        $membership = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$membership) {
-            throw new \Exception("User {$params['email']} is not a member of {$company->name}");
-        }
-
-        CompanyContext::assignRole($user, $params['role']);
-
-        return [
-            'message' => "Role assigned: {$params['role']} \u2192 {$user->email}",
-            'data' => [
-                'user' => $user->email,
-                'role' => $params['role'],
-            ],
-        ];
-    }
-}
-
-
-===== build/app/Actions/User/RemoveRoleAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Facades\CompanyContext;
-use App\Models\User;
-
-class RemoveRoleAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'email' => 'required|email',
-            'role' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_MANAGE_ROLES;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $user = User::where('email', $params['email'])->firstOrFail();
-
-        CompanyContext::removeRole($user, $params['role']);
-
-        return [
-            'message' => "Role removed: {$params['role']} \u2190 {$user->email}",
-            'data' => [
-                'user' => $user->email,
-                'role' => $params['role'],
-            ],
-        ];
-    }
-}
-
-
-===== build/app/Actions/User/DeactivateAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Models\User;
-use App\Facades\CompanyContext;
-use Illuminate\Support\Facades\DB;
-
-class DeactivateAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'email' => 'required|email',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_MANAGE_USERS;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $user = User::where('email', $params['email'])->firstOrFail();
-
-        DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', $user->id)
-            ->update(['is_active' => false, 'updated_at' => now()]);
-
-        return [
-            'message' => "User deactivated: {$user->email}",
-            'data' => ['user' => $user->email],
-        ];
-    }
-}
-
-
-===== build/app/Actions/User/DeleteAction.php =====
-<?php
-
-namespace App\Actions\User;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Models\User;
-use App\Facades\CompanyContext;
-use Illuminate\Support\Facades\DB;
-
-class DeleteAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'email' => 'required|email',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_DELETE_USER;
-    }
-
-    public function handle(array $params): array
-    {
-        $company = CompanyContext::requireCompany();
-
-        $user = User::where('email', $params['email'])->firstOrFail();
-
-        return DB::transaction(function () use ($user, $company) {
-            DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', $user->id)
-                ->delete();
-
-            $otherMemberships = DB::table('auth.company_user')
-                ->where('user_id', $user->id)
-                ->count();
-
-            if ($otherMemberships === 0) {
-                $user->delete();
-                $message = "User deleted permanently: {$user->email}";
-            } else {
-                $message = "User removed from company: {$user->email}";
-            }
-
-            return [
-                'message' => $message,
-                'data' => ['user' => $user->email],
-            ];
-        });
-    }
-}
-
-
-===== build/app/Actions/Role/IndexAction.php =====
-<?php
-
-namespace App\Actions\Role;
-
-use App\Contracts\PaletteAction;
-use App\Models\Role;
-use App\Support\PaletteFormatter;
-use App\Facades\CompanyContext;
-
-class IndexAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [];
-    }
-
-    public function permission(): ?string
-    {
-        return null;
-    }
-
-    public function handle(array $params): array
-    {
-        
-        $company = CompanyContext::requireCompany();
-
-        $roles = Role::with('permissions')
-            ->when($company, fn($query) => $query->where(fn($inner) => $inner
-                ->where('company_id', $company->id)
-                ->orWhereNull('company_id')
-            ))
-            ->orderBy('name')
-            ->get();
-
-        return [
-            'data' => PaletteFormatter::table(
-                headers: ['Role', 'Permissions', 'Users'],
-                rows: $roles->map(fn($r) => [
-                    $r->name,
-                    $r->permissions->pluck('name')->implode(', ') ?: '{secondary}None{/}',
-                    $r->users()
-                        ->when($company, fn($users) => $users->wherePivot('company_id', $company->id))
-                        ->count(),
-                ])->toArray(),
-                footer: $roles->count() . ' roles'
-            ),
-        ];
-    }
-}
-
-
-===== build/app/Actions/Role/AssignPermissionAction.php =====
-<?php
-
-namespace App\Actions\Role;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Facades\CompanyContext;
-
-class AssignPermissionAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'permission' => 'required|string',
-            'role' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_MANAGE_ROLES;
-    }
-
-    public function handle(array $params): array
-    {
-        
-        $company = CompanyContext::requireCompany();
-
-        $role = Role::where('name', $params['role'])
-            ->where(fn($q) => $q->where('company_id', $company?->id)->orWhereNull('company_id'))
-            ->firstOrFail();
-
-        $permission = Permission::where('name', $params['permission'])->firstOrFail();
-
-        $role->givePermissionTo($permission);
-
-        return [
-            'message' => "Permission assigned: {$permission->name} \u2192 {$role->name}",
-            'data' => [
-                'role' => $role->name,
-                'permission' => $permission->name,
-            ],
-        ];
-    }
-}
-
-
-===== build/app/Actions/Role/RevokePermissionAction.php =====
-<?php
-
-namespace App\Actions\Role;
-
-use App\Constants\Permissions;
-use App\Contracts\PaletteAction;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Facades\CompanyContext;
-
-class RevokePermissionAction implements PaletteAction
-{
-    public function rules(): array
-    {
-        return [
-            'permission' => 'required|string',
-            'role' => 'required|string',
-        ];
-    }
-
-    public function permission(): ?string
-    {
-        return Permissions::COMPANY_MANAGE_ROLES;
-    }
-
-    public function handle(array $params): array
-    {
-        
-        $company = CompanyContext::requireCompany();
-
-        $role = Role::where('name', $params['role'])
-            ->where(fn($q) => $q->where('company_id', $company?->id)->orWhereNull('company_id'))
-            ->firstOrFail();
-
-        $permission = Permission::where('name', $params['permission'])->firstOrFail();
-
-        $role->revokePermissionTo($permission);
-
-        return [
-            'message' => "Permission revoked: {$permission->name} \u2190 {$role->name}",
-            'data' => [
-                'role' => $role->name,
-                'permission' => $permission->name,
-            ],
-        ];
-    }
-}
-
-

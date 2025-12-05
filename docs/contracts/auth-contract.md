@@ -56,14 +56,15 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `id` uuid PK.  
   - `name` string(255) not null.  
   - `industry` string nullable.  
- - `slug` string unique not null (auto-generated).  
+  - `slug` string unique not null (auto-generated).  
   - `country` string nullable; `country_id` uuid nullable.  
   - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
   - `language` string(10) default `en`; `locale` string(10) default `en_US`.  
   - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string). Do not add new keys without updating this contract.  
+  - `logo_url` string(500) nullable.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
-  - `created_at`, `updated_at`.
+  - `created_at`, `updated_at`.  
 - Defaults quick ref: `base_currency: 'USD'`, `language: 'en'`, `locale: 'en_US'`, `is_active: true`.
 - FK behavior: `created_by_user_id` → `auth.users.id` (ON DELETE SET NULL, ON UPDATE CASCADE).
 - Constraints/Indexes:  
@@ -74,7 +75,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Laravel model (canonical):  
   - `$connection = 'pgsql';`  
   - `$table = 'auth.companies';`  
-  - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'created_by_user_id'];`  
+  - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id'];`  
   - `$casts = ['settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean'];`
 - Relationships:  
   - belongsToMany User via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  

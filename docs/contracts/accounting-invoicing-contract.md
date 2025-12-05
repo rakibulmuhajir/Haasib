@@ -31,6 +31,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `payment_terms` integer not null default 30 (days).
   - `credit_limit` numeric(15,2) null.
   - `notes` text null.
+  - `logo_url` varchar(500) null.
   - `is_active` boolean not null default true.
   - `created_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
   - `updated_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
@@ -51,15 +52,15 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
       or current_setting('app.is_super_admin', true)::boolean = true
     );
   ```
-- Model (canonical):
-  - `$connection = 'pgsql';`
-  - `$table = 'acct.customers';`
-  - `$keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_number','name','email','phone','billing_address','shipping_address','tax_id','base_currency','payment_terms','credit_limit','notes','is_active','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['id'=>'string','company_id'=>'string','billing_address'=>'array','shipping_address'=>'array','credit_limit'=>'decimal:2','payment_terms'=>'integer','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
-- Relationships:
-  - belongsTo Company.
-  - hasMany Invoice.
+  - Model (canonical):
+    - `$connection = 'pgsql';`
+    - `$table = 'acct.customers';`
+    - `$keyType = 'string'; public $incrementing = false;`
+    - `$fillable = ['company_id','customer_number','name','email','phone','billing_address','shipping_address','tax_id','base_currency','payment_terms','credit_limit','notes','logo_url','is_active','created_by_user_id','updated_by_user_id'];`
+    - `$casts = ['id'=>'string','company_id'=>'string','billing_address'=>'array','shipping_address'=>'array','credit_limit'=>'decimal:2','payment_terms'=>'integer','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - Relationships:
+    - belongsTo Company.
+    - hasMany Invoice.
   - hasMany Payment.
   - hasMany CreditNote.
 - Validation:
@@ -73,6 +74,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `payment_terms`: required|integer|min:0|max:365.
   - `credit_limit`: nullable|numeric|min:0.
   - `notes`: nullable|string.
+  - `logo_url`: nullable|string|max:500.
   - `is_active`: boolean.
 - Business rules:
   - Customer number unique per company.
@@ -216,7 +218,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `payment_number`: required|string|max:50 (unique per company, soft-delete aware).
   - `payment_date`: required|date|before_or_equal:today.
   - `amount`: required|numeric|min:0.01|decimal:6.
-  - `currency`: required|string|size:3|uppercase (enabled for company).
+  - `currency`: required|string|size:3|uppercase (enabled for company); must equal invoice currency or company base when allocating.
   - `exchange_rate`: nullable|numeric|min:0.00000001|decimal:8 (required if currency != base_currency; NULL if currency = base).
   - `base_currency`: required|string|size:3|uppercase (company base).
   - `payment_method`: required|in:cash,check,card,bank_transfer,other.
@@ -224,7 +226,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `notes`: nullable|string.
 - Business rules:
   - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
-  - Payment currency must match invoice currency or company base currency when allocating (see allocations).
+  - Payment currency must match invoice currency or company base currency when allocating (Phase 1 rule).
   - Payment amount cannot exceed sum of allocations.
   - Cannot delete payment with allocations; void instead if required.
 
@@ -254,7 +256,7 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - On create/update/delete, recompute invoice `paid_amount`/`balance` (transaction currency) and status/paid_at accordingly.
 
 ### acct.credit_notes
-- Purpose: credits/refunds.
+- Purpose: credits/refunds. (Extended to support line items and applications in this implementation.)
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
@@ -262,11 +264,15 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `invoice_id` uuid null FK → `acct.invoices.id` (RESTRICT/CASCADE).
   - `credit_note_number` varchar(50) not null; unique per company (filtered).
   - `credit_date` date not null default `current_date`.
-  - `amount` numeric(15,2) not null default 0.00.
+  - `amount` numeric(15,2) not null default 0.00 (must be > 0 via check).
   - `base_currency` char(3) not null default `'USD'`.
   - `reason` varchar(255) not null.
   - `status` varchar(20) not null default `'draft'` (enum: draft, issued, applied, void).
   - `notes` text null.
+  - `terms` text null. *(Extension)*
+  - `sent_at`, `posted_at`, `voided_at` timestamps nullable. *(Extension)*
+  - `cancellation_reason` varchar(255) nullable. *(Extension)*
+  - `journal_entry_id` uuid nullable. *(Extension placeholder for GL linkage)*
   - `created_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
   - `updated_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
   - `created_at`, `updated_at`, `deleted_at`.
@@ -274,8 +280,8 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.credit_notes'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','customer_id','invoice_id','credit_note_number','credit_date','amount','base_currency','reason','status','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','customer_id'=>'string','invoice_id'=>'string','credit_date'=>'date','amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','customer_id','invoice_id','credit_note_number','credit_date','amount','base_currency','reason','status','notes','terms','sent_at','posted_at','voided_at','cancellation_reason','journal_entry_id','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','customer_id'=>'string','invoice_id'=>'string','credit_date'=>'date','amount'=>'decimal:2','sent_at'=>'datetime','posted_at'=>'datetime','voided_at'=>'datetime','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Customer; belongsTo Invoice.
 - Validation:
   - `customer_id`: required|uuid|exists:acct.customers,id.
@@ -287,12 +293,56 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
   - `reason`: required|string|max:255.
   - `status`: in:draft,issued,applied,void.
   - `notes`: nullable|string.
+  - `terms`: nullable|string. *(Extension)*
+  - `sent_at`/`posted_at`/`voided_at`: nullable|date. *(Extension)*
 - Business rules:
   - Credit amount cannot exceed invoice balance if tied to an invoice.
   - Currency must match invoice/customer base currency.
   - On apply, reduce invoice balance/paid_amount per chosen accounting treatment (define in service).
   - Status transitions: draft → issued → applied; void stops usage.
-  - Note: Credit notes are 1:1 with an invoice in v1 (multi-invoice allocations deferred).
+  - In this implementation, line items/applications are enabled; amount should align with sum of items, and applications must not exceed available credit. Document any future GL posting in `journal_entry_id`.
+
+### acct.credit_note_items *(Extension to support itemized credits)*
+- Purpose: item-level detail for credit notes.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `credit_note_id` uuid not null FK → `acct.credit_notes.id` (CASCADE/CASCADE).
+  - `line_number` integer not null.
+  - `description` varchar(500) not null.
+  - `quantity` numeric(10,2) not null default 1.00.
+  - `unit_price` numeric(15,2) not null default 0.00.
+  - `tax_rate` numeric(5,2) not null default 0.00.
+  - `discount_rate` numeric(5,2) not null default 0.00.
+  - `line_total` numeric(15,2) not null default 0.00.
+  - `tax_amount` numeric(15,2) not null default 0.00.
+  - `total` numeric(15,2) not null default 0.00.
+  - `created_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
+  - `updated_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
+  - `created_at`, `updated_at`, `deleted_at`.
+- Indexes/constraints: PK `id`; indexes on `company_id`; (`credit_note_id`, `line_number`); unique (`credit_note_id`, `line_number`) enforced; check constraints ensure positive quantities/amounts and discount_rate ≤ 100.
+- RLS: company isolation + super-admin override (same pattern).
+- Model: `$fillable = ['company_id','credit_note_id','line_number','description','quantity','unit_price','tax_rate','discount_rate','line_total','tax_amount','total','created_by_user_id','updated_by_user_id'];` with casts matching numeric/date fields above.
+- Business rules: line numbers sequential per credit note; calculated fields computed server-side; edits blocked after issuance if business rules require.
+
+### acct.credit_note_applications *(Extension to allow applying credits to invoices)*
+- Purpose: allocate a credit note to an invoice.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `credit_note_id` uuid not null FK → `acct.credit_notes.id` (CASCADE/CASCADE).
+  - `invoice_id` uuid not null FK → `acct.invoices.id` (CASCADE/CASCADE).
+  - `amount_applied` numeric(15,2) not null (check > 0).
+  - `applied_at` timestamp not null default now().
+  - `user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `notes` text nullable.
+  - `invoice_balance_before` numeric(15,2) not null.
+  - `invoice_balance_after` numeric(15,2) not null.
+  - `created_at`, `updated_at`.
+- Indexes/constraints: indexes on company_id, credit_note_id, invoice_id, applied_at; unique (`credit_note_id`, `invoice_id`) enforced; check invoice_balance_before ≥ invoice_balance_after.
+- RLS: company isolation + super-admin override.
+- Model: `$fillable = ['company_id','credit_note_id','invoice_id','amount_applied','applied_at','user_id','notes','invoice_balance_before','invoice_balance_after'];` with casts for numeric/datetime fields.
+- Business rules: sum of `amount_applied` per credit note ≤ credit_note.amount; must not exceed invoice balance; applying should update invoice paid/balance/status accordingly and update credit note status to applied when fully used.
 
 ### acct.recurring_schedules
 - Purpose: recurrence templates for invoice generation.

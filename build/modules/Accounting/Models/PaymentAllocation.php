@@ -5,11 +5,10 @@ namespace App\Modules\Accounting\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PaymentAllocation extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
     protected $table = 'acct.payment_allocations';
@@ -20,19 +19,20 @@ class PaymentAllocation extends Model
         'company_id',
         'payment_id',
         'invoice_id',
-        'allocated_amount',
-        'allocated_at',
+        'amount_allocated',
+        'base_amount_allocated',
+        'applied_at',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'payment_id' => 'string',
         'invoice_id' => 'string',
-        'allocated_amount' => 'decimal:6',
-        'allocated_at' => 'datetime',
+        'amount_allocated' => 'decimal:6',
+        'base_amount_allocated' => 'decimal:2',
+        'applied_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
     public function payment()

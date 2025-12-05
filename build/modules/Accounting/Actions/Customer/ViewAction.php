@@ -34,15 +34,15 @@ class ViewAction implements PaletteAction
         $invoiceStats = Invoice::where('customer_id', $customer->id)
             ->selectRaw("
                 COUNT(*) as total_count,
-                COUNT(CASE WHEN status IN ('draft', 'sent', 'posted', 'overdue') THEN 1 END) as unpaid_count,
+                COUNT(CASE WHEN status IN ('draft', 'sent', 'viewed', 'partial', 'overdue') AND balance > 0 THEN 1 END) as unpaid_count,
                 SUM(total_amount) as total_billed,
-                SUM(balance_due) as total_outstanding
+                SUM(balance) as total_outstanding
             ")
             ->first();
 
         // Get last invoice date
         $lastInvoice = Invoice::where('customer_id', $customer->id)
-            ->orderBy('issue_date', 'desc')
+            ->orderBy('invoice_date', 'desc')
             ->first();
 
         // Get payment stats
@@ -50,10 +50,9 @@ class ViewAction implements PaletteAction
             ->join('acct.payments as p', 'pa.payment_id', '=', 'p.id')
             ->join('acct.invoices as i', 'pa.invoice_id', '=', 'i.id')
             ->where('i.customer_id', $customer->id)
-            ->where('pa.is_voided', false)
             ->selectRaw('
                 COUNT(*) as payment_count,
-                SUM(pa.allocated_amount) as total_payments
+                SUM(pa.amount_allocated) as total_payments
             ')
             ->first();
 
@@ -65,24 +64,24 @@ class ViewAction implements PaletteAction
                     ['Name', $customer->name],
                     ['Email', $customer->email ?? '—'],
                     ['Phone', $customer->phone ?? '—'],
-                    ['Currency', $customer->currency],
-                    ['Status', $customer->status === 'active' ? '{success}Active{/}' : '{secondary}Inactive{/}'],
+                    ['Currency', $customer->base_currency],
+                    ['Status', $customer->is_active ? '{success}Active{/}' : '{secondary}Inactive{/}'],
                     ['', ''],  // Spacer
                     ['Invoice Statistics', ''],
                     ['Total Invoices', (string) ($invoiceStats->total_count ?? 0)],
                     ['Unpaid Invoices', (string) ($invoiceStats->unpaid_count ?? 0)],
-                    ['Total Billed', PaletteFormatter::money($invoiceStats->total_billed ?? 0, $customer->currency)],
-                    ['Outstanding', $this->formatBalance($invoiceStats->total_outstanding ?? 0, $customer->currency)],
-                    ['Last Invoice', $lastInvoice ? $lastInvoice->issue_date->format('M j, Y') : '—'],
+                    ['Total Billed', PaletteFormatter::money($invoiceStats->total_billed ?? 0, $customer->base_currency)],
+                    ['Outstanding', $this->formatBalance($invoiceStats->total_outstanding ?? 0, $customer->base_currency)],
+                    ['Last Invoice', $lastInvoice ? $lastInvoice->invoice_date->format('M j, Y') : '—'],
                     ['', ''],  // Spacer
                     ['Payment Statistics', ''],
                     ['Total Payments', (string) ($paymentStats->payment_count ?? 0)],
-                    ['Total Paid', PaletteFormatter::money($paymentStats->total_payments ?? 0, $customer->currency)],
+                    ['Total Paid', PaletteFormatter::money($paymentStats->total_payments ?? 0, $customer->base_currency)],
                     ['', ''],  // Spacer
                     ['Credit Information', ''],
-                    ['Credit Limit', $customer->credit_limit ? PaletteFormatter::money($customer->credit_limit, $customer->currency) : '—'],
+                    ['Credit Limit', $customer->credit_limit ? PaletteFormatter::money($customer->credit_limit, $customer->base_currency) : '—'],
                     ['Available Credit', $customer->getAvailableCredit() > 0 ?
-                        PaletteFormatter::money($customer->getAvailableCredit(), $customer->currency) : '{secondary}—{/}'],
+                        PaletteFormatter::money($customer->getAvailableCredit(), $customer->base_currency) : '{secondary}—{/}'],
                     ['Risk Level', $this->formatRiskLevel($customer->getRiskLevel())],
                     ['', ''],  // Spacer
                     ['Contact Information', ''],

@@ -15,7 +15,7 @@ class IndexAction implements PaletteAction
     public function rules(): array
     {
         return [
-            'status' => 'nullable|string|in:draft,sent,posted,overdue,paid,cancelled',
+            'status' => 'nullable|string|in:draft,sent,viewed,partial,paid,overdue,void,cancelled',
             'customer' => 'nullable|string|max:255',
             'unpaid' => 'nullable|boolean',
             'overdue' => 'nullable|boolean',
@@ -37,7 +37,7 @@ class IndexAction implements PaletteAction
 
         $query = Invoice::with('customer')
             ->where('company_id', $company->id)
-            ->orderBy('issue_date', 'desc')
+            ->orderBy('invoice_date', 'desc')
             ->orderBy('invoice_number', 'desc');
 
         // Status filter
@@ -45,12 +45,13 @@ class IndexAction implements PaletteAction
             $query->where('status', $params['status']);
         }
 
-        // Unpaid shorthand (draft + sent + posted + overdue)
+        // Unpaid shorthand (draft + sent + viewed + partial + overdue)
         if (!empty($params['unpaid']) && $params['unpaid']) {
             $query->whereIn('status', [
                 'draft',
                 'sent',
-                'posted',
+                'viewed',
+                'partial',
                 'overdue',
             ]);
         }
@@ -74,16 +75,16 @@ class IndexAction implements PaletteAction
 
         // Date range
         if (!empty($params['from'])) {
-            $query->where('issue_date', '>=', $params['from']);
+            $query->where('invoice_date', '>=', $params['from']);
         }
         if (!empty($params['to'])) {
-            $query->where('issue_date', '<=', $params['to']);
+            $query->where('invoice_date', '<=', $params['to']);
         }
 
         $invoices = $query->limit($limit)->get();
 
         // Calculate totals
-        $totalOutstanding = $invoices->sum('balance_due');
+        $totalOutstanding = $invoices->sum('balance');
         $totalBilled = $invoices->sum('total_amount');
 
         return [
@@ -97,7 +98,8 @@ class IndexAction implements PaletteAction
                     $this->formatStatus($inv),
                 ])->toArray(),
                 footer: $invoices->count() . ' invoices · ' .
-                        PaletteFormatter::money($totalOutstanding, $company->base_currency) . ' outstanding'
+                        PaletteFormatter::money($totalOutstanding, $company->base_currency) . ' outstanding',
+                rowIds: $invoices->pluck('id')->toArray()
             ),
         ];
     }
@@ -108,6 +110,7 @@ class IndexAction implements PaletteAction
         $isOverdue = !in_array($invoice->status, [
             'paid',
             'cancelled',
+            'void',
             'draft',
         ]) && $invoice->due_date->isPast();
 
@@ -118,9 +121,12 @@ class IndexAction implements PaletteAction
         return match ($invoice->status) {
             'draft' => '{secondary}○ Draft{/}',
             'sent' => '{warning}◐ Sent{/}',
-            'posted' => '{accent}◑ Posted{/}',
+            'sent' => '{warning}◐ Sent{/}',
+            'viewed' => '{accent}◑ Viewed{/}',
+            'partial' => '{accent}◑ Partial{/}',
             'overdue' => '{warning}◕ Overdue{/}',
             'paid' => '{success}● Paid{/}',
+            'void' => '{secondary}✗ Void{/}',
             'cancelled' => '{secondary}✗ Cancelled{/}',
             default => $invoice->status,
         };

@@ -200,6 +200,8 @@ php artisan app:sync-permissions
 php artisan app:sync-role-permissions
 ```
 
+Quick reminder (what we just did for credit notes): add the permission keys to `config/permissions.php`, grant them in `config/role-permissions.php`, then run the two sync commands above so roles pick them up.
+
 ## API Authentication (Mobile)
 
 The system supports Sanctum for mobile API authentication.

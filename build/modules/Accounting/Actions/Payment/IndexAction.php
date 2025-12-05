@@ -38,8 +38,6 @@ class IndexAction implements PaletteAction
 
         $query = Payment::with(['paymentAllocations.invoice.customer'])
             ->where('company_id', $company->id)
-            ->where('paymentable_type', Invoice::class)
-            ->where('is_voided', false)
             ->orderBy('payment_date', 'desc');
 
         // Invoice filter
@@ -61,7 +59,7 @@ class IndexAction implements PaletteAction
 
         // Method filter
         if (!empty($params['method'])) {
-            $query->where('method', $params['method']);
+            $query->where('payment_method', $params['method']);
         }
 
         // Date range
@@ -87,12 +85,13 @@ class IndexAction implements PaletteAction
                         $p->payment_date->format('M j, Y'),
                         $invoice?->invoice_number ?? '—',
                         $customer ? Str::limit($customer->name, 15) : '—',
-                        ucfirst(str_replace('_', ' ', $p->method)),
+                        ucfirst(str_replace('_', ' ', $p->payment_method)),
                         PaletteFormatter::money($p->amount, $p->currency),
                     ];
                 })->toArray(),
                 footer: $payments->count() . ' payments · ' .
-                        PaletteFormatter::money($totalAmount, $company->base_currency) . ' total'
+                        PaletteFormatter::money($totalAmount, $company->base_currency) . ' total',
+                rowIds: $payments->pluck('id')->toArray()
             ),
         ];
     }

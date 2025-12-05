@@ -27,7 +27,7 @@ class RestoreAction implements PaletteAction
 
         // Search including inactive
         $customer = Customer::where('company_id', $company->id)
-            ->where('status', 'inactive')
+            ->where('is_active', false)
             ->where(function ($q) use ($params) {
                 $q->where('id', $params['id'])
                   ->orWhere('customer_number', $params['id'])
@@ -36,7 +36,7 @@ class RestoreAction implements PaletteAction
             })
             ->firstOrFail();
 
-        $customer->update(['status' => 'active']);
+        $customer->update(['is_active' => true]);
 
         return [
             'message' => "Customer restored: {$customer->name}",

@@ -58,6 +58,14 @@ return [
             'accounts_report_view',
             'accounts_report_export',
         ],
+
+        // Credit Notes (simple names used across accounting module)
+        'credit_note' => [
+            'credit_note.create',
+            'credit_note.view',
+            'credit_note.apply',
+            'credit_note.void',
+        ],
     ],
 
     /*

@@ -16,6 +16,11 @@ class Permissions
     public const PAYMENT_DELETE = 'payment.delete';
     public const PAYMENT_VOID = 'payment.void';
 
+    public const CREDIT_NOTE_CREATE = 'credit_note.create';
+    public const CREDIT_NOTE_VIEW = 'credit_note.view';
+    public const CREDIT_NOTE_APPLY = 'credit_note.apply';
+    public const CREDIT_NOTE_VOID = 'credit_note.void';
+
     public const CUSTOMER_CREATE = 'customer.create';
     public const CUSTOMER_VIEW = 'customer.view';
     public const CUSTOMER_UPDATE = 'customer.update';

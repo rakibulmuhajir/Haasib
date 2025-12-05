@@ -6,7 +6,7 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Domain\Customers\Models\Customer;
-use App\Models\Invoice;
+use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Support\Facades\DB;
 
 class DeleteAction implements PaletteAction
@@ -31,8 +31,8 @@ class DeleteAction implements PaletteAction
 
         // Check for unpaid invoices
         $unpaidCount = Invoice::where('customer_id', $customer->id)
-            ->whereIn('status', ['draft', 'sent', 'posted', 'overdue'])
-            ->where('balance_due', '>', 0)
+            ->whereIn('status', ['draft', 'sent', 'viewed', 'partial', 'overdue'])
+            ->where('balance', '>', 0)
             ->count();
 
         if ($unpaidCount > 0) {
@@ -45,8 +45,7 @@ class DeleteAction implements PaletteAction
         // Check for active credit notes
         $creditNoteCount = DB::table('acct.credit_notes')
             ->where('customer_id', $customer->id)
-            ->where('status', '!=', 'voided')
-            ->whereRaw('(total_amount - amount_applied) > 0')
+            ->where('status', '!=', 'void')
             ->count();
 
         if ($creditNoteCount > 0) {
@@ -57,7 +56,7 @@ class DeleteAction implements PaletteAction
         }
 
         // Soft delete (deactivate)
-        $customer->update(['status' => 'inactive']);
+        $customer->update(['is_active' => false]);
 
         return [
             'message' => "Customer deleted: {$customer->name}",

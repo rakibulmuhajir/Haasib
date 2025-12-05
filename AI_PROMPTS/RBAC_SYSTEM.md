@@ -73,48 +73,43 @@ build/
 **Step 1**: Add to `app/Constants/Permissions.php`
 ```php
 // In Permissions class
-public const ACCT_ORDERS_VIEW = 'acct.orders.view';
-public const ACCT_ORDERS_CREATE = 'acct.orders.create';
-public const ACCT_ORDERS_UPDATE = 'acct.orders.update';
-public const ACCT_ORDERS_DELETE = 'acct.orders.delete';
-
-// In getAllByModule() method
-'acct.orders' => [
-    self::ACCT_ORDERS_VIEW,
-    self::ACCT_ORDERS_CREATE,
-    self::ACCT_ORDERS_UPDATE,
-    self::ACCT_ORDERS_DELETE,
-],
+public const CREDIT_NOTE_CREATE = 'credit_note.create';
+// ... add any other new permissions
 ```
 
-**Step 2**: Sync to database
-```bash
-php artisan rbac:sync-permissions
-```
-
-**Step 3**: Update role matrix (optional)
+**Step 2**: Add to `config/permissions.php` registry so `app:sync-permissions` creates it:
 ```php
-// In config/role-permissions.php
-'owner' => [
-    // ... existing permissions
-    Permissions::ACCT_ORDERS_VIEW,
-    Permissions::ACCT_ORDERS_CREATE,
-    Permissions::ACCT_ORDERS_UPDATE,
-    Permissions::ACCT_ORDERS_DELETE,
-],
-
-'accountant' => [
-    // ... existing permissions
-    Permissions::ACCT_ORDERS_VIEW,
-    Permissions::ACCT_ORDERS_CREATE,
-    Permissions::ACCT_ORDERS_UPDATE,
-    // No delete
+// e.g., under a module section
+'credit_note' => [
+    'credit_note.create',
+    'credit_note.view',
+    'credit_note.apply',
+    'credit_note.void',
 ],
 ```
 
-**Step 4**: Sync roles
+**Step 3**: Update role matrix (`config/role-permissions.php`) to grant it:
+```php
+'admin' => [
+    // ...
+    'credit_note.create',
+    'credit_note.view',
+    'credit_note.apply',
+    'credit_note.void',
+],
+'accountant' => [
+    // ...
+    'credit_note.create',
+    'credit_note.view',
+    'credit_note.apply',
+    'credit_note.void',
+],
+```
+
+**Step 4**: Sync
 ```bash
-php artisan rbac:sync-role-permissions
+php artisan app:sync-permissions
+php artisan app:sync-role-permissions
 ```
 
 ### Permission Naming Convention

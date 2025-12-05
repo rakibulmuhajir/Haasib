@@ -35,6 +35,7 @@ class Company extends Model
         'language',
         'locale',
         'settings',
+        'logo_url',
         'created_by_user_id',
     ];
 }

@@ -5,7 +5,7 @@ namespace App\Modules\Accounting\Actions\Invoice;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
-use App\Models\Invoice;
+use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Support\Str;
 
 class SendAction implements PaletteAction
@@ -31,17 +31,18 @@ class SendAction implements PaletteAction
         $invoice = $this->resolveInvoice($params['id'], $company->id);
 
         // Validate status
-        if ($invoice->status === 'cancelled') {
-            throw new \Exception("Cannot send cancelled invoice");
-        }
-
-        if ($invoice->status === 'paid') {
-            throw new \Exception("Invoice is already paid");
+        if (in_array($invoice->status, ['paid', 'void', 'cancelled'])) {
+            throw new \Exception("Cannot send invoice in status {$invoice->status}");
         }
 
         // Update status if draft or sent
-        if (in_array($invoice->status, ['draft', 'sent'])) {
-            $invoice->markAsSent();
+        $now = now();
+        if (in_array($invoice->status, ['draft', 'sent', 'viewed'])) {
+            $invoice->update([
+                'status' => 'sent',
+                'sent_at' => $now,
+            ]);
+            $invoice->refresh();
         }
 
         // Send email if requested

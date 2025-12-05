@@ -7,13 +7,22 @@ use NumberFormatter;
 
 class PaletteFormatter
 {
-    public static function table(array $headers, array $rows, ?string $footer = null): array
+    /**
+     * Format data as a table for palette output.
+     *
+     * @param array $headers Column headers
+     * @param array $rows Row data (display values)
+     * @param string|null $footer Optional footer text
+     * @param array|null $rowIds Optional array of row identifiers (UUIDs) for quick actions
+     */
+    public static function table(array $headers, array $rows, ?string $footer = null, ?array $rowIds = null): array
     {
         return [
             'type' => 'table',
             'headers' => $headers,
             'rows' => $rows,
             'footer' => $footer,
+            'rowIds' => $rowIds,
         ];
     }
 

@@ -46,6 +46,12 @@ return [
         'payment.create',
         'payment.view',
         'payment.void',
+
+        // Credit notes
+        'credit_note.create',
+        'credit_note.view',
+        'credit_note.apply',
+        'credit_note.void',
     ],
 
     'accountant' => [
@@ -65,6 +71,12 @@ return [
         'payment.create',
         'payment.view',
         'payment.void',
+
+        // Credit notes
+        'credit_note.create',
+        'credit_note.view',
+        'credit_note.apply',
+        'credit_note.void',
     ],
 
     'member' => [

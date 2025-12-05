@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Payment extends Model
 {
@@ -29,7 +30,6 @@ class Payment extends Model
         'payment_method',
         'reference_number',
         'notes',
-        'status',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -41,6 +41,7 @@ class Payment extends Model
         'amount' => 'decimal:6',
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',
+        'base_currency' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -51,5 +52,26 @@ class Payment extends Model
     public function paymentAllocations()
     {
         return $this->hasMany(PaymentAllocation::class, 'payment_id');
+    }
+
+    /**
+     * Generate a payment number scoped per company (simple incremental suffix).
+     */
+    public static function generatePaymentNumber(string $companyId): string
+    {
+        $last = DB::table('acct.payments')
+            ->where('company_id', $companyId)
+            ->whereNotNull('payment_number')
+            ->orderByDesc('created_at')
+            ->value('payment_number');
+
+        $base = 'PAY-';
+        $next = 1;
+
+        if ($last && preg_match('/(\\d+)$/', $last, $m)) {
+            $next = (int) $m[1] + 1;
+        }
+
+        return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
     }
 }

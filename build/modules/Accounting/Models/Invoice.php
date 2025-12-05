@@ -21,7 +21,6 @@ class Invoice extends Model
         'company_id',
         'customer_id',
         'invoice_number',
-        'issue_date',
         'invoice_date',
         'due_date',
         'status',
@@ -34,7 +33,6 @@ class Invoice extends Model
         'total_amount',
         'paid_amount',
         'balance',
-        'balance_due',
         'base_amount',
         'payment_terms',
         'notes',
@@ -46,14 +44,12 @@ class Invoice extends Model
         'recurring_schedule_id',
         'created_by_user_id',
         'updated_by_user_id',
-        'payment_status',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'customer_id' => 'string',
         'recurring_schedule_id' => 'string',
-        'issue_date' => 'date',
         'invoice_date' => 'date',
         'due_date' => 'date',
         'subtotal' => 'decimal:6',
@@ -62,7 +58,6 @@ class Invoice extends Model
         'total_amount' => 'decimal:6',
         'paid_amount' => 'decimal:6',
         'balance' => 'decimal:6',
-        'balance_due' => 'decimal:6',
         'base_amount' => 'decimal:2',
         'exchange_rate' => 'decimal:8',
         'payment_terms' => 'integer',
@@ -80,6 +75,16 @@ class Invoice extends Model
     public function lineItems()
     {
         return $this->hasMany(InvoiceLineItem::class, 'invoice_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(\App\Models\Company::class, 'company_id');
     }
 
     /**

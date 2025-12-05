@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,12 +20,18 @@ class CreateAction implements PaletteAction
     {
         return [
             'customer' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|max:999999999.99',
             'currency' => 'required|string|size:3|uppercase',
             'due' => 'nullable|date|after_or_equal:today',
-            'description' => 'nullable|string|max:1000',
             'draft' => 'nullable|boolean',
-            'reference' => 'nullable|string|max:100',
+            'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
+            'payment_terms' => 'nullable|integer|min:0|max:365',
+            'line_items' => 'required|array|min:1',
+            'line_items.*.description' => 'required|string|max:500',
+            'line_items.*.quantity' => 'required|numeric|min:0.01',
+            'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.line_number' => 'nullable|integer|min:1',
         ];
     }
 
@@ -41,11 +48,12 @@ class CreateAction implements PaletteAction
         $customer = $this->resolveCustomer($params['customer'], $company->id);
 
         return DB::transaction(function () use ($params, $company, $customer) {
-            // Calculate due date
-            $issueDate = now();
+            // Calculate dates
+            $invoiceDate = now();
+            $paymentTerms = $params['payment_terms'] ?? $customer->payment_terms ?? 30;
             $dueDate = !empty($params['due'])
                 ? Carbon::parse($params['due'])
-                : $issueDate->copy()->addDays(30); // Default 30 days
+                : $invoiceDate->copy()->addDays($paymentTerms);
 
             // Generate invoice number using existing model method
             $invoiceNumber = Invoice::generateInvoiceNumber($company->id);
@@ -53,50 +61,87 @@ class CreateAction implements PaletteAction
             // Determine status
             $status = ($params['draft'] ?? false)
                 ? 'draft'
-                : 'sent'; // Use 'sent' instead of 'pending' to match existing flow
+                : 'sent';
 
             $currency = strtoupper($params['currency']);
-            $baseCurrency = $company->base_currency ?? $currency;
-            $exchangeRate = ($currency === $baseCurrency) ? 1.0 : ($params['exchange_rate'] ?? null);
+            $baseCurrency = strtoupper($company->base_currency ?? $customer->base_currency ?? $currency);
+            $exchangeRate = ($currency === $baseCurrency) ? null : ($params['exchange_rate'] ?? null);
+            if ($currency !== $baseCurrency && $exchangeRate === null) {
+                throw new \InvalidArgumentException('exchange_rate is required when currency differs from base_currency.');
+            }
+            $exchangeRate = $exchangeRate ? (float) $exchangeRate : null;
+            $lineItems = $params['line_items'];
+
+            // Compute totals
+            $subtotal = 0.0;
+            $taxAmount = 0.0;
+            $discountAmount = 0.0;
+            foreach ($lineItems as $idx => $item) {
+                $qty = (float) $item['quantity'];
+                $unit = (float) $item['unit_price'];
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $discountRate = isset($item['discount_rate']) ? (float) $item['discount_rate'] : 0.0;
+
+                $lineTotal = $qty * $unit;
+                $lineDiscount = $lineTotal * ($discountRate / 100);
+                $lineTaxable = $lineTotal - $lineDiscount;
+                $lineTax = $lineTaxable * ($taxRate / 100);
+                $lineGrand = $lineTaxable + $lineTax;
+
+                $subtotal += $lineTotal;
+                $taxAmount += $lineTax;
+                $discountAmount += $lineDiscount;
+
+                $lineItems[$idx]['_line_total'] = $lineTotal;
+                $lineItems[$idx]['_tax_amount'] = $lineTax;
+                $lineItems[$idx]['_total'] = $lineGrand;
+            }
+
+            $total = $subtotal + $taxAmount - $discountAmount;
+            $baseAmount = round($total * ($exchangeRate ?? 1), 2);
 
             // Create invoice
             $invoice = Invoice::create([
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'invoice_number' => $invoiceNumber,
-                'reference' => $params['reference'] ?? null,
-                'issue_date' => $issueDate,
+                'invoice_date' => $invoiceDate,
                 'due_date' => $dueDate,
-                'subtotal' => $params['amount'],
-                'tax_amount' => 0,
-                'discount_amount' => 0,
-                'total_amount' => $params['amount'],
-                'balance_due' => $params['amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'discount_amount' => $discountAmount,
+                'total_amount' => $total,
+                'paid_amount' => 0,
+                'balance' => $total,
                 'currency' => $currency,
                 'base_currency' => $baseCurrency,
-                'exchange_rate' => $exchangeRate ?? 1.0,
+                'exchange_rate' => $exchangeRate,
+                'base_amount' => $baseAmount,
+                'payment_terms' => $paymentTerms,
                 'status' => $status,
-                'payment_status' => $status === 'draft' ? 'draft' : 'unpaid',
                 'notes' => $params['description'] ?? null,
                 'created_by_user_id' => Auth::id(),
             ]);
 
-            // Create line item if description provided
-            if (!empty($params['description'])) {
-                $invoice->lineItems()->create([
-                    'description' => $params['description'],
-                    'quantity' => 1,
-                    'unit_price' => $params['amount'],
-                    'tax_rate_id' => null,
-                    'discount_percent' => 0,
-                    'tax_amount' => 0,
-                    'discount_amount' => 0,
-                    'total' => $params['amount'],
-                    'sort_order' => 0,
+            // Persist line items
+            foreach ($lineItems as $idx => $item) {
+                InvoiceLineItem::create([
+                    'company_id' => $company->id,
+                    'invoice_id' => $invoice->id,
+                    'line_number' => $item['line_number'] ?? ($idx + 1),
+                    'description' => $item['description'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'tax_rate' => $item['tax_rate'] ?? 0,
+                    'discount_rate' => $item['discount_rate'] ?? 0,
+                    'line_total' => $item['_line_total'],
+                    'tax_amount' => $item['_tax_amount'],
+                    'total' => $item['_total'],
+                    'created_by_user_id' => Auth::id(),
                 ]);
             }
 
-            $statusLabel = $status === 'draft' ? 'Draft' : 'Pending';
+            $statusLabel = $status === 'draft' ? 'Draft' : 'Sent';
 
             return [
                 'message' => "Invoice {$invoiceNumber} created ({$statusLabel}) for {$customer->name}",
@@ -119,7 +164,7 @@ class CreateAction implements PaletteAction
         if (Str::isUuid($identifier)) {
             $customer = Customer::where('id', $identifier)
                 ->where('company_id', $companyId)
-                ->where('status', 'active')
+                ->where('is_active', true)
                 ->first();
             if ($customer) return $customer;
         }
@@ -127,27 +172,27 @@ class CreateAction implements PaletteAction
         // Try exact customer number
         $customer = Customer::where('company_id', $companyId)
             ->where('customer_number', $identifier)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try exact email
         $customer = Customer::where('company_id', $companyId)
             ->where('email', $identifier)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try exact name (case-insensitive)
         $customer = Customer::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = ?', [strtolower($identifier)])
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try fuzzy match
         $customer = Customer::where('company_id', $companyId)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->whereRaw('similarity(name, ?) > 0.3', [$identifier])
             ->orderByRaw('similarity(name, ?) DESC', [$identifier])
             ->first();

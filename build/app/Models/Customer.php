@@ -29,6 +29,7 @@ class Customer extends Model
         'payment_terms',
         'credit_limit',
         'notes',
+        'logo_url',
         'is_active',
         'created_by_user_id',
         'updated_by_user_id',

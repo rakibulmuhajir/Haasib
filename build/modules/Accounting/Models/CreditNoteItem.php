@@ -19,6 +19,7 @@ class CreditNoteItem extends Model
     protected $fillable = [
         'company_id',
         'credit_note_id',
+        'line_number',
         'description',
         'quantity',
         'unit_price',
@@ -27,11 +28,14 @@ class CreditNoteItem extends Model
         'line_total',
         'tax_amount',
         'total',
+        'created_by_user_id',
+        'updated_by_user_id',
     ];
 
     protected $casts = [
         'company_id' => 'string',
         'credit_note_id' => 'string',
+        'line_number' => 'integer',
         'quantity' => 'decimal:2',
         'unit_price' => 'decimal:2',
         'tax_rate' => 'decimal:2',
@@ -39,6 +43,8 @@ class CreditNoteItem extends Model
         'line_total' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'created_by_user_id' => 'string',
+        'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

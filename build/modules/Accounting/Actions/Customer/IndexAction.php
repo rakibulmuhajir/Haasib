@@ -34,7 +34,7 @@ class IndexAction implements PaletteAction
 
         // Filter by active status
         if (empty($params['inactive'])) {
-            $query->where('status', 'active');
+            $query->where('is_active', true);
         }
 
         // Search filter
@@ -56,9 +56,9 @@ class IndexAction implements PaletteAction
         // Get invoice totals for each customer
         $invoiceTotals = DB::table('acct.invoices')
             ->whereIn('customer_id', $customerIds)
-            ->whereIn('status', ['draft', 'sent', 'posted', 'overdue'])
-            ->where('balance_due', '>', 0)
-            ->selectRaw('customer_id, SUM(balance_due) as total')
+            ->whereIn('status', ['draft', 'sent', 'viewed', 'partial', 'overdue'])
+            ->where('balance', '>', 0)
+            ->selectRaw('customer_id, SUM(balance) as total')
             ->groupBy('customer_id')
             ->pluck('total', 'customer_id');
 
@@ -70,9 +70,10 @@ class IndexAction implements PaletteAction
                     $c->email ?? '{secondary}—{/}',
                     $c->phone ?? '{secondary}—{/}',
                     $this->formatBalance($invoiceTotals[$c->id] ?? 0, $c->base_currency ?? 'USD'),
-                    ($c->status ?? 'active') === 'active' ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
+                    ($c->is_active ?? true) ? '{success}● Active{/}' : '{secondary}○ Inactive{/}',
                 ])->toArray(),
-                footer: $customers->count() . ' customers'
+                footer: $customers->count() . ' customers',
+                rowIds: $customers->pluck('id')->toArray()
             ),
         ];
     }

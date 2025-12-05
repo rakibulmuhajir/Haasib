@@ -54,36 +54,37 @@ class DuplicateAction implements PaletteAction
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'invoice_number' => $newNumber,
-                'reference' => null, // Clear reference for duplicate
-                'issue_date' => now(),
+                'invoice_date' => now(),
                 'due_date' => now()->addDays(30), // Default 30 days
                 'subtotal' => $source->subtotal,
                 'tax_amount' => $source->tax_amount,
                 'discount_amount' => $source->discount_amount,
                 'total_amount' => $source->total_amount,
-                'balance_due' => $source->total_amount,
-                'currency' => $customer->currency,
-                'exchange_rate' => 1.0,
+                'paid_amount' => 0,
+                'balance' => $source->total_amount,
+                'currency' => $source->currency,
+                'base_currency' => $source->base_currency,
+                'exchange_rate' => $source->exchange_rate,
+                'base_amount' => $source->base_amount,
                 'status' => $status,
-                'payment_status' => $status === 'draft' ? 'draft' : 'unpaid',
                 'notes' => $source->notes,
-                'terms' => $source->terms,
-                'footer' => $source->footer,
                 'created_by_user_id' => Auth::id(),
             ]);
 
             // Copy line items
-            foreach ($source->lineItems as $line) {
+            foreach ($source->lineItems as $idx => $line) {
                 $invoice->lineItems()->create([
+                    'company_id' => $company->id,
+                    'invoice_id' => $invoice->id,
+                    'line_number' => $line->line_number ?? ($idx + 1),
                     'description' => $line->description,
                     'quantity' => $line->quantity,
                     'unit_price' => $line->unit_price,
-                    'tax_rate_id' => $line->tax_rate_id,
-                    'discount_percent' => $line->discount_percent,
-                    'tax_amount' => $line->tax_amount,
-                    'discount_amount' => $line->discount_amount,
+                    'tax_rate' => $line->tax_rate ?? 0,
+                    'discount_rate' => $line->discount_rate ?? 0,
+                    'line_total' => $line->line_total ?? $line->total,
+                    'tax_amount' => $line->tax_amount ?? 0,
                     'total' => $line->total,
-                    'sort_order' => $line->sort_order,
                 ]);
             }
 
@@ -132,7 +133,7 @@ class DuplicateAction implements PaletteAction
         if (Str::isUuid($identifier)) {
             $customer = Customer::where('id', $identifier)
                 ->where('company_id', $companyId)
-                ->where('status', 'active')
+                ->where('is_active', true)
                 ->first();
             if ($customer) return $customer;
         }
@@ -140,27 +141,27 @@ class DuplicateAction implements PaletteAction
         // Try exact customer number
         $customer = Customer::where('company_id', $companyId)
             ->where('customer_number', $identifier)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try exact email
         $customer = Customer::where('company_id', $companyId)
             ->where('email', $identifier)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try exact name (case-insensitive)
         $customer = Customer::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = ?', [strtolower($identifier)])
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->first();
         if ($customer) return $customer;
 
         // Try fuzzy match
         $customer = Customer::where('company_id', $companyId)
-            ->where('status', 'active')
+            ->where('is_active', true)
             ->whereRaw('similarity(name, ?) > 0.3', [$identifier])
             ->orderByRaw('similarity(name, ?) DESC', [$identifier])
             ->first();

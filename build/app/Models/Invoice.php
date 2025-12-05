@@ -32,7 +32,6 @@ class Invoice extends Model
         'total_amount',
         'paid_amount',
         'balance',
-        'balance_due',
         'base_amount',
         'payment_terms',
         'notes',
@@ -44,7 +43,6 @@ class Invoice extends Model
         'recurring_schedule_id',
         'created_by_user_id',
         'updated_by_user_id',
-        'payment_status',
     ];
 
     protected $casts = [
@@ -59,7 +57,6 @@ class Invoice extends Model
         'total_amount' => 'decimal:6',
         'paid_amount' => 'decimal:6',
         'balance' => 'decimal:6',
-        'balance_due' => 'decimal:6',
         'base_amount' => 'decimal:2',
         'exchange_rate' => 'decimal:8',
         'payment_terms' => 'integer',

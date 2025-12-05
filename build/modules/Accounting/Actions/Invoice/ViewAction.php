@@ -31,9 +31,11 @@ class ViewAction implements PaletteAction
         $invoice->load('customer', 'lineItems');
 
         // Get payment history
-        $payments = Payment::where('paymentable_type', Invoice::class)
-            ->where('paymentable_id', $invoice->id)
-            ->where('is_voided', false)
+        $payments = Payment::where('company_id', $company->id)
+            ->whereHas('paymentAllocations', function ($q) use ($invoice) {
+                $q->where('invoice_id', $invoice->id);
+            })
+            ->with('paymentAllocations')
             ->orderBy('payment_date', 'desc')
             ->get();
 
@@ -41,10 +43,9 @@ class ViewAction implements PaletteAction
             ['Invoice Number', $invoice->invoice_number],
             ['Customer', $invoice->customer->name],
             ['Status', $this->formatStatusLong($invoice)],
-            ['Issue Date', $invoice->issue_date->format('M j, Y')],
+            ['Invoice Date', $invoice->invoice_date->format('M j, Y')],
             ['Due Date', $invoice->due_date->format('M j, Y') .
-                ($invoice->due_date->isPast() && $invoice->balance_due > 0 ? ' {error}(OVERDUE){/}' : '')],
-            ['Reference', $invoice->reference ?? '—'],
+                ($invoice->due_date->isPast() && $invoice->balance > 0 ? ' {error}(OVERDUE){/}' : '')],
             ['', ''],  // Spacer
             ['Financial Summary', ''],
             ['Subtotal', PaletteFormatter::money($invoice->subtotal, $invoice->currency)],
@@ -53,9 +54,9 @@ class ViewAction implements PaletteAction
                 ? '-' . PaletteFormatter::money($invoice->discount_amount, $invoice->currency)
                 : '—'],
             ['{bold}Total{/}', '{bold}' . PaletteFormatter::money($invoice->total_amount, $invoice->currency) . '{/}'],
-            ['Amount Paid', PaletteFormatter::money($invoice->total_amount - $invoice->balance_due, $invoice->currency)],
-            ['{bold}Balance Due{/}', $invoice->balance_due > 0
-                ? '{warning}' . PaletteFormatter::money($invoice->balance_due, $invoice->currency) . '{/}'
+            ['Amount Paid', PaletteFormatter::money($invoice->total_amount - $invoice->balance, $invoice->currency)],
+            ['{bold}Balance{/}', $invoice->balance > 0
+                ? '{warning}' . PaletteFormatter::money($invoice->balance, $invoice->currency) . '{/}'
                 : '{success}$0.00{/}'],
         ];
 
@@ -76,9 +77,10 @@ class ViewAction implements PaletteAction
             $rows[] = ['', ''];
             $rows[] = ['{bold}Payments{/}', ''];
             foreach ($payments as $payment) {
+                $allocated = $payment->paymentAllocations->firstWhere('invoice_id', $invoice->id);
                 $rows[] = [
-                    "  " . $payment->payment_date->format('M j') . " ({$payment->method})",
-                    PaletteFormatter::money($payment->amount, $payment->currency),
+                    "  " . $payment->payment_date->format('M j') . " ({$payment->payment_method})",
+                    PaletteFormatter::money($allocated->amount_allocated ?? $payment->amount, $payment->currency),
                 ];
             }
         }
@@ -122,6 +124,7 @@ class ViewAction implements PaletteAction
         $isOverdue = !in_array($invoice->status, [
             'paid',
             'cancelled',
+            'void',
             'draft',
         ]) && $invoice->due_date->isPast();
 
@@ -133,9 +136,11 @@ class ViewAction implements PaletteAction
         return match ($invoice->status) {
             'draft' => '{secondary}Draft{/}',
             'sent' => '{warning}Sent{/}',
-            'posted' => '{accent}Posted{/}',
+            'viewed' => '{accent}Viewed{/}',
+            'partial' => '{accent}Partial{/}',
             'overdue' => '{warning}Overdue{/}',
             'paid' => '{success}Paid in full{/}',
+            'void' => '{secondary}Void{/}',
             'cancelled' => '{secondary}Cancelled{/}',
             default => $invoice->status,
         };

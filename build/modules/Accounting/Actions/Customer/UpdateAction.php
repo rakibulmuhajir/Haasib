@@ -17,8 +17,25 @@ class UpdateAction implements PaletteAction
             'name' => 'nullable|string|min:1|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
-            'currency' => 'nullable|string|size:3',
+            'base_currency' => 'nullable|string|size:3|uppercase',
             'payment_terms' => 'nullable|integer|min:0|max:365',
+            'tax_id' => 'nullable|string|max:100',
+            'credit_limit' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+            'billing_address' => 'nullable|array',
+            'billing_address.street' => 'nullable|string|max:255',
+            'billing_address.city' => 'nullable|string|max:100',
+            'billing_address.state' => 'nullable|string|max:100',
+            'billing_address.zip' => 'nullable|string|max:20',
+            'billing_address.country' => 'nullable|string|max:2',
+            'shipping_address' => 'nullable|array',
+            'shipping_address.street' => 'nullable|string|max:255',
+            'shipping_address.city' => 'nullable|string|max:100',
+            'shipping_address.state' => 'nullable|string|max:100',
+            'shipping_address.zip' => 'nullable|string|max:20',
+            'shipping_address.country' => 'nullable|string|max:2',
+            'logo_url' => 'nullable|string|max:500',
+            'is_active' => 'nullable|boolean',
         ];
     }
 
@@ -61,14 +78,49 @@ class UpdateAction implements PaletteAction
             $changes[] = "phone → " . ($params['phone'] ?: 'removed');
         }
 
-        if (isset($params['currency'])) {
-            $updates['currency'] = strtoupper($params['currency']);
-            $changes[] = "currency → {$params['currency']}";
+        if (isset($params['base_currency'])) {
+            $updates['base_currency'] = strtoupper($params['base_currency']);
+            $changes[] = "base_currency → {$updates['base_currency']}";
         }
 
         if (isset($params['payment_terms'])) {
-            // Note: payment_terms is not in the model schema, might need migration
+            $updates['payment_terms'] = (int) $params['payment_terms'];
             $changes[] = "payment terms → {$params['payment_terms']} days";
+        }
+
+        if (array_key_exists('tax_id', $params)) {
+            $updates['tax_id'] = $params['tax_id'] ?: null;
+            $changes[] = "tax_id → " . ($params['tax_id'] ?: 'removed');
+        }
+
+        if (array_key_exists('credit_limit', $params)) {
+            $updates['credit_limit'] = $params['credit_limit'] === null ? null : $params['credit_limit'];
+            $changes[] = "credit_limit → " . ($params['credit_limit'] ?? 'removed');
+        }
+
+        if (array_key_exists('notes', $params)) {
+            $updates['notes'] = $params['notes'] ?? null;
+            $changes[] = "notes → " . ($params['notes'] ?? 'removed');
+        }
+
+        if (array_key_exists('billing_address', $params)) {
+            $updates['billing_address'] = $params['billing_address'] ?? null;
+            $changes[] = "billing_address updated";
+        }
+
+        if (array_key_exists('shipping_address', $params)) {
+            $updates['shipping_address'] = $params['shipping_address'] ?? null;
+            $changes[] = "shipping_address updated";
+        }
+
+        if (array_key_exists('logo_url', $params)) {
+            $updates['logo_url'] = $params['logo_url'] ?? null;
+            $changes[] = "logo_url updated";
+        }
+
+        if (array_key_exists('is_active', $params)) {
+            $updates['is_active'] = (bool) $params['is_active'];
+            $changes[] = "status → " . ($updates['is_active'] ? 'active' : 'inactive');
         }
 
         if (empty($updates)) {

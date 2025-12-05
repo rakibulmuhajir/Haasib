@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class CreditNote extends Model
 {
@@ -52,4 +53,25 @@ class CreditNote extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * Generate a credit note number scoped per company (simple incremental suffix).
+     */
+    public static function generateCreditNoteNumber(string $companyId): string
+    {
+        $last = DB::table('acct.credit_notes')
+            ->where('company_id', $companyId)
+            ->whereNotNull('credit_note_number')
+            ->orderByDesc('created_at')
+            ->value('credit_note_number');
+
+        $base = 'CN-';
+        $next = 1;
+
+        if ($last && preg_match('/(\\d+)$/', $last, $m)) {
+            $next = (int) $m[1] + 1;
+        }
+
+        return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+    }
 }

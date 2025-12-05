@@ -40,6 +40,7 @@ return new class extends Migration
         });
 
         DB::statement("ALTER TABLE auth.companies ADD CONSTRAINT companies_base_currency_format CHECK (base_currency ~ '^[A-Z]{3}$')");
+        DB::statement(\"ALTER TABLE auth.companies ADD CONSTRAINT companies_industry_allowed CHECK (industry IS NULL OR industry IN ('education','energy','ai','technology','retail','services'))\");
 
         Schema::table('auth.companies', function (Blueprint $table) {
             $table->foreign('created_by_user_id')

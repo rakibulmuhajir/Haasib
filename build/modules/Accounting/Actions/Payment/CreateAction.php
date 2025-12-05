@@ -21,7 +21,9 @@ class CreateAction implements PaletteAction
         return [
             'invoice' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0.01|max:999999999.99',
-            'method' => 'nullable|string|in:cash,check,card,bank_transfer,other',
+            'method' => 'required|string|in:cash,check,card,bank_transfer,other',
+            'currency' => 'nullable|string|size:3|uppercase', // must match invoice currency or base
+            'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'date' => 'nullable|date|before_or_equal:today',
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
@@ -55,11 +57,11 @@ class CreateAction implements PaletteAction
         $amount = (float) $params['amount'];
 
         // Warn if overpaying
-        if ($amount > $invoice->balance_due) {
+        if ($amount > $invoice->balance) {
             throw new \Exception(
                 "Payment amount ({$amount}) exceeds balance due " .
-                "(" . PaletteFormatter::money($invoice->balance_due, $invoice->currency) . "). " .
-                "Maximum payment: " . PaletteFormatter::money($invoice->balance_due, $invoice->currency)
+                "(" . PaletteFormatter::money($invoice->balance, $invoice->currency) . "). " .
+                "Maximum payment: " . PaletteFormatter::money($invoice->balance, $invoice->currency)
             );
         }
 
@@ -68,50 +70,66 @@ class CreateAction implements PaletteAction
                 ? Carbon::parse($params['date'])
                 : now();
 
-            // Create payment record
-            $payment = Payment::create([
-                'company_id' => $company->id,
-                'paymentable_type' => Invoice::class,
-                'paymentable_id' => $invoice->id,
-                'amount' => $amount,
-                'currency' => $invoice->currency,
-                'method' => $params['method'] ?? 'bank_transfer',
-                'reference' => $params['reference'] ?? null,
-                'payment_date' => $paymentDate,
-                'notes' => $params['notes'] ?? null,
-                'created_by_user_id' => Auth::id(),
-            ]);
+        $paymentNumber = Payment::generatePaymentNumber($company->id);
+        $currency = strtoupper($params['currency'] ?? $invoice->currency);
+        if ($currency !== $invoice->currency && $currency !== $invoice->base_currency) {
+            throw new \InvalidArgumentException('Payment currency must match invoice currency or base currency.');
+        }
+        $baseCurrency = $invoice->base_currency ?? $company->base_currency ?? $currency;
+        $exchangeRate = $currency === $baseCurrency ? null : ($params['exchange_rate'] ?? $invoice->exchange_rate ?? null);
+        if ($currency !== $baseCurrency && $exchangeRate === null) {
+            throw new \InvalidArgumentException('exchange_rate is required when payment currency differs from base_currency.');
+        }
+        if ($currency === $baseCurrency) {
+            $exchangeRate = null;
+        }
+        $baseAmount = round($amount * ($exchangeRate ?? 1), 2);
 
-            // Create payment allocation
-            PaymentAllocation::create([
-                'company_id' => $company->id,
-                'payment_id' => $payment->id,
-                'invoice_id' => $invoice->id,
-                'allocated_amount' => $amount,
-                'allocated_at' => $paymentDate,
-            ]);
+        // Create payment record
+        $payment = Payment::create([
+            'company_id' => $company->id,
+            'customer_id' => $invoice->customer_id,
+            'payment_number' => $paymentNumber,
+            'payment_date' => $paymentDate,
+            'amount' => $amount,
+            'currency' => $currency,
+            'exchange_rate' => $exchangeRate,
+            'base_currency' => $baseCurrency,
+            'base_amount' => $baseAmount,
+            'payment_method' => $params['method'] ?? 'bank_transfer',
+            'reference_number' => $params['reference'] ?? null,
+            'notes' => $params['notes'] ?? null,
+            'created_by_user_id' => Auth::id(),
+        ]);
 
-            // Update invoice
-            $newAmountPaid = ($invoice->total_amount - $invoice->balance_due) + $amount;
-            $newBalanceDue = $invoice->total_amount - $newAmountPaid;
+        // Create payment allocation
+        PaymentAllocation::create([
+            'company_id' => $company->id,
+            'payment_id' => $payment->id,
+            'invoice_id' => $invoice->id,
+            'amount_allocated' => $amount,
+            'base_amount_allocated' => $baseAmount,
+            'applied_at' => $paymentDate,
+        ]);
 
-            $newStatus = $newBalanceDue <= 0
-                ? 'paid'
-                : ($newBalanceDue < $invoice->total_amount ? 'posted' : 'sent');
+        // Update invoice
+        $newBalance = $invoice->balance - $amount;
+        $newPaidAmount = $invoice->paid_amount + $amount;
 
-            $newPaymentStatus = $newBalanceDue <= 0
-                ? 'paid'
-                : 'unpaid';
+        $newStatus = $newBalance <= 0
+            ? 'paid'
+            : ($newPaidAmount > 0 ? 'partial' : $invoice->status);
 
-            $invoice->update([
-                'payment_status' => $newPaymentStatus,
-                'balance_due' => max(0, $newBalanceDue),
-                'paid_at' => $newPaymentStatus === 'paid' ? now() : null,
-            ]);
+        $invoice->update([
+            'status' => $newStatus,
+            'paid_amount' => $newPaidAmount,
+            'balance' => max(0, $newBalance),
+            'paid_at' => $newStatus === 'paid' ? now() : null,
+        ]);
 
-            $statusMsg = $newPaymentStatus === 'paid'
+            $statusMsg = $newStatus === 'paid'
                 ? '{success}Paid in full{/}'
-                : PaletteFormatter::money($newBalanceDue, $invoice->currency) . ' remaining';
+                : PaletteFormatter::money(max(0, $newBalance), $invoice->currency) . ' remaining';
 
             return [
                 'message' => "Payment recorded: " .
@@ -121,7 +139,7 @@ class CreateAction implements PaletteAction
                     'id' => $payment->id,
                     'invoice' => $invoice->invoice_number,
                     'amount' => PaletteFormatter::money($amount, $invoice->currency),
-                    'balance_due' => PaletteFormatter::money(max(0, $newBalanceDue), $invoice->currency),
+                    'balance' => PaletteFormatter::money(max(0, $newBalance), $invoice->currency),
                     'status' => $newStatus,
                 ],
             ];

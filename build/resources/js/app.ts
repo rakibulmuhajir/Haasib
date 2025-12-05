@@ -5,6 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import type { DefineComponent } from 'vue'
 import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
+import { useFlashMessages } from './composables/useFlashMessages'
 import CommandPalette from './components/palette/CommandPalette.vue'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel'
@@ -22,6 +23,9 @@ createInertiaApp({
       name: 'AppRoot',
       setup() {
         const paletteVisible = ref(false)
+
+        // Initialize global flash message handler
+        useFlashMessages()
 
         function togglePalette() {
           paletteVisible.value = !paletteVisible.value

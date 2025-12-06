@@ -6,7 +6,7 @@ export function useFlashMessages() {
   const page = usePage()
 
   const handleFlashMessages = () => {
-    const flash = page.props.flash as any
+    const flash = page.props?.flash as any
 
     if (flash?.success) {
       toast.success(flash.success)
@@ -27,7 +27,7 @@ export function useFlashMessages() {
 
   // Watch for flash changes and show toast notifications
   watch(
-    () => page.props.flash,
+    () => page.props?.flash,
     () => {
       handleFlashMessages()
     },

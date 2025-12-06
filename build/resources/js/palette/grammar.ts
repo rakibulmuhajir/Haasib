@@ -12,29 +12,15 @@ import { getEntities, getVerbsForEntity, getSchema, getAllSchemas } from './sche
 // ============================================================================
 
 export const ENTITY_ICONS: Record<string, string> = {
-  // Core entities
+  // Core entities (Revenue Phase)
   company: '🏢',
   customer: '👤',
   invoice: '📄',
   payment: '💳',
 
-  // Payables
-  vendor: '🏪',
-  bill: '📋',
-  expense: '💸',
-
-  // Accounting
-  account: '📊',
-  journal: '📒',
-  report: '📈',
-
-  // Inventory & Sales
-  product: '📦',
-  service: '🛠️',
-  tax: '🏛️',
-
   // Settings
   user: '👥',
+  role: '🔐',
   settings: '⚙️',
 
   // Default
@@ -48,38 +34,25 @@ export const ENTITY_ICONS: Record<string, string> = {
 const ENTITY_SHORTCUTS: Record<string, string> = {
   // Single letter
   c: 'company',
+  u: 'user',
   i: 'invoice',
   p: 'payment',
-  v: 'vendor',
-  b: 'bill',
-  e: 'expense',
-  r: 'report',
-  a: 'account',
+  r: 'role',
 
   // Two letter
   co: 'company',
   cu: 'customer',
+  us: 'user',
+  ro: 'role',
   in: 'invoice',
   pa: 'payment',
-  ve: 'vendor',
-  bi: 'bill',
-  ex: 'expense',
-  re: 'report',
-  ac: 'account',
-  jo: 'journal',
-  pr: 'product',
-  ta: 'tax',
 
   // Common abbreviations
   inv: 'invoice',
   cust: 'customer',
   comp: 'company',
   pay: 'payment',
-  vend: 'vendor',
-  exp: 'expense',
-  rep: 'report',
-  acct: 'account',
-  prod: 'product',
+  usr: 'user',
 }
 
 // ============================================================================
@@ -192,10 +165,8 @@ export function getCommandExample(entity: string, verb: string): string {
     'invoice.create': 'invoice create "Acme Corp" 1000 --currency=USD',
     'invoice.list': 'invoice list --status=unpaid',
     'payment.create': 'payment create INV-001 500',
-    'vendor.create': 'vendor create "Supplier Inc"',
-    'bill.create': 'bill create "Supplier Inc" 500',
-    'expense.create': 'expense create 50 "Office Supplies"',
-    'report.generate': 'report generate profit_loss --period=this_month',
+    'user.create': 'user create "John Doe" john@example.com',
+    'role.create': 'role create "Manager"',
   }
 
   return examples[`${entity}.${verb}`] || `${entity} ${verb}`

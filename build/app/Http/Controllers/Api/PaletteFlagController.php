@@ -35,6 +35,9 @@ class PaletteFlagController extends Controller
             'period' => $this->getPeriodValues($query),
             'type' => $this->getTypeValues($query),
             'method', 'payment_method' => $this->getPaymentMethodValues($query),
+            'country' => $this->getCountryValues($query),
+            'industry' => $this->getIndustryValues($query),
+            'payment_terms' => $this->getPaymentTermsValues($query),
             default => [],
         };
 
@@ -46,9 +49,24 @@ class PaletteFlagController extends Controller
      */
     private function searchEntity(string $entityType, string $query): array
     {
-        // Company search doesn't require a company context
-        if ($entityType === 'company') {
-            return $this->searchCompanies($query);
+        // Lookup entities (small lists, no company context needed)
+        if (in_array($entityType, ['currency', 'country', 'industry'])) {
+            return match ($entityType) {
+                'currency' => $this->getCurrencyValues($query),
+                'country' => $this->getCountryValues($query),
+                'industry' => $this->getIndustryValues($query),
+                default => [],
+            };
+        }
+
+        // These searches don't require company context
+        if (in_array($entityType, ['company', 'user', 'role'])) {
+            return match ($entityType) {
+                'company' => $this->searchCompanies($query),
+                'user' => $this->searchUsers($query),
+                'role' => $this->searchRoles($query),
+                default => [],
+            };
         }
 
         // All other entity searches require company context
@@ -60,8 +78,6 @@ class PaletteFlagController extends Controller
         return match ($entityType) {
             'customer' => $this->searchCustomers($company->id, $query),
             'invoice' => $this->searchInvoices($company->id, $query),
-            'vendor' => $this->searchVendors($company->id, $query),
-            'bill' => $this->searchBills($company->id, $query),
             default => [],
         };
     }
@@ -152,65 +168,50 @@ class PaletteFlagController extends Controller
         ])->all();
     }
 
-    private function searchVendors(string $companyId, string $query): array
+    private function searchUsers(string $query): array
     {
-        // Check if vendors table exists
-        try {
-            $builder = DB::table('acct.vendors')
-                ->where('company_id', $companyId)
-                ->whereNull('deleted_at')
-                ->select('id', 'name', 'email')
-                ->orderBy('name')
-                ->limit(10);
+        // User search doesn't require company context (admin can see all)
+        $builder = DB::table('auth.users')
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->limit(10);
 
-            if ($query) {
-                $builder->where(function ($q) use ($query) {
-                    $q->where('name', 'ilike', "%{$query}%")
-                        ->orWhere('email', 'ilike', "%{$query}%");
-                });
-            }
-
-            return $builder->get()->map(fn($row) => [
-                'value' => $row->id,
-                'label' => $row->name,
-                'meta' => $row->email ?? '',
-                'icon' => '🏭',
-            ])->all();
-        } catch (\Exception $e) {
-            // Table doesn't exist yet
-            return [];
+        if ($query) {
+            $builder->where(function ($q) use ($query) {
+                $q->where('name', 'ilike', "%{$query}%")
+                    ->orWhere('email', 'ilike', "%{$query}%");
+            });
         }
+
+        return $builder->get()->map(fn($row) => [
+            'value' => $row->id,
+            'label' => $row->name,
+            'meta' => $row->email,
+            'icon' => '👤',
+        ])->all();
     }
 
-    private function searchBills(string $companyId, string $query): array
+    private function searchRoles(string $query): array
     {
-        // Check if bills table exists
-        try {
-            $builder = DB::table('acct.bills as b')
-                ->leftJoin('acct.vendors as v', 'b.vendor_id', '=', 'v.id')
-                ->where('b.company_id', $companyId)
-                ->whereNull('b.deleted_at')
-                ->select('b.id', 'b.bill_number', 'b.total_amount', 'b.currency', 'b.status', 'v.name as vendor_name')
-                ->orderByDesc('b.created_at')
-                ->limit(10);
+        // Role search doesn't require company context
+        $builder = DB::table('auth.roles')
+            ->select('id', 'name', 'description')
+            ->orderBy('name')
+            ->limit(10);
 
-            if ($query) {
-                $builder->where(function ($q) use ($query) {
-                    $q->where('b.bill_number', 'ilike', "%{$query}%")
-                        ->orWhere('v.name', 'ilike', "%{$query}%");
-                });
-            }
-
-            return $builder->get()->map(fn($row) => [
-                'value' => $row->id,
-                'label' => $row->bill_number ?: 'Draft',
-                'meta' => ($row->vendor_name ? $row->vendor_name . ' - ' : '') . number_format((float)$row->total_amount, 2) . ' ' . $row->currency,
-                'icon' => '📋',
-            ])->all();
-        } catch (\Exception $e) {
-            // Table doesn't exist yet
-            return [];
+        if ($query) {
+            $builder->where(function ($q) use ($query) {
+                $q->where('name', 'ilike', "%{$query}%")
+                    ->orWhere('description', 'ilike', "%{$query}%");
+            });
         }
+
+        return $builder->get()->map(fn($row) => [
+            'value' => $row->id,
+            'label' => $row->name,
+            'meta' => $row->description ?? '',
+            'icon' => '🔐',
+        ])->all();
     }
 
     private function getStatusValues(string $query): array
@@ -292,6 +293,9 @@ class PaletteFlagController extends Controller
             ['value' => 'individual', 'label' => 'Individual', 'icon' => '👤'],
             ['value' => 'government', 'label' => 'Government', 'icon' => '🏛️'],
             ['value' => 'non_profit', 'label' => 'Non-Profit', 'icon' => '🤝'],
+            ['value' => 'admin', 'label' => 'Admin', 'icon' => '👑'],
+            ['value' => 'manager', 'label' => 'Manager', 'icon' => '🎯'],
+            ['value' => 'employee', 'label' => 'Employee', 'icon' => '💼'],
         ];
 
         if (!$query) {
@@ -323,6 +327,91 @@ class PaletteFlagController extends Controller
         return array_values(array_filter($methods, fn($m) =>
             str_contains(strtolower($m['value']), $q) ||
             str_contains(strtolower($m['label']), $q)
+        ));
+    }
+
+    private function getCountryValues(string $query): array
+    {
+        $countries = [
+            ['value' => 'US', 'label' => 'United States', 'icon' => '🇺🇸'],
+            ['value' => 'GB', 'label' => 'United Kingdom', 'icon' => '🇬🇧'],
+            ['value' => 'CA', 'label' => 'Canada', 'icon' => '🇨🇦'],
+            ['value' => 'AU', 'label' => 'Australia', 'icon' => '🇦🇺'],
+            ['value' => 'DE', 'label' => 'Germany', 'icon' => '🇩🇪'],
+            ['value' => 'FR', 'label' => 'France', 'icon' => '🇫🇷'],
+            ['value' => 'JP', 'label' => 'Japan', 'icon' => '🇯🇵'],
+            ['value' => 'CN', 'label' => 'China', 'icon' => '🇨🇳'],
+            ['value' => 'IN', 'label' => 'India', 'icon' => '🇮🇳'],
+            ['value' => 'PK', 'label' => 'Pakistan', 'icon' => '🇵🇰'],
+            ['value' => 'AE', 'label' => 'United Arab Emirates', 'icon' => '🇦🇪'],
+            ['value' => 'SA', 'label' => 'Saudi Arabia', 'icon' => '🇸🇦'],
+            ['value' => 'SG', 'label' => 'Singapore', 'icon' => '🇸🇬'],
+            ['value' => 'MY', 'label' => 'Malaysia', 'icon' => '🇲🇾'],
+            ['value' => 'NL', 'label' => 'Netherlands', 'icon' => '🇳🇱'],
+        ];
+
+        if (!$query) {
+            return $countries;
+        }
+
+        $q = strtolower($query);
+        return array_values(array_filter($countries, fn($c) =>
+            str_contains(strtolower($c['value']), $q) ||
+            str_contains(strtolower($c['label']), $q)
+        ));
+    }
+
+    private function getIndustryValues(string $query): array
+    {
+        $industries = [
+            ['value' => 'technology', 'label' => 'Technology', 'icon' => '💻'],
+            ['value' => 'healthcare', 'label' => 'Healthcare', 'icon' => '🏥'],
+            ['value' => 'finance', 'label' => 'Finance & Banking', 'icon' => '🏦'],
+            ['value' => 'retail', 'label' => 'Retail & E-commerce', 'icon' => '🛒'],
+            ['value' => 'manufacturing', 'label' => 'Manufacturing', 'icon' => '🏭'],
+            ['value' => 'construction', 'label' => 'Construction', 'icon' => '🏗️'],
+            ['value' => 'education', 'label' => 'Education', 'icon' => '🎓'],
+            ['value' => 'hospitality', 'label' => 'Hospitality & Tourism', 'icon' => '🏨'],
+            ['value' => 'real_estate', 'label' => 'Real Estate', 'icon' => '🏠'],
+            ['value' => 'professional_services', 'label' => 'Professional Services', 'icon' => '💼'],
+            ['value' => 'logistics', 'label' => 'Logistics & Transport', 'icon' => '🚚'],
+            ['value' => 'agriculture', 'label' => 'Agriculture', 'icon' => '🌾'],
+            ['value' => 'energy', 'label' => 'Energy & Utilities', 'icon' => '⚡'],
+            ['value' => 'media', 'label' => 'Media & Entertainment', 'icon' => '🎬'],
+            ['value' => 'non_profit', 'label' => 'Non-Profit', 'icon' => '🤝'],
+            ['value' => 'other', 'label' => 'Other', 'icon' => '📋'],
+        ];
+
+        if (!$query) {
+            return $industries;
+        }
+
+        $q = strtolower($query);
+        return array_values(array_filter($industries, fn($i) =>
+            str_contains(strtolower($i['value']), $q) ||
+            str_contains(strtolower($i['label']), $q)
+        ));
+    }
+
+    private function getPaymentTermsValues(string $query): array
+    {
+        $terms = [
+            ['value' => '7', 'label' => 'Net 7 days', 'icon' => '📅'],
+            ['value' => '14', 'label' => 'Net 14 days', 'icon' => '📅'],
+            ['value' => '30', 'label' => 'Net 30 days', 'icon' => '📅'],
+            ['value' => '45', 'label' => 'Net 45 days', 'icon' => '📅'],
+            ['value' => '60', 'label' => 'Net 60 days', 'icon' => '📅'],
+            ['value' => '90', 'label' => 'Net 90 days', 'icon' => '📅'],
+        ];
+
+        if (!$query) {
+            return $terms;
+        }
+
+        $q = strtolower($query);
+        return array_values(array_filter($terms, fn($t) =>
+            str_contains($t['value'], $q) ||
+            str_contains(strtolower($t['label']), $q)
         ));
     }
 }

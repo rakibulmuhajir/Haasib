@@ -1,52 +1,293 @@
 /**
  * Command Palette Schemas
  *
- * This file defines the schema for each entity+verb combination.
- * Adding new accounting modules (bills, vendors, reports, etc.) is as simple
- * as adding entries to the SCHEMAS object.
- *
- * Schema Structure:
- * - entity: string - The entity name (invoice, bill, vendor, etc.)
- * - verb: string - The action (create, list, view, delete, etc.)
- * - args: Array - Required positional arguments
- * - flags: Array - Optional named flags
- *
- * Arg/Flag Properties:
- * - name: string - Field name (used as key in API params)
- * - required: boolean - Whether field is required
- * - hint: string - Help text shown to user
- * - hasDropdown: boolean - Whether to show dropdown with suggestions
- * - enum: string[] - Static list of allowed values (optional)
- * - options: string - API endpoint to fetch dynamic options (optional)
+ * Field Input Types:
+ * - text:   User types free text (name, description, reference)
+ * - number: User types numeric value (amount, limit)
+ * - email:  User types email with validation hint
+ * - phone:  User types phone number
+ * - date:   User types date with format hint (dd/mm/yyyy)
+ * - select: User picks from static enum list (no DB)
+ * - lookup: User picks from small DB list, shown immediately (currency, country, industry)
+ * - search: User types to search large DB (customer, invoice, company) - requires ≥2 chars
+ * - image:  User picks file (logo, avatar)
  */
 
-export interface ArgDef {
-  name: string
-  required: boolean
-  hint?: string
-  hasDropdown?: boolean
-  enum?: string[]
-  options?: string
-  /** Entity type for DB search (e.g., 'customer', 'invoice', 'company') */
-  searchEntity?: string
-}
+// ============================================================================
+// Types
+// ============================================================================
 
-export interface FlagDef {
+export type InputType = 'text' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'lookup' | 'search' | 'image'
+
+/** Entity types that use lookup (small cached lists, shown immediately) */
+export const LOOKUP_ENTITIES = ['currency', 'country', 'industry', 'role'] as const
+
+/** Entity types that use search (large lists, type to search) */
+export const SEARCH_ENTITIES = ['customer', 'company', 'invoice', 'user', 'vendor'] as const
+
+export interface FieldDef {
   name: string
+  required?: boolean
+  inputType: InputType
   hint?: string
-  hasDropdown?: boolean
+  placeholder?: string
+  /** Static options for 'select' type */
   enum?: string[]
-  options?: string
-  /** Entity type for DB search (e.g., 'customer', 'invoice', 'company') */
+  /** Entity type for 'search' type (e.g., 'customer', 'invoice') */
   searchEntity?: string
+  /** Accepted file types for 'image' type */
+  accept?: string
 }
 
 export interface CommandSchema {
   entity: string
   verb: string
-  args: ArgDef[]
-  flags: FlagDef[]
+  args: FieldDef[]
+  flags: FieldDef[]
 }
+
+// ============================================================================
+// Reusable Field Definitions
+// ============================================================================
+
+const FIELDS = {
+  // Text fields
+  name: (hint: string): FieldDef => ({
+    name: 'name',
+    required: true,
+    inputType: 'text',
+    hint,
+  }),
+
+  description: (): FieldDef => ({
+    name: 'description',
+    inputType: 'text',
+    hint: 'Description',
+  }),
+
+  reference: (): FieldDef => ({
+    name: 'reference',
+    inputType: 'text',
+    hint: 'External reference',
+  }),
+
+  notes: (): FieldDef => ({
+    name: 'notes',
+    inputType: 'text',
+    hint: 'Notes',
+  }),
+
+  message: (): FieldDef => ({
+    name: 'message',
+    inputType: 'text',
+    hint: 'Message',
+  }),
+
+  search: (): FieldDef => ({
+    name: 'search',
+    inputType: 'text',
+    hint: 'Search term',
+  }),
+
+  tax_id: (): FieldDef => ({
+    name: 'tax_id',
+    inputType: 'text',
+    hint: 'Tax ID (e.g., VAT number)',
+  }),
+
+  // Number fields
+  amount: (hint = 'Amount'): FieldDef => ({
+    name: 'amount',
+    required: true,
+    inputType: 'number',
+    hint,
+    placeholder: '0.00',
+  }),
+
+  limit: (): FieldDef => ({
+    name: 'limit',
+    inputType: 'number',
+    hint: 'Max results',
+    placeholder: '50',
+  }),
+
+  // Email field
+  email: (required = false): FieldDef => ({
+    name: 'email',
+    required,
+    inputType: 'email',
+    hint: 'Email address',
+    placeholder: 'name@example.com',
+  }),
+
+  // Phone field
+  phone: (): FieldDef => ({
+    name: 'phone',
+    inputType: 'phone',
+    hint: 'Phone number',
+    placeholder: '+1 234 567 8900',
+  }),
+
+  // Date fields
+  date: (name: string, hint: string): FieldDef => ({
+    name,
+    inputType: 'date',
+    hint,
+    placeholder: 'dd/mm/yyyy',
+  }),
+
+  due_date: (): FieldDef => ({
+    name: 'due',
+    inputType: 'date',
+    hint: 'Due date',
+    placeholder: 'dd/mm/yyyy or +30d',
+  }),
+
+  from_date: (): FieldDef => ({
+    name: 'from',
+    inputType: 'date',
+    hint: 'From date',
+    placeholder: 'dd/mm/yyyy',
+  }),
+
+  to_date: (): FieldDef => ({
+    name: 'to',
+    inputType: 'date',
+    hint: 'To date',
+    placeholder: 'dd/mm/yyyy',
+  }),
+
+  // Select fields (static enum)
+  status: (options: string[]): FieldDef => ({
+    name: 'status',
+    inputType: 'select',
+    hint: 'Status',
+    enum: options,
+  }),
+
+  payment_terms: (): FieldDef => ({
+    name: 'payment_terms',
+    inputType: 'select',
+    hint: 'Payment terms (days)',
+    enum: ['7', '14', '30', '45', '60', '90'],
+  }),
+
+  customer_type: (): FieldDef => ({
+    name: 'type',
+    inputType: 'select',
+    hint: 'Customer type',
+    enum: ['business', 'individual'],
+  }),
+
+  payment_method: (): FieldDef => ({
+    name: 'method',
+    inputType: 'select',
+    hint: 'Payment method',
+    enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'],
+  }),
+
+  invoice_status: (): FieldDef => ({
+    name: 'status',
+    inputType: 'select',
+    hint: 'Invoice status',
+    enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
+  }),
+
+  // Lookup fields (small DB lists, shown immediately)
+  currency: (required = false): FieldDef => ({
+    name: 'currency',
+    required,
+    inputType: 'lookup',
+    hint: 'Currency',
+    searchEntity: 'currency',
+  }),
+
+  country: (): FieldDef => ({
+    name: 'country',
+    inputType: 'lookup',
+    hint: 'Country',
+    searchEntity: 'country',
+  }),
+
+  industry: (): FieldDef => ({
+    name: 'industry',
+    inputType: 'lookup',
+    hint: 'Industry',
+    searchEntity: 'industry',
+  }),
+
+  role: (): FieldDef => ({
+    name: 'role',
+    inputType: 'lookup',
+    hint: 'Role',
+    searchEntity: 'role',
+  }),
+
+  // Search fields (large DB, type to search)
+  customer: (required = false): FieldDef => ({
+    name: 'customer',
+    required,
+    inputType: 'search',
+    hint: 'Customer',
+    searchEntity: 'customer',
+  }),
+
+  invoice: (required = false): FieldDef => ({
+    name: 'invoice',
+    required,
+    inputType: 'search',
+    hint: 'Invoice',
+    searchEntity: 'invoice',
+  }),
+
+  company: (required = false): FieldDef => ({
+    name: 'company',
+    required,
+    inputType: 'search',
+    hint: 'Company',
+    searchEntity: 'company',
+  }),
+
+  user: (required = false): FieldDef => ({
+    name: 'user',
+    required,
+    inputType: 'search',
+    hint: 'User',
+    searchEntity: 'user',
+  }),
+
+  // Image fields
+  logo: (): FieldDef => ({
+    name: 'logo',
+    inputType: 'image',
+    hint: 'Company logo',
+    accept: 'image/png,image/jpeg,image/svg+xml',
+  }),
+
+  avatar: (): FieldDef => ({
+    name: 'avatar',
+    inputType: 'image',
+    hint: 'Profile picture',
+    accept: 'image/png,image/jpeg',
+  }),
+
+  // ID fields (for view/edit commands)
+  id: (entity: string): FieldDef => ({
+    name: 'id',
+    required: true,
+    inputType: 'search',
+    hint: `${entity} ID`,
+    searchEntity: entity,
+  }),
+
+  slug: (entity: string): FieldDef => ({
+    name: 'slug',
+    required: true,
+    inputType: 'search',
+    hint: `${entity} slug`,
+    searchEntity: entity,
+  }),
+} as const
 
 // ============================================================================
 // Schema Definitions
@@ -60,13 +301,14 @@ const SCHEMAS: Record<string, CommandSchema> = {
     entity: 'company',
     verb: 'create',
     args: [
-      { name: 'name', required: true, hint: 'Company name' },
-      { name: 'currency', required: true, hint: 'Base currency', hasDropdown: true },
+      FIELDS.name('Company name'),
+      FIELDS.currency(true),
     ],
     flags: [
-      { name: 'industry', hint: 'Industry sector', hasDropdown: true },
-      { name: 'country', hint: 'Country code', hasDropdown: true },
-      { name: 'tax_id', hint: 'Tax identification number' },
+      FIELDS.industry(),
+      FIELDS.country(),
+      FIELDS.tax_id(),
+      FIELDS.logo(),
     ],
   },
   'company.list': {
@@ -74,24 +316,26 @@ const SCHEMAS: Record<string, CommandSchema> = {
     verb: 'list',
     args: [],
     flags: [
-      { name: 'status', hint: 'Filter by status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.status(['active', 'inactive', 'all']),
+      FIELDS.limit(),
     ],
   },
   'company.view': {
     entity: 'company',
     verb: 'view',
-    args: [
-      { name: 'id', required: true, hint: 'Company ID or slug', hasDropdown: true, searchEntity: 'company' },
-    ],
+    args: [FIELDS.id('company')],
     flags: [],
   },
   'company.switch': {
     entity: 'company',
     verb: 'switch',
-    args: [
-      { name: 'slug', required: true, hint: 'Company slug', hasDropdown: true, searchEntity: 'company' },
-    ],
+    args: [FIELDS.slug('company')],
+    flags: [],
+  },
+  'company.delete': {
+    entity: 'company',
+    verb: 'delete',
+    args: [FIELDS.slug('company')],
     flags: [],
   },
 
@@ -102,15 +346,15 @@ const SCHEMAS: Record<string, CommandSchema> = {
     entity: 'customer',
     verb: 'create',
     args: [
-      { name: 'name', required: true, hint: 'Customer name' },
+      FIELDS.name('Customer name'),
     ],
     flags: [
-      { name: 'email', hint: 'Email address' },
-      { name: 'phone', hint: 'Phone number' },
-      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
-      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
-      { name: 'type', hint: 'Customer type', hasDropdown: true, enum: ['business', 'individual'] },
-      { name: 'country', hint: 'Country', hasDropdown: true },
+      FIELDS.email(),
+      FIELDS.phone(),
+      FIELDS.currency(),
+      FIELDS.payment_terms(),
+      FIELDS.customer_type(),
+      FIELDS.country(),
     ],
   },
   'customer.list': {
@@ -118,17 +362,21 @@ const SCHEMAS: Record<string, CommandSchema> = {
     verb: 'list',
     args: [],
     flags: [
-      { name: 'search', hint: 'Search by name' },
-      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.search(),
+      FIELDS.status(['active', 'inactive', 'all']),
+      FIELDS.limit(),
     ],
   },
   'customer.view': {
     entity: 'customer',
     verb: 'view',
-    args: [
-      { name: 'id', required: true, hint: 'Customer ID or name', hasDropdown: true, searchEntity: 'customer' },
-    ],
+    args: [FIELDS.id('customer')],
+    flags: [],
+  },
+  'customer.delete': {
+    entity: 'customer',
+    verb: 'delete',
+    args: [FIELDS.id('customer')],
     flags: [],
   },
 
@@ -139,14 +387,24 @@ const SCHEMAS: Record<string, CommandSchema> = {
     entity: 'invoice',
     verb: 'create',
     args: [
-      { name: 'customer', required: true, hint: 'Customer name', hasDropdown: true, searchEntity: 'customer' },
-      { name: 'amount', required: true, hint: 'Invoice amount' },
+      FIELDS.customer(true),
+      {
+        name: 'line_items',
+        required: true,
+        inputType: 'text',
+        hint: 'Line items (JSON array or format: "Description:Quantity:Price")',
+        placeholder: '[{"description":"Service","quantity":1,"unit_price":100}]',
+      },
     ],
     flags: [
-      { name: 'currency', hint: 'Currency code', hasDropdown: true },
-      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)', hasDropdown: true },
-      { name: 'description', hint: 'Invoice description' },
-      { name: 'reference', hint: 'External reference' },
+      FIELDS.currency(),
+      FIELDS.due_date(),
+      {
+        name: 'description',
+        inputType: 'text',
+        hint: 'Invoice description',
+      },
+      FIELDS.reference(),
     ],
   },
   'invoice.list': {
@@ -154,31 +412,39 @@ const SCHEMAS: Record<string, CommandSchema> = {
     verb: 'list',
     args: [],
     flags: [
-      { name: 'customer', hint: 'Filter by customer', hasDropdown: true, searchEntity: 'customer' },
-      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'] },
-      { name: 'from', hint: 'From date', hasDropdown: true },
-      { name: 'to', hint: 'To date', hasDropdown: true },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.customer(),
+      FIELDS.invoice_status(),
+      FIELDS.from_date(),
+      FIELDS.to_date(),
+      FIELDS.limit(),
     ],
   },
   'invoice.view': {
     entity: 'invoice',
     verb: 'view',
-    args: [
-      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true, searchEntity: 'invoice' },
-    ],
+    args: [FIELDS.id('invoice')],
     flags: [],
   },
   'invoice.send': {
     entity: 'invoice',
     verb: 'send',
-    args: [
-      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true, searchEntity: 'invoice' },
-    ],
+    args: [FIELDS.id('invoice')],
     flags: [
-      { name: 'email', hint: 'Override recipient email' },
-      { name: 'message', hint: 'Custom message' },
+      FIELDS.email(),
+      FIELDS.message(),
     ],
+  },
+  'invoice.void': {
+    entity: 'invoice',
+    verb: 'void',
+    args: [FIELDS.id('invoice')],
+    flags: [],
+  },
+  'invoice.duplicate': {
+    entity: 'invoice',
+    verb: 'duplicate',
+    args: [FIELDS.id('invoice')],
+    flags: [],
   },
 
   // --------------------------------------------------------------------------
@@ -188,14 +454,14 @@ const SCHEMAS: Record<string, CommandSchema> = {
     entity: 'payment',
     verb: 'create',
     args: [
-      { name: 'invoice', required: true, hint: 'Invoice number', hasDropdown: true, searchEntity: 'invoice' },
-      { name: 'amount', required: true, hint: 'Payment amount' },
+      FIELDS.invoice(true),
+      FIELDS.amount('Payment amount'),
     ],
     flags: [
-      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
-      { name: 'reference', hint: 'Payment reference' },
-      { name: 'date', hint: 'Payment date', hasDropdown: true },
-      { name: 'notes', hint: 'Notes' },
+      FIELDS.payment_method(),
+      FIELDS.reference(),
+      FIELDS.date('date', 'Payment date'),
+      FIELDS.notes(),
     ],
   },
   'payment.list': {
@@ -203,262 +469,91 @@ const SCHEMAS: Record<string, CommandSchema> = {
     verb: 'list',
     args: [],
     flags: [
-      { name: 'invoice', hint: 'Filter by invoice', hasDropdown: true, searchEntity: 'invoice' },
-      { name: 'customer', hint: 'Filter by customer', hasDropdown: true, searchEntity: 'customer' },
-      { name: 'from', hint: 'From date', hasDropdown: true },
-      { name: 'to', hint: 'To date', hasDropdown: true },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.invoice(),
+      FIELDS.customer(),
+      FIELDS.from_date(),
+      FIELDS.to_date(),
+      FIELDS.limit(),
     ],
   },
-
-  // --------------------------------------------------------------------------
-  // VENDOR (NEW)
-  // --------------------------------------------------------------------------
-  'vendor.create': {
-    entity: 'vendor',
-    verb: 'create',
-    args: [
-      { name: 'name', required: true, hint: 'Vendor name' },
-    ],
-    flags: [
-      { name: 'email', hint: 'Email address' },
-      { name: 'phone', hint: 'Phone number' },
-      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
-      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
-      { name: 'type', hint: 'Vendor type', hasDropdown: true, enum: ['supplier', 'contractor', 'service'] },
-      { name: 'country', hint: 'Country', hasDropdown: true },
-      { name: 'tax_id', hint: 'Tax ID' },
-    ],
-  },
-  'vendor.list': {
-    entity: 'vendor',
-    verb: 'list',
-    args: [],
-    flags: [
-      { name: 'search', hint: 'Search by name' },
-      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
-      { name: 'limit', hint: 'Max results' },
-    ],
-  },
-  'vendor.view': {
-    entity: 'vendor',
+  'payment.view': {
+    entity: 'payment',
     verb: 'view',
-    args: [
-      { name: 'id', required: true, hint: 'Vendor ID or name', hasDropdown: true, searchEntity: 'vendor' },
-    ],
+    args: [FIELDS.id('payment')],
+    flags: [],
+  },
+  'payment.void': {
+    entity: 'payment',
+    verb: 'void',
+    args: [FIELDS.id('payment')],
     flags: [],
   },
 
   // --------------------------------------------------------------------------
-  // BILL (NEW - Vendor Invoices)
+  // USER
   // --------------------------------------------------------------------------
-  'bill.create': {
-    entity: 'bill',
+  'user.create': {
+    entity: 'user',
     verb: 'create',
     args: [
-      { name: 'vendor', required: true, hint: 'Vendor name', hasDropdown: true, searchEntity: 'vendor' },
-      { name: 'amount', required: true, hint: 'Bill amount' },
+      FIELDS.name('User name'),
+      FIELDS.email(true),
     ],
     flags: [
-      { name: 'currency', hint: 'Currency code', hasDropdown: true },
-      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)', hasDropdown: true },
-      { name: 'bill_number', hint: 'Vendor bill number' },
-      { name: 'description', hint: 'Bill description' },
-      { name: 'category', hint: 'Expense category', hasDropdown: true },
+      FIELDS.role(),
+      FIELDS.company(),
+      FIELDS.avatar(),
     ],
   },
-  'bill.list': {
-    entity: 'bill',
+  'user.list': {
+    entity: 'user',
     verb: 'list',
     args: [],
     flags: [
-      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true, searchEntity: 'vendor' },
-      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'pending', 'paid', 'overdue', 'cancelled'] },
-      { name: 'category', hint: 'Filter by category', hasDropdown: true },
-      { name: 'from', hint: 'From date', hasDropdown: true },
-      { name: 'to', hint: 'To date', hasDropdown: true },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.company(),
+      FIELDS.role(),
+      FIELDS.status(['active', 'inactive', 'all']),
+      FIELDS.limit(),
     ],
   },
-  'bill.pay': {
-    entity: 'bill',
-    verb: 'pay',
-    args: [
-      { name: 'id', required: true, hint: 'Bill ID or number', hasDropdown: true, searchEntity: 'bill' },
-    ],
-    flags: [
-      { name: 'amount', hint: 'Payment amount (partial payment)' },
-      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
-      { name: 'reference', hint: 'Payment reference' },
-      { name: 'date', hint: 'Payment date', hasDropdown: true },
-    ],
+  'user.view': {
+    entity: 'user',
+    verb: 'view',
+    args: [FIELDS.id('user')],
+    flags: [],
   },
 
   // --------------------------------------------------------------------------
-  // EXPENSE (NEW)
+  // ROLE
   // --------------------------------------------------------------------------
-  'expense.create': {
-    entity: 'expense',
+  'role.create': {
+    entity: 'role',
     verb: 'create',
     args: [
-      { name: 'amount', required: true, hint: 'Expense amount' },
-      { name: 'category', required: true, hint: 'Expense category', hasDropdown: true },
+      FIELDS.name('Role name'),
     ],
     flags: [
-      { name: 'vendor', hint: 'Vendor (if applicable)', hasDropdown: true, searchEntity: 'vendor' },
-      { name: 'date', hint: 'Expense date', hasDropdown: true },
-      { name: 'description', hint: 'Description' },
-      { name: 'receipt', hint: 'Receipt reference' },
-      { name: 'currency', hint: 'Currency', hasDropdown: true },
-      { name: 'payment_method', hint: 'Payment method', hasDropdown: true },
+      FIELDS.description(),
+      {
+        name: 'permissions',
+        inputType: 'text',
+        hint: 'Permissions (comma-separated)',
+      },
     ],
   },
-  'expense.list': {
-    entity: 'expense',
+  'role.list': {
+    entity: 'role',
     verb: 'list',
     args: [],
     flags: [
-      { name: 'category', hint: 'Filter by category', hasDropdown: true },
-      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true, searchEntity: 'vendor' },
-      { name: 'from', hint: 'From date', hasDropdown: true },
-      { name: 'to', hint: 'To date', hasDropdown: true },
-      { name: 'limit', hint: 'Max results' },
+      FIELDS.search(),
+      FIELDS.limit(),
     ],
   },
-
-  // --------------------------------------------------------------------------
-  // REPORT (NEW)
-  // --------------------------------------------------------------------------
-  'report.generate': {
-    entity: 'report',
-    verb: 'generate',
-    args: [
-      { name: 'type', required: true, hint: 'Report type', hasDropdown: true, enum: [
-        'profit_loss', 'balance_sheet', 'cash_flow', 'aged_receivables',
-        'aged_payables', 'tax_summary', 'sales_by_customer', 'expenses_by_category'
-      ]},
-    ],
-    flags: [
-      { name: 'from', hint: 'Start date', hasDropdown: true },
-      { name: 'to', hint: 'End date', hasDropdown: true },
-      { name: 'period', hint: 'Period', hasDropdown: true, enum: ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom'] },
-      { name: 'format', hint: 'Output format', hasDropdown: true, enum: ['table', 'csv', 'pdf'] },
-      { name: 'compare', hint: 'Compare with previous period', hasDropdown: true, enum: ['none', 'previous_period', 'previous_year'] },
-    ],
-  },
-  'report.list': {
-    entity: 'report',
-    verb: 'list',
-    args: [],
-    flags: [
-      { name: 'type', hint: 'Filter by report type', hasDropdown: true },
-    ],
-  },
-
-  // --------------------------------------------------------------------------
-  // ACCOUNT (Chart of Accounts)
-  // --------------------------------------------------------------------------
-  'account.create': {
-    entity: 'account',
-    verb: 'create',
-    args: [
-      { name: 'name', required: true, hint: 'Account name' },
-      { name: 'type', required: true, hint: 'Account type', hasDropdown: true, enum: [
-        'asset', 'liability', 'equity', 'revenue', 'expense'
-      ]},
-    ],
-    flags: [
-      { name: 'code', hint: 'Account code' },
-      { name: 'parent', hint: 'Parent account', hasDropdown: true },
-      { name: 'description', hint: 'Description' },
-      { name: 'currency', hint: 'Currency (for multi-currency)', hasDropdown: true },
-    ],
-  },
-  'account.list': {
-    entity: 'account',
-    verb: 'list',
-    args: [],
-    flags: [
-      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] },
-      { name: 'search', hint: 'Search by name or code' },
-    ],
-  },
-
-  // --------------------------------------------------------------------------
-  // JOURNAL (Manual Journal Entries)
-  // --------------------------------------------------------------------------
-  'journal.create': {
-    entity: 'journal',
-    verb: 'create',
-    args: [
-      { name: 'description', required: true, hint: 'Entry description' },
-    ],
-    flags: [
-      { name: 'date', hint: 'Entry date', hasDropdown: true },
-      { name: 'reference', hint: 'Reference number' },
-    ],
-  },
-  'journal.list': {
-    entity: 'journal',
-    verb: 'list',
-    args: [],
-    flags: [
-      { name: 'from', hint: 'From date', hasDropdown: true },
-      { name: 'to', hint: 'To date', hasDropdown: true },
-      { name: 'limit', hint: 'Max results' },
-    ],
-  },
-
-  // --------------------------------------------------------------------------
-  // PRODUCT/SERVICE
-  // --------------------------------------------------------------------------
-  'product.create': {
-    entity: 'product',
-    verb: 'create',
-    args: [
-      { name: 'name', required: true, hint: 'Product/service name' },
-      { name: 'price', required: true, hint: 'Unit price' },
-    ],
-    flags: [
-      { name: 'type', hint: 'Type', hasDropdown: true, enum: ['product', 'service'] },
-      { name: 'sku', hint: 'SKU code' },
-      { name: 'description', hint: 'Description' },
-      { name: 'category', hint: 'Category', hasDropdown: true },
-      { name: 'tax_rate', hint: 'Tax rate %', hasDropdown: true },
-      { name: 'unit', hint: 'Unit of measure', hasDropdown: true, enum: ['unit', 'hour', 'day', 'kg', 'meter', 'liter'] },
-    ],
-  },
-  'product.list': {
-    entity: 'product',
-    verb: 'list',
-    args: [],
-    flags: [
-      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['product', 'service', 'all'] },
-      { name: 'category', hint: 'Filter by category', hasDropdown: true },
-      { name: 'search', hint: 'Search by name' },
-      { name: 'limit', hint: 'Max results' },
-    ],
-  },
-
-  // --------------------------------------------------------------------------
-  // TAX
-  // --------------------------------------------------------------------------
-  'tax.create': {
-    entity: 'tax',
-    verb: 'create',
-    args: [
-      { name: 'name', required: true, hint: 'Tax name (e.g., VAT, GST)' },
-      { name: 'rate', required: true, hint: 'Tax rate %' },
-    ],
-    flags: [
-      { name: 'type', hint: 'Tax type', hasDropdown: true, enum: ['sales', 'purchase', 'both'] },
-      { name: 'account', hint: 'Tax account', hasDropdown: true },
-    ],
-  },
-  'tax.list': {
-    entity: 'tax',
-    verb: 'list',
-    args: [],
+  'role.view': {
+    entity: 'role',
+    verb: 'view',
+    args: [FIELDS.id('role')],
     flags: [],
   },
 }
@@ -493,16 +588,61 @@ export function getAllSchemas(): CommandSchema[] {
   return Object.values(SCHEMAS)
 }
 
-// Helper to check if a field has dropdown
+// Helper to check if a field needs dropdown/sidebar
 export function fieldHasDropdown(entity: string, verb: string, fieldName: string): boolean {
   const schema = getSchema(entity, verb)
   if (!schema) return false
 
-  const arg = schema.args.find(a => a.name === fieldName)
-  if (arg) return !!arg.hasDropdown
+  const allFields = [...schema.args, ...schema.flags]
+  const field = allFields.find(f => f.name === fieldName)
+  if (!field) return false
 
-  const flag = schema.flags.find(f => f.name === fieldName)
-  if (flag) return !!flag.hasDropdown
+  return field.inputType === 'select' || field.inputType === 'lookup' || field.inputType === 'search'
+}
 
-  return false
+// Helper to check if field shows options immediately (lookup/select) vs requires typing (search)
+export function fieldShowsImmediately(field: FieldDef): boolean {
+  return field.inputType === 'select' || field.inputType === 'lookup'
+}
+
+// Helper to check if field requires typing before showing options
+export function fieldRequiresTyping(field: FieldDef): boolean {
+  return field.inputType === 'search'
+}
+
+// Helper to get field definition
+export function getFieldDef(entity: string, verb: string, fieldName: string): FieldDef | null {
+  const schema = getSchema(entity, verb)
+  if (!schema) return null
+
+  const allFields = [...schema.args, ...schema.flags]
+  return allFields.find(f => f.name === fieldName) || null
+}
+
+// Helper to check if field is image type
+export function isImageField(field: FieldDef): boolean {
+  return field.inputType === 'image'
+}
+
+// Helper to check if field is date type
+export function isDateField(field: FieldDef): boolean {
+  return field.inputType === 'date'
+}
+
+// Helper to get placeholder for field
+export function getFieldPlaceholder(field: FieldDef): string {
+  if (field.placeholder) return field.placeholder
+
+  switch (field.inputType) {
+    case 'date':
+      return 'dd/mm/yyyy'
+    case 'email':
+      return 'name@example.com'
+    case 'number':
+      return '0'
+    case 'image':
+      return 'Click to select file'
+    default:
+      return ''
+  }
 }

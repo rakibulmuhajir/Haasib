@@ -174,7 +174,11 @@ class CommandController extends Controller
      */
     private function authorizeCompanyCreate(mixed $user): true|JsonResponse
     {
-        $companyCount = $user->companies()->count();
+        // Only count active memberships on active companies
+        $companyCount = $user->companies()
+            ->wherePivot('is_active', true)
+            ->where('auth.companies.is_active', true)
+            ->count();
 
         if ($companyCount >= self::MAX_COMPANIES_PER_USER) {
             return $this->error(

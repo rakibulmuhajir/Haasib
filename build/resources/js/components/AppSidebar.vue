@@ -21,6 +21,10 @@ import {
   FileText,
   BookOpen,
   Folder,
+  Users,
+  DollarSign,
+  Receipt,
+  Clock,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -61,6 +65,26 @@ const mainNavItems = computed<NavItem[]>(() => {
         title: 'Company',
         href: `/${slug}`,
         icon: Building2,
+      },
+      {
+        title: 'Customers',
+        href: `/${slug}/customers`,
+        icon: Users,
+      },
+      {
+        title: 'Invoices',
+        href: `/${slug}/invoices`,
+        icon: FileText,
+      },
+      {
+        title: 'Payments',
+        href: `/${slug}/payments`,
+        icon: DollarSign,
+      },
+      {
+        title: 'Credit Notes',
+        href: `/${slug}/credit-notes`,
+        icon: Receipt,
       }
     )
   }

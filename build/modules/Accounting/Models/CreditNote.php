@@ -54,12 +54,37 @@ class CreditNote extends Model
         'deleted_at' => 'datetime',
     ];
 
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class, 'invoice_id');
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(\App\Models\Company::class, 'company_id');
+    }
+
+    public function items()
+    {
+        return $this->hasMany(CreditNoteItem::class, 'credit_note_id');
+    }
+
+    public function applications()
+    {
+        return $this->hasMany(CreditNoteApplication::class, 'credit_note_id');
+    }
+
     /**
      * Generate a credit note number scoped per company (simple incremental suffix).
      */
     public static function generateCreditNoteNumber(string $companyId): string
     {
-        $last = DB::table('acct.credit_notes')
+        $last = DB::connection('pgsql')->table('acct.credit_notes')
             ->where('company_id', $companyId)
             ->whereNotNull('credit_note_number')
             ->orderByDesc('created_at')

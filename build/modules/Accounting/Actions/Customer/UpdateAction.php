@@ -5,7 +5,7 @@ namespace App\Modules\Accounting\Actions\Customer;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
-use App\Modules\Accounting\Domain\Customers\Models\Customer;
+use App\Modules\Accounting\Models\Customer;
 use Illuminate\Support\Facades\Auth;
 
 class UpdateAction implements PaletteAction

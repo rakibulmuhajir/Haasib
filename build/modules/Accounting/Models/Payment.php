@@ -54,12 +54,22 @@ class Payment extends Model
         return $this->hasMany(PaymentAllocation::class, 'payment_id');
     }
 
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(\App\Models\Company::class, 'company_id');
+    }
+
     /**
      * Generate a payment number scoped per company (simple incremental suffix).
      */
     public static function generatePaymentNumber(string $companyId): string
     {
-        $last = DB::table('acct.payments')
+        $last = DB::connection('pgsql')->table('acct.payments')
             ->where('company_id', $companyId)
             ->whereNotNull('payment_number')
             ->orderByDesc('created_at')

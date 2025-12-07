@@ -34,6 +34,10 @@ import {
   UserCog,
   CheckCircle2,
   XCircle,
+  Receipt,
+  AlertTriangle,
+  Wallet,
+  Ban,
 } from 'lucide-vue-next'
 
 interface Company {
@@ -51,6 +55,35 @@ interface Stats {
   total_users: number
   active_users: number
   admins: number
+}
+
+interface Financials {
+  ar_outstanding: number
+  ar_outstanding_count: number
+  ar_overdue: number
+  ar_overdue_count: number
+  payments_mtd: number
+  expenses_mtd_placeholder: string
+  aging: {
+    current: number
+    bucket_1_30: number
+    bucket_31_60: number
+    bucket_61_90: number
+    bucket_90_plus: number
+  }
+  quick_stats: {
+    invoices_sent_this_month: number
+    payments_received_this_month: number
+    new_customers_this_month: number
+  }
+  recent_activity: Array<{
+    type: string
+    label: string
+    amount?: number
+    currency?: string
+    status?: string
+    occurred_at: string
+  }>
 }
 
 interface PendingInvitation {
@@ -79,6 +112,7 @@ const props = defineProps<{
   users: User[]
   currentUserRole: string
   pendingInvitations: PendingInvitation[]
+  financials: Financials
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -167,6 +201,13 @@ const tableColumns = [
   { key: 'joined_at', label: 'Joined', sortable: true },
   { key: 'actions', label: '', class: 'text-right' },
 ]
+
+const formatMoney = (amount: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: props.company.base_currency || 'USD',
+  }).format(amount)
+}
 </script>
 
 <template>
@@ -217,6 +258,115 @@ const tableColumns = [
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-semibold text-zinc-900">{{ stats.admins }}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <!-- Financial Snapshot -->
+      <div class="space-y-4">
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">AR Outstanding</CardTitle>
+              <Receipt class="h-4 w-4 text-zinc-500" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ formatMoney(financials.ar_outstanding) }}</div>
+              <p class="text-xs text-zinc-500 mt-1">{{ financials.ar_outstanding_count }} open invoice{{ financials.ar_outstanding_count === 1 ? '' : 's' }}</p>
+            </CardContent>
+          </Card>
+
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">AR Overdue</CardTitle>
+              <AlertTriangle class="h-4 w-4 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ formatMoney(financials.ar_overdue) }}</div>
+              <p class="text-xs text-zinc-500 mt-1">{{ financials.ar_overdue_count }} overdue</p>
+            </CardContent>
+          </Card>
+
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">Payments MTD</CardTitle>
+              <Wallet class="h-4 w-4 text-emerald-500" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ formatMoney(financials.payments_mtd) }}</div>
+            </CardContent>
+          </Card>
+
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">Expenses MTD</CardTitle>
+              <Ban class="h-4 w-4 text-zinc-400" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-xl font-semibold text-zinc-500">Placeholder</div>
+              <p class="text-xs text-zinc-500 mt-1">{{ financials.expenses_mtd_placeholder }}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader>
+              <CardTitle class="text-sm font-medium text-zinc-500">AR Aging</CardTitle>
+              <CardDescription>Aging by due date</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-2 text-sm text-zinc-700">
+              <div class="flex justify-between"><span>Current</span><span class="font-medium text-zinc-900">{{ formatMoney(financials.aging.current) }}</span></div>
+              <div class="flex justify-between"><span>1-30 days</span><span class="font-medium text-zinc-900">{{ formatMoney(financials.aging.bucket_1_30) }}</span></div>
+              <div class="flex justify-between"><span>31-60 days</span><span class="font-medium text-zinc-900">{{ formatMoney(financials.aging.bucket_31_60) }}</span></div>
+              <div class="flex justify-between"><span>61-90 days</span><span class="font-medium text-zinc-900">{{ formatMoney(financials.aging.bucket_61_90) }}</span></div>
+              <div class="flex justify-between"><span>90+ days</span><span class="font-medium text-zinc-900">{{ formatMoney(financials.aging.bucket_90_plus) }}</span></div>
+            </CardContent>
+          </Card>
+
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader>
+              <CardTitle class="text-sm font-medium text-zinc-500">Quick Stats</CardTitle>
+              <CardDescription>This month</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-3 text-sm text-zinc-700">
+              <div class="flex justify-between">
+                <span>Invoices sent</span>
+                <span class="font-medium text-zinc-900">{{ financials.quick_stats.invoices_sent_this_month }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Payments received</span>
+                <span class="font-medium text-zinc-900">{{ financials.quick_stats.payments_received_this_month }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>New customers</span>
+                <span class="font-medium text-zinc-900">{{ financials.quick_stats.new_customers_this_month }}</span>
+              </div>
+              <div class="pt-2 flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/invoices/create`)">Create Invoice</Button>
+                <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/payments/create`)">Record Payment</Button>
+                <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/customers/create`)">Add Customer</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card class="border-zinc-200/80 bg-white">
+          <CardHeader>
+            <CardTitle class="text-sm font-medium text-zinc-500">Recent Activity</CardTitle>
+            <CardDescription>Last few accounting events</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-3 text-sm text-zinc-700">
+            <div v-for="(item, idx) in financials.recent_activity" :key="idx" class="flex justify-between border-b border-zinc-200 pb-2 last:border-b-0 last:pb-0">
+              <div>
+                <p class="font-medium text-zinc-900">{{ item.label }}</p>
+                <p class="text-xs text-zinc-500">{{ new Date(item.occurred_at).toLocaleDateString() }}</p>
+              </div>
+              <div v-if="item.amount" class="font-mono text-sm text-zinc-800">
+                {{ formatMoney(item.amount) }}
+              </div>
+            </div>
+            <div v-if="financials.recent_activity.length === 0" class="text-sm text-zinc-500">No recent activity.</div>
           </CardContent>
         </Card>
       </div>

@@ -161,6 +161,116 @@ class CompanyController extends Controller
                 ->get();
         }
 
+        // Financial snapshot (AR only; AP/expenses placeholder)
+        $openInvoices = DB::table('acct.invoices')
+            ->where('company_id', $company->id)
+            ->where('balance', '>', 0)
+            ->whereNotIn('status', ['paid', 'void', 'cancelled']);
+
+        $arOutstanding = (clone $openInvoices)->sum('balance');
+        $arOutstandingCount = (clone $openInvoices)->count();
+
+        $arOverdueQuery = (clone $openInvoices)->where('due_date', '<', now()->toDateString());
+        $arOverdue = (clone $arOverdueQuery)->sum('balance');
+        $arOverdueCount = (clone $arOverdueQuery)->count();
+
+        $paymentsMTD = DB::table('acct.payments')
+            ->where('company_id', $company->id)
+            ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+            ->sum(DB::raw('COALESCE(base_amount, amount)'));
+
+        // Aging buckets
+        $agingBuckets = DB::table('acct.invoices')
+            ->selectRaw("
+                SUM(CASE WHEN due_date >= current_date THEN balance ELSE 0 END) as current_bucket,
+                SUM(CASE WHEN due_date < current_date AND due_date >= current_date - interval '30 days' THEN balance ELSE 0 END) as bucket_1_30,
+                SUM(CASE WHEN due_date < current_date - interval '30 days' AND due_date >= current_date - interval '60 days' THEN balance ELSE 0 END) as bucket_31_60,
+                SUM(CASE WHEN due_date < current_date - interval '60 days' AND due_date >= current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_61_90,
+                SUM(CASE WHEN due_date < current_date - interval '90 days' THEN balance ELSE 0 END) as bucket_90_plus
+            ")
+            ->where('company_id', $company->id)
+            ->where('balance', '>', 0)
+            ->whereNotIn('status', ['paid', 'void', 'cancelled'])
+            ->first();
+
+        $quickStats = [
+            'invoices_sent_this_month' => DB::table('acct.invoices')
+                ->where('company_id', $company->id)
+                ->whereBetween('sent_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->count(),
+            'payments_received_this_month' => DB::table('acct.payments')
+                ->where('company_id', $company->id)
+                ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()])
+                ->count(),
+            'new_customers_this_month' => DB::table('acct.customers')
+                ->where('company_id', $company->id)
+                ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->count(),
+        ];
+
+        // Recent activity (payments, invoices, customers)
+        $recentPayments = DB::table('acct.payments as p')
+            ->join('acct.customers as c', 'c.id', '=', 'p.customer_id')
+            ->where('p.company_id', $company->id)
+            ->orderByDesc('p.payment_date')
+            ->limit(5)
+            ->get([
+                'p.payment_date as occurred_at',
+                'p.amount',
+                'p.currency',
+                'c.name as customer_name',
+                'p.payment_number',
+            ])
+            ->map(function ($p) {
+                return [
+                    'type' => 'payment',
+                    'label' => "Payment {$p->payment_number} from {$p->customer_name}",
+                    'amount' => (float) $p->amount,
+                    'currency' => $p->currency,
+                    'occurred_at' => $p->occurred_at,
+                ];
+            });
+
+        $recentInvoices = DB::table('acct.invoices as i')
+            ->join('acct.customers as c', 'c.id', '=', 'i.customer_id')
+            ->where('i.company_id', $company->id)
+            ->orderByDesc('i.invoice_date')
+            ->limit(5)
+            ->get([
+                'i.invoice_date as occurred_at',
+                'i.invoice_number',
+                'c.name as customer_name',
+                'i.status',
+            ])
+            ->map(function ($i) {
+                return [
+                    'type' => 'invoice',
+                    'label' => "Invoice {$i->invoice_number} for {$i->customer_name}",
+                    'status' => $i->status,
+                    'occurred_at' => $i->occurred_at,
+                ];
+            });
+
+        $recentCustomers = DB::table('acct.customers')
+            ->where('company_id', $company->id)
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get(['name', 'created_at'])
+            ->map(function ($c) {
+                return [
+                    'type' => 'customer',
+                    'label' => "New customer: {$c->name}",
+                    'occurred_at' => $c->created_at,
+                ];
+            });
+
+        $recentActivity = $recentPayments
+            ->concat($recentInvoices)
+            ->concat($recentCustomers)
+            ->sortByDesc('occurred_at')
+            ->take(7)
+            ->values();
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -180,6 +290,23 @@ class CompanyController extends Controller
             'users' => $users,
             'currentUserRole' => $currentUserRole,
             'pendingInvitations' => $pendingInvitations,
+            'financials' => [
+                'ar_outstanding' => (float) $arOutstanding,
+                'ar_outstanding_count' => $arOutstandingCount,
+                'ar_overdue' => (float) $arOverdue,
+                'ar_overdue_count' => $arOverdueCount,
+                'payments_mtd' => (float) $paymentsMTD,
+                'expenses_mtd_placeholder' => 'Not implemented yet',
+                'aging' => [
+                    'current' => (float) ($agingBuckets->current_bucket ?? 0),
+                    'bucket_1_30' => (float) ($agingBuckets->bucket_1_30 ?? 0),
+                    'bucket_31_60' => (float) ($agingBuckets->bucket_31_60 ?? 0),
+                    'bucket_61_90' => (float) ($agingBuckets->bucket_61_90 ?? 0),
+                    'bucket_90_plus' => (float) ($agingBuckets->bucket_90_plus ?? 0),
+                ],
+                'quick_stats' => $quickStats,
+                'recent_activity' => $recentActivity,
+            ],
         ]);
     }
 

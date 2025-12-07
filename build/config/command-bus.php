@@ -33,9 +33,21 @@ return [
     'invoice.send' => \App\Modules\Accounting\Actions\Invoice\SendAction::class,
     'invoice.void' => \App\Modules\Accounting\Actions\Invoice\VoidAction::class,
     'invoice.duplicate' => \App\Modules\Accounting\Actions\Invoice\DuplicateAction::class,
+    'invoice.update' => \App\Modules\Accounting\Actions\Invoice\UpdateAction::class,
+    'invoice.delete' => \App\Modules\Accounting\Actions\Invoice\DeleteAction::class,
 
     // Payment
     'payment.create' => \App\Modules\Accounting\Actions\Payment\CreateAction::class,
     'payment.list' => \App\Modules\Accounting\Actions\Payment\IndexAction::class,
     'payment.void' => \App\Modules\Accounting\Actions\Payment\VoidAction::class,
+    'payment.update' => \App\Modules\Accounting\Actions\Payment\UpdateAction::class,
+    'payment.delete' => \App\Modules\Accounting\Actions\Payment\DeleteAction::class,
+
+    // Credit Note
+    'credit_note.create' => \App\Modules\Accounting\Actions\CreditNote\CreateAction::class,
+    'credit_note.list' => \App\Modules\Accounting\Actions\CreditNote\IndexAction::class,
+    'credit_note.update' => \App\Modules\Accounting\Actions\CreditNote\UpdateAction::class,
+    'credit_note.delete' => \App\Modules\Accounting\Actions\CreditNote\DeleteAction::class,
+    'credit_note.apply' => \App\Modules\Accounting\Actions\CreditNote\ApplyAction::class,
+    'credit_note.void' => \App\Modules\Accounting\Actions\CreditNote\VoidAction::class,
 ];

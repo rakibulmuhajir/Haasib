@@ -92,7 +92,7 @@ class Invoice extends Model
      */
     public static function generateInvoiceNumber(string $companyId): string
     {
-        $last = DB::table('acct.invoices')
+        $last = DB::connection('pgsql')->table('acct.invoices')
             ->where('company_id', $companyId)
             ->whereNotNull('invoice_number')
             ->orderByDesc('created_at')

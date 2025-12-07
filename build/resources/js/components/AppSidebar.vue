@@ -25,6 +25,9 @@ import {
   DollarSign,
   Receipt,
   Clock,
+  Banknote,
+  ReceiptText,
+  Truck,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -84,6 +87,31 @@ const mainNavItems = computed<NavItem[]>(() => {
       {
         title: 'Credit Notes',
         href: `/${slug}/credit-notes`,
+        icon: Receipt,
+      },
+      {
+        title: 'Accounts',
+        href: `/${slug}/accounts`,
+        icon: BookOpen,
+      },
+      {
+        title: 'Vendors',
+        href: `/${slug}/vendors`,
+        icon: Truck,
+      },
+      {
+        title: 'Bills',
+        href: `/${slug}/bills`,
+        icon: ReceiptText,
+      },
+      {
+        title: 'Bill Payments',
+        href: `/${slug}/bill-payments`,
+        icon: Banknote,
+      },
+      {
+        title: 'Vendor Credits',
+        href: `/${slug}/vendor-credits`,
         icon: Receipt,
       }
     )

@@ -5,7 +5,7 @@ import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptRefund } from 'lucide-vue-next'
+import { ReceiptText } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -74,7 +74,7 @@ const applicationRows = computed(() =>
   <PageShell
     :title="`Credit ${credit.credit_number}`"
     :breadcrumbs="breadcrumbs"
-    :icon="ReceiptRefund"
+    :icon="ReceiptText"
   >
     <div class="grid gap-4 md:grid-cols-3">
       <div class="space-y-1">

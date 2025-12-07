@@ -45,8 +45,9 @@ const props = defineProps<{
   }
 }>()
 
+const allTypesValue = '__all'
 const search = ref(props.filters.search ?? '')
-const typeFilter = ref(props.filters.type ?? '')
+const typeFilter = ref(props.filters.type ?? allTypesValue)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -79,7 +80,7 @@ const handleSearch = () => {
     `/${props.company.slug}/accounts`,
     {
       search: search.value,
-      type: typeFilter.value,
+      type: typeFilter.value === allTypesValue ? '' : typeFilter.value,
     },
     { preserveState: true }
   )
@@ -127,7 +128,7 @@ const typeOptions = [
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All Types</SelectItem>
+          <SelectItem :value="allTypesValue">All Types</SelectItem>
           <SelectItem v-for="t in typeOptions" :key="t" :value="t">{{ t }}</SelectItem>
         </SelectContent>
       </Select>

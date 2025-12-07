@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptRefund, Plus } from 'lucide-vue-next'
+import { ReceiptText, Plus } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -51,8 +51,10 @@ const props = defineProps<{
   }
 }>()
 
-const vendorId = ref(props.filters.vendor_id ?? '')
-const status = ref(props.filters.status ?? '')
+const allVendorsValue = '__all_vendors'
+const allStatusValue = '__all_status'
+const vendorId = ref(props.filters.vendor_id ?? allVendorsValue)
+const status = ref(props.filters.status ?? allStatusValue)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -95,8 +97,8 @@ const handleSearch = () => {
   router.get(
     `/${props.company.slug}/vendor-credits`,
     {
-      vendor_id: vendorId.value,
-      status: status.value,
+      vendor_id: vendorId.value === allVendorsValue ? '' : vendorId.value,
+      status: status.value === allStatusValue ? '' : status.value,
     },
     { preserveState: true }
   )
@@ -108,7 +110,7 @@ const handleSearch = () => {
   <PageShell
     title="Vendor Credits"
     :breadcrumbs="breadcrumbs"
-    :icon="ReceiptRefund"
+    :icon="ReceiptText"
   >
     <template #actions>
       <Button @click="router.get(`/${company.slug}/vendor-credits/create`)">
@@ -123,7 +125,7 @@ const handleSearch = () => {
           <SelectValue placeholder="All vendors" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All vendors</SelectItem>
+          <SelectItem :value="allVendorsValue">All vendors</SelectItem>
           <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">{{ v.name }}</SelectItem>
         </SelectContent>
       </Select>
@@ -132,7 +134,7 @@ const handleSearch = () => {
           <SelectValue placeholder="All status" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All status</SelectItem>
+          <SelectItem :value="allStatusValue">All status</SelectItem>
           <SelectItem value="draft">Draft</SelectItem>
           <SelectItem value="received">Received</SelectItem>
           <SelectItem value="applied">Applied</SelectItem>

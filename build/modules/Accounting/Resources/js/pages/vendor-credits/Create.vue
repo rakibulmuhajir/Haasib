@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptRefund, Save, Plus, Trash2 } from 'lucide-vue-next'
+import { ReceiptText, Save, Plus, Trash2 } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -86,7 +86,7 @@ const handleSubmit = () => {
   <PageShell
     title="Create Vendor Credit"
     :breadcrumbs="breadcrumbs"
-    :icon="ReceiptRefund"
+    :icon="ReceiptText"
   >
     <form class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">

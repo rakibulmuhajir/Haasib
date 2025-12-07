@@ -6,6 +6,9 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreInvoiceRequest;
 use App\Modules\Accounting\Http\Requests\UpdateInvoiceRequest;
+use App\Modules\Accounting\Http\Requests\SendInvoiceRequest;
+use App\Modules\Accounting\Http\Requests\DuplicateInvoiceRequest;
+use App\Modules\Accounting\Http\Requests\VoidInvoiceRequest;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
 use App\Models\CompanyCurrency;
@@ -209,6 +212,56 @@ class InvoiceController extends Controller
 
         return redirect()
             ->route('invoices.index', ['company' => $company->slug])
+            ->with('success', $result['message']);
+    }
+
+    public function send(SendInvoiceRequest $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+        $invoiceId = $request->route('invoice');
+        $commandBus = app(CommandBus::class);
+
+        $payload = array_merge($request->validated(), ['id' => $invoiceId]);
+
+        $result = $commandBus->dispatch('invoice.send', $payload, $request->user());
+
+        return redirect()
+            ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
+            ->with('success', $result['message']);
+    }
+
+    public function duplicate(DuplicateInvoiceRequest $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+        $invoiceId = $request->route('invoice');
+        $commandBus = app(CommandBus::class);
+
+        $payload = array_merge($request->validated(), [
+            'id' => $invoiceId,
+            // Duplicate as draft so user can review before sending
+            'draft' => $request->boolean('draft', true),
+        ]);
+
+        $result = $commandBus->dispatch('invoice.duplicate', $payload, $request->user());
+        $newId = $result['data']['id'] ?? null;
+
+        return redirect()
+            ->route('invoices.show', ['company' => $company->slug, 'invoice' => $newId ?? $invoiceId])
+            ->with('success', $result['message']);
+    }
+
+    public function void(VoidInvoiceRequest $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+        $invoiceId = $request->route('invoice');
+        $commandBus = app(CommandBus::class);
+
+        $payload = array_merge($request->validated(), ['id' => $invoiceId]);
+
+        $result = $commandBus->dispatch('invoice.void', $payload, $request->user());
+
+        return redirect()
+            ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
             ->with('success', $result['message']);
     }
 }

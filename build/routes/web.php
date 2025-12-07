@@ -71,6 +71,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoices.edit');
         Route::put('/{company}/invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
         Route::delete('/{company}/invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+        Route::post('/{company}/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
+        Route::post('/{company}/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
+        Route::post('/{company}/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
 
         // Payment routes (Accounting module)
         Route::get('/{company}/payments', [PaymentController::class, 'index'])->name('payments.index');

@@ -47,10 +47,12 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Edit', href: `/${props.company.slug}/accounts/${props.account.id}/edit` },
 ]
 
+const noneParentValue = '__none'
+
 const form = useForm({
   name: props.account.name,
   currency: props.account.currency ?? '',
-  parent_id: props.account.parent_id ?? '',
+  parent_id: props.account.parent_id ?? noneParentValue,
   description: props.account.description ?? '',
   is_active: true,
 })
@@ -58,9 +60,14 @@ const form = useForm({
 const filteredParents = computed(() => props.parents.filter((p) => p.id !== props.account.id && p.type === props.account.type))
 
 const handleSubmit = () => {
-  form.put(`/${props.company.slug}/accounts/${props.account.id}`, {
-    preserveScroll: true,
-  })
+  form
+    .transform((data) => ({
+      ...data,
+      parent_id: data.parent_id === noneParentValue ? null : data.parent_id,
+    }))
+    .put(`/${props.company.slug}/accounts/${props.account.id}`, {
+      preserveScroll: true,
+    })
 }
 </script>
 
@@ -101,15 +108,15 @@ const handleSubmit = () => {
         <div>
           <Label for="parent_id">Parent (optional)</Label>
           <Select v-model="form.parent_id">
-            <SelectTrigger id="parent_id">
-              <SelectValue placeholder="No parent" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">No parent</SelectItem>
-              <SelectItem
-                v-for="p in filteredParents"
-                :key="p.id"
-                :value="p.id"
+          <SelectTrigger id="parent_id">
+            <SelectValue placeholder="No parent" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="noneParentValue">No parent</SelectItem>
+            <SelectItem
+              v-for="p in filteredParents"
+              :key="p.id"
+              :value="p.id"
               >
                 {{ p.code }} — {{ p.name }}
               </SelectItem>

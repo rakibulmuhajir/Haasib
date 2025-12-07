@@ -53,7 +53,8 @@ const props = defineProps<{
   }
 }>()
 
-const vendorId = ref(props.filters.vendor_id ?? '')
+const allVendorsValue = '__all_vendors'
+const vendorId = ref(props.filters.vendor_id ?? allVendorsValue)
 const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
 
@@ -90,7 +91,7 @@ const handleSearch = () => {
   router.get(
     `/${props.company.slug}/bill-payments`,
     {
-      vendor_id: vendorId.value,
+      vendor_id: vendorId.value === allVendorsValue ? '' : vendorId.value,
       from_date: fromDate.value,
       to_date: toDate.value,
     },
@@ -119,7 +120,7 @@ const handleSearch = () => {
           <SelectValue placeholder="All vendors" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All vendors</SelectItem>
+          <SelectItem :value="allVendorsValue">All vendors</SelectItem>
           <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">{{ v.name }}</SelectItem>
         </SelectContent>
       </Select>

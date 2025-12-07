@@ -143,7 +143,6 @@ const handleSubmit = () => {
               <SelectValue placeholder="Select vendor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Select vendor</SelectItem>
               <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">
                 {{ v.name }}
               </SelectItem>

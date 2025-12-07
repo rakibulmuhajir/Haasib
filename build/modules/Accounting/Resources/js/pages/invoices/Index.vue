@@ -105,12 +105,14 @@ const getStatusBadgeVariant = (status: string) => {
     case 'draft':
       return 'secondary'
     case 'sent':
+    case 'viewed':
       return 'default'
     case 'paid':
       return 'success'
     case 'overdue':
       return 'destructive'
     case 'cancelled':
+    case 'void':
       return 'outline'
     default:
       return 'secondary'
@@ -182,9 +184,11 @@ const tableData = computed(() => {
           <SelectItem value="all">All Status</SelectItem>
           <SelectItem value="draft">Draft</SelectItem>
           <SelectItem value="sent">Sent</SelectItem>
+          <SelectItem value="viewed">Viewed</SelectItem>
           <SelectItem value="paid">Paid</SelectItem>
           <SelectItem value="overdue">Overdue</SelectItem>
           <SelectItem value="cancelled">Cancelled</SelectItem>
+          <SelectItem value="void">Void</SelectItem>
         </SelectContent>
       </Select>
     </div>

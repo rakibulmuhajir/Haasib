@@ -176,9 +176,12 @@ const voidInvoice = () => {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button @click="sendInvoice" :disabled="invoice.status === 'paid' || invoice.status === 'cancelled'">
+      <Button
+        @click="sendInvoice"
+        :disabled="['paid', 'cancelled', 'void'].includes(invoice.status)"
+      >
         <Send class="mr-2 h-4 w-4" />
-        Send Invoice
+        Mark as Sent
       </Button>
     </template>
 

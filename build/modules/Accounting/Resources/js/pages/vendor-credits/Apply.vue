@@ -5,7 +5,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptRefund, Save } from 'lucide-vue-next'
+import { ReceiptText, Save } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -78,7 +78,7 @@ const handleSubmit = () => {
   <PageShell
     :title="`Apply ${credit.credit_number}`"
     :breadcrumbs="breadcrumbs"
-    :icon="ReceiptRefund"
+    :icon="ReceiptText"
   >
     <div class="mb-4 text-sm text-muted-foreground">
       Credit amount: {{ credit.amount }} {{ credit.currency }} · Total applying: {{ totalApplied.toFixed(2) }}

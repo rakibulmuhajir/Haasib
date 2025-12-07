@@ -56,13 +56,15 @@ const subtypeMap: Record<string, string[]> = {
   other_expense: ['other_expense'],
 }
 
+const noneParentValue = '__none'
+
 const form = useForm({
   code: '',
   name: '',
   type: '',
   subtype: '',
   currency: '',
-  parent_id: '',
+  parent_id: noneParentValue,
   description: '',
 })
 
@@ -70,9 +72,14 @@ const availableSubtypes = computed(() => subtypeMap[form.type] || [])
 const filteredParents = computed(() => props.parents.filter((p) => p.type === form.type))
 
 const handleSubmit = () => {
-  form.post(`/${props.company.slug}/accounts`, {
-    preserveScroll: true,
-  })
+  form
+    .transform((data) => ({
+      ...data,
+      parent_id: data.parent_id === noneParentValue ? null : data.parent_id,
+    }))
+    .post(`/${props.company.slug}/accounts`, {
+      preserveScroll: true,
+    })
 }
 </script>
 
@@ -118,15 +125,15 @@ const handleSubmit = () => {
         <div>
           <Label for="parent_id">Parent (optional)</Label>
           <Select v-model="form.parent_id">
-            <SelectTrigger id="parent_id">
-              <SelectValue placeholder="No parent" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">No parent</SelectItem>
-              <SelectItem
-                v-for="p in filteredParents"
-                :key="p.id"
-                :value="p.id"
+          <SelectTrigger id="parent_id">
+            <SelectValue placeholder="No parent" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="noneParentValue">No parent</SelectItem>
+            <SelectItem
+              v-for="p in filteredParents"
+              :key="p.id"
+              :value="p.id"
               >
                 {{ p.code }} — {{ p.name }}
               </SelectItem>

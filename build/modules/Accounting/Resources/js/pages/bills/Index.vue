@@ -57,9 +57,11 @@ const props = defineProps<{
   vendors: VendorRef[]
 }>()
 
+const allVendorsValue = '__all_vendors'
+const allStatusValue = '__all_status'
 const search = ref(props.filters.search ?? '')
-const vendorId = ref(props.filters.vendor_id ?? '')
-const status = ref(props.filters.status ?? '')
+const vendorId = ref(props.filters.vendor_id ?? allVendorsValue)
+const status = ref(props.filters.status ?? allStatusValue)
 const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
 
@@ -110,8 +112,8 @@ const handleSearch = () => {
     `/${props.company.slug}/bills`,
     {
       search: search.value,
-      vendor_id: vendorId.value,
-      status: status.value,
+      vendor_id: vendorId.value === allVendorsValue ? '' : vendorId.value,
+      status: status.value === allStatusValue ? '' : status.value,
       from_date: fromDate.value,
       to_date: toDate.value,
     },
@@ -149,7 +151,7 @@ const handleSearch = () => {
           <SelectValue placeholder="All vendors" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All vendors</SelectItem>
+          <SelectItem :value="allVendorsValue">All vendors</SelectItem>
           <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">{{ v.name }}</SelectItem>
         </SelectContent>
       </Select>
@@ -158,7 +160,7 @@ const handleSearch = () => {
           <SelectValue placeholder="All status" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All status</SelectItem>
+          <SelectItem :value="allStatusValue">All status</SelectItem>
           <SelectItem value="draft">Draft</SelectItem>
           <SelectItem value="received">Received</SelectItem>
           <SelectItem value="partial">Partial</SelectItem>

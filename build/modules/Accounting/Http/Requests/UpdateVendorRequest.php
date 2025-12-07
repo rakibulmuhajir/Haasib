@@ -3,7 +3,7 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use App\Http\Requests.BaseFormRequest;
+use App\Http\Requests\BaseFormRequest;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 

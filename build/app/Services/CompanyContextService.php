@@ -26,7 +26,7 @@ class CompanyContextService
     public function setContext(Company $company): void
     {
         $this->company = $company;
-        $this->updateSystemContext($company->id);
+        $this->updateSystemContext($company->id, $company->base_currency);
 
         Log::debug('Company context set', [
             'company_id' => $company->id,
@@ -199,11 +199,14 @@ class CompanyContextService
     // PRIVATE HELPERS
     // ============================================================================
 
-    private function updateSystemContext(?string $companyId): void
+    private function updateSystemContext(?string $companyId, ?string $baseCurrency = null): void
     {
         // Update PostgreSQL session variable
         if ($companyId) {
             DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+            if ($baseCurrency) {
+                DB::select("SELECT set_config('app.company_base_currency', ?, true)", [$baseCurrency]);
+            }
         } else {
             $this->updateSystemContextImmediate(null);
         }
@@ -215,12 +218,16 @@ class CompanyContextService
     /**
      * Reset or set config immediately (no deferral).
      */
-    private function updateSystemContextImmediate(?string $companyId): void
+    private function updateSystemContextImmediate(?string $companyId, ?string $baseCurrency = null): void
     {
         if ($companyId) {
             DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+            if ($baseCurrency) {
+                DB::select("SELECT set_config('app.company_base_currency', ?, true)", [$baseCurrency]);
+            }
         } else {
             DB::statement("RESET app.current_company_id");
+            DB::statement("RESET app.company_base_currency");
         }
     }
 

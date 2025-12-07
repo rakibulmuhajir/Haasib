@@ -35,6 +35,13 @@ class Permissions
     public const BILL_VIEW = 'bill.view';
     public const BILL_PAY = 'bill.pay';
     public const BILL_VOID = 'bill.void';
+    public const BILL_UPDATE = 'bill.update';
+    public const BILL_DELETE = 'bill.delete';
+
+    public const VENDOR_CREDIT_CREATE = 'vendor_credit.create';
+    public const VENDOR_CREDIT_VIEW = 'vendor_credit.view';
+    public const VENDOR_CREDIT_APPLY = 'vendor_credit.apply';
+    public const VENDOR_CREDIT_VOID = 'vendor_credit.void';
 
     public const EXPENSE_CREATE = 'expense.create';
     public const EXPENSE_VIEW = 'expense.view';
@@ -45,6 +52,7 @@ class Permissions
     public const ACCOUNT_VIEW = 'account.view';
     public const ACCOUNT_UPDATE = 'account.update';
     public const ACCOUNT_RECONCILE = 'account.reconcile';
+    public const ACCOUNT_DELETE = 'account.delete';
 
     public const REPORT_VIEW = 'report.view';
     public const REPORT_EXPORT = 'report.export';

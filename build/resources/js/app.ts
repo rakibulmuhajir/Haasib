@@ -1,7 +1,6 @@
 import '../css/app.css'
 
 import { createInertiaApp } from '@inertiajs/vue3'
-import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import type { DefineComponent } from 'vue'
 import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
@@ -10,13 +9,23 @@ import CommandPalette from './components/palette/CommandPalette.vue'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel'
 
+const localPages = import.meta.glob<DefineComponent>('./pages/**/*.vue')
+const modulePages = import.meta.glob<DefineComponent>('../modules/**/Resources/js/pages/**/*.vue')
+
+const resolvePage = (name: string) => {
+  const normalized = name.startsWith('/') ? name.slice(1) : name
+  const local = localPages[`./pages/${normalized}.vue`]
+  if (local) return local
+
+  const moduleMatch = Object.keys(modulePages).find((key) => key.endsWith(`/${normalized}.vue`))
+  if (moduleMatch) return modulePages[moduleMatch]
+
+  throw new Error(`Page not found: ${name}`)
+}
+
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
-  resolve: (name) =>
-    resolvePageComponent(
-      `./pages/${name}.vue`,
-      import.meta.glob<DefineComponent>('./pages/**/*.vue'),
-    ),
+  resolve: resolvePage,
   setup({ el, App, props, plugin }) {
     // Root component that wraps the app and adds the command palette
     const Root = defineComponent({

@@ -52,6 +52,26 @@ return [
         'credit_note.view',
         'credit_note.apply',
         'credit_note.void',
+
+        // AP / GL
+        'account.create',
+        'account.view',
+        'account.update',
+        'account.delete',
+        'bill.create',
+        'bill.view',
+        'bill.update',
+        'bill.delete',
+        'bill.pay',
+        'bill.void',
+        'vendor.create',
+        'vendor.view',
+        'vendor.update',
+        'vendor.delete',
+        'vendor_credit.create',
+        'vendor_credit.view',
+        'vendor_credit.apply',
+        'vendor_credit.void',
     ],
 
     'accountant' => [
@@ -77,6 +97,21 @@ return [
         'credit_note.view',
         'credit_note.apply',
         'credit_note.void',
+
+        // AP / GL
+        'account.create',
+        'account.view',
+        'account.update',
+        'bill.create',
+        'bill.view',
+        'bill.update',
+        'bill.pay',
+        'vendor.create',
+        'vendor.view',
+        'vendor.update',
+        'vendor_credit.create',
+        'vendor_credit.view',
+        'vendor_credit.apply',
     ],
 
     'member' => [
@@ -88,6 +123,12 @@ return [
 
         // Payment (read only)
         'payment.view',
+
+        // AP/GL read-only
+        'account.view',
+        'bill.view',
+        'vendor.view',
+        'vendor_credit.view',
     ],
 
 ];

@@ -50,4 +50,39 @@ return [
     'credit_note.delete' => \App\Modules\Accounting\Actions\CreditNote\DeleteAction::class,
     'credit_note.apply' => \App\Modules\Accounting\Actions\CreditNote\ApplyAction::class,
     'credit_note.void' => \App\Modules\Accounting\Actions\CreditNote\VoidAction::class,
+
+    // Account
+    'account.list' => \App\Modules\Accounting\Actions\Account\IndexAction::class,
+    'account.view' => \App\Modules\Accounting\Actions\Account\ViewAction::class,
+    'account.create' => \App\Modules\Accounting\Actions\Account\CreateAction::class,
+    'account.update' => \App\Modules\Accounting\Actions\Account\UpdateAction::class,
+    'account.delete' => \App\Modules\Accounting\Actions\Account\DeleteAction::class,
+    'account.toggle-active' => \App\Modules\Accounting\Actions\Account\ToggleActiveAction::class,
+
+    // Vendor
+    'vendor.list' => \App\Modules\Accounting\Actions\Vendor\IndexAction::class,
+    'vendor.view' => \App\Modules\Accounting\Actions\Vendor\ViewAction::class,
+    'vendor.create' => \App\Modules\Accounting\Actions\Vendor\CreateAction::class,
+    'vendor.update' => \App\Modules\Accounting\Actions\Vendor\UpdateAction::class,
+    'vendor.delete' => \App\Modules\Accounting\Actions\Vendor\DeleteAction::class,
+
+    // Bill
+    'bill.list' => \App\Modules\Accounting\Actions\Bill\IndexAction::class,
+    'bill.view' => \App\Modules\Accounting\Actions\Bill\ViewAction::class,
+    'bill.create' => \App\Modules\Accounting\Actions\Bill\CreateAction::class,
+    'bill.update' => \App\Modules\Accounting\Actions\Bill\UpdateAction::class,
+    'bill.delete' => \App\Modules\Accounting\Actions\Bill\DeleteAction::class,
+    'bill.void' => \App\Modules\Accounting\Actions\Bill\VoidAction::class,
+    'bill.receive' => \App\Modules\Accounting\Actions\Bill\ReceiveAction::class,
+
+    // Bill Payment
+    'bill_payment.list' => \App\Modules\Accounting\Actions\BillPayment\IndexAction::class,
+    'bill_payment.create' => \App\Modules\Accounting\Actions\BillPayment\CreateAction::class,
+    'bill_payment.void' => \App\Modules\Accounting\Actions\BillPayment\VoidAction::class,
+
+    // Vendor Credit
+    'vendor_credit.list' => \App\Modules\Accounting\Actions\VendorCredit\IndexAction::class,
+    'vendor_credit.create' => \App\Modules\Accounting\Actions\VendorCredit\CreateAction::class,
+    'vendor_credit.apply' => \App\Modules\Accounting\Actions\VendorCredit\ApplyAction::class,
+    'vendor_credit.void' => \App\Modules\Accounting\Actions\VendorCredit\VoidAction::class,
 ];

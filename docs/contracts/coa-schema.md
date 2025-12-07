@@ -55,7 +55,7 @@ Single source of truth for the company chart of accounts used by AP/AR/GL. Updat
   - `name`: required|string|max:255.
   - `type`: required|in:asset,liability,equity,revenue,expense,cogs,other_income,other_expense.
   - `subtype`: required|string|max:50; must align with `type` per mapping above.
-  - `normal_balance`: required|in:debit,credit; must align with type (assets/expenses/cogs → debit; liabilities/equity/revenue/other_income/other_expense → credit).
+  - `normal_balance`: required|in:debit,credit; must align with type (assets/expenses/cogs/other_expense → debit; liabilities/equity/revenue/other_income → credit).
   - `currency`: nullable|string|size:3|uppercase; must be enabled for company; must be NULL for base-only types; required/allowed only for foreign-capable subtypes.
   - `is_active`: boolean.
   - `is_system`: boolean.

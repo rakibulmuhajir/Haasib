@@ -43,8 +43,8 @@ return new class extends Migration
             ALTER TABLE acct.accounts
             ADD CONSTRAINT accounts_normal_balance_chk
             CHECK (
-                (type IN ('asset','expense','cogs') AND normal_balance = 'debit')
-                OR (type IN ('liability','equity','revenue','other_income','other_expense') AND normal_balance = 'credit')
+                (type IN ('asset','expense','cogs','other_expense') AND normal_balance = 'debit')
+                OR (type IN ('liability','equity','revenue','other_income') AND normal_balance = 'credit')
             )
         ");
 

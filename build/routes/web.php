@@ -9,6 +9,11 @@ use App\Modules\Accounting\Http\Controllers\CustomerController;
 use App\Modules\Accounting\Http\Controllers\InvoiceController;
 use App\Modules\Accounting\Http\Controllers\PaymentController;
 use App\Modules\Accounting\Http\Controllers\CreditNoteController;
+use App\Modules\Accounting\Http\Controllers\AccountController;
+use App\Modules\Accounting\Http\Controllers\BillController;
+use App\Modules\Accounting\Http\Controllers\BillPaymentController;
+use App\Modules\Accounting\Http\Controllers\VendorController;
+use App\Modules\Accounting\Http\Controllers\VendorCreditController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -84,6 +89,48 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/credit-notes/{credit_note}/edit', [CreditNoteController::class, 'edit'])->name('credit-notes.edit');
         Route::put('/{company}/credit-notes/{credit_note}', [CreditNoteController::class, 'update'])->name('credit-notes.update');
         Route::delete('/{company}/credit-notes/{credit_note}', [CreditNoteController::class, 'destroy'])->name('credit-notes.destroy');
+
+        // Accounts (Chart of Accounts)
+        Route::get('/{company}/accounts', [AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/{company}/accounts/create', [AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/{company}/accounts', [AccountController::class, 'store'])->name('accounts.store');
+        Route::get('/{company}/accounts/{account}', [AccountController::class, 'show'])->name('accounts.show');
+        Route::get('/{company}/accounts/{account}/edit', [AccountController::class, 'edit'])->name('accounts.edit');
+        Route::put('/{company}/accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
+        Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
+
+        // Vendors
+        Route::get('/{company}/vendors', [VendorController::class, 'index'])->name('vendors.index');
+        Route::get('/{company}/vendors/create', [VendorController::class, 'create'])->name('vendors.create');
+        Route::post('/{company}/vendors', [VendorController::class, 'store'])->name('vendors.store');
+        Route::get('/{company}/vendors/{vendor}', [VendorController::class, 'show'])->name('vendors.show');
+        Route::get('/{company}/vendors/{vendor}/edit', [VendorController::class, 'edit'])->name('vendors.edit');
+        Route::put('/{company}/vendors/{vendor}', [VendorController::class, 'update'])->name('vendors.update');
+        Route::delete('/{company}/vendors/{vendor}', [VendorController::class, 'destroy'])->name('vendors.destroy');
+
+        // Bills
+        Route::get('/{company}/bills', [BillController::class, 'index'])->name('bills.index');
+        Route::get('/{company}/bills/create', [BillController::class, 'create'])->name('bills.create');
+        Route::post('/{company}/bills', [BillController::class, 'store'])->name('bills.store');
+        Route::get('/{company}/bills/{bill}', [BillController::class, 'show'])->name('bills.show');
+        Route::get('/{company}/bills/{bill}/edit', [BillController::class, 'edit'])->name('bills.edit');
+        Route::put('/{company}/bills/{bill}', [BillController::class, 'update'])->name('bills.update');
+        Route::delete('/{company}/bills/{bill}', [BillController::class, 'destroy'])->name('bills.destroy');
+
+        // Bill Payments
+        Route::get('/{company}/bill-payments', [BillPaymentController::class, 'index'])->name('bill-payments.index');
+        Route::get('/{company}/bill-payments/create', [BillPaymentController::class, 'create'])->name('bill-payments.create');
+        Route::post('/{company}/bill-payments', [BillPaymentController::class, 'store'])->name('bill-payments.store');
+        Route::get('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'show'])->name('bill-payments.show');
+        Route::delete('/{company}/bill-payments/{payment}', [BillPaymentController::class, 'destroy'])->name('bill-payments.destroy');
+
+        // Vendor Credits
+        Route::get('/{company}/vendor-credits', [VendorCreditController::class, 'index'])->name('vendor-credits.index');
+        Route::get('/{company}/vendor-credits/create', [VendorCreditController::class, 'create'])->name('vendor-credits.create');
+        Route::post('/{company}/vendor-credits', [VendorCreditController::class, 'store'])->name('vendor-credits.store');
+        Route::get('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'show'])->name('vendor-credits.show');
+        Route::get('/{company}/vendor-credits/{vendorCredit}/apply', [VendorCreditController::class, 'apply'])->name('vendor-credits.apply');
+        Route::delete('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'destroy'])->name('vendor-credits.destroy');
     });
 });
 

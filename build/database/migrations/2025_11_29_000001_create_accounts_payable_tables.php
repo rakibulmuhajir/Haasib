@@ -135,7 +135,9 @@ return new class extends Migration
 
             $table->foreign('company_id')->references('id')->on('auth.companies')->cascadeOnDelete()->cascadeOnUpdate();
             $table->foreign('bill_id')->references('id')->on('acct.bills')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->foreign('account_id')->references('id')->on('acct.accounts')->nullOnDelete()->cascadeOnUpdate();
+            if (Schema::hasTable('acct.accounts')) {
+                $table->foreign('account_id')->references('id')->on('acct.accounts')->nullOnDelete()->cascadeOnUpdate();
+            }
             $table->foreign('created_by_user_id')->references('id')->on('auth.users')->nullOnDelete()->cascadeOnUpdate();
             $table->foreign('updated_by_user_id')->references('id')->on('auth.users')->nullOnDelete()->cascadeOnUpdate();
 
@@ -255,7 +257,9 @@ return new class extends Migration
 
             $table->foreign('company_id')->references('id')->on('auth.companies')->cascadeOnDelete()->cascadeOnUpdate();
             $table->foreign('vendor_credit_id')->references('id')->on('acct.vendor_credits')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->foreign('account_id')->references('id')->on('acct.accounts')->nullOnDelete()->cascadeOnUpdate();
+            if (Schema::hasTable('acct.accounts')) {
+                $table->foreign('account_id')->references('id')->on('acct.accounts')->nullOnDelete()->cascadeOnUpdate();
+            }
             $table->foreign('created_by_user_id')->references('id')->on('auth.users')->nullOnDelete()->cascadeOnUpdate();
             $table->foreign('updated_by_user_id')->references('id')->on('auth.users')->nullOnDelete()->cascadeOnUpdate();
 

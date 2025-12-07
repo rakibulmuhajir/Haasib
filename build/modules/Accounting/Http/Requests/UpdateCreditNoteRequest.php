@@ -3,13 +3,14 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\BaseFormRequest;
 
-class UpdateCreditNoteRequest extends FormRequest
+class UpdateCreditNoteRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(Permissions::CREDIT_NOTE_UPDATE) ?? false;
+        return $this->hasCompanyPermission(Permissions::CREDIT_NOTE_UPDATE)
+            && $this->validateRlsContext();
     }
 
     public function rules(): array

@@ -3,13 +3,14 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\BaseFormRequest;
 
-class StorePaymentRequest extends FormRequest
+class StorePaymentRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(Permissions::PAYMENT_CREATE) ?? false;
+        return $this->hasCompanyPermission(Permissions::PAYMENT_CREATE)
+            && $this->validateRlsContext();
     }
 
     public function rules(): array

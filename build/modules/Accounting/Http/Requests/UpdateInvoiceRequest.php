@@ -3,13 +3,14 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\BaseFormRequest;
 
-class UpdateInvoiceRequest extends FormRequest
+class UpdateInvoiceRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(Permissions::INVOICE_UPDATE) ?? false;
+        return $this->hasCompanyPermission(Permissions::INVOICE_UPDATE)
+            && $this->validateRlsContext();
     }
 
     public function rules(): array

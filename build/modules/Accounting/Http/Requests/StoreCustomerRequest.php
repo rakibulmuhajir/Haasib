@@ -3,14 +3,14 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use App\Facades\CompanyContext;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\BaseFormRequest;
 
-class StoreCustomerRequest extends FormRequest
+class StoreCustomerRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(Permissions::CUSTOMER_CREATE) ?? false;
+        return $this->hasCompanyPermission(Permissions::CUSTOMER_CREATE)
+            && $this->validateRlsContext();
     }
 
     public function rules(): array

@@ -3,13 +3,14 @@
 namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\BaseFormRequest;
 
-class UpdatePaymentRequest extends FormRequest
+class UpdatePaymentRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(Permissions::PAYMENT_UPDATE) ?? false;
+        return $this->hasCompanyPermission(Permissions::PAYMENT_UPDATE)
+            && $this->validateRlsContext();
     }
 
     public function rules(): array

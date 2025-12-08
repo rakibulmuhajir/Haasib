@@ -168,7 +168,12 @@ class CompanyContextService
         $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
         try {
             $this->permissionRegistrar->setPermissionsTeamId($company->id);
-            return $user->hasPermissionTo($permission, 'web');
+            try {
+                return $user->hasPermissionTo($permission, 'web');
+            } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+                // Gracefully handle missing permission records
+                return false;
+            }
         } finally {
             $this->permissionRegistrar->setPermissionsTeamId($previousTeamId);
         }

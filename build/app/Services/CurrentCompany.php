@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Company;
+use Spatie\Permission\PermissionRegistrar;
+
+/**
+ * Lightweight singleton for the active company context.
+ */
+class CurrentCompany
+{
+    private ?Company $company = null;
+
+    /**
+    * Set the current company and propagate team context to Spatie permissions.
+    */
+    public function set(Company $company): void
+    {
+        $this->company = $company;
+        app(PermissionRegistrar::class)->setPermissionsTeamId($company->id);
+    }
+
+    /**
+     * Get the current company, or null if not set.
+     */
+    public function get(): ?Company
+    {
+        return $this->company;
+    }
+
+    /**
+     * Get the current company or fail fast.
+     */
+    public function getOrFail(): Company
+    {
+        if (!$this->company) {
+            abort(500, 'No company context set.');
+        }
+
+        return $this->company;
+    }
+
+    /**
+     * Check if the company context exists.
+     */
+    public function exists(): bool
+    {
+        return $this->company !== null;
+    }
+
+    /**
+     * Get the current company ID, if present.
+     */
+    public function id(): ?string
+    {
+        return $this->company?->id;
+    }
+
+    /**
+     * Clear context and reset Spatie team binding.
+     */
+    public function clear(): void
+    {
+        $this->company = null;
+        app(PermissionRegistrar::class)->setPermissionsTeamId(null);
+    }
+}

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Facades\CompanyContext;
+use App\Services\CurrentCompany;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ class IdentifyCompany
     public function handle(Request $request, Closure $next): Response
     {
         CompanyContext::clearContext();
+        app(CurrentCompany::class)->clear();
 
         $user = $request->user();
 
@@ -31,6 +33,9 @@ class IdentifyCompany
         if ($slug) {
             try {
                 CompanyContext::setContextBySlug($slug);
+                if ($company = CompanyContext::getCompany()) {
+                    app(CurrentCompany::class)->set($company);
+                }
                 // Remember this as the last accessed company
                 if ($user) {
                     session(['last_company_slug' => $slug]);

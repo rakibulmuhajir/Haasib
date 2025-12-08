@@ -66,3 +66,182 @@ Single source of truth for the company chart of accounts used by AP/AR/GL. Updat
   - Prevent deleting system accounts or accounts with posted journal lines.
   - Parent must belong to same company.
   - Default `normal_balance`: debit for asset/expense/cogs; credit for liability/equity/revenue/other_income/other_expense.
+
+---
+
+## Integration Points
+
+### What Links to Accounts
+
+The Chart of Accounts is the central reference for all financial postings. These tables reference `acct.accounts.id`:
+
+| Table | Column | Account Constraint | Purpose |
+|-------|--------|-------------------|---------|
+| `acct.customers` | `ar_account_id` | subtype = 'accounts_receivable' | Customer's AR account |
+| `acct.vendors` | `ap_account_id` | subtype = 'accounts_payable' | Vendor's AP account |
+| `acct.payments` | `deposit_account_id` | subtype IN ('bank','cash') | Where payment is deposited |
+| `acct.bill_payments` | `payment_account_id` | subtype IN ('bank','cash','credit_card') | Where payment comes from |
+| `acct.invoice_line_items` | `income_account_id` | type = 'revenue' | Revenue recognition |
+| `acct.bill_line_items` | `expense_account_id` | type IN ('expense','cogs','asset') | Expense/asset recognition |
+| `acct.journal_entries` | `account_id` | Any active account | GL posting lines |
+| `bank.company_bank_accounts` | `gl_account_id` | subtype IN ('bank','cash') | Bank ↔ GL link |
+| `inv.items` | `income_account_id` | type = 'revenue' | Product sales revenue |
+| `inv.items` | `expense_account_id` | type IN ('expense','cogs') | Product COGS |
+| `inv.items` | `asset_account_id` | subtype = 'inventory' | Inventory asset |
+
+### Account Selectors by Use Case
+
+Each dropdown in the UI needs specific filtering:
+
+```typescript
+// Account selector configurations
+const ACCOUNT_FILTERS = {
+  // AR/AP accounts
+  ar_account: { subtype: 'accounts_receivable' },
+  ap_account: { subtype: 'accounts_payable' },
+
+  // Payment accounts
+  deposit_to: { subtype: ['bank', 'cash'] },
+  pay_from: { subtype: ['bank', 'cash', 'credit_card'] },
+
+  // Income/Expense
+  income: { type: 'revenue' },
+  expense: { type: ['expense', 'cogs', 'asset'] },
+
+  // Inventory
+  inventory_asset: { subtype: 'inventory' },
+  cogs: { type: 'cogs' },
+
+  // Year-end
+  retained_earnings: { subtype: 'retained_earnings' },
+
+  // All postable
+  all: { is_active: true }
+};
+```
+
+### Default Accounts
+
+Company settings should store default account IDs:
+
+| Setting | Subtype/Type | Used By |
+|---------|--------------|---------|
+| `default_ar_account_id` | accounts_receivable | Customers without specific AR |
+| `default_ap_account_id` | accounts_payable | Vendors without specific AP |
+| `default_income_account_id` | revenue | Invoice lines without specific income account |
+| `default_expense_account_id` | expense | Bill lines without specific expense account |
+| `default_bank_account_id` | bank | Payments without specific bank |
+| `retained_earnings_account_id` | retained_earnings | Year-end close |
+| `sales_tax_payable_account_id` | other_current_liability | Output tax |
+| `purchase_tax_receivable_account_id` | other_current_asset | Input tax |
+
+### Account Type → Normal Balance Mapping
+
+Enforced by database check constraint:
+
+| Type | Normal Balance | Debit Increases | Credit Increases |
+|------|----------------|-----------------|------------------|
+| asset | debit | ✅ | |
+| expense | debit | ✅ | |
+| cogs | debit | ✅ | |
+| other_expense | debit | ✅ | |
+| liability | credit | | ✅ |
+| equity | credit | | ✅ |
+| revenue | credit | | ✅ |
+| other_income | credit | | ✅ |
+
+### Subtype → Type Mapping
+
+Valid combinations:
+
+| Subtype | Valid Types |
+|---------|-------------|
+| bank, cash, accounts_receivable, other_current_asset, inventory | asset |
+| fixed_asset, other_asset | asset |
+| accounts_payable, credit_card, other_current_liability | liability |
+| other_liability, loan_payable | liability |
+| equity, retained_earnings | equity |
+| revenue | revenue |
+| cogs | cogs |
+| expense | expense |
+| other_income | other_income |
+| other_expense | other_expense |
+
+### System Accounts (Seeded on Company Creation)
+
+These accounts are created automatically and marked `is_system = true`:
+
+| Code | Name | Type | Subtype |
+|------|------|------|---------|
+| 1100 | Accounts Receivable | asset | accounts_receivable |
+| 2100 | Accounts Payable | liability | accounts_payable |
+| 3100 | Retained Earnings | equity | retained_earnings |
+| 4100 | Sales Revenue | revenue | revenue |
+| 5100 | Cost of Goods Sold | cogs | cogs |
+| 6100 | General Expense | expense | expense |
+
+### Query Helpers
+
+```php
+// Account.php - Scopes for filtering
+public function scopeBankAccounts($query)
+{
+    return $query->whereIn('subtype', ['bank', 'cash']);
+}
+
+public function scopeRevenueAccounts($query)
+{
+    return $query->where('type', 'revenue');
+}
+
+public function scopeExpenseAccounts($query)
+{
+    return $query->whereIn('type', ['expense', 'cogs', 'asset']);
+}
+
+public function scopeReceivableAccounts($query)
+{
+    return $query->where('subtype', 'accounts_receivable');
+}
+
+public function scopePayableAccounts($query)
+{
+    return $query->where('subtype', 'accounts_payable');
+}
+```
+
+### Account Immutability Rules
+
+| Property | Mutable Before Postings | Mutable After Postings |
+|----------|------------------------|------------------------|
+| code | ✅ | ❌ |
+| name | ✅ | ✅ |
+| type | ✅ | ❌ |
+| subtype | ✅ | ❌ |
+| currency | ✅ | ❌ |
+| is_active | ✅ | ✅ (but cannot deactivate with balance) |
+| is_system | ❌ | ❌ |
+| description | ✅ | ✅ |
+
+### Migration Dependency
+
+COA depends on:
+1. `auth.companies` (company_id FK)
+2. `public.currencies` (currency FK)
+3. `auth.users` (created_by, updated_by FK)
+
+COA is required by:
+1. `acct.transactions` / `acct.journal_entries` (GL)
+2. `acct.customers` / `acct.vendors` (AR/AP)
+3. `acct.payments` / `acct.bill_payments` (Payments)
+4. `bank.company_bank_accounts` (Banking)
+5. `inv.items` (Inventory)
+
+**Order**: COA migration runs after auth, before GL/AR/AP/Banking/Inventory.
+
+---
+
+## Extending
+- Add new type/subtype values here first.
+- Consider `acct.account_templates` for chart of accounts templates.
+- Multi-company consolidation would need mapping tables.

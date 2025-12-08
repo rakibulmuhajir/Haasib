@@ -417,6 +417,147 @@ Single source of truth for customers, invoices, payments, credit notes, recurrin
 - Approval workflows.
 - Email delivery tracking.
 
+---
+
+## Integration Points
+
+### GL Posting (Required Columns to Add)
+
+The following columns must be added to enable GL posting:
+
+#### acct.customers (Add)
+```sql
+ALTER TABLE acct.customers
+  ADD COLUMN ar_account_id uuid REFERENCES acct.accounts(id);
+```
+- **Purpose**: Customer-specific AR account (defaults to company's default AR account)
+- **Validation**: Must be an account with `subtype = 'accounts_receivable'`
+- **Model $fillable**: Add `'ar_account_id'`
+- **Model $casts**: Add `'ar_account_id' => 'string'`
+
+#### acct.invoice_line_items (Add)
+```sql
+ALTER TABLE acct.invoice_line_items
+  ADD COLUMN income_account_id uuid REFERENCES acct.accounts(id);
+```
+- **Purpose**: Revenue account for GL posting
+- **Validation**: Must be an account with `type = 'revenue'`
+- **Default**: Falls back to company's `default_income_account_id`
+- **Model $fillable**: Add `'income_account_id'`
+- **Model $casts**: Add `'income_account_id' => 'string'`
+
+#### acct.invoices (Add)
+```sql
+ALTER TABLE acct.invoices
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+- **Purpose**: Links to GL transaction after posting
+- **Nullable**: True (null until posted)
+- **Model $fillable**: Add `'transaction_id'`
+- **Model $casts**: Add `'transaction_id' => 'string'`
+
+#### acct.payments (Add)
+```sql
+ALTER TABLE acct.payments
+  ADD COLUMN deposit_account_id uuid REFERENCES acct.accounts(id),
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+- **deposit_account_id**: Bank/cash account receiving the payment
+- **Validation**: Must be an account with `subtype IN ('bank', 'cash')`
+- **transaction_id**: Links to GL transaction after posting
+- **Model $fillable**: Add `'deposit_account_id', 'transaction_id'`
+- **Model $casts**: Add both as `'string'`
+
+#### acct.credit_notes (Add)
+```sql
+ALTER TABLE acct.credit_notes
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+
+### Posting Triggers
+
+| Document | Event | GL Transaction |
+|----------|-------|----------------|
+| Invoice | Status → 'sent' or on create if auto-post | DR AR, CR Revenue (per line item) |
+| Payment | On create | DR Bank, CR AR |
+| Credit Note | Status → 'issued' | DR Revenue, CR AR |
+| Credit Note Application | On apply | DR AR (credit note's customer), CR AR (invoice's customer) if different; or adjusts allocation |
+
+### Journal Entry Patterns
+
+**Invoice Posting** (single-currency):
+```
+Transaction: INV-00001
+  DR  Accounts Receivable (ar_account_id)     $1,150.00
+  CR  Sales Revenue (line1.income_account_id)   $900.00
+  CR  Sales Revenue (line2.income_account_id)   $100.00
+  CR  Tax Payable (tax account)                 $150.00
+```
+
+**Payment Posting**:
+```
+Transaction: PAY-00001
+  DR  Bank Account (deposit_account_id)       $1,150.00
+  CR  Accounts Receivable (customer.ar_account_id) $1,150.00
+```
+
+**Credit Note Posting**:
+```
+Transaction: CN-00001
+  DR  Sales Revenue (reverse of invoice line accounts)  $100.00
+  CR  Accounts Receivable (customer.ar_account_id)      $100.00
+```
+
+### UI Changes Required
+
+1. **Payment Form**: Add "Deposit To" dropdown
+   - Query: `accounts WHERE subtype IN ('bank','cash') AND is_active = true`
+   - Required field
+
+2. **Invoice Line Item**: Add "Income Account" dropdown
+   - Query: `accounts WHERE type = 'revenue' AND is_active = true`
+   - Default: company's default income account
+   - Optional (uses default if not specified)
+
+3. **Customer Form**: Add "AR Account" dropdown
+   - Query: `accounts WHERE subtype = 'accounts_receivable' AND is_active = true`
+   - Optional (uses company default)
+
+### Relationship Additions
+
+```php
+// Customer.php
+public function arAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'ar_account_id');
+}
+
+// Invoice.php
+public function transaction(): BelongsTo
+{
+    return $this->belongsTo(Transaction::class, 'transaction_id');
+}
+
+// Payment.php
+public function depositAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'deposit_account_id');
+}
+
+public function transaction(): BelongsTo
+{
+    return $this->belongsTo(Transaction::class, 'transaction_id');
+}
+
+// InvoiceLineItem.php
+public function incomeAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'income_account_id');
+}
+```
+
+---
+
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.
 - Keep enums and validation snippets in sync across requests, DTOs, Vue components, and tests.

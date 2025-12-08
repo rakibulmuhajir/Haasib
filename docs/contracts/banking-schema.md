@@ -332,6 +332,120 @@ for each row execute function bank.update_account_balance();
 - Bank statement PDF parsing.
 - Positive pay / check fraud prevention.
 
+---
+
+## Integration Points
+
+### GL Account Linkage
+
+Every company bank account MUST link to a GL account for posting:
+
+```
+bank.company_bank_accounts.gl_account_id → acct.accounts.id
+```
+
+**Constraint**: The linked GL account must have `subtype IN ('bank', 'cash')`.
+
+### Payment Integration (AR)
+
+When a customer payment is recorded:
+
+1. User selects `deposit_account_id` from `acct.accounts` (bank/cash subtype)
+2. The system looks up `bank.company_bank_accounts` where `gl_account_id = deposit_account_id`
+3. Creates `bank.bank_transactions` with:
+   - `bank_account_id` = matched company bank account
+   - `transaction_type` = 'deposit'
+   - `amount` = positive (money in)
+   - `matched_payment_id` = payment.id
+4. GL posting: DR Bank, CR AR
+
+```php
+// PaymentService
+public function recordPayment(Payment $payment): void
+{
+    // Find bank account by GL account
+    $bankAccount = CompanyBankAccount::where('gl_account_id', $payment->deposit_account_id)->first();
+
+    if ($bankAccount) {
+        BankTransaction::create([
+            'bank_account_id' => $bankAccount->id,
+            'transaction_type' => 'deposit',
+            'amount' => $payment->amount,
+            'matched_payment_id' => $payment->id,
+            // ...
+        ]);
+    }
+}
+```
+
+### Bill Payment Integration (AP)
+
+When a vendor bill payment is recorded:
+
+1. User selects `payment_account_id` from `acct.accounts` (bank/cash/credit_card subtype)
+2. The system looks up `bank.company_bank_accounts` where `gl_account_id = payment_account_id`
+3. Creates `bank.bank_transactions` with:
+   - `bank_account_id` = matched company bank account
+   - `transaction_type` = 'withdrawal'
+   - `amount` = negative (money out)
+   - `matched_bill_payment_id` = bill_payment.id
+4. GL posting: DR AP, CR Bank
+
+### Reconciliation → GL
+
+When a bank transaction is matched and not yet posted to GL:
+
+1. User matches bank transaction to a customer payment or vendor bill payment
+2. System creates GL transaction if not already posted
+3. Links `bank_transactions.gl_transaction_id` to the GL transaction
+
+### Account Selector Integration
+
+The payment forms should use accounts from COA, not directly from `bank.company_bank_accounts`:
+
+```vue
+<!-- Payment form -->
+<AccountSelect
+  v-model="form.deposit_account_id"
+  :filter="{ subtype: ['bank', 'cash'] }"
+  label="Deposit To"
+/>
+```
+
+The backend validates that the selected account exists and optionally links to a bank account.
+
+### Bank Account ↔ GL Account Sync
+
+| Action | Result |
+|--------|--------|
+| Create bank account | Optionally auto-create GL account with same name |
+| Update bank account currency | Must match GL account currency |
+| Delete bank account | Check GL account has no postings first |
+| Deactivate bank account | GL account can remain active |
+
+### Required System Accounts
+
+On company setup, seed these accounts in COA:
+
+| Code | Name | Type | Subtype | Purpose |
+|------|------|------|---------|---------|
+| 1000 | Cash on Hand | asset | cash | Petty cash |
+| 1010 | Primary Bank Account | asset | bank | Main operating account |
+| 1020 | Savings Account | asset | bank | Reserve funds |
+
+### Migration Dependency
+
+Banking tables depend on:
+1. `auth.companies` (company_id FK)
+2. `acct.accounts` (gl_account_id FK)
+3. `acct.payments` (matched_payment_id FK)
+4. `acct.bill_payments` (matched_bill_payment_id FK)
+5. `acct.transactions` (gl_transaction_id FK)
+
+**Order**: GL Core tables must exist before Banking migration.
+
+---
+
 ## Extending
 - Add new transaction_type values here first.
 - Bank feed integration would add `bank.bank_feeds` and `bank.feed_connections` tables.

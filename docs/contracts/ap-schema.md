@@ -431,5 +431,154 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
 - Automatic bill import from email/PDF.
 - Vendor portal.
 
+---
+
+## Integration Points
+
+### GL Posting (Required Columns to Add)
+
+The following columns must be added to enable GL posting:
+
+#### acct.vendors (Add)
+```sql
+ALTER TABLE acct.vendors
+  ADD COLUMN ap_account_id uuid REFERENCES acct.accounts(id);
+```
+- **Purpose**: Vendor-specific AP account (defaults to company's default AP account)
+- **Validation**: Must be an account with `subtype = 'accounts_payable'`
+- **Model $fillable**: Add `'ap_account_id'`
+- **Model $casts**: Add `'ap_account_id' => 'string'`
+
+#### acct.bill_line_items (Add)
+```sql
+ALTER TABLE acct.bill_line_items
+  ADD COLUMN expense_account_id uuid REFERENCES acct.accounts(id);
+```
+- **Purpose**: Expense/asset account for GL posting
+- **Validation**: Must be an account with `type IN ('expense', 'cogs', 'asset')`
+- **Default**: Falls back to company's `default_expense_account_id`
+- **Model $fillable**: Add `'expense_account_id'`
+- **Model $casts**: Add `'expense_account_id' => 'string'`
+
+#### acct.bills (Add)
+```sql
+ALTER TABLE acct.bills
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+- **Purpose**: Links to GL transaction after posting
+- **Nullable**: True (null until posted)
+- **Model $fillable**: Add `'transaction_id'`
+- **Model $casts**: Add `'transaction_id' => 'string'`
+
+#### acct.bill_payments (Add)
+```sql
+ALTER TABLE acct.bill_payments
+  ADD COLUMN payment_account_id uuid REFERENCES acct.accounts(id),
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+- **payment_account_id**: Bank/cash/credit card account used for payment
+- **Validation**: Must be an account with `subtype IN ('bank', 'cash', 'credit_card')`
+- **transaction_id**: Links to GL transaction after posting
+- **Model $fillable**: Add `'payment_account_id', 'transaction_id'`
+- **Model $casts**: Add both as `'string'`
+
+#### acct.vendor_credits (Add)
+```sql
+ALTER TABLE acct.vendor_credits
+  ADD COLUMN transaction_id uuid REFERENCES acct.transactions(id);
+```
+
+### Posting Triggers
+
+| Document | Event | GL Transaction |
+|----------|-------|----------------|
+| Bill | Status → 'received' or 'approved' | DR Expense (per line), CR AP |
+| Bill Payment | On create | DR AP, CR Bank |
+| Vendor Credit | Status → 'received' | DR AP, CR Expense |
+| Vendor Credit Application | On apply | Adjusts allocations |
+
+### Journal Entry Patterns
+
+**Bill Posting** (single-currency):
+```
+Transaction: BILL-00001
+  DR  Office Supplies (line1.expense_account_id)  $400.00
+  DR  Equipment (line2.expense_account_id)        $600.00
+  DR  Input VAT (tax account)                     $150.00
+  CR  Accounts Payable (vendor.ap_account_id)   $1,150.00
+```
+
+**Bill Payment Posting**:
+```
+Transaction: BP-00001
+  DR  Accounts Payable (vendor.ap_account_id)   $1,150.00
+  CR  Bank Account (payment_account_id)         $1,150.00
+```
+
+**Vendor Credit Posting**:
+```
+Transaction: VC-00001
+  DR  Accounts Payable (vendor.ap_account_id)     $100.00
+  CR  Office Supplies (reverse of expense)        $100.00
+```
+
+### UI Changes Required
+
+1. **Bill Payment Form**: Add "Pay From" dropdown
+   - Query: `accounts WHERE subtype IN ('bank','cash','credit_card') AND is_active = true`
+   - Required field
+
+2. **Bill Line Item**: Add "Expense Account" dropdown
+   - Query: `accounts WHERE type IN ('expense','cogs','asset') AND is_active = true`
+   - Default: company's default expense account
+   - Required for posting
+
+3. **Vendor Form**: Add "AP Account" dropdown
+   - Query: `accounts WHERE subtype = 'accounts_payable' AND is_active = true`
+   - Optional (uses company default)
+
+### Relationship Additions
+
+```php
+// Vendor.php
+public function apAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'ap_account_id');
+}
+
+// Bill.php
+public function transaction(): BelongsTo
+{
+    return $this->belongsTo(Transaction::class, 'transaction_id');
+}
+
+// BillPayment.php
+public function paymentAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'payment_account_id');
+}
+
+public function transaction(): BelongsTo
+{
+    return $this->belongsTo(Transaction::class, 'transaction_id');
+}
+
+// BillLineItem.php
+public function expenseAccount(): BelongsTo
+{
+    return $this->belongsTo(Account::class, 'expense_account_id');
+}
+```
+
+### Migration Order
+
+1. Create GL core tables first (`acct.transactions`, `acct.journal_entries`)
+2. Add account columns to AP tables
+3. Update models with new $fillable and relationships
+4. Implement PostingService for AP
+5. Update forms with account selectors
+
+---
+
 ## Extending
 - If a new column/enum value is required, add it here first, then add migration + validation + resource + form updates in one cohesive change.

@@ -54,6 +54,9 @@ class Permissions
     public const ACCOUNT_RECONCILE = 'account.reconcile';
     public const ACCOUNT_DELETE = 'account.delete';
 
+    public const JOURNAL_CREATE = 'journal.create';
+    public const JOURNAL_VIEW = 'journal.view';
+
     public const REPORT_VIEW = 'report.view';
     public const REPORT_EXPORT = 'report.export';
 
@@ -65,6 +68,24 @@ class Permissions
     public const COMPANY_MANAGE_USERS = 'company.manage-users';
     public const COMPANY_DELETE_USER = 'company.delete-user';
     public const COMPANY_MANAGE_ROLES = 'company.manage-roles';
+
+    // Tax Management permissions
+    public const TAX_MANAGE = 'tax.manage';
+    public const TAX_VIEW = 'tax.view';
+    public const TAX_SETTINGS_UPDATE = 'tax.settings.update';
+    public const TAX_RATE_CREATE = 'tax.rate.create';
+    public const TAX_RATE_UPDATE = 'tax.rate.update';
+    public const TAX_RATE_DELETE = 'tax.rate.delete';
+    public const TAX_GROUP_CREATE = 'tax.group.create';
+    public const TAX_GROUP_UPDATE = 'tax.group.update';
+    public const TAX_GROUP_DELETE = 'tax.group.delete';
+    public const TAX_REGISTRATION_CREATE = 'tax.registration.create';
+    public const TAX_REGISTRATION_UPDATE = 'tax.registration.update';
+    public const TAX_REGISTRATION_DELETE = 'tax.registration.delete';
+    public const TAX_EXEMPTION_CREATE = 'tax.exemption.create';
+    public const TAX_EXEMPTION_UPDATE = 'tax.exemption.update';
+    public const TAX_EXEMPTION_DELETE = 'tax.exemption.delete';
+    public const TAX_CALCULATE = 'tax.calculate';
 
     public static function all(): array
     {

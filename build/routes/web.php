@@ -14,6 +14,8 @@ use App\Modules\Accounting\Http\Controllers\BillController;
 use App\Modules\Accounting\Http\Controllers\BillPaymentController;
 use App\Modules\Accounting\Http\Controllers\VendorController;
 use App\Modules\Accounting\Http\Controllers\VendorCreditController;
+use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -134,6 +136,42 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'show'])->name('vendor-credits.show');
         Route::get('/{company}/vendor-credits/{vendorCredit}/apply', [VendorCreditController::class, 'apply'])->name('vendor-credits.apply');
         Route::delete('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'destroy'])->name('vendor-credits.destroy');
+
+        // Manual Journals
+        Route::get('/{company}/journals', [JournalController::class, 'index'])->name('journals.index');
+        Route::get('/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
+        Route::post('/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
+        Route::get('/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+
+        // Tax Management routes
+        Route::get('/{company}/tax/settings', [TaxSettingsController::class, 'index'])->name('tax.settings');
+        Route::post('/{company}/tax/settings', [TaxSettingsController::class, 'updateSettings'])->name('tax.settings.update');
+        Route::post('/{company}/tax/enable-saudi-vat', [TaxSettingsController::class, 'enableSaudiVAT'])->name('tax.enable-saudi-vat');
+
+        // Tax Rates
+        Route::post('/{company}/tax/rates', [TaxSettingsController::class, 'createTaxRate'])->name('tax.rates.store');
+        Route::put('/{company}/tax/rates/{id}', [TaxSettingsController::class, 'updateTaxRate'])->name('tax.rates.update');
+        Route::delete('/{company}/tax/rates/{id}', [TaxSettingsController::class, 'deleteTaxRate'])->name('tax.rates.destroy');
+
+        // Tax Groups
+        Route::post('/{company}/tax/groups', [TaxSettingsController::class, 'createTaxGroup'])->name('tax.groups.store');
+        Route::put('/{company}/tax/groups/{id}', [TaxSettingsController::class, 'updateTaxGroup'])->name('tax.groups.update');
+        Route::delete('/{company}/tax/groups/{id}', [TaxSettingsController::class, 'deleteTaxGroup'])->name('tax.groups.destroy');
+
+        // Tax Registrations
+        Route::post('/{company}/tax/registrations', [TaxSettingsController::class, 'createTaxRegistration'])->name('tax.registrations.store');
+        Route::put('/{company}/tax/registrations/{id}', [TaxSettingsController::class, 'updateTaxRegistration'])->name('tax.registrations.update');
+        Route::delete('/{company}/tax/registrations/{id}', [TaxSettingsController::class, 'deleteTaxRegistration'])->name('tax.registrations.destroy');
+
+        // Tax Exemptions
+        Route::post('/{company}/tax/exemptions', [TaxSettingsController::class, 'createTaxExemption'])->name('tax.exemptions.store');
+        Route::put('/{company}/tax/exemptions/{id}', [TaxSettingsController::class, 'updateTaxExemption'])->name('tax.exemptions.update');
+        Route::delete('/{company}/tax/exemptions/{id}', [TaxSettingsController::class, 'deleteTaxExemption'])->name('tax.exemptions.destroy');
+
+        // Tax API endpoints
+        Route::get('/{company}/tax/api/rates', [TaxSettingsController::class, 'getTaxRates'])->name('tax.api.rates');
+        Route::get('/{company}/tax/api/groups', [TaxSettingsController::class, 'getTaxGroups'])->name('tax.api.groups');
+        Route::post('/{company}/tax/api/calculate', [TaxSettingsController::class, 'calculateTax'])->name('tax.api.calculate');
     });
 });
 

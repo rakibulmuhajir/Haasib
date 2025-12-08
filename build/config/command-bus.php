@@ -85,4 +85,7 @@ return [
     'vendor_credit.create' => \App\Modules\Accounting\Actions\VendorCredit\CreateAction::class,
     'vendor_credit.apply' => \App\Modules\Accounting\Actions\VendorCredit\ApplyAction::class,
     'vendor_credit.void' => \App\Modules\Accounting\Actions\VendorCredit\VoidAction::class,
+
+    // General Ledger - Manual Journals
+    'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,
 ];

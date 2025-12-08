@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\CompanyContextService;
+use App\Services\CurrentCompany;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -16,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register CompanyContextService as scoped singleton (one instance per request)
         $this->app->scoped(CompanyContextService::class);
+        // CurrentCompany should share request scope too
+        $this->app->scoped(CurrentCompany::class);
     }
 
     /**

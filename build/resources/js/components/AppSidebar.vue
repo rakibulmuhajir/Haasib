@@ -95,6 +95,11 @@ const mainNavItems = computed<NavItem[]>(() => {
         icon: BookOpen,
       },
       {
+        title: 'Journals',
+        href: `/${slug}/journals`,
+        icon: FileText,
+      },
+      {
         title: 'Vendors',
         href: `/${slug}/vendors`,
         icon: Truck,

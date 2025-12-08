@@ -40,7 +40,7 @@ These are non-negotiable. Violating any = restart.
 ```php
 // ✅ THESE ARE MANDATORY
 Route::get('/{company}/resource', ...)->middleware(['auth', 'identify.company']);
-$company = CompanyContext::getCompany();
+$company = app(CurrentCompany::class)->get();
 Bus::dispatch('action.name', $request->validated());
 $this->hasCompanyPermission(Permissions::RESOURCE_ACTION);
 Schema::create('{schema}.{table}', ...);  // e.g., 'acct.customers'
@@ -96,8 +96,8 @@ $table->id();                              // Integer PK
 ```
 URL: /{company}/resource
   → IdentifyCompany middleware extracts slug
-  → Sets CompanyContext (facade) + Spatie team atomically
-  → Controller: CompanyContext::getCompany()
+  → Sets CurrentCompany singleton + Spatie team atomically
+  → Controller: app(CurrentCompany::class)->get()
 ```
 
 ### Authorization
@@ -119,7 +119,7 @@ return $this->hasCompanyPermission(Permissions::RESOURCE_ACTION)
 | Permissions | `app/Constants/Permissions.php` |
 | Role matrix | `config/role-permissions.php` |
 | Auth helpers | `app/Http/Requests/BaseFormRequest.php` |
-| Company context | `app/Services/CompanyContextService.php` |
+| Company context | `app/Services/CurrentCompany.php` |
 
 ---
 
@@ -137,9 +137,9 @@ These mistakes have caused restarts. Check every time.
 
 ### Backend
 ```php
-❌ session('active_company_id')        // → CompanyContext::getCompany()
-❌ $user->currentCompany()             // → DEPRECATED, use CompanyContext facade
-❌ ServiceContext->currentCompany()    // → DEPRECATED, use CompanyContext facade
+❌ session('active_company_id')        // → app(CurrentCompany::class)->get()
+❌ $user->currentCompany()             // → DEPRECATED, use CurrentCompany singleton
+❌ ServiceContext->currentCompany()    // → DEPRECATED, use CurrentCompany singleton
 ❌ Route::get('/customers', ...)       // → Route::get('/{company}/customers', ...)
 ❌ Missing identify.company middleware // → Always add to tenant routes
 ❌ Customer::find($id) in controller   // → Move to service layer
@@ -152,7 +152,7 @@ These mistakes have caused restarts. Check every time.
 ❌ Missing $keyType = 'string'         // → Required for UUID
 ❌ Missing $incrementing = false       // → Required for UUID
 ❌ Guessing $fillable                  // → Copy from schema contract
-❌ Copying old code with currentCompany() // → Update to CompanyContext facade
+❌ Copying old code with currentCompany() // → Update to CurrentCompany singleton
 ```
 
 ### Frontend
@@ -253,7 +253,7 @@ class Entity extends Model
 // modules/{Module}/Http/Controllers/
 public function index(): Response
 {
-    $company = CompanyContext::getCompany();
+    $company = app(CurrentCompany::class)->get();
     return Inertia::render('Module/Entity/Index', [
         'entities' => Entity::where('company_id', $company->id)->get(),
     ]);

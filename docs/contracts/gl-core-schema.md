@@ -325,6 +325,90 @@ for each row execute function acct.check_period_open();
 - Dimension hierarchies (flat dimensions only).
 - Budgets and forecasts.
 
+## Integration Points
+
+### Inbound Links (What Posts to GL)
+
+These modules create `acct.transactions` and `acct.journal_entries`:
+
+| Source | Transaction Type | Trigger | Journal Pattern |
+|--------|------------------|---------|-----------------|
+| **Invoice** | `invoice` | Status → 'sent'/'approved' | DR AR account, CR Revenue accounts |
+| **Payment (AR)** | `receipt` | On create | DR Bank account, CR AR account |
+| **Credit Note** | `credit_note` | Status → 'approved' | DR Revenue, CR AR account |
+| **Bill** | `bill` | Status → 'approved' | DR Expense accounts, CR AP account |
+| **Bill Payment** | `payment` | On create | DR AP account, CR Bank account |
+| **Vendor Credit** | `vendor_credit` | Status → 'approved' | DR AP account, CR Expense |
+| **Bank Transfer** | `transfer` | On create | DR Target Bank, CR Source Bank |
+| **Manual Journal** | `manual` | User creates | User-defined |
+
+### Required Account IDs from Source Documents
+
+For posting to work, source documents need these account links:
+
+| Document | Required Column | Links To | Validation |
+|----------|----------------|----------|------------|
+| `acct.payments` | `deposit_account_id` | `acct.accounts.id` | subtype IN ('bank','cash') |
+| `acct.payments` | `transaction_id` | `acct.transactions.id` | Posted entry link |
+| `acct.bill_payments` | `payment_account_id` | `acct.accounts.id` | subtype IN ('bank','cash','credit_card') |
+| `acct.bill_payments` | `transaction_id` | `acct.transactions.id` | Posted entry link |
+| `acct.invoice_line_items` | `income_account_id` | `acct.accounts.id` | type = 'revenue' |
+| `acct.bill_line_items` | `expense_account_id` | `acct.accounts.id` | type IN ('expense','cogs','asset') |
+| `acct.customers` | `ar_account_id` | `acct.accounts.id` | subtype = 'accounts_receivable' |
+| `acct.vendors` | `ap_account_id` | `acct.accounts.id` | subtype = 'accounts_payable' |
+
+### Posting Service Interface
+
+```php
+// App\Services\GL\PostingService
+interface PostingServiceInterface
+{
+    public function postInvoice(Invoice $invoice): Transaction;
+    public function postPayment(Payment $payment): Transaction;
+    public function postCreditNote(CreditNote $creditNote): Transaction;
+    public function postBill(Bill $bill): Transaction;
+    public function postBillPayment(BillPayment $billPayment): Transaction;
+    public function postVendorCredit(VendorCredit $vendorCredit): Transaction;
+    public function reverseTransaction(Transaction $transaction, string $reason): Transaction;
+    public function voidTransaction(Transaction $transaction, string $reason): void;
+}
+```
+
+### Lookup Functions
+
+The period for a transaction date:
+```sql
+SELECT id FROM acct.accounting_periods
+WHERE company_id = $1
+  AND start_date <= $2
+  AND end_date >= $2
+  AND is_closed = false;
+```
+
+The fiscal year for a date:
+```sql
+SELECT id FROM acct.fiscal_years
+WHERE company_id = $1
+  AND start_date <= $2
+  AND end_date >= $2
+  AND status = 'open';
+```
+
+### Default Account Settings
+
+Company settings needed for auto-posting:
+
+| Setting Key | Purpose | Account Constraint |
+|-------------|---------|-------------------|
+| `default_ar_account_id` | Customer receivables | subtype = 'accounts_receivable' |
+| `default_ap_account_id` | Vendor payables | subtype = 'accounts_payable' |
+| `default_income_account_id` | Sales revenue | type = 'revenue' |
+| `default_expense_account_id` | General expense | type = 'expense' |
+| `default_bank_account_id` | Primary bank | subtype = 'bank' |
+| `retained_earnings_account_id` | Year-end close | subtype = 'retained_earnings' |
+
+---
+
 ## Extending
 - Add new transaction_type values here first.
 - Dimension fields (1-3) can be used for cost centers, projects, locations.

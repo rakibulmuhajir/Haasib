@@ -58,6 +58,8 @@ return [
         'account.view',
         'account.update',
         'account.delete',
+        'journal.create',
+        'journal.view',
         'bill.create',
         'bill.view',
         'bill.update',
@@ -72,6 +74,24 @@ return [
         'vendor_credit.view',
         'vendor_credit.apply',
         'vendor_credit.void',
+
+        // Tax Management
+        'tax.manage',
+        'tax.view',
+        'tax.settings.update',
+        'tax.rate.create',
+        'tax.rate.update',
+        'tax.rate.delete',
+        'tax.group.create',
+        'tax.group.update',
+        'tax.group.delete',
+        'tax.registration.create',
+        'tax.registration.update',
+        'tax.registration.delete',
+        'tax.exemption.create',
+        'tax.exemption.update',
+        'tax.exemption.delete',
+        'tax.calculate',
     ],
 
     'accountant' => [
@@ -102,6 +122,8 @@ return [
         'account.create',
         'account.view',
         'account.update',
+        'journal.create',
+        'journal.view',
         'bill.create',
         'bill.view',
         'bill.update',
@@ -112,6 +134,24 @@ return [
         'vendor_credit.create',
         'vendor_credit.view',
         'vendor_credit.apply',
+
+        // Tax Management
+        'tax.manage',
+        'tax.view',
+        'tax.settings.update',
+        'tax.rate.create',
+        'tax.rate.update',
+        'tax.rate.delete',
+        'tax.group.create',
+        'tax.group.update',
+        'tax.group.delete',
+        'tax.registration.create',
+        'tax.registration.update',
+        'tax.registration.delete',
+        'tax.exemption.create',
+        'tax.exemption.update',
+        'tax.exemption.delete',
+        'tax.calculate',
     ],
 
     'member' => [
@@ -126,9 +166,13 @@ return [
 
         // AP/GL read-only
         'account.view',
+        'journal.view',
         'bill.view',
         'vendor.view',
         'vendor_credit.view',
+
+        // Tax Management (read only)
+        'tax.view',
     ],
 
 ];

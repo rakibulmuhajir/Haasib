@@ -33,6 +33,7 @@ class CreditNote extends Model
         'posted_at',
         'voided_at',
         'cancellation_reason',
+        'transaction_id',
         'journal_entry_id',
         'created_by_user_id',
         'updated_by_user_id',
@@ -47,6 +48,7 @@ class CreditNote extends Model
         'sent_at' => 'datetime',
         'posted_at' => 'datetime',
         'voided_at' => 'datetime',
+        'transaction_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -77,6 +79,11 @@ class CreditNote extends Model
     public function applications()
     {
         return $this->hasMany(CreditNoteApplication::class, 'credit_note_id');
+    }
+
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 
     /**

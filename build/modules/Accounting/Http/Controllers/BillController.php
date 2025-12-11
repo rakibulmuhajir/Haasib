@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -65,6 +66,18 @@ class BillController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'payment_terms', 'base_currency']);
 
+        $expenseAccounts = Account::where('company_id', $company->id)
+            ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'type']);
+
+        $apAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/bills/Create', [
             'company' => [
                 'id' => $company->id,
@@ -73,6 +86,8 @@ class BillController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendors' => $vendors,
+            'expenseAccounts' => $expenseAccounts,
+            'apAccounts' => $apAccounts,
         ]);
     }
 
@@ -87,51 +102,74 @@ class BillController extends Controller
         return back()->with('success', 'Bill created');
     }
 
-    public function show(string $bill): Response
+    public function show(string $company, string $bill): Response
     {
-        $company = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\Bill::with(['vendor', 'lineItems'])
-            ->where('company_id', $company->id)
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        $record = \App\Modules\Accounting\Models\Bill::with(['vendor:id,name,logo_url', 'lineItems'])
+            ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
 
         return Inertia::render('accounting/bills/Show', [
             'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
+                'id' => $companyModel->id,
+                'name' => $companyModel->name,
+                'slug' => $companyModel->slug,
+                'base_currency' => $companyModel->base_currency,
+                'logo_url' => $companyModel->logo_url,
             ],
             'bill' => $record,
         ]);
     }
 
-    public function edit(string $bill): Response
+    public function edit(string $company, string $bill): Response
     {
-        $company = app(CompanyContextService::class)->requireCompany();
+        $companyModel = app(CompanyContextService::class)->requireCompany();
         $record = \App\Modules\Accounting\Models\Bill::with('lineItems')
-            ->where('company_id', $company->id)
+            ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
-        $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+        $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $companyModel->id)
             ->orderBy('name')
             ->get(['id', 'name', 'payment_terms', 'base_currency']);
 
+        $expenseAccounts = Account::where('company_id', $companyModel->id)
+            ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'type']);
+
+        $apAccounts = Account::where('company_id', $companyModel->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/bills/Edit', [
             'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
+                'id' => $companyModel->id,
+                'name' => $companyModel->name,
+                'slug' => $companyModel->slug,
+                'base_currency' => $companyModel->base_currency,
             ],
             'bill' => $record,
             'vendors' => $vendors,
+            'expenseAccounts' => $expenseAccounts,
+            'apAccounts' => $apAccounts,
         ]);
     }
 
-    public function destroy(Request $request, string $bill): RedirectResponse
+    public function destroy(Request $request, string $company, string $bill): RedirectResponse
     {
-        $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill.delete', ['id' => $bill, 'company_id' => $company->id], $request->user());
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        app(CommandBus::class)->dispatch('bill.delete', ['id' => $bill, 'company_id' => $companyModel->id], $request->user());
 
         return back()->with('success', 'Bill deleted');
+    }
+
+    public function receive(Request $request, string $company, string $bill): RedirectResponse
+    {
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        app(CommandBus::class)->dispatch('bill.receive', ['id' => $bill], $request->user());
+
+        return back()->with('success', 'Bill marked as received');
     }
 }

@@ -32,7 +32,7 @@ class CreateAction implements PaletteAction
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.account_id' => 'nullable|uuid',
+            'line_items.*.expense_account_id' => 'nullable|uuid',
         ];
     }
 
@@ -113,7 +113,7 @@ class CreateAction implements PaletteAction
                     'line_total' => $line['line_total'],
                     'tax_amount' => $line['tax_amount'],
                     'total' => $line['total'],
-                    'account_id' => $source['account_id'] ?? null,
+                    'expense_account_id' => $source['expense_account_id'] ?? null,
                     'created_by_user_id' => Auth::id(),
                 ]);
             }

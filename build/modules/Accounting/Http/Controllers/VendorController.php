@@ -3,8 +3,10 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
 use App\Modules\Accounting\Http\Requests\UpdateVendorRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -51,6 +53,12 @@ class VendorController extends Controller
     public function create(): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        $apAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/vendors/Create', [
             'company' => [
                 'id' => $company->id,
@@ -58,17 +66,24 @@ class VendorController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
+            'apAccounts' => $apAccounts,
         ]);
     }
 
     public function store(StoreVendorRequest $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('vendor.create', [
+        $result = app(CommandBus::class)->dispatch('vendor.create', [
             ...$request->validated(),
             'company_id' => $company->id,
         ], $request->user());
-        return back()->with('success', 'Vendor created');
+
+        $vendorId = $result['data']['id'] ?? null;
+        if ($vendorId) {
+            return redirect("/{$company->slug}/vendors/{$vendorId}")->with('success', 'Vendor created');
+        }
+
+        return redirect("/{$company->slug}/vendors")->with('success', 'Vendor created');
     }
 
     public function update(UpdateVendorRequest $request, string $vendor): RedirectResponse
@@ -82,23 +97,46 @@ class VendorController extends Controller
         return back()->with('success', 'Vendor updated');
     }
 
-    public function show(string $vendor): Response
+    public function show(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        $vendorId = $request->route('vendor');
         $record = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->withCount('bills')
-            ->findOrFail($vendor);
+            ->findOrFail($vendorId);
 
         $unpaid = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
             ->sum('balance');
 
+        $overdue = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
+            ->where('vendor_id', $record->id)
+            ->whereNotIn('status', ['paid', 'void', 'cancelled'])
+            ->where('due_date', '<', now()->toDateString())
+            ->sum('balance');
+
+        $paidYtd = \App\Modules\Accounting\Models\BillPayment::where('company_id', $company->id)
+            ->where('vendor_id', $record->id)
+            ->whereYear('payment_date', now()->year)
+            ->sum('amount');
+
         $bills = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->id)
             ->orderByDesc('bill_date')
-            ->take(5)
+            ->take(25)
             ->get(['id', 'bill_number', 'bill_date', 'due_date', 'total_amount', 'balance', 'currency', 'status']);
+
+        $payments = \App\Modules\Accounting\Models\BillPayment::where('company_id', $company->id)
+            ->where('vendor_id', $record->id)
+            ->orderByDesc('payment_date')
+            ->take(25)
+            ->get(['id', 'payment_number', 'payment_date', 'amount', 'currency', 'payment_method', 'reference_number']);
+
+        $currencies = CompanyCurrency::where('company_id', $company->id)
+            ->orderByDesc('is_base')
+            ->orderBy('currency_code')
+            ->get(['currency_code', 'is_base']);
 
         return Inertia::render('accounting/vendors/Show', [
             'company' => [
@@ -108,19 +146,30 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendor' => $record,
-            'stats' => [
+            'summary' => [
+                'open_balance' => $unpaid,
+                'overdue_balance' => $overdue,
                 'bill_count' => $record->bills_count,
-                'unpaid' => $unpaid,
-                'amount_owed' => $unpaid,
+                'paid_ytd' => $paidYtd,
             ],
-            'recentBills' => $bills,
+            'bills' => $bills,
+            'payments' => $payments,
+            'currencies' => $currencies,
+            'canEdit' => true,
         ]);
     }
 
-    public function edit(string $vendor): Response
+    public function edit(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)->findOrFail($vendor);
+        $vendorId = $request->route('vendor');
+        $record = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)->findOrFail($vendorId);
+
+        $apAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
 
         return Inertia::render('accounting/vendors/Edit', [
             'company' => [
@@ -130,14 +179,16 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendor' => $record,
+            'apAccounts' => $apAccounts,
         ]);
     }
 
-    public function destroy(Request $request, string $vendor): RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        $vendorId = $request->route('vendor');
         app(CommandBus::class)->dispatch('vendor.delete', [
-            'id' => $vendor,
+            'id' => $vendorId,
             'company_id' => $company->id,
         ], $request->user());
         return back()->with('success', 'Vendor deleted');

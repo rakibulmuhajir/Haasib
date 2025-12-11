@@ -31,6 +31,7 @@ class Customer extends Model
         'notes',
         'logo_url',
         'is_active',
+        'ar_account_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -43,10 +44,16 @@ class Customer extends Model
         'credit_limit' => 'decimal:2',
         'payment_terms' => 'integer',
         'is_active' => 'boolean',
+        'ar_account_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    public function arAccount()
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Account::class, 'ar_account_id');
+    }
 }

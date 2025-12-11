@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreAccountRequest;
 use App\Modules\Accounting\Http\Requests\UpdateAccountRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountTemplate;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -18,20 +19,11 @@ class AccountController extends Controller
     public function index(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        $query = Account::where('company_id', $company->id)->orderBy('code');
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->string('type'));
-        }
-        if ($request->filled('search')) {
-            $term = $request->string('search');
-            $query->where(function ($q) use ($term) {
-                $q->where('code', 'ilike', "%{$term}%")
-                    ->orWhere('name', 'ilike', "%{$term}%");
-            });
-        }
-
-        $accounts = $query->paginate(25)->withQueryString();
+        
+        // Fetch all accounts for client-side grouping and tree structure
+        $accounts = Account::where('company_id', $company->id)
+            ->orderBy('code')
+            ->get();
 
         return Inertia::render('accounting/accounts/Index', [
             'company' => [
@@ -41,7 +33,6 @@ class AccountController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'accounts' => $accounts,
-            'filters' => $request->only(['type', 'search']),
         ]);
     }
 
@@ -56,6 +47,10 @@ class AccountController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'parents' => Account::where('company_id', $company->id)->orderBy('code')->get(['id', 'code', 'name', 'type']),
+            'templates' => AccountTemplate::query()
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'type', 'subtype', 'normal_balance', 'is_contra', 'description']),
         ]);
     }
 
@@ -67,7 +62,9 @@ class AccountController extends Controller
             'company_id' => $company->id,
         ], $request->user());
 
-        return back()->with('success', 'Account created');
+        return redirect()
+            ->route('accounts.index', ['company' => $company->slug])
+            ->with('success', 'Account created');
     }
 
     public function show(string $account): Response

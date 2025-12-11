@@ -1,6 +1,6 @@
 import { usePage } from '@inertiajs/vue3'
 import { watch } from 'vue'
-import { toast } from 'sonner'
+import { toast } from 'vue-sonner'
 
 export function useFlashMessages() {
   const page = usePage()

@@ -28,7 +28,7 @@ class StoreVendorCreditApplicationRequest extends BaseFormRequest
         return [
             'vendor_credit_id' => ['required', 'uuid', $vendorCreditRule],
             'bill_id' => ['required', 'uuid', $billRule],
-            'amount_applied' => ['required', 'numeric', 'min:0.01', 'decimal:6'],
+            'amount_applied' => ['required', 'numeric', 'min:0.01'],
             'applied_at' => ['nullable', 'date'],
             'user_id' => ['nullable', 'uuid', 'exists:auth.users,id'],
             'notes' => ['nullable', 'string'],

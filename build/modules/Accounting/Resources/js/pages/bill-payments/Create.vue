@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard, Save } from 'lucide-vue-next'
+import { useFormFeedback } from '@/composables/useFormFeedback'
 
 interface CompanyRef {
   id: string
@@ -27,15 +28,36 @@ interface BillRef {
   bill_number: string
   balance: number
   currency: string
+  due_date?: string
+}
+
+interface SelectedBill {
+  id: string
+  bill_number: string
+  balance: number
+  currency: string
+  vendor_id: string
+  vendor?: VendorRef
+}
+
+interface AccountOption {
+  id: string
+  code: string
+  name: string
+  subtype?: string
 }
 
 const props = defineProps<{
   company: CompanyRef
   vendors: VendorRef[]
   unpaidBills: BillRef[]
+  selectedBill?: SelectedBill | null
   filters?: {
     vendor_id?: string | null
+    bill_id?: string | null
   }
+  bankAccounts?: AccountOption[]
+  apAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -44,21 +66,31 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Create', href: `/${props.company.slug}/bill-payments/create` },
 ]
 
+const { showSuccess, showError } = useFormFeedback()
+
 const form = useForm({
-  vendor_id: props.filters?.vendor_id ?? '',
+  vendor_id: props.selectedBill?.vendor_id ?? props.filters?.vendor_id ?? '',
   payment_date: new Date().toISOString().slice(0, 10),
-  amount: 0,
-  currency: props.company.base_currency,
+  amount: props.selectedBill?.balance ?? 0,
+  currency: props.selectedBill?.currency ?? props.company.base_currency,
   base_currency: props.company.base_currency,
   payment_method: 'bank_transfer',
   reference_number: '',
-  notes: '',
-  allocations: [] as { bill_id: string; amount_allocated: number }[],
+  notes: props.selectedBill ? `Payment for ${props.selectedBill.bill_number}` : '',
+  payment_account_id: '',
+  ap_account_id: '',
+  allocations: props.selectedBill
+    ? [{ bill_id: props.selectedBill.id, amount_allocated: props.selectedBill.balance }]
+    : [] as { bill_id: string; amount_allocated: number }[],
 })
 
 const unpaidBills = ref<BillRef[]>(props.unpaidBills ?? [])
 
 const resetAllocations = (bills: BillRef[]) => {
+  // Only reset allocations if we don't have a selected bill with pre-filled allocation
+  if (props.selectedBill && form.allocations.length > 0) {
+    return
+  }
   form.allocations = bills.map((bill) => ({
     bill_id: bill.id,
     amount_allocated: 0,
@@ -116,13 +148,44 @@ const currentAllocation = (billId: string) => {
   return form.allocations.find((a) => a.bill_id === billId)?.amount_allocated ?? 0
 }
 
+const formatNumber = (value: number, decimals: number = 2): string => {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value)
+}
+
 const handleSubmit = () => {
   if (totalAllocated.value - form.amount > 0.000001) {
-    alert('Allocations exceed payment amount')
+    showError('Allocations exceed payment amount')
     return
   }
-  form.post(`/${props.company.slug}/bill-payments`, {
+
+  // Transform empty strings to null for optional fields
+  const data = {
+    vendor_id: form.vendor_id,
+    payment_date: form.payment_date,
+    amount: form.amount,
+    currency: form.currency,
+    base_currency: form.base_currency,
+    payment_method: form.payment_method,
+    reference_number: form.reference_number || null,
+    notes: form.notes || null,
+    payment_account_id: form.payment_account_id,
+    ap_account_id: form.ap_account_id || null,
+    allocations: form.allocations.filter(a => a.amount_allocated > 0),
+  }
+
+  form.transform(() => data).post(`/${props.company.slug}/bill-payments`, {
     preserveScroll: true,
+    onSuccess: () => {
+      showSuccess('Bill payment recorded successfully')
+      router.visit(`/${props.company.slug}/bill-payments`)
+    },
+    onError: (errors) => {
+      console.error('Validation errors:', errors)
+      showError(errors)
+    }
   })
 }
 </script>
@@ -160,6 +223,41 @@ const handleSubmit = () => {
         <div>
           <Label for="currency">Currency</Label>
           <Input id="currency" v-model="form.currency" maxlength="3" />
+        </div>
+        <div>
+          <Label for="payment_account_id">Pay From *</Label>
+          <Select v-model="form.payment_account_id" required>
+            <SelectTrigger id="payment_account_id">
+              <SelectValue placeholder="Select bank/cash account" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="acct in props.bankAccounts || []"
+                :key="acct.id"
+                :value="acct.id"
+              >
+                {{ acct.code }} — {{ acct.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label for="ap_account_id">AP Account</Label>
+          <Select v-model="form.ap_account_id">
+            <SelectTrigger id="ap_account_id">
+              <SelectValue placeholder="Use company default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Use company default</SelectItem>
+              <SelectItem
+                v-for="acct in props.apAccounts || []"
+                :key="acct.id"
+                :value="acct.id"
+              >
+                {{ acct.code }} — {{ acct.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label for="payment_method">Method</Label>
@@ -201,7 +299,7 @@ const handleSubmit = () => {
           >
             <div>
               <div class="font-medium">{{ bill.bill_number }}</div>
-              <div class="text-xs text-muted-foreground">Balance {{ bill.balance }} {{ bill.currency }}</div>
+              <div class="text-xs text-muted-foreground">Balance {{ formatNumber(bill.balance) }} {{ bill.currency }}</div>
             </div>
             <Input
               class="w-32"
@@ -222,9 +320,9 @@ const handleSubmit = () => {
       </div>
 
       <div class="flex justify-end gap-3">
-        <Button type="submit">
+        <Button type="submit" :disabled="form.processing">
           <Save class="mr-2 h-4 w-4" />
-          Save Payment
+          {{ form.processing ? 'Saving...' : 'Save Payment' }}
         </Button>
       </div>
     </form>

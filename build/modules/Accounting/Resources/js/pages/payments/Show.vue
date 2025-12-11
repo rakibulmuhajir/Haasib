@@ -25,10 +25,16 @@ import {
   Calendar,
 } from 'lucide-vue-next'
 
+interface Invoice {
+  id: string
+  invoice_number: string
+}
+
 interface PaymentAllocation {
   id: string
   invoice_id: string
-  amount: number
+  invoice?: Invoice
+  amount_allocated: number
 }
 
 interface Customer {
@@ -55,6 +61,7 @@ interface CompanyRef {
   id: string
   name: string
   slug: string
+  logo_url?: string
 }
 
 const props = defineProps<{
@@ -150,6 +157,28 @@ const formatDate = (dateString: string) => {
         <!-- Payment Header -->
         <Card>
           <CardContent class="pt-6">
+            <!-- Company Logo Section -->
+            <div class="mb-6 pb-6 border-b">
+              <div class="flex items-center gap-4">
+                <div v-if="company.logo_url" class="flex-shrink-0">
+                  <img
+                    :src="company.logo_url"
+                    :alt="`${company.name} logo`"
+                    class="h-16 w-auto object-contain"
+                  />
+                </div>
+                <div v-else class="flex-shrink-0">
+                  <div class="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Building class="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <div>
+                  <h2 class="text-xl font-semibold">{{ company.name }}</h2>
+                  <p class="text-sm text-muted-foreground">Payment Receipt</p>
+                </div>
+              </div>
+            </div>
+
             <div class="flex justify-between items-start mb-6">
               <div>
                 <h1 class="text-2xl font-bold">Payment {{ payment.payment_number }}</h1>
@@ -170,8 +199,13 @@ const formatDate = (dateString: string) => {
               <div>
                 <h3 class="font-semibold mb-2">Customer:</h3>
                 <div>
-                  <p class="font-medium">{{ payment.customer.name }}</p>
-                  <p v-if="payment.customer.email">{{ payment.customer.email }}</p>
+                  <button
+                    @click="router.get(`/${company.slug}/customers/${payment.customer.id}`)"
+                    class="font-medium text-primary hover:underline focus:outline-none focus:underline text-left"
+                  >
+                    {{ payment.customer.name }}
+                  </button>
+                  <p v-if="payment.customer.email" class="text-sm text-muted-foreground">{{ payment.customer.email }}</p>
                 </div>
               </div>
               <div class="text-right">
@@ -196,11 +230,16 @@ const formatDate = (dateString: string) => {
             <div class="space-y-3">
               <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded-lg">
                 <div>
-                  <p class="font-medium">Invoice #{{ allocation.invoice_id }}</p>
+                  <button
+                    @click="router.get(`/${company.slug}/invoices/${allocation.invoice_id}`)"
+                    class="font-medium text-primary hover:underline focus:outline-none focus:underline"
+                  >
+                    {{ allocation.invoice?.invoice_number || `Invoice #${allocation.invoice_id}` }}
+                  </button>
                   <p class="text-sm text-muted-foreground">Applied to invoice</p>
                 </div>
                 <div class="text-right">
-                  <p class="font-medium">{{ formatCurrency(allocation.amount, payment.currency) }}</p>
+                  <p class="font-medium">{{ formatCurrency(allocation.amount_allocated, payment.currency) }}</p>
                 </div>
               </div>
             </div>
@@ -242,7 +281,7 @@ const formatDate = (dateString: string) => {
             <div v-if="payment.payment_allocations.length > 0" class="space-y-2">
               <p class="font-medium text-sm">Total Allocated:</p>
               <div class="text-right">
-                {{ formatCurrency(payment.payment_allocations.reduce((sum, a) => sum + a.amount, 0), payment.currency) }}
+                {{ formatCurrency(payment.payment_allocations.reduce((sum, a) => sum + Number(a.amount_allocated), 0), payment.currency) }}
               </div>
             </div>
           </CardContent>

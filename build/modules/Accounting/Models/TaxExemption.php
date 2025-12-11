@@ -13,7 +13,7 @@ class TaxExemption extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
-    protected $table = 'tax.tax_exemptions';
+    protected $table = 'acct.tax_exemptions';
     protected $keyType = 'string';
     public $incrementing = false;
 

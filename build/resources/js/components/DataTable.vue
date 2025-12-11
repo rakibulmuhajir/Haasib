@@ -137,13 +137,13 @@ const handleRowClick = (row: T) => {
 <template>
   <div>
     <!-- Header -->
-    <div 
+    <div
       v-if="title || description || $slots.header"
-      class="flex items-center justify-between border-b border-zinc-100 px-6 py-4"
+      class="flex items-center justify-between border-b border-border/80 bg-surface-1 px-6 py-4"
     >
       <div>
-        <h3 v-if="title" class="font-semibold text-zinc-900">{{ title }}</h3>
-        <p v-if="description" class="mt-0.5 text-sm text-zinc-500">
+        <h3 v-if="title" class="font-semibold text-text-primary">{{ title }}</h3>
+        <p v-if="description" class="mt-0.5 text-sm text-text-secondary">
           {{ description }}
         </p>
       </div>
@@ -156,14 +156,14 @@ const handleRowClick = (row: T) => {
     <div class="hidden overflow-x-auto lg:block">
       <table class="min-w-full">
         <thead>
-          <tr class="border-b border-zinc-100">
+          <tr class="border-b border-border/80">
             <th
               v-for="column in columns"
               :key="String(column.key)"
               :class="[
-                'px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500',
+                'px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary',
                 column.headerClass,
-                { 'cursor-pointer select-none transition-colors hover:text-zinc-900': column.sortable },
+                { 'cursor-pointer select-none transition-colors hover:text-text-primary': column.sortable },
               ]"
               @click="handleSort(column)"
             >
@@ -174,20 +174,20 @@ const handleRowClick = (row: T) => {
                   v-if="column.sortable"
                   class="h-3.5 w-3.5 transition-colors"
                   :class="[
-                    sortState.column === column.key ? 'text-teal-600' : 'text-zinc-300'
+                    sortState.column === column.key ? 'text-primary' : 'text-text-quaternary'
                   ]"
                 />
               </div>
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-zinc-100">
+        <tbody class="divide-y divide-border/70">
           <!-- Loading State -->
           <tr v-if="loading">
             <td :colspan="columns.length" class="px-6 py-12 text-center">
               <div class="flex items-center justify-center gap-3">
-                <div class="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200 border-t-teal-500" />
-                <span class="text-sm text-zinc-500">Loading...</span>
+                <div class="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" />
+                <span class="text-sm text-text-secondary">Loading...</span>
               </div>
             </td>
           </tr>
@@ -196,7 +196,7 @@ const handleRowClick = (row: T) => {
           <tr v-else-if="data.length === 0">
             <td :colspan="columns.length" class="px-6 py-12">
               <slot name="empty">
-                <div class="text-center text-sm text-zinc-500">No data available</div>
+                <div class="text-center text-sm text-text-secondary">No data available</div>
               </slot>
             </td>
           </tr>
@@ -208,16 +208,16 @@ const handleRowClick = (row: T) => {
             :key="String(row[keyField])"
             :class="[
               'transition-colors',
-              hoverable && 'hover:bg-zinc-50/80',
+              hoverable && 'hover:bg-muted/60',
               clickable && 'cursor-pointer',
-              striped && index % 2 === 1 && 'bg-zinc-50/50',
+              striped && index % 2 === 1 && 'bg-muted/50',
             ]"
             @click="handleRowClick(row)"
           >
             <td
               v-for="column in columns"
               :key="String(column.key)"
-              :class="['px-6 py-4 text-sm text-zinc-700', column.class]"
+              :class="['px-6 py-4 text-sm text-text-secondary', column.class]"
             >
               <slot :name="`cell-${String(column.key)}`" :row="row" :value="getCellValue(row, column)">
                 {{ getCellValue(row, column) }}
@@ -232,12 +232,12 @@ const handleRowClick = (row: T) => {
     <div class="space-y-3 p-4 lg:hidden">
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="flex items-center gap-3">
-          <div class="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200 border-t-teal-500" />
-          <span class="text-sm text-zinc-500">Loading...</span>
+          <div class="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" />
+          <span class="text-sm text-text-secondary">Loading...</span>
         </div>
       </div>
       
-      <div v-else-if="data.length === 0" class="py-12 text-center text-sm text-zinc-500">
+      <div v-else-if="data.length === 0" class="py-12 text-center text-sm text-text-secondary">
         <slot name="empty">No data available</slot>
       </div>
       
@@ -249,8 +249,8 @@ const handleRowClick = (row: T) => {
           :row="row"
         >
           <div 
-            class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
-            :class="{ 'cursor-pointer hover:border-zinc-300 hover:shadow': clickable }"
+            class="rounded-xl border border-border/80 bg-surface-1 p-4 shadow-sm"
+            :class="{ 'cursor-pointer hover:border-border hover:shadow-sm': clickable }"
             @click="handleRowClick(row)"
           >
             <div class="space-y-2.5 text-sm">
@@ -259,8 +259,8 @@ const handleRowClick = (row: T) => {
                 :key="String(column.key)"
                 class="flex items-center justify-between gap-4"
               >
-                <span class="text-zinc-500">{{ column.label }}</span>
-                <span class="font-medium text-zinc-900 text-right">
+                <span class="text-text-tertiary">{{ column.label }}</span>
+                <span class="text-right font-medium text-text-primary">
                   {{ getCellValue(row, column) }}
                 </span>
               </div>
@@ -273,19 +273,19 @@ const handleRowClick = (row: T) => {
     <!-- Pagination -->
     <div
       v-if="pagination && totalPages > 1"
-      class="flex flex-col gap-4 border-t border-zinc-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+      class="flex flex-col gap-4 border-t border-border/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
     >
-      <p class="text-sm text-zinc-500">
+      <p class="text-sm text-text-secondary">
         Showing
-        <span class="font-medium text-zinc-700">
+        <span class="font-medium text-text-primary">
           {{ (pagination.currentPage - 1) * pagination.perPage + 1 }}
         </span>
         to
-        <span class="font-medium text-zinc-700">
+        <span class="font-medium text-text-primary">
           {{ Math.min(pagination.currentPage * pagination.perPage, pagination.total) }}
         </span>
         of
-        <span class="font-medium text-zinc-700">{{ pagination.total }}</span>
+        <span class="font-medium text-text-primary">{{ pagination.total }}</span>
         results
       </p>
       
@@ -316,7 +316,7 @@ const handleRowClick = (row: T) => {
             class="h-8 w-8 p-0"
             :class="[
               page === pagination.currentPage 
-                ? 'bg-teal-600 hover:bg-teal-700' 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
                 : ''
             ]"
           >

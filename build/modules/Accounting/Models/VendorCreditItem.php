@@ -29,7 +29,7 @@ class VendorCreditItem extends Model
         'line_total',
         'tax_amount',
         'total',
-        'account_id',
+        'expense_account_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -37,7 +37,7 @@ class VendorCreditItem extends Model
     protected $casts = [
         'company_id' => 'string',
         'vendor_credit_id' => 'string',
-        'account_id' => 'string',
+        'expense_account_id' => 'string',
         'line_number' => 'integer',
         'quantity' => 'decimal:2',
         'unit_price' => 'decimal:6',

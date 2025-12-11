@@ -32,11 +32,20 @@ interface CurrencyRef {
   is_base: boolean
 }
 
+interface AccountOption {
+  id: string
+  code: string
+  name: string
+  subtype?: string
+}
+
 const props = defineProps<{
   company: CompanyRef
   customers: Array<{ id: string; name: string }>
   invoices: InvoiceRef[]
   currencies: CurrencyRef[]
+  depositAccounts?: AccountOption[]
+  arAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -55,6 +64,8 @@ const form = useForm({
   reference_number: '',
   payment_date: new Date().toISOString().split('T')[0],
   notes: '',
+  deposit_account_id: '',
+  ar_account_id: 'company_default',
 })
 
 const paymentMethods = [
@@ -163,6 +174,24 @@ const submit = () => {
             </Select>
           </div>
           <div>
+            <Label for="ar_account_id">AR Account</Label>
+            <Select v-model="form.ar_account_id">
+              <SelectTrigger id="ar_account_id">
+                <SelectValue placeholder="Use company default" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="company_default">Use company default</SelectItem>
+                <SelectItem
+                  v-for="acct in props.arAccounts || []"
+                  :key="acct.id"
+                  :value="acct.id"
+                >
+                  {{ acct.code }} — {{ acct.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <Label for="invoice_id">Apply to Invoice *</Label>
             <Select v-model="form.invoice_id" :disabled="!form.customer_id" required>
               <SelectTrigger>
@@ -210,6 +239,23 @@ const submit = () => {
               type="date"
               required
             />
+          </div>
+          <div>
+            <Label for="deposit_account_id">Deposit To *</Label>
+            <Select v-model="form.deposit_account_id" required>
+              <SelectTrigger id="deposit_account_id">
+                <SelectValue placeholder="Select bank/cash account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="acct in props.depositAccounts || []"
+                  :key="acct.id"
+                  :value="acct.id"
+                >
+                  {{ acct.code }} — {{ acct.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label for="currency">Currency *</Label>

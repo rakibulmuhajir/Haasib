@@ -170,6 +170,23 @@ class CreditNoteController extends Controller
             ->with(['customer', 'invoice:id,invoice_number'])
             ->findOrFail($creditNoteId);
 
+        // Get all active customers
+        $customers = Customer::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        // Get all invoices that can be applied to (excluding cancelled/void)
+        $invoices = Invoice::where('company_id', $company->id)
+            ->whereNotIn('status', ['cancelled', 'void'])
+            ->orderBy('invoice_number')
+            ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency']);
+
+        $currencies = CompanyCurrency::where('company_id', $company->id)
+            ->orderByDesc('is_base')
+            ->orderBy('currency_code')
+            ->get(['currency_code', 'is_base']);
+
         return Inertia::render('accounting/credit-notes/Edit', [
             'company' => [
                 'id' => $company->id,
@@ -178,6 +195,9 @@ class CreditNoteController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'credit_note' => $creditNoteRecord,
+            'customers' => $customers,
+            'invoices' => $invoices,
+            'currencies' => $currencies,
         ]);
     }
 
@@ -187,6 +207,7 @@ class CreditNoteController extends Controller
 
         $creditNoteId = $request->route('credit_note');
         $creditNoteRecord = CreditNote::where('company_id', $company->id)
+            ->with('items') // Load existing items
             ->findOrFail($creditNoteId);
 
         $commandBus = app(CommandBus::class);

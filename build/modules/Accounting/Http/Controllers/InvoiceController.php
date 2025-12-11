@@ -11,6 +11,7 @@ use App\Modules\Accounting\Http\Requests\DuplicateInvoiceRequest;
 use App\Modules\Accounting\Http\Requests\VoidInvoiceRequest;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Account;
 use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
 use Illuminate\Http\RedirectResponse;
@@ -79,6 +80,18 @@ class InvoiceController extends Controller
             ->orderBy('currency_code')
             ->get(['currency_code', 'is_base']);
 
+        $revenueAccounts = Account::where('company_id', $company->id)
+            ->where('type', 'revenue')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        $arAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_receivable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/invoices/Create', [
             'company' => [
                 'id' => $company->id,
@@ -88,6 +101,8 @@ class InvoiceController extends Controller
             ],
             'customers' => $customers,
             'currencies' => $currencies,
+            'revenueAccounts' => $revenueAccounts,
+            'arAccounts' => $arAccounts,
         ]);
     }
 
@@ -155,6 +170,18 @@ class InvoiceController extends Controller
             ->orderBy('currency_code')
             ->get(['currency_code', 'is_base']);
 
+        $revenueAccounts = Account::where('company_id', $company->id)
+            ->where('type', 'revenue')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        $arAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_receivable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/invoices/Edit', [
             'company' => [
                 'id' => $company->id,
@@ -165,6 +192,8 @@ class InvoiceController extends Controller
             'invoice' => $invoiceRecord,
             'customers' => $customers,
             'currencies' => $currencies,
+            'revenueAccounts' => $revenueAccounts,
+            'arAccounts' => $arAccounts,
         ]);
     }
 

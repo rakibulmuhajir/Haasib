@@ -28,6 +28,7 @@ class InvoiceLineItem extends Model
         'line_total',
         'tax_amount',
         'total',
+        'income_account_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -43,10 +44,16 @@ class InvoiceLineItem extends Model
         'line_total' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'income_account_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    public function incomeAccount()
+    {
+        return $this->belongsTo(Account::class, 'income_account_id');
+    }
 }

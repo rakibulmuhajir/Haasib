@@ -60,11 +60,11 @@ class UpdateAccountRequest extends BaseFormRequest
             }],
             'normal_balance' => ['required', Rule::in(['debit', 'credit']), function ($attr, $value, $fail) {
                 $type = $this->input('type');
-                if ($type && in_array($type, ['asset', 'expense', 'cogs'], true) && $value !== 'debit') {
-                    $fail('normal_balance must be debit for asset/expense/cogs');
+                if ($type && in_array($type, ['asset', 'expense', 'cogs', 'other_expense'], true) && $value !== 'debit') {
+                    $fail('normal_balance must be debit for asset/expense/cogs/other_expense');
                 }
-                if ($type && in_array($type, ['liability', 'equity', 'revenue', 'other_income', 'other_expense'], true) && $value !== 'credit') {
-                    $fail('normal_balance must be credit for liability/equity/revenue/other_income/other_expense');
+                if ($type && in_array($type, ['liability', 'equity', 'revenue', 'other_income'], true) && $value !== 'credit') {
+                    $fail('normal_balance must be credit for liability/equity/revenue/other_income');
                 }
             }],
             'currency' => [

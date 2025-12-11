@@ -15,7 +15,7 @@ class CompanyBankAccount extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
-    protected $table = 'bank.company_bank_accounts';
+    protected $table = 'acct.company_bank_accounts';
     protected $keyType = 'string';
     public $incrementing = false;
 

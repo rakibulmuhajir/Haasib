@@ -17,35 +17,56 @@ interface Action {
 
 interface Props {
   title?: string
+  subtitle?: string
   breadcrumbs?: BreadcrumbItemType[]
   actions?: Action[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: undefined,
+  subtitle: undefined,
   breadcrumbs: () => [],
   actions: () => [],
+})
+
+const heading = computed(() => {
+  if (props.title) return props.title
+  const lastCrumb = props.breadcrumbs[props.breadcrumbs.length - 1]
+  return lastCrumb?.title || 'Dashboard'
 })
 </script>
 
 <template>
   <header
-    class="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)"
+    class="relative flex h-(--header-height) shrink-0 items-center border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)"
   >
-    <div class="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-      <SidebarTrigger class="-ml-1" />
+    <div class="absolute inset-x-6 bottom-0 h-px bg-gradient-to-r from-transparent via-[var(--shell-hero-ring)] to-transparent" />
 
-      <template v-if="breadcrumbs && breadcrumbs.length > 0">
-        <Separator orientation="vertical" class="mx-2 data-[orientation=vertical]:h-4" />
-        <Breadcrumbs :breadcrumbs="breadcrumbs" />
-      </template>
+    <div class="flex w-full items-center justify-between gap-3 px-4 py-2 lg:gap-4 lg:px-6">
+      <div class="flex min-w-0 flex-1 items-start gap-3">
+        <SidebarTrigger class="-ml-1 mt-1 text-text-tertiary hover:text-text-primary transition-colors" />
 
-      <template v-if="title">
-        <Separator v-if="!breadcrumbs || breadcrumbs.length === 0" orientation="vertical" class="mx-2 data-[orientation=vertical]:h-4" />
-        <h1 class="text-base font-medium">{{ title }}</h1>
-      </template>
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+          <div v-if="breadcrumbs && breadcrumbs.length > 0" class="flex items-center gap-2 text-xs text-text-tertiary">
+            <Breadcrumbs :breadcrumbs="breadcrumbs" />
+          </div>
 
-      <div v-if="actions.length > 0 || $slots.actions" class="ml-auto flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="truncate text-lg font-semibold text-text-primary">{{ heading }}</h1>
+            <slot name="meta">
+              <span v-if="subtitle" class="rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-text-secondary">
+                {{ subtitle }}
+              </span>
+            </slot>
+          </div>
+
+          <div v-if="$slots.description" class="text-sm text-text-secondary">
+            <slot name="description" />
+          </div>
+        </div>
+      </div>
+
+      <div v-if="actions.length > 0 || $slots.actions" class="flex items-center gap-2">
         <slot name="actions">
           <Button
             v-for="(action, index) in actions"

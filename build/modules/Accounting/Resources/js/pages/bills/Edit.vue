@@ -29,6 +29,7 @@ interface LineItem {
   tax_rate: number
   discount_rate: number
   account_id?: string
+  expense_account_id?: string
 }
 
 interface BillRef {
@@ -43,12 +44,23 @@ interface BillRef {
   internal_notes: string | null
   line_items: LineItem[]
   status: string
+  ap_account_id?: string | null
+}
+
+interface AccountOption {
+  id: string
+  code: string
+  name: string
+  type?: string
+  subtype?: string
 }
 
 const props = defineProps<{
   company: CompanyRef
   vendors: VendorRef[]
   bill: BillRef
+  expenseAccounts?: AccountOption[]
+  apAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -67,7 +79,8 @@ const form = useForm({
   payment_terms: props.bill.payment_terms,
   notes: props.bill.notes ?? '',
   internal_notes: props.bill.internal_notes ?? '',
-  line_items: props.bill.line_items.map((li) => ({ ...li })),
+  ap_account_id: props.bill.ap_account_id ?? '',
+  line_items: props.bill.line_items.map((li) => ({ ...li, expense_account_id: li.expense_account_id ?? '' })),
 })
 
 const totals = computed(() => {
@@ -142,6 +155,24 @@ const handleSubmit = () => {
           <Input id="payment_terms" v-model.number="form.payment_terms" type="number" min="0" max="365" />
         </div>
         <div>
+          <Label for="ap_account_id">AP Account</Label>
+          <Select v-model="form.ap_account_id">
+            <SelectTrigger id="ap_account_id">
+              <SelectValue placeholder="Use company default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Use company default</SelectItem>
+              <SelectItem
+                v-for="acct in props.apAccounts || []"
+                :key="acct.id"
+                :value="acct.id"
+              >
+                {{ acct.code }} — {{ acct.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label for="notes">Notes</Label>
           <Input id="notes" v-model="form.notes" />
         </div>
@@ -163,7 +194,7 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="grid gap-3 rounded border p-3 md:grid-cols-5"
+            class="grid gap-3 rounded border p-3 md:grid-cols-6"
           >
             <div class="md:col-span-2">
               <Label>Description</Label>
@@ -177,11 +208,6 @@ const handleSubmit = () => {
               <Label>Unit Price</Label>
               <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
             </div>
-            <div class="flex items-end justify-between gap-2">
-              <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)">
-                <Trash2 class="h-4 w-4" />
-              </Button>
-            </div>
             <div>
               <Label>Tax %</Label>
               <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
@@ -190,9 +216,28 @@ const handleSubmit = () => {
               <Label>Discount %</Label>
               <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" />
             </div>
-            <div class="md:col-span-2">
-              <Label>Account ID (optional)</Label>
-              <Input v-model="line.account_id" placeholder="Account UUID" />
+            <div>
+              <Label>Expense Account</Label>
+              <Select v-model="line.expense_account_id">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Use default</SelectItem>
+                  <SelectItem
+                    v-for="acct in props.expenseAccounts || []"
+                    :key="acct.id"
+                    :value="acct.id"
+                  >
+                    {{ acct.code }} — {{ acct.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="flex items-end justify-between gap-2">
+              <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)">
+                <Trash2 class="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>

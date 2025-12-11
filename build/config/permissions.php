@@ -63,6 +63,7 @@ return [
         'credit_note' => [
             'credit_note.create',
             'credit_note.view',
+            'credit_note.update',
             'credit_note.apply',
             'credit_note.void',
         ],

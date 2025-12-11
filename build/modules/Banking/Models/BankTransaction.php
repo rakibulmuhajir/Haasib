@@ -17,7 +17,7 @@ class BankTransaction extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
-    protected $table = 'bank.bank_transactions';
+    protected $table = 'acct.bank_transactions';
     protected $keyType = 'string';
     public $incrementing = false;
 

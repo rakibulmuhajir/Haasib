@@ -6,6 +6,8 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\GlPostingService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SendAction implements PaletteAction
@@ -27,52 +29,65 @@ class SendAction implements PaletteAction
     public function handle(array $params): array
     {
         $company = CompanyContext::requireCompany();
+        $postingService = app(GlPostingService::class);
 
-        $invoice = $this->resolveInvoice($params['id'], $company->id);
+        $invoice = $this->resolveInvoice($params['id'], $company->id)
+            ->load(['customer', 'lineItems']);
 
-        // Validate status
-        if (in_array($invoice->status, ['paid', 'void', 'cancelled'])) {
-            throw new \Exception("Cannot send invoice in status {$invoice->status}");
-        }
-
-        // Update status if draft or sent
-        $now = now();
-        if (in_array($invoice->status, ['draft', 'sent', 'viewed'])) {
-            $invoice->update([
-                'status' => 'sent',
-                'sent_at' => $now,
-            ]);
-            $invoice->refresh();
-        }
-
-        // Send email if requested
-        $emailSent = false;
-        if (($params['email'] ?? false) || !empty($params['to'])) {
-            $recipientEmail = $params['to'] ?? $invoice->customer->email;
-
-            if (!$recipientEmail) {
-                throw new \Exception("No email address. Specify with --to=email@example.com");
+        return DB::transaction(function () use ($invoice, $params, $postingService, $company) {
+            // Validate status
+            if (in_array($invoice->status, ['paid', 'void', 'cancelled'])) {
+                throw new \Exception("Cannot send invoice in status {$invoice->status}");
             }
 
-            // TODO: Dispatch email job when email service is implemented
-            // dispatch(new SendInvoiceEmail($invoice, $recipientEmail));
-            $emailSent = true;
-        }
+            // Update status if draft or sent
+            $now = now();
+            if (in_array($invoice->status, ['draft', 'sent', 'viewed'])) {
+                $invoice->update([
+                    'status' => 'sent',
+                    'sent_at' => $now,
+                ]);
+                $invoice->refresh();
+            }
 
-        $message = "Invoice {$invoice->invoice_number} marked as sent";
-        if ($emailSent) {
-            $message .= " and emailed to {$recipientEmail}";
-        }
+            // Post to GL if not already posted
+            if (!$invoice->transaction_id) {
+                $transaction = $postingService->postInvoice($invoice);
+                $invoice->transaction_id = $transaction->id;
+                $invoice->save();
+            }
 
-        return [
-            'message' => $message,
-            'data' => [
-                'id' => $invoice->id,
-                'number' => $invoice->invoice_number,
-                'status' => $invoice->status,
-                'emailed' => $emailSent,
-            ],
-        ];
+            // Send email if requested
+            $emailSent = false;
+            if (($params['email'] ?? false) || !empty($params['to'])) {
+                $recipientEmail = $params['to'] ?? $invoice->customer->email;
+
+                if (!$recipientEmail) {
+                    throw new \Exception("No email address. Specify with --to=email@example.com");
+                }
+
+                // TODO: Dispatch email job when email service is implemented
+                // dispatch(new SendInvoiceEmail($invoice, $recipientEmail));
+                $emailSent = true;
+            }
+
+            $message = "Invoice {$invoice->invoice_number} marked as sent";
+            if ($emailSent) {
+                $message .= isset($recipientEmail)
+                    ? " and emailed to {$recipientEmail}"
+                    : ' and emailed';
+            }
+
+            return [
+                'message' => $message,
+                'data' => [
+                    'id' => $invoice->id,
+                    'number' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'emailed' => $emailSent,
+                ],
+            ];
+        });
     }
 
     private function resolveInvoice(string $identifier, string $companyId): Invoice

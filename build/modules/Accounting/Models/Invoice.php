@@ -42,6 +42,7 @@ class Invoice extends Model
         'paid_at',
         'voided_at',
         'recurring_schedule_id',
+        'transaction_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -65,6 +66,7 @@ class Invoice extends Model
         'viewed_at' => 'datetime',
         'paid_at' => 'datetime',
         'voided_at' => 'datetime',
+        'transaction_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -87,22 +89,32 @@ class Invoice extends Model
         return $this->belongsTo(\App\Models\Company::class, 'company_id');
     }
 
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
+    }
+
     /**
      * Generate an invoice number scoped per company (simple incremental suffix).
+     * Uses company's invoice_prefix and invoice_start_number settings.
      */
     public static function generateInvoiceNumber(string $companyId): string
     {
+        // Get company settings
+        $company = \App\Models\Company::find($companyId);
+        $base = $company->invoice_prefix ?? 'INV-';
+        $startNumber = $company->invoice_start_number ?? 1001;
+
         $last = DB::connection('pgsql')->table('acct.invoices')
             ->where('company_id', $companyId)
             ->whereNotNull('invoice_number')
             ->orderByDesc('created_at')
             ->value('invoice_number');
 
-        $base = 'INV-';
-        $next = 1;
+        $next = $startNumber;
 
         if ($last && preg_match('/(\d+)$/' , $last, $m)) {
-            $next = (int) $m[1] + 1;
+            $next = max((int) $m[1] + 1, $startNumber);
         }
 
         return $base . str_pad((string) $next, 5, '0', STR_PAD_LEFT);

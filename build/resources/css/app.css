@@ -2,6 +2,8 @@
 
 @import 'tw-animate-css';
 
+@import 'vue-sonner/style.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
@@ -59,6 +61,40 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Text hierarchy */
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-tertiary: var(--text-tertiary);
+    --color-text-quaternary: var(--text-quaternary);
+
+    /* Accent colors */
+    --color-accent-blue: var(--accent-blue);
+    --color-accent-blue-foreground: var(--accent-blue-foreground);
+    --color-accent-green: var(--accent-green);
+    --color-accent-green-foreground: var(--accent-green-foreground);
+    --color-accent-amber: var(--accent-amber);
+    --color-accent-amber-foreground: var(--accent-amber-foreground);
+    --color-accent-purple: var(--accent-purple);
+    --color-accent-purple-foreground: var(--accent-purple-foreground);
+
+    /* Navigation */
+    --color-nav-section-text: var(--nav-section-text);
+    --color-nav-item-text: var(--nav-item-text);
+    --color-nav-item-text-active: var(--nav-item-text-active);
+    --color-nav-item-text-hover: var(--nav-item-text-hover);
+
+    /* Footer */
+    --color-footer: var(--footer-background);
+    --color-footer-foreground: var(--footer-text);
+    --color-footer-border: var(--footer-border);
+
+    /* Surfaces */
+    --color-surface-1: var(--surface-1);
+    --color-surface-2: var(--surface-2);
+    --color-surface-3: var(--surface-3);
+    --color-shell-hero: var(--shell-hero);
+    --color-shell-hero-ring: var(--shell-hero-ring);
 }
 
 /*
@@ -124,6 +160,40 @@
     --sidebar-border: hsl(0 0% 91%);
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
     --sidebar: hsl(0 0% 98%);
+
+    /* Text hierarchy */
+    --text-primary: hsl(0 0% 9%);
+    --text-secondary: hsl(0 0% 25%);
+    --text-tertiary: hsl(0 0% 45%);
+    --text-quaternary: hsl(0 0% 60%);
+
+    /* Accent colors */
+    --accent-blue: hsl(217 91% 60%);
+    --accent-blue-foreground: hsl(0 0% 100%);
+    --accent-green: hsl(142 76% 36%);
+    --accent-green-foreground: hsl(0 0% 100%);
+    --accent-amber: hsl(38 92% 50%);
+    --accent-amber-foreground: hsl(0 0% 9%);
+    --accent-purple: hsl(262 83% 58%);
+    --accent-purple-foreground: hsl(0 0% 100%);
+
+    /* Navigation */
+    --nav-section-text: hsl(0 0% 45%);
+    --nav-item-text: hsl(0 0% 35%);
+    --nav-item-text-active: hsl(0 0% 9%);
+    --nav-item-text-hover: hsl(0 0% 15%);
+
+    /* Surfaces */
+    --surface-1: hsl(0 0% 100%);
+    --surface-2: hsl(0 0% 98%);
+    --surface-3: hsl(0 0% 96%);
+    --shell-hero: radial-gradient(circle at 20% 20%, hsl(210 100% 97%), transparent 35%), radial-gradient(circle at 80% 0%, hsl(170 80% 95%), transparent 30%), hsl(0 0% 100%);
+    --shell-hero-ring: hsl(200 100% 90% / 0.45);
+
+    /* Footer */
+    --footer-background: hsl(0 0% 98%);
+    --footer-text: hsl(0 0% 45%);
+    --footer-border: hsl(0 0% 92%);
 }
 
 .dark {
@@ -160,6 +230,36 @@
     --sidebar-border: hsl(0 0% 15.9%);
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
     --sidebar: hsl(240 5.9% 10%);
+
+    /* Text hierarchy (dark) */
+    --text-primary: hsl(0 0% 98%);
+    --text-secondary: hsl(0 0% 80%);
+    --text-tertiary: hsl(0 0% 55%);
+    --text-quaternary: hsl(0 0% 40%);
+
+    /* Accent colors (brighter for dark) */
+    --accent-blue: hsl(217 91% 65%);
+    --accent-green: hsl(142 70% 45%);
+    --accent-amber: hsl(38 92% 55%);
+    --accent-purple: hsl(262 83% 68%);
+
+    /* Navigation (dark) */
+    --nav-section-text: hsl(0 0% 55%);
+    --nav-item-text: hsl(0 0% 70%);
+    --nav-item-text-active: hsl(0 0% 98%);
+    --nav-item-text-hover: hsl(0 0% 90%);
+
+    /* Surfaces (dark) */
+    --surface-1: hsl(0 0% 7%);
+    --surface-2: hsl(0 0% 10%);
+    --surface-3: hsl(0 0% 14%);
+    --shell-hero: radial-gradient(circle at 15% 30%, hsl(215 50% 12%), transparent 30%), radial-gradient(circle at 80% 0%, hsl(165 60% 14%), transparent 30%), hsl(0 0% 6%);
+    --shell-hero-ring: hsl(200 70% 60% / 0.35);
+
+    /* Footer (dark) */
+    --footer-background: hsl(0 0% 5%);
+    --footer-text: hsl(0 0% 55%);
+    --footer-border: hsl(0 0% 15%);
 }
 
 @layer base {

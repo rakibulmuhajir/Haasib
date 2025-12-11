@@ -11,7 +11,7 @@ class TaxGroupComponent extends Model
     use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
-    protected $table = 'tax.tax_group_components';
+    protected $table = 'acct.tax_group_components';
     protected $keyType = 'string';
     public $incrementing = false;
     public $timestamps = false;

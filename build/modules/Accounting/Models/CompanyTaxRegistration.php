@@ -12,7 +12,7 @@ class CompanyTaxRegistration extends Model
     use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
-    protected $table = 'tax.company_tax_registrations';
+    protected $table = 'acct.company_tax_registrations';
     protected $keyType = 'string';
     public $incrementing = false;
 

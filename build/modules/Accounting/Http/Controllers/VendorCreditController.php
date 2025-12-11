@@ -51,6 +51,16 @@ class VendorCreditController extends Controller
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
             ->get(['id', 'name', 'base_currency']);
+        $expenseAccounts = \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+            ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+        $apAccounts = \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
 
         return Inertia::render('accounting/vendor-credits/Create', [
             'company' => [
@@ -60,6 +70,8 @@ class VendorCreditController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendors' => $vendors,
+            'expenseAccounts' => $expenseAccounts,
+            'apAccounts' => $apAccounts,
         ]);
     }
 
@@ -74,12 +86,16 @@ class VendorCreditController extends Controller
         return back()->with('success', 'Vendor credit created');
     }
 
-    public function show(string $vendorCredit): Response
+    public function show(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
+
+        // Get the vendor credit ID from route parameters explicitly
+        $vendorCreditId = $request->route('vendorCredit');
+
         $record = \App\Modules\Accounting\Models\VendorCredit::with(['vendor', 'applications.bill'])
             ->where('company_id', $company->id)
-            ->findOrFail($vendorCredit);
+            ->findOrFail($vendorCreditId);
 
         return Inertia::render('accounting/vendor-credits/Show', [
             'company' => [
@@ -92,10 +108,51 @@ class VendorCreditController extends Controller
         ]);
     }
 
-    public function apply(string $vendorCredit): Response
+    public function edit(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\VendorCredit::where('company_id', $company->id)->findOrFail($vendorCredit);
+
+        // Get the vendor credit ID from route parameters explicitly
+        $vendorCreditId = $request->route('vendorCredit');
+
+        $record = \App\Modules\Accounting\Models\VendorCredit::where('company_id', $company->id)->findOrFail($vendorCreditId);
+
+        $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $expenseAccounts = \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+            ->whereIn('type', ['expense', 'cogs', 'asset'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+        $apAccounts = \App\Modules\Accounting\Models\Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        return Inertia::render('accounting/vendor-credits/Edit', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+            ],
+            'credit' => $record,
+            'vendors' => $vendors,
+            'expenseAccounts' => $expenseAccounts,
+            'apAccounts' => $apAccounts,
+        ]);
+    }
+
+    public function apply(Request $request): Response
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+
+        // Get the vendor credit ID from route parameters explicitly
+        $vendorCreditId = $request->route('vendorCredit');
+
+        $record = \App\Modules\Accounting\Models\VendorCredit::where('company_id', $company->id)->findOrFail($vendorCreditId);
         $unpaidBills = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
             ->where('vendor_id', $record->vendor_id)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
@@ -113,11 +170,15 @@ class VendorCreditController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, string $vendorCredit): RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
+
+        // Get the vendor credit ID from route parameters explicitly
+        $vendorCreditId = $request->route('vendorCredit');
+
         app(CommandBus::class)->dispatch('vendor_credit.void', [
-            'id' => $vendorCredit,
+            'id' => $vendorCreditId,
             'company_id' => $company->id,
             'cancellation_reason' => 'voided via controller',
         ], $request->user());

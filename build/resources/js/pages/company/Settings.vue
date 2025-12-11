@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3'
+import { Head, Link, usePage, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import PageShell from '@/components/PageShell.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import {
   Settings,
   Users,
@@ -14,6 +17,8 @@ import {
   CreditCard,
   FileText,
   ChevronRight,
+  Calendar,
+  TrendingUp,
 } from 'lucide-vue-next'
 
 interface Company {
@@ -28,12 +33,54 @@ interface Company {
   current_user_role: string
   can_manage_company: boolean
   can_manage_users: boolean
+  settings?: {
+    fiscal_year_start_month?: number
+    auto_create_fiscal_year?: boolean
+    default_period_type?: string
+  }
 }
 
 const page = usePage()
 const props = page.props as any
 
 const company = ref<Company>(props.company)
+
+// Fiscal year form
+const fiscalYearForm = useForm({
+  fiscal_year_start_month: company.value.settings?.fiscal_year_start_month ?? 1,
+  auto_create_fiscal_year: company.value.settings?.auto_create_fiscal_year ?? true,
+  default_period_type: company.value.settings?.default_period_type ?? 'monthly',
+})
+
+const months = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  {value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+]
+
+const periodTypes = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'yearly', label: 'Yearly' },
+]
+
+const saveFiscalYearSettings = () => {
+  fiscalYearForm.patch(`/${company.value.slug}/settings`, {
+    onSuccess: () => {
+      // Update local company data with response
+      company.value = { ...company.value, settings: fiscalYearForm.data() }
+    }
+  })
+}
 
 const settingsSections = [
   {
@@ -66,9 +113,9 @@ const settingsSections = [
     title: 'Accounting',
     description: 'Chart of accounts, fiscal years, and accounting periods',
     icon: CreditCard,
-    href: '#', // Will be implemented when GL core is ready
+    href: '#fiscal-year-settings', // Scroll to fiscal year settings
     color: 'text-orange-600',
-    disabled: true, // Not implemented yet
+    disabled: false,
   },
   {
     title: 'Security',
@@ -298,6 +345,128 @@ const getRoleBadgeVariant = (role: string) => {
                 Configure Tax Settings
               </Button>
             </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Fiscal Year Settings -->
+      <Card id="fiscal-year-settings" class="bg-orange-50 border-orange-200">
+        <CardHeader>
+          <CardTitle class="text-orange-900">
+            <Calendar class="w-5 h-5 inline mr-2" />
+            Fiscal Year & Accounting Periods
+          </CardTitle>
+          <CardDescription class="text-orange-700">
+            Configure your company's fiscal year and automatic accounting period creation
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <form @submit.prevent="saveFiscalYearSettings" class="space-y-4">
+            <!-- Fiscal Year Start Month -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label for="fiscal_year_start_month">Fiscal Year Start Month</Label>
+                <Select v-model="fiscalYearForm.fiscal_year_start_month">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="month in months"
+                      :key="month.value"
+                      :value="month.value"
+                    >
+                      {{ month.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-sm text-orange-700 mt-1">
+                  Month when your fiscal year begins (most companies use January)
+                </p>
+              </div>
+
+              <!-- Period Type -->
+              <div>
+                <Label for="default_period_type">Default Accounting Period Type</Label>
+                <Select v-model="fiscalYearForm.default_period_type">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select period type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="period in periodTypes"
+                      :key="period.value"
+                      :value="period.value"
+                    >
+                      {{ period.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-sm text-orange-700 mt-1">
+                  How accounting periods are automatically created
+                </p>
+              </div>
+            </div>
+
+            <!-- Auto Create Fiscal Year -->
+            <div class="flex items-center justify-between">
+              <div class="space-y-1">
+                <Label for="auto_create_fiscal_year">Auto-Create Fiscal Years</Label>
+                <p class="text-sm text-orange-700">
+                  Automatically create fiscal years when transactions are posted
+                </p>
+              </div>
+              <Switch
+                id="auto_create_fiscal_year"
+                v-model="fiscalYearForm.auto_create_fiscal_year"
+              />
+            </div>
+
+            <!-- Save Button -->
+            <div class="pt-4">
+              <Button
+                type="submit"
+                variant="default"
+                class="bg-orange-600 hover:bg-orange-700"
+                :disabled="fiscalYearForm.processing"
+              >
+                <TrendingUp class="w-4 h-4 mr-2" />
+                {{ fiscalYearForm.processing ? 'Saving...' : 'Save Fiscal Year Settings' }}
+              </Button>
+            </div>
+          </form>
+
+          <!-- Info Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <div class="bg-white rounded-lg p-4 border border-orange-200">
+              <h4 class="font-medium text-orange-900 mb-2">
+                <Calendar class="w-4 h-4 inline mr-1" />
+                Current Settings
+              </h4>
+              <div class="space-y-2 text-sm">
+                <div><strong>Start:</strong> {{ months.find(m => m.value === (company.settings?.fiscal_year_start_month ?? 1))?.label }}</div>
+                <div><strong>Periods:</strong> {{ company.settings?.default_period_type || 'monthly' }}</div>
+                <div><strong>Auto-create:</strong> {{ company.settings?.auto_create_fiscal_year ? 'Yes' : 'No' }}</div>
+              </div>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-orange-200">
+              <h4 class="font-medium text-orange-900 mb-2">
+                <TrendingUp class="w-4 h-4 inline mr-1" />
+                Impact
+              </h4>
+              <p class="text-sm text-orange-700 mt-1">
+                These settings determine how transactions are organized and reported in your financial statements.
+              </p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-orange-200">
+              <h4 class="font-medium text-orange-900 mb-2">
+                <CreditCard class="w-4 h-4 inline mr-1" />
+                Fiscal Years
+              </h4>
+              <p class="text-sm text-orange-700 mt-1">
+                When enabled, the system will automatically create fiscal years as needed for posting transactions.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

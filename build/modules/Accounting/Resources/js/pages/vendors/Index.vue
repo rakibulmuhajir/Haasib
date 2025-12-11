@@ -4,12 +4,11 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
-import { Building2, Plus, Search } from 'lucide-vue-next'
+import { Building2, Plus, Search, Eye, Pencil, Trash2 } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -56,23 +55,38 @@ const breadcrumbs: BreadcrumbItem[] = [
 const columns = [
   { key: 'vendor_number', label: 'Vendor #' },
   { key: 'name', label: 'Name' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
   { key: 'currency', label: 'Currency' },
-  { key: 'status', label: 'Status' },
+  { key: 'actions', label: 'Actions' },
 ]
 
 const tableData = computed(() =>
   props.vendors.data.map((v) => ({
+    ...v, // Keep original data for actions
     id: v.id,
     vendor_number: v.vendor_number,
     name: v.name,
-    email: v.email ?? '—',
-    phone: v.phone ?? '—',
     currency: v.base_currency,
-    status: v.is_active ? 'Active' : 'Inactive',
+    _original: v, // Store original data reference
   }))
 )
+
+const viewVendor = (id: string) => {
+  router.get(`/${props.company.slug}/vendors/${id}`)
+}
+
+const editVendor = (id: string) => {
+  router.get(`/${props.company.slug}/vendors/${id}/edit`)
+}
+
+const deleteVendor = (id: string) => {
+  if (confirm('Are you sure you want to delete this vendor?')) {
+    router.delete(`/${props.company.slug}/vendors/${id}`)
+  }
+}
+
+const handleRowClick = (row: any) => {
+  viewVendor(row.id)
+}
 
 const handleSearch = () => {
   router.get(
@@ -135,9 +149,93 @@ const handleSearch = () => {
         :columns="columns"
         :data="tableData"
         :pagination="vendors"
+        clickable
+        hoverable
+        @row-click="handleRowClick"
       >
-        <template #status="{ value }">
-          <Badge :variant="value === 'Active' ? 'success' : 'secondary'">{{ value }}</Badge>
+        <template #vendor_number="{ row }">
+          <button
+            class="font-medium text-primary hover:text-primary/80 transition-colors"
+            @click.stop="viewVendor(row.id)"
+          >
+            {{ row.vendor_number }}
+          </button>
+        </template>
+
+        <template #name="{ row }">
+          <button
+            class="font-medium text-primary hover:text-primary/80 transition-colors"
+            @click.stop="viewVendor(row.id)"
+          >
+            {{ row.name }}
+          </button>
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              @click.stop="viewVendor(row.id)"
+              title="View"
+            >
+              <Eye class="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              @click.stop="editVendor(row.id)"
+              title="Edit"
+            >
+              <Pencil class="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8 text-destructive hover:text-destructive"
+              @click.stop="deleteVendor(row.id)"
+              title="Delete"
+            >
+              <Trash2 class="h-4 w-4" />
+            </Button>
+          </div>
+        </template>
+
+        <!-- Mobile Card Template -->
+        <template #mobile-card="{ row }">
+          <div class="p-4 space-y-3 border-b">
+            <div class="flex justify-between items-start">
+              <div>
+                <button
+                  class="font-semibold text-primary hover:text-primary/80 transition-colors"
+                  @click.stop="viewVendor(row.id)"
+                >
+                  {{ row.vendor_number }}
+                </button>
+                <div class="text-sm text-muted-foreground mt-1">
+                  <button
+                    class="font-medium text-primary hover:text-primary/80 transition-colors"
+                    @click.stop="viewVendor(row.id)"
+                  >
+                    {{ row.name }}
+                  </button>
+                </div>
+                <div v-if="row.email" class="text-sm text-muted-foreground">{{ row.email }}</div>
+                <div v-if="row.phone" class="text-sm text-muted-foreground">{{ row.phone }}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm font-medium">{{ row.currency }}</div>
+                <div v-if="!row.is_active" class="text-xs text-red-500">Inactive</div>
+              </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <Button size="sm" @click.stop="viewVendor(row.id)">View</Button>
+              <Button size="sm" variant="outline" @click.stop="editVendor(row.id)">Edit</Button>
+              <Button size="sm" variant="destructive" @click.stop="deleteVendor(row.id)">Delete</Button>
+            </div>
+          </div>
         </template>
       </DataTable>
     </div>

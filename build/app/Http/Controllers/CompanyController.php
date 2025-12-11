@@ -7,6 +7,8 @@ use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
+use App\Services\CompanyContextService;
+use App\Services\RolePermissionSynchronizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,13 +20,32 @@ use Inertia\Response;
 
 class CompanyController extends Controller
 {
-    public function store(CompanyStoreRequest $request): RedirectResponse
+    /**
+     * Show the company creation form.
+     */
+    public function create(Request $request): Response
+    {
+        $guided = $request->query('guided', false);
+
+        // Get available currencies
+        $currencies = DB::table('public.currencies')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['code', 'name', 'symbol']);
+
+        return Inertia::render('companies/Create', [
+            'currencies' => $currencies,
+            'guided' => $guided,
+        ]);
+    }
+
+    public function store(CompanyStoreRequest $request, CompanyContextService $companyContext): RedirectResponse
     {
         $data = $request->validated();
         $data['base_currency'] = strtoupper($data['base_currency']);
         $data['slug'] = $data['slug'] ?? Str::slug($data['name']);
 
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $companyContext) {
             $company = Company::create([
                 'name' => $data['name'],
                 'industry' => $data['industry'] ?? null,
@@ -44,6 +65,13 @@ class CompanyController extends Controller
                 ['is_base' => true, 'enabled_at' => now()]
             );
 
+            // Create roles for the new company BEFORE assigning owner role
+            $roleMatrix = config('role-permissions', []);
+            if (!empty($roleMatrix)) {
+                $syncer = app(RolePermissionSynchronizer::class);
+                $syncer->syncForCompany($company, $roleMatrix);
+            }
+
             if (Auth::check()) {
                 DB::table('auth.company_user')->updateOrInsert(
                     [
@@ -59,10 +87,17 @@ class CompanyController extends Controller
                         'updated_at' => now(),
                     ]
                 );
+
+                // Assign the spatie role so permission checks succeed
+                $companyContext->withContext($company, function () use ($companyContext) {
+                    $user = Auth::user();
+                    if ($user) {
+                        $companyContext->assignRole($user, 'owner');
+                    }
+                });
             }
 
-            return redirect()->route('companies.index')
-                ->with('success', 'Company created successfully.');
+            return redirect("/{$company->slug}/onboarding")->with('success', 'Company created! Let\'s set it up.');
         });
     }
 
@@ -79,6 +114,8 @@ class CompanyController extends Controller
             ->where('user_id', Auth::id())
             ->value('role');
 
+        $settings = $company->settings ?? [];
+
         return Inertia::render('company/Settings', [
             'company' => [
                 'id' => $company->id,
@@ -88,6 +125,7 @@ class CompanyController extends Controller
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
                 'is_active' => $company->is_active,
+                'settings' => $settings,
             ],
             'currentUserRole' => $currentUserRole,
         ]);
@@ -271,6 +309,8 @@ class CompanyController extends Controller
             ->take(7)
             ->values();
 
+        $settings = $company->settings ?? [];
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -281,6 +321,9 @@ class CompanyController extends Controller
                 'created_at' => $company->created_at,
                 'industry' => $company->industry,
                 'country' => $company->country,
+                'language' => $company->language ?? 'en',
+                'locale' => $company->locale ?? 'en_US',
+                'fiscal_year_start_month' => $company->fiscal_year_start_month ?? 1,
             ],
             'stats' => [
                 'total_users' => $userStats->total_users ?? 0,
@@ -314,6 +357,75 @@ class CompanyController extends Controller
     {
         // Company metadata (name/industry/base currency) is immutable after creation
         abort(403, 'Company details cannot be edited after creation.');
+    }
+
+    /**
+     * Update company settings (partial update for editable fields).
+     */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+
+        // Check if user is owner or admin
+        $currentUserRole = DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', Auth::id())
+            ->value('role');
+
+        if (! in_array($currentUserRole, ['owner', 'admin'])) {
+            abort(403, 'Only company owners and admins can update settings.');
+        }
+
+        // Validate the request - only allow specific fields to be updated
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'language' => 'sometimes|string|max:10',
+            'locale' => 'sometimes|string|max:10',
+            'fiscal_year_start_month' => 'sometimes|integer|min:1|max:12',
+            'auto_create_fiscal_year' => 'sometimes|boolean',
+            'default_period_type' => 'sometimes|string|in:monthly,quarterly,yearly',
+        ]);
+
+        // Update allowed direct fields
+        $directUpdates = [];
+        if (isset($validated['name'])) {
+            $directUpdates['name'] = $validated['name'];
+        }
+        if (isset($validated['language'])) {
+            $directUpdates['language'] = $validated['language'];
+        }
+        if (isset($validated['locale'])) {
+            $directUpdates['locale'] = $validated['locale'];
+        }
+
+        // Handle fiscal year start month as direct column
+        if (isset($validated['fiscal_year_start_month'])) {
+            $directUpdates['fiscal_year_start_month'] = $validated['fiscal_year_start_month'];
+        }
+
+        // Handle other fiscal year settings in settings JSON
+        $settings = $company->settings ?? [];
+        $settingsUpdated = false;
+
+        if (isset($validated['auto_create_fiscal_year'])) {
+            $settings['auto_create_fiscal_year'] = $validated['auto_create_fiscal_year'];
+            $settingsUpdated = true;
+        }
+
+        if (isset($validated['default_period_type'])) {
+            $settings['default_period_type'] = $validated['default_period_type'];
+            $settingsUpdated = true;
+        }
+
+        if ($settingsUpdated) {
+            $directUpdates['settings'] = $settings;
+        }
+
+        if (! empty($directUpdates)) {
+            $company->update($directUpdates);
+        }
+
+        return back()->with('success', 'Settings updated successfully.');
     }
 
     public function destroy(string $companyId): JsonResponse

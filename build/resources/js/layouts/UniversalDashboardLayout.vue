@@ -42,26 +42,41 @@ const isOpen = computed(() => page.props.sidebarOpen)
     }"
   >
     <AppSidebar variant="inset" />
-    <SidebarInset>
+    <SidebarInset class="relative flex min-h-screen flex-col bg-surface-2">
+      <div
+        class="pointer-events-none absolute inset-x-0 top-0 h-56 opacity-80"
+        :style="{ background: 'var(--shell-hero)' }"
+      />
+
       <DashboardHeader
         :title="title"
         :breadcrumbs="breadcrumbs"
         :actions="actions"
+        class="relative z-10"
       >
         <template v-if="$slots.actions" #actions>
           <slot name="actions" />
         </template>
       </DashboardHeader>
-      <div class="flex flex-1 flex-col">
-        <div class="@container/main flex flex-1 flex-col gap-2">
-          <div
-            :class="[
-              'flex flex-col gap-4 py-4 md:gap-6 md:py-6',
-              fullWidth ? '' : 'px-4 lg:px-6',
-            ]"
+
+      <div class="relative z-10 flex flex-1 flex-col px-4 pb-8 pt-2 lg:px-8">
+        <div
+          :class="[
+            'flex w-full flex-1 flex-col gap-4',
+            fullWidth ? 'max-w-none' : 'max-w-7xl',
+          ]"
+          class="mx-auto"
+        >
+          <section
+            v-if="$slots.hero"
+            class="rounded-2xl border border-border/80 bg-surface-1/90 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-1/70"
           >
+            <slot name="hero" />
+          </section>
+
+          <section class="flex flex-1 flex-col rounded-2xl border border-border/80 bg-surface-1 p-4 shadow-sm">
             <slot />
-          </div>
+          </section>
         </div>
       </div>
     </SidebarInset>

@@ -45,6 +45,7 @@ class StoreAccountRequest extends BaseFormRequest
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
 
         return [
+            'template_id' => ['nullable', 'uuid', Rule::exists('acct.account_templates', 'id')->where('is_active', true)],
             'parent_id' => ['nullable', 'uuid', Rule::exists('acct.accounts', 'id')->where('company_id', $companyId)],
             'code' => ['required', 'string', 'max:50', $codeRule],
             'name' => ['required', 'string', 'max:255'],
@@ -57,11 +58,11 @@ class StoreAccountRequest extends BaseFormRequest
             }],
             'normal_balance' => ['required', Rule::in(['debit', 'credit']), function ($attr, $value, $fail) {
                 $type = $this->input('type');
-                if ($type && in_array($type, ['asset', 'expense', 'cogs'], true) && $value !== 'debit') {
-                    $fail('normal_balance must be debit for asset/expense/cogs');
+                if ($type && in_array($type, ['asset', 'expense', 'cogs', 'other_expense'], true) && $value !== 'debit') {
+                    $fail('normal_balance must be debit for asset/expense/cogs/other_expense');
                 }
-                if ($type && in_array($type, ['liability', 'equity', 'revenue', 'other_income', 'other_expense'], true) && $value !== 'credit') {
-                    $fail('normal_balance must be credit for liability/equity/revenue/other_income/other_expense');
+                if ($type && in_array($type, ['liability', 'equity', 'revenue', 'other_income'], true) && $value !== 'credit') {
+                    $fail('normal_balance must be credit for liability/equity/revenue/other_income');
                 }
             }],
             'currency' => [

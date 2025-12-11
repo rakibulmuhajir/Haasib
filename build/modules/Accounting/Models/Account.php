@@ -26,6 +26,7 @@ class Account extends Model
         'subtype',
         'normal_balance',
         'currency',
+        'is_contra',
         'is_active',
         'is_system',
         'description',
@@ -36,6 +37,7 @@ class Account extends Model
     protected $casts = [
         'company_id' => 'string',
         'parent_id' => 'string',
+        'is_contra' => 'boolean',
         'is_active' => 'boolean',
         'is_system' => 'boolean',
         'created_by_user_id' => 'string',

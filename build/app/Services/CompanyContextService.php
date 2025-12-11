@@ -28,6 +28,9 @@ class CompanyContextService
         $this->company = $company;
         $this->updateSystemContext($company->id, $company->base_currency);
 
+        // Set Spatie team ID for permission checks
+        $this->permissionRegistrar->setPermissionsTeamId($company->id);
+
         Log::debug('Company context set', [
             'company_id' => $company->id,
             'company_name' => $company->name,
@@ -49,6 +52,9 @@ class CompanyContextService
     public function clearContext(): void
     {
         $this->company = null;
+
+        // Reset Spatie team ID
+        $this->permissionRegistrar->setPermissionsTeamId(null);
 
         $conn = DB::connection();
         if ($conn->transactionLevel() > 0) {

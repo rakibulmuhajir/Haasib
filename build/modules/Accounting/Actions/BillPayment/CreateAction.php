@@ -8,6 +8,8 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\BillPaymentAllocation;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -19,16 +21,18 @@ class CreateAction implements PaletteAction
             'vendor_id' => 'required|uuid',
             'payment_number' => 'nullable|string|max:50',
             'payment_date' => 'required|date',
-            'amount' => 'required|numeric|min:0.01|decimal:6',
+            'amount' => 'required|numeric|min:0.01',
             'currency' => 'required|string|size:3|uppercase',
             'base_currency' => 'required|string|size:3|uppercase',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|decimal:8',
             'payment_method' => 'required|string|max:50',
             'reference_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
+            'payment_account_id' => 'required|uuid',
+            'ap_account_id' => 'nullable|uuid',
             'allocations' => 'nullable|array',
             'allocations.*.bill_id' => 'required_with:allocations|uuid',
-            'allocations.*.amount_allocated' => 'required_with:allocations|numeric|min:0.01|decimal:6',
+            'allocations.*.amount_allocated' => 'required_with:allocations|numeric|min:0',
         ];
     }
 
@@ -65,6 +69,7 @@ class CreateAction implements PaletteAction
                 'base_currency' => $params['base_currency'],
                 'base_amount' => $baseAmount,
                 'payment_method' => $params['payment_method'],
+                'payment_account_id' => $params['payment_account_id'] ?? null,
                 'reference_number' => $params['reference_number'] ?? null,
                 'notes' => $params['notes'] ?? null,
                 'created_by_user_id' => Auth::id(),
@@ -101,6 +106,17 @@ class CreateAction implements PaletteAction
                     }
                     $bill->save();
                 }
+            }
+
+            if (!empty($params['payment_account_id'])) {
+                $vendor = Vendor::where('company_id', $company->id)->find($params['vendor_id']);
+                $apAccountId = $params['ap_account_id'] ?? $vendor?->ap_account_id ?? null;
+                if (!$apAccountId) {
+                    throw new \RuntimeException('AP account is required to post bill payment.');
+                }
+                $transaction = app(GlPostingService::class)->postBillPayment($payment, $params['payment_account_id'], $apAccountId);
+                $payment->transaction_id = $transaction->id;
+                $payment->save();
             }
 
             return [

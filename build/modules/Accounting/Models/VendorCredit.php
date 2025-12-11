@@ -35,6 +35,8 @@ class VendorCredit extends Model
         'received_at',
         'voided_at',
         'cancellation_reason',
+        'ap_account_id',
+        'transaction_id',
         'journal_entry_id',
         'created_by_user_id',
         'updated_by_user_id',
@@ -50,6 +52,8 @@ class VendorCredit extends Model
         'base_amount' => 'decimal:2',
         'received_at' => 'datetime',
         'voided_at' => 'datetime',
+        'ap_account_id' => 'string',
+        'transaction_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -80,5 +84,10 @@ class VendorCredit extends Model
     public function applications()
     {
         return $this->hasMany(VendorCreditApplication::class, 'vendor_credit_id');
+    }
+
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 }

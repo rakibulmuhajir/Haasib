@@ -10,7 +10,7 @@ class Jurisdiction extends Model
     use HasFactory;
 
     protected $connection = 'pgsql';
-    protected $table = 'tax.jurisdictions';
+    protected $table = 'acct.jurisdictions';
     protected $keyType = 'string';
     public $incrementing = false;
 

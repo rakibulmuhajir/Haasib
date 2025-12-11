@@ -18,6 +18,7 @@ class Permissions
 
     public const CREDIT_NOTE_CREATE = 'credit_note.create';
     public const CREDIT_NOTE_VIEW = 'credit_note.view';
+    public const CREDIT_NOTE_UPDATE = 'credit_note.update';
     public const CREDIT_NOTE_APPLY = 'credit_note.apply';
     public const CREDIT_NOTE_VOID = 'credit_note.void';
 

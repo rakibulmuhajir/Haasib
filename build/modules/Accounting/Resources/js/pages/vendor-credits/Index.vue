@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
-import { ReceiptText, Plus } from 'lucide-vue-next'
+import { ReceiptText, Plus, Eye, Pencil, Trash2 } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -68,6 +68,7 @@ const columns = [
   { key: 'amount', label: 'Amount' },
   { key: 'reason', label: 'Reason' },
   { key: 'status', label: 'Status' },
+  { key: 'actions', label: 'Actions' },
 ]
 
 const formatMoney = (val: number, currency: string) =>
@@ -75,6 +76,7 @@ const formatMoney = (val: number, currency: string) =>
 
 const tableData = computed(() =>
   props.credits.data.map((c) => ({
+    ...c, // Keep original data for actions
     id: c.id,
     credit_number: c.credit_number,
     vendor: c.vendor?.name ?? '—',
@@ -82,6 +84,7 @@ const tableData = computed(() =>
     amount: formatMoney(c.amount, c.currency),
     reason: c.reason,
     status: c.status,
+    _original: c, // Store original data reference
   }))
 )
 
@@ -102,6 +105,25 @@ const handleSearch = () => {
     },
     { preserveState: true }
   )
+}
+
+// Action methods
+const viewCredit = (id: string) => {
+  router.get(`/${props.company.slug}/vendor-credits/${id}`)
+}
+
+const editCredit = (id: string) => {
+  router.get(`/${props.company.slug}/vendor-credits/${id}/edit`)
+}
+
+const deleteCredit = (id: string) => {
+  if (confirm('Are you sure you want to delete this vendor credit?')) {
+    router.delete(`/${props.company.slug}/vendor-credits/${id}`)
+  }
+}
+
+const handleRowClick = (row: any) => {
+  viewCredit(row.id)
 }
 </script>
 
@@ -157,9 +179,106 @@ const handleSearch = () => {
         :columns="columns"
         :data="tableData"
         :pagination="credits"
+        clickable
+        hoverable
+        @row-click="handleRowClick"
       >
+        <template #credit_number="{ row }">
+          <button
+            class="font-medium text-primary hover:text-primary/80 transition-colors"
+            @click.stop="viewCredit(row.id)"
+          >
+            {{ row.credit_number }}
+          </button>
+        </template>
+
+        <template #vendor="{ row }">
+          <button
+            v-if="row._original.vendor"
+            class="text-blue-600 hover:text-blue-800 transition-colors"
+            @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
+          >
+            {{ row.vendor }}
+          </button>
+          <span v-else>{{ row.vendor }}</span>
+        </template>
+
         <template #status="{ value }">
           <Badge :variant="statusVariant(value)">{{ value }}</Badge>
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              @click.stop="viewCredit(row.id)"
+              title="View"
+            >
+              <Eye class="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              @click.stop="editCredit(row.id)"
+              title="Edit"
+            >
+              <Pencil class="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8 text-destructive hover:text-destructive"
+              @click.stop="deleteCredit(row.id)"
+              title="Delete"
+            >
+              <Trash2 class="h-4 w-4" />
+            </Button>
+          </div>
+        </template>
+
+        <!-- Mobile Card Template -->
+        <template #mobile-card="{ row }">
+          <div class="p-4 space-y-3 border-b">
+            <div class="flex justify-between items-start">
+              <div>
+                <button
+                  class="font-semibold text-primary hover:text-primary/80 transition-colors"
+                  @click.stop="viewCredit(row.id)"
+                >
+                  {{ row.credit_number }}
+                </button>
+                <div class="text-sm text-muted-foreground mt-1">
+                  <span v-if="row._original.vendor">
+                    <button
+                      class="text-blue-600 hover:text-blue-800 transition-colors"
+                      @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
+                    >
+                      {{ row.vendor }}
+                    </button>
+                  </span>
+                  <span v-else>{{ row.vendor }}</span>
+                </div>
+              </div>
+              <Badge :variant="statusVariant(row.status)">
+                {{ row.status }}
+              </Badge>
+            </div>
+            <div class="flex justify-between items-center">
+              <div>
+                <div class="text-sm text-muted-foreground">{{ row.credit_date }}</div>
+                <div class="font-medium">{{ row.reason }}</div>
+              </div>
+              <div class="text-lg font-bold">{{ row.amount }}</div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <Button size="sm" @click.stop="viewCredit(row.id)">View</Button>
+              <Button size="sm" variant="outline" @click.stop="editCredit(row.id)">Edit</Button>
+              <Button size="sm" variant="destructive" @click.stop="deleteCredit(row.id)">Delete</Button>
+            </div>
+          </div>
         </template>
       </DataTable>
     </div>

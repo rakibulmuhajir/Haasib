@@ -19,12 +19,12 @@ class UpdateAction implements PaletteAction
             'vendor_invoice_number' => 'nullable|string|max:100',
             'due_date' => 'nullable|date',
             'line_items' => 'nullable|array|min:1',
-            'line_items.*.description' => 'required_with:line_items|string|max:500',
-            'line_items.*.quantity' => 'required_with:line_items|numeric|min:0.01',
-            'line_items.*.unit_price' => 'required_with:line_items|numeric|min:0',
+            'line_items.*.description' => 'required|string|max:500',
+            'line_items.*.quantity' => 'required|numeric|min:0.01',
+            'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.account_id' => 'nullable|uuid',
+            'line_items.*.expense_account_id' => 'nullable|uuid',
             'notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
         ];
@@ -77,7 +77,7 @@ class UpdateAction implements PaletteAction
                         'line_total' => $line['line_total'],
                         'tax_amount' => $line['tax_amount'],
                         'total' => $line['total'],
-                        'account_id' => $src['account_id'] ?? null,
+                        'expense_account_id' => $src['expense_account_id'] ?? null,
                         'created_by_user_id' => Auth::id(),
                     ]);
                 }

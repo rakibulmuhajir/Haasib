@@ -14,7 +14,7 @@ class TaxGroup extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
-    protected $table = 'tax.tax_groups';
+    protected $table = 'acct.tax_groups';
     protected $keyType = 'string';
     public $incrementing = false;
 
@@ -62,7 +62,7 @@ class TaxGroup extends Model
 
     public function taxRates()
     {
-        return $this->belongsToMany(TaxRate::class, 'tax.tax_group_components')
+        return $this->belongsToMany(TaxRate::class, 'acct.tax_group_components')
             ->withPivot('priority')
             ->orderByPivot('priority');
     }

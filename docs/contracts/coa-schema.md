@@ -24,6 +24,7 @@ Single source of truth for the company chart of accounts used by AP/AR/GL. Updat
   - `subtype` varchar(50) not null. Allowed examples (must map to type): bank, cash, accounts_receivable, accounts_payable, credit_card, other_current_asset, other_asset, inventory, fixed_asset, other_current_liability, other_liability, loan_payable, equity, retained_earnings, revenue, cogs, expense, other_income, other_expense.
   - `normal_balance` varchar(6) not null (debit|credit).
   - `currency` char(3) nullable FK → `public.currencies.code`. Base-only types (revenue, cogs, expense, other_income, other_expense, equity) must be NULL. Foreign currency allowed only for: bank, cash, accounts_receivable, accounts_payable, credit_card, other_current_asset, other_asset, other_current_liability, other_liability.
+  - `is_contra` boolean not null default false. True for contra accounts. Contra accounts have `normal_balance` opposite to their type category (e.g., contra-asset has credit normal_balance). Used for UI/reporting grouping.
   - `is_active` boolean not null default true.
   - `is_system` boolean not null default false (lock from edits/deletion).
   - `description` text nullable.
@@ -48,15 +49,16 @@ Single source of truth for the company chart of accounts used by AP/AR/GL. Updat
   ```
 - Model (canonical):
   - `$connection = 'pgsql'; $table = 'acct.accounts'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','parent_id','code','name','type','subtype','normal_balance','currency','is_active','is_system','description','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','parent_id'=>'string','is_active'=>'boolean','is_system'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','parent_id','code','name','type','subtype','normal_balance','currency','is_contra','is_active','is_system','description','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','parent_id'=>'string','is_contra'=>'boolean','is_active'=>'boolean','is_system'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Validation:
   - `code`: required|string|max:50; unique per company (soft-delete aware).
   - `name`: required|string|max:255.
   - `type`: required|in:asset,liability,equity,revenue,expense,cogs,other_income,other_expense.
   - `subtype`: required|string|max:50; must align with `type` per mapping above.
-  - `normal_balance`: required|in:debit,credit; must align with type (assets/expenses/cogs/other_expense → debit; liabilities/equity/revenue/other_income → credit).
+  - `normal_balance`: required|in:debit,credit. Standard accounts follow type (assets/expenses→debit); contra accounts have opposite.
   - `currency`: nullable|string|size:3|uppercase; must be enabled for company; must be NULL for base-only types; required/allowed only for foreign-capable subtypes.
+  - `is_contra`: boolean (default false).
   - `is_active`: boolean.
   - `is_system`: boolean.
   - `parent_id`: nullable|uuid|exists:acct.accounts,id (same company).
@@ -66,6 +68,44 @@ Single source of truth for the company chart of accounts used by AP/AR/GL. Updat
   - Prevent deleting system accounts or accounts with posted journal lines.
   - Parent must belong to same company.
   - Default `normal_balance`: debit for asset/expense/cogs; credit for liability/equity/revenue/other_income/other_expense.
+
+### acct.account_templates (global catalog)
+- Purpose: global, company-agnostic templates that populate the account creation dropdowns; selected templates are copied into `acct.accounts` for each company.
+- Columns:
+  - `id` uuid PK.
+  - `code` varchar(50) not null; global unique.
+  - `name` varchar(255) not null.
+  - `type` varchar(30) not null (allowed: asset, liability, equity, revenue, expense, cogs, other_income, other_expense).
+  - `subtype` varchar(50) not null (must align with `type` per mapping above).
+  - `normal_balance` varchar(6) not null (debit|credit) derived from type.
+  - `is_contra` boolean not null default false. True for contra accounts. Contra accounts have `normal_balance` opposite to their type category (e.g., contra-asset has credit normal_balance). Used for UI/reporting grouping.
+  - `is_active` boolean not null default true.
+  - `description` text nullable.
+  - `created_at`, `updated_at` timestamps.
+- Indexes/constraints:
+  - PK `id`.
+  - Unique `code`.
+  - Index: (`type`, `subtype`); (`is_active`).
+  - Checks: `type` allowed list; `normal_balance` in (debit, credit).
+  - Note: No type→normal_balance constraint. Contra accounts (`is_contra=true`) have opposite normal_balance to their type category (e.g., contra-asset has credit normal_balance).
+- RLS: not required (global template data, no `company_id`).
+- Model (canonical):
+  - `$connection = 'pgsql'; $table = 'acct.account_templates'; $keyType = 'string'; public $incrementing = false;`
+  - `$fillable = ['code','name','type','subtype','normal_balance','is_contra','is_active','description'];`
+  - `$casts = ['is_contra'=>'boolean','is_active'=>'boolean','created_at'=>'datetime','updated_at'=>'datetime'];`
+- Validation:
+  - `code`: required|string|max:50|unique:acct.account_templates,code.
+  - `name`: required|string|max:255.
+  - `type`: required|in:asset,liability,equity,revenue,expense,cogs,other_income,other_expense.
+  - `subtype`: required|string|max:50; must align with type.
+  - `normal_balance`: required|in:debit,credit. Standard accounts follow type (assets/expenses→debit); contra accounts have opposite.
+  - `is_contra`: boolean (default false).
+  - `is_active`: boolean.
+- Business rules:
+  - Used to seed/selectable options across companies; selections instantiate company accounts with matching code/name/type/subtype/normal_balance/is_contra.
+  - Keep codes non-overlapping and descriptive to avoid collisions when copied into tenant charts.
+  - **normal_balance** = "which side increases this account". Standard accounts follow type (assets/expenses→debit, liabilities/equity/revenue→credit). Contra accounts have the opposite.
+  - **is_contra** = UI/reporting flag indicating the account should be displayed under its type but with opposite sign (e.g., Accumulated Depreciation under Assets but subtracted).
 
 ---
 

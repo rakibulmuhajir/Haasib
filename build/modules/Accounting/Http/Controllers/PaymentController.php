@@ -9,6 +9,7 @@ use App\Modules\Accounting\Http\Requests\UpdatePaymentRequest;
 use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Account;
 use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
 use Illuminate\Http\RedirectResponse;
@@ -84,6 +85,18 @@ class PaymentController extends Controller
             ->orderBy('currency_code')
             ->get(['currency_code', 'is_base']);
 
+        $depositAccounts = Account::where('company_id', $company->id)
+            ->whereIn('subtype', ['bank', 'cash'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'subtype']);
+
+        $arAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_receivable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/payments/Create', [
             'company' => [
                 'id' => $company->id,
@@ -94,6 +107,8 @@ class PaymentController extends Controller
             'customers' => $customers,
             'invoices' => $invoices,
             'currencies' => $currencies,
+            'depositAccounts' => $depositAccounts,
+            'arAccounts' => $arAccounts,
         ]);
     }
 
@@ -125,6 +140,8 @@ class PaymentController extends Controller
             'date' => $validated['payment_date'] ?? null,
             'reference' => $validated['reference_number'] ?? null,
             'notes' => $validated['notes'] ?? null,
+            'deposit_account_id' => $validated['deposit_account_id'],
+            'ar_account_id' => $validated['ar_account_id'] ?? null,
         ];
 
         try {
@@ -152,7 +169,7 @@ class PaymentController extends Controller
 
         $paymentId = $request->route('payment');
         $paymentRecord = Payment::where('company_id', $company->id)
-            ->with(['customer', 'paymentAllocations'])
+            ->with(['customer', 'paymentAllocations.invoice:id,invoice_number'])
             ->findOrFail($paymentId);
 
         return Inertia::render('accounting/payments/Show', [
@@ -160,6 +177,7 @@ class PaymentController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'logo_url' => $company->logo_url,
             ],
             'payment' => $paymentRecord,
         ]);

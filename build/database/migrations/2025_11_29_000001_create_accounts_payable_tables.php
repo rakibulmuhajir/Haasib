@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('account_number', 100)->nullable();
             $table->text('notes')->nullable();
             $table->string('website', 500)->nullable();
+            $table->string('logo_url', 500)->nullable();
             $table->boolean('is_active')->default(true);
             $table->uuid('created_by_user_id')->nullable();
             $table->uuid('updated_by_user_id')->nullable();

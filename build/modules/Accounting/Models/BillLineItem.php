@@ -29,6 +29,7 @@ class BillLineItem extends Model
         'line_total',
         'tax_amount',
         'total',
+        'expense_account_id',
         'account_id',
         'created_by_user_id',
         'updated_by_user_id',
@@ -46,6 +47,7 @@ class BillLineItem extends Model
         'line_total' => 'decimal:6',
         'tax_amount' => 'decimal:6',
         'total' => 'decimal:6',
+        'expense_account_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -61,5 +63,10 @@ class BillLineItem extends Model
     public function company()
     {
         return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    public function expenseAccount()
+    {
+        return $this->belongsTo(Account::class, 'expense_account_id');
     }
 }

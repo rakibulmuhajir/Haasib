@@ -13,7 +13,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(CurrencySeeder::class);
+        $this->call([
+            CurrencySeeder::class,
+            AccountTemplateSeeder::class,
+            IndustryCoaPackSeeder::class,
+        ]);
 
         User::factory()->create([
             'name' => 'Test User',

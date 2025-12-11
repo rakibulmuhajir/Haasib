@@ -4,12 +4,11 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
-import { Users, Search, Plus } from 'lucide-vue-next'
+import { Users, Search, Plus, Eye, Pencil, Trash2 } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -72,15 +71,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 const columns = [
   { key: 'customer_number', label: 'Customer #' },
   { key: 'name', label: 'Name' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
   { key: 'open_balance', label: 'Open Balance' },
   { key: 'overdue_balance', label: 'Overdue' },
   { key: 'invoice_count', label: 'Invoices' },
   { key: 'available_credit', label: 'Credit' },
   { key: 'last_invoice_date', label: 'Last Invoice' },
   { key: 'last_payment_date', label: 'Last Payment' },
-  { key: 'status', label: 'Status' },
+  { key: 'actions', label: 'Actions' },
 ]
 
 const formatMoney = (val: number, currency: string) =>
@@ -91,17 +88,28 @@ const tableData = computed(() =>
     id: c.id,
     customer_number: c.customer_number,
     name: c.name,
-    email: c.email ?? '—',
-    phone: c.phone ?? '—',
     open_balance: formatMoney(c.open_balance ?? 0, c.base_currency || props.company.base_currency),
     overdue_balance: formatMoney(c.overdue_balance ?? 0, c.base_currency || props.company.base_currency),
     invoice_count: c.invoice_count ?? 0,
     available_credit: formatMoney(c.available_credit ?? 0, c.base_currency || props.company.base_currency),
     last_invoice_date: c.last_invoice_date ?? '—',
     last_payment_date: c.last_payment_date ?? '—',
-    status: c.is_active ? 'Active' : 'Inactive',
   }))
 )
+
+const viewCustomer = (id: string) => {
+  router.get(`/${props.company.slug}/customers/${id}`)
+}
+
+const editCustomer = (id: string) => {
+  router.get(`/${props.company.slug}/customers/${id}/edit`)
+}
+
+const deleteCustomer = (id: string) => {
+  if (confirm('Are you sure you want to delete this customer?')) {
+    router.delete(`/${props.company.slug}/customers/${id}`)
+  }
+}
 
 const handleSearch = () => {
   router.get(
@@ -212,8 +220,18 @@ const sortOptions = [
         :data="tableData"
         :pagination="customers"
       >
-        <template #status="{ value }">
-          <Badge :variant="value === 'Active' ? 'success' : 'secondary'">{{ value }}</Badge>
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-1">
+            <Button variant="ghost" size="icon" class="h-8 w-8" @click.stop="viewCustomer(row.id)">
+              <Eye class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-8 w-8" @click.stop="editCustomer(row.id)">
+              <Pencil class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive hover:text-destructive" @click.stop="deleteCustomer(row.id)">
+              <Trash2 class="h-4 w-4" />
+            </Button>
+          </div>
         </template>
       </DataTable>
     </div>

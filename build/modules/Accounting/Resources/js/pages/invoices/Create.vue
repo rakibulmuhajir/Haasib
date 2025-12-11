@@ -25,11 +25,20 @@ interface LineItem {
   unit_price: number
   tax_rate?: number
   discount_amount?: number
+  income_account_id?: string
+}
+
+interface AccountOption {
+  id: string
+  code: string
+  name: string
 }
 
 const props = defineProps<{
   company: CompanyRef
   customers: Array<{ id: string; name: string }>
+  revenueAccounts?: AccountOption[]
+  arAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -46,6 +55,7 @@ const lineItems = ref<LineItem[]>([
 const form = useForm({
   customer_id: '',
   line_items: lineItems.value,
+  ar_account_id: '',
   currency: props.company.base_currency,
   invoice_date: new Date().toISOString().split('T')[0],
   due_date: '',
@@ -151,6 +161,24 @@ const formatCurrency = (amount: number) => {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label for="ar_account_id">AR Account</Label>
+            <Select v-model="form.ar_account_id">
+              <SelectTrigger id="ar_account_id">
+                <SelectValue placeholder="Use company default" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Use company default</SelectItem>
+                <SelectItem
+                  v-for="acct in props.arAccounts || []"
+                  :key="acct.id"
+                  :value="acct.id"
+                >
+                  {{ acct.code }} — {{ acct.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -207,15 +235,15 @@ const formatCurrency = (amount: number) => {
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid grid-cols-12 gap-2 text-sm text-muted-foreground font-medium">
-            <div class="col-span-6">Description</div>
+            <div class="col-span-5">Description</div>
             <div class="col-span-2">Quantity</div>
             <div class="col-span-2">Unit Price</div>
+            <div class="col-span-2">Income Account</div>
             <div class="col-span-1">Total</div>
-            <div class="col-span-1"></div>
           </div>
 
           <div v-for="(item, index) in lineItems" :key="index" class="grid grid-cols-12 gap-2">
-            <div class="col-span-6">
+            <div class="col-span-5">
               <Input
                 v-model="item.description"
                 placeholder="Item description"
@@ -243,19 +271,25 @@ const formatCurrency = (amount: number) => {
                 required
               />
             </div>
-            <div class="col-span-1 flex items-center text-sm">
-              {{ formatCurrency(item.quantity * item.unit_price) }}
+            <div class="col-span-2">
+              <Select v-model="item.income_account_id">
+                <SelectTrigger>
+                  <SelectValue placeholder="Income acct" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Use default</SelectItem>
+                  <SelectItem
+                    v-for="acct in props.revenueAccounts || []"
+                    :key="acct.id"
+                    :value="acct.id"
+                  >
+                    {{ acct.code }} — {{ acct.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div class="col-span-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                @click="removeLineItem(index)"
-                :disabled="lineItems.length === 1"
-              >
-                <Trash2 class="h-4 w-4" />
-              </Button>
+            <div class="col-span-2 flex items-center text-sm">
+              {{ formatCurrency(item.quantity * item.unit_price) }}
             </div>
           </div>
 

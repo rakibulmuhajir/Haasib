@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateCustomerRequest extends BaseFormRequest
 {
@@ -24,6 +25,13 @@ class UpdateCustomerRequest extends BaseFormRequest
             'tax_id' => ['nullable', 'string', 'max:100'],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
+            'ar_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('subtype', 'accounts_receivable')
+                    ->where('is_active', true)),
+            ],
             'billing_address' => ['nullable', 'array'],
             'billing_address.street' => ['nullable', 'string', 'max:255'],
             'billing_address.city' => ['nullable', 'string', 'max:100'],

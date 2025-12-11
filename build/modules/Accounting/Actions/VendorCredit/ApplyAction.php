@@ -19,7 +19,7 @@ class ApplyAction implements PaletteAction
             'id' => 'required|string',
             'applications' => 'required|array|min:1',
             'applications.*.bill_id' => 'required|uuid',
-            'applications.*.amount_applied' => 'required|numeric|min:0.01|decimal:6',
+            'applications.*.amount_applied' => 'required|numeric|min:0.01',
         ];
     }
 

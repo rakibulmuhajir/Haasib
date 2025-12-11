@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillPaymentRequest;
+use App\Modules\Accounting\Models\Account;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -57,10 +58,34 @@ class BillPaymentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $vendorId = $request->string('vendor_id');
-        $selectedVendorId = $vendorId instanceof Stringable && $vendorId->isNotEmpty()
-            ? $vendorId->toString()
-            : null;
+        $bankAccounts = Account::where('company_id', $company->id)
+            ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'subtype']);
+
+        $apAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_payable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        // Check if coming from a specific bill
+        $billId = $request->string('bill_id');
+        $selectedBill = null;
+        $selectedVendorId = null;
+
+        if ($billId instanceof Stringable && $billId->isNotEmpty()) {
+            $selectedBill = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
+                ->with('vendor:id,name')
+                ->findOrFail($billId->toString());
+            $selectedVendorId = $selectedBill->vendor_id;
+        } else {
+            $vendorId = $request->string('vendor_id');
+            $selectedVendorId = $vendorId instanceof Stringable && $vendorId->isNotEmpty()
+                ? $vendorId->toString()
+                : null;
+        }
 
         $unpaidBills = collect();
         if ($selectedVendorId !== null) {
@@ -68,7 +93,7 @@ class BillPaymentController extends Controller
                 ->where('vendor_id', $selectedVendorId)
                 ->whereNotIn('status', ['paid', 'void', 'cancelled'])
                 ->orderByDesc('bill_date')
-                ->get(['id', 'bill_number', 'balance', 'currency']);
+                ->get(['id', 'bill_number', 'balance', 'currency', 'due_date']);
         }
 
         return Inertia::render('accounting/bill-payments/Create', [
@@ -79,22 +104,42 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendors' => $vendors,
+            'bankAccounts' => $bankAccounts,
+            'apAccounts' => $apAccounts,
             'unpaidBills' => $unpaidBills,
+            'selectedBill' => $selectedBill,
             'filters' => [
                 'vendor_id' => $selectedVendorId,
+                'bill_id' => $billId instanceof Stringable && $billId->isNotEmpty() ? $billId->toString() : null,
             ],
         ]);
     }
 
     public function store(StoreBillPaymentRequest $request): RedirectResponse
     {
-        $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill_payment.create', [
-            ...$request->validated(),
-            'company_id' => $company->id,
-        ], $request->user());
+        \Log::info('Bill payment store called', [
+            'request_data' => $request->all(),
+        ]);
 
-        return back()->with('success', 'Bill payment recorded');
+        $company = app(CompanyContextService::class)->requireCompany();
+
+        try {
+            $result = app(CommandBus::class)->dispatch('bill_payment.create', [
+                ...$request->validated(),
+                'company_id' => $company->id,
+            ], $request->user());
+
+            \Log::info('Bill payment created successfully', ['result' => $result]);
+
+            return redirect()->route('bill-payments.index', ['company' => $company->slug])
+                ->with('success', 'Bill payment recorded');
+        } catch (\Exception $e) {
+            \Log::error('Bill payment creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 
     public function show(string $payment): Response

@@ -4,11 +4,14 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import InlineEditable from '@/components/InlineEditable.vue'
+import { useInlineEdit } from '@/composables/useInlineEdit'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -40,7 +43,12 @@ import {
   AlertTriangle,
   Wallet,
   Ban,
+  BarChart3,
+  Settings,
+  Globe,
+  Languages,
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 interface Company {
   id: string
@@ -51,6 +59,9 @@ interface Company {
   created_at: string
   industry?: string
   country?: string
+  language?: string
+  locale?: string
+  fiscal_year_start_month?: number
 }
 
 interface Stats {
@@ -123,6 +134,23 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.company.name },
 ])
 
+// Tab state
+const activeTab = ref('overview')
+
+// Setup inline editing
+const inlineEdit = useInlineEdit({
+  endpoint: `/${props.company.slug}/settings`,
+  successMessage: 'Setting updated successfully',
+  errorMessage: 'Failed to update setting',
+})
+
+// Register editable fields
+const nameField = inlineEdit.registerField('name', props.company.name)
+const languageField = inlineEdit.registerField('language', props.company.language || 'en')
+const localeField = inlineEdit.registerField('locale', props.company.locale || 'en_US')
+const fiscalYearField = inlineEdit.registerField('fiscal_year_start_month', props.company.fiscal_year_start_month || 1)
+
+// Invite dialog
 const inviteDialogOpen = ref(false)
 const roleDialogOpen = ref(false)
 const removeDialogOpen = ref(false)
@@ -144,6 +172,39 @@ const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRo
 
 const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
+const languageOptions = [
+  { value: 'en', label: 'English' },
+  { value: 'ar', label: 'Arabic' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'es', label: 'Spanish' },
+]
+
+const localeOptions = [
+  { value: 'en_US', label: 'English (US)' },
+  { value: 'en_GB', label: 'English (UK)' },
+  { value: 'ar_SA', label: 'Arabic (Saudi Arabia)' },
+  { value: 'ar_AE', label: 'Arabic (UAE)' },
+  { value: 'fr_FR', label: 'French (France)' },
+  { value: 'de_DE', label: 'German (Germany)' },
+  { value: 'es_ES', label: 'Spanish (Spain)' },
+]
+
+const monthOptions = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+]
+
 const getRoleBadgeVariant = (role: string) => {
   const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     owner: 'default',
@@ -160,6 +221,10 @@ const handleInvite = () => {
     onSuccess: () => {
       inviteForm.reset()
       inviteDialogOpen.value = false
+      toast.success('Invitation sent successfully')
+    },
+    onError: () => {
+      toast.error('Failed to send invitation')
     },
   })
 }
@@ -176,6 +241,10 @@ const handleRoleUpdate = () => {
     onSuccess: () => {
       roleDialogOpen.value = false
       selectedUser.value = null
+      toast.success('Role updated successfully')
+    },
+    onError: () => {
+      toast.error('Failed to update role')
     },
   })
 }
@@ -192,6 +261,10 @@ const handleRemoveUser = () => {
     onSuccess: () => {
       removeDialogOpen.value = false
       selectedUser.value = null
+      toast.success('User removed successfully')
+    },
+    onError: () => {
+      toast.error('Failed to remove user')
     },
   })
 }
@@ -227,45 +300,58 @@ const formatMoney = (amount: number) => {
       <span>{{ company.base_currency }}</span>
     </template>
 
-    <template #actions>
-    </template>
+    <Tabs v-model="activeTab" class="w-full">
+      <TabsList class="mb-6 bg-zinc-100">
+        <TabsTrigger value="overview" class="gap-2">
+          <BarChart3 class="h-4 w-4" />
+          Overview
+        </TabsTrigger>
+        <TabsTrigger value="settings" class="gap-2">
+          <Settings class="h-4 w-4" />
+          Settings
+        </TabsTrigger>
+        <TabsTrigger value="users" class="gap-2">
+          <Users class="h-4 w-4" />
+          Users
+        </TabsTrigger>
+      </TabsList>
 
-    <div class="space-y-6">
-      <!-- Stats Cards -->
-      <div class="grid gap-4 md:grid-cols-3">
-        <Card class="border-zinc-200/80 bg-white">
-          <CardHeader class="flex flex-row items-center justify-between pb-2">
-            <CardTitle class="text-sm font-medium text-zinc-500">Total Users</CardTitle>
-            <Users class="h-4 w-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div class="text-2xl font-semibold text-zinc-900">{{ stats.total_users }}</div>
-          </CardContent>
-        </Card>
+      <!-- Overview Tab -->
+      <TabsContent value="overview" class="space-y-6">
+        <!-- Stats Cards -->
+        <div class="grid gap-4 md:grid-cols-3">
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">Total Users</CardTitle>
+              <Users class="h-4 w-4 text-zinc-400" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ stats.total_users }}</div>
+            </CardContent>
+          </Card>
 
-        <Card class="border-zinc-200/80 bg-white">
-          <CardHeader class="flex flex-row items-center justify-between pb-2">
-            <CardTitle class="text-sm font-medium text-zinc-500">Active Users</CardTitle>
-            <CheckCircle2 class="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div class="text-2xl font-semibold text-zinc-900">{{ stats.active_users }}</div>
-          </CardContent>
-        </Card>
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">Active Users</CardTitle>
+              <CheckCircle2 class="h-4 w-4 text-emerald-500" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ stats.active_users }}</div>
+            </CardContent>
+          </Card>
 
-        <Card class="border-zinc-200/80 bg-white">
-          <CardHeader class="flex flex-row items-center justify-between pb-2">
-            <CardTitle class="text-sm font-medium text-zinc-500">Administrators</CardTitle>
-            <Shield class="h-4 w-4 text-teal-500" />
-          </CardHeader>
-          <CardContent>
-            <div class="text-2xl font-semibold text-zinc-900">{{ stats.admins }}</div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card class="border-zinc-200/80 bg-white">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium text-zinc-500">Administrators</CardTitle>
+              <Shield class="h-4 w-4 text-teal-500" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-semibold text-zinc-900">{{ stats.admins }}</div>
+            </CardContent>
+          </Card>
+        </div>
 
-      <!-- Financial Snapshot -->
-      <div class="space-y-4">
+        <!-- Financial Snapshot -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card class="border-zinc-200/80 bg-white">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
@@ -371,157 +457,237 @@ const formatMoney = (amount: number) => {
             <div v-if="financials.recent_activity.length === 0" class="text-sm text-zinc-500">No recent activity.</div>
           </CardContent>
         </Card>
-      </div>
+      </TabsContent>
 
-      <!-- Pending Invitations (visible to owners/admins) -->
-      <Card v-if="currentUserRole === 'owner'" class="border-amber-100 bg-amber-50">
-        <CardHeader class="pb-3">
-          <CardTitle class="text-amber-900">Pending Invitations</CardTitle>
-          <CardDescription class="text-amber-700">
-            Invites sent from {{ company.name }}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div v-if="pendingInvitations.length === 0" class="text-sm text-amber-700">
-            No pending invitations.
-          </div>
-          <div v-else class="space-y-3">
-            <div
-              v-for="invite in pendingInvitations"
-              :key="invite.id"
-              class="flex flex-col gap-1 rounded-lg border border-amber-200/80 bg-white px-4 py-3 shadow-xs"
-            >
-              <div class="flex items-center justify-between">
-                <div class="font-medium text-amber-900">{{ invite.email }}</div>
-                <Badge variant="outline" class="capitalize text-amber-800">
-                  {{ invite.role }}
-                </Badge>
-              </div>
-              <div class="text-xs text-amber-700">
-                Expires {{ new Date(invite.expires_at).toLocaleDateString() }}
-                <span v-if="invite.inviter_name"> • Invited by {{ invite.inviter_name }}</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <!-- Settings Tab -->
+      <TabsContent value="settings" class="space-y-6">
+        <!-- Editable Settings -->
+        <Card class="border-zinc-200/80 bg-white">
+          <CardHeader>
+            <CardTitle class="text-zinc-900">Company Settings</CardTitle>
+            <CardDescription class="text-zinc-500">
+              {{ canManage ? 'Click on the pencil icon to edit a setting' : 'Contact an owner or admin to make changes' }}
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid gap-6 md:grid-cols-2">
+              <!-- Company Name (Editable) -->
+              <InlineEditable
+                v-model="nameField.value.value"
+                label="Company Name"
+                :editing="nameField.isEditing.value"
+                :saving="nameField.isSaving.value"
+                :can-edit="canManage"
+                type="text"
+                @start-edit="nameField.startEditing()"
+                @save="nameField.save()"
+                @cancel="nameField.cancelEditing()"
+              />
 
-      <!-- Company Details Card (read-only) -->
-      <Card class="border-zinc-200/80 bg-white">
-        <CardHeader>
-          <div class="flex items-center justify-between">
-            <div>
-              <CardTitle class="text-zinc-900">Company Details</CardTitle>
-              <CardDescription class="text-zinc-500">
-                Created values cannot be changed
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Company Name</div>
-              <div class="text-base text-zinc-900">{{ company.name }}</div>
-            </div>
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Slug</div>
-              <div class="font-mono text-base text-zinc-900">{{ company.slug }}</div>
-            </div>
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Base Currency</div>
-              <div class="font-mono text-base text-zinc-900">{{ company.base_currency }}</div>
-            </div>
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Industry</div>
-              <div class="text-base text-zinc-900">{{ company.industry || '—' }}</div>
-            </div>
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Country</div>
-              <div class="text-base text-zinc-900">{{ company.country || '—' }}</div>
-            </div>
-            <div class="space-y-1.5">
-              <div class="text-sm font-medium text-zinc-500">Created</div>
-              <div class="flex items-center gap-1.5 text-base text-zinc-900">
-                <Calendar class="h-3.5 w-3.5 text-zinc-400" />
-                {{ new Date(company.created_at).toLocaleDateString() }}
+              <!-- Slug (Read-only) -->
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-zinc-500">Slug</Label>
+                <div class="font-mono text-base text-zinc-900">{{ company.slug }}</div>
+                <p class="text-xs text-zinc-400">Cannot be changed</p>
+              </div>
+
+              <!-- Base Currency (Read-only) -->
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-zinc-500">Base Currency</Label>
+                <div class="font-mono text-base text-zinc-900">{{ company.base_currency }}</div>
+                <p class="text-xs text-zinc-400">Cannot be changed after creation</p>
+              </div>
+
+              <!-- Country (Read-only) -->
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-zinc-500">Country</Label>
+                <div class="text-base text-zinc-900">{{ company.country || '—' }}</div>
+                <p class="text-xs text-zinc-400">Cannot be changed</p>
+              </div>
+
+              <!-- Industry (Read-only) -->
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-zinc-500">Industry</Label>
+                <div class="text-base text-zinc-900 capitalize">{{ company.industry || '—' }}</div>
+              </div>
+
+              <!-- Created Date (Read-only) -->
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-zinc-500">Created</Label>
+                <div class="flex items-center gap-1.5 text-base text-zinc-900">
+                  <Calendar class="h-3.5 w-3.5 text-zinc-400" />
+                  {{ new Date(company.created_at).toLocaleDateString() }}
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <!-- User Management -->
-      <DataTable
-        :data="users"
-        :columns="tableColumns"
-        title="Team Members"
-        :description="`${users.length} ${users.length === 1 ? 'member' : 'members'} in this company`"
-        key-field="id"
-        hoverable
-      >
-        <template #header>
-          <Button v-if="canManage" size="sm" @click="inviteDialogOpen = true">
-            <UserPlus class="mr-2 h-4 w-4" />
-            Invite User
-          </Button>
-        </template>
+        <!-- Regional Settings -->
+        <Card class="border-zinc-200/80 bg-white">
+          <CardHeader>
+            <CardTitle class="text-zinc-900 flex items-center gap-2">
+              <Globe class="h-4 w-4" />
+              Regional Settings
+            </CardTitle>
+            <CardDescription class="text-zinc-500">
+              Language, locale, and fiscal year preferences
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid gap-6 md:grid-cols-2">
+              <!-- Language (Editable) -->
+              <InlineEditable
+                v-model="languageField.value.value"
+                label="Language"
+                :editing="languageField.isEditing.value"
+                :saving="languageField.isSaving.value"
+                :can-edit="canManage"
+                type="select"
+                :options="languageOptions"
+                :icon="Languages"
+                @start-edit="languageField.startEditing()"
+                @save="languageField.save()"
+                @cancel="languageField.cancelEditing()"
+              />
 
-        <template #cell-name="{ row }">
-          <div class="flex flex-col">
-            <span class="font-medium text-zinc-900">{{ row.name || 'Unknown' }}</span>
-            <div class="flex items-center gap-1 text-zinc-500">
-              <Mail class="h-3 w-3" />
-              <span class="text-xs">{{ row.email }}</span>
+              <!-- Locale (Editable) -->
+              <InlineEditable
+                v-model="localeField.value.value"
+                label="Locale"
+                :editing="localeField.isEditing.value"
+                :saving="localeField.isSaving.value"
+                :can-edit="canManage"
+                type="select"
+                :options="localeOptions"
+                @start-edit="localeField.startEditing()"
+                @save="localeField.save()"
+                @cancel="localeField.cancelEditing()"
+              />
+
+              <!-- Fiscal Year Start Month (Editable) -->
+              <InlineEditable
+                v-model="fiscalYearField.value.value"
+                label="Fiscal Year Start"
+                :editing="fiscalYearField.isEditing.value"
+                :saving="fiscalYearField.isSaving.value"
+                :can-edit="canManage"
+                type="select"
+                :options="monthOptions"
+                :icon="Calendar"
+                helper-text="Month when your fiscal year begins"
+                @start-edit="fiscalYearField.startEditing()"
+                @save="fiscalYearField.save()"
+                @cancel="fiscalYearField.cancelEditing()"
+              />
             </div>
-          </div>
-        </template>
+          </CardContent>
+        </Card>
 
-        <template #cell-role="{ row }">
-          <Badge :variant="getRoleBadgeVariant(row.role)" class="capitalize">
-            <Shield class="mr-1 h-3 w-3" />
-            {{ row.role }}
-          </Badge>
-        </template>
+        <!-- Pending Invitations (visible to owners) -->
+        <Card v-if="currentUserRole === 'owner' && pendingInvitations.length > 0" class="border-amber-100 bg-amber-50">
+          <CardHeader class="pb-3">
+            <CardTitle class="text-amber-900">Pending Invitations</CardTitle>
+            <CardDescription class="text-amber-700">
+              Invites sent from {{ company.name }}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="space-y-3">
+              <div
+                v-for="invite in pendingInvitations"
+                :key="invite.id"
+                class="flex flex-col gap-1 rounded-lg border border-amber-200/80 bg-white px-4 py-3 shadow-xs"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="font-medium text-amber-900">{{ invite.email }}</div>
+                  <Badge variant="outline" class="capitalize text-amber-800">
+                    {{ invite.role }}
+                  </Badge>
+                </div>
+                <div class="text-xs text-amber-700">
+                  Expires {{ new Date(invite.expires_at).toLocaleDateString() }}
+                  <span v-if="invite.inviter_name"> • Invited by {{ invite.inviter_name }}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-        <template #cell-is_active="{ row }">
-          <Badge :variant="row.is_active ? 'default' : 'secondary'">
-            <component :is="row.is_active ? CheckCircle2 : XCircle" class="mr-1 h-3 w-3" />
-            {{ row.is_active ? 'Active' : 'Inactive' }}
-          </Badge>
-        </template>
+      <!-- Users Tab -->
+      <TabsContent value="users" class="space-y-6">
+        <DataTable
+          :data="users"
+          :columns="tableColumns"
+          title="Team Members"
+          :description="`${users.length} ${users.length === 1 ? 'member' : 'members'} in this company`"
+          key-field="id"
+          hoverable
+        >
+          <template #header>
+            <Button v-if="canManage" size="sm" @click="inviteDialogOpen = true">
+              <UserPlus class="mr-2 h-4 w-4" />
+              Invite User
+            </Button>
+          </template>
 
-        <template #cell-joined_at="{ row }">
-          <div v-if="row.joined_at" class="flex items-center gap-1 text-zinc-700">
-            <Calendar class="h-3 w-3 text-zinc-400" />
-            <span>{{ new Date(row.joined_at).toLocaleDateString() }}</span>
-          </div>
-          <span v-else class="text-zinc-400">—</span>
-        </template>
+          <template #cell-name="{ row }">
+            <div class="flex flex-col">
+              <span class="font-medium text-zinc-900">{{ row.name || 'Unknown' }}</span>
+              <div class="flex items-center gap-1 text-zinc-500">
+                <Mail class="h-3 w-3" />
+                <span class="text-xs">{{ row.email }}</span>
+              </div>
+            </div>
+          </template>
 
-        <template #cell-actions="{ row }">
-          <div class="flex justify-end">
-            <DropdownMenu v-if="canManage">
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="sm">
-                  <MoreVertical class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem @click="openRoleDialog(row)">
-                  <UserCog class="mr-2 h-4 w-4" />
-                  Change Role
-                </DropdownMenuItem>
-                <DropdownMenuItem @click="openRemoveDialog(row)" class="text-red-600 focus:text-red-600">
-                  <Trash2 class="mr-2 h-4 w-4" />
-                  Remove User
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </template>
-      </DataTable>
-    </div>
+          <template #cell-role="{ row }">
+            <Badge :variant="getRoleBadgeVariant(row.role)" class="capitalize">
+              <Shield class="mr-1 h-3 w-3" />
+              {{ row.role }}
+            </Badge>
+          </template>
+
+          <template #cell-is_active="{ row }">
+            <Badge :variant="row.is_active ? 'default' : 'secondary'">
+              <component :is="row.is_active ? CheckCircle2 : XCircle" class="mr-1 h-3 w-3" />
+              {{ row.is_active ? 'Active' : 'Inactive' }}
+            </Badge>
+          </template>
+
+          <template #cell-joined_at="{ row }">
+            <div v-if="row.joined_at" class="flex items-center gap-1 text-zinc-700">
+              <Calendar class="h-3 w-3 text-zinc-400" />
+              <span>{{ new Date(row.joined_at).toLocaleDateString() }}</span>
+            </div>
+            <span v-else class="text-zinc-400">—</span>
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="flex justify-end">
+              <DropdownMenu v-if="canManage">
+                <DropdownMenuTrigger as-child>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem @click="openRoleDialog(row)">
+                    <UserCog class="mr-2 h-4 w-4" />
+                    Change Role
+                  </DropdownMenuItem>
+                  <DropdownMenuItem @click="openRemoveDialog(row)" class="text-red-600 focus:text-red-600">
+                    <Trash2 class="mr-2 h-4 w-4" />
+                    Remove User
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </template>
+        </DataTable>
+      </TabsContent>
+    </Tabs>
 
     <!-- Invite User Dialog -->
     <Dialog v-model:open="inviteDialogOpen">

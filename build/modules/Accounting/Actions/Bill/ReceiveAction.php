@@ -6,7 +6,9 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ReceiveAction implements PaletteAction
 {
@@ -29,10 +31,18 @@ class ReceiveAction implements PaletteAction
             throw new \InvalidArgumentException('Cannot receive a void/cancelled bill');
         }
 
-        $bill->status = 'received';
-        $bill->received_at = now();
-        $bill->updated_by_user_id = Auth::id();
-        $bill->save();
+        DB::transaction(function () use ($bill) {
+            $bill->status = 'received';
+            $bill->received_at = now();
+            $bill->updated_by_user_id = Auth::id();
+            $bill->save();
+
+            if (!$bill->transaction_id) {
+                $posting = app(GlPostingService::class)->postBill($bill);
+                $bill->transaction_id = $posting->id;
+                $bill->save();
+            }
+        });
 
         return ['message' => "Bill {$bill->bill_number} marked received"];
     }

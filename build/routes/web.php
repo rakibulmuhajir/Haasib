@@ -16,6 +16,7 @@ use App\Modules\Accounting\Http\Controllers\VendorController;
 use App\Modules\Accounting\Http\Controllers\VendorCreditController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\TaxSettingsController;
+use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -30,6 +31,11 @@ Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
+// Welcome page for first-time users
+Route::get('welcome', [\App\Http\Controllers\WelcomeController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('welcome');
+
 // Invitation routes (public/guest access for viewing)
 Route::get('/invite/{token}', [InvitationController::class, 'show'])->name('invitation.show');
 
@@ -40,6 +46,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/invitations/pending', [InvitationController::class, 'pending'])->name('invitations.pending');
 
     // Non-scoped company routes (creation and switching)
+    Route::get('/companies/create', [CompanyController::class, 'create'])->name('companies.create');
     Route::post('/companies', [CompanyController::class, 'store'])->name('companies.store');
     Route::post('/companies/switch', [CompaniesPageController::class, 'switch'])->name('companies.switch');
     Route::get('/companies', [CompaniesPageController::class, 'index'])->name('companies.index');
@@ -50,6 +57,37 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}', [CompanyController::class, 'show'])->name('company.show');
         Route::put('/{company}', [CompanyController::class, 'update'])->name('company.update');
         Route::get('/{company}/settings', [CompanyController::class, 'settings'])->name('company.settings');
+        Route::patch('/{company}/settings', [CompanyController::class, 'updateSettings'])->name('company.settings.update');
+
+        // Company onboarding wizard
+        Route::prefix('/{company}/onboarding')->group(function () {
+            Route::get('/', [\App\Http\Controllers\CompanyOnboardingController::class, 'index'])->name('onboarding.index');
+
+            Route::get('/company-identity', [\App\Http\Controllers\CompanyOnboardingController::class, 'showCompanyIdentity'])->name('onboarding.company-identity');
+            Route::post('/company-identity', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeCompanyIdentity']);
+
+            Route::get('/fiscal-year', [\App\Http\Controllers\CompanyOnboardingController::class, 'showFiscalYear'])->name('onboarding.fiscal-year');
+            Route::post('/fiscal-year', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeFiscalYear']);
+
+            Route::get('/bank-accounts', [\App\Http\Controllers\CompanyOnboardingController::class, 'showBankAccounts'])->name('onboarding.bank-accounts');
+            Route::post('/bank-accounts', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeBankAccounts']);
+
+            Route::get('/default-accounts', [\App\Http\Controllers\CompanyOnboardingController::class, 'showDefaultAccounts'])->name('onboarding.default-accounts');
+            Route::post('/default-accounts', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeDefaultAccounts']);
+
+            Route::get('/tax-settings', [\App\Http\Controllers\CompanyOnboardingController::class, 'showTaxSettings'])->name('onboarding.tax-settings');
+            Route::post('/tax-settings', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeTaxSettings']);
+
+            Route::get('/numbering', [\App\Http\Controllers\CompanyOnboardingController::class, 'showNumbering'])->name('onboarding.numbering');
+            Route::post('/numbering', [\App\Http\Controllers\CompanyOnboardingController::class, 'storeNumbering']);
+
+            Route::get('/payment-terms', [\App\Http\Controllers\CompanyOnboardingController::class, 'showPaymentTerms'])->name('onboarding.payment-terms');
+            Route::post('/payment-terms', [\App\Http\Controllers\CompanyOnboardingController::class, 'storePaymentTerms']);
+
+            Route::get('/complete', [\App\Http\Controllers\CompanyOnboardingController::class, 'showComplete'])->name('onboarding.complete');
+            Route::post('/complete', [\App\Http\Controllers\CompanyOnboardingController::class, 'complete']);
+        });
+
         Route::get('/{company}/users', [UsersPageController::class, 'index'])->name('users.index');
         Route::post('/{company}/users/invite', [UsersPageController::class, 'invite'])->name('users.invite');
         Route::put('/{company}/users/{user}/role', [UsersPageController::class, 'updateRole'])->name('users.update-role');
@@ -121,6 +159,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/bills/{bill}/edit', [BillController::class, 'edit'])->name('bills.edit');
         Route::put('/{company}/bills/{bill}', [BillController::class, 'update'])->name('bills.update');
         Route::delete('/{company}/bills/{bill}', [BillController::class, 'destroy'])->name('bills.destroy');
+        Route::post('/{company}/bills/{bill}/receive', [BillController::class, 'receive'])->name('bills.receive');
 
         // Bill Payments
         Route::get('/{company}/bill-payments', [BillPaymentController::class, 'index'])->name('bill-payments.index');
@@ -134,6 +173,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/vendor-credits/create', [VendorCreditController::class, 'create'])->name('vendor-credits.create');
         Route::post('/{company}/vendor-credits', [VendorCreditController::class, 'store'])->name('vendor-credits.store');
         Route::get('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'show'])->name('vendor-credits.show');
+        Route::get('/{company}/vendor-credits/{vendorCredit}/edit', [VendorCreditController::class, 'edit'])->name('vendor-credits.edit');
         Route::get('/{company}/vendor-credits/{vendorCredit}/apply', [VendorCreditController::class, 'apply'])->name('vendor-credits.apply');
         Route::delete('/{company}/vendor-credits/{vendorCredit}', [VendorCreditController::class, 'destroy'])->name('vendor-credits.destroy');
 
@@ -172,6 +212,16 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/tax/api/rates', [TaxSettingsController::class, 'getTaxRates'])->name('tax.api.rates');
         Route::get('/{company}/tax/api/groups', [TaxSettingsController::class, 'getTaxGroups'])->name('tax.api.groups');
         Route::post('/{company}/tax/api/calculate', [TaxSettingsController::class, 'calculateTax'])->name('tax.api.calculate');
+
+        // Fiscal Year Management
+        Route::get('/{company}/fiscal-years', [FiscalYearController::class, 'index'])->name('fiscal-years.index');
+        Route::get('/{company}/fiscal-years/create', [FiscalYearController::class, 'create'])->name('fiscal-years.create');
+        Route::post('/{company}/fiscal-years', [FiscalYearController::class, 'store'])->name('fiscal-years.store');
+        Route::get('/{company}/fiscal-years/{fiscalYear}', [FiscalYearController::class, 'show'])->name('fiscal-years.show');
+        Route::get('/{company}/fiscal-years/{fiscalYear}/edit', [FiscalYearController::class, 'edit'])->name('fiscal-years.edit');
+        Route::put('/{company}/fiscal-years/{fiscalYear}', [FiscalYearController::class, 'update'])->name('fiscal-years.update');
+        Route::delete('/{company}/fiscal-years/{fiscalYear}', [FiscalYearController::class, 'destroy'])->name('fiscal-years.destroy');
+        Route::post('/{company}/fiscal-years/{fiscalYear}/periods', [FiscalYearController::class, 'createPeriods'])->name('fiscal-years.periods.create');
     });
 });
 

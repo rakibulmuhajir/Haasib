@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
@@ -23,9 +23,21 @@ interface ParentOption {
   type: string
 }
 
+interface AccountTemplateOption {
+  id: string
+  code: string
+  name: string
+  type: string
+  subtype: string
+  normal_balance: string
+  is_contra: boolean
+  description?: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   parents: ParentOption[]
+  templates: AccountTemplateOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -56,9 +68,21 @@ const subtypeMap: Record<string, string[]> = {
   other_expense: ['other_expense'],
 }
 
+const normalBalanceMap: Record<string, string> = {
+  asset: 'debit',
+  expense: 'debit',
+  cogs: 'debit',
+  other_expense: 'debit',
+  liability: 'credit',
+  equity: 'credit',
+  revenue: 'credit',
+  other_income: 'credit',
+}
+
 const noneParentValue = '__none'
 
 const form = useForm({
+  template_id: '',
   code: '',
   name: '',
   type: '',
@@ -66,10 +90,37 @@ const form = useForm({
   currency: '',
   parent_id: noneParentValue,
   description: '',
+  normal_balance: '',
 })
 
 const availableSubtypes = computed(() => subtypeMap[form.type] || [])
 const filteredParents = computed(() => props.parents.filter((p) => p.type === form.type))
+
+watch(
+  () => form.type,
+  (newType) => {
+    form.normal_balance = normalBalanceMap[newType] ?? ''
+    if (!subtypeMap[newType]?.includes(form.subtype)) {
+      form.subtype = ''
+    }
+  }
+)
+
+watch(
+  () => form.template_id,
+  (templateId) => {
+    const template = props.templates.find((t) => t.id === templateId)
+    if (!template) {
+      return
+    }
+
+    form.code = template.code
+    form.name = template.name
+    form.type = template.type
+    form.subtype = template.subtype
+    form.normal_balance = template.normal_balance
+  }
+)
 
 const handleSubmit = () => {
   form
@@ -92,6 +143,24 @@ const handleSubmit = () => {
   >
     <form class="space-y-6" @submit.prevent="handleSubmit">
       <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label for="template_id">Start from template (optional)</Label>
+          <Select v-model="form.template_id">
+            <SelectTrigger id="template_id">
+              <SelectValue placeholder="Pick a template" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">No template</SelectItem>
+              <SelectItem
+                v-for="t in templates"
+                :key="t.id"
+                :value="t.id"
+              >
+                {{ t.code }} — {{ t.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div>
           <Label for="code">Code</Label>
           <Input id="code" v-model="form.code" required />

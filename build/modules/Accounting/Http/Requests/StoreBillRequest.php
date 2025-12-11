@@ -41,10 +41,10 @@ class StoreBillRequest extends BaseFormRequest
 
         return [
             'vendor_id' => ['required', 'uuid', 'exists:acct.vendors,id'],
-            'bill_number' => ['required', 'string', 'max:50', $billNumberRule],
+            'bill_number' => ['nullable', 'string', 'max:50', $billNumberRule],
             'vendor_invoice_number' => ['nullable', 'string', 'max:100'],
             'bill_date' => ['required', 'date'],
-            'due_date' => ['required', 'date', 'after_or_equal:bill_date'],
+            'due_date' => ['nullable', 'date', 'after_or_equal:bill_date'],
             'status' => ['in:' . implode(',', $statusValues)],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],
@@ -58,7 +58,20 @@ class StoreBillRequest extends BaseFormRequest
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'line_items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.discount_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
+            'line_items.*.expense_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->whereIn('type', ['expense', 'cogs', 'asset'])
+                    ->where('is_active', true)),
+            ],
+            'ap_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('subtype', 'accounts_payable')
+                    ->where('is_active', true)),
+            ],
         ];
     }
 }

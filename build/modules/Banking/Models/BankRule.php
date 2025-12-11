@@ -13,7 +13,7 @@ class BankRule extends Model
     use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
-    protected $table = 'bank.bank_rules';
+    protected $table = 'acct.bank_rules';
     protected $keyType = 'string';
     public $incrementing = false;
 

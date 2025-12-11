@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteItem;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -123,6 +124,12 @@ class CreateAction implements PaletteAction
                     'total' => $item['_total'],
                     'created_by_user_id' => Auth::id(),
                 ]);
+            }
+
+            if ($status === 'issued') {
+                $transaction = app(GlPostingService::class)->postCreditNote($credit);
+                $credit->transaction_id = $transaction->id;
+                $credit->save();
             }
 
             return [

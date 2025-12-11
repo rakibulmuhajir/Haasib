@@ -11,7 +11,7 @@ class Bank extends Model
     use HasFactory;
 
     protected $connection = 'pgsql';
-    protected $table = 'bank.banks';
+    protected $table = 'acct.banks';
     protected $keyType = 'string';
     public $incrementing = false;
 

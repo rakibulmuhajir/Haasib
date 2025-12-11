@@ -39,15 +39,33 @@ class StoreBillPaymentRequest extends BaseFormRequest
 
         return [
             'vendor_id' => ['required', 'uuid', 'exists:acct.vendors,id'],
-            'payment_number' => ['required', 'string', 'max:50', $paymentNumberRule],
+            'payment_number' => ['nullable', 'string', 'max:50', $paymentNumberRule],
             'payment_date' => ['required', 'date', 'before_or_equal:today'],
-            'amount' => ['required', 'numeric', 'min:0.01', 'decimal:6'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'exchange_rate' => $exchangeRateRules,
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],
             'payment_method' => ['required', Rule::in(['cash', 'check', 'card', 'bank_transfer', 'ach', 'wire', 'other'])],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
+            'payment_account_id' => [
+                'required',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
+                    ->where('is_active', true)),
+            ],
+            'ap_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('subtype', 'accounts_payable')
+                    ->where('is_active', true)),
+            ],
+            // Allocations
+            'allocations' => ['nullable', 'array'],
+            'allocations.*.bill_id' => ['required_with:allocations', 'uuid', 'exists:acct.bills,id'],
+            'allocations.*.amount_allocated' => ['required_with:allocations', 'numeric', 'min:0'],
         ];
     }
 }

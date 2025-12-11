@@ -43,6 +43,7 @@ class Bill extends Model
         'paid_at',
         'voided_at',
         'recurring_schedule_id',
+        'transaction_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -66,6 +67,7 @@ class Bill extends Model
         'approved_at' => 'datetime',
         'paid_at' => 'datetime',
         'voided_at' => 'datetime',
+        'transaction_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -86,6 +88,11 @@ class Bill extends Model
     public function recurringSchedule()
     {
         return $this->belongsTo(RecurringBillSchedule::class, 'recurring_schedule_id');
+    }
+
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 
     public function lineItems()

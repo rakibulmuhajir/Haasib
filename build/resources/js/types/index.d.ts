@@ -12,10 +12,18 @@ export interface BreadcrumbItem {
 
 export interface NavItem {
     title: string;
-    href: NonNullable<InertiaLinkProps['href']>;
+    href?: NonNullable<InertiaLinkProps['href']>;  // Optional for parent menus
     icon?: LucideIcon;
     isActive?: boolean;
     external?: boolean;
+    badge?: string | number;
+    children?: NavItem[];  // Sub-menu items (one level only)
+}
+
+export interface NavGroup {
+    label: string;
+    collapsible?: boolean;
+    items: NavItem[];
 }
 
 export type AppPageProps<

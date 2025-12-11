@@ -14,6 +14,12 @@ interface CompanyRef {
   base_currency: string
 }
 
+interface AccountOption {
+  id: string
+  code: string
+  name: string
+}
+
 interface VendorRef {
   id: string
   vendor_number: string
@@ -33,6 +39,7 @@ interface VendorRef {
 const props = defineProps<{
   company: CompanyRef
   vendor: VendorRef
+  apAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -58,6 +65,7 @@ const form = useForm({
   account_number: props.vendor.account_number ?? '',
   notes: props.vendor.notes ?? '',
   website: props.vendor.website ?? '',
+  ap_account_id: (props.vendor as any).ap_account_id ?? '',
   is_active: props.vendor.is_active,
 })
 
@@ -104,6 +112,24 @@ const handleSubmit = () => {
         <div>
           <Label for="account_number">Account #</Label>
           <Input id="account_number" v-model="form.account_number" />
+        </div>
+        <div>
+          <Label for="ap_account_id">AP Account</Label>
+          <Select v-model="form.ap_account_id">
+            <SelectTrigger id="ap_account_id">
+              <SelectValue placeholder="Select AP account" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Use company default</SelectItem>
+              <SelectItem
+                v-for="acct in props.apAccounts || []"
+                :key="acct.id"
+                :value="acct.id"
+              >
+                {{ acct.code }} — {{ acct.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label for="website">Website</Label>

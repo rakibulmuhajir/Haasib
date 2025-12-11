@@ -12,6 +12,10 @@ class SyncPermissions extends Command
 
     protected $description = 'Sync all permissions from config (global, not per-company)';
 
+    protected $aliases = [
+        'rbac:sync-permissions',
+    ];
+
     public function handle(): int
     {
         // Clear team context - permissions are GLOBAL

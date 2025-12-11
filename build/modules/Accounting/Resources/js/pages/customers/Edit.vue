@@ -22,6 +22,12 @@ interface CurrencyOption {
   is_base: boolean
 }
 
+interface AccountOption {
+  id: string
+  code: string
+  name: string
+}
+
 interface CustomerRef {
   id: string
   customer_number: string
@@ -55,6 +61,7 @@ const props = defineProps<{
   company: CompanyRef
   customer: CustomerRef
   currencies: CurrencyOption[]
+  arAccounts?: AccountOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -78,6 +85,7 @@ const form = useForm({
   credit_limit: props.customer.credit_limit ?? '',
   notes: props.customer.notes ?? '',
   logo_url: props.customer.logo_url ?? '',
+  ar_account_id: (props.customer as any).ar_account_id ?? '',
   billing_street: props.customer.billing_address?.street ?? '',
   billing_city: props.customer.billing_address?.city ?? '',
   billing_state: props.customer.billing_address?.state ?? '',
@@ -175,6 +183,24 @@ const handleSubmit = () => {
         <div>
           <Label for="tax_id">Tax ID</Label>
           <Input id="tax_id" v-model="form.tax_id" />
+        </div>
+        <div>
+          <Label for="ar_account_id">AR Account</Label>
+          <Select v-model="form.ar_account_id">
+            <SelectTrigger id="ar_account_id">
+              <SelectValue placeholder="Select AR account" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">Use company default</SelectItem>
+              <SelectItem
+                v-for="acct in props.arAccounts || []"
+                :key="acct.id"
+                :value="acct.id"
+              >
+                {{ acct.code }} — {{ acct.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label for="credit_limit">Credit Limit</Label>

@@ -143,6 +143,7 @@ class UpdateAction implements PaletteAction
                     'line_total' => $item['_line_total'],
                     'tax_amount' => $item['_tax_amount'],
                     'total' => $item['_total'],
+                    'income_account_id' => $item['income_account_id'] ?? null,
                     'created_by_user_id' => Auth::id(),
                 ]);
             }

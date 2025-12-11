@@ -13,7 +13,7 @@ class BankReconciliation extends Model
     use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
-    protected $table = 'bank.bank_reconciliations';
+    protected $table = 'acct.bank_reconciliations';
     protected $keyType = 'string';
     public $incrementing = false;
 

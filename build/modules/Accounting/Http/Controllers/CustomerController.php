@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Payment;
+use App\Modules\Accounting\Models\Account;
 use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
 use Illuminate\Http\RedirectResponse;
@@ -181,11 +182,6 @@ class CustomerController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
-
         return Inertia::render('accounting/customers/Create', [
             'company' => [
                 'id' => $company->id,
@@ -193,7 +189,6 @@ class CustomerController extends Controller
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
             ],
-            'currencies' => $currencies,
         ]);
     }
 
@@ -267,6 +262,19 @@ class CustomerController extends Controller
             ->selectRaw("AVG(EXTRACT(EPOCH FROM (paid_at - invoice_date)) / 86400) as avg_days")
             ->value('avg_days');
 
+        // AR Aging for this specific customer
+        $now = now()->toDateString();
+        $aging = Invoice::where('company_id', $company->id)
+            ->where('customer_id', $customer->id)
+            ->where('balance', '>', 0)
+            ->whereNotIn('status', ['paid', 'void', 'cancelled'])
+            ->selectRaw("COALESCE(SUM(CASE WHEN due_date >= ? THEN balance ELSE 0 END), 0) AS current", [$now])
+            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30", [$now, now()->subDays(30)->toDateString()])
+            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60", [now()->subDays(30)->toDateString(), now()->subDays(60)->toDateString()])
+            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90", [now()->subDays(60)->toDateString(), now()->subDays(90)->toDateString()])
+            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus", [now()->subDays(90)->toDateString()])
+            ->first();
+
         $invoices = Invoice::where('company_id', $company->id)
             ->where('customer_id', $customer->id)
             ->orderByDesc('invoice_date')
@@ -298,6 +306,12 @@ class CustomerController extends Controller
                 'notes',
             ]);
 
+        // Currencies for editing
+        $currencies = CompanyCurrency::where('company_id', $company->id)
+            ->orderByDesc('is_base')
+            ->orderBy('currency_code')
+            ->get(['currency_code', 'is_base']);
+
         return Inertia::render('accounting/customers/Show', [
             'company' => [
                 'id' => $company->id,
@@ -318,9 +332,18 @@ class CustomerController extends Controller
                 'paid_ytd' => (float) $paidYtd,
                 'invoiced_ytd' => (float) $invoicedYtd,
                 'avg_days_to_pay' => $avgDaysToPay ? round($avgDaysToPay, 1) : null,
+                'aging' => [
+                    'current' => (float) ($aging->current ?? 0),
+                    'bucket_1_30' => (float) ($aging->bucket_1_30 ?? 0),
+                    'bucket_31_60' => (float) ($aging->bucket_31_60 ?? 0),
+                    'bucket_61_90' => (float) ($aging->bucket_61_90 ?? 0),
+                    'bucket_90_plus' => (float) ($aging->bucket_90_plus ?? 0),
+                ],
             ],
             'invoices' => $invoices,
             'payments' => $payments,
+            'currencies' => $currencies,
+            'canEdit' => true, // TODO: Check actual permissions
         ]);
     }
 
@@ -337,6 +360,12 @@ class CustomerController extends Controller
             ->orderBy('currency_code')
             ->get(['currency_code', 'is_base']);
 
+        $arAccounts = Account::where('company_id', $company->id)
+            ->where('subtype', 'accounts_receivable')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/customers/Edit', [
             'company' => [
                 'id' => $company->id,
@@ -346,6 +375,7 @@ class CustomerController extends Controller
             ],
             'customer' => $customer,
             'currencies' => $currencies,
+            'arAccounts' => $arAccounts,
         ]);
     }
 

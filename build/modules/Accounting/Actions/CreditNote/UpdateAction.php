@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteItem;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -103,6 +104,9 @@ class UpdateAction implements PaletteAction
         $baseCurrency = $customer->base_currency ?? $company->base_currency ?? 'USD';
 
         return DB::transaction(function () use ($company, $creditNote, $customer, $invoice, $creditDate, $status, $amount, $baseCurrency, $params, $lineItems) {
+            // Force delete existing line items first to avoid any race conditions
+            CreditNoteItem::where('credit_note_id', $creditNote->id)->forceDelete();
+
             // Update credit note
             $creditNote->update([
                 'customer_id' => $customer->id,
@@ -115,15 +119,15 @@ class UpdateAction implements PaletteAction
                 'updated_by_user_id' => Auth::id(),
             ]);
 
-            // Delete existing line items
-            CreditNoteItem::where('credit_note_id', $creditNote->id)->delete();
-
-            // Create new line items
+            // Create new line items with explicit sequential line numbers starting from 1
+            $newItems = [];
             foreach ($lineItems as $idx => $item) {
-                CreditNoteItem::create([
+                $lineNumber = ($idx + 1); // Force sequential line numbers starting from 1
+                $newItems[] = [
+                    'id' => Str::orderedUuid(),
                     'company_id' => $company->id,
                     'credit_note_id' => $creditNote->id,
-                    'line_number' => $item['line_number'] ?? ($idx + 1),
+                    'line_number' => $lineNumber,
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
@@ -133,7 +137,21 @@ class UpdateAction implements PaletteAction
                     'tax_amount' => $item['_tax_amount'],
                     'total' => $item['_total'],
                     'created_by_user_id' => Auth::id(),
-                ]);
+                    'updated_by_user_id' => Auth::id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // Bulk insert to avoid any potential issues
+            if (!empty($newItems)) {
+                CreditNoteItem::insert($newItems);
+            }
+
+            if ($status === 'issued' && !$creditNote->transaction_id) {
+                $transaction = app(GlPostingService::class)->postCreditNote($creditNote);
+                $creditNote->transaction_id = $transaction->id;
+                $creditNote->save();
             }
 
             return [

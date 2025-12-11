@@ -12,6 +12,10 @@ class SyncRolePermissions extends Command
 
     protected $description = 'Sync role-permission matrix for companies';
 
+    protected $aliases = [
+        'rbac:sync-role-permissions',
+    ];
+
     public function handle(): int
     {
         $matrix = config('role-permissions', []);

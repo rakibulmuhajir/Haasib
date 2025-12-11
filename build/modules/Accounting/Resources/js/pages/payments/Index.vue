@@ -8,25 +8,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
 import {
   DollarSign,
   Plus,
-  ArrowLeft,
-  Eye,
-  Pencil,
-  Trash2,
-  MoreHorizontal,
   Search,
   CreditCard,
   Building,
-  Smartphone,
+  FileText,
 } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -109,7 +98,8 @@ const getPaymentMethodIcon = (method: string) => {
     case 'card':
       return CreditCard
     case 'cheque':
-      return DollarSign
+    case 'check':
+      return FileText
     default:
       return DollarSign
   }
@@ -124,9 +114,23 @@ const getPaymentMethodLabel = (method: string) => {
     case 'card':
       return 'Card'
     case 'cheque':
+    case 'check':
       return 'Cheque'
     default:
       return 'Other'
+  }
+}
+
+const getPaymentMethodVariant = (method: string): 'default' | 'secondary' | 'outline' => {
+  switch (method) {
+    case 'cash':
+      return 'default'
+    case 'bank_transfer':
+      return 'secondary'
+    case 'card':
+      return 'outline'
+    default:
+      return 'secondary'
   }
 }
 
@@ -137,13 +141,20 @@ const formatCurrency = (amount: number, currency: string) => {
   }).format(amount)
 }
 
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 const columns = [
   { key: 'payment_number', label: 'Payment #' },
   { key: 'customer', label: 'Customer' },
   { key: 'amount', label: 'Amount' },
   { key: 'payment_method', label: 'Method' },
   { key: 'payment_date', label: 'Date' },
-  { key: 'actions', label: '', sortable: false },
 ]
 
 const tableData = computed(() => {
@@ -153,15 +164,28 @@ const tableData = computed(() => {
       id: payment.id,
       payment_number: payment.payment_number,
       customer: payment.customer.name,
+      customer_id: payment.customer_id,
       amount: formatCurrency(payment.amount, payment.currency),
-      payment_method: getPaymentMethodLabel(payment.payment_method),
-      payment_date: new Date(payment.payment_date).toLocaleDateString(),
-      actions: payment.id, // Only store the ID for fallback
-      _paymentObject: payment, // Store full object for template
+      payment_method: payment.payment_method,
+      payment_date: formatDate(payment.payment_date),
+      _paymentObject: payment,
       icon,
     }
   })
 })
+
+const navigateToPayment = (paymentId: string) => {
+  router.get(`/${props.company.slug}/payments/${paymentId}`)
+}
+
+const navigateToCustomer = (customerId: string) => {
+  router.get(`/${props.company.slug}/customers/${customerId}`)
+}
+
+const filterByMethod = (method: string) => {
+  paymentMethod.value = method
+  handleSearch()
+}
 </script>
 
 <template>
@@ -195,7 +219,7 @@ const tableData = computed(() => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Methods</SelectItem>
-          <SelectItem value="cash">Cash</SelectItem>
+          <SelectItem value="cashe">Cash</SelectItem>
           <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
           <SelectItem value="card">Card</SelectItem>
           <SelectItem value="cheque">Cheque</SelectItem>
@@ -210,47 +234,66 @@ const tableData = computed(() => {
       :data="tableData"
       :pagination="payments"
     >
-      <template #payment_method="{ value, row }">
-        <div class="flex items-center gap-2">
-          <component :is="row.icon" class="h-4 w-4" />
-          <span>{{ value }}</span>
-        </div>
+      <!-- Payment Number - Clickable Link -->
+      <template #cell-payment_number="{ value, row }">
+        <button
+          @click="navigateToPayment(row.id)"
+          class="font-medium text-primary hover:underline focus:outline-none focus:underline"
+        >
+          {{ value }}
+        </button>
       </template>
 
-      <template #actions="{ row }">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" class="h-8 w-8 p-0">
-              <MoreHorizontal class="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem @click="router.get(`/${company.slug}/payments/${row._paymentObject.id}`)">
-              <Eye class="mr-2 h-4 w-4" />
-              View
-            </DropdownMenuItem>
-            <DropdownMenuItem @click="router.get(`/${company.slug}/payments/${row._paymentObject.id}/edit`)">
-              <Pencil class="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <!-- Customer - Clickable Link -->
+      <template #cell-customer="{ value, row }">
+        <button
+          @click="navigateToCustomer(row.customer_id)"
+          class="text-foreground hover:text-primary hover:underline focus:outline-none focus:underline transition-colors"
+        >
+          {{ value }}
+        </button>
+      </template>
+
+      <!-- Payment Method - Clickable Badge -->
+      <template #cell-payment_method="{ value, row }">
+        <button
+          @click="filterByMethod(value)"
+          class="inline-flex items-center gap-2 transition-opacity hover:opacity-70 focus:outline-none"
+        >
+          <Badge :variant="getPaymentMethodVariant(value)">
+            <component :is="row.icon" class="h-3 w-3 mr-1" />
+            {{ getPaymentMethodLabel(value) }}
+          </Badge>
+        </button>
       </template>
 
       <!-- Mobile Card Template -->
       <template #mobile-card="{ row }">
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div
+          @click="navigateToPayment(row.id)"
+          class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+        >
           <div class="space-y-3">
             <!-- Header with payment number and method -->
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="font-semibold text-zinc-900">{{ row.payment_number }}</h3>
-                <p class="text-sm text-zinc-500">{{ row.customer }}</p>
+                <h3 class="font-semibold text-primary">{{ row.payment_number }}</h3>
+                <button
+                  @click.stop="navigateToCustomer(row.customer_id)"
+                  class="text-sm text-zinc-500 hover:text-primary hover:underline"
+                >
+                  {{ row.customer }}
+                </button>
               </div>
-              <div class="flex items-center gap-2">
-                <component :is="row.icon" class="h-4 w-4 text-zinc-500" />
-                <span class="text-sm text-zinc-600">{{ row.payment_method }}</span>
-              </div>
+              <button
+                @click.stop="filterByMethod(row.payment_method)"
+                class="transition-opacity hover:opacity-70"
+              >
+                <Badge :variant="getPaymentMethodVariant(row.payment_method)">
+                  <component :is="row.icon" class="h-3 w-3 mr-1" />
+                  {{ getPaymentMethodLabel(row.payment_method) }}
+                </Badge>
+              </button>
             </div>
 
             <!-- Amount and date -->
@@ -262,28 +305,6 @@ const tableData = computed(() => {
             <div class="flex items-center justify-between">
               <span class="text-sm text-zinc-500">Date</span>
               <span class="font-medium">{{ row.payment_date }}</span>
-            </div>
-
-            <!-- Actions -->
-            <div class="pt-2 border-t border-zinc-100">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" class="w-full justify-between">
-                    Actions
-                    <MoreHorizontal class="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-48">
-                  <DropdownMenuItem @click="router.get(`/${company.slug}/payments/${row._paymentObject.id}`)">
-                    <Eye class="mr-2 h-4 w-4" />
-                    View
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="router.get(`/${company.slug}/payments/${row._paymentObject.id}/edit`)">
-                    <Pencil class="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>

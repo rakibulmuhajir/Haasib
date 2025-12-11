@@ -31,7 +31,7 @@ class StoreVendorRequest extends BaseFormRequest
             : 'string';
 
         return [
-            'vendor_number' => ['required', 'string', 'max:50', $vendorNumberRule],
+            'vendor_number' => ['nullable', 'string', 'max:50', $vendorNumberRule],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255', $emailRule],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -41,12 +41,20 @@ class StoreVendorRequest extends BaseFormRequest
             'address.zip' => ['nullable', 'string', 'max:20'],
             'address.country' => ['nullable', 'string', 'size:2'],
             'tax_id' => ['nullable', 'string', 'max:100'],
-            'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],
-            'payment_terms' => ['required', 'integer', 'min:0', 'max:365'],
+            'base_currency' => ['nullable', 'string', 'size:3', 'uppercase'],
+            'payment_terms' => ['nullable', 'integer', 'min:0', 'max:365'],
             'account_number' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
             'website' => ['nullable', 'string', 'max:500'],
+            'logo_url' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
+            'ap_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('subtype', 'accounts_payable')
+                    ->where('is_active', true)),
+            ],
         ];
     }
 }

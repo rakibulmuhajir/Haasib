@@ -50,7 +50,10 @@ class CreateAction implements PaletteAction
         return DB::transaction(function () use ($params, $company, $customer) {
             // Calculate dates
             $invoiceDate = now();
-            $paymentTerms = $params['payment_terms'] ?? $customer->payment_terms ?? 30;
+            $paymentTerms = $params['payment_terms']
+                ?? $customer->payment_terms
+                ?? $company->default_customer_payment_terms
+                ?? 30;
             $dueDate = !empty($params['due'])
                 ? Carbon::parse($params['due'])
                 : $invoiceDate->copy()->addDays($paymentTerms);
@@ -137,6 +140,7 @@ class CreateAction implements PaletteAction
                     'line_total' => $item['_line_total'],
                     'tax_amount' => $item['_tax_amount'],
                     'total' => $item['_total'],
+                    'income_account_id' => $item['income_account_id'] ?? null,
                     'created_by_user_id' => Auth::id(),
                 ]);
             }

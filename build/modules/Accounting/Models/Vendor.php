@@ -30,7 +30,9 @@ class Vendor extends Model
         'account_number',
         'notes',
         'website',
+        'logo_url',
         'is_active',
+        'ap_account_id',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -41,6 +43,7 @@ class Vendor extends Model
         'address' => 'array',
         'payment_terms' => 'integer',
         'is_active' => 'boolean',
+        'ap_account_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -66,5 +69,10 @@ class Vendor extends Model
     public function vendorCredits()
     {
         return $this->hasMany(VendorCredit::class, 'vendor_id');
+    }
+
+    public function apAccount()
+    {
+        return $this->belongsTo(Account::class, 'ap_account_id');
     }
 }

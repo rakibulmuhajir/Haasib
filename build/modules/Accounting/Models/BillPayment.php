@@ -28,6 +28,8 @@ class BillPayment extends Model
         'base_currency',
         'base_amount',
         'payment_method',
+        'payment_account_id',
+        'transaction_id',
         'reference_number',
         'notes',
         'created_by_user_id',
@@ -41,6 +43,8 @@ class BillPayment extends Model
         'amount' => 'decimal:6',
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',
+        'payment_account_id' => 'string',
+        'transaction_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -61,5 +65,15 @@ class BillPayment extends Model
     public function allocations()
     {
         return $this->hasMany(BillPaymentAllocation::class, 'bill_payment_id');
+    }
+
+    public function paymentAccount()
+    {
+        return $this->belongsTo(Account::class, 'payment_account_id');
+    }
+
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 }

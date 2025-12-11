@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreInvoiceRequest extends BaseFormRequest
 {
@@ -23,6 +24,13 @@ class StoreInvoiceRequest extends BaseFormRequest
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'line_items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'line_items.*.income_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('type', 'revenue')
+                    ->where('is_active', true)),
+            ],
             'currency' => ['nullable', 'string', 'size:3', 'uppercase'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'description' => ['nullable', 'string', 'max:500'],
@@ -31,6 +39,13 @@ class StoreInvoiceRequest extends BaseFormRequest
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
             'invoice_date' => ['required', 'date'],
+            'ar_account_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->where('subtype', 'accounts_receivable')
+                    ->where('is_active', true)),
+            ],
         ];
     }
 }

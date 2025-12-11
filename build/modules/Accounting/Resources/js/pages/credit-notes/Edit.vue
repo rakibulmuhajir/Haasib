@@ -26,7 +26,10 @@ interface Customer {
 
 interface Invoice {
   id: string
+  customer_id: string
   invoice_number: string
+  total_amount: number
+  currency: string
 }
 
 interface CreditNote {
@@ -47,9 +50,17 @@ interface CreditNote {
   created_at: string
 }
 
+interface CurrencyRef {
+  currency_code: string
+  is_base: boolean
+}
+
 const props = defineProps<{
   company: CompanyRef
   credit_note: CreditNote
+  customers: Customer[]
+  invoices: Invoice[]
+  currencies: CurrencyRef[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -62,7 +73,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const form = useForm({
   customer_id: props.credit_note.customer.id,
-  invoice_id: props.credit_note.invoice?.id || '',
+  invoice_id: props.credit_note.invoice?.id || 'company_default',
   amount: props.credit_note.amount,
   base_currency: props.credit_note.base_currency,
   reason: props.credit_note.reason,
@@ -70,6 +81,12 @@ const form = useForm({
   credit_date: props.credit_note.credit_date,
   notes: props.credit_note.notes || '',
   terms: props.credit_note.terms || '',
+})
+
+// Filter invoices based on selected customer
+const availableInvoices = computed(() => {
+  if (!form.customer_id) return []
+  return props.invoices.filter(invoice => invoice.customer_id === form.customer_id)
 })
 
 const statusOptions = [
@@ -88,7 +105,19 @@ const formatCurrency = (amount: number) => {
 }
 
 const submit = () => {
-  form.put(`/${props.company.slug}/credit-notes/${props.credit_note.id}`)
+  // Convert 'company_default' back to null for the backend
+  const submitData = { ...form }
+  if (submitData.invoice_id === 'company_default') {
+    submitData.invoice_id = null
+  }
+
+  form.transform((data) => {
+    const transformed = { ...data }
+    if (transformed.invoice_id === 'company_default') {
+      transformed.invoice_id = null
+    }
+    return transformed
+  }).put(`/${props.company.slug}/credit-notes/${props.credit_note.id}`)
 }
 
 const isEditable = computed(() => {
@@ -100,7 +129,7 @@ const isEditable = computed(() => {
   <Head :title="`Edit Credit Note ${credit_note.credit_note_number}`" />
 
   <PageShell
-    :title="`Edit Credit Note ${credit_note.credit_note_number}`"
+    :title="`Edit Credit Note`"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
@@ -113,6 +142,33 @@ const isEditable = computed(() => {
         Save Changes
       </Button>
     </template>
+
+    <!-- Credit Note Header with Clickable Number -->
+    <Card class="mb-6">
+      <CardContent class="pt-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <Receipt class="h-5 w-5 text-muted-foreground" />
+              <span class="text-sm font-medium text-muted-foreground">Credit Note</span>
+              <Badge :variant="credit_note.status === 'applied' ? 'default' : 'secondary'">
+                {{ credit_note.status }}
+              </Badge>
+            </div>
+            <button
+              @click="router.get(`/${company.slug}/credit-notes/${credit_note.id}`)"
+              class="text-2xl font-bold hover:text-primary transition-colors"
+            >
+              {{ credit_note.credit_note_number }}
+            </button>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-bold text-green-600">{{ formatCurrency(credit_note.amount) }}</div>
+            <div class="text-sm text-muted-foreground">{{ credit_note.base_currency }}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
 
     <div v-if="!isEditable" class="mb-6">
       <Card class="border-yellow-200 bg-yellow-50">
@@ -135,29 +191,44 @@ const isEditable = computed(() => {
         <CardContent class="space-y-4">
           <div>
             <Label for="customer_id">Customer *</Label>
-            <Select v-model="form.customer_id" required :disabled="!isEditable">
+            <Select v-model="form.customer_id" required :disabled="!isEditable" @update:modelValue="form.invoice_id = 'company_default'">
               <SelectTrigger>
                 <SelectValue placeholder="Select a customer" />
               </SelectTrigger>
               <SelectContent>
-                <!-- This would be populated from API -->
-                <SelectItem :value="credit_note.customer.id">{{ credit_note.customer.name }}</SelectItem>
+                <SelectItem
+                  v-for="customer in customers"
+                  :key="customer.id"
+                  :value="customer.id"
+                >
+                  {{ customer.name }}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label for="invoice_id">Apply to Invoice (Optional)</Label>
-            <Select v-model="form.invoice_id" :disabled="!isEditable">
+            <Select v-model="form.invoice_id" :disabled="!isEditable || !form.customer_id">
               <SelectTrigger>
                 <SelectValue placeholder="Select an invoice" />
               </SelectTrigger>
               <SelectContent>
-                <!-- This would be populated from API based on customer selection -->
-                <SelectItem v-if="credit_note.invoice" :value="credit_note.invoice.id">
-                  {{ credit_note.invoice.invoice_number }}
+                <SelectItem value="company_default">No specific invoice</SelectItem>
+                <SelectItem
+                  v-for="invoice in availableInvoices"
+                  :key="invoice.id"
+                  :value="invoice.id"
+                >
+                  {{ invoice.invoice_number }} - {{ formatCurrency(invoice.total_amount) }} {{ invoice.currency }}
                 </SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="form.customer_id && availableInvoices.length === 0" class="text-sm text-muted-foreground mt-1">
+              No invoices found for this customer
+            </p>
+            <p v-if="!form.customer_id" class="text-sm text-muted-foreground mt-1">
+              Select a customer first to see available invoices
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -219,10 +290,13 @@ const isEditable = computed(() => {
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="USD">USD - US Dollar</SelectItem>
-                <SelectItem value="EUR">EUR - Euro</SelectItem>
-                <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
+                <SelectItem
+                  v-for="currency in currencies"
+                  :key="currency.currency_code"
+                  :value="currency.currency_code"
+                >
+                  {{ currency.currency_code }}{{ currency.is_base ? ' (Base)' : '' }}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -291,7 +365,7 @@ const isEditable = computed(() => {
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Customer:</span>
-            <span>{{ credit_note.customer.name }}</span>
+            <span>{{ customers.find(c => c.id === form.customer_id)?.name || credit_note.customer.name }}</span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Status:</span>
@@ -301,9 +375,10 @@ const isEditable = computed(() => {
             <span>Reason:</span>
             <span>{{ form.reason }}</span>
           </div>
-          <div v-if="credit_note.invoice" class="flex justify-between text-sm text-muted-foreground">
+          <div class="flex justify-between text-sm text-muted-foreground">
             <span>Applied to:</span>
-            <span>{{ credit_note.invoice.invoice_number }}</span>
+            <span v-if="form.invoice_id === 'company_default'">No specific invoice</span>
+            <span v-else>{{ availableInvoices.find(i => i.id === form.invoice_id)?.invoice_number || credit_note.invoice?.invoice_number || 'Unknown invoice' }}</span>
           </div>
         </CardContent>
       </Card>

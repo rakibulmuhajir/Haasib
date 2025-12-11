@@ -22,9 +22,11 @@ interface AccountRef {
   name: string
   type: string
   subtype: string
+  normal_balance: string
   currency: string | null
   parent_id: string | null
   description: string | null
+  is_active: boolean
 }
 
 interface ParentOption {
@@ -50,14 +52,18 @@ const breadcrumbs: BreadcrumbItem[] = [
 const noneParentValue = '__none'
 
 const form = useForm({
+  code: props.account.code,
   name: props.account.name,
+  type: props.account.type,
+  subtype: props.account.subtype,
+  normal_balance: props.account.normal_balance,
   currency: props.account.currency ?? '',
   parent_id: props.account.parent_id ?? noneParentValue,
   description: props.account.description ?? '',
-  is_active: true,
+  is_active: props.account.is_active,
 })
 
-const filteredParents = computed(() => props.parents.filter((p) => p.id !== props.account.id && p.type === props.account.type))
+const filteredParents = computed(() => props.parents.filter((p) => p.id !== props.account.id && p.type === form.type))
 
 const handleSubmit = () => {
   form

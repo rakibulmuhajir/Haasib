@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\Payroll\Models;
+namespace App\Modules\Payroll\Models;
 
 use App\Models\Company;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;

@@ -1,8 +1,8 @@
 # 🚚 HAASIB MIGRATION PLAN: /stack → /build
 
-**Migration Date**: 2025-11-18  
-**Source**: `/home/banna/projects/Haasib/stack`  
-**Target**: `/home/banna/projects/Haasib/build`  
+**Migration Date**: 2025-11-18
+**Source**: `/home/banna/projects/Haasib/stack`
+**Target**: `/home/banna/projects/Haasib/build`
 **Objective**: Module-driven clean rebuild with constitutional compliance
 
 ---
@@ -12,7 +12,7 @@
 ### Strategy
 - **Module-Driven**: Migrate complete self-contained modules (Core → Accounting → Future modules)
 - **Complete Module Testing**: Test full module functionality after migration
-- **Constitutional Compliance**: All code follows CLAUDE.md standards  
+- **Constitutional Compliance**: All code follows CLAUDE.md standards
 - **Zero Drift**: Use exact templates from CLAUDE.md
 - **Module Isolation**: Each module can be independently enabled/disabled
 - **Constitution as Source of Truth**: At the start of EVERY phase run `cat CLAUDE.md | head -n 120` and skim the relevant sections to confirm no instructions changed; log the timestamp in `migration-journal.md`.
@@ -51,7 +51,7 @@
   - ✅ All required UI components (select, table, tabs, charts)
   - ✅ Dependencies (@unovis/vue, @tanstack/vue-table, @tabler/icons-vue, etc.)
 
-### Step 0.5.2: Universal Layout Component ✅ COMPLETED  
+### Step 0.5.2: Universal Layout Component ✅ COMPLETED
 - **File**: `/build/resources/js/layouts/UniversalLayout.vue`
 - **Features**:
   - ✅ Sidebar-07 integration with accounting-focused navigation
@@ -74,7 +74,7 @@
 ### Step 0.5.4: Navigation & Routing ✅ COMPLETED
 - **Routes Added**:
   - ✅ `/dashboard` - Main dashboard with analytics
-  - ✅ `/customers` - Customer management  
+  - ✅ `/customers` - Customer management
   - ✅ `/invoices` - Invoice management
   - ✅ `/dashboard/custom` - Original test implementation
 - **Navigation Structure**:
@@ -119,7 +119,7 @@ composer require spatie/laravel-permission:^6.0
 composer require spatie/laravel-activitylog:^4.0
 composer require predis/predis
 
-# Frontend dependencies  
+# Frontend dependencies
 npm install @inertiajs/vue3@^2.0 vue@^3.0
 npm install primevue@^4.0.0
 npm install @primevue/themes
@@ -168,7 +168,7 @@ cd build && php artisan db:seed --class=PermissionSeeder
 cd build && php artisan migrate --path=database/migrations/2025_10_11_110306_enhance_company_rls_policies.php
 ```
 
-**✅ Testing Checkpoint**: 
+**✅ Testing Checkpoint**:
 - Laravel welcome page loads at `npm run dev`
 - Database connection successful
 - Basic Laravel installation functional
@@ -267,7 +267,7 @@ sed -i '/Accounting/,+20d' build/routes/web.php # iterative removal; confirm dif
 cd build && php artisan route:list --columns=Method,URI,Name,Action | tee /tmp/core-routes.txt
 ```
 
-**✅ Core Module Testing Checkpoint**: 
+**✅ Core Module Testing Checkpoint**:
 - [ ] User authentication works
 - [ ] Company management functional
 - [ ] Module loading infrastructure works
@@ -279,7 +279,7 @@ cd build && php artisan route:list --columns=Method,URI,Name,Action | tee /tmp/c
 
 ## 🔐 PHASE 2.5: RBAC SYSTEM IMPLEMENTATION ✅ COMPLETED
 
-**Status**: ✅ **COMPLETED** (2025-11-26)  
+**Status**: ✅ **COMPLETED** (2025-11-26)
 **Purpose**: Eliminate "RBAC errors with each feature" blocker
 
 ### Step 2.5.1: Enable Spatie Teams ✅ COMPLETED
@@ -778,7 +778,7 @@ JSON
 cat > build/modules/Reporting/Providers/ReportingServiceProvider.php <<'PHP'
 <?php
 
-namespace Modules\Reporting\Providers;
+namespace App\Modules\Reporting\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -802,7 +802,7 @@ JSON
   cat > build/modules/${module}/Providers/${module}ServiceProvider.php <<PHP
 <?php
 
-namespace Modules\\${module}\\Providers;
+namespace App\Modules\\${module}\\Providers;
 
 use Illuminate\\Support\\ServiceProvider;
 
@@ -819,7 +819,7 @@ done
 ```bash
 # Configure module dependencies in each module.json
 echo "# Accounting module can work independently"
-echo "# Reporting module depends on Accounting" 
+echo "# Reporting module depends on Accounting"
 echo "# CRM module depends on Accounting"
 echo "# Future modules can plug into this architecture"
 jq '.dependencies' build/modules/Accounting/module.json
@@ -888,16 +888,16 @@ npm run build && echo "✅ All modules build successfully"
 # Validate module independence
 php artisan module:disable accounting
 php artisan route:list # Should show only core routes
-php artisan module:enable accounting  
+php artisan module:enable accounting
 php artisan route:list # Should show core + accounting routes
 ```
 
-**✅ Module Migration Success Criteria**: 
+**✅ Module Migration Success Criteria**:
 - ✅ Core module handles authentication and company management
 - ✅ Accounting module provides complete business functionality independently
 - ✅ Modules can be enabled/disabled without breaking the system
 - ✅ No 403 permission errors across all modules
-- ✅ Every module page follows strict layout standards  
+- ✅ Every module page follows strict layout standards
 - ✅ Module workflows complete successfully
 - ✅ Performance matches or exceeds original system
 - ✅ Ready for future module additions (CRM, Hospitality, etc.)
@@ -908,7 +908,7 @@ php artisan route:list # Should show core + accounting routes
 
 ### Emergency Rollback
 ```bash
-# Stop build environment  
+# Stop build environment
 cd /home/banna/projects/Haasib/build
 php artisan down
 
@@ -1004,7 +1004,7 @@ Foundation (Phase 1)
     ↓
 Core Module (Phase 2)
 ├── Authentication System
-├── Company Management  
+├── Company Management
 ├── User Management
 ├── RBAC System
 └── Module Loading Infrastructure
@@ -1025,7 +1025,7 @@ Future Modules (Phase 10+)
 └── Additional Business Modules
 ```
 
-**Migration Status**: ⏸️ Ready for Module-Driven Execution  
-**Estimated Duration**: 3-4 hours (with thorough module testing)  
-**Risk Level**: Low (module isolation + independent rollbacks)  
+**Migration Status**: ⏸️ Ready for Module-Driven Execution
+**Estimated Duration**: 3-4 hours (with thorough module testing)
+**Risk Level**: Low (module isolation + independent rollbacks)
 **Approach**: Complete self-contained modules, not technical layers

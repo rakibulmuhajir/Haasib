@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\Payroll\Http\Controllers;
+namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Services\CurrentCompany;

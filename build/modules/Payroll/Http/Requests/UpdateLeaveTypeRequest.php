@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\Payroll\Http\Requests;
+namespace App\Modules\Payroll\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;

@@ -1,0 +1,120 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { Component } from 'vue'
+import AppLayout from '@/layouts/AppLayout.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SearchBar from '@/components/SearchBar.vue'
+import type { BreadcrumbItem } from '@/types'
+
+interface Action {
+  label: string
+  icon?: Component
+  onClick?: () => void
+  variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive'
+  disabled?: boolean
+  loading?: boolean
+}
+
+interface Props {
+  title: string
+  description?: string
+  icon?: Component
+  breadcrumbs?: BreadcrumbItem[]
+  badge?: {
+    text: string
+    variant?: 'default' | 'secondary' | 'outline' | 'destructive'
+  }
+  actions?: Action[]
+  backButton?: {
+    label: string
+    onClick: () => void
+    icon?: Component
+  }
+  searchable?: boolean
+  searchPlaceholder?: string
+  /** Canonical v-model prop for search */
+  search?: string
+  /** Legacy support for search v-model */
+  searchModelValue?: string
+  loading?: boolean
+  /** Use compact layout without the content card wrapper */
+  compact?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  description: undefined,
+  icon: undefined,
+  breadcrumbs: () => [],
+  badge: undefined,
+  actions: () => [],
+  backButton: undefined,
+  searchable: false,
+  searchPlaceholder: 'Search...',
+  search: undefined,
+  searchModelValue: '',
+  loading: false,
+  compact: false,
+})
+
+const emit = defineEmits<{
+  'update:search': [value: string]
+  'update:searchModelValue': [value: string]
+  'search': [value: string]
+}>()
+
+const searchValue = computed({
+  get: () => props.search ?? props.searchModelValue,
+  set: (value: string) => {
+    emit('update:search', value)
+    emit('update:searchModelValue', value)
+    emit('search', value)
+  },
+})
+</script>
+
+<template>
+  <AppLayout :breadcrumbs="breadcrumbs">
+    <div class="flex flex-col gap-6">
+      <PageHeader
+        :title="title"
+        :description="description"
+        :icon="icon"
+        :badge="badge"
+        :actions="actions"
+        :back-button="backButton"
+      >
+        <template v-if="$slots.description" #description>
+          <slot name="description" />
+        </template>
+        <template v-if="$slots.actions" #actions>
+          <slot name="actions" />
+        </template>
+      </PageHeader>
+
+      <div
+        v-if="searchable || $slots.filters"
+        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <SearchBar
+          v-if="searchable"
+          :model-value="searchValue"
+          :placeholder="searchPlaceholder"
+          :loading="loading"
+          @update:model-value="(value) => (searchValue = value)"
+          class="w-full sm:max-w-sm"
+        />
+
+        <div v-if="$slots.filters" class="flex items-center gap-2">
+          <slot name="filters" />
+        </div>
+      </div>
+
+      <div v-if="compact">
+        <slot />
+      </div>
+      <div v-else class="flex flex-col gap-6">
+        <slot />
+      </div>
+    </div>
+  </AppLayout>
+</template>

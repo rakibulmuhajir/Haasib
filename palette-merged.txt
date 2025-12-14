@@ -1,0 +1,2999 @@
+/**
+ * Format text with semantic color tags
+ * Supports: {success}, {error}, {warning}, {accent}, {primary}, {secondary}, {link:url}
+ */
+
+export function formatText(text: string): string {
+  if (!text || typeof text !== 'string') return ''
+
+  let result = escapeHtml(text)
+
+  // Semantic color tags
+  result = result.replace(/\{success\}(.*?)\{\/\}/g, '<span class="fmt-success">$1</span>')
+  result = result.replace(/\{error\}(.*?)\{\/\}/g, '<span class="fmt-error">$1</span>')
+  result = result.replace(/\{warning\}(.*?)\{\/\}/g, '<span class="fmt-warning">$1</span>')
+  result = result.replace(/\{accent\}(.*?)\{\/\}/g, '<span class="fmt-accent">$1</span>')
+  result = result.replace(/\{primary\}(.*?)\{\/\}/g, '<span class="fmt-primary">$1</span>')
+  result = result.replace(/\{secondary\}(.*?)\{\/\}/g, '<span class="fmt-secondary">$1</span>')
+
+  // Text formatting
+  result = result.replace(/\{bold\}(.*?)\{\/\}/g, '<strong>$1</strong>')
+  result = result.replace(/\{dim\}(.*?)\{\/\}/g, '<span class="fmt-dim">$1</span>')
+  result = result.replace(/\{code\}(.*?)\{\/\}/g, '<code class="fmt-code">$1</code>')
+
+  // Links - sanitize URLs
+  result = result.replace(/\{link:(.*?)\}(.*?)\{\/\}/g, (match, url, text) => {
+    const sanitizedUrl = sanitizeUrl(url)
+    return `<a href="${sanitizedUrl}" class="fmt-link" target="_blank" rel="noopener noreferrer">${text}</a>`
+  })
+
+  return result
+}
+
+/**
+ * Basic HTML escape to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+/**
+ * Sanitize URL to prevent javascript: and data: URLs
+ */
+function sanitizeUrl(url: string): string {
+  const trimmed = url.trim().toLowerCase()
+
+  // Block dangerous protocols
+  if (
+    trimmed.startsWith('javascript:') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('vbscript:')
+  ) {
+    return '#'
+  }
+
+  // Allow http, https, mailto, relative paths
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./')
+  ) {
+    return url
+  }
+
+  // Default to relative path
+  return `/${url}`
+}
+
+/**
+ * Helper to format money
+ */
+export function formatMoney(amount: number | string, currency = 'USD'): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  if (isNaN(num)) return String(amount)
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+  }).format(num)
+}
+
+/**
+ * Helper to format date
+ */
+export function formatDate(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  if (isNaN(d.getTime())) return String(date)
+
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(d)
+}
+
+/**
+ * Format data as an ASCII table
+ */
+export function formatTable(
+  rows: string[][],
+  headers?: string[],
+  footer?: string
+): string {
+  if (rows.length === 0 && !headers) {
+    return '(no results)'
+  }
+
+  // Calculate column widths
+  const allRows = headers ? [headers, ...rows] : rows
+  const colCount = Math.max(...allRows.map(r => r.length))
+  const colWidths: number[] = []
+
+  for (let col = 0; col < colCount; col++) {
+    let maxWidth = 0
+    for (const row of allRows) {
+      const cell = stripAnsi(row[col] || '')
+      maxWidth = Math.max(maxWidth, cell.length)
+    }
+    // Cap column width at 40 chars
+    colWidths.push(Math.min(maxWidth, 40))
+  }
+
+  const lines: string[] = []
+
+  // Top border
+  lines.push(formatBorder(colWidths, '┌', '┬', '┐'))
+
+  // Header
+  if (headers) {
+    lines.push(formatRow(headers, colWidths))
+    lines.push(formatBorder(colWidths, '├', '┼', '┤'))
+  }
+
+  // Rows
+  for (let i = 0; i < rows.length; i++) {
+    lines.push(formatRow(rows[i], colWidths))
+  }
+
+  // Bottom border
+  lines.push(formatBorder(colWidths, '└', '┴', '┘'))
+
+  // Footer
+  if (footer) {
+    lines.push('')
+    lines.push(footer)
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Format a single row
+ */
+function formatRow(cells: string[], widths: number[]): string {
+  const parts: string[] = []
+
+  for (let i = 0; i < widths.length; i++) {
+    const cell = cells[i] || ''
+    const stripped = stripAnsi(cell)
+    const padded = stripped.padEnd(widths[i])
+    // Truncate if too long
+    const final = padded.length > widths[i] 
+      ? padded.substring(0, widths[i] - 1) + '…'
+      : padded
+    parts.push(final)
+  }
+
+  return '│ ' + parts.join(' │ ') + ' │'
+}
+
+/**
+ * Format a border line
+ */
+function formatBorder(widths: number[], left: string, mid: string, right: string): string {
+  const segments = widths.map(w => '─'.repeat(w + 2))
+  return left + segments.join(mid) + right
+}
+
+/**
+ * Strip ANSI codes and our custom tags from text
+ */
+function stripAnsi(text: string): string {
+  // Remove ANSI escape codes
+  let result = text.replace(/\x1b\[[0-9;]*m/g, '')
+  // Remove our {tag}...{/} format
+  result = result.replace(/\{[^}]+\}/g, '')
+  return result
+}
+
+/**
+ * Simple table format (no borders) for compact output
+ */
+export function formatSimpleTable(
+  rows: string[][],
+  headers?: string[]
+): string {
+  if (rows.length === 0) return '(no results)'
+
+  const allRows = headers ? [headers, ...rows] : rows
+  const colCount = Math.max(...allRows.map(r => r.length))
+  const colWidths: number[] = []
+
+  for (let col = 0; col < colCount; col++) {
+    let maxWidth = 0
+    for (const row of allRows) {
+      const cell = stripAnsi(row[col] || '')
+      maxWidth = Math.max(maxWidth, cell.length)
+    }
+    colWidths.push(Math.min(maxWidth, 40))
+  }
+
+  const lines: string[] = []
+
+  if (headers) {
+    lines.push(formatSimpleRow(headers, colWidths))
+    lines.push(colWidths.map(w => '─'.repeat(w)).join('  '))
+  }
+
+  for (const row of rows) {
+    lines.push(formatSimpleRow(row, colWidths))
+  }
+
+  return lines.join('\n')
+}
+
+function formatSimpleRow(cells: string[], widths: number[]): string {
+  return cells
+    .map((cell, i) => {
+      const stripped = stripAnsi(cell || '')
+      return stripped.padEnd(widths[i] || 0)
+    })
+    .join('  ')
+}
+
+/**
+ * Format key-value pairs (for single record display)
+ */
+export function formatKeyValue(data: Record<string, unknown>): string {
+  const maxKeyLen = Math.max(...Object.keys(data).map(k => k.length))
+
+  return Object.entries(data)
+    .map(([key, value]) => {
+      const paddedKey = key.padEnd(maxKeyLen)
+      const displayValue = formatValue(value)
+      return `${paddedKey}  ${displayValue}`
+    })
+    .join('\n')
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return value.toLocaleString()
+  if (value instanceof Date) return value.toLocaleDateString()
+  if (Array.isArray(value)) return value.join(', ')
+  return String(value)
+}
+
+/**
+ * Preset shortcuts (non-configurable)
+ *
+ * Examples:
+ *  ic -> invoice create
+ *  il -> invoice list
+ */
+const PRESET_SHORTCUTS: Record<string, { entity: string; verb: string }> = {
+  ic: { entity: 'invoice', verb: 'create' },
+  il: { entity: 'invoice', verb: 'list' },
+  pc: { entity: 'payment', verb: 'create' },
+  pl: { entity: 'payment', verb: 'list' },
+  cc: { entity: 'customer', verb: 'create' },
+  cl: { entity: 'customer', verb: 'list' },
+  jc: { entity: 'journal', verb: 'create' },
+}
+
+/**
+ * Expand preset shortcut to canonical "entity verb" string.
+ * Unknown shortcuts return the original input unchanged.
+ */
+export function expandPresetShortcut(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return trimmed
+
+  const [first, ...rest] = trimmed.split(/\s+/)
+  const preset = PRESET_SHORTCUTS[first.toLowerCase()]
+  if (!preset) return trimmed
+
+  const tail = rest.join(' ')
+  const expanded = `${preset.entity} ${preset.verb}`.trim()
+  return tail ? `${expanded} ${tail}` : `${expanded} `
+}
+
+/**
+ * Check if token is a preset shortcut.
+ */
+export function isPresetShortcut(token: string): boolean {
+  return Boolean(PRESET_SHORTCUTS[token.toLowerCase()])
+}
+
+/**
+ * Expose preset map (read-only) for suggestion displays.
+ */
+export function getPresetShortcuts(): Record<string, { entity: string; verb: string }> {
+  return { ...PRESET_SHORTCUTS }
+}
+
+export interface FrecencyEntry {
+  command: string
+  count: number
+  lastUsed: number
+}
+
+const STORAGE_KEY = 'palette-frecency-v1'
+
+function load(): Record<string, FrecencyEntry> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function save(entries: Record<string, FrecencyEntry>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+export function recordCommandUse(command: string): void {
+  const entries = load()
+  const key = command.trim()
+  if (!key) return
+
+  const existing = entries[key] || { command: key, count: 0, lastUsed: Date.now() }
+  entries[key] = {
+    command: key,
+    count: existing.count + 1,
+    lastUsed: Date.now(),
+  }
+
+  save(entries)
+}
+
+export function getFrecencyScores(): Record<string, number> {
+  const now = Date.now()
+  const entries = load()
+  const scores: Record<string, number> = {}
+
+  Object.values(entries).forEach((entry) => {
+    const daysSince = (now - entry.lastUsed) / (1000 * 60 * 60 * 24)
+    const recencyWeight = Math.max(0.2, 1 - daysSince / 7) // decays over 7 days
+    scores[entry.command] = entry.count * recencyWeight
+  })
+
+  return scores
+}
+
+import { GRAMMAR } from './grammar'
+
+const MODULE_GROUPS: Record<string, string[]> = {
+  sales: ['customer', 'invoice', 'payment'],
+  purchases: [],
+  accounting: ['account', 'journal'],
+  settings: ['company', 'user', 'role'],
+}
+
+/**
+ * Get help text for a topic
+ */
+export function getHelp(topic?: string): string {
+  if (!topic) {
+    return getGeneralHelp()
+  }
+
+  const topicLower = topic.toLowerCase()
+
+  if (topicLower === '?' || topicLower === 'help') {
+    return getGroupedHelp()
+  }
+
+  if (topicLower.startsWith('?')) {
+    const group = topicLower.replace('?', '').trim()
+    return getGroupedHelp(group)
+  }
+
+  if (MODULE_GROUPS[topicLower]) {
+    return getGroupedHelp(topicLower)
+  }
+
+  // Help for specific entity
+  if (GRAMMAR[topicLower]) {
+    return getEntityHelp(topicLower)
+  }
+
+  // Help for entity.verb
+  if (topicLower.includes('.')) {
+    const [entity, verb] = topicLower.split('.')
+    if (GRAMMAR[entity]) {
+      return getVerbHelp(entity, verb)
+    }
+  }
+
+  // Try to find entity by shortcut
+  for (const [entityName, entityDef] of Object.entries(GRAMMAR)) {
+    if (entityDef.shortcuts.includes(topicLower)) {
+      return getEntityHelp(entityName)
+    }
+  }
+
+  // Topic not found
+  return `Unknown topic: ${topic}\n\nAvailable: ${Object.keys(GRAMMAR).join(', ')}, or type 'help' for overview.`
+}
+
+/**
+ * General help - list all commands
+ */
+function getGeneralHelp(): string {
+  const lines: string[] = [
+    'COMMAND PALETTE',
+    '═══════════════',
+    '',
+    'Usage: entity verb [arguments] [--flags]',
+    '',
+    'AVAILABLE ENTITIES:',
+    '',
+  ]
+
+  for (const [entityName, entity] of Object.entries(GRAMMAR)) {
+    const shortcuts = entity.shortcuts.length > 0 
+      ? ` (${entity.shortcuts.join(', ')})` 
+      : ''
+    const verbs = entity.verbs.map(v => v.name).join(', ')
+    lines.push(`  ${entityName}${shortcuts}`)
+    lines.push(`    verbs: ${verbs}`)
+    lines.push('')
+  }
+
+  lines.push('BUILT-IN COMMANDS:')
+  lines.push('')
+  lines.push('  help [topic]     Show help (e.g., help company)')
+  lines.push("  ? [group]        List namespaces by group (e.g., '? sales')")
+  lines.push('  clear            Clear output')
+  lines.push('')
+  lines.push('SHORTCUTS:')
+  lines.push('')
+  lines.push('  ↑/↓              Navigate history')
+  lines.push('  Tab              Accept suggestion')
+  lines.push('  Ctrl+L           Clear output')
+  lines.push('  Ctrl+U           Clear input')
+  lines.push('  Esc              Close palette')
+  lines.push('')
+  lines.push('EXAMPLES:')
+  lines.push('')
+  lines.push('  company.list                    List all companies')
+  lines.push('  co.create "Acme Corp" USD       Create company')
+  lines.push('  user.invite john@example.com    Invite user')
+  lines.push('')
+  lines.push('Type "help <entity>" for detailed help (e.g., help company)')
+
+  return lines.join('\n')
+}
+
+function getGroupedHelp(group?: string): string {
+  const lines: string[] = ['COMMAND CATALOG', '════════════════', '']
+
+  if (!group) {
+    lines.push('Groups: sales, purchases, accounting, settings')
+    lines.push("Type '? sales' to filter to that group.")
+    lines.push('')
+  }
+
+  const targetGroups = group ? [group] : Object.keys(MODULE_GROUPS)
+
+  for (const groupName of targetGroups) {
+    const entities = MODULE_GROUPS[groupName]
+    const hasEntities = entities && entities.length > 0
+    if (!hasEntities) {
+      if (group) {
+        lines.push(`${groupName.toUpperCase()}`)
+        lines.push('  (no commands yet)')
+        lines.push('')
+      }
+      continue
+    }
+
+    lines.push(`${groupName.toUpperCase()}`)
+    lines.push('─'.repeat(groupName.length))
+
+    entities.forEach((entityName) => {
+      const entity = GRAMMAR[entityName]
+      if (!entity) return
+      const verbs = entity.verbs.map((v) => v.name).join(', ')
+      lines.push(`  ${entityName} (${verbs})`)
+    })
+
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Help for a specific entity
+ */
+function getEntityHelp(entityName: string): string {
+  const entity = GRAMMAR[entityName]
+  if (!entity) return `Unknown entity: ${entityName}`
+
+  const lines: string[] = [
+    `${entityName.toUpperCase()}`,
+    '═'.repeat(entityName.length),
+    '',
+  ]
+
+  if (entity.shortcuts.length > 0) {
+    lines.push(`Shortcuts: ${entity.shortcuts.join(', ')}`)
+    lines.push('')
+  }
+
+  lines.push('COMMANDS:')
+  lines.push('')
+
+  for (const verb of entity.verbs) {
+    const aliases = verb.aliases.length > 0 
+      ? ` (aliases: ${verb.aliases.join(', ')})` 
+      : ''
+    lines.push(`  ${entityName} ${verb.name}${aliases}`)
+
+    // Show flags
+    if (verb.flags.length > 0) {
+      for (const flag of verb.flags) {
+        const required = flag.required ? ' (required)' : ''
+        const shorthand = flag.shorthand ? ` (-${flag.shorthand})` : ''
+        const defaultVal = flag.default !== undefined ? ` [default: ${flag.default}]` : ''
+        lines.push(`    --${flag.name}${shorthand}: ${flag.type}${required}${defaultVal}`)
+      }
+    } else {
+      lines.push('    (no flags)')
+    }
+
+    // Example using canonical entity and verb
+    lines.push(`    Example: ${buildExample(entityName, verb)}`)
+    lines.push('')
+  }
+
+  lines.push('EXAMPLES:')
+  lines.push('')
+  lines.push(...getEntityExamples(entityName))
+
+  return lines.join('\n')
+}
+
+/**
+ * Help for a specific verb
+ */
+function getVerbHelp(entityName: string, verbName: string): string {
+  const entity = GRAMMAR[entityName]
+  if (!entity) return `Unknown entity: ${entityName}`
+
+  const verb = entity.verbs.find(v => 
+    v.name === verbName || v.aliases.includes(verbName)
+  )
+  if (!verb) return `Unknown verb: ${entityName}.${verbName}`
+
+  const lines: string[] = [
+    `${entityName.toUpperCase()} ${verb.name.toUpperCase()}`,
+    '═'.repeat(entityName.length + verb.name.length + 1),
+    '',
+  ]
+
+  if (verb.aliases.length > 0) {
+    lines.push(`Aliases: ${verb.aliases.join(', ')}`)
+    lines.push('')
+  }
+
+  lines.push('FLAGS:')
+  lines.push('')
+
+  if (verb.flags.length > 0) {
+    for (const flag of verb.flags) {
+      const required = flag.required ? ' (required)' : ''
+      const shorthand = flag.shorthand ? `, -${flag.shorthand}` : ''
+      const defaultVal = flag.default !== undefined ? `\n      Default: ${flag.default}` : ''
+      lines.push(`  --${flag.name}${shorthand}`)
+      lines.push(`      Type: ${flag.type}${required}${defaultVal}`)
+      lines.push('')
+    }
+  } else {
+    lines.push('  (no flags)')
+    lines.push('')
+  }
+
+  lines.push('EXAMPLES:')
+  lines.push('')
+  lines.push(`  ${buildExample(entityName, verb)}`)
+  lines.push(...getVerbExamples(entityName, verb.name))
+
+  return lines.join('\n')
+}
+
+/**
+ * Get example commands for an entity
+ */
+function getEntityExamples(entityName: string): string[] {
+  const examples: Record<string, string[]> = {
+    company: [
+      '  company list',
+      '  company create "Acme Corp" USD',
+      '  co create "My Company" USD --industry=tech',
+      '  company switch acme-corp',
+      '  company delete acme-corp',
+    ],
+    user: [
+      '  user list',
+      '  user invite john@example.com',
+      '  user invite jane@example.com --role=admin',
+      '  user assign-role john@example.com --role=accountant',
+      '  user deactivate john@example.com',
+    ],
+    role: [
+      '  role list',
+      '  role assign --permission=invoice:create --role=accountant',
+      '  role revoke --permission=invoice:delete --role=member',
+    ],
+  }
+
+  return examples[entityName] || ['  (no examples available)']
+}
+
+/**
+ * Get example commands for a specific verb
+ */
+function getVerbExamples(entityName: string, verbName: string): string[] {
+  const key = `${entityName}.${verbName}`
+  const examples: Record<string, string[]> = {
+    'company.list': [
+      '  company list',
+      '  co list',
+    ],
+    'company.create': [
+      '  company create "Acme Corp" USD',
+      '  co create "My Company" CAD',
+      '  company create --name="Big Corp" --currency=EUR --industry=finance',
+    ],
+    'company.switch': [
+      '  company switch acme-corp',
+      '  co switch my-company',
+    ],
+    'company.delete': [
+      '  company delete acme-corp',
+      '  co delete old-company',
+    ],
+    'user.list': [
+      '  user list',
+      '  u list',
+    ],
+    'user.invite': [
+      '  user invite john@example.com',
+      '  user invite jane@example.com --role=admin',
+      '  u invite test@test.com --name="John Doe"',
+    ],
+    'user.assign-role': [
+      '  user assign-role john@example.com --role=admin',
+      '  user assign --email=jane@example.com --role=accountant',
+    ],
+    'user.deactivate': [
+      '  user deactivate john@example.com',
+      '  user disable --email=test@test.com',
+    ],
+    'role.list': [
+      '  role list',
+      '  r list',
+    ],
+  }
+
+  return examples[key] || ['  (no examples available)']
+}
+
+function buildExample(
+  entityName: string,
+  verb: { name: string; flags: Array<{ name: string; required: boolean }>; requiresSubject: boolean }
+): string {
+  const base = `${entityName}.${verb.name}`
+  const requiredFlags = verb.flags
+    .filter(f => f.required)
+    .map(f => `--${f.name}=<${f.name}>`)
+    .join(' ')
+
+  const subjectHint = verb.requiresSubject ? '<value>' : ''
+  return [base, subjectHint, requiredFlags].filter(Boolean).join(' ').trim()
+}
+
+import type { ParsedCommand } from '@/types/palette'
+import { GRAMMAR, resolveEntityShortcut, resolveVerbAlias, getVerbDefinition } from './grammar'
+import { expandPresetShortcut } from './shortcuts'
+
+/**
+ * Parse a command string into a structured ParsedCommand
+ */
+export function parse(input: string): ParsedCommand {
+  const normalizedInput = expandPresetShortcut(input)
+  const result: ParsedCommand = {
+    raw: normalizedInput.trim(),
+    entity: '',
+    verb: '',
+    flags: {},
+    complete: false,
+    confidence: 0,
+    errors: [],
+    idemKey: '',
+  }
+
+  if (!result.raw) {
+    result.errors.push('Empty command')
+    return result
+  }
+
+  const tokens = tokenize(result.raw)
+  
+  if (tokens.length === 0) {
+    result.errors.push('No tokens found')
+    return result
+  }
+
+  const first = tokens[0]
+  let rest = tokens.slice(1)
+
+  // Parse entity.verb
+  const entityVerb = parseEntityVerb(first, rest)
+  if (entityVerb) {
+    result.entity = entityVerb.entity
+    result.verb = entityVerb.verb
+    if (entityVerb.consumed > 1) {
+      rest = rest.slice(entityVerb.consumed - 1)
+    }
+  } else {
+    result.errors.push(`Unknown command: ${first}`)
+    return result
+  }
+
+  // Extract flags and remaining positional args
+  const { flags, remaining, flagErrors } = extractFlags(rest, result.entity, result.verb)
+  result.flags = flags
+  result.errors.push(...flagErrors)
+
+  // Set subject from remaining tokens
+  if (remaining.length > 0) {
+    result.subject = remaining.join(' ')
+  }
+
+  // Infer flags from subject (smart parsing)
+  inferFromSubject(result)
+
+  // Calculate completion status
+  result.complete = isComplete(result)
+  result.confidence = calculateConfidence(result)
+  result.idemKey = generateIdemKey(result)
+
+  return result
+}
+
+/**
+ * Parse entity.verb from tokens
+ */
+function parseEntityVerb(
+  token: string, 
+  remainingTokens: string[]
+): { entity: string; verb: string; consumed: number } | null {
+  
+  // Handle "entity.verb" format
+  if (token.includes('.')) {
+    const [entityPart, verbPart] = token.split('.')
+    const entity = resolveEntityShortcut(entityPart)
+    if (!entity) return null
+    
+    const verb = resolveVerbAlias(entity, verbPart)
+    if (!verb) return null
+    
+    return { entity, verb, consumed: 1 }
+  }
+
+  // Handle "entity verb" format (space separated)
+  const entity = resolveEntityShortcut(token)
+  if (entity) {
+    if (remainingTokens.length > 0) {
+      const candidateVerb = resolveVerbAlias(entity, remainingTokens[0])
+      if (candidateVerb) {
+        return { entity, verb: candidateVerb, consumed: 2 }
+      }
+    }
+    // Use default verb
+    return { entity, verb: GRAMMAR[entity].defaultVerb, consumed: 1 }
+  }
+
+  return null
+}
+
+/**
+ * Tokenize input, respecting quotes
+ */
+function tokenize(input: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let inQuotes = false
+  let quoteChar = ''
+
+  for (const char of input) {
+    if ((char === '"' || char === "'") && !inQuotes) {
+      inQuotes = true
+      quoteChar = char
+    } else if (char === quoteChar && inQuotes) {
+      inQuotes = false
+      quoteChar = ''
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+
+  if (current) tokens.push(current)
+  return tokens
+}
+
+/**
+ * Extract flags from tokens
+ */
+function extractFlags(
+  tokens: string[],
+  entity: string,
+  verb: string
+): { flags: Record<string, unknown>; remaining: string[]; flagErrors: string[] } {
+  const flags: Record<string, unknown> = {}
+  const remaining: string[] = []
+  const errors: string[] = []
+
+  const verbDef = getVerbDefinition(entity, verb)
+  if (!verbDef) {
+    return { flags, remaining: tokens, flagErrors: errors }
+  }
+
+  let i = 0
+  while (i < tokens.length) {
+    const token = tokens[i]
+
+    if (token.startsWith('--')) {
+      const { name, value, consumed, error } = parseLongFlag(token, tokens[i + 1], verbDef.flags)
+      if (error) errors.push(error)
+      else if (name) flags[name] = value
+      i += consumed
+    } else if (token.startsWith('-') && token.length === 2) {
+      const { name, value, consumed, error } = parseShortFlag(token, tokens[i + 1], verbDef.flags)
+      if (error) errors.push(error)
+      else if (name) flags[name] = value
+      i += consumed
+    } else {
+      remaining.push(token)
+      i++
+    }
+  }
+
+  return { flags, remaining, flagErrors: errors }
+}
+
+/**
+ * Parse --flag or --flag=value
+ */
+function parseLongFlag(
+  token: string,
+  nextToken: string | undefined,
+  flagDefs: Array<{ name: string; shorthand?: string; type: string; required: boolean; default?: unknown }>
+): { name: string | null; value: unknown; consumed: number; error: string | null } {
+  const withoutDashes = token.substring(2)
+  
+  // Handle --flag=value
+  if (withoutDashes.includes('=')) {
+    const [name, ...valueParts] = withoutDashes.split('=')
+    const value = valueParts.join('=')
+    const flagDef = flagDefs.find(f => f.name === name)
+    
+    if (!flagDef) {
+      return { name: null, value: null, consumed: 1, error: `Unknown flag: --${name}` }
+    }
+    
+    return { name, value: coerceValue(value, flagDef.type), consumed: 1, error: null }
+  }
+
+  // Handle --flag value or --flag (boolean)
+  const flagDef = flagDefs.find(f => f.name === withoutDashes)
+  
+  if (!flagDef) {
+    return { name: null, value: null, consumed: 1, error: `Unknown flag: --${withoutDashes}` }
+  }
+
+  if (flagDef.type === 'boolean') {
+    return { name: withoutDashes, value: true, consumed: 1, error: null }
+  }
+
+  if (!nextToken || nextToken.startsWith('-')) {
+    return { name: null, value: null, consumed: 1, error: `Flag --${withoutDashes} requires a value` }
+  }
+
+  return { name: withoutDashes, value: coerceValue(nextToken, flagDef.type), consumed: 2, error: null }
+}
+
+/**
+ * Parse -f or -f value
+ */
+function parseShortFlag(
+  token: string,
+  nextToken: string | undefined,
+  flagDefs: Array<{ name: string; shorthand?: string; type: string; required: boolean }>
+): { name: string | null; value: unknown; consumed: number; error: string | null } {
+  const shorthand = token[1]
+  const flagDef = flagDefs.find(f => f.shorthand === shorthand)
+  
+  if (!flagDef) {
+    return { name: null, value: null, consumed: 1, error: `Unknown flag: -${shorthand}` }
+  }
+
+  if (flagDef.type === 'boolean') {
+    return { name: flagDef.name, value: true, consumed: 1, error: null }
+  }
+
+  if (!nextToken || nextToken.startsWith('-')) {
+    return { name: null, value: null, consumed: 1, error: `Flag -${shorthand} requires a value` }
+  }
+
+  return { name: flagDef.name, value: coerceValue(nextToken, flagDef.type), consumed: 2, error: null }
+}
+
+/**
+ * Coerce string value to appropriate type
+ */
+function coerceValue(value: string, type: string): unknown {
+  if (type === 'number') {
+    const num = parseFloat(value)
+    return isNaN(num) ? value : num
+  }
+  
+  if (type === 'boolean') {
+    return value.toLowerCase() === 'true' || value === '1'
+  }
+  
+  return value
+}
+
+/**
+ * Infer flag values from positional subject
+ */
+function inferFromSubject(result: ParsedCommand): void {
+  if (!result.subject) return
+
+  const words = result.subject.split(/\s+/)
+
+  // Customer create: accept positional name [email] [currency]
+  if (result.entity === 'customer' && result.verb === 'create') {
+    let email: string | undefined
+    let currency: string | undefined
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!email && emailRegex.test(word)) {
+        email = word
+        continue
+      }
+      if (
+        !currency &&
+        word.length === 3 &&
+        /^[A-Za-z]{3}$/.test(word)
+      ) {
+        currency = word.toUpperCase()
+        continue
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.email && email) {
+      result.flags.email = email
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.name) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.name = name
+      }
+    }
+  }
+
+  // Invoice create: positional customer, amount, currency
+  if (result.entity === 'invoice' && result.verb === 'create') {
+    let amount: number | undefined
+    let currency: string | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+
+      if (!currency && /^[A-Za-z]{3}$/.test(word)) {
+        currency = word.toUpperCase()
+        continue
+      }
+
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.currency && currency) {
+      result.flags.currency = currency
+    }
+    if (!result.flags.customer) {
+      const name = parts.join(' ').trim()
+      if (name) {
+        result.flags.customer = name
+      }
+    }
+  }
+
+  // Payment create: positional invoice, amount
+  if (result.entity === 'payment' && result.verb === 'create') {
+    let amount: number | undefined
+    const parts: string[] = []
+
+    for (const word of words) {
+      if (!amount && /^\$?[\d,]+\.?\d*$/.test(word)) {
+        const num = parseFloat(word.replace(/[,$]/g, ''))
+        if (!isNaN(num)) {
+          amount = num
+          continue
+        }
+      }
+      parts.push(word)
+    }
+
+    if (!result.flags.amount && amount !== undefined) {
+      result.flags.amount = amount
+    }
+    if (!result.flags.invoice) {
+      const invoiceToken = parts.join(' ').trim()
+      if (invoiceToken) {
+        result.flags.invoice = invoiceToken
+      }
+    }
+  }
+
+  // Company create: "company.create Acme Corp USD"
+  if (result.entity === 'company' && result.verb === 'create') {
+    if (!result.flags.name && words.length > 0) {
+      // Find currency (3 uppercase letters at the end)
+      const lastWord = words[words.length - 1]
+      if (lastWord && lastWord.length === 3 && lastWord.toUpperCase() === lastWord) {
+        result.flags.currency = lastWord.toUpperCase()
+        result.flags.name = words.slice(0, -1).join(' ')
+      } else {
+        // No currency found, entire subject is name
+        result.flags.name = result.subject
+      }
+    }
+  }
+
+  // Company switch/delete: "company.switch acme-corp"
+  if (result.entity === 'company' && ['switch', 'delete', 'view'].includes(result.verb)) {
+    if (!result.flags.slug && words.length > 0) {
+      result.flags.slug = words.join('-').toLowerCase()
+    }
+  }
+
+  // User invite: "user.invite john@example.com"
+  if (result.entity === 'user' && result.verb === 'invite') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailWord = words.find(w => emailRegex.test(w))
+    
+    if (emailWord && !result.flags.email) {
+      result.flags.email = emailWord
+      // Remaining words could be name
+      const nameWords = words.filter(w => w !== emailWord)
+      if (nameWords.length > 0 && !result.flags.name) {
+        result.flags.name = nameWords.join(' ')
+      }
+    }
+  }
+
+  // User operations with email: deactivate, delete, assign-role
+  if (result.entity === 'user' && ['deactivate', 'delete', 'assign-role', 'remove-role'].includes(result.verb)) {
+    if (!result.flags.email && words.length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const emailWord = words.find(w => emailRegex.test(w))
+      if (emailWord) {
+        result.flags.email = emailWord
+      }
+    }
+  }
+}
+
+/**
+ * Check if command has all required flags
+ */
+function isComplete(result: ParsedCommand): boolean {
+  if (result.errors.length > 0) return false
+  if (!result.entity || !result.verb) return false
+
+  const verbDef = getVerbDefinition(result.entity, result.verb)
+  if (!verbDef) return false
+
+  const requiredFlags = verbDef.flags.filter(f => f.required)
+  for (const flag of requiredFlags) {
+    if (!(flag.name in result.flags)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Calculate confidence score (0-1)
+ */
+function calculateConfidence(result: ParsedCommand): number {
+  if (!result.entity || !result.verb) return 0
+  if (result.errors.length > 0) return 0.3
+
+  const verbDef = getVerbDefinition(result.entity, result.verb)
+  if (!verbDef) return 0
+
+  const totalFlags = verbDef.flags.length
+  const providedFlags = Object.keys(result.flags).length
+
+  if (totalFlags === 0) return 1
+
+  const flagScore = providedFlags / totalFlags
+  return result.complete ? 1 : Math.min(0.9, flagScore)
+}
+
+/**
+ * Generate idempotency key for the command
+ */
+function generateIdemKey(result: ParsedCommand): string {
+  if (!result.complete) return ''
+  
+  const parts = [
+    result.entity,
+    result.verb,
+    ...Object.entries(result.flags)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`),
+  ]
+  
+  return btoa(parts.join('|')).substring(0, 32)
+}
+
+import { GRAMMAR, ENTITY_ICONS, COMMAND_DESCRIPTIONS, resolveEntityShortcut } from './grammar'
+import { getPresetShortcuts } from './shortcuts'
+import type { Suggestion } from '@/types/palette'
+
+export interface GenerateSuggestionOptions {
+  maxResults?: number
+  stage?: 'entity' | 'verb'
+  entity?: string
+  frecencyScores?: Record<string, number>
+}
+
+/**
+ * Generate command suggestions based on partial input
+ */
+export function generateSuggestions(input: string, options: GenerateSuggestionOptions = {}): Suggestion[] {
+  const maxResults = options.maxResults ?? 8
+  const stage = options.stage ?? 'entity'
+  const trimmed = input.trim()
+  const frecencyScores = options.frecencyScores || {}
+
+  if (!trimmed && stage === 'entity') {
+    return getQuickStartSuggestions(frecencyScores).slice(0, maxResults)
+  }
+
+  const inputLower = input.toLowerCase()
+  const suggestions: Array<Suggestion & { commandKey?: string }> = []
+
+  const targetEntity = options.entity || resolveEntityShortcut(trimmed.split(/\s+/)[0] || '') || ''
+  const completions = stage === 'verb'
+    ? (targetEntity ? getVerbCompletions(targetEntity) : getEntityCompletions())
+    : getEntityCompletions()
+
+  for (const completion of completions) {
+    const score = scoreSuggestion(inputLower, completion.value.toLowerCase())
+    if (score > 0) {
+      const frecencyBoost = completion.commandKey
+        ? (frecencyScores[completion.commandKey] || 0) * 50
+        : 0
+      suggestions.push({ ...completion, score: score + frecencyBoost })
+    }
+  }
+
+  // Sort by score (higher = better match), then by length (shorter = simpler)
+  return suggestions
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score! - a.score!
+      return a.value.length - b.value.length
+    })
+    .slice(0, maxResults)
+}
+
+/**
+ * Quick start suggestions when input is empty
+ */
+function getQuickStartSuggestions(frecencyScores: Record<string, number>): Suggestion[] {
+  const topFrequent = Object.entries(frecencyScores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([command]) => ({
+      type: 'history' as const,
+      value: `${command} `,
+      label: command,
+      description: 'Recent favorite',
+      icon: '⏱',
+    }))
+
+  const presets = getPresetShortcuts()
+  const shortcutPicks = Object.entries(presets).slice(0, 3).map(([shortcut, cmd]) => ({
+    type: 'command' as const,
+    value: `${cmd.entity} ${cmd.verb} `,
+    label: `${cmd.entity} ${cmd.verb}`,
+    description: `Shortcut: ${shortcut}`,
+    icon: ENTITY_ICONS[cmd.entity] || '⌨️',
+  }))
+
+  return [
+    ...topFrequent,
+    ...shortcutPicks,
+    {
+      type: 'command',
+      value: 'company list',
+      label: 'company list',
+      description: 'View all companies',
+      icon: ENTITY_ICONS.company,
+    },
+    {
+      type: 'command',
+      value: 'user invite ',
+      label: 'user invite',
+      description: 'Invite a new user',
+      icon: ENTITY_ICONS.user,
+    },
+    {
+      type: 'command',
+      value: 'user list',
+      label: 'user list',
+      description: 'View all users',
+      icon: ENTITY_ICONS.user,
+    },
+    {
+      type: 'command',
+      value: 'help',
+      label: 'help',
+      description: 'Show all commands',
+      icon: '❓',
+    },
+  ]
+}
+
+/**
+ * Score how well input matches a completion
+ * Higher score = better match
+ */
+function scoreSuggestion(input: string, completion: string): number {
+  // Exact prefix match - highest score
+  if (completion.startsWith(input)) {
+    return 100 + (input.length / completion.length) * 50
+  }
+
+  // Match after the dot (e.g., "list" matches "company.list")
+  const dotIndex = completion.indexOf('.')
+  if (dotIndex > 0) {
+    const afterDot = completion.substring(dotIndex + 1)
+    if (afterDot.startsWith(input)) {
+      return 80 + (input.length / afterDot.length) * 30
+    }
+  }
+
+  // Fuzzy match - each character in order
+  let inputIdx = 0
+  let score = 0
+  for (let i = 0; i < completion.length && inputIdx < input.length; i++) {
+    if (completion[i] === input[inputIdx]) {
+      // Bonus for consecutive matches
+      score += (i === 0 || completion[i - 1] === '.' || completion[i - 1] === ' ') ? 10 : 5
+      inputIdx++
+    }
+  }
+
+  // Only return score if all input chars were found
+  return inputIdx === input.length ? score : 0
+}
+
+function getEntityCompletions(): Array<Suggestion & { commandKey?: string }> {
+  const completions: Array<Suggestion & { commandKey?: string }> = []
+
+  for (const [entityName, entity] of Object.entries(GRAMMAR)) {
+    // Entity alone
+    completions.push({
+      type: 'entity',
+      value: `${entityName} `,
+      label: entityName,
+      description: '',
+      icon: ENTITY_ICONS[entityName] || '📦',
+    })
+  }
+
+  return completions
+}
+
+function getVerbCompletions(entityName: string): Array<Suggestion & { commandKey?: string }> {
+  const entity = GRAMMAR[entityName]
+  if (!entity) return []
+
+  return entity.verbs.map((verb) => {
+    const commandKey = `${entityName}.${verb.name}`
+    const description = COMMAND_DESCRIPTIONS[commandKey] || ''
+    return {
+      type: 'verb' as const,
+      value: `${entityName} ${verb.name} `,
+      label: `${verb.name}`,
+      description,
+      icon: ENTITY_ICONS[entityName] || '📦',
+      commandKey,
+    }
+  })
+}
+
+/**
+ * Get suggestions for flag values (for future use with entity catalogs)
+ */
+export function getFlagSuggestions(
+  entity: string,
+  verb: string,
+  flag: string,
+  partial: string,
+  catalog: Record<string, string[]> = {}
+): string[] {
+  // For now, just return from catalog if available
+  const key = `${entity}.${flag}`
+  const values = catalog[key] || []
+
+  if (!partial) return values.slice(0, 5)
+
+  const partialLower = partial.toLowerCase()
+  return values
+    .filter(v => v.toLowerCase().includes(partialLower))
+    .slice(0, 5)
+}
+
+import type { ParsedCommand } from '@/types/palette'
+import type { CommandSchema } from './schemas'
+
+export interface ArgState {
+  name: string
+  displayValue: string
+  status: 'current' | 'filled' | 'default' | 'pending'
+  hint?: string
+}
+
+export interface ScaffoldState {
+  args: ArgState[]
+  currentArg?: string
+  requiredRemaining: string[]
+  optionalFlags: Array<{ name: string; value?: string; source?: string; loading?: boolean; hint?: string }>
+  statusMessage: string
+  optionalHint: string
+  isReady: boolean
+  pointerHint: string
+}
+
+export function buildScaffold(
+  parsed: ParsedCommand,
+  schema: CommandSchema | null,
+  context: {
+    companyName?: string
+    companyCurrency?: string
+    defaults?: Record<string, { value: string; source?: string }>
+  },
+  activeArg?: string
+): ScaffoldState | null {
+  if (!schema) return null
+
+  const args: ArgState[] = []
+  const requiredRemaining: string[] = []
+
+  // Determine which arg is current (first unfilled required arg, or activeArg)
+  let firstUnfilledRequired: string | undefined
+
+  // First pass: find first unfilled required arg
+  schema.args.forEach(arg => {
+    const userValue = parsed.flags?.[arg.name]
+    const defaultMeta = context.defaults?.[arg.name]
+    const hasUserValue = userValue !== undefined && userValue !== null && String(userValue).trim() !== ''
+    const hasDefault = defaultMeta?.value !== undefined && defaultMeta?.value !== null
+
+    if (arg.required && !hasUserValue && !hasDefault && !firstUnfilledRequired) {
+      firstUnfilledRequired = arg.name
+    }
+  })
+
+  const currentArgName = activeArg || firstUnfilledRequired
+
+  // Second pass: build arg states
+  schema.args.forEach(arg => {
+    const userValue = parsed.flags?.[arg.name]
+    const defaultMeta = context.defaults?.[arg.name]
+    const defaultValue = defaultMeta?.value
+    const hasUserValue = userValue !== undefined && userValue !== null && String(userValue).trim() !== ''
+    const hasDefault = defaultValue !== undefined && defaultValue !== null && String(defaultValue).trim() !== ''
+
+    // Track missing required args
+    if (arg.required && !hasUserValue && !hasDefault) {
+      requiredRemaining.push(arg.name)
+    }
+
+    // Determine status
+    let status: ArgState['status']
+    let displayValue: string
+
+    if (arg.name === currentArgName && !hasUserValue) {
+      status = 'current'
+      displayValue = hasDefault ? `${defaultValue}` : arg.name
+    } else if (hasUserValue) {
+      status = 'filled'
+      displayValue = String(userValue)
+    } else if (hasDefault) {
+      status = 'default'
+      displayValue = `${defaultValue}`
+    } else {
+      status = 'pending'
+      displayValue = arg.name
+    }
+
+    args.push({
+      name: arg.name,
+      displayValue,
+      status,
+      hint: arg.hint,
+    })
+  })
+
+  // Build flag chips
+  const flagChips = schema.flags.map(flag => {
+    const defaultMeta = context.defaults?.[flag.name]
+    const userValue = parsed.flags?.[flag.name] as string | undefined
+    const value = userValue || defaultMeta?.value
+    const source = userValue ? 'user' : defaultMeta?.source
+    return {
+      name: flag.name,
+      value,
+      source,
+      hint: flag.hint,
+      loading: false,
+    }
+  })
+
+  const isReady = requiredRemaining.length === 0
+
+  // Build pointer hint
+  let pointerHint = ''
+  if (currentArgName) {
+    const argDef = schema.args.find(a => a.name === currentArgName)
+    pointerHint = argDef?.hint || ''
+  }
+
+  // Build status message
+  let statusMessage: string
+  if (isReady) {
+    statusMessage = 'Ready — press Enter to execute'
+  } else if (requiredRemaining.length === 1) {
+    statusMessage = `Enter ${requiredRemaining[0]}`
+  } else {
+    statusMessage = `Need: ${requiredRemaining.join(', ')}`
+  }
+
+  // Build optional hint
+  let optionalHint = ''
+  if (flagChips.length > 0) {
+    const flagNames = flagChips.slice(0, 3).map(f => `--${f.name}`).join(', ')
+    const moreCount = flagChips.length > 3 ? ` +${flagChips.length - 3} more` : ''
+    optionalHint = `Optional: ${flagNames}${moreCount}`
+  }
+
+  return {
+    args,
+    currentArg: currentArgName,
+    requiredRemaining,
+    optionalFlags: flagChips,
+    statusMessage,
+    optionalHint,
+    isReady,
+    pointerHint,
+  }
+}
+
+/**
+ * Command Palette Schemas
+ *
+ * This file defines the schema for each entity+verb combination.
+ * Adding new accounting modules (bills, vendors, reports, etc.) is as simple
+ * as adding entries to the SCHEMAS object.
+ *
+ * Schema Structure:
+ * - entity: string - The entity name (invoice, bill, vendor, etc.)
+ * - verb: string - The action (create, list, view, delete, etc.)
+ * - args: Array - Required positional arguments
+ * - flags: Array - Optional named flags
+ *
+ * Arg/Flag Properties:
+ * - name: string - Field name (used as key in API params)
+ * - required: boolean - Whether field is required
+ * - hint: string - Help text shown to user
+ * - hasDropdown: boolean - Whether to show dropdown with suggestions
+ * - enum: string[] - Static list of allowed values (optional)
+ * - options: string - API endpoint to fetch dynamic options (optional)
+ */
+
+export interface ArgDef {
+  name: string
+  required: boolean
+  hint?: string
+  hasDropdown?: boolean
+  enum?: string[]
+  options?: string
+}
+
+export interface FlagDef {
+  name: string
+  hint?: string
+  hasDropdown?: boolean
+  enum?: string[]
+  options?: string
+}
+
+export interface CommandSchema {
+  entity: string
+  verb: string
+  args: ArgDef[]
+  flags: FlagDef[]
+}
+
+// ============================================================================
+// Schema Definitions
+// ============================================================================
+
+const SCHEMAS: Record<string, CommandSchema> = {
+  // --------------------------------------------------------------------------
+  // COMPANY
+  // --------------------------------------------------------------------------
+  'company.create': {
+    entity: 'company',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Company name' },
+      { name: 'currency', required: true, hint: 'Base currency', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'industry', hint: 'Industry sector', hasDropdown: true },
+      { name: 'country', hint: 'Country code', hasDropdown: true },
+      { name: 'tax_id', hint: 'Tax identification number' },
+    ],
+  },
+  'company.list': {
+    entity: 'company',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'status', hint: 'Filter by status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'company.view': {
+    entity: 'company',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Company ID or slug' },
+    ],
+    flags: [],
+  },
+  'company.switch': {
+    entity: 'company',
+    verb: 'switch',
+    args: [
+      { name: 'id', required: true, hint: 'Company ID or slug', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // CUSTOMER
+  // --------------------------------------------------------------------------
+  'customer.create': {
+    entity: 'customer',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Customer name' },
+    ],
+    flags: [
+      { name: 'email', hint: 'Email address' },
+      { name: 'phone', hint: 'Phone number' },
+      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
+      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
+      { name: 'type', hint: 'Customer type', hasDropdown: true, enum: ['business', 'individual'] },
+      { name: 'country', hint: 'Country', hasDropdown: true },
+    ],
+  },
+  'customer.list': {
+    entity: 'customer',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'search', hint: 'Search by name' },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'customer.view': {
+    entity: 'customer',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Customer ID or name', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // INVOICE
+  // --------------------------------------------------------------------------
+  'invoice.create': {
+    entity: 'invoice',
+    verb: 'create',
+    args: [
+      { name: 'customer', required: true, hint: 'Customer name', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Invoice amount' },
+    ],
+    flags: [
+      { name: 'currency', hint: 'Currency code', hasDropdown: true },
+      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)' },
+      { name: 'description', hint: 'Invoice description' },
+      { name: 'reference', hint: 'External reference' },
+    ],
+  },
+  'invoice.list': {
+    entity: 'invoice',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'customer', hint: 'Filter by customer', hasDropdown: true },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'] },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'invoice.view': {
+    entity: 'invoice',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true },
+    ],
+    flags: [],
+  },
+  'invoice.send': {
+    entity: 'invoice',
+    verb: 'send',
+    args: [
+      { name: 'id', required: true, hint: 'Invoice ID or number', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'email', hint: 'Override recipient email' },
+      { name: 'message', hint: 'Custom message' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // PAYMENT
+  // --------------------------------------------------------------------------
+  'payment.create': {
+    entity: 'payment',
+    verb: 'create',
+    args: [
+      { name: 'invoice', required: true, hint: 'Invoice number', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Payment amount' },
+    ],
+    flags: [
+      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
+      { name: 'reference', hint: 'Payment reference' },
+      { name: 'date', hint: 'Payment date' },
+      { name: 'notes', hint: 'Notes' },
+    ],
+  },
+  'payment.list': {
+    entity: 'payment',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'invoice', hint: 'Filter by invoice', hasDropdown: true },
+      { name: 'customer', hint: 'Filter by customer', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // VENDOR (NEW)
+  // --------------------------------------------------------------------------
+  'vendor.create': {
+    entity: 'vendor',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Vendor name' },
+    ],
+    flags: [
+      { name: 'email', hint: 'Email address' },
+      { name: 'phone', hint: 'Phone number' },
+      { name: 'currency', hint: 'Preferred currency', hasDropdown: true },
+      { name: 'payment_terms', hint: 'Payment terms (days)', hasDropdown: true, enum: ['7', '14', '30', '45', '60', '90'] },
+      { name: 'type', hint: 'Vendor type', hasDropdown: true, enum: ['supplier', 'contractor', 'service'] },
+      { name: 'country', hint: 'Country', hasDropdown: true },
+      { name: 'tax_id', hint: 'Tax ID' },
+    ],
+  },
+  'vendor.list': {
+    entity: 'vendor',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'search', hint: 'Search by name' },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['active', 'inactive', 'all'] },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'vendor.view': {
+    entity: 'vendor',
+    verb: 'view',
+    args: [
+      { name: 'id', required: true, hint: 'Vendor ID or name', hasDropdown: true },
+    ],
+    flags: [],
+  },
+
+  // --------------------------------------------------------------------------
+  // BILL (NEW - Vendor Invoices)
+  // --------------------------------------------------------------------------
+  'bill.create': {
+    entity: 'bill',
+    verb: 'create',
+    args: [
+      { name: 'vendor', required: true, hint: 'Vendor name', hasDropdown: true },
+      { name: 'amount', required: true, hint: 'Bill amount' },
+    ],
+    flags: [
+      { name: 'currency', hint: 'Currency code', hasDropdown: true },
+      { name: 'due', hint: 'Due date (YYYY-MM-DD or +30d)' },
+      { name: 'bill_number', hint: 'Vendor bill number' },
+      { name: 'description', hint: 'Bill description' },
+      { name: 'category', hint: 'Expense category', hasDropdown: true },
+    ],
+  },
+  'bill.list': {
+    entity: 'bill',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true },
+      { name: 'status', hint: 'Filter status', hasDropdown: true, enum: ['draft', 'pending', 'paid', 'overdue', 'cancelled'] },
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+  'bill.pay': {
+    entity: 'bill',
+    verb: 'pay',
+    args: [
+      { name: 'id', required: true, hint: 'Bill ID or number', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'amount', hint: 'Payment amount (partial payment)' },
+      { name: 'method', hint: 'Payment method', hasDropdown: true, enum: ['cash', 'bank_transfer', 'card', 'cheque', 'other'] },
+      { name: 'reference', hint: 'Payment reference' },
+      { name: 'date', hint: 'Payment date' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // EXPENSE (NEW)
+  // --------------------------------------------------------------------------
+  'expense.create': {
+    entity: 'expense',
+    verb: 'create',
+    args: [
+      { name: 'amount', required: true, hint: 'Expense amount' },
+      { name: 'category', required: true, hint: 'Expense category', hasDropdown: true },
+    ],
+    flags: [
+      { name: 'vendor', hint: 'Vendor (if applicable)', hasDropdown: true },
+      { name: 'date', hint: 'Expense date' },
+      { name: 'description', hint: 'Description' },
+      { name: 'receipt', hint: 'Receipt reference' },
+      { name: 'currency', hint: 'Currency', hasDropdown: true },
+      { name: 'payment_method', hint: 'Payment method', hasDropdown: true },
+    ],
+  },
+  'expense.list': {
+    entity: 'expense',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'vendor', hint: 'Filter by vendor', hasDropdown: true },
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // REPORT (NEW)
+  // --------------------------------------------------------------------------
+  'report.generate': {
+    entity: 'report',
+    verb: 'generate',
+    args: [
+      { name: 'type', required: true, hint: 'Report type', hasDropdown: true, enum: [
+        'profit_loss', 'balance_sheet', 'cash_flow', 'aged_receivables',
+        'aged_payables', 'tax_summary', 'sales_by_customer', 'expenses_by_category'
+      ]},
+    ],
+    flags: [
+      { name: 'from', hint: 'Start date' },
+      { name: 'to', hint: 'End date' },
+      { name: 'period', hint: 'Period', hasDropdown: true, enum: ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom'] },
+      { name: 'format', hint: 'Output format', hasDropdown: true, enum: ['table', 'csv', 'pdf'] },
+      { name: 'compare', hint: 'Compare with previous period', hasDropdown: true, enum: ['none', 'previous_period', 'previous_year'] },
+    ],
+  },
+  'report.list': {
+    entity: 'report',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by report type', hasDropdown: true },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // ACCOUNT (Chart of Accounts)
+  // --------------------------------------------------------------------------
+  'account.create': {
+    entity: 'account',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Account name' },
+      { name: 'type', required: true, hint: 'Account type', hasDropdown: true, enum: [
+        'asset', 'liability', 'equity', 'revenue', 'expense'
+      ]},
+    ],
+    flags: [
+      { name: 'code', hint: 'Account code' },
+      { name: 'parent', hint: 'Parent account', hasDropdown: true },
+      { name: 'description', hint: 'Description' },
+      { name: 'currency', hint: 'Currency (for multi-currency)', hasDropdown: true },
+    ],
+  },
+  'account.list': {
+    entity: 'account',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] },
+      { name: 'search', hint: 'Search by name or code' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // JOURNAL (Manual Journal Entries)
+  // --------------------------------------------------------------------------
+  'journal.create': {
+    entity: 'journal',
+    verb: 'create',
+    args: [
+      { name: 'description', required: true, hint: 'Entry description' },
+    ],
+    flags: [
+      { name: 'date', hint: 'Entry date' },
+      { name: 'reference', hint: 'Reference number' },
+    ],
+  },
+  'journal.list': {
+    entity: 'journal',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'from', hint: 'From date' },
+      { name: 'to', hint: 'To date' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // PRODUCT/SERVICE
+  // --------------------------------------------------------------------------
+  'product.create': {
+    entity: 'product',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Product/service name' },
+      { name: 'price', required: true, hint: 'Unit price' },
+    ],
+    flags: [
+      { name: 'type', hint: 'Type', hasDropdown: true, enum: ['product', 'service'] },
+      { name: 'sku', hint: 'SKU code' },
+      { name: 'description', hint: 'Description' },
+      { name: 'category', hint: 'Category', hasDropdown: true },
+      { name: 'tax_rate', hint: 'Tax rate %', hasDropdown: true },
+      { name: 'unit', hint: 'Unit of measure', hasDropdown: true, enum: ['unit', 'hour', 'day', 'kg', 'meter', 'liter'] },
+    ],
+  },
+  'product.list': {
+    entity: 'product',
+    verb: 'list',
+    args: [],
+    flags: [
+      { name: 'type', hint: 'Filter by type', hasDropdown: true, enum: ['product', 'service', 'all'] },
+      { name: 'category', hint: 'Filter by category', hasDropdown: true },
+      { name: 'search', hint: 'Search by name' },
+      { name: 'limit', hint: 'Max results' },
+    ],
+  },
+
+  // --------------------------------------------------------------------------
+  // TAX
+  // --------------------------------------------------------------------------
+  'tax.create': {
+    entity: 'tax',
+    verb: 'create',
+    args: [
+      { name: 'name', required: true, hint: 'Tax name (e.g., VAT, GST)' },
+      { name: 'rate', required: true, hint: 'Tax rate %' },
+    ],
+    flags: [
+      { name: 'type', hint: 'Tax type', hasDropdown: true, enum: ['sales', 'purchase', 'both'] },
+      { name: 'account', hint: 'Tax account', hasDropdown: true },
+    ],
+  },
+  'tax.list': {
+    entity: 'tax',
+    verb: 'list',
+    args: [],
+    flags: [],
+  },
+}
+
+// ============================================================================
+// Exports
+// ============================================================================
+
+export function getSchema(entity: string, verb: string): CommandSchema | null {
+  const key = `${entity}.${verb}`
+  return SCHEMAS[key] || null
+}
+
+export function getEntities(): string[] {
+  const entities = new Set<string>()
+  Object.keys(SCHEMAS).forEach(key => {
+    entities.add(key.split('.')[0])
+  })
+  return Array.from(entities).sort()
+}
+
+export function getVerbsForEntity(entity: string): string[] {
+  const verbs: string[] = []
+  Object.keys(SCHEMAS).forEach(key => {
+    const [e, v] = key.split('.')
+    if (e === entity) verbs.push(v)
+  })
+  return verbs
+}
+
+export function getAllSchemas(): CommandSchema[] {
+  return Object.values(SCHEMAS)
+}
+
+// Helper to check if a field has dropdown
+export function fieldHasDropdown(entity: string, verb: string, fieldName: string): boolean {
+  const schema = getSchema(entity, verb)
+  if (!schema) return false
+
+  const arg = schema.args.find(a => a.name === fieldName)
+  if (arg) return !!arg.hasDropdown
+
+  const flag = schema.flags.find(f => f.name === fieldName)
+  if (flag) return !!flag.hasDropdown
+
+  return false
+}
+
+/**
+ * Command Palette Grammar
+ *
+ * Defines entities, verbs, shortcuts, and icons.
+ * This file should be auto-generated from schemas.ts or kept in sync manually.
+ */
+
+import { getEntities, getVerbsForEntity, getSchema, getAllSchemas } from './schemas'
+
+// ============================================================================
+// Entity Icons
+// ============================================================================
+
+export const ENTITY_ICONS: Record<string, string> = {
+  // Core entities
+  company: '🏢',
+  customer: '👤',
+  invoice: '📄',
+  payment: '💳',
+
+  // Payables
+  vendor: '🏪',
+  bill: '📋',
+  expense: '💸',
+
+  // Accounting
+  account: '📊',
+  journal: '📒',
+  report: '📈',
+
+  // Inventory & Sales
+  product: '📦',
+  service: '🛠️',
+  tax: '🏛️',
+
+  // Settings
+  user: '👥',
+  settings: '⚙️',
+
+  // Default
+  default: '📄',
+}
+
+// ============================================================================
+// Entity Shortcuts (for power users)
+// ============================================================================
+
+const ENTITY_SHORTCUTS: Record<string, string> = {
+  // Single letter
+  c: 'company',
+  i: 'invoice',
+  p: 'payment',
+  v: 'vendor',
+  b: 'bill',
+  e: 'expense',
+  r: 'report',
+  a: 'account',
+
+  // Two letter
+  co: 'company',
+  cu: 'customer',
+  in: 'invoice',
+  pa: 'payment',
+  ve: 'vendor',
+  bi: 'bill',
+  ex: 'expense',
+  re: 'report',
+  ac: 'account',
+  jo: 'journal',
+  pr: 'product',
+  ta: 'tax',
+
+  // Common abbreviations
+  inv: 'invoice',
+  cust: 'customer',
+  comp: 'company',
+  pay: 'payment',
+  vend: 'vendor',
+  exp: 'expense',
+  rep: 'report',
+  acct: 'account',
+  prod: 'product',
+}
+
+// ============================================================================
+// Verb Shortcuts
+// ============================================================================
+
+const VERB_SHORTCUTS: Record<string, string> = {
+  c: 'create',
+  l: 'list',
+  v: 'view',
+  d: 'delete',
+  e: 'edit',
+  s: 'send',
+  g: 'generate',
+
+  // Common abbreviations
+  cr: 'create',
+  ls: 'list',
+  vw: 'view',
+  del: 'delete',
+  ed: 'edit',
+  gen: 'generate',
+}
+
+// ============================================================================
+// Functions
+// ============================================================================
+
+/**
+ * Resolve entity shortcut to full entity name
+ */
+export function resolveEntityShortcut(input: string): string | null {
+  const lower = input.toLowerCase().trim()
+
+  // Check direct shortcut
+  if (ENTITY_SHORTCUTS[lower]) {
+    return ENTITY_SHORTCUTS[lower]
+  }
+
+  // Check if it's already a valid entity
+  const entities = getEntities()
+  if (entities.includes(lower)) {
+    return lower
+  }
+
+  // Check partial match
+  const match = entities.find(e => e.startsWith(lower))
+  if (match) {
+    return match
+  }
+
+  return null
+}
+
+/**
+ * Resolve verb shortcut to full verb name
+ */
+export function resolveVerbShortcut(input: string, entity: string): string | null {
+  const lower = input.toLowerCase().trim()
+  const verbs = getVerbsForEntity(entity)
+
+  // Check direct shortcut
+  if (VERB_SHORTCUTS[lower] && verbs.includes(VERB_SHORTCUTS[lower])) {
+    return VERB_SHORTCUTS[lower]
+  }
+
+  // Check if it's already a valid verb
+  if (verbs.includes(lower)) {
+    return lower
+  }
+
+  // Check partial match
+  const match = verbs.find(v => v.startsWith(lower))
+  if (match) {
+    return match
+  }
+
+  return null
+}
+
+/**
+ * Get available verbs for an entity
+ */
+export function getVerbs(entity: string): string[] {
+  return getVerbsForEntity(entity)
+}
+
+/**
+ * Get icon for an entity
+ */
+export function getEntityIcon(entity: string): string {
+  return ENTITY_ICONS[entity] || ENTITY_ICONS.default
+}
+
+/**
+ * Get all available entities
+ */
+export function getAllEntities(): string[] {
+  return getEntities()
+}
+
+/**
+ * Get command example for help text
+ */
+export function getCommandExample(entity: string, verb: string): string {
+  const examples: Record<string, string> = {
+    'company.create': 'company create "Acme Corp" USD',
+    'company.list': 'company list --status=active',
+    'customer.create': 'customer create "John Doe" --email=john@example.com',
+    'invoice.create': 'invoice create "Acme Corp" 1000 --currency=USD',
+    'invoice.list': 'invoice list --status=unpaid',
+    'payment.create': 'payment create INV-001 500',
+    'vendor.create': 'vendor create "Supplier Inc"',
+    'bill.create': 'bill create "Supplier Inc" 500',
+    'expense.create': 'expense create 50 "Office Supplies"',
+    'report.generate': 'report generate profit_loss --period=this_month',
+  }
+
+  return examples[`${entity}.${verb}`] || `${entity} ${verb}`
+}
+
+/**
+ * Check if input matches a preset shortcut (e.g., "inv" for invoice)
+ */
+export function isPresetShortcut(input: string): boolean {
+  const lower = input.toLowerCase().trim()
+  return !!ENTITY_SHORTCUTS[lower]
+}
+
+// ============================================================================
+// GRAMMAR Export (for autocomplete.ts compatibility)
+// ============================================================================
+
+interface VerbDef {
+  name: string
+  args?: string[]
+  flags?: string[]
+}
+
+interface EntityDef {
+  verbs: VerbDef[]
+}
+
+/**
+ * Build GRAMMAR object from schemas
+ * This provides backwards compatibility with autocomplete.ts
+ */
+function buildGrammar(): Record<string, EntityDef> {
+  const grammar: Record<string, EntityDef> = {}
+  const schemas = getAllSchemas()
+
+  // Group schemas by entity
+  const byEntity: Record<string, typeof schemas> = {}
+  schemas.forEach(schema => {
+    if (!byEntity[schema.entity]) {
+      byEntity[schema.entity] = []
+    }
+    byEntity[schema.entity].push(schema)
+  })
+
+  // Build grammar structure
+  Object.entries(byEntity).forEach(([entity, entitySchemas]) => {
+    grammar[entity] = {
+      verbs: entitySchemas.map(schema => ({
+        name: schema.verb,
+        args: schema.args.map(a => a.name),
+        flags: schema.flags.map(f => f.name),
+      }))
+    }
+  })
+
+  return grammar
+}
+
+export const GRAMMAR = buildGrammar()
+
+// ============================================================================
+// COMMAND_DESCRIPTIONS Export (for autocomplete.ts compatibility)
+// ============================================================================
+
+/**
+ * Build command descriptions from schemas
+ */
+function buildCommandDescriptions(): Record<string, string> {
+  const descriptions: Record<string, string> = {}
+  const schemas = getAllSchemas()
+
+  schemas.forEach(schema => {
+    const key = `${schema.entity}.${schema.verb}`
+    // Generate description from args
+    const requiredArgs = schema.args.filter(a => a.required).map(a => a.name)
+    const optionalFlags = schema.flags.slice(0, 2).map(f => f.name)
+
+    let desc = ''
+    if (requiredArgs.length) {
+      desc = `Requires: ${requiredArgs.join(', ')}`
+    }
+    if (optionalFlags.length) {
+      desc += desc ? '. ' : ''
+      desc += `Options: ${optionalFlags.join(', ')}${schema.flags.length > 2 ? '...' : ''}`
+    }
+
+    descriptions[key] = desc || `${schema.verb} ${schema.entity}`
+  })
+
+  return descriptions
+}
+
+export const COMMAND_DESCRIPTIONS = buildCommandDescriptions()
+
+// ============================================================================
+// Verb Helper Functions
+// ============================================================================
+
+/**
+ * Resolve verb shortcut to full verb name (alias for resolveVerbShortcut)
+ */
+export function resolveVerbAlias(entity: string, input: string): string | null {
+  return resolveVerbShortcut(input, entity)
+}
+
+/**
+ * Get verb definition from GRAMMAR
+ */
+export function getVerbDefinition(entity: string, verb: string): { args: any[]; flags: any[] } | null {
+  const grammar = GRAMMAR[entity]
+  if (!grammar) return null
+
+  const verbDef = grammar.verbs.find((v: any) => v.name === verb)
+  if (!verbDef) return null
+
+  return {
+    args: verbDef.args || [],
+    flags: verbDef.flags || []
+  }
+}
+
+import type { QuickAction, TableState } from '@/types/palette'
+
+/**
+ * Quick Actions System
+ *
+ * Provides numbered shortcuts for common actions after list commands.
+ * Actions are context-aware and can be row-specific.
+ */
+
+/**
+ * Get quick actions for a given entity/verb combination
+ */
+export function getQuickActions(entity: string, verb: string): QuickAction[] {
+  const key = `${entity}.${verb}`
+
+  switch (key) {
+    // --------------------------------------------------------------------------
+    // COMPANY
+    // --------------------------------------------------------------------------
+    case 'company.list':
+      return [
+        {
+          key: '1',
+          label: 'Switch to company',
+          command: 'company switch {slug}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'View details',
+          command: 'company view {slug}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Assign user',
+          command: 'user invite',
+          needsRow: true,
+          prompt: 'Enter user email (optionally add role, e.g., jane@x.com --role owner)',
+        },
+        {
+          key: '4',
+          label: 'Create new company',
+          command: 'company create',
+          needsRow: false,
+          prompt: 'Enter company name and currency (e.g., Acme Inc USD)',
+        },
+        {
+          key: '0',
+          label: 'Delete company',
+          command: 'company delete {slug}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this company permanently',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // USER
+    // --------------------------------------------------------------------------
+    case 'user.list':
+      return [
+        {
+          key: '1',
+          label: 'View user',
+          command: 'user view {email}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Assign role',
+          command: 'user assign-role {email}',
+          needsRow: true,
+          prompt: 'Enter role name',
+        },
+        {
+          key: '3',
+          label: 'Deactivate user',
+          command: 'user deactivate {email}',
+          needsRow: true,
+          prompt: 'Type "confirm" to deactivate this user',
+        },
+        {
+          key: '4',
+          label: 'Invite new user',
+          command: 'user invite',
+          needsRow: false,
+          prompt: 'Enter email address',
+        },
+      ]
+
+    case 'role.list':
+      return [
+        {
+          key: '1',
+          label: 'View role',
+          command: 'role view {name}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Assign permission',
+          command: 'role assign',
+          needsRow: true,
+          prompt: 'Enter permission name',
+        },
+        {
+          key: '3',
+          label: 'Revoke permission',
+          command: 'role revoke',
+          needsRow: true,
+          prompt: 'Enter permission name',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // CUSTOMER
+    // --------------------------------------------------------------------------
+    case 'customer.list':
+      return [
+        {
+          key: '1',
+          label: 'Create invoice',
+          command: 'invoice create {name}',
+          needsRow: true,
+          prompt: 'Enter invoice amount',
+        },
+        {
+          key: '2',
+          label: 'View customer',
+          command: 'customer view {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'View invoices',
+          command: 'invoice list --customer={name}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'View payments',
+          command: 'payment list --customer={name}',
+          needsRow: true,
+        },
+        {
+          key: '5',
+          label: 'Create new customer',
+          command: 'customer create',
+          needsRow: false,
+          prompt: 'Enter customer name',
+        },
+        {
+          key: '0',
+          label: 'Delete customer',
+          command: 'customer delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this customer',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // INVOICE
+    // --------------------------------------------------------------------------
+    case 'invoice.list':
+      return [
+        {
+          key: '1',
+          label: 'View invoice',
+          command: 'invoice view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Record payment',
+          command: 'payment create {id}',
+          needsRow: true,
+          prompt: 'Enter payment amount',
+        },
+        {
+          key: '3',
+          label: 'Send invoice',
+          command: 'invoice send {id}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Duplicate invoice',
+          command: 'invoice duplicate {id}',
+          needsRow: true,
+        },
+        {
+          key: '5',
+          label: 'Create new invoice',
+          command: 'invoice create',
+          needsRow: false,
+          prompt: 'Enter customer name and amount (e.g., Acme Corp 1500)',
+        },
+        {
+          key: '0',
+          label: 'Void invoice',
+          command: 'invoice void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this invoice',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // PAYMENT
+    // --------------------------------------------------------------------------
+    case 'payment.list':
+      return [
+        {
+          key: '1',
+          label: 'View payment',
+          command: 'payment view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'View invoice',
+          command: 'invoice view {invoice}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Record new payment',
+          command: 'payment create',
+          needsRow: false,
+          prompt: 'Enter invoice number and amount (e.g., INV-001 500)',
+        },
+        {
+          key: '0',
+          label: 'Void payment',
+          command: 'payment void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this payment',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // VENDOR
+    // --------------------------------------------------------------------------
+    case 'vendor.list':
+      return [
+        {
+          key: '1',
+          label: 'Create bill',
+          command: 'bill create {name}',
+          needsRow: true,
+          prompt: 'Enter bill amount',
+        },
+        {
+          key: '2',
+          label: 'View vendor',
+          command: 'vendor view {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'View bills',
+          command: 'bill list --vendor={name}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Create new vendor',
+          command: 'vendor create',
+          needsRow: false,
+          prompt: 'Enter vendor name',
+        },
+        {
+          key: '0',
+          label: 'Delete vendor',
+          command: 'vendor delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this vendor',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // BILL
+    // --------------------------------------------------------------------------
+    case 'bill.list':
+      return [
+        {
+          key: '1',
+          label: 'View bill',
+          command: 'bill view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Pay bill',
+          command: 'bill pay {id}',
+          needsRow: true,
+          prompt: 'Enter payment amount (leave empty for full payment)',
+        },
+        {
+          key: '3',
+          label: 'View vendor',
+          command: 'vendor view {vendor}',
+          needsRow: true,
+        },
+        {
+          key: '4',
+          label: 'Create new bill',
+          command: 'bill create',
+          needsRow: false,
+          prompt: 'Enter vendor name and amount (e.g., Supplier Inc 500)',
+        },
+        {
+          key: '0',
+          label: 'Void bill',
+          command: 'bill void {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to void this bill',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // EXPENSE
+    // --------------------------------------------------------------------------
+    case 'expense.list':
+      return [
+        {
+          key: '1',
+          label: 'View expense',
+          command: 'expense view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Duplicate expense',
+          command: 'expense duplicate {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create new expense',
+          command: 'expense create',
+          needsRow: false,
+          prompt: 'Enter amount and category (e.g., 50 Office Supplies)',
+        },
+        {
+          key: '0',
+          label: 'Delete expense',
+          command: 'expense delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this expense',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // PRODUCT
+    // --------------------------------------------------------------------------
+    case 'product.list':
+      return [
+        {
+          key: '1',
+          label: 'View product',
+          command: 'product view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Edit product',
+          command: 'product edit {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create invoice with product',
+          command: 'invoice create --product={name}',
+          needsRow: true,
+          prompt: 'Enter customer name',
+        },
+        {
+          key: '4',
+          label: 'Create new product',
+          command: 'product create',
+          needsRow: false,
+          prompt: 'Enter product name and price (e.g., Widget 29.99)',
+        },
+        {
+          key: '0',
+          label: 'Delete product',
+          command: 'product delete {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to delete this product',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // ACCOUNT (Chart of Accounts)
+    // --------------------------------------------------------------------------
+    case 'account.list':
+      return [
+        {
+          key: '1',
+          label: 'View account',
+          command: 'account view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'View transactions',
+          command: 'journal list --account={code}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create sub-account',
+          command: 'account create --parent={code}',
+          needsRow: true,
+          prompt: 'Enter account name and type',
+        },
+        {
+          key: '4',
+          label: 'Create new account',
+          command: 'account create',
+          needsRow: false,
+          prompt: 'Enter account name and type (e.g., Cash asset)',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // JOURNAL
+    // --------------------------------------------------------------------------
+    case 'journal.list':
+      return [
+        {
+          key: '1',
+          label: 'View entry',
+          command: 'journal view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Reverse entry',
+          command: 'journal reverse {id}',
+          needsRow: true,
+          prompt: 'Type "confirm" to create reversal entry',
+        },
+        {
+          key: '3',
+          label: 'Create new entry',
+          command: 'journal create',
+          needsRow: false,
+          prompt: 'Enter description',
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // REPORT
+    // --------------------------------------------------------------------------
+    case 'report.list':
+      return [
+        {
+          key: '1',
+          label: 'Generate report',
+          command: 'report generate {type}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Profit & Loss',
+          command: 'report generate profit_loss --period=this_month',
+          needsRow: false,
+        },
+        {
+          key: '3',
+          label: 'Balance Sheet',
+          command: 'report generate balance_sheet',
+          needsRow: false,
+        },
+        {
+          key: '4',
+          label: 'Aged Receivables',
+          command: 'report generate aged_receivables',
+          needsRow: false,
+        },
+        {
+          key: '5',
+          label: 'Aged Payables',
+          command: 'report generate aged_payables',
+          needsRow: false,
+        },
+      ]
+
+    // --------------------------------------------------------------------------
+    // TAX
+    // --------------------------------------------------------------------------
+    case 'tax.list':
+      return [
+        {
+          key: '1',
+          label: 'View tax',
+          command: 'tax view {id}',
+          needsRow: true,
+        },
+        {
+          key: '2',
+          label: 'Edit tax rate',
+          command: 'tax edit {id}',
+          needsRow: true,
+        },
+        {
+          key: '3',
+          label: 'Create new tax',
+          command: 'tax create',
+          needsRow: false,
+          prompt: 'Enter tax name and rate (e.g., VAT 15)',
+        },
+      ]
+
+    default:
+      return []
+  }
+}
+
+/**
+ * Check if entity.verb combination supports quick actions
+ */
+export function hasQuickActions(entity: string, verb: string): boolean {
+  return getQuickActions(entity, verb).length > 0
+}
+
+/**
+ * Resolve command template with row data
+ *
+ * @param template - Command template with {field} placeholders
+ * @param tableState - Current table state
+ * @returns Resolved command string
+ */
+export function resolveQuickActionCommand(
+  template: string,
+  tableState: TableState | null
+): string | null {
+  if (!template) return null
+
+  // If template has no placeholders, return as-is
+  if (!template.includes('{')) {
+    return template
+  }
+
+  // Need table state to resolve placeholders
+  if (!tableState) return null
+
+  const { headers, rows, selectedRowIndex } = tableState
+
+  // Need a selected row
+  if (selectedRowIndex < 0 || selectedRowIndex >= rows.length) {
+    return null
+  }
+
+  const selectedRow = rows[selectedRowIndex]
+  let resolved = template
+
+  // Replace {field} placeholders with row values
+  // Match headers to find the right column
+  headers.forEach((header, index) => {
+    const value = selectedRow[index] || ''
+    const normalizedHeader = header.toLowerCase().replace(/\s+/g, '')
+
+    // Try to match common patterns
+    const patterns = [
+      `{${normalizedHeader}}`,
+      `{${header.toLowerCase()}}`,
+      `{${header}}`,
+    ]
+
+    patterns.forEach(pattern => {
+      resolved = resolved.replace(new RegExp(pattern.replace(/[{}]/g, '\\$&'), 'g'), value)
+    })
+  })
+
+  // Handle common field name mappings
+  const mappings: Record<string, string[]> = {
+    slug: ['slug', 'id', 'name', 'company'],
+    email: ['email', 'user', 'emailaddress'],
+    name: ['name', 'rolename', 'role'],
+  }
+
+  Object.entries(mappings).forEach(([placeholder, possibleHeaders]) => {
+    const pattern = `{${placeholder}}`
+    if (resolved.includes(pattern)) {
+      // Find matching header
+      for (const possibleHeader of possibleHeaders) {
+        const headerIndex = headers.findIndex(h =>
+          h.toLowerCase().replace(/\s+/g, '') === possibleHeader
+        )
+        if (headerIndex >= 0) {
+          const value = selectedRow[headerIndex] || ''
+          resolved = resolved.replace(new RegExp(pattern.replace(/[{}]/g, '\\$&'), 'g'), value)
+          break
+        }
+      }
+    }
+  })
+
+  // If still has unresolved placeholders, return null
+  if (resolved.includes('{')) {
+    return null
+  }
+
+  return resolved.trim()
+}
+
+/**
+ * Get display label with row data
+ *
+ * @param action - Quick action
+ * @param tableState - Current table state
+ * @returns Display label with context
+ */
+export function getQuickActionLabel(
+  action: QuickAction,
+  tableState: TableState | null
+): string {
+  if (!action.needsRow || !tableState) {
+    return action.label
+  }
+
+  const { headers, rows, selectedRowIndex } = tableState
+
+  if (selectedRowIndex < 0 || selectedRowIndex >= rows.length) {
+    return action.label
+  }
+
+  const selectedRow = rows[selectedRowIndex]
+
+  // Try to find a meaningful identifier from the row
+  // Priority: name/slug/email -> first column -> generic
+  const identifierHeaders = ['name', 'slug', 'email', 'company']
+  let identifier = ''
+
+  for (const headerName of identifierHeaders) {
+    const headerIndex = headers.findIndex(h =>
+      h.toLowerCase().replace(/\s+/g, '') === headerName
+    )
+    if (headerIndex >= 0 && selectedRow[headerIndex]) {
+      identifier = selectedRow[headerIndex]
+      break
+    }
+  }
+
+  // Fallback to first column
+  if (!identifier && selectedRow.length > 0) {
+    identifier = selectedRow[0]
+  }
+
+  if (!identifier) {
+    return action.label
+  }
+
+  // Append identifier to label
+  return `${action.label}: ${identifier}`
+}

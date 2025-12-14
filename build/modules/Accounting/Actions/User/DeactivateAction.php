@@ -1,0 +1,42 @@
+<?php
+
+namespace App\Modules\Accounting\Actions\User;
+
+use App\Constants\Permissions;
+use App\Contracts\PaletteAction;
+use App\Constants\Tables;
+use App\Models\User;
+use App\Facades\CompanyContext;
+use Illuminate\Support\Facades\DB;
+
+class DeactivateAction implements PaletteAction
+{
+    public function rules(): array
+    {
+        return [
+            'email' => 'required|email',
+        ];
+    }
+
+    public function permission(): ?string
+    {
+        return Permissions::COMPANY_MANAGE_USERS;
+    }
+
+    public function handle(array $params): array
+    {
+        $company = CompanyContext::requireCompany();
+
+        $user = User::where('email', $params['email'])->firstOrFail();
+
+        DB::table(Tables::COMPANY_USER)
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->update(['is_active' => false, 'updated_at' => now()]);
+
+        return [
+            'message' => "User deactivated: {$user->email}",
+            'data' => ['user' => $user->email],
+        ];
+    }
+}

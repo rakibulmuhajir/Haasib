@@ -1,0 +1,49 @@
+<?php
+
+// bootstrap/app.php (Laravel 11 style)
+// Add this to your existing bootstrap/app.php
+
+use App\Http\Middleware\EnsureHasCompany;
+use App\Http\Middleware\IdentifyCompany;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware) {
+        // Register custom middleware aliases
+        $middleware->alias([
+            'identify.company' => IdentifyCompany::class,
+            'has.company' => EnsureHasCompany::class,
+        ]);
+
+        // Web middleware group additions
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions) {
+        //
+    })->create();
+
+
+/*
+|--------------------------------------------------------------------------
+| For Laravel 10 (Kernel.php style)
+|--------------------------------------------------------------------------
+|
+| If you're on Laravel 10, add to app/Http/Kernel.php:
+|
+| protected $middlewareAliases = [
+|     // ... existing aliases
+|     'identify.company' => \App\Http\Middleware\IdentifyCompany::class,
+|     'has.company' => \App\Http\Middleware\EnsureHasCompany::class,
+| ];
+|
+*/

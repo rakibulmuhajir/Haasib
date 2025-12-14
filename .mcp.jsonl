@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+          "type": "stdio",
+          "command": "php",
+          "args": [
+            "artisan",
+            "boost:mcp"
+          ],
+          "env": {}
+        },
+        "playwright": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "@playwright/mcp@latest"
+          ],
+          "env": {}
+        },
+    "shadcnVue": {
+      "command": "npx",
+      "args": [
+        "shadcn-vue@latest",
+        "mcp"
+      ]
+    }
+  }
+}

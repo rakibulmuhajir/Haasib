@@ -46,6 +46,7 @@ class StoreBillRequest extends BaseFormRequest
             'bill_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:bill_date'],
             'status' => ['in:' . implode(',', $statusValues)],
+            'pay_immediately' => ['nullable', 'boolean'],
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],
             'exchange_rate' => $exchangeRateRules,

@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
+import { useLexicon } from '@/composables/useLexicon'
 import {
   FileText,
   Plus,
@@ -82,10 +83,11 @@ const props = defineProps<{
 const search = ref(props.filters.search)
 const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
+const { t, has } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Invoices', href: `/${props.company.slug}/invoices` },
+  { title: t('dashboard'), href: `/${props.company.slug}` },
+  { title: t('invoices'), href: `/${props.company.slug}/invoices` },
 ]
 
 const handleSearch = () => {
@@ -127,12 +129,12 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const columns = [
-  { key: 'invoice_number', label: 'Invoice #' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'status', label: 'Status' },
-  { key: 'total_amount', label: 'Total' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'due_date', label: 'Due Date' },
+  { key: 'invoice_number', label: t('invoiceNumber') },
+  { key: 'customer', label: t('customer') },
+  { key: 'status', label: t('status') },
+  { key: 'total_amount', label: t('total') },
+  { key: 'balance', label: t('balance') },
+  { key: 'due_date', label: t('dueDate') },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -141,7 +143,7 @@ const tableData = computed(() => {
     id: invoice.id,
     invoice_number: invoice.invoice_number,
     customer: invoice.customer.name,
-    status: invoice.status,
+    status: has(invoice.status) ? t(invoice.status) : invoice.status,
     total_amount: formatCurrency(invoice.total_amount, invoice.currency),
     balance: formatCurrency(invoice.balance, invoice.currency),
     due_date: new Date(invoice.due_date).toLocaleDateString(),
@@ -152,16 +154,16 @@ const tableData = computed(() => {
 </script>
 
 <template>
-  <Head title="Invoices" />
+  <Head :title="t('invoices')" />
 
   <PageShell
-    :title="`Invoices`"
+    :title="t('invoices')"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
       <Button @click="router.get(`/${company.slug}/invoices/create`)">
         <Plus class="mr-2 h-4 w-4" />
-        Create Invoice
+        {{ t('newInvoice') }}
       </Button>
     </template>
 
@@ -171,24 +173,24 @@ const tableData = computed(() => {
         <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           v-model="search"
-          placeholder="Search invoices..."
+          :placeholder="t('searchInvoicePlaceholder')"
           class="pl-10"
           @keyup.enter="handleSearch"
         />
       </div>
       <Select v-model="status" @update:modelValue="handleSearch">
         <SelectTrigger class="w-[180px]">
-          <SelectValue placeholder="All Status" />
+          <SelectValue :placeholder="t('allStatus')" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Status</SelectItem>
-          <SelectItem value="draft">Draft</SelectItem>
-          <SelectItem value="sent">Sent</SelectItem>
-          <SelectItem value="viewed">Viewed</SelectItem>
-          <SelectItem value="paid">Paid</SelectItem>
-          <SelectItem value="overdue">Overdue</SelectItem>
-          <SelectItem value="cancelled">Cancelled</SelectItem>
-          <SelectItem value="void">Void</SelectItem>
+          <SelectItem value="all">{{ t('allStatus') }}</SelectItem>
+          <SelectItem value="draft">{{ t('draft') }}</SelectItem>
+          <SelectItem value="sent">{{ t('sent') }}</SelectItem>
+          <SelectItem value="viewed">{{ t('viewed') }}</SelectItem>
+          <SelectItem value="paid">{{ t('paid') }}</SelectItem>
+          <SelectItem value="overdue">{{ t('overdue') }}</SelectItem>
+          <SelectItem value="cancelled">{{ t('cancelled') }}</SelectItem>
+          <SelectItem value="void">{{ t('void') }}</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -289,9 +291,9 @@ const tableData = computed(() => {
     <EmptyState
       v-if="invoices.data.length === 0"
       icon="FileText"
-      title="No invoices yet"
-      description="Create your first invoice to get started."
-      :action-label="'Create Invoice'"
+      :title="t('noInvoices')"
+      :description="t('noInvoicesDesc')"
+      :action-label="t('newInvoice')"
       @action="router.get(`/${company.slug}/invoices/create`)"
     />
   </PageShell>

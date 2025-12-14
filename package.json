@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "lint:mode-copy": "bash scripts/check-mode-strings.sh"
+  },
   "devDependencies": {
     "shadcn-vue": "^2.3.3"
   },

@@ -93,6 +93,85 @@ return [
         'tax.exemption.update',
         'tax.exemption.delete',
         'tax.calculate',
+
+        // Inventory - Items
+        'item.create',
+        'item.view',
+        'item.update',
+        'item.delete',
+
+        // Inventory - Categories
+        'item_category.create',
+        'item_category.view',
+        'item_category.update',
+        'item_category.delete',
+
+        // Inventory - Warehouses
+        'warehouse.create',
+        'warehouse.view',
+        'warehouse.update',
+        'warehouse.delete',
+
+        // Inventory - Stock
+        'stock.view',
+        'stock.adjust',
+        'stock.transfer',
+        'stock.count',
+
+        // Payroll - Employees
+        'employee.create',
+        'employee.view',
+        'employee.update',
+        'employee.delete',
+
+        // Payroll - Settings
+        'payroll.settings.view',
+        'payroll.settings.update',
+
+        // Payroll - Leave
+        'leave_request.create',
+        'leave_request.view',
+        'leave_request.update',
+        'leave_request.approve',
+        'leave_request.delete',
+
+        // Payroll - Runs & Payslips
+        'payroll_run.create',
+        'payroll_run.view',
+        'payroll_run.close',
+        'payroll_run.delete',
+        'payslip.create',
+        'payslip.view',
+        'payslip.approve',
+        'payslip.pay',
+        'payslip.delete',
+
+        // Banking - Bank Accounts
+        'bank_account.create',
+        'bank_account.view',
+        'bank_account.update',
+        'bank_account.delete',
+
+        // Banking - Bank Transactions
+        'bank_transaction.view',
+        'bank_transaction.create',
+        'bank_transaction.import',
+
+        // Banking - Bank Feed
+        'bank_feed.view',
+        'bank_feed.resolve',
+
+        // Banking - Reconciliation
+        'bank_reconciliation.create',
+        'bank_reconciliation.view',
+        'bank_reconciliation.complete',
+        'bank_reconciliation.cancel',
+
+        // Banking - Bank Rules
+        'bank_rule.create',
+        'bank_rule.view',
+        'bank_rule.update',
+        'bank_rule.delete',
     ],
 
     'accountant' => [
@@ -154,6 +233,73 @@ return [
         'tax.exemption.update',
         'tax.exemption.delete',
         'tax.calculate',
+
+        // Inventory - Items
+        'item.create',
+        'item.view',
+        'item.update',
+
+        // Inventory - Categories
+        'item_category.create',
+        'item_category.view',
+        'item_category.update',
+
+        // Inventory - Warehouses
+        'warehouse.view',
+
+        // Inventory - Stock
+        'stock.view',
+        'stock.adjust',
+        'stock.transfer',
+
+        // Payroll - Employees
+        'employee.create',
+        'employee.view',
+        'employee.update',
+
+        // Payroll - Settings
+        'payroll.settings.view',
+        'payroll.settings.update',
+
+        // Payroll - Leave
+        'leave_request.create',
+        'leave_request.view',
+        'leave_request.update',
+        'leave_request.approve',
+
+        // Payroll - Runs & Payslips
+        'payroll_run.create',
+        'payroll_run.view',
+        'payroll_run.close',
+        'payslip.create',
+        'payslip.view',
+        'payslip.approve',
+        'payslip.pay',
+
+        // Banking - Bank Accounts
+        'bank_account.create',
+        'bank_account.view',
+        'bank_account.update',
+
+        // Banking - Bank Transactions
+        'bank_transaction.view',
+        'bank_transaction.create',
+        'bank_transaction.import',
+
+        // Banking - Bank Feed
+        'bank_feed.view',
+        'bank_feed.resolve',
+
+        // Banking - Reconciliation
+        'bank_reconciliation.create',
+        'bank_reconciliation.view',
+        'bank_reconciliation.complete',
+        'bank_reconciliation.cancel',
+
+        // Banking - Bank Rules
+        'bank_rule.create',
+        'bank_rule.view',
+        'bank_rule.update',
     ],
 
     'member' => [
@@ -175,6 +321,26 @@ return [
 
         // Tax Management (read only)
         'tax.view',
+
+        // Inventory (read only)
+        'item.view',
+        'item_category.view',
+        'warehouse.view',
+        'stock.view',
+
+        // Payroll (read only)
+        'employee.view',
+        'payroll.settings.view',
+        'leave_request.view',
+        'payroll_run.view',
+        'payslip.view',
+
+        // Banking (read only)
+        'bank_account.view',
+        'bank_transaction.view',
+        'bank_feed.view',
+        'bank_reconciliation.view',
+        'bank_rule.view',
     ],
 
 ];

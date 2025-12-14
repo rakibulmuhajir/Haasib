@@ -61,6 +61,15 @@ class HandleInertiaRequests extends Middleware
                 ->first();
         }
 
+        // Current company role for the authenticated user (used for mode gating)
+        $currentCompanyRole = null;
+        if ($currentCompany && $request->user()) {
+            $currentCompanyRole = \DB::table('auth.company_user')
+                ->where('company_id', $currentCompany->id)
+                ->where('user_id', $request->user()->id)
+                ->value('role');
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -68,6 +77,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'currentCompany' => $currentCompany,
+                'currentCompanyRole' => $currentCompanyRole,
                 'companies' => $companies,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

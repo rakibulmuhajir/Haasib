@@ -47,7 +47,7 @@ watch(() => page.url, () => {
 </script>
 
 <template>
-  <SidebarGroup v-for="group in groups" :key="group.label" class="px-2 py-0">
+  <SidebarGroup v-for="group in groups" :key="group.label">
     <SidebarGroupLabel class="text-nav-section-text text-xs uppercase tracking-wider font-medium mb-1">
       {{ group.label }}
     </SidebarGroupLabel>

@@ -57,6 +57,7 @@ $table->id();                              // Integer PK
 - `<script setup lang="ts">` only — no Options API
 - Shadcn/Vue components only — no raw `<input>`, `<button>`
 - Inertia forms — no `fetch()` or `axios`
+- Mode-aware terminology — use `useLexicon()` for Owner/Accountant text (see `docs/frontend-experience-contract.md` Section 14)
 
 ---
 
@@ -161,6 +162,8 @@ These mistakes have caused restarts. Check every time.
 ❌ <button @click="...">               // → <Button @click="...">
 ❌ export default { data() }           // → <script setup lang="ts">
 ❌ fetch('/api/...')                   // → Inertia form.post()
+❌ isAccountantMode ? 'Revenue' : 'Money In'  // → t('moneyIn') via useLexicon()
+❌ Hardcoded "Transactions to review"  // → t('transactionsToReview')
 ```
 
 ---
@@ -434,6 +437,10 @@ php artisan migrate:fresh --seed --force
 | New table | `docs/contracts/{schema}-schema.md` | `AI_PROMPTS/DATABASE_SCHEMA_REMEDIATION.md` |
 | New model | Schema contract | `AI_PROMPTS/MODEL_REMEDIATION.md` |
 | New feature | Schema contract | `AI_PROMPTS/MASTER_REMEDIATION_PROMPT.md` |
+| New screen/UI | `docs/frontend-experience-contract.md` | `docs/ui-screen-specifications.md` |
+| UX patterns | `docs/frontend-experience-contract.md` | User modes, Resolution Engine, interactions |
+| Technical specs | `docs/ui-screen-specifications.md` | Fields, actions, posting logic |
+| Error handling | `docs/ui-screen-specifications.md` Section 15.11 | `AI_PROMPTS/toast.md` |
 | RBAC | `AI_PROMPTS/RBAC_SYSTEM.md` | `docs/god-mode-system.md` |
 | Fix violations | `AI_PROMPTS/QUALITY_VALIDATION_PROMPT.md` | Pattern-specific file |
 
@@ -446,12 +453,16 @@ Every user-facing action must handle the full request cycle. Before marking work
 2. **Error path** - Validation errors shown inline, server errors shown as toast
 3. **Loading state** - Button disabled, spinner if >300ms expected
 
-For toast notifications, use Sonner. See `AI_PRMPTS/toast.md` for implementation.
+**For complete error handling patterns, see `docs/ui-screen-specifications.md` Section 15.11.**
+
+For toast notifications, use Sonner. See `AI_PROMPTS/toast.md` for implementation.
 
 For Inertia actions specifically:
 - Redirects: Return `redirect()->with('success', '...')`, frontend flash handler shows toast
 - Stay on page: Return `back()->with('success', '...')`
 - Never return raw JSON from routes that Inertia components call
+
+**CRITICAL:** Never expose plain Laravel error pages for business logic failures. All errors must be caught and shown via Sonner toast.
 ## 🚀 DEVELOPMENT SERVER
 
 ```bash

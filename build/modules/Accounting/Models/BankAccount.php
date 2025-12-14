@@ -2,9 +2,13 @@
 
 namespace App\Modules\Accounting\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Company;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BankAccount extends Model
@@ -54,20 +58,99 @@ class BankAccount extends Model
         'is_active' => 'boolean',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
-    public function bank()
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function bank(): BelongsTo
     {
         return $this->belongsTo(Bank::class);
     }
 
-    public function glAccount()
+    public function glAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'gl_account_id');
     }
 
-    public function transactions()
+    public function transactions(): HasMany
     {
         return $this->hasMany(BankTransaction::class, 'bank_account_id');
+    }
+
+    public function reconciliations(): HasMany
+    {
+        return $this->hasMany(BankReconciliation::class, 'bank_account_id');
+    }
+
+    public function bankRules(): HasMany
+    {
+        return $this->hasMany(BankRule::class, 'bank_account_id');
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by_user_id');
+    }
+
+    /**
+     * Get unreconciled transactions count.
+     */
+    public function getUnreconciledCountAttribute(): int
+    {
+        return $this->transactions()->unreconciled()->count();
+    }
+
+    /**
+     * Scope for active accounts.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope for primary account.
+     */
+    public function scopePrimary($query)
+    {
+        return $query->where('is_primary', true);
+    }
+
+    /**
+     * Check if account has transactions (for currency immutability).
+     */
+    public function hasTransactions(): bool
+    {
+        return $this->transactions()->exists();
+    }
+
+    /**
+     * Check if account has unreconciled transactions (for deletion check).
+     */
+    public function hasUnreconciledTransactions(): bool
+    {
+        return $this->transactions()->unreconciled()->exists();
+    }
+
+    /**
+     * Get the last reconciliation.
+     */
+    public function lastReconciliation(): ?BankReconciliation
+    {
+        return $this->reconciliations()
+            ->completed()
+            ->orderByDesc('statement_date')
+            ->first();
     }
 }

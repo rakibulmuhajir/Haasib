@@ -31,9 +31,22 @@
 | Module | Schema | Contract | Status | Notes |
 |--------|--------|----------|--------|-------|
 | **Chart of Accounts** | `acct` | [coa-schema.md](./coa-schema.md) | 🔶 Partial | Migration done, views in progress |
-| **Fiscal Years & Periods** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 📋 Contract Only | Foundation for period close |
-| **Transactions & Journal Entries** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 📋 Contract Only | Double-entry backbone |
+| **Fiscal Years & Periods** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Tables + models + routes/controller exist; Inertia pages not yet added |
+| **Transactions & Journal Entries** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Tables + models exist; manual journals UI implemented |
 | **Posting Templates** | `acct` | [posting-schema.md](./posting-schema.md) | 📋 Contract Only | Auto-post AR/AP to GL |
+
+---
+
+## MVP Readiness (Immediate Attention)
+
+These are the non-✅ items that block an **Accounting MVP** (AR/AP + Banking + reliable books) based on the dependency graph and the Implementation Priority below.
+
+| Area | Contract(s) | Current Status | MVP Impact | Immediate Deliverable |
+|------|-------------|----------------|------------|-----------------------|
+| **GL Core Tables** | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Period control and GL screens not fully wired (fiscal year pages missing) | Add fiscal year/period Inertia pages + period close controls |
+| **Posting Engine** | [posting-schema.md](./posting-schema.md), [integration-plan.md](./integration-plan.md) | 📋 Contract Only | AR/AP and banking activity cannot flow into GL; reconciliation cannot tie out | PostingService + templates + test checklist in `integration-plan.md` |
+| **COA UI/Views** | [coa-schema.md](./coa-schema.md) | 🔶 Partial | Users can’t reliably maintain accounts needed by posting | Finish COA pages + seed/default accounts workflow |
+| **Tax (If Required for MVP Scope)** | [tax-schema.md](./tax-schema.md) | 📋 Contract Only | Invoices/bills can’t compute VAT/GST correctly | Tax tables + document-level tax calculation + UI fields |
 
 ---
 
@@ -65,10 +78,10 @@
 
 | Module | Schema | Contract | Status | Notes |
 |--------|--------|----------|--------|-------|
-| **Banks (Reference)** | `bank` | [banking-schema.md](./banking-schema.md) | 📋 Contract Only | Bank catalog |
-| **Company Bank Accounts** | `bank` | [banking-schema.md](./banking-schema.md) | 📋 Contract Only | Company's accounts |
-| **Bank Transactions** | `bank` | [banking-schema.md](./banking-schema.md) | 📋 Contract Only | Feed/manual entries |
-| **Bank Reconciliations** | `bank` | [banking-schema.md](./banking-schema.md) | 📋 Contract Only | Statement matching |
+| **Banks (Reference)** | `bank` | [banking-schema.md](./banking-schema.md) | ✅ Complete | Bank catalog |
+| **Company Bank Accounts** | `bank` | [banking-schema.md](./banking-schema.md) | ✅ Complete | Company's accounts |
+| **Bank Transactions** | `bank` | [banking-schema.md](./banking-schema.md) | ✅ Complete | Feed/manual entries |
+| **Bank Reconciliations** | `bank` | [banking-schema.md](./banking-schema.md) | ✅ Complete | Statement matching |
 
 ---
 
@@ -87,12 +100,12 @@
 
 | Module | Schema | Contract | Status | Notes |
 |--------|--------|----------|--------|-------|
-| **Item Categories** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | Product categories |
-| **Items/Products** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | SKU master |
-| **Warehouses** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | Storage locations |
-| **Stock Levels** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | Qty per location |
-| **Stock Movements** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | In/out/adjust |
-| **Inventory Costing** | `inv` | [inventory-schema.md](./inventory-schema.md) | 📋 Contract Only | WA/FIFO, COGS |
+| **Item Categories** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | Product categories |
+| **Items/Products** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | SKU master |
+| **Warehouses** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | Storage locations |
+| **Stock Levels** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | Qty per location |
+| **Stock Movements** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | In/out/adjust |
+| **Inventory Costing** | `inv` | [inventory-schema.md](./inventory-schema.md) | ✅ Complete | WA/FIFO, COGS |
 
 ---
 
@@ -100,12 +113,12 @@
 
 | Module | Schema | Contract | Status | Notes |
 |--------|--------|----------|--------|-------|
-| **Employees** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Employee master |
-| **Payroll Periods** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Pay cycles |
-| **Payroll Runs** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Batch processing |
-| **Payslips** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Per-employee detail |
-| **Earning/Deduction Types** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Salary components |
-| **Benefits & Leave** | `pay` | [payroll-schema.md](./payroll-schema.md) | 📋 Contract Only | Insurance, PTO |
+| **Employees** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Employee master |
+| **Payroll Periods** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Pay cycles |
+| **Payroll Runs** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Batch processing |
+| **Payslips** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Per-employee detail |
+| **Earning/Deduction Types** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Salary components |
+| **Benefits & Leave** | `pay` | [payroll-schema.md](./payroll-schema.md) | ✅ Complete | Insurance, PTO |
 
 ---
 
@@ -158,21 +171,22 @@
 
 ### Phase 1: GL Foundation (Required for AR/AP posting)
 1. `gl-core-schema.md` - Fiscal years, periods, transactions, journal entries
-2. `posting-schema.md` - Auto-post templates
-3. `banking-schema.md` - Bank accounts for payments
+2. `posting-schema.md` + `integration-plan.md` - Posting engine + validation checklist
+3. `coa-schema.md` - Finish COA views + defaults needed by posting
+4. `banking-schema.md` - Bank accounts for payments (schema complete; integration depends on posting)
 
 ### Phase 2: Compliance
-4. `tax-schema.md` - VAT/GST handling
+5. `tax-schema.md` - VAT/GST handling
 
 ### Phase 3: Operations (As Needed)
-5. `inventory-schema.md` - If selling products
-6. `payroll-schema.md` - HR/payroll processing
+6. `inventory-schema.md` - If selling products
+7. `payroll-schema.md` - HR/payroll processing
 
 ### Phase 4: Extensions
-7. `reporting-schema.md` - Financial reports
-8. `crm-schema.md` - Enhanced CRM
-9. `vms-schema.md` - Travel agency vertical
-10. `system-schema.md` - Infrastructure
+8. `reporting-schema.md` - Financial reports
+9. `crm-schema.md` - Enhanced CRM
+10. `vms-schema.md` - Travel agency vertical
+11. `system-schema.md` - Infrastructure
 
 ---
 

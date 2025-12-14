@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { Plus, ArrowLeft, Save, Trash2 } from 'lucide-vue-next'
+import { useLexicon } from '@/composables/useLexicon'
 
 interface CompanyRef {
   id: string
@@ -62,12 +63,14 @@ const props = defineProps<{
   arAccounts?: AccountOption[]
 }>()
 
+const { t } = useLexicon()
+
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
-  { title: 'Dashboard', href: '/dashboard' },
+  { title: t('dashboard'), href: '/dashboard' },
   { title: props.company.name, href: `/${props.company.slug}` },
-  { title: 'Invoices', href: `/${props.company.slug}/invoices` },
+  { title: t('invoices'), href: `/${props.company.slug}/invoices` },
   { title: props.invoice.invoice_number, href: `/${props.company.slug}/invoices/${props.invoice.id}` },
-  { title: 'Edit' },
+  { title: t('edit') },
 ])
 
 const lineItems = ref<LineItem[]>([
@@ -152,20 +155,20 @@ const isEditable = computed(() => {
 </script>
 
 <template>
-  <Head :title="`Edit Invoice ${invoice.invoice_number}`" />
+  <Head :title="`${t('edit')} ${t('invoices')} ${invoice.invoice_number}`" />
 
   <PageShell
-    :title="`Edit Invoice ${invoice.invoice_number}`"
+    :title="`${t('edit')} ${t('invoices')} ${invoice.invoice_number}`"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices/${invoice.id}`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
-        Cancel
+        {{ t('cancel') }}
       </Button>
       <Button @click="submit" :disabled="form.processing || !isEditable">
         <Save class="mr-2 h-4 w-4" />
-        Save Changes
+        {{ t('saveChanges') }}
       </Button>
     </template>
 
@@ -174,7 +177,7 @@ const isEditable = computed(() => {
         <CardContent class="pt-6">
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">{{ invoice.status }}</Badge>
-            <span class="text-sm">This invoice cannot be edited in its current status.</span>
+            <span class="text-sm">{{ t('invoiceLocked') }}</span>
           </div>
         </CardContent>
       </Card>
@@ -184,12 +187,12 @@ const isEditable = computed(() => {
       <!-- Customer Information -->
       <Card>
         <CardHeader>
-          <CardTitle>Customer Information</CardTitle>
-          <CardDescription>Select the customer for this invoice</CardDescription>
+          <CardTitle>{{ t('customerInformation') }}</CardTitle>
+          <CardDescription>{{ t('selectCustomerForInvoice') }}</CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <Label for="customer_id">Customer *</Label>
+            <Label for="customer_id">{{ t('customer') }} *</Label>
             <Select v-model="form.customer_id" required :disabled="!isEditable">
               <SelectTrigger>
                 <SelectValue placeholder="Select a customer" />
@@ -201,13 +204,13 @@ const isEditable = computed(() => {
             </Select>
           </div>
           <div>
-            <Label for="ar_account_id">AR Account</Label>
+            <Label for="ar_account_id">{{ t('arAccount') }}</Label>
             <Select v-model="form.ar_account_id" :disabled="!isEditable">
               <SelectTrigger id="ar_account_id">
-                <SelectValue placeholder="Use company default" />
+                <SelectValue :placeholder="t('useCompanyDefault')" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Use company default</SelectItem>
+                <SelectItem value="__none">{{ t('useCompanyDefault') }}</SelectItem>
                 <SelectItem
                   v-for="acct in props.arAccounts || []"
                   :key="acct.id"
@@ -224,12 +227,12 @@ const isEditable = computed(() => {
       <!-- Invoice Details -->
       <Card>
         <CardHeader>
-          <CardTitle>Invoice Details</CardTitle>
-          <CardDescription>Basic information about the invoice</CardDescription>
+          <CardTitle>{{ t('invoiceDetails') }}</CardTitle>
+          <CardDescription>{{ t('invoiceDetailsHelper') }}</CardDescription>
         </CardHeader>
         <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label for="invoice_date">Invoice Date *</Label>
+            <Label for="invoice_date">{{ t('invoiceDate') }} *</Label>
             <Input
               id="invoice_date"
               v-model="form.invoice_date"
@@ -239,7 +242,7 @@ const isEditable = computed(() => {
             />
           </div>
           <div>
-            <Label for="due_date">Due Date</Label>
+            <Label for="due_date">{{ t('dueDate') }}</Label>
             <Input
               id="due_date"
               v-model="form.due_date"
@@ -248,7 +251,7 @@ const isEditable = computed(() => {
             />
           </div>
           <div>
-            <Label for="reference">Reference</Label>
+            <Label for="reference">{{ t('reference') }}</Label>
             <Input
               id="reference"
               v-model="form.reference"
@@ -257,7 +260,7 @@ const isEditable = computed(() => {
             />
           </div>
           <div>
-            <Label for="payment_terms">Payment Terms (days)</Label>
+            <Label for="payment_terms">{{ t('paymentTerms') }} ({{ t('days') }})</Label>
             <Input
               id="payment_terms"
               v-model.number="form.payment_terms"
@@ -273,16 +276,16 @@ const isEditable = computed(() => {
       <!-- Line Items -->
       <Card>
         <CardHeader>
-          <CardTitle>Line Items</CardTitle>
-          <CardDescription>Add products or services to invoice</CardDescription>
+          <CardTitle>{{ t('items') }}</CardTitle>
+          <CardDescription>{{ t('lineItemsHelper') }}</CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid grid-cols-12 gap-2 text-sm text-muted-foreground font-medium">
-            <div class="col-span-5">Description</div>
-            <div class="col-span-2">Quantity</div>
-            <div class="col-span-2">Unit Price</div>
-            <div class="col-span-2">Income Account</div>
-            <div class="col-span-1">Total</div>
+            <div class="col-span-5">{{ t('description') }}</div>
+            <div class="col-span-2">{{ t('quantity') }}</div>
+            <div class="col-span-2">{{ t('unitPrice') }}</div>
+            <div class="col-span-2">{{ t('incomeAccount') }}</div>
+            <div class="col-span-1">{{ t('total') }}</div>
           </div>
 
           <div v-for="(item, index) in lineItems" :key="index" class="grid grid-cols-12 gap-2">
@@ -341,7 +344,7 @@ const isEditable = computed(() => {
 
           <Button type="button" variant="outline" @click="addLineItem" class="w-full" :disabled="!isEditable">
             <Plus class="mr-2 h-4 w-4" />
-            Add Line Item
+            {{ t('addLineItem') }}
           </Button>
         </CardContent>
       </Card>
@@ -349,19 +352,19 @@ const isEditable = computed(() => {
       <!-- Summary -->
       <Card>
         <CardHeader>
-          <CardTitle>Invoice Summary</CardTitle>
+          <CardTitle>{{ t('amountSummary') }}</CardTitle>
         </CardHeader>
         <CardContent class="space-y-2">
           <div class="flex justify-between text-sm">
-            <span>Subtotal:</span>
+            <span>{{ t('subtotal') }}:</span>
             <span>{{ formatCurrency(subtotal) }}</span>
           </div>
           <div class="flex justify-between text-sm">
-            <span>Tax:</span>
+            <span>{{ t('tax') }}:</span>
             <span>{{ formatCurrency(taxAmount) }}</span>
           </div>
           <div class="flex justify-between text-lg font-bold">
-            <span>Total:</span>
+            <span>{{ t('total') }}:</span>
             <span>{{ formatCurrency(totalAmount) }}</span>
           </div>
         </CardContent>
@@ -370,11 +373,11 @@ const isEditable = computed(() => {
       <!-- Notes -->
       <Card>
         <CardHeader>
-          <CardTitle>Additional Information</CardTitle>
+          <CardTitle>{{ t('additionalInformation') }}</CardTitle>
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <Label for="description">Description</Label>
+            <Label for="description">{{ t('description') }}</Label>
             <Textarea
               id="description"
               v-model="form.description"
@@ -384,7 +387,7 @@ const isEditable = computed(() => {
             />
           </div>
           <div>
-            <Label for="notes">Customer Notes</Label>
+            <Label for="notes">{{ t('customerNotes') }}</Label>
             <Textarea
               id="notes"
               v-model="form.notes"

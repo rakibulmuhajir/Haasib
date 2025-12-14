@@ -57,6 +57,7 @@ $table->id();                              // Integer PK
 - `<script setup lang="ts">` only — no Options API
 - Shadcn/Vue components only — no raw `<input>`, `<button>`
 - Inertia forms — no `fetch()` or `axios`
+- Mode-aware terminology — use `useLexicon()` for Owner/Accountant text (see `docs/frontend-experience-contract.md` Section 14)
 
 ---
 
@@ -96,7 +97,7 @@ $table->id();                              // Integer PK
 ```
 URL: /{company}/resource
   → IdentifyCompany middleware extracts slug
-  → Sets CurrentCompany singleton + Spatie team
+  → Sets CurrentCompany singleton + Spatie team atomically
   → Controller: app(CurrentCompany::class)->get()
 ```
 
@@ -161,6 +162,8 @@ These mistakes have caused restarts. Check every time.
 ❌ <button @click="...">               // → <Button @click="...">
 ❌ export default { data() }           // → <script setup lang="ts">
 ❌ fetch('/api/...')                   // → Inertia form.post()
+❌ isAccountantMode ? 'Revenue' : 'Money In'  // → t('moneyIn') via useLexicon()
+❌ Hardcoded "Transactions to review"  // → t('transactionsToReview')
 ```
 
 ---
@@ -168,6 +171,8 @@ These mistakes have caused restarts. Check every time.
 ## 🖊️ INLINE EDITING
 
 **Full guide**: `docs/inline-editing-system.md`
+
+### When to Use Inline Editing
 
 | Field Type | Inline? | Reason |
 |------------|---------|--------|
@@ -177,6 +182,79 @@ These mistakes have caused restarts. Check every time.
 | `currency` | ❌ | Affects other calculations |
 
 **Rule**: If changing the field triggers recalculations or affects other fields, use a form.
+
+### Universal Inline Edit System
+
+Use the reusable composable and component for all inline editing:
+
+**Files:**
+- Composable: `resources/js/composables/useInlineEdit.ts`
+- Component: `resources/js/components/InlineEditable.vue`
+
+**Usage Example:**
+```vue
+<script setup lang="ts">
+import InlineEditable from '@/components/InlineEditable.vue'
+import { useInlineEdit } from '@/composables/useInlineEdit'
+
+// Setup inline editing with endpoint
+const inlineEdit = useInlineEdit({
+  endpoint: `/${company.slug}/settings`,
+  successMessage: 'Updated successfully',
+  errorMessage: 'Failed to update',
+})
+
+// Register fields with initial values
+const nameField = inlineEdit.registerField('name', props.company.name)
+const statusField = inlineEdit.registerField('status', props.company.status)
+</script>
+
+<template>
+  <!-- Text input -->
+  <InlineEditable
+    v-model="nameField.value.value"
+    label="Company Name"
+    :editing="nameField.isEditing.value"
+    :saving="nameField.isSaving.value"
+    :can-edit="canManage"
+    type="text"
+    @start-edit="nameField.startEditing()"
+    @save="nameField.save()"
+    @cancel="nameField.cancelEditing()"
+  />
+
+  <!-- Select input -->
+  <InlineEditable
+    v-model="statusField.value.value"
+    label="Status"
+    :editing="statusField.isEditing.value"
+    :saving="statusField.isSaving.value"
+    :can-edit="canManage"
+    type="select"
+    :options="[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]"
+    :icon="StatusIcon"
+    helper-text="Current status"
+    @start-edit="statusField.startEditing()"
+    @save="statusField.save()"
+    @cancel="statusField.cancelEditing()"
+  />
+</template>
+```
+
+**InlineEditable Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `label` | string | Field label |
+| `editing` | boolean | Is field being edited |
+| `saving` | boolean | Is field saving |
+| `canEdit` | boolean | Can user edit (default: true) |
+| `type` | `'text' \| 'email' \| 'number' \| 'select' \| 'textarea'` | Input type |
+| `options` | `{ value, label }[]` | Options for select type |
+| `icon` | Component | Optional icon before value |
+| `helperText` | string | Help text below value |
+| `readonly` | boolean | Show without edit button |
+
+**Keyboard Shortcuts:** Enter = Save, Escape = Cancel
 
 ---
 
@@ -328,6 +406,9 @@ bash validate-migration.sh
 - [ ] UUID primary keys
 - [ ] RLS policies on tenant tables
 - [ ] Shadcn/Vue components (no raw HTML inputs)
+- [ ] **Palette Actions implement PaletteAction interface**
+- [ ] **Action permissions use App\Constants\Permissions**
+- [ ] **Commands route has identify.company middleware**
 
 ---
 
@@ -341,7 +422,8 @@ php artisan migrate:fresh --seed --force
 
 ### Critical Files (DO NOT DELETE)
 - `app/Models/User.php`
-- `app/Services/CurrentCompany.php`
+- `app/Services/CompanyContextService.php`
+- `app/Facades/CompanyContext.php`
 - `app/Http/Middleware/IdentifyCompany.php`
 - `database/migrations/0001_01_01_000000_create_users_table.php`
 - `database/migrations/2025_11_26_175213_create_permission_tables.php`
@@ -355,6 +437,10 @@ php artisan migrate:fresh --seed --force
 | New table | `docs/contracts/{schema}-schema.md` | `AI_PROMPTS/DATABASE_SCHEMA_REMEDIATION.md` |
 | New model | Schema contract | `AI_PROMPTS/MODEL_REMEDIATION.md` |
 | New feature | Schema contract | `AI_PROMPTS/MASTER_REMEDIATION_PROMPT.md` |
+| New screen/UI | `docs/frontend-experience-contract.md` | `docs/ui-screen-specifications.md` |
+| UX patterns | `docs/frontend-experience-contract.md` | User modes, Resolution Engine, interactions |
+| Technical specs | `docs/ui-screen-specifications.md` | Fields, actions, posting logic |
+| Error handling | `docs/ui-screen-specifications.md` Section 15.11 | `AI_PROMPTS/toast.md` |
 | RBAC | `AI_PROMPTS/RBAC_SYSTEM.md` | `docs/god-mode-system.md` |
 | Fix violations | `AI_PROMPTS/QUALITY_VALIDATION_PROMPT.md` | Pattern-specific file |
 
@@ -367,12 +453,16 @@ Every user-facing action must handle the full request cycle. Before marking work
 2. **Error path** - Validation errors shown inline, server errors shown as toast
 3. **Loading state** - Button disabled, spinner if >300ms expected
 
-For toast notifications, use Sonner. See `AI_PRMPTS/toast.md` for implementation.
+**For complete error handling patterns, see `docs/ui-screen-specifications.md` Section 15.11.**
+
+For toast notifications, use Sonner. See `AI_PROMPTS/toast.md` for implementation.
 
 For Inertia actions specifically:
 - Redirects: Return `redirect()->with('success', '...')`, frontend flash handler shows toast
 - Stay on page: Return `back()->with('success', '...')`
 - Never return raw JSON from routes that Inertia components call
+
+**CRITICAL:** Never expose plain Laravel error pages for business logic failures. All errors must be caught and shown via Sonner toast.
 ## 🚀 DEVELOPMENT SERVER
 
 ```bash

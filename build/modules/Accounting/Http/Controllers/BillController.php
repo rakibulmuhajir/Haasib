@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -59,7 +60,7 @@ class BillController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
@@ -78,6 +79,23 @@ class BillController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        // Owner mode → simplified quick create
+        if ($this->prefersOwnerMode($request)) {
+            return Inertia::render('accounting/bills/QuickCreate', [
+                'company' => [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'base_currency' => $company->base_currency,
+                    'default_payment_terms' => $company->default_payment_terms ?? null,
+                ],
+                'recentVendors' => [],
+                'expenseAccounts' => $expenseAccounts,
+                'defaultTaxCode' => null,
+                'defaultTerms' => $company->default_payment_terms ?? null,
+            ]);
+        }
+
         return Inertia::render('accounting/bills/Create', [
             'company' => [
                 'id' => $company->id,
@@ -91,15 +109,75 @@ class BillController extends Controller
         ]);
     }
 
+    protected function prefersOwnerMode(Request $request): bool
+    {
+        return $request->cookie('haasib_user_mode', 'owner') !== 'accountant';
+    }
+
     public function store(StoreBillRequest $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill.create', [
-            ...$request->validated(),
+        $commandBus = app(CommandBus::class);
+
+        $payload = $request->validated();
+        if ($request->boolean('pay_immediately')) {
+            $payload['status'] = 'received';
+        }
+
+        $result = $commandBus->dispatch('bill.create', [
+            ...$payload,
             'company_id' => $company->id,
         ], $request->user());
 
-        return back()->with('success', 'Bill created');
+        if ($request->boolean('pay_immediately')) {
+            $billId = $result['data']['id'] ?? null;
+            if (!$billId) {
+                return back()->with('success', $result['message'] ?? 'Bill created');
+            }
+
+            $bill = Bill::where('company_id', $company->id)
+                ->with(['vendor'])
+                ->findOrFail($billId);
+
+            $paymentAccountId = $company->bank_account_id;
+            if (!$paymentAccountId) {
+                $paymentAccountId = Account::where('company_id', $company->id)
+                    ->whereIn('subtype', ['bank', 'cash'])
+                    ->where('is_active', true)
+                    ->orderBy('code')
+                    ->value('id');
+            }
+
+            if (!$paymentAccountId) {
+                return back()->withErrors(['payment_account_id' => 'No bank/cash account found. Add one in onboarding or Chart of Accounts.']);
+            }
+
+            $commandBus->dispatch('bill_payment.create', [
+                'vendor_id' => $bill->vendor_id,
+                'payment_date' => $bill->bill_date,
+                'amount' => (float) $bill->total_amount,
+                'currency' => $bill->currency,
+                'base_currency' => $bill->base_currency,
+                'exchange_rate' => $bill->exchange_rate,
+                'payment_method' => 'cash',
+                'payment_account_id' => $paymentAccountId,
+                'ap_account_id' => $bill->vendor?->ap_account_id,
+                'allocations' => [
+                    [
+                        'bill_id' => $bill->id,
+                        'amount_allocated' => (float) $bill->total_amount,
+                    ],
+                ],
+            ], $request->user());
+
+            $billId = $result['data']['id'] ?? null;
+            return redirect()->route('bills.show', [$company->slug, $billId])
+                ->with('success', 'Bill saved and paid');
+        }
+
+        $billId = $result['data']['id'] ?? null;
+        return redirect()->route('bills.show', [$company->slug, $billId])
+            ->with('success', $result['message'] ?? 'Bill created');
     }
 
     public function show(string $company, string $bill): Response

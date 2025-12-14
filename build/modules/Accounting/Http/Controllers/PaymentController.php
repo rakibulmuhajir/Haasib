@@ -64,7 +64,7 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $company = CompanyContext::getCompany();
 
@@ -74,8 +74,9 @@ class PaymentController extends Controller
             ->get(['id', 'name']);
 
         // Get unpaid invoices (balance > 0, not cancelled/void)
+        // Also include 'approved' status since some invoices may be approved but not sent
         $invoices = Invoice::where('company_id', $company->id)
-            ->whereIn('status', ['sent', 'viewed', 'partial', 'overdue'])
+            ->whereIn('status', ['approved', 'sent', 'viewed', 'partial', 'overdue'])
             ->where('balance', '>', 0)
             ->orderBy('invoice_number')
             ->get(['id', 'customer_id', 'invoice_number', 'balance', 'currency']);
@@ -97,6 +98,12 @@ class PaymentController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        // Pre-selection from URL params (when coming from invoice page)
+        $preselect = [
+            'customer_id' => $request->query('customer_id'),
+            'invoice_id' => $request->query('invoice_id'),
+        ];
+
         return Inertia::render('accounting/payments/Create', [
             'company' => [
                 'id' => $company->id,
@@ -109,6 +116,7 @@ class PaymentController extends Controller
             'currencies' => $currencies,
             'depositAccounts' => $depositAccounts,
             'arAccounts' => $arAccounts,
+            'preselect' => $preselect,
         ]);
     }
 

@@ -45,17 +45,18 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
   <header class="pb-6">
     <!-- Back Button -->
     <div v-if="backButton" class="mb-4">
-      <button
+      <Button
         @click="backButton.onClick"
-        class="group inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 
-               transition-colors hover:text-zinc-900"
+        variant="ghost"
+        size="sm"
+        class="group -ml-2 inline-flex items-center gap-1.5 px-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
       >
         <component 
           :is="BackIcon" 
           class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" 
         />
         {{ backButton.label }}
-      </button>
+      </Button>
     </div>
 
     <!-- Header Content -->

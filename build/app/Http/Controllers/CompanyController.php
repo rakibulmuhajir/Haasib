@@ -9,6 +9,7 @@ use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\RolePermissionSynchronizer;
+use App\Modules\Accounting\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,13 @@ use Inertia\Response;
 
 class CompanyController extends Controller
 {
+    protected DashboardService $dashboardService;
+
+    public function __construct(DashboardService $dashboardService)
+    {
+        $this->dashboardService = $dashboardService;
+    }
+
     /**
      * Show the company creation form.
      */
@@ -311,6 +319,12 @@ class CompanyController extends Controller
 
         $settings = $company->settings ?? [];
 
+        // Fetch new Dashboard Data
+        $cashPosition = $this->dashboardService->getCashPosition($company->id);
+        $moneyInOut = $this->dashboardService->getMoneyInOut($company->id);
+        $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
+        $profitLoss = $this->dashboardService->getProfitLossSummary($company->id);
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -350,6 +364,13 @@ class CompanyController extends Controller
                 'quick_stats' => $quickStats,
                 'recent_activity' => $recentActivity,
             ],
+            // New Dashboard Data Structure
+            'dashboard' => [
+                'cash_position' => $cashPosition,
+                'money_in_out' => $moneyInOut,
+                'needs_attention' => $needsAttention,
+                'profit_loss' => $profitLoss,
+            ]
         ]);
     }
 
@@ -448,6 +469,28 @@ class CompanyController extends Controller
         return response()->json([
             'success' => true,
             'message' => $result['message'] ?? 'Company deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Get company's default tax code (JSON API for TaxToggle fallback)
+     */
+    public function taxDefault(): JsonResponse
+    {
+        $company = CompanyContext::getCompany();
+
+        $defaultTaxRate = \App\Modules\Accounting\Models\TaxRate::where('company_id', $company->id)
+            ->where('is_default', true)
+            ->where('is_active', true)
+            ->first(['id', 'name', 'code', 'rate']);
+
+        return response()->json([
+            'tax_code' => $defaultTaxRate ? [
+                'id' => $defaultTaxRate->id,
+                'name' => $defaultTaxRate->name,
+                'code' => $defaultTaxRate->code,
+                'rate' => (float) $defaultTaxRate->rate,
+            ] : null,
         ]);
     }
 }

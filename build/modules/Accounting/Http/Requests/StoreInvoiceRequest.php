@@ -34,11 +34,13 @@ class StoreInvoiceRequest extends BaseFormRequest
             'currency' => ['nullable', 'string', 'size:3', 'uppercase'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'description' => ['nullable', 'string', 'max:500'],
-            'reference' => ['nullable', 'string', 'max:100'],
             'payment_terms' => ['nullable', 'integer', 'min:0', 'max:365'],
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
             'invoice_date' => ['required', 'date'],
+            // Owner UI uses "approved" to indicate send/post immediately
+            'status' => ['nullable', 'string', 'in:draft,approved,sent'],
+            'send_immediately' => ['nullable', 'boolean'],
             'ar_account_id' => [
                 'nullable',
                 'uuid',

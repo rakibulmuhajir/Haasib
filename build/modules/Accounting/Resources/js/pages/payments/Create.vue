@@ -46,6 +46,10 @@ const props = defineProps<{
   currencies: CurrencyRef[]
   depositAccounts?: AccountOption[]
   arAccounts?: AccountOption[]
+  preselect?: {
+    customer_id?: string | null
+    invoice_id?: string | null
+  }
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -55,11 +59,16 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Record Payment' },
 ])
 
+// Get preselected invoice details for initial amount
+const preselectedInvoice = props.preselect?.invoice_id
+  ? props.invoices.find(inv => inv.id === props.preselect?.invoice_id)
+  : null
+
 const form = useForm({
-  customer_id: '',
-  invoice_id: '',
-  amount: 0,
-  currency: props.company.base_currency,
+  customer_id: props.preselect?.customer_id || '',
+  invoice_id: props.preselect?.invoice_id || '',
+  amount: preselectedInvoice?.balance || 0,
+  currency: preselectedInvoice?.currency || props.company.base_currency,
   payment_method: 'bank_transfer',
   reference_number: '',
   payment_date: new Date().toISOString().split('T')[0],

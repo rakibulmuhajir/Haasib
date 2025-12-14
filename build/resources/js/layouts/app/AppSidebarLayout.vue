@@ -27,7 +27,7 @@ const isOpen = computed(() => page.props.sidebarOpen)
 <template>
   <SidebarProvider
     :default-open="isOpen"
-    :style="{ '--sidebar-width': 'calc(var(--spacing) * 72)' }"
+    :style="{ '--sidebar-width': 'calc(var(--spacing) * 64)' }"
   >
     <AppSidebar />
     <SidebarInset class="relative flex min-h-screen flex-col bg-surface-2">

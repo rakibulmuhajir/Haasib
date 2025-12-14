@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Services\GlPostingService;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,17 +22,22 @@ class CreateAction implements PaletteAction
         return [
             'customer' => 'required|string|max:255',
             'currency' => 'required|string|size:3|uppercase',
-            'due' => 'nullable|date|after_or_equal:today',
+            'date' => 'nullable|date',
+            'due' => 'nullable|date',
             'draft' => 'nullable|boolean',
+            'send_immediately' => 'nullable|boolean',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'payment_terms' => 'nullable|integer|min:0|max:365',
+            'description' => 'nullable|string|max:500',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
             'line_items.*.quantity' => 'required|numeric|min:0.01',
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.line_number' => 'nullable|integer|min:1',
+            'line_items.*.income_account_id' => 'nullable|uuid',
         ];
     }
 
@@ -49,14 +55,21 @@ class CreateAction implements PaletteAction
 
         return DB::transaction(function () use ($params, $company, $customer) {
             // Calculate dates
-            $invoiceDate = now();
+            $invoiceDate = !empty($params['date'])
+                ? Carbon::parse($params['date'])
+                : now();
             $paymentTerms = $params['payment_terms']
                 ?? $customer->payment_terms
                 ?? $company->default_customer_payment_terms
                 ?? 30;
-            $dueDate = !empty($params['due'])
-                ? Carbon::parse($params['due'])
-                : $invoiceDate->copy()->addDays($paymentTerms);
+            if (!empty($params['due'])) {
+                $dueDate = Carbon::parse($params['due']);
+                if ($dueDate->lt($invoiceDate->copy()->startOfDay())) {
+                    throw new \InvalidArgumentException('Due date must be on or after the invoice date.');
+                }
+            } else {
+                $dueDate = $invoiceDate->copy()->addDays($paymentTerms);
+            }
 
             // Generate invoice number using existing model method
             $invoiceNumber = Invoice::generateInvoiceNumber($company->id);
@@ -86,7 +99,9 @@ class CreateAction implements PaletteAction
                 $discountRate = isset($item['discount_rate']) ? (float) $item['discount_rate'] : 0.0;
 
                 $lineTotal = $qty * $unit;
-                $lineDiscount = $lineTotal * ($discountRate / 100);
+                $lineDiscount = isset($item['discount_amount'])
+                    ? min((float) $item['discount_amount'], $lineTotal)
+                    : ($lineTotal * ($discountRate / 100));
                 $lineTaxable = $lineTotal - $lineDiscount;
                 $lineTax = $lineTaxable * ($taxRate / 100);
                 $lineGrand = $lineTaxable + $lineTax;
@@ -143,6 +158,15 @@ class CreateAction implements PaletteAction
                     'income_account_id' => $item['income_account_id'] ?? null,
                     'created_by_user_id' => Auth::id(),
                 ]);
+            }
+
+            // Owner flow expects immediate posting when not draft
+            if ($status !== 'draft' && ($params['send_immediately'] ?? true) && !$invoice->transaction_id) {
+                $postingService = app(GlPostingService::class);
+                $transaction = $postingService->postInvoice($invoice->fresh(['customer', 'lineItems']));
+                $invoice->transaction_id = $transaction->id;
+                $invoice->sent_at = now();
+                $invoice->save();
             }
 
             $statusLabel = $status === 'draft' ? 'Draft' : 'Sent';

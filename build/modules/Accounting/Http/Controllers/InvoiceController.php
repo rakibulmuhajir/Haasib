@@ -33,7 +33,6 @@ class InvoiceController extends Controller
             $term = $request->search;
             $query->where(function ($q) use ($term) {
                 $q->where('invoice_number', 'ilike', "%{$term}%")
-                    ->orWhere('reference', 'ilike', "%{$term}%")
                     ->orWhereHas('customer', function ($subQ) use ($term) {
                         $subQ->where('name', 'ilike', "%{$term}%");
                     });
@@ -66,9 +65,25 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $company = CompanyContext::getCompany();
+
+        // Owner mode → simplified quick create
+        if ($this->prefersOwnerMode($request)) {
+            return Inertia::render('accounting/invoices/QuickCreate', [
+                'company' => [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'base_currency' => $company->base_currency,
+                    'default_payment_terms' => $company->default_payment_terms ?? null,
+                ],
+                'recentCustomers' => [],
+                'defaultTaxCode' => null,
+                'defaultTerms' => $company->default_payment_terms ?? null,
+            ]);
+        }
 
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
@@ -106,6 +121,11 @@ class InvoiceController extends Controller
         ]);
     }
 
+    protected function prefersOwnerMode(Request $request): bool
+    {
+        return $request->cookie('haasib_user_mode', 'owner') !== 'accountant';
+    }
+
     public function store(StoreInvoiceRequest $request): RedirectResponse
     {
         $company = CompanyContext::getCompany();
@@ -113,13 +133,16 @@ class InvoiceController extends Controller
 
         // Transform validated data to match Action expected format
         $validated = $request->validated();
+        $status = $validated['status'] ?? 'draft';
         $params = [
             'customer' => $validated['customer_id'],
             'currency' => $validated['currency'] ?? $company->base_currency ?? 'USD',
             'due' => $validated['due_date'] ?? null,
-            'draft' => ($validated['status'] ?? 'draft') === 'draft',
+            'date' => $validated['invoice_date'] ?? null,
+            'draft' => $status === 'draft',
             'payment_terms' => $validated['payment_terms'] ?? null,
             'description' => $validated['description'] ?? null,
+            'send_immediately' => (bool) ($validated['send_immediately'] ?? ($status !== 'draft')),
             'line_items' => $validated['line_items'],
         ];
 

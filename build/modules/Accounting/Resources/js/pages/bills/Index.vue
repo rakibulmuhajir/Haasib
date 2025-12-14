@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
+import { useLexicon } from '@/composables/useLexicon'
 import { FileText, Plus, Search } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -58,6 +59,7 @@ const props = defineProps<{
   vendors: VendorRef[]
 }>()
 
+const { t } = useLexicon()
 const allVendorsValue = '__all_vendors'
 const allStatusValue = '__all_status'
 const search = ref(props.filters.search ?? '')
@@ -67,18 +69,18 @@ const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Bills', href: `/${props.company.slug}/bills` },
+  { title: t('dashboard'), href: `/${props.company.slug}` },
+  { title: t('bills'), href: `/${props.company.slug}/bills` },
 ]
 
 const columns = [
-  { key: 'bill_number', label: 'Bill #' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'bill_date', label: 'Date' },
-  { key: 'due_date', label: 'Due' },
-  { key: 'total_amount', label: 'Total' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'status', label: 'Status' },
+  { key: 'bill_number', label: t('billNumber') },
+  { key: 'vendor', label: t('vendor') },
+  { key: 'bill_date', label: t('date') },
+  { key: 'due_date', label: t('due') },
+  { key: 'total_amount', label: t('total') },
+  { key: 'balance', label: t('balance') },
+  { key: 'status', label: t('status') },
 ]
 
 const formatMoney = (val: number, currency: string) =>
@@ -145,53 +147,53 @@ const filterByStatus = (statusValue: string) => {
 </script>
 
 <template>
-  <Head title="Bills" />
+  <Head :title="t('bills')" />
   <PageShell
-    title="Bills"
+    :title="t('bills')"
     :breadcrumbs="breadcrumbs"
     :icon="FileText"
   >
     <template #actions>
       <Button @click="router.get(`/${company.slug}/bills/create`)">
         <Plus class="mr-2 h-4 w-4" />
-        New Bill
+        {{ t('newBill') }}
       </Button>
     </template>
 
-    <div class="mb-4 grid gap-3 md:grid-cols-5">
-      <div class="relative md:col-span-2">
-        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          v-model="search"
-          placeholder="Search bill # or vendor invoice #"
-          class="pl-10"
-          @keyup.enter="handleSearch"
-        />
-      </div>
-      <Select v-model="vendorId" @update:modelValue="handleSearch">
-        <SelectTrigger>
-          <SelectValue placeholder="All vendors" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem :value="allVendorsValue">All vendors</SelectItem>
-          <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">{{ v.name }}</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select v-model="status" @update:modelValue="handleSearch">
-        <SelectTrigger>
-          <SelectValue placeholder="All status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem :value="allStatusValue">All status</SelectItem>
-          <SelectItem value="draft">Draft</SelectItem>
-          <SelectItem value="received">Received</SelectItem>
-          <SelectItem value="partial">Partial</SelectItem>
-          <SelectItem value="paid">Paid</SelectItem>
-          <SelectItem value="overdue">Overdue</SelectItem>
-          <SelectItem value="void">Void</SelectItem>
-          <SelectItem value="cancelled">Cancelled</SelectItem>
-        </SelectContent>
-      </Select>
+  <div class="mb-4 grid gap-3 md:grid-cols-5">
+    <div class="relative md:col-span-2">
+      <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        v-model="search"
+        :placeholder="t('searchBillPlaceholder')"
+        class="pl-10"
+        @keyup.enter="handleSearch"
+      />
+    </div>
+    <Select v-model="vendorId" @update:modelValue="handleSearch">
+      <SelectTrigger>
+        <SelectValue :placeholder="t('allVendors')" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem :value="allVendorsValue">{{ t('allVendors') }}</SelectItem>
+        <SelectItem v-for="v in vendors" :key="v.id" :value="v.id">{{ v.name }}</SelectItem>
+      </SelectContent>
+    </Select>
+    <Select v-model="status" @update:modelValue="handleSearch">
+      <SelectTrigger>
+        <SelectValue :placeholder="t('allStatus')" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem :value="allStatusValue">{{ t('allStatus') }}</SelectItem>
+        <SelectItem value="draft">{{ t('draft') }}</SelectItem>
+        <SelectItem value="received">{{ t('received') }}</SelectItem>
+        <SelectItem value="partial">{{ t('partial') }}</SelectItem>
+        <SelectItem value="paid">{{ t('paid') }}</SelectItem>
+        <SelectItem value="overdue">{{ t('overdue') }}</SelectItem>
+        <SelectItem value="void">{{ t('void') }}</SelectItem>
+        <SelectItem value="cancelled">{{ t('cancelled') }}</SelectItem>
+      </SelectContent>
+    </Select>
       <div class="grid grid-cols-2 gap-2">
         <Input v-model="fromDate" type="date" placeholder="From" @change="handleSearch" />
         <Input v-model="toDate" type="date" placeholder="To" @change="handleSearch" />
@@ -200,9 +202,9 @@ const filterByStatus = (statusValue: string) => {
 
     <div v-if="!bills.data.length">
       <EmptyState
-        title="No bills yet"
-        description="Create your first bill to track vendor payables."
-        cta-text="Create Bill"
+        :title="t('noBills')"
+        :description="t('noBillsDesc')"
+        :cta-text="t('newBill')"
         @click="router.get(`/${company.slug}/bills/create`)"
       />
     </div>

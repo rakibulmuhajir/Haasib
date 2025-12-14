@@ -413,4 +413,123 @@ class CustomerController extends Controller
             ->route('customers.index', ['company' => $company->slug])
             ->with('success', $result['message']);
     }
+
+    /**
+     * Search customers (JSON API for EntitySearch component)
+     */
+    public function search(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = CompanyContext::getCompany();
+        $query = $request->get('q', '');
+        $limit = min((int) $request->get('limit', 10), 50);
+
+        if (strlen($query) < 2) {
+            return response()->json(['results' => []]);
+        }
+
+        $customers = Customer::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'ilike', "%{$query}%")
+                    ->orWhere('email', 'ilike', "%{$query}%")
+                    ->orWhere('customer_number', 'ilike', "%{$query}%")
+                    ->orWhere('phone', 'ilike', "%{$query}%");
+            })
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'email', 'phone', 'customer_number']);
+
+        return response()->json(['results' => $customers]);
+    }
+
+    /**
+     * Get recent customers (JSON API for EntitySearch component)
+     */
+    public function recent(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = CompanyContext::getCompany();
+        $limit = min((int) $request->get('limit', 5), 20);
+
+        // Get customers from recent invoices
+        $recentCustomerIds = Invoice::where('company_id', $company->id)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->pluck('customer_id')
+            ->unique()
+            ->take($limit);
+
+        $customers = Customer::where('company_id', $company->id)
+            ->whereIn('id', $recentCustomerIds)
+            ->where('is_active', true)
+            ->get(['id', 'name', 'email', 'phone', 'customer_number']);
+
+        // Sort by the order they appear in recent invoices
+        $sorted = $recentCustomerIds->map(fn($id) => $customers->firstWhere('id', $id))
+            ->filter()
+            ->values();
+
+        return response()->json(['results' => $sorted]);
+    }
+
+    /**
+     * Quick store customer with minimal data (for QuickAddModal)
+     */
+    public function quickStore(Request $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+        ]);
+
+        $commandBus = app(CommandBus::class);
+
+        $result = $commandBus->dispatch('customer.create', [
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?? null,
+            'company_id' => $company->id,
+            'base_currency' => $company->base_currency,
+            'is_active' => true,
+        ], $request->user());
+
+        $customer = Customer::find($result['data']['id']);
+
+        return back()->with([
+            'success' => 'Customer created',
+            'entity' => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'email' => $customer->email,
+            ],
+        ]);
+    }
+
+    /**
+     * Get customer's default tax code (JSON API for TaxToggle)
+     */
+    public function taxDefault(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = CompanyContext::getCompany();
+        $customerId = $request->route('customer');
+
+        $customer = Customer::where('company_id', $company->id)
+            ->findOrFail($customerId);
+
+        // TODO: Implement customer-specific tax code lookup
+        // For now, return company default tax rate
+        $defaultTaxRate = \App\Modules\Accounting\Models\TaxRate::where('company_id', $company->id)
+            ->where('is_default', true)
+            ->where('is_active', true)
+            ->first(['id', 'name', 'code', 'rate']);
+
+        return response()->json([
+            'tax_code' => $defaultTaxRate ? [
+                'id' => $defaultTaxRate->id,
+                'name' => $defaultTaxRate->name,
+                'code' => $defaultTaxRate->code,
+                'rate' => (float) $defaultTaxRate->rate,
+            ] : null,
+        ]);
+    }
 }

@@ -1,8 +1,38 @@
 # UI Screen Specifications – Canonical Reference
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2025-12-11
 **Purpose**: Complete specification for all transaction and master data screens
 **Audience**: Developers implementing UI, backend APIs, and business logic
+
+---
+
+## Related Documents
+
+| Document | Purpose |
+|----------|---------|
+| **`docs/frontend-experience-contract.md`** | **UX philosophy, user modes, interaction patterns** |
+| `docs/contracts/acct-schema.md` | Database schema for accounting module |
+| `AI_PROMPTS/toast.md` | Error handling & toast implementation |
+| `AI_PROMPTS/FRONTEND_REMEDIATION.md` | Vue component standards |
+
+### Document Relationship
+
+**Read `frontend-experience-contract.md` FIRST** for:
+- Owner Mode vs Accountant Mode (information density)
+- The Resolution Engine (bank feed processing)
+- Navigation & layout patterns
+- Dashboard experiences
+- Terminology mapping (Owner ↔ Accountant language)
+- Mobile strategy
+- Interaction patterns & animations
+
+**THIS document** defines:
+- Exact fields, types, and validation rules per screen
+- Actions with preconditions and effects
+- Posting logic (DR/CR entries)
+- State models
+- Multi-currency and period control rules
+- Error handling patterns (Section 15.11)
 
 ---
 

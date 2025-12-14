@@ -193,4 +193,121 @@ class VendorController extends Controller
         ], $request->user());
         return back()->with('success', 'Vendor deleted');
     }
+
+    /**
+     * Search vendors (JSON API for EntitySearch component)
+     */
+    public function search(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+        $query = $request->get('q', '');
+        $limit = min((int) $request->get('limit', 10), 50);
+
+        if (strlen($query) < 2) {
+            return response()->json(['results' => []]);
+        }
+
+        $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'ilike', "%{$query}%")
+                    ->orWhere('email', 'ilike', "%{$query}%")
+                    ->orWhere('vendor_number', 'ilike', "%{$query}%")
+                    ->orWhere('phone', 'ilike', "%{$query}%");
+            })
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'email', 'phone', 'vendor_number']);
+
+        return response()->json(['results' => $vendors]);
+    }
+
+    /**
+     * Get recent vendors (JSON API for EntitySearch component)
+     */
+    public function recent(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+        $limit = min((int) $request->get('limit', 5), 20);
+
+        // Get vendors from recent bills
+        $recentVendorIds = \App\Modules\Accounting\Models\Bill::where('company_id', $company->id)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->pluck('vendor_id')
+            ->unique()
+            ->take($limit);
+
+        $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+            ->whereIn('id', $recentVendorIds)
+            ->where('is_active', true)
+            ->get(['id', 'name', 'email', 'phone', 'vendor_number']);
+
+        // Sort by the order they appear in recent bills
+        $sorted = $recentVendorIds->map(fn($id) => $vendors->firstWhere('id', $id))
+            ->filter()
+            ->values();
+
+        return response()->json(['results' => $sorted]);
+    }
+
+    /**
+     * Quick store vendor with minimal data (for QuickAddModal)
+     */
+    public function quickStore(Request $request): RedirectResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+        ]);
+
+        $result = app(CommandBus::class)->dispatch('vendor.create', [
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?? null,
+            'company_id' => $company->id,
+            'base_currency' => $company->base_currency,
+            'is_active' => true,
+        ], $request->user());
+
+        $vendor = \App\Modules\Accounting\Models\Vendor::find($result['data']['id']);
+
+        return back()->with([
+            'success' => 'Vendor created',
+            'entity' => [
+                'id' => $vendor->id,
+                'name' => $vendor->name,
+                'email' => $vendor->email,
+            ],
+        ]);
+    }
+
+    /**
+     * Get vendor's default tax code (JSON API for TaxToggle)
+     */
+    public function taxDefault(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $company = app(CompanyContextService::class)->requireCompany();
+        $vendorId = $request->route('vendor');
+
+        $vendor = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+            ->findOrFail($vendorId);
+
+        // TODO: Implement vendor-specific tax code lookup
+        // For now, return company default tax rate
+        $defaultTaxRate = \App\Modules\Accounting\Models\TaxRate::where('company_id', $company->id)
+            ->where('is_default', true)
+            ->where('is_active', true)
+            ->first(['id', 'name', 'code', 'rate']);
+
+        return response()->json([
+            'tax_code' => $defaultTaxRate ? [
+                'id' => $defaultTaxRate->id,
+                'name' => $defaultTaxRate->name,
+                'code' => $defaultTaxRate->code,
+                'rate' => (float) $defaultTaxRate->rate,
+            ] : null,
+        ]);
+    }
 }

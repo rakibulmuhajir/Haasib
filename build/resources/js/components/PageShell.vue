@@ -74,57 +74,46 @@ const searchValue = computed({
 
 <template>
   <AppLayout :breadcrumbs="breadcrumbs">
-    <!-- Main content area with warm background -->
-    <div class="min-h-full bg-gradient-to-b from-stone-50 to-zinc-100/50">
-      <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <!-- Page Header -->
-        <PageHeader
-          :title="title"
-          :description="description"
-          :icon="icon"
-          :badge="badge"
-          :actions="actions"
-          :back-button="backButton"
-        >
-          <template v-if="$slots.description" #description>
-            <slot name="description" />
-          </template>
-          <template v-if="$slots.actions" #actions>
-            <slot name="actions" />
-          </template>
-        </PageHeader>
+    <div class="flex flex-col gap-6">
+      <PageHeader
+        :title="title"
+        :description="description"
+        :icon="icon"
+        :badge="badge"
+        :actions="actions"
+        :back-button="backButton"
+      >
+        <template v-if="$slots.description" #description>
+          <slot name="description" />
+        </template>
+        <template v-if="$slots.actions" #actions>
+          <slot name="actions" />
+        </template>
+      </PageHeader>
 
-        <!-- Toolbar: Search & Filters -->
-        <div 
-          v-if="searchable || $slots.filters" 
-          class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <SearchBar
-            v-if="searchable"
-            :model-value="searchValue"
-            :placeholder="searchPlaceholder"
-            :loading="loading"
-            @update:model-value="(value) => (searchValue = value)"
-            class="w-full sm:max-w-sm"
-          />
-          
-          <div v-if="$slots.filters" class="flex items-center gap-2">
-            <slot name="filters" />
-          </div>
-        </div>
+      <div
+        v-if="searchable || $slots.filters"
+        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <SearchBar
+          v-if="searchable"
+          :model-value="searchValue"
+          :placeholder="searchPlaceholder"
+          :loading="loading"
+          @update:model-value="(value) => (searchValue = value)"
+          class="w-full sm:max-w-sm"
+        />
 
-        <!-- Main Content -->
-        <div v-if="compact">
-          <slot />
+        <div v-if="$slots.filters" class="flex items-center gap-2">
+          <slot name="filters" />
         </div>
-        
-        <!-- Card-wrapped content (default) -->
-        <div 
-          v-else 
-          class="rounded-2xl border border-zinc-200/80 bg-white shadow-sm shadow-zinc-900/5"
-        >
-          <slot />
-        </div>
+      </div>
+
+      <div v-if="compact">
+        <slot />
+      </div>
+      <div v-else class="flex flex-col gap-6">
+        <slot />
       </div>
     </div>
   </AppLayout>

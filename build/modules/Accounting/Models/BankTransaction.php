@@ -2,9 +2,12 @@
 
 namespace App\Modules\Accounting\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Company;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BankTransaction extends Model
@@ -60,35 +63,102 @@ class BankTransaction extends Model
         'raw_data' => 'array',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
-    public function bankAccount()
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(BankAccount::class, 'bank_account_id');
     }
 
-    public function matchedPayment()
+    public function reconciliation(): BelongsTo
+    {
+        return $this->belongsTo(BankReconciliation::class, 'reconciliation_id');
+    }
+
+    public function matchedPayment(): BelongsTo
     {
         return $this->belongsTo(Payment::class, 'matched_payment_id');
     }
 
-    public function matchedBillPayment()
+    public function matchedBillPayment(): BelongsTo
     {
         return $this->belongsTo(BillPayment::class, 'matched_bill_payment_id');
     }
 
-    public function glTransaction()
+    public function glTransaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class, 'gl_transaction_id');
     }
 
+    public function reconciledByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reconciled_by_user_id');
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by_user_id');
+    }
+
+    /**
+     * Check if transaction is an inflow (money in).
+     */
+    public function isInflow(): bool
+    {
+        return $this->amount > 0;
+    }
+
+    /**
+     * Check if transaction is an outflow (money out).
+     */
+    public function isOutflow(): bool
+    {
+        return $this->amount < 0;
+    }
+
+    /**
+     * Scope for unreconciled transactions.
+     */
+    public function scopeUnreconciled($query)
+    {
+        return $query->where('is_reconciled', false);
+    }
+
+    /**
+     * Scope for reconciled transactions.
+     */
+    public function scopeReconciled($query)
+    {
+        return $query->where('is_reconciled', true);
+    }
+
     /**
      * Scope for "Parked" transactions (clarification queue).
-     * Since we don't have a status, we assume parked = unreconciled AND has notes.
      */
     public function scopeParked($query)
     {
         return $query->where('is_reconciled', false)
                      ->whereNotNull('notes');
+    }
+
+    /**
+     * Scope for transactions within a date range.
+     */
+    public function scopeInDateRange($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('transaction_date', [$startDate, $endDate]);
     }
 }

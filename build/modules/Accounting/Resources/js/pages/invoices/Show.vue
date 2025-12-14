@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
+import { useLexicon } from '@/composables/useLexicon'
 import {
   ArrowLeft,
   Edit,
@@ -80,10 +81,12 @@ const props = defineProps<{
   invoice: Invoice
 }>()
 
+const { t } = useLexicon()
+
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
-  { title: 'Dashboard', href: '/dashboard' },
+  { title: t('dashboard'), href: '/dashboard' },
   { title: props.company.name, href: `/${props.company.slug}` },
-  { title: 'Invoices', href: `/${props.company.slug}/invoices` },
+  { title: t('invoices'), href: `/${props.company.slug}/invoices` },
   { title: props.invoice.invoice_number },
 ])
 
@@ -141,16 +144,16 @@ const voidInvoice = () => {
 </script>
 
 <template>
-  <Head :title="`Invoice ${invoice.invoice_number}`" />
+  <Head :title="`${t('invoices')} ${invoice.invoice_number}`" />
 
   <PageShell
-    :title="`Invoice ${invoice.invoice_number}`"
+    :title="`${t('invoices')} ${invoice.invoice_number}`"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
       <Button variant="outline" @click="router.get(`/${company.slug}/invoices`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
-        Back
+        {{ t('back') }}
       </Button>
 
       <DropdownMenu>
@@ -163,15 +166,15 @@ const voidInvoice = () => {
         <DropdownMenuContent align="end">
           <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${invoice.id}/edit`)">
             <Edit class="mr-2 h-4 w-4" />
-            Edit
+            {{ t('edit') }}
           </DropdownMenuItem>
           <DropdownMenuItem @click="duplicateInvoice">
             <Copy class="mr-2 h-4 w-4" />
-            Duplicate
+            {{ t('duplicate') }}
           </DropdownMenuItem>
           <DropdownMenuItem @click="voidInvoice">
             <Trash2 class="mr-2 h-4 w-4" />
-            Void
+            {{ t('void') }}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -181,7 +184,7 @@ const voidInvoice = () => {
         :disabled="['paid', 'cancelled', 'void'].includes(invoice.status)"
       >
         <Send class="mr-2 h-4 w-4" />
-        Mark as Sent
+        {{ t('markAsSent') }}
       </Button>
     </template>
 
@@ -193,10 +196,10 @@ const voidInvoice = () => {
           <CardContent class="pt-6">
             <div class="flex justify-between items-start mb-6">
               <div>
-                <h1 class="text-2xl font-bold">Invoice {{ invoice.invoice_number }}</h1>
-                <p class="text-muted-foreground">Date: {{ formatDate(invoice.invoice_date) }}</p>
-                <p class="text-muted-foreground">Due: {{ formatDate(invoice.due_date) }}</p>
-                <p v-if="isOverdue" class="text-destructive font-medium">Overdue</p>
+                <h1 class="text-2xl font-bold">{{ t('invoices') }} {{ invoice.invoice_number }}</h1>
+                <p class="text-muted-foreground">{{ t('invoiceDate') }}: {{ formatDate(invoice.invoice_date) }}</p>
+                <p class="text-muted-foreground">{{ t('dueDate') }}: {{ formatDate(invoice.due_date) }}</p>
+                <p v-if="isOverdue" class="text-destructive font-medium">{{ t('overdue') }}</p>
               </div>
               <Badge :variant="getStatusBadgeVariant(invoice.status)" class="text-sm">
                 {{ invoice.status }}
@@ -205,7 +208,7 @@ const voidInvoice = () => {
 
             <div class="grid grid-cols-2 gap-6">
               <div>
-                <h3 class="font-semibold mb-2">Bill To:</h3>
+                <h3 class="font-semibold mb-2">{{ t('whoIsThisFor') }}</h3>
                 <div>
                   <p class="font-medium">{{ invoice.customer.name }}</p>
                   <p v-if="invoice.customer.email">{{ invoice.customer.email }}</p>
@@ -214,10 +217,10 @@ const voidInvoice = () => {
               </div>
               <div class="text-right">
                 <p v-if="invoice.reference" class="mb-1">
-                  <span class="font-medium">Reference:</span> {{ invoice.reference }}
+                  <span class="font-medium">{{ t('reference') }}:</span> {{ invoice.reference }}
                 </p>
                 <p v-if="invoice.payment_terms" class="mb-1">
-                  <span class="font-medium">Terms:</span> {{ invoice.payment_terms }} days
+                  <span class="font-medium">{{ t('paymentTerms') }}:</span> {{ invoice.payment_terms }} days
                 </p>
               </div>
             </div>
@@ -227,15 +230,15 @@ const voidInvoice = () => {
         <!-- Line Items -->
         <Card>
           <CardHeader>
-            <CardTitle>Items</CardTitle>
+            <CardTitle>{{ t('items') }}</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="space-y-4">
               <div class="grid grid-cols-12 gap-2 text-sm font-medium text-muted-foreground pb-2 border-b">
-                <div class="col-span-6">Description</div>
-                <div class="col-span-2 text-right">Quantity</div>
-                <div class="col-span-2 text-right">Price</div>
-                <div class="col-span-2 text-right">Total</div>
+                <div class="col-span-6">{{ t('description') }}</div>
+                <div class="col-span-2 text-right">{{ t('quantity') }}</div>
+                <div class="col-span-2 text-right">{{ t('unitPrice') }}</div>
+                <div class="col-span-2 text-right">{{ t('total') }}</div>
               </div>
 
               <div v-for="item in invoice.line_items" :key="item.id" class="grid grid-cols-12 gap-2 py-2">
@@ -251,15 +254,15 @@ const voidInvoice = () => {
         <!-- Notes -->
         <Card v-if="invoice.description || invoice.notes">
           <CardHeader>
-            <CardTitle>Notes</CardTitle>
+            <CardTitle>{{ t('notes') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
             <div v-if="invoice.description">
-              <h4 class="font-medium">Description</h4>
+              <h4 class="font-medium">{{ t('description') }}</h4>
               <p class="text-sm">{{ invoice.description }}</p>
             </div>
             <div v-if="invoice.notes">
-              <h4 class="font-medium">Customer Notes</h4>
+              <h4 class="font-medium">{{ t('customerNotes') }}</h4>
               <p class="text-sm">{{ invoice.notes }}</p>
             </div>
           </CardContent>
@@ -271,33 +274,33 @@ const voidInvoice = () => {
         <!-- Amount Summary -->
         <Card>
           <CardHeader>
-            <CardTitle>Amount Summary</CardTitle>
+            <CardTitle>{{ t('amountSummary') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
             <div class="flex justify-between text-sm">
-              <span>Subtotal:</span>
+              <span>{{ t('subtotal') }}:</span>
               <span>{{ formatCurrency(invoice.subtotal, invoice.currency) }}</span>
             </div>
             <div v-if="invoice.discount_amount > 0" class="flex justify-between text-sm">
-              <span>Discount:</span>
+              <span>{{ t('discount') }}:</span>
               <span>-{{ formatCurrency(invoice.discount_amount, invoice.currency) }}</span>
             </div>
             <div v-if="invoice.tax_amount > 0" class="flex justify-between text-sm">
-              <span>Tax:</span>
+              <span>{{ t('tax') }}:</span>
               <span>{{ formatCurrency(invoice.tax_amount, invoice.currency) }}</span>
             </div>
             <Separator />
             <div class="flex justify-between font-bold">
-              <span>Total:</span>
+              <span>{{ t('total') }}:</span>
               <span>{{ formatCurrency(invoice.total_amount, invoice.currency) }}</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span>Paid:</span>
+              <span>{{ t('paid') }}:</span>
               <span>{{ formatCurrency(invoice.paid_amount, invoice.currency) }}</span>
             </div>
             <Separator />
             <div class="flex justify-between font-bold text-lg">
-              <span>Balance Due:</span>
+              <span>{{ t('balanceDue') }}:</span>
               <span>{{ formatCurrency(invoice.balance, invoice.currency) }}</span>
             </div>
           </CardContent>
@@ -306,23 +309,23 @@ const voidInvoice = () => {
         <!-- Status Timeline -->
         <Card>
           <CardHeader>
-            <CardTitle>Status Timeline</CardTitle>
+            <CardTitle>{{ t('statusTimeline') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
             <div class="flex justify-between text-sm">
-              <span>Created:</span>
+              <span>{{ t('created') }}:</span>
               <span>{{ formatDate(invoice.created_at) }}</span>
             </div>
             <div v-if="invoice.sent_at" class="flex justify-between text-sm">
-              <span>Sent:</span>
+              <span>{{ t('sent') }}:</span>
               <span>{{ formatDate(invoice.sent_at) }}</span>
             </div>
             <div v-if="invoice.viewed_at" class="flex justify-between text-sm">
-              <span>Viewed:</span>
+              <span>{{ t('viewed') }}:</span>
               <span>{{ formatDate(invoice.viewed_at) }}</span>
             </div>
             <div v-if="invoice.paid_at" class="flex justify-between text-sm">
-              <span>Paid:</span>
+              <span>{{ t('paid') }}:</span>
               <span>{{ formatDate(invoice.paid_at) }}</span>
             </div>
           </CardContent>
@@ -331,20 +334,28 @@ const voidInvoice = () => {
         <!-- Actions -->
         <Card>
           <CardHeader>
-            <CardTitle>Actions</CardTitle>
+            <CardTitle>{{ t('actions') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-2">
+            <Button
+              v-if="invoice.balance > 0 && !['paid', 'cancelled', 'void'].includes(invoice.status)"
+              class="w-full"
+              @click="router.get(`/${company.slug}/payments/create?customer_id=${invoice.customer.id}&invoice_id=${invoice.id}`)"
+            >
+              <DollarSign class="mr-2 h-4 w-4" />
+              {{ t('recordPayment') }}
+            </Button>
             <Button class="w-full" variant="outline" @click="sendInvoice" :disabled="invoice.status === 'paid' || invoice.status === 'cancelled'">
               <Send class="mr-2 h-4 w-4" />
-              Send to Customer
+              {{ t('sendInvoice') }}
             </Button>
             <Button class="w-full" variant="outline">
               <Download class="mr-2 h-4 w-4" />
-              Download PDF
+              {{ t('downloadPdf') }}
             </Button>
             <Button class="w-full" variant="outline" @click="router.get(`/${company.slug}/invoices/${invoice.id}/edit`)" :disabled="invoice.status === 'paid'">
               <Edit class="mr-2 h-4 w-4" />
-              Edit Invoice
+              {{ t('edit') }} {{ t('invoices') }}
             </Button>
           </CardContent>
         </Card>

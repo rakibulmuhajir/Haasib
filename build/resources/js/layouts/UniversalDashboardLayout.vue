@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { Component } from 'vue'
 import AppSidebar from '@/components/AppSidebar.vue'
-import DashboardHeader from '@/components/DashboardHeader.vue'
+import AppSidebarHeader from '@/components/AppSidebarHeader.vue'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import type { BreadcrumbItemType } from '@/types'
 import { usePage } from '@inertiajs/vue3'
@@ -48,7 +48,7 @@ const isOpen = computed(() => page.props.sidebarOpen)
         :style="{ background: 'var(--shell-hero)' }"
       />
 
-      <DashboardHeader
+      <AppSidebarHeader
         :title="title"
         :breadcrumbs="breadcrumbs"
         :actions="actions"
@@ -57,7 +57,7 @@ const isOpen = computed(() => page.props.sidebarOpen)
         <template v-if="$slots.actions" #actions>
           <slot name="actions" />
         </template>
-      </DashboardHeader>
+      </AppSidebarHeader>
 
       <div class="relative z-10 flex flex-1 flex-col px-4 pb-8 pt-2 lg:px-8">
         <div

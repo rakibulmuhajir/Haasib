@@ -1,9 +1,11 @@
-# Schema Contract — Banking & Cash Management (bank)
+# Schema Contract — Banking & Cash Management
 
 Single source of truth for bank accounts, transactions, and reconciliations. Read this before touching migrations, models, or services.
 
+**Note**: All banking tables reside in the `acct` schema alongside other accounting tables, not a separate `bank` schema. This consolidates all financial data under one schema for simpler RLS policies and joins.
+
 ## Guardrails
-- Schema: `bank` on `pgsql`.
+- Schema: `acct` on `pgsql`.
 - UUID primary keys with `public.gen_random_uuid()` default.
 - Soft deletes via `deleted_at` on bank accounts and transactions.
 - RLS required with company isolation + super-admin override.
@@ -11,10 +13,11 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
 - Money precision: `numeric(15,2)` for balances; `numeric(18,6)` for transaction amounts.
 - Bank account currency is immutable after transactions exist.
 - GL account linkage required for posting to general ledger.
+- **Module**: All models live in `App\Modules\Accounting\Models`.
 
 ## Tables
 
-### bank.banks
+### acct.banks
 - Purpose: reference table for bank institutions (optional, for dropdown selection).
 - Columns:
   - `id` uuid PK.
@@ -30,7 +33,7 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Index: `swift_code`; `country_code`.
 - RLS: None (public reference data).
 - Model:
-  - `$connection = 'pgsql'; $table = 'bank.banks'; $keyType = 'string'; public $incrementing = false;`
+  - `$connection = 'pgsql'; $table = 'acct.banks'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['name','swift_code','country_code','logo_url','website','is_active'];`
   - `$casts = ['is_active'=>'boolean','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Validation:
@@ -41,12 +44,12 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Seed with common banks; users can add custom entries.
   - Not tenant-scoped; shared across all companies.
 
-### bank.company_bank_accounts
+### acct.company_bank_accounts
 - Purpose: company's bank accounts for receiving/making payments.
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
-  - `bank_id` uuid nullable FK → `bank.banks.id` (SET NULL/CASCADE).
+  - `bank_id` uuid nullable FK → `acct.banks.id` (SET NULL/CASCADE).
   - `gl_account_id` uuid nullable FK → `acct.accounts.id` (RESTRICT/CASCADE).
   - `account_name` varchar(255) not null (display name, e.g., "Main Operating Account").
   - `account_number` varchar(100) not null.
@@ -74,15 +77,15 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Index: `company_id`; (`company_id`, `is_active`); (`company_id`, `is_primary`).
 - RLS:
   ```sql
-  alter table bank.company_bank_accounts enable row level security;
-  create policy company_bank_accounts_policy on bank.company_bank_accounts
+  alter table acct.company_bank_accounts enable row level security;
+  create policy company_bank_accounts_policy on acct.company_bank_accounts
     for all using (
       company_id = current_setting('app.current_company_id', true)::uuid
       or current_setting('app.is_super_admin', true)::boolean = true
     );
   ```
 - Model:
-  - `$connection = 'pgsql'; $table = 'bank.company_bank_accounts'; $keyType = 'string'; public $incrementing = false;`
+  - `$connection = 'pgsql'; $table = 'acct.company_bank_accounts'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['company_id','bank_id','gl_account_id','account_name','account_number','account_type','currency','iban','swift_code','routing_number','branch_name','branch_address','opening_balance','opening_balance_date','current_balance','last_reconciled_balance','last_reconciled_date','is_primary','is_active','notes','created_by_user_id','updated_by_user_id'];`
   - `$casts = ['company_id'=>'string','bank_id'=>'string','gl_account_id'=>'string','opening_balance'=>'decimal:2','opening_balance_date'=>'date','current_balance'=>'decimal:2','last_reconciled_balance'=>'decimal:2','last_reconciled_date'=>'date','is_primary'=>'boolean','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Bank; belongsTo GlAccount (Account); hasMany BankTransaction; hasMany BankReconciliation.
@@ -106,13 +109,13 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - current_balance updated by triggers on bank_transactions.
   - Cannot delete account with unreconciled transactions.
 
-### bank.bank_transactions
+### acct.bank_transactions
 - Purpose: individual transactions (deposits, withdrawals, transfers, fees).
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
-  - `bank_account_id` uuid not null FK → `bank.company_bank_accounts.id` (CASCADE/CASCADE).
-  - `reconciliation_id` uuid nullable FK → `bank.bank_reconciliations.id` (SET NULL/CASCADE).
+  - `bank_account_id` uuid not null FK → `acct.company_bank_accounts.id` (CASCADE/CASCADE).
+  - `reconciliation_id` uuid nullable FK → `acct.bank_reconciliations.id` (SET NULL/CASCADE).
   - `transaction_date` date not null.
   - `value_date` date nullable (settlement date).
   - `description` text not null.
@@ -141,12 +144,12 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Check: NOT (`matched_payment_id` IS NOT NULL AND `matched_bill_payment_id` IS NOT NULL) — can match to AR or AP, not both.
 - RLS: company_id + super-admin override.
 - Model:
-  - `$connection = 'pgsql'; $table = 'bank.bank_transactions'; $keyType = 'string'; public $incrementing = false;`
+  - `$connection = 'pgsql'; $table = 'acct.bank_transactions'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['company_id','bank_account_id','reconciliation_id','transaction_date','value_date','description','reference_number','transaction_type','amount','balance_after','payee_name','category','is_reconciled','reconciled_date','reconciled_by_user_id','matched_payment_id','matched_bill_payment_id','gl_transaction_id','source','external_id','raw_data','notes','created_by_user_id','updated_by_user_id'];`
   - `$casts = ['company_id'=>'string','bank_account_id'=>'string','reconciliation_id'=>'string','transaction_date'=>'date','value_date'=>'date','amount'=>'decimal:6','balance_after'=>'decimal:2','is_reconciled'=>'boolean','reconciled_date'=>'date','reconciled_by_user_id'=>'string','matched_payment_id'=>'string','matched_bill_payment_id'=>'string','gl_transaction_id'=>'string','raw_data'=>'array','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo BankAccount; belongsTo Reconciliation; belongsTo Payment (AR); belongsTo BillPayment (AP); belongsTo GlTransaction (Transaction).
 - Validation:
-  - `bank_account_id`: required|uuid|exists:bank.company_bank_accounts,id.
+  - `bank_account_id`: required|uuid|exists:acct.company_bank_accounts,id.
   - `transaction_date`: required|date.
   - `description`: required|string.
   - `transaction_type`: required|in:deposit,withdrawal,transfer_in,transfer_out,fee,interest,adjustment,opening.
@@ -159,12 +162,12 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Matching to AR payment or AP bill payment creates GL posting.
   - external_id used for deduplication on imports.
 
-### bank.bank_reconciliations
+### acct.bank_reconciliations
 - Purpose: reconciliation header for matching bank statements.
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
-  - `bank_account_id` uuid not null FK → `bank.company_bank_accounts.id` (CASCADE/CASCADE).
+  - `bank_account_id` uuid not null FK → `acct.company_bank_accounts.id` (CASCADE/CASCADE).
   - `statement_date` date not null.
   - `statement_ending_balance` numeric(15,2) not null.
   - `book_balance` numeric(15,2) not null (system balance at statement date).
@@ -184,12 +187,12 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Index: `company_id`; `bank_account_id`; (`company_id`, `status`).
 - RLS: company_id + super-admin override.
 - Model:
-  - `$connection = 'pgsql'; $table = 'bank.bank_reconciliations'; $keyType = 'string'; public $incrementing = false;`
+  - `$connection = 'pgsql'; $table = 'acct.bank_reconciliations'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['company_id','bank_account_id','statement_date','statement_ending_balance','book_balance','reconciled_balance','difference','status','started_at','completed_at','completed_by_user_id','notes','created_by_user_id','updated_by_user_id'];`
   - `$casts = ['company_id'=>'string','bank_account_id'=>'string','statement_date'=>'date','statement_ending_balance'=>'decimal:2','book_balance'=>'decimal:2','reconciled_balance'=>'decimal:2','difference'=>'decimal:2','started_at'=>'datetime','completed_at'=>'datetime','completed_by_user_id'=>'string','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo BankAccount; hasMany BankTransaction (reconciled items).
 - Validation:
-  - `bank_account_id`: required|uuid|exists:bank.company_bank_accounts,id.
+  - `bank_account_id`: required|uuid|exists:acct.company_bank_accounts,id.
   - `statement_date`: required|date; unique per bank account.
   - `statement_ending_balance`: required|numeric.
   - `status`: in:in_progress,completed,cancelled.
@@ -200,12 +203,12 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Linked transactions marked as reconciled.
   - Cannot complete reconciliation before previous period.
 
-### bank.bank_rules
+### acct.bank_rules
 - Purpose: auto-categorization rules for imported transactions.
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
-  - `bank_account_id` uuid nullable FK → `bank.company_bank_accounts.id` (SET NULL/CASCADE).
+  - `bank_account_id` uuid nullable FK → `acct.company_bank_accounts.id` (SET NULL/CASCADE).
   - `name` varchar(255) not null.
   - `priority` integer not null default 0.
   - `conditions` jsonb not null. Keys: field (description, payee_name, amount, reference_number), operator (contains, equals, starts_with, ends_with, regex, gt, lt, between), value.
@@ -218,7 +221,7 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
   - Index: `company_id`; (`company_id`, `is_active`, `priority`).
 - RLS: company_id + super-admin override.
 - Model:
-  - `$connection = 'pgsql'; $table = 'bank.bank_rules'; $keyType = 'string'; public $incrementing = false;`
+  - `$connection = 'pgsql'; $table = 'acct.bank_rules'; $keyType = 'string'; public $incrementing = false;`
   - `$fillable = ['company_id','bank_account_id','name','priority','conditions','actions','is_active','created_by_user_id'];`
   - `$casts = ['company_id'=>'string','bank_account_id'=>'string','priority'=>'integer','conditions'=>'array','actions'=>'array','is_active'=>'boolean','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Validation:
@@ -238,7 +241,7 @@ Single source of truth for bank accounts, transactions, and reconciliations. Rea
 ### trg_update_bank_balance
 ```sql
 -- After insert/update/delete on bank_transactions, update bank account balance
-create or replace function bank.update_account_balance()
+create or replace function acct.update_account_balance()
 returns trigger as $$
 declare
   v_account_id uuid;
@@ -248,12 +251,12 @@ begin
 
   select coalesce(sum(amount), 0) + opening_balance
   into v_new_balance
-  from bank.company_bank_accounts a
-  left join bank.bank_transactions t on t.bank_account_id = a.id and t.deleted_at is null
+  from acct.company_bank_accounts a
+  left join acct.bank_transactions t on t.bank_account_id = a.id and t.deleted_at is null
   where a.id = v_account_id
   group by a.opening_balance;
 
-  update bank.company_bank_accounts
+  update acct.company_bank_accounts
   set current_balance = v_new_balance
   where id = v_account_id;
 
@@ -262,8 +265,8 @@ end;
 $$ language plpgsql;
 
 create trigger bank_transactions_aiud
-after insert or update or delete on bank.bank_transactions
-for each row execute function bank.update_account_balance();
+after insert or update or delete on acct.bank_transactions
+for each row execute function acct.update_account_balance();
 ```
 
 ## Enums Reference
@@ -341,7 +344,7 @@ for each row execute function bank.update_account_balance();
 Every company bank account MUST link to a GL account for posting:
 
 ```
-bank.company_bank_accounts.gl_account_id → acct.accounts.id
+acct.company_bank_accounts.gl_account_id → acct.accounts.id
 ```
 
 **Constraint**: The linked GL account must have `subtype IN ('bank', 'cash')`.
@@ -351,8 +354,8 @@ bank.company_bank_accounts.gl_account_id → acct.accounts.id
 When a customer payment is recorded:
 
 1. User selects `deposit_account_id` from `acct.accounts` (bank/cash subtype)
-2. The system looks up `bank.company_bank_accounts` where `gl_account_id = deposit_account_id`
-3. Creates `bank.bank_transactions` with:
+2. The system looks up `acct.company_bank_accounts` where `gl_account_id = deposit_account_id`
+3. Creates `acct.bank_transactions` with:
    - `bank_account_id` = matched company bank account
    - `transaction_type` = 'deposit'
    - `amount` = positive (money in)
@@ -364,7 +367,7 @@ When a customer payment is recorded:
 public function recordPayment(Payment $payment): void
 {
     // Find bank account by GL account
-    $bankAccount = CompanyBankAccount::where('gl_account_id', $payment->deposit_account_id)->first();
+    $bankAccount = BankAccount::where('gl_account_id', $payment->deposit_account_id)->first();
 
     if ($bankAccount) {
         BankTransaction::create([
@@ -383,8 +386,8 @@ public function recordPayment(Payment $payment): void
 When a vendor bill payment is recorded:
 
 1. User selects `payment_account_id` from `acct.accounts` (bank/cash/credit_card subtype)
-2. The system looks up `bank.company_bank_accounts` where `gl_account_id = payment_account_id`
-3. Creates `bank.bank_transactions` with:
+2. The system looks up `acct.company_bank_accounts` where `gl_account_id = payment_account_id`
+3. Creates `acct.bank_transactions` with:
    - `bank_account_id` = matched company bank account
    - `transaction_type` = 'withdrawal'
    - `amount` = negative (money out)
@@ -401,7 +404,7 @@ When a bank transaction is matched and not yet posted to GL:
 
 ### Account Selector Integration
 
-The payment forms should use accounts from COA, not directly from `bank.company_bank_accounts`:
+The payment forms should use accounts from COA, not directly from `acct.company_bank_accounts`:
 
 ```vue
 <!-- Payment form -->
@@ -446,7 +449,35 @@ Banking tables depend on:
 
 ---
 
+## UX Philosophy
+
+Banking features follow the dual-mode experience defined in `docs/frontend-experience-contract.md`:
+
+### Owner Mode (Bank section)
+- **Review Transactions** — Resolution Engine for categorizing/matching (the Bank Feed)
+- **Balance Overview** — Cash position with Balance Explainer widget
+- Simple language: "Money In", "Money Out", "Transactions to review"
+
+### Accountant Mode (Banking section)
+- **Bank Accounts** — Full CRUD with GL linking
+- **Transactions** — High-density grid with filters
+- **Reconciliation** — Formal statement reconciliation workflow
+- **Bank Rules** — Auto-categorization rule management
+- Technical language: "Unreconciled items", "Statement balance", "Book balance"
+
+### Key Distinction: Bank Feed vs Reconciliation
+
+| Feature | Bank Feed (Resolution Engine) | Bank Reconciliation |
+|---------|------------------------------|---------------------|
+| Purpose | Categorize/match incoming transactions | Formal statement reconciliation |
+| Location | Owner Mode: Bank → Review | Accountant Mode: Banking → Reconciliation |
+| Workflow | Match/Create/Transfer/Park | Compare statement vs book, mark reconciled |
+| Frequency | Daily/ongoing | Monthly/periodic |
+| Output | GL postings created | Transactions marked reconciled |
+
+---
+
 ## Extending
 - Add new transaction_type values here first.
-- Bank feed integration would add `bank.bank_feeds` and `bank.feed_connections` tables.
-- Consider `bank.transfers` table for explicit internal transfers.
+- Bank feed integration would add `acct.bank_feeds` and `acct.feed_connections` tables.
+- Consider `acct.transfers` table for explicit internal transfers.

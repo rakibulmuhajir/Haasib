@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
+import { useLexicon } from '@/composables/useLexicon'
 import { FileText, Pencil, Trash2, Building } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -60,11 +61,13 @@ const props = defineProps<{
   bill: BillRef
 }>()
 
-const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Bills', href: `/${props.company.slug}/bills` },
+const { t } = useLexicon()
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+  { title: t('dashboard'), href: `/${props.company.slug}` },
+  { title: t('bills'), href: `/${props.company.slug}/bills` },
   { title: props.bill.bill_number, href: `/${props.company.slug}/bills/${props.bill.id}` },
-]
+])
 
 const formatMoney = (val: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(val)
@@ -90,7 +93,7 @@ const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'ou
 }
 
 const handleDelete = () => {
-  if (!confirm('Are you sure you want to delete this bill?')) return
+  if (!confirm(t('confirmDeleteBill'))) return
   router.delete(`/${props.company.slug}/bills/${props.bill.id}`)
 }
 
@@ -102,9 +105,9 @@ const navigateToVendor = () => {
 </script>
 
 <template>
-  <Head :title="`Bill ${bill.bill_number}`" />
+  <Head :title="`${t('bills')} ${bill.bill_number}`" />
   <PageShell
-    :title="`Bill ${bill.bill_number}`"
+    :title="`${t('bills')} ${bill.bill_number}`"
     :breadcrumbs="breadcrumbs"
     :icon="FileText"
   >
@@ -112,11 +115,11 @@ const navigateToVendor = () => {
       <div class="flex gap-2">
         <Button variant="outline" @click="router.get(`/${company.slug}/bills/${bill.id}/edit`)">
           <Pencil class="mr-2 h-4 w-4" />
-          Edit
+          {{ t('edit') }}
         </Button>
         <Button variant="destructive" @click="handleDelete">
           <Trash2 class="mr-2 h-4 w-4" />
-          Delete
+          {{ t('delete') }}
         </Button>
       </div>
     </template>
@@ -143,8 +146,8 @@ const navigateToVendor = () => {
                   </div>
                 </div>
                 <div>
-                  <h2 class="text-xl font-semibold">{{ bill.vendor?.name ?? 'Unknown Vendor' }}</h2>
-                  <p class="text-sm text-muted-foreground">Vendor</p>
+                  <h2 class="text-xl font-semibold">{{ bill.vendor?.name ?? t('vendor') }}</h2>
+                  <p class="text-sm text-muted-foreground">{{ t('vendor') }}</p>
                 </div>
               </div>
             </div>
@@ -162,7 +165,7 @@ const navigateToVendor = () => {
           <CardContent class="space-y-6">
             <!-- Due Date -->
             <div>
-              <h3 class="text-sm font-medium text-muted-foreground mb-2">Due Date</h3>
+              <h3 class="text-sm font-medium text-muted-foreground mb-2">{{ t('dueDate') }}</h3>
               <p class="text-lg font-semibold">{{ formatDate(bill.due_date) }}</p>
             </div>
 
@@ -170,7 +173,7 @@ const navigateToVendor = () => {
 
             <!-- Line Items -->
             <div>
-              <h3 class="text-lg font-semibold mb-4">Line Items</h3>
+              <h3 class="text-lg font-semibold mb-4">{{ t('lineItems') }}</h3>
               <div class="space-y-3">
                 <div
                   v-for="item in bill.line_items"
@@ -183,16 +186,16 @@ const navigateToVendor = () => {
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
                     <div>
-                      <span class="font-medium">Qty:</span> {{ formatNumber(item.quantity) }}
+                      <span class="font-medium">{{ t('quantity') }}:</span> {{ formatNumber(item.quantity) }}
                     </div>
                     <div>
-                      <span class="font-medium">Price:</span> {{ formatMoney(item.unit_price, bill.currency) }}
+                      <span class="font-medium">{{ t('price') }}:</span> {{ formatMoney(item.unit_price, bill.currency) }}
                     </div>
                     <div v-if="item.tax_rate > 0">
-                      <span class="font-medium">Tax:</span> {{ formatNumber(item.tax_rate) }}%
+                      <span class="font-medium">{{ t('tax') }}:</span> {{ formatNumber(item.tax_rate) }}%
                     </div>
                     <div v-if="item.discount_rate > 0">
-                      <span class="font-medium">Discount:</span> {{ formatNumber(item.discount_rate) }}%
+                      <span class="font-medium">{{ t('discount') }}:</span> {{ formatNumber(item.discount_rate) }}%
                     </div>
                   </div>
                 </div>
@@ -204,27 +207,27 @@ const navigateToVendor = () => {
             <!-- Totals -->
             <div class="space-y-3">
               <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">Subtotal</span>
+                <span class="text-muted-foreground">{{ t('subtotal') }}</span>
                 <span class="font-medium">{{ formatMoney(bill.subtotal, bill.currency) }}</span>
               </div>
               <div v-if="bill.tax_amount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">Tax</span>
+                <span class="text-muted-foreground">{{ t('tax') }}</span>
                 <span class="font-medium">{{ formatMoney(bill.tax_amount, bill.currency) }}</span>
               </div>
               <div v-if="bill.discount_amount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">Discount</span>
+                <span class="text-muted-foreground">{{ t('discount') }}</span>
                 <span class="font-medium text-destructive">-{{ formatMoney(bill.discount_amount, bill.currency) }}</span>
               </div>
               <Separator />
               <div class="flex justify-between text-lg font-bold">
-                <span>Total</span>
+                <span>{{ t('total') }}</span>
                 <span>{{ formatMoney(bill.total_amount, bill.currency) }}</span>
               </div>
             </div>
 
             <!-- Notes -->
             <div v-if="bill.notes" class="pt-4 border-t">
-              <h4 class="text-sm font-medium text-muted-foreground mb-2">Notes</h4>
+              <h4 class="text-sm font-medium text-muted-foreground mb-2">{{ t('notes') }}</h4>
               <p class="text-sm">{{ bill.notes }}</p>
             </div>
           </CardContent>
@@ -236,21 +239,21 @@ const navigateToVendor = () => {
         <!-- Payment Summary -->
         <Card>
           <CardHeader>
-            <CardTitle>Payment Summary</CardTitle>
+            <CardTitle>{{ t('paymentSummary') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-4">
             <div class="space-y-2">
               <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">Bill Amount</span>
+                <span class="text-muted-foreground">{{ t('billAmount') }}</span>
                 <span class="font-medium">{{ formatMoney(bill.total_amount, bill.currency) }}</span>
               </div>
               <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">Amount Paid</span>
+                <span class="text-muted-foreground">{{ t('amountPaid') }}</span>
                 <span class="font-medium">{{ formatMoney(bill.paid_amount, bill.currency) }}</span>
               </div>
               <Separator />
               <div class="flex justify-between text-base font-semibold">
-                <span>Balance Due</span>
+                <span>{{ t('balanceDue') }}</span>
                 <span :class="bill.balance > 0 ? 'text-destructive' : 'text-green-600'">
                   {{ formatMoney(bill.balance, bill.currency) }}
                 </span>
@@ -264,7 +267,7 @@ const navigateToVendor = () => {
                 class="w-full"
                 @click="router.post(`/${company.slug}/bills/${bill.id}/receive`)"
               >
-                Mark as Received
+                {{ t('markAsReceived') }}
               </Button>
 
               <Button
@@ -272,7 +275,7 @@ const navigateToVendor = () => {
                 class="w-full"
                 @click="router.get(`/${company.slug}/bill-payments/create?bill_id=${bill.id}`)"
               >
-                Record Payment
+                {{ t('recordPayment') }}
               </Button>
             </div>
           </CardContent>
@@ -281,27 +284,27 @@ const navigateToVendor = () => {
         <!-- Bill Details -->
         <Card>
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>{{ t('details') }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3 text-sm">
             <div class="flex justify-between">
-              <span class="text-muted-foreground">Bill Number</span>
+              <span class="text-muted-foreground">{{ t('billNumber') }}</span>
               <span class="font-medium">{{ bill.bill_number }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-muted-foreground">Bill Date</span>
+              <span class="text-muted-foreground">{{ t('billDate') }}</span>
               <span class="font-medium">{{ formatDate(bill.bill_date) }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-muted-foreground">Due Date</span>
+              <span class="text-muted-foreground">{{ t('dueDate') }}</span>
               <span class="font-medium">{{ formatDate(bill.due_date) }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-muted-foreground">Currency</span>
+              <span class="text-muted-foreground">{{ t('currency') }}</span>
               <span class="font-medium">{{ bill.currency }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-muted-foreground">Status</span>
+              <span class="text-muted-foreground">{{ t('status') }}</span>
               <Badge :variant="statusVariant(bill.status)">{{ bill.status }}</Badge>
             </div>
           </CardContent>
@@ -310,7 +313,7 @@ const navigateToVendor = () => {
         <!-- Internal Notes -->
         <Card v-if="bill.internal_notes">
           <CardHeader>
-            <CardTitle class="text-sm">Internal Notes</CardTitle>
+            <CardTitle class="text-sm">{{ t('internalNotes') }}</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-sm text-muted-foreground">{{ bill.internal_notes }}</p>

@@ -7,8 +7,10 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class CreateAction implements PaletteAction
 {
@@ -20,6 +22,7 @@ class CreateAction implements PaletteAction
             'vendor_invoice_number' => 'nullable|string|max:100',
             'bill_date' => 'required|date',
             'due_date' => 'nullable|date',
+            'status' => 'nullable|string|in:draft,received',
             'currency' => 'required|string|size:3|uppercase',
             'base_currency' => 'required|string|size:3|uppercase',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|decimal:8',
@@ -54,13 +57,16 @@ class CreateAction implements PaletteAction
             throw new \InvalidArgumentException('Bill number already exists');
         }
 
-        $billDate = $params['bill_date'];
+        $billDate = Carbon::parse($params['bill_date']);
         $paymentTerms = $params['payment_terms'] ?? 30;
-        $dueDate = $params['due_date'] ?? now()->parse($billDate)->addDays($paymentTerms)->toDateString();
+        $dueDate = !empty($params['due_date'])
+            ? Carbon::parse($params['due_date'])->toDateString()
+            : $billDate->copy()->addDays($paymentTerms)->toDateString();
 
         $exchangeRate = $params['currency'] === $params['base_currency'] ? null : ($params['exchange_rate'] ?? null);
+        $status = $params['status'] ?? 'draft';
 
-        return DB::transaction(function () use ($company, $params, $billNumber, $dueDate, $paymentTerms, $exchangeRate) {
+        return DB::transaction(function () use ($company, $params, $billNumber, $billDate, $dueDate, $paymentTerms, $exchangeRate, $status) {
             $lineTotals = collect($params['line_items'])->map(function ($item) {
                 $lineTotal = round(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 6);
                 $taxAmount = round($lineTotal * (($item['tax_rate'] ?? 0) / 100), 6);
@@ -80,9 +86,9 @@ class CreateAction implements PaletteAction
                 'vendor_id' => $params['vendor_id'],
                 'bill_number' => $billNumber,
                 'vendor_invoice_number' => $params['vendor_invoice_number'] ?? null,
-                'bill_date' => $params['bill_date'],
+                'bill_date' => $billDate->toDateString(),
                 'due_date' => $dueDate,
-                'status' => 'draft',
+                'status' => $status,
                 'currency' => $params['currency'],
                 'base_currency' => $params['base_currency'],
                 'exchange_rate' => $exchangeRate,
@@ -96,6 +102,7 @@ class CreateAction implements PaletteAction
                 'payment_terms' => $paymentTerms,
                 'notes' => $params['notes'] ?? null,
                 'internal_notes' => $params['internal_notes'] ?? null,
+                'received_at' => $status === 'received' ? now() : null,
                 'created_by_user_id' => Auth::id(),
             ]);
 
@@ -118,8 +125,16 @@ class CreateAction implements PaletteAction
                 ]);
             }
 
+            if ($status === 'received' && !$bill->transaction_id) {
+                $posting = app(GlPostingService::class)->postBill($bill->fresh(['vendor', 'lineItems']));
+                $bill->transaction_id = $posting->id;
+                $bill->save();
+            }
+
             return [
-                'message' => "Bill {$bill->bill_number} created",
+                'message' => $status === 'received'
+                    ? "Bill {$bill->bill_number} received"
+                    : "Bill {$bill->bill_number} created",
                 'data' => ['id' => $bill->id],
             ];
         });

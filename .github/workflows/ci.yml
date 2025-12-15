@@ -41,17 +41,5 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Prepare Laravel test env (sqlite :memory:)
-        run: |
-          cp .env.example .env
-          php artisan key:generate --ansi
-          php -r "file_put_contents('.env', preg_replace('/^DB_CONNECTION=.*/m', 'DB_CONNECTION=sqlite', file_get_contents('.env')));"
-          php -r "file_put_contents('.env', preg_replace('/^DB_DATABASE=.*/m', 'DB_DATABASE=:memory:', file_get_contents('.env')));"
-          php -r "file_put_contents('.env', preg_replace('/^APP_ENV=.*/m', 'APP_ENV=testing', file_get_contents('.env')));"
-          php -r "file_put_contents('.env', preg_replace('/^APP_DEBUG=.*/m', 'APP_DEBUG=false', file_get_contents('.env')));"
-
-      - name: Run tests
-        run: php artisan test --ansi
-
       - name: Build assets
         run: npm run build

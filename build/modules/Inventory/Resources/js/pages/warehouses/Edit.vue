@@ -50,8 +50,8 @@ const form = useForm({
   state: props.warehouse.state ?? '',
   postal_code: props.warehouse.postal_code ?? '',
   country_code: props.warehouse.country_code ?? '',
-  is_primary: props.warehouse.is_primary,
-  is_active: props.warehouse.is_active,
+  is_primary: Boolean(props.warehouse.is_primary),
+  is_active: Boolean(props.warehouse.is_active),
   notes: props.warehouse.notes ?? '',
 })
 
@@ -158,13 +158,13 @@ const submit = () => {
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="flex items-center space-x-2">
-            <Switch id="is_primary" v-model:checked="form.is_primary" />
+            <Switch id="is_primary" v-model="form.is_primary" />
             <Label for="is_primary">Set as primary warehouse</Label>
           </div>
           <p class="text-sm text-muted-foreground">Primary warehouse is used as default for new stock movements</p>
 
           <div class="flex items-center space-x-2">
-            <Switch id="is_active" v-model:checked="form.is_active" />
+            <Switch id="is_active" v-model="form.is_active" />
             <Label for="is_active">Active</Label>
           </div>
 

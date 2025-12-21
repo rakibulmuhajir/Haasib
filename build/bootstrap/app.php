@@ -4,6 +4,8 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IdentifyCompany;
 use App\Http\Middleware\CheckFirstTimeUser;
+use App\Http\Middleware\RequireIndustry;
+use App\Http\Middleware\RequireModuleEnabled;
 use App\Console\Commands\CleanupIdempotencyCommand;
 use App\Console\Commands\SyncPermissions;
 use App\Console\Commands\SyncRolePermissions;
@@ -32,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'identify.company' => IdentifyCompany::class,
+            'require.industry' => RequireIndustry::class,
+            'require.module' => RequireModuleEnabled::class,
         ]);
     })
     ->withCommands([

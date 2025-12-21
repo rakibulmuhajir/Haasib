@@ -26,6 +26,7 @@ interface Company {
   name: string
   slug: string
   industry?: string
+  industry_code?: string
   country?: string
   base_currency: string
   is_active: boolean
@@ -37,6 +38,7 @@ interface Company {
     fiscal_year_start_month?: number
     auto_create_fiscal_year?: boolean
     default_period_type?: string
+    modules?: Record<string, boolean>
   }
 }
 
@@ -50,6 +52,10 @@ const fiscalYearForm = useForm({
   fiscal_year_start_month: company.value.settings?.fiscal_year_start_month ?? 1,
   auto_create_fiscal_year: company.value.settings?.auto_create_fiscal_year ?? true,
   default_period_type: company.value.settings?.default_period_type ?? 'monthly',
+})
+
+const moduleSettingsForm = useForm({
+  inventory: company.value.settings?.modules?.inventory !== false,
 })
 
 const months = [
@@ -79,6 +85,16 @@ const saveFiscalYearSettings = () => {
       // Update local company data with response
       company.value = { ...company.value, settings: fiscalYearForm.data() }
     }
+  })
+}
+
+const saveModuleSettings = () => {
+  moduleSettingsForm.patch(`/${company.value.slug}/settings/modules`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      const modules = { ...(company.value.settings?.modules ?? {}), inventory: moduleSettingsForm.inventory }
+      company.value = { ...company.value, settings: { ...(company.value.settings ?? {}), modules } }
+    },
   })
 }
 
@@ -236,6 +252,47 @@ const getRoleBadgeVariant = (role: string) => {
                 </Badge>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Module Settings -->
+      <Card class="mt-8">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <Settings class="w-5 h-5" />
+            Modules
+          </CardTitle>
+          <CardDescription>
+            Enable or disable optional modules for this company.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center justify-between gap-6">
+            <div>
+              <div class="font-medium">Inventory</div>
+              <div class="text-sm text-muted-foreground">
+                Items, categories, warehouses, stock levels, and stock movements.
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <Switch
+                id="inventory-module"
+                v-model:checked="moduleSettingsForm.inventory"
+                :disabled="!company.can_manage_company || moduleSettingsForm.processing"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="!company.can_manage_company || moduleSettingsForm.processing"
+                @click="saveModuleSettings"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+          <div v-if="moduleSettingsForm.errors.inventory" class="mt-2 text-sm text-destructive">
+            {{ moduleSettingsForm.errors.inventory }}
           </div>
         </CardContent>
       </Card>

@@ -59,6 +59,14 @@ return [
             'accounts_report_export',
         ],
 
+        // Posting Templates
+        'posting_template' => [
+            'posting_template.create',
+            'posting_template.view',
+            'posting_template.update',
+            'posting_template.delete',
+        ],
+
         // Credit Notes (simple names used across accounting module)
         'credit_note' => [
             'credit_note.create',
@@ -95,6 +103,64 @@ return [
             'company_members_invite',
             'company_members_update_role',
             'company_members_remove',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fuel Station Module
+    |--------------------------------------------------------------------------
+    */
+    'fuel_station' => [
+
+        // Pumps
+        'pump' => [
+            'pump.create',
+            'pump.view',
+            'pump.update',
+            'pump.delete',
+        ],
+
+        // Pump Readings
+        'pump_reading' => [
+            'pump_reading.create',
+            'pump_reading.view',
+        ],
+
+        // Tank Readings
+        'tank_reading' => [
+            'tank_reading.create',
+            'tank_reading.view',
+            'tank_reading.update',
+        ],
+
+        // Fuel Rates
+        'fuel_rate' => [
+            'fuel_rate.update',
+        ],
+
+        // Investors
+        'investor' => [
+            'investor.create',
+            'investor.view',
+            'investor.update',
+        ],
+
+        // Handovers
+        'handover' => [
+            'handover.create',
+            'handover.view',
+        ],
+
+        // Amanat (Deposits)
+        'amanat' => [
+            'amanat.deposit',
+            'amanat.withdraw',
+        ],
+
+        // Fuel Sales
+        'fuel_sale' => [
+            'fuel_sale.create',
         ],
     ],
 

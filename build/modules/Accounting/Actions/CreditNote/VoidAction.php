@@ -7,7 +7,8 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
-use App\Support\PaletteFormatter;
+use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\PostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -41,7 +42,34 @@ class VoidAction implements PaletteAction
             throw new \Exception('Cannot void a credit note that has applications. Remove applications first.');
         }
 
-        return DB::transaction(function () use ($credit, $params) {
+        return DB::transaction(function () use ($company, $credit, $params) {
+            $transaction = null;
+            if ($credit->transaction_id) {
+                $transaction = Transaction::where('company_id', $company->id)
+                    ->where('id', $credit->transaction_id)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+
+            if (! $transaction) {
+                $transaction = Transaction::where('company_id', $company->id)
+                    ->where('reference_type', 'acct.credit_notes')
+                    ->where('reference_id', $credit->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($transaction && ! $credit->transaction_id) {
+                    $credit->transaction_id = $transaction->id;
+                    $credit->save();
+                }
+            }
+
+            if ($transaction) {
+                app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+            }
+
             $credit->update([
                 'status' => 'void',
                 'voided_at' => now(),

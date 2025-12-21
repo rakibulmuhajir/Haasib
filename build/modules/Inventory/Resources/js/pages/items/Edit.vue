@@ -89,7 +89,7 @@ const form = useForm({
   name: props.item.name,
   description: props.item.description ?? '',
   item_type: props.item.item_type,
-  category_id: props.item.category_id ?? '',
+  category_id: props.item.category_id ?? null,
   unit_of_measure: props.item.unit_of_measure,
   track_inventory: props.item.track_inventory,
   is_purchasable: props.item.is_purchasable,
@@ -97,14 +97,14 @@ const form = useForm({
   cost_price: props.item.cost_price,
   selling_price: props.item.selling_price,
   currency: props.item.currency,
-  tax_rate_id: props.item.tax_rate_id ?? '',
-  income_account_id: props.item.income_account_id ?? '',
-  expense_account_id: props.item.expense_account_id ?? '',
-  asset_account_id: props.item.asset_account_id ?? '',
+  tax_rate_id: props.item.tax_rate_id ?? null,
+  income_account_id: props.item.income_account_id ?? null,
+  expense_account_id: props.item.expense_account_id ?? null,
+  asset_account_id: props.item.asset_account_id ?? null,
   reorder_point: props.item.reorder_point,
   reorder_quantity: props.item.reorder_quantity,
   barcode: props.item.barcode ?? '',
-  is_active: props.item.is_active,
+  is_active: Boolean(props.item.is_active),
 })
 
 const submit = () => {
@@ -188,10 +188,9 @@ const submit = () => {
               <Label for="category">Category</Label>
               <Select v-model="form.category_id">
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Select category (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   <SelectItem v-for="cat in categories" :key="cat.id" :value="cat.id">
                     {{ cat.name }}
                   </SelectItem>
@@ -269,10 +268,9 @@ const submit = () => {
             <Label for="tax_rate">Tax Rate</Label>
             <Select v-model="form.tax_rate_id">
               <SelectTrigger class="w-full md:w-1/3">
-                <SelectValue placeholder="Select tax rate" />
+                <SelectValue placeholder="Select tax rate (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
                 <SelectItem v-for="rate in taxRates" :key="rate.id" :value="rate.id">
                   {{ rate.name }} ({{ rate.rate }}%)
                 </SelectItem>

@@ -7,6 +7,8 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Payment;
 use App\Modules\Accounting\Models\PaymentAllocation;
+use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\PostingService;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +46,33 @@ class VoidAction implements PaletteAction
 
         return DB::transaction(function () use ($params, $payment, $allocations) {
             $totalVoided = 0;
+
+            $transaction = null;
+            if ($payment->transaction_id) {
+                $transaction = Transaction::where('company_id', $payment->company_id)
+                    ->where('id', $payment->transaction_id)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+
+            if (! $transaction) {
+                $transaction = Transaction::where('company_id', $payment->company_id)
+                    ->where('reference_type', 'acct.payments')
+                    ->where('reference_id', $payment->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($transaction && ! $payment->transaction_id) {
+                    $payment->transaction_id = $transaction->id;
+                    $payment->save();
+                }
+            }
+
+            if ($transaction) {
+                app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
+            }
 
             foreach ($allocations as $allocation) {
                 $invoice = $allocation->invoice;

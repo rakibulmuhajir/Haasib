@@ -6,6 +6,7 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Inventory\Http\Requests\StoreWarehouseRequest;
 use App\Modules\Inventory\Http\Requests\UpdateWarehouseRequest;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,11 @@ class WarehouseController extends Controller
 
         $query = Warehouse::where('company_id', $company->id);
 
+        // Include soft-deleted warehouses if requested
+        if ($request->boolean('include_deleted')) {
+            $query->withTrashed();
+        }
+
         if ($request->has('search') && $request->search) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -37,7 +43,7 @@ class WarehouseController extends Controller
 
         $query->orderByDesc('is_primary')->orderBy('name');
 
-        $warehouses = $query->paginate(25)->withQueryString();
+        $warehouses = $query->with('linkedItem:id,name,fuel_category')->paginate(25)->withQueryString();
 
         // Get stock counts per warehouse
         $warehouseIds = $warehouses->pluck('id');
@@ -52,6 +58,7 @@ class WarehouseController extends Controller
             return array_merge($warehouse->toArray(), [
                 'item_count' => (int) ($stock->item_count ?? 0),
                 'total_units' => (float) ($stock->total_units ?? 0),
+                'is_deleted' => $warehouse->trashed(),
             ]);
         });
 
@@ -65,6 +72,7 @@ class WarehouseController extends Controller
             'filters' => [
                 'search' => $request->search ?? '',
                 'include_inactive' => $request->boolean('include_inactive'),
+                'include_deleted' => $request->boolean('include_deleted'),
             ],
         ]);
     }
@@ -73,12 +81,22 @@ class WarehouseController extends Controller
     {
         $company = CompanyContext::getCompany();
 
+        // Get fuel items for tank linking
+        $fuelItems = Item::where('company_id', $company->id)
+            ->whereNotNull('fuel_category')
+            ->where('is_active', true)
+            ->select(['id', 'name', 'fuel_category'])
+            ->orderBy('fuel_category')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('inventory/warehouses/Create', [
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
             ],
+            'fuelItems' => $fuelItems,
         ]);
     }
 

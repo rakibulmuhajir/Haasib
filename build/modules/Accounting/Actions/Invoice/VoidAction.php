@@ -6,6 +6,8 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\PostingService;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Str;
 
@@ -47,6 +49,33 @@ class VoidAction implements PaletteAction
                 PaletteFormatter::money($amountPaid, $invoice->currency) .
                 ". Refund payments first."
             );
+        }
+
+        $transaction = null;
+        if ($invoice->transaction_id) {
+            $transaction = Transaction::where('company_id', $company->id)
+                ->where('id', $invoice->transaction_id)
+                ->whereNull('deleted_at')
+                ->first();
+        }
+
+        if (! $transaction) {
+            $transaction = Transaction::where('company_id', $company->id)
+                ->where('reference_type', 'acct.invoices')
+                ->where('reference_id', $invoice->id)
+                ->whereNull('reversal_of_id')
+                ->whereNull('deleted_at')
+                ->orderByDesc('created_at')
+                ->first();
+
+            if ($transaction && ! $invoice->transaction_id) {
+                $invoice->transaction_id = $transaction->id;
+                $invoice->save();
+            }
+        }
+
+        if ($transaction) {
+            app(PostingService::class)->reverseTransaction($transaction, $params['reason'] ?? null);
         }
 
         // Update invoice status

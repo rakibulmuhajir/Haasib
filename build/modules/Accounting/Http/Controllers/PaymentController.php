@@ -166,7 +166,7 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             return redirect()
                 ->back()
-                ->withErrors(['error' => $e->getMessage()])
+                ->with('error', $e->getMessage())
                 ->withInput();
         }
     }
@@ -267,10 +267,22 @@ class PaymentController extends Controller
 
         $commandBus = app(CommandBus::class);
 
-        $result = $commandBus->dispatch('payment.delete', ['id' => $paymentRecord->id], $request->user());
+        try {
+            $result = $commandBus->dispatch('payment.delete', ['id' => $paymentRecord->id], $request->user());
 
-        return redirect()
-            ->route('payments.index', ['company' => $company->slug])
-            ->with('success', $result['message']);
+            return redirect()
+                ->route('payments.index', ['company' => $company->slug])
+                ->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

@@ -60,7 +60,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `country` string nullable; `country_id` uuid nullable.  
   - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
   - `language` string(10) default `en`; `locale` string(10) default `en_US`.  
-  - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string). Do not add new keys without updating this contract.  
+  - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string), `modules` (object of moduleKey => boolean), `fiscal_year_start_month` (int 1-12), `auto_create_fiscal_year` (boolean), `default_period_type` (string: monthly|quarterly|yearly). Do not add new keys without updating this contract.  
   - `logo_url` string(500) nullable.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  

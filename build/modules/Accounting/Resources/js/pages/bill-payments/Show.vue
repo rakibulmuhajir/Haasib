@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard } from 'lucide-vue-next'
 
@@ -41,6 +42,7 @@ interface PaymentRef {
 const props = defineProps<{
   company: CompanyRef
   payment: PaymentRef
+  journalTransactionId?: string | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -76,6 +78,16 @@ const allocationRows = computed(() =>
     :breadcrumbs="breadcrumbs"
     :icon="CreditCard"
   >
+    <template #actions>
+      <Button
+        v-if="journalTransactionId"
+        variant="outline"
+        @click="router.get(`/${company.slug}/journals/${journalTransactionId}`)"
+      >
+        View Journal
+      </Button>
+    </template>
+
     <div class="grid gap-4 md:grid-cols-3">
       <div class="space-y-1">
         <div class="text-sm text-muted-foreground">Vendor</div>

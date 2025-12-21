@@ -30,13 +30,17 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const pickByCode = (accounts: Account[], code: string): string => {
+  return accounts.find(a => a.code === code)?.id || accounts[0]?.id || ''
+}
+
 const form = useForm({
-  ar_account_id: props.arAccounts[0]?.id || '',
-  ap_account_id: props.apAccounts[0]?.id || '',
-  income_account_id: props.revenueAccounts[0]?.id || '',
-  expense_account_id: props.expenseAccounts[0]?.id || '',
-  bank_account_id: props.bankAccounts[0]?.id || '',
-  retained_earnings_account_id: props.retainedEarningsAccounts[0]?.id || '',
+  ar_account_id: pickByCode(props.arAccounts, '1100'),
+  ap_account_id: pickByCode(props.apAccounts, '2100'),
+  income_account_id: pickByCode(props.revenueAccounts, '4100'),
+  expense_account_id: pickByCode(props.expenseAccounts, '6100'),
+  bank_account_id: pickByCode(props.bankAccounts, '1000'),
+  retained_earnings_account_id: pickByCode(props.retainedEarningsAccounts, '3100'),
   sales_tax_payable_account_id: props.taxPayableAccounts[0]?.id || '',
   purchase_tax_receivable_account_id: props.taxReceivableAccounts[0]?.id || '',
 })

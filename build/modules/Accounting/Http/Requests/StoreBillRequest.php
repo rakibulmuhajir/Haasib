@@ -54,6 +54,8 @@ class StoreBillRequest extends BaseFormRequest
             'notes' => ['nullable', 'string'],
             'internal_notes' => ['nullable', 'string'],
             'line_items' => ['required', 'array', 'min:1'],
+            'line_items.*.item_id' => ['nullable', 'uuid', 'exists:inv.items,id'],
+            'line_items.*.warehouse_id' => ['nullable', 'uuid', 'exists:inv.warehouses,id'],
             'line_items.*.description' => ['required', 'string', 'max:500'],
             'line_items.*.quantity' => ['required', 'numeric', 'min:0.01'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],

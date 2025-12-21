@@ -29,7 +29,7 @@ defineProps<Props>();
                         as-child
                     >
                         <a
-                            :href="toUrl(item.href)"
+                            :href="item.href ? toUrl(item.href) : '#'"
                             target="_blank"
                             rel="noopener noreferrer"
                         >

@@ -6,6 +6,7 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -52,9 +53,22 @@ class SendAction implements PaletteAction
 
             // Post to GL if not already posted
             if (!$invoice->transaction_id) {
+                $existing = Transaction::where('company_id', $company->id)
+                    ->where('reference_type', 'acct.invoices')
+                    ->where('reference_id', $invoice->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($existing) {
+                    $invoice->transaction_id = $existing->id;
+                    $invoice->save();
+                } else {
                 $transaction = $postingService->postInvoice($invoice);
                 $invoice->transaction_id = $transaction->id;
                 $invoice->save();
+                }
             }
 
             // Send email if requested

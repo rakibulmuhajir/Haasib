@@ -7,6 +7,8 @@ import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,15 +33,25 @@ interface CompanyRef {
   slug: string
 }
 
+interface LinkedItemRef {
+  id: string
+  name: string
+  fuel_category?: string | null
+}
+
 interface WarehouseRow {
   id: string
   code: string
   name: string
+  warehouse_type: string
   city: string | null
   is_primary: boolean
   is_active: boolean
+  is_deleted: boolean
   item_count: number
   total_units: number
+  capacity?: number | null
+  linked_item?: LinkedItemRef | null
 }
 
 interface PaginatedWarehouses {
@@ -56,10 +68,12 @@ const props = defineProps<{
   filters: {
     search: string
     include_inactive: boolean
+    include_deleted: boolean
   }
 }>()
 
 const search = ref(props.filters.search)
+const includeDeleted = ref(props.filters.include_deleted)
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -69,8 +83,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 const handleSearch = () => {
   router.get(
     `/${props.company.slug}/warehouses`,
-    { search: search.value },
+    {
+      search: search.value,
+      include_deleted: includeDeleted.value ? '1' : '0',
+    },
     { preserveState: true }
+  )
+}
+
+const handleFilterChange = () => {
+  router.get(
+    `/${props.company.slug}/warehouses`,
+    {
+      search: search.value,
+      include_deleted: includeDeleted.value ? '1' : '0',
+    },
+    { preserveState: true, replace: true }
   )
 }
 
@@ -84,6 +112,7 @@ const formatQuantity = (qty: number) => {
 const columns = [
   { key: 'code', label: 'Code' },
   { key: 'name', label: 'Name' },
+  { key: 'type', label: 'Type' },
   { key: 'city', label: 'Location' },
   { key: 'item_count', label: 'Items' },
   { key: 'total_units', label: 'Total Units' },
@@ -96,15 +125,19 @@ const tableData = computed(() => {
     id: warehouse.id,
     code: warehouse.code,
     name: warehouse.name,
+    type: warehouse.warehouse_type === 'tank' ? 'Fuel Tank' : 'Standard',
     city: warehouse.city ?? '-',
     item_count: warehouse.item_count,
     total_units: formatQuantity(warehouse.total_units),
-    status: warehouse.is_active ? 'Active' : 'Inactive',
+    status: warehouse.is_deleted ? 'Deleted' : warehouse.is_active ? 'Active' : 'Inactive',
     _raw: warehouse,
+    _rowClass: warehouse.is_deleted ? 'opacity-50 line-through' : '',
   }))
 })
 
 const handleRowClick = (row: any) => {
+  // Don't allow clicking into deleted warehouses
+  if (row._raw.is_deleted) return
   router.get(`/${props.company.slug}/warehouses/${row.id}`)
 }
 
@@ -139,6 +172,16 @@ const handleDelete = (id: string) => {
           class="pl-9"
           @keyup.enter="handleSearch"
         />
+      </div>
+      <div class="flex items-center space-x-2">
+        <Checkbox
+          id="include-deleted"
+          v-model:checked="includeDeleted"
+          @update:checked="handleFilterChange"
+        />
+        <Label for="include-deleted" class="text-sm font-normal cursor-pointer">
+          Show deleted
+        </Label>
       </div>
     </div>
 
@@ -176,13 +219,15 @@ const handleDelete = (id: string) => {
       </template>
 
       <template #cell-status="{ row }">
-        <Badge :variant="row._raw.is_active ? 'success' : 'secondary'">
+        <Badge
+          :variant="row._raw.is_deleted ? 'destructive' : row._raw.is_active ? 'success' : 'secondary'"
+        >
           {{ row.status }}
         </Badge>
       </template>
 
       <template #cell-_actions="{ row }">
-        <DropdownMenu>
+        <DropdownMenu v-if="!row._raw.is_deleted">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon" class="h-8 w-8">
               <MoreHorizontal class="h-4 w-4" />
@@ -203,6 +248,7 @@ const handleDelete = (id: string) => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <span v-else class="text-xs text-muted-foreground italic">Deleted</span>
       </template>
     </DataTable>
   </PageShell>

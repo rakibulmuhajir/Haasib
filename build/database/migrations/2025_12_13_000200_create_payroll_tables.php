@@ -9,7 +9,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Create 'pay' schema
+        // Create 'pay' schema (and keep fresh installs reliable in multi-schema PostgreSQL).
+        // Laravel's migrate:fresh can leave behind tables in non-default schemas; if that happens,
+        // we need to drop the payroll schema with CASCADE before recreating it.
+        $hasPayTables = (bool) (DB::selectOne("
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'pay'
+            ) AS exists
+        ")?->exists ?? false);
+
+        if ($hasPayTables) {
+            DB::statement('DROP SCHEMA IF EXISTS pay CASCADE');
+        }
+
         DB::statement('CREATE SCHEMA IF NOT EXISTS pay');
 
         // 1. pay.employees

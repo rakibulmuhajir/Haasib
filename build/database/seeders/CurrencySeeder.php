@@ -21,7 +21,14 @@ class CurrencySeeder extends Seeder
         ];
 
         foreach ($currencies as $currency) {
-            DB::table('currencies')->updateOrInsert(
+            $table = 'public.currencies';
+            try {
+                DB::table($table)->limit(1)->get();
+            } catch (\Throwable) {
+                $table = 'currencies';
+            }
+
+            DB::table($table)->updateOrInsert(
                 ['code' => $currency['code']],
                 array_merge($currency, ['is_active' => true, 'created_at' => $now, 'updated_at' => $now])
             );

@@ -184,14 +184,27 @@ export function isPresetShortcut(input: string): boolean {
 // GRAMMAR Export (for autocomplete.ts compatibility)
 // ============================================================================
 
+interface FlagDef {
+  name: string
+  type: string
+  required: boolean
+  shorthand?: string
+  default?: unknown
+}
+
 interface VerbDef {
   name: string
+  aliases: string[]
   args?: string[]
-  flags?: string[]
+  flags: FlagDef[]
+  requiresSubject: boolean
+  defaultVerb?: boolean
 }
 
 interface EntityDef {
   verbs: VerbDef[]
+  shortcuts: string[]
+  defaultVerb?: string
 }
 
 /**
@@ -211,13 +224,44 @@ function buildGrammar(): Record<string, EntityDef> {
     byEntity[schema.entity].push(schema)
   })
 
+  // Build reverse lookup for entity shortcuts
+  const entityShortcuts: Record<string, string[]> = {}
+  Object.entries(ENTITY_SHORTCUTS).forEach(([shortcut, entity]) => {
+    if (!entityShortcuts[entity]) {
+      entityShortcuts[entity] = []
+    }
+    entityShortcuts[entity].push(shortcut)
+  })
+
+  // Build reverse lookup for verb aliases
+  const verbAliases: Record<string, string[]> = {}
+  Object.entries(VERB_SHORTCUTS).forEach(([alias, verb]) => {
+    if (!verbAliases[verb]) {
+      verbAliases[verb] = []
+    }
+    verbAliases[verb].push(alias)
+  })
+
   // Build grammar structure
   Object.entries(byEntity).forEach(([entity, entitySchemas]) => {
+    // Find the default verb (usually 'list' or the first verb)
+    const defaultVerbSchema = entitySchemas.find(s => s.verb === 'list') || entitySchemas[0]
+
     grammar[entity] = {
+      shortcuts: entityShortcuts[entity] || [],
+      defaultVerb: defaultVerbSchema?.verb,
       verbs: entitySchemas.map(schema => ({
         name: schema.verb,
+        aliases: verbAliases[schema.verb] || [],
         args: schema.args.map(a => a.name),
-        flags: schema.flags.map(f => f.name),
+        flags: schema.flags.map(f => ({
+          name: f.name,
+          type: f.inputType,
+          required: f.required ?? false,
+          shorthand: undefined,
+          default: undefined,
+        })),
+        requiresSubject: schema.args.some(a => a.required),
       }))
     }
   })

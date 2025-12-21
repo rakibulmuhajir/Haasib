@@ -14,16 +14,23 @@ use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\IndustryCoaPack;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
+use App\Modules\FuelStation\Services\FuelStationModuleInstaller;
+use App\Modules\FuelStation\Services\FuelStationOnboardingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CompanyOnboardingController extends Controller
 {
-    public function __construct(private CompanyOnboardingService $onboardingService)
+    public function __construct(
+        private CompanyOnboardingService $onboardingService,
+        private FuelStationModuleInstaller $fuelStationInstaller,
+        private FuelStationOnboardingService $fuelStationOnboarding,
+    )
     {
     }
 
@@ -77,7 +84,42 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $this->onboardingService->setupCompanyIdentity($company, $request->validated());
+        $data = $request->validated();
+
+        if (($data['industry_code'] ?? null) === 'fuel_station') {
+            try {
+                $this->fuelStationInstaller->ensureMigrationsApplied();
+            } catch (\Throwable $e) {
+                Log::error('FuelStation module migrations failed during onboarding', [
+                    'company_id' => $company->id ?? null,
+                    'company_slug' => $company->slug ?? null,
+                    'exception' => $e::class,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return redirect()->back()
+                    ->with('error', 'Failed to prepare Fuel Station module. Please try again.');
+            }
+        }
+
+        $this->onboardingService->setupCompanyIdentity($company, $data);
+
+        if (($data['industry_code'] ?? null) === 'fuel_station') {
+            try {
+                $this->fuelStationOnboarding->ensureRequiredAccounts($company->id);
+                $this->fuelStationOnboarding->createDefaultFuelItems($company->id);
+            } catch (\Throwable $e) {
+                Log::error('FuelStation module seed failed during onboarding', [
+                    'company_id' => $company->id ?? null,
+                    'company_slug' => $company->slug ?? null,
+                    'exception' => $e::class,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return redirect("/{$company->slug}/onboarding/fiscal-year")
+                    ->with('error', 'Company saved, but Fuel Station defaults could not be created. You can continue onboarding and complete Fuel setup later.');
+            }
+        }
 
         return redirect("/{$company->slug}/onboarding/fiscal-year")
             ->with('success', 'Company identity configured successfully.');

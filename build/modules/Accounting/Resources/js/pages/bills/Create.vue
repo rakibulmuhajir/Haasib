@@ -33,11 +33,31 @@ interface AccountOption {
   subtype?: string
 }
 
+interface ItemOption {
+  id: string
+  sku: string
+  name: string
+  cost_price: number
+  unit_of_measure: string
+  track_inventory: boolean
+}
+
+interface WarehouseOption {
+  id: string
+  code: string
+  name: string
+  is_primary: boolean
+}
+
 const props = defineProps<{
   company: CompanyRef
   vendors: VendorRef[]
   expenseAccounts?: AccountOption[]
   apAccounts?: AccountOption[]
+  defaultExpenseAccountId?: string | null
+  inventoryEnabled?: boolean
+  items?: ItemOption[]
+  warehouses?: WarehouseOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -46,13 +66,22 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Create' },
 ]
 
+// Get default warehouse (primary or first)
+const defaultWarehouseId = computed(() => {
+  if (!props.warehouses?.length) return null
+  const primary = props.warehouses.find(w => w.is_primary)
+  return primary?.id ?? props.warehouses[0]?.id ?? null
+})
+
 const lineItemTemplate = () => ({
+  item_id: null as string | null,
+  warehouse_id: defaultWarehouseId.value,
   description: '',
   quantity: 1,
   unit_price: 0,
   tax_rate: 0,
   discount_rate: 0,
-  expense_account_id: 'company_default',
+  expense_account_id: props.defaultExpenseAccountId || 'company_default',
 })
 
 const form = useForm({
@@ -117,6 +146,20 @@ const removeLine = (idx: number) => {
   }
 }
 
+// Handle item selection - auto-fill description and cost price
+const handleItemSelect = (idx: number, itemId: string | null) => {
+  const line = form.line_items[idx]
+  line.item_id = itemId
+
+  if (itemId && props.items) {
+    const item = props.items.find(i => i.id === itemId)
+    if (item) {
+      line.description = item.name
+      line.unit_price = Number(item.cost_price) || 0
+    }
+  }
+}
+
 const handleSubmit = () => {
   // Prepare data - convert 'company_default' to null for backend
   const data = {
@@ -124,6 +167,8 @@ const handleSubmit = () => {
     ap_account_id: form.ap_account_id === 'company_default' ? null : form.ap_account_id,
     line_items: form.line_items.map(item => ({
       ...item,
+      item_id: item.item_id || null,
+      warehouse_id: item.warehouse_id || null,
       expense_account_id: item.expense_account_id === 'company_default' ? null : item.expense_account_id,
     })),
   }
@@ -282,55 +327,104 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="grid gap-3 rounded-lg border p-4 md:grid-cols-7"
+            class="rounded-lg border p-4 space-y-3"
           >
-            <div class="md:col-span-2">
-              <Label>Description *</Label>
-              <Input v-model="line.description" placeholder="Item description" required />
+            <!-- Item & Warehouse Row (if inventory enabled) -->
+            <div v-if="inventoryEnabled && items?.length" class="grid gap-3 md:grid-cols-3">
+              <div>
+                <Label>Item (Optional)</Label>
+                <Select
+                  :model-value="line.item_id ?? 'none'"
+                  @update:model-value="(v) => handleItemSelect(idx, v === 'none' ? null : v)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select item or enter manually" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Manual entry —</SelectItem>
+                    <SelectItem
+                      v-for="item in items"
+                      :key="item.id"
+                      :value="item.id"
+                    >
+                      {{ item.sku }} — {{ item.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div v-if="line.item_id && warehouses?.length">
+                <Label>Warehouse</Label>
+                <Select v-model="line.warehouse_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select warehouse" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="wh in warehouses"
+                      :key="wh.id"
+                      :value="wh.id"
+                    >
+                      {{ wh.code }} — {{ wh.name }}
+                      <span v-if="wh.is_primary" class="text-muted-foreground ml-1">(Primary)</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Quantity *</Label>
-              <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+
+            <!-- Main Line Item Fields -->
+            <div class="grid gap-3 md:grid-cols-7">
+              <div class="md:col-span-2">
+                <Label>Description *</Label>
+                <Input v-model="line.description" placeholder="Item description" required />
+              </div>
+              <div>
+                <Label>Quantity *</Label>
+                <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+              </div>
+              <div>
+                <Label>Unit Price *</Label>
+                <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+              </div>
+              <div>
+                <Label>Tax %</Label>
+                <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
+              </div>
+              <div>
+                <Label>Discount %</Label>
+                <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
+              </div>
+              <div>
+                <Label>Expense Account</Label>
+                <Select v-model="line.expense_account_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="company_default">Use default</SelectItem>
+                    <SelectItem
+                      v-for="acct in props.expenseAccounts || []"
+                      :key="acct.id"
+                      :value="acct.id"
+                    >
+                      {{ acct.code }} — {{ acct.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Unit Price *</Label>
-              <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
-            </div>
-            <div>
-              <Label>Tax %</Label>
-              <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
-            </div>
-            <div>
-              <Label>Discount %</Label>
-              <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
-            </div>
-            <div>
-              <Label>Expense Account</Label>
-              <Select v-model="line.expense_account_id">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="company_default">Use default</SelectItem>
-                  <SelectItem
-                    v-for="acct in props.expenseAccounts || []"
-                    :key="acct.id"
-                    :value="acct.id"
-                  >
-                    {{ acct.code }} — {{ acct.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="flex items-end">
+
+            <!-- Delete Button -->
+            <div class="flex justify-end">
               <Button
                 type="button"
                 variant="destructive"
-                size="icon"
+                size="sm"
                 @click="removeLine(idx)"
                 :disabled="form.line_items.length === 1"
               >
-                <Trash2 class="h-4 w-4" />
+                <Trash2 class="h-4 w-4 mr-1" />
+                Remove
               </Button>
             </div>
           </div>

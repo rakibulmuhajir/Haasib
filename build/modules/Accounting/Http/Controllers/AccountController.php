@@ -57,14 +57,24 @@ class AccountController extends Controller
     public function store(StoreAccountRequest $request): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('account.create', [
-            ...$request->validated(),
-            'company_id' => $company->id,
-        ], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('account.create', [
+                ...$request->validated(),
+                'company_id' => $company->id,
+            ], $request->user());
 
-        return redirect()
-            ->route('accounts.index', ['company' => $company->slug])
-            ->with('success', 'Account created');
+            return redirect()
+                ->route('accounts.index', ['company' => $company->slug])
+                ->with('success', 'Account created');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function show(string $account): Response
@@ -107,23 +117,43 @@ class AccountController extends Controller
     public function update(UpdateAccountRequest $request, string $account): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('account.update', [
-            ...$request->validated(),
-            'id' => $account,
-            'company_id' => $company->id,
-        ], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('account.update', [
+                ...$request->validated(),
+                'id' => $account,
+                'company_id' => $company->id,
+            ], $request->user());
 
-        return back()->with('success', 'Account updated');
+            return back()->with('success', 'Account updated');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function destroy(Request $request, string $account): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('account.delete', [
-            'id' => $account,
-            'company_id' => $company->id,
-        ], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('account.delete', [
+                'id' => $account,
+                'company_id' => $company->id,
+            ], $request->user());
 
-        return back()->with('success', 'Account deleted');
+            return back()->with('success', 'Account deleted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

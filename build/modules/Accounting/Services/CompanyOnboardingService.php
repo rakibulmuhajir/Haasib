@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\IndustryCoaPack;
 use App\Modules\Accounting\Models\IndustryCoaTemplate;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Modules\Accounting\Services\PostingTemplateInstaller;
 
 /**
  * Company Onboarding Service
@@ -63,7 +64,9 @@ class CompanyOnboardingService
                 'timezone' => $data['timezone'] ?? 'UTC',
             ]);
 
-            // Create industry-specific chart of accounts
+            $this->enableModulesForIndustry($company, $data['industry_code']);
+
+            // Create industry-specific chart of accounts (idempotent)
             $this->createIndustryChartOfAccounts($company, $data['industry_code']);
 
             // Mark step as completed
@@ -73,6 +76,13 @@ class CompanyOnboardingService
 
             return $company->fresh();
         });
+    }
+
+    private function enableModulesForIndustry(Company $company, string $industryCode): void
+    {
+        if ($industryCode === 'fuel_station') {
+            $company->enableModule('fuel_station');
+        }
     }
 
     /**
@@ -163,6 +173,12 @@ class CompanyOnboardingService
                 $createdAccounts[] = $account;
             }
 
+            app(CompanyBankAccountSyncService::class)->ensureForCompany(
+                $company->id,
+                $this->getCurrentUserId(),
+                collect($createdAccounts)->pluck('id')->all(),
+            );
+
             // Set default bank account if none exists
             if (!empty($createdAccounts) && empty($company->bank_account_id)) {
                 $company->update(['bank_account_id' => $createdAccounts[0]->id]);
@@ -196,6 +212,9 @@ class CompanyOnboardingService
                 'sales_tax_payable_account_id' => $defaults['sales_tax_payable_account_id'] ?? null,
                 'purchase_tax_receivable_account_id' => $defaults['purchase_tax_receivable_account_id'] ?? null,
             ]);
+
+            // Bootstrap default posting templates now that core accounts are mapped.
+            app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
 
             // Mark step as completed
             $onboarding = $company->onboarding;
@@ -315,6 +334,10 @@ class CompanyOnboardingService
             ->orderBy('sort_order')
             ->get();
 
+        // Bank/cash accounts are created explicitly during onboarding (Step 3) so we don't
+        // seed industry-pack bank/cash templates into company COA to avoid duplicates/confusion.
+        $skipSubtypes = ['bank', 'cash'];
+
         // Subtypes that are allowed to have currency per the check constraint
         $monetarySubtypes = [
             'bank',
@@ -329,10 +352,34 @@ class CompanyOnboardingService
         ];
 
         foreach ($templates as $template) {
+            if (in_array($template->subtype, $skipSubtypes, true)) {
+                continue;
+            }
+
             // Only monetary accounts can have currency set
             $currency = in_array($template->subtype, $monetarySubtypes)
                 ? $company->base_currency
                 : null;
+
+            // Check if account already exists (idempotent)
+            $existingAccount = Account::where('company_id', $company->id)
+                ->where('code', $template->code)
+                ->first();
+
+            if ($existingAccount) {
+                // Update existing account to match template
+                $existingAccount->update([
+                    'name' => $template->name,
+                    'type' => $template->type,
+                    'subtype' => $template->subtype,
+                    'normal_balance' => $template->normal_balance,
+                    'currency' => $currency,
+                    'is_contra' => $template->is_contra,
+                    'is_system' => $template->is_system,
+                    'description' => $template->description,
+                ]);
+                continue;
+            }
 
             Account::create([
                 'company_id' => $company->id,
@@ -391,7 +438,7 @@ class CompanyOnboardingService
                 'name' => $currentStart->format('F Y'),
                 'start_date' => $currentStart,
                 'end_date' => $currentEnd,
-                'status' => 'open',
+                'period_type' => $frequency,
                 'is_closed' => false,
                 'created_by_user_id' => $this->getCurrentUserId(),
             ]);

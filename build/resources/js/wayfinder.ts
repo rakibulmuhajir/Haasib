@@ -6,10 +6,13 @@ export type RouteQueryOptions = {
   mergeQuery?: Record<string, QueryValue>
 }
 
+// Support both 'method' (singular, for Inertia compatibility) and 'methods' (plural, from wayfinder)
+// When Method is a string[], the definition uses 'methods'. When Method is a string, route calls use 'method'.
 export type RouteDefinition<Method extends string | string[]> = {
   url: string
-  method: Method
-}
+} & (Method extends string[]
+  ? { methods: Method; method?: never }
+  : { method: Method; methods?: never })
 
 export type RouteFormDefinition<Method extends string> = {
   action: string

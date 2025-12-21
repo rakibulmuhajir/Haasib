@@ -49,13 +49,13 @@ const page = usePage();
 const auth = computed(() => page.props.auth);
 
 const isCurrentRoute = computed(
-    () => (url: NonNullable<InertiaLinkProps['href']>) =>
-        urlIsActive(url, page.url),
+    () => (url?: InertiaLinkProps['href']) =>
+        url ? urlIsActive(url, page.url) : false,
 );
 
 const activeItemStyles = computed(
-    () => (url: NonNullable<InertiaLinkProps['href']>) =>
-        isCurrentRoute.value(toUrl(url))
+    () => (url?: InertiaLinkProps['href']) =>
+        url && isCurrentRoute.value(toUrl(url))
             ? 'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
             : '',
 );
@@ -130,7 +130,7 @@ const rightNavItems: NavItem[] = [
                                     <a
                                         v-for="item in rightNavItems"
                                         :key="item.title"
-                                        :href="toUrl(item.href)"
+                                        :href="item.href ? toUrl(item.href) : '#'"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="flex items-center space-x-2 text-sm font-medium"
@@ -214,7 +214,7 @@ const rightNavItems: NavItem[] = [
                                                 class="group h-9 w-9 cursor-pointer"
                                             >
                                                 <a
-                                                    :href="toUrl(item.href)"
+                                                    :href="item.href ? toUrl(item.href) : '#'"
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                 >

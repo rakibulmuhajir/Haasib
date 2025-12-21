@@ -51,6 +51,10 @@ import {
   Languages,
   TrendingUp,
   TrendingDown,
+  Fuel,
+  Gauge,
+  FileText,
+  Warehouse,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -84,7 +88,6 @@ interface Financials {
   aging: {
     current: number
     bucket_1_30: number
-    bucket_31_60: number
     bucket_31_60: number
     bucket_61_90: number
     bucket_90_plus: number
@@ -149,6 +152,33 @@ interface DashboardData {
   }
 }
 
+interface FuelHomeDashboard {
+  summary: {
+    active_pumps: number
+    today_readings: number
+    pending_tank_readings: number
+  }
+  pendingHandovers: {
+    count: number
+    total_amount: number
+  }
+  tanks: Array<{
+    tank_id: string
+    item_name: string
+    capacity: number
+    current_level: number
+    fill_percentage: number
+    last_reading_date: string | null
+  }>
+  rates: Array<{
+    item_name: string
+    purchase_rate: number
+    sale_rate: number
+    margin: number
+    effective_date: string | null
+  }>
+}
+
 const props = defineProps<{
   company: Company
   stats: Stats
@@ -157,11 +187,11 @@ const props = defineProps<{
   pendingInvitations: PendingInvitation[]
   financials: Financials
   dashboard: DashboardData
+  fuelDashboard?: FuelHomeDashboard | null
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
-  { title: 'Home', href: '/dashboard' },
-  { title: 'Companies', href: '/companies' },
+  { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: props.company.name },
 ])
 
@@ -202,6 +232,7 @@ const roleForm = useForm({
 const removeForm = useForm({})
 
 const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRole))
+const isFuelStationCompany = computed(() => !!props.fuelDashboard)
 
 const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
@@ -349,11 +380,11 @@ const currencySymbol = (currencyCode: string) => {
           <BarChart3 class="h-4 w-4" />
           Dashboard
         </TabsTrigger>
-        <TabsTrigger value="settings" class="gap-2">
+        <TabsTrigger v-if="canManage" value="settings" class="gap-2">
           <Settings class="h-4 w-4" />
           Settings
         </TabsTrigger>
-        <TabsTrigger value="users" class="gap-2">
+        <TabsTrigger v-if="canManage" value="users" class="gap-2">
           <Users class="h-4 w-4" />
           Users
         </TabsTrigger>
@@ -362,6 +393,76 @@ const currencySymbol = (currencyCode: string) => {
 
       <!-- Overview Tab (Dashboard) -->
       <TabsContent value="overview" class="space-y-6">
+
+        <!-- Fuel Station Snapshot -->
+        <Card v-if="isFuelStationCompany" class="border-zinc-200/80 bg-white">
+          <CardHeader class="pb-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <Fuel class="h-5 w-5 text-zinc-700" />
+                <CardTitle class="text-base font-semibold text-zinc-900">Fuel Station</CardTitle>
+              </div>
+              <div class="flex gap-2">
+                <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/fuel/shift-close`)">Shift Close</Button>
+                <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/fuel/pump-readings`)">Pump Readings</Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                <div class="flex items-center gap-2 text-xs text-zinc-500">
+                  <Gauge class="h-4 w-4" />
+                  Active pumps
+                </div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.active_pumps ?? 0 }}</div>
+              </div>
+              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                <div class="flex items-center gap-2 text-xs text-zinc-500">
+                  <FileText class="h-4 w-4" />
+                  Today readings
+                </div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.today_readings ?? 0 }}</div>
+              </div>
+              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                <div class="flex items-center gap-2 text-xs text-zinc-500">
+                  <Warehouse class="h-4 w-4" />
+                  Pending tank readings
+                </div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.pending_tank_readings ?? 0 }}</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div class="rounded-lg border border-zinc-100 bg-white p-3">
+                <div class="text-sm font-medium text-zinc-900">Pending handovers</div>
+                <div class="mt-1 flex items-baseline justify-between gap-3">
+                  <div class="text-sm text-zinc-600">{{ fuelDashboard?.pendingHandovers.count ?? 0 }} pending</div>
+                  <div class="font-semibold text-zinc-900">
+                    <MoneyText :amount="fuelDashboard?.pendingHandovers.total_amount ?? 0" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-lg border border-zinc-100 bg-white p-3 lg:col-span-2">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm font-medium text-zinc-900">Tanks (lowest)</div>
+                  <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/fuel/tank-readings`)">View →</Button>
+                </div>
+                <div v-if="(fuelDashboard?.tanks?.length ?? 0) === 0" class="mt-2 text-sm text-zinc-500">No tank readings yet.</div>
+                <div v-else class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div v-for="t in (fuelDashboard?.tanks ?? [])" :key="t.tank_id" class="rounded-md bg-zinc-50 p-2">
+                    <div class="text-xs text-zinc-500 truncate">{{ t.item_name }}</div>
+                    <div class="mt-1 flex items-center justify-between text-sm">
+                      <span class="font-semibold text-zinc-900">{{ t.fill_percentage }}%</span>
+                      <span class="text-zinc-600">{{ Math.round(t.current_level) }} / {{ Math.round(t.capacity) }} L</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         
         <!-- Cash Position -->
         <Card class="border-zinc-200/80 bg-white">
@@ -590,7 +691,7 @@ const currencySymbol = (currencyCode: string) => {
       </TabsContent>
 
       <!-- Settings Tab -->
-      <TabsContent value="settings" class="space-y-6">
+      <TabsContent v-if="canManage" value="settings" class="space-y-6">
         <!-- Editable Settings -->
         <Card class="border-zinc-200/80 bg-white">
           <CardHeader>
@@ -749,7 +850,7 @@ const currencySymbol = (currencyCode: string) => {
       </TabsContent>
 
       <!-- Users Tab -->
-      <TabsContent value="users" class="space-y-6">
+      <TabsContent v-if="canManage" value="users" class="space-y-6">
         <DataTable
           :data="users"
           :columns="tableColumns"

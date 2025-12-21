@@ -6,6 +6,7 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,10 +39,24 @@ class ReceiveAction implements PaletteAction
             $bill->save();
 
             if (!$bill->transaction_id) {
-                $posting = app(GlPostingService::class)->postBill($bill);
-                $bill->transaction_id = $posting->id;
-                $bill->save();
+                $existing = Transaction::where('company_id', $bill->company_id)
+                    ->where('reference_type', 'acct.bills')
+                    ->where('reference_id', $bill->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($existing) {
+                    $bill->transaction_id = $existing->id;
+                    $bill->save();
+                } else {
+                    $posting = app(GlPostingService::class)->postBill($bill);
+                    $bill->transaction_id = $posting->id;
+                    $bill->save();
+                }
             }
+
         });
 
         return ['message' => "Bill {$bill->bill_number} marked received"];

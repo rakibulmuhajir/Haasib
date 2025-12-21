@@ -58,6 +58,12 @@ class Permissions
     public const JOURNAL_CREATE = 'journal.create';
     public const JOURNAL_VIEW = 'journal.view';
 
+    // Posting Templates
+    public const POSTING_TEMPLATE_CREATE = 'posting_template.create';
+    public const POSTING_TEMPLATE_VIEW = 'posting_template.view';
+    public const POSTING_TEMPLATE_UPDATE = 'posting_template.update';
+    public const POSTING_TEMPLATE_DELETE = 'posting_template.delete';
+
     public const REPORT_VIEW = 'report.view';
     public const REPORT_EXPORT = 'report.export';
 
@@ -111,6 +117,40 @@ class Permissions
     public const STOCK_ADJUST = 'stock.adjust';
     public const STOCK_TRANSFER = 'stock.transfer';
     public const STOCK_COUNT = 'stock.count';
+
+    // Fuel Station - Pumps
+    public const PUMP_CREATE = 'pump.create';
+    public const PUMP_VIEW = 'pump.view';
+    public const PUMP_UPDATE = 'pump.update';
+    public const PUMP_DELETE = 'pump.delete';
+
+    // Fuel Station - Tank Readings
+    public const TANK_READING_CREATE = 'tank_reading.create';
+    public const TANK_READING_VIEW = 'tank_reading.view';
+    public const TANK_READING_UPDATE = 'tank_reading.update';
+
+    // Fuel Station - Pump Readings
+    public const PUMP_READING_CREATE = 'pump_reading.create';
+    public const PUMP_READING_VIEW = 'pump_reading.view';
+
+    // Fuel Station - Rate Management
+    public const FUEL_RATE_UPDATE = 'fuel_rate.update';
+
+    // Fuel Station - Investors
+    public const INVESTOR_CREATE = 'investor.create';
+    public const INVESTOR_VIEW = 'investor.view';
+    public const INVESTOR_UPDATE = 'investor.update';
+
+    // Fuel Station - Handovers
+    public const HANDOVER_CREATE = 'handover.create';
+    public const HANDOVER_VIEW = 'handover.view';
+
+    // Fuel Station - Amanat
+    public const AMANAT_DEPOSIT = 'amanat.deposit';
+    public const AMANAT_WITHDRAW = 'amanat.withdraw';
+
+    // Fuel Station - Sales
+    public const FUEL_SALE_CREATE = 'fuel_sale.create';
 
     // Payroll - Employees
     public const EMPLOYEE_CREATE = 'employee.create';

@@ -260,11 +260,23 @@ class InvoiceController extends Controller
 
         $commandBus = app(CommandBus::class);
 
-        $result = $commandBus->dispatch('invoice.delete', ['id' => $invoiceRecord->id], $request->user());
+        try {
+            $result = $commandBus->dispatch('invoice.delete', ['id' => $invoiceRecord->id], $request->user());
 
-        return redirect()
-            ->route('invoices.index', ['company' => $company->slug])
-            ->with('success', $result['message']);
+            return redirect()
+                ->route('invoices.index', ['company' => $company->slug])
+                ->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function send(SendInvoiceRequest $request): RedirectResponse
@@ -275,11 +287,23 @@ class InvoiceController extends Controller
 
         $payload = array_merge($request->validated(), ['id' => $invoiceId]);
 
-        $result = $commandBus->dispatch('invoice.send', $payload, $request->user());
+        try {
+            $result = $commandBus->dispatch('invoice.send', $payload, $request->user());
 
-        return redirect()
-            ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
-            ->with('success', $result['message']);
+            return redirect()
+                ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
+                ->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function duplicate(DuplicateInvoiceRequest $request): RedirectResponse
@@ -310,10 +334,22 @@ class InvoiceController extends Controller
 
         $payload = array_merge($request->validated(), ['id' => $invoiceId]);
 
-        $result = $commandBus->dispatch('invoice.void', $payload, $request->user());
+        try {
+            $result = $commandBus->dispatch('invoice.void', $payload, $request->user());
 
-        return redirect()
-            ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
-            ->with('success', $result['message']);
+            return redirect()
+                ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceId])
+                ->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

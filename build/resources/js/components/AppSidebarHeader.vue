@@ -43,7 +43,8 @@ const handleModeChecked = (val: boolean | 'indeterminate') => {
   if (next === isAccountantMode.value) return
 
   setMode(next ? 'accountant' : 'owner')
-  router.reload({ preserveScroll: true })
+  // reload() already preserves scroll and state by default
+  router.reload()
 }
 </script>
 

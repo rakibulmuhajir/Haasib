@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Facades\CompanyContext;
+use App\Constants\Permissions;
 use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
@@ -10,11 +11,13 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\RolePermissionSynchronizer;
 use App\Modules\Accounting\Services\DashboardService;
+use App\Modules\FuelStation\Services\FuelDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,7 +36,7 @@ class CompanyController extends Controller
      */
     public function create(Request $request): Response
     {
-        $guided = $request->query('guided', false);
+        $guided = filter_var($request->query('guided', false), FILTER_VALIDATE_BOOLEAN);
 
         // Get available currencies
         $currencies = DB::table('public.currencies')
@@ -115,6 +118,7 @@ class CompanyController extends Controller
     public function settings(Request $request): Response
     {
         $company = CompanyContext::getCompany();
+        $user = $request->user();
 
         // Get current user's role
         $currentUserRole = DB::table('auth.company_user')
@@ -130,10 +134,15 @@ class CompanyController extends Controller
                 'name' => $company->name,
                 'slug' => $company->slug,
                 'industry' => $company->industry,
+                'industry_code' => $company->industry_code ?? null,
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
                 'is_active' => $company->is_active,
+                'created_at' => optional($company->created_at)->toISOString(),
                 'settings' => $settings,
+                'current_user_role' => $currentUserRole,
+                'can_manage_company' => $user?->hasCompanyPermission(Permissions::COMPANY_UPDATE) ?? false,
+                'can_manage_users' => $user?->hasCompanyPermission(Permissions::COMPANY_MANAGE_USERS) ?? false,
             ],
             'currentUserRole' => $currentUserRole,
         ]);
@@ -325,6 +334,23 @@ class CompanyController extends Controller
         $needsAttention = $this->dashboardService->getNeedsAttention($company->id);
         $profitLoss = $this->dashboardService->getProfitLossSummary($company->id);
 
+        $isFuelStation = $company->isModuleEnabled('fuel_station')
+            || ($company->industry_code ?? null) === 'fuel_station'
+            || ($company->industry ?? null) === 'fuel_station';
+
+        $fuelDashboard = null;
+        if ($isFuelStation) {
+            try {
+                $fuelDashboard = app(FuelDashboardService::class)->getHomeCards($company->id);
+            } catch (\Throwable $e) {
+                Log::warning('Fuel dashboard home cards failed', [
+                    'company_id' => $company->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $fuelDashboard = null;
+            }
+        }
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -370,7 +396,8 @@ class CompanyController extends Controller
                 'money_in_out' => $moneyInOut,
                 'needs_attention' => $needsAttention,
                 'profit_loss' => $profitLoss,
-            ]
+            ],
+            'fuelDashboard' => $fuelDashboard,
         ]);
     }
 

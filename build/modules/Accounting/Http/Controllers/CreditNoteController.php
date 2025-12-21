@@ -255,10 +255,22 @@ class CreditNoteController extends Controller
 
         $commandBus = app(CommandBus::class);
 
-        $result = $commandBus->dispatch('credit_note.delete', ['id' => $creditNoteRecord->id], $request->user());
+        try {
+            $result = $commandBus->dispatch('credit_note.delete', ['id' => $creditNoteRecord->id], $request->user());
 
-        return redirect()
-            ->route('credit-notes.index', ['company' => $company->slug])
-            ->with('success', $result['message']);
+            return redirect()
+                ->route('credit-notes.index', ['company' => $company->slug])
+                ->with('success', $result['message']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

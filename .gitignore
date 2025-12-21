@@ -13,3 +13,7 @@ vendor/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
+
+build/public/build/*
+build/public/build
+build/public/build/manifest.json

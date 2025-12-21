@@ -50,9 +50,9 @@ const form = useForm({
   code: props.category.code,
   name: props.category.name,
   description: props.category.description ?? '',
-  parent_id: props.category.parent_id ?? '',
+  parent_id: props.category.parent_id ?? null,
   sort_order: props.category.sort_order,
-  is_active: props.category.is_active,
+  is_active: Boolean(props.category.is_active),
 })
 
 const submit = () => {
@@ -123,12 +123,12 @@ const submit = () => {
                   <SelectValue placeholder="None (top level)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None (top level)</SelectItem>
                   <SelectItem v-for="cat in parentCategories" :key="cat.id" :value="cat.id">
                     {{ cat.name }} ({{ cat.code }})
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p class="text-sm text-muted-foreground">Leave empty for top-level category</p>
             </div>
 
             <div class="space-y-2">
@@ -144,7 +144,7 @@ const submit = () => {
           </div>
 
           <div class="flex items-center space-x-2">
-            <Switch id="is_active" v-model:checked="form.is_active" />
+            <Switch id="is_active" v-model="form.is_active" />
             <Label for="is_active">Active</Label>
           </div>
         </CardContent>

@@ -63,7 +63,7 @@ const form = useForm({
   name: '',
   description: '',
   item_type: 'product',
-  category_id: '',
+  category_id: null,
   unit_of_measure: 'unit',
   track_inventory: true,
   is_purchasable: true,
@@ -71,10 +71,10 @@ const form = useForm({
   cost_price: 0,
   selling_price: 0,
   currency: props.company.base_currency,
-  tax_rate_id: '',
-  income_account_id: '',
-  expense_account_id: '',
-  asset_account_id: '',
+  tax_rate_id: null,
+  income_account_id: null,
+  expense_account_id: null,
+  asset_account_id: null,
   reorder_point: 0,
   reorder_quantity: 0,
   barcode: '',
@@ -162,10 +162,9 @@ const submit = () => {
               <Label for="category">Category</Label>
               <Select v-model="form.category_id">
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Select category (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   <SelectItem v-for="cat in categories" :key="cat.id" :value="cat.id">
                     {{ cat.name }}
                   </SelectItem>
@@ -243,10 +242,9 @@ const submit = () => {
             <Label for="tax_rate">Tax Rate</Label>
             <Select v-model="form.tax_rate_id">
               <SelectTrigger class="w-full md:w-1/3">
-                <SelectValue placeholder="Select tax rate" />
+                <SelectValue placeholder="Select tax rate (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
                 <SelectItem v-for="rate in taxRates" :key="rate.id" :value="rate.id">
                   {{ rate.name }} ({{ rate.rate }}%)
                 </SelectItem>

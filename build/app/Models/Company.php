@@ -41,18 +41,50 @@ class Company extends Model
     protected $fillable = [
         'name',
         'industry',
+        'industry_code',
         'slug',
         'country',
         'country_id',
         'base_currency',
         'language',
         'locale',
+        'registration_number',
+        'trade_name',
+        'timezone',
+        'fiscal_year_start_month',
+        'period_frequency',
+        'invoice_prefix',
+        'invoice_start_number',
+        'bill_prefix',
+        'bill_start_number',
+        'default_customer_payment_terms',
+        'default_vendor_payment_terms',
+        'tax_registered',
+        'tax_rate',
+        'tax_inclusive',
+        'onboarding_completed',
+        'onboarding_completed_at',
+        'ar_account_id',
+        'ap_account_id',
+        'income_account_id',
+        'expense_account_id',
+        'bank_account_id',
+        'retained_earnings_account_id',
+        'sales_tax_payable_account_id',
+        'purchase_tax_receivable_account_id',
         'settings',
         'logo_url',
         'created_by_user_id',
     ];
 
     protected function industry(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => $value ? strtolower($value) : null,
+        );
+    }
+
+    protected function industryCode(): Attribute
     {
         return Attribute::make(
             set: fn (?string $value) => $value ? strtolower($value) : null,
@@ -120,6 +152,38 @@ class Company extends Model
         $this->settings = array_merge($this->settings ?? [], [
             'default_period_type' => $periodType
         ]);
+        $this->save();
+    }
+
+    public function isModuleEnabled(string $moduleKey): bool
+    {
+        $modules = (array) ($this->settings['modules'] ?? []);
+
+        $defaults = [
+            // Inventory is available by default, but can be explicitly disabled per company.
+            'inventory' => true,
+        ];
+
+        return (bool) ($modules[$moduleKey] ?? ($defaults[$moduleKey] ?? false));
+    }
+
+    public function enableModule(string $moduleKey): void
+    {
+        $settings = (array) ($this->settings ?? []);
+        $modules = (array) ($settings['modules'] ?? []);
+        $modules[$moduleKey] = true;
+
+        $this->settings = array_merge($settings, ['modules' => $modules]);
+        $this->save();
+    }
+
+    public function disableModule(string $moduleKey): void
+    {
+        $settings = (array) ($this->settings ?? []);
+        $modules = (array) ($settings['modules'] ?? []);
+        $modules[$moduleKey] = false;
+
+        $this->settings = array_merge($settings, ['modules' => $modules]);
         $this->save();
     }
 }

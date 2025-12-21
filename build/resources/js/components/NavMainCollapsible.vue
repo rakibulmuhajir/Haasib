@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 import { Link, usePage } from '@inertiajs/vue3'
 import {
@@ -25,6 +25,8 @@ const props = defineProps<{
 }>()
 
 const page = usePage()
+const rootEl = ref<HTMLElement | null>(null)
+const didInitialScroll = ref(false)
 
 // Track open state for collapsible parents
 const openItems = ref<Record<string, boolean>>({})
@@ -44,88 +46,112 @@ watch(() => page.url, () => {
     })
   })
 }, { immediate: true })
+
+async function scrollActiveLinkIntoView() {
+  await nextTick()
+  const active = rootEl.value?.querySelector<HTMLElement>(
+    '[data-sidebar="menu-sub-button"][data-active="true"], [data-sidebar="menu-button"][data-active="true"]',
+  )
+  if (!active) return
+
+  active.scrollIntoView({
+    block: 'center',
+    behavior: didInitialScroll.value ? 'auto' : 'auto',
+  })
+  didInitialScroll.value = true
+}
+
+onMounted(() => {
+  scrollActiveLinkIntoView()
+})
+
+watch(() => page.url, () => {
+  scrollActiveLinkIntoView()
+})
 </script>
 
 <template>
-  <SidebarGroup v-for="group in groups" :key="group.label">
-    <SidebarGroupLabel class="text-nav-section-text text-xs uppercase tracking-wider font-medium mb-1">
-      {{ group.label }}
-    </SidebarGroupLabel>
+  <div ref="rootEl">
+    <SidebarGroup v-for="group in groups" :key="group.label">
+      <SidebarGroupLabel class="text-nav-section-text text-xs uppercase tracking-wider font-medium mb-1">
+        {{ group.label }}
+      </SidebarGroupLabel>
 
-    <SidebarMenu>
-      <template v-for="item in group.items" :key="item.title">
-        <!-- Parent with children (collapsible) -->
-        <Collapsible
-          v-if="item.children && item.children.length > 0"
-          v-model:open="openItems[item.title]"
-          as-child
-        >
-          <SidebarMenuItem>
-            <CollapsibleTrigger as-child>
-              <SidebarMenuButton
-                :tooltip="item.title"
-                class="text-nav-item-text hover:text-nav-item-text-hover"
-                :class="{ 'text-nav-item-text-active font-medium': hasActiveChild(item.children) }"
+      <SidebarMenu>
+        <template v-for="item in group.items" :key="item.title">
+          <!-- Parent with children (collapsible) -->
+          <Collapsible
+            v-if="item.children && item.children.length > 0"
+            v-model:open="openItems[item.title]"
+            as-child
+          >
+            <SidebarMenuItem>
+              <CollapsibleTrigger as-child>
+                <SidebarMenuButton
+                  :tooltip="item.title"
+                  class="text-nav-item-text hover:text-nav-item-text-hover"
+                  :class="{ 'text-nav-item-text-active font-medium': hasActiveChild(item.children) }"
+                >
+                  <component :is="item.icon" v-if="item.icon" class="size-4" />
+                  <span>{{ item.title }}</span>
+                  <ChevronRight
+                    class="ml-auto size-4 shrink-0 transition-transform duration-200"
+                    :class="{ 'rotate-90': openItems[item.title] }"
+                  />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem v-for="child in item.children" :key="child.title">
+                    <SidebarMenuSubButton
+                      as-child
+                      :is-active="child.href ? urlIsActive(child.href, page.url) : false"
+                    >
+                      <Link v-if="child.href && !child.external" :href="child.href">
+                        <component :is="child.icon" v-if="child.icon" class="size-4" />
+                        <span>{{ child.title }}</span>
+                      </Link>
+                      <a
+                        v-else-if="child.href && child.external"
+                        :href="toUrl(child.href)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <component :is="child.icon" v-if="child.icon" class="size-4" />
+                        <span>{{ child.title }}</span>
+                      </a>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          </Collapsible>
+
+          <!-- Standalone item (no children) -->
+          <SidebarMenuItem v-else>
+            <SidebarMenuButton
+              as-child
+              :is-active="item.href ? urlIsActive(item.href, page.url) : false"
+              :tooltip="item.title"
+            >
+              <Link v-if="item.href && !item.external" :href="item.href">
+                <component :is="item.icon" v-if="item.icon" class="size-4" />
+                <span>{{ item.title }}</span>
+              </Link>
+              <a
+                v-else-if="item.href && item.external"
+                :href="toUrl(item.href)"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <component :is="item.icon" v-if="item.icon" class="size-4" />
                 <span>{{ item.title }}</span>
-                <ChevronRight
-                  class="ml-auto size-4 shrink-0 transition-transform duration-200"
-                  :class="{ 'rotate-90': openItems[item.title] }"
-                />
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                <SidebarMenuSubItem v-for="child in item.children" :key="child.title">
-                  <SidebarMenuSubButton
-                    as-child
-                    :is-active="child.href ? urlIsActive(child.href, page.url) : false"
-                  >
-                    <Link v-if="child.href && !child.external" :href="child.href">
-                      <component :is="child.icon" v-if="child.icon" class="size-4" />
-                      <span>{{ child.title }}</span>
-                    </Link>
-                    <a
-                      v-else-if="child.href && child.external"
-                      :href="toUrl(child.href)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <component :is="child.icon" v-if="child.icon" class="size-4" />
-                      <span>{{ child.title }}</span>
-                    </a>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
+              </a>
+            </SidebarMenuButton>
           </SidebarMenuItem>
-        </Collapsible>
-
-        <!-- Standalone item (no children) -->
-        <SidebarMenuItem v-else>
-          <SidebarMenuButton
-            as-child
-            :is-active="item.href ? urlIsActive(item.href, page.url) : false"
-            :tooltip="item.title"
-          >
-            <Link v-if="item.href && !item.external" :href="item.href">
-              <component :is="item.icon" v-if="item.icon" class="size-4" />
-              <span>{{ item.title }}</span>
-            </Link>
-            <a
-              v-else-if="item.href && item.external"
-              :href="toUrl(item.href)"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <component :is="item.icon" v-if="item.icon" class="size-4" />
-              <span>{{ item.title }}</span>
-            </a>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </template>
-    </SidebarMenu>
-  </SidebarGroup>
+        </template>
+      </SidebarMenu>
+    </SidebarGroup>
+  </div>
 </template>

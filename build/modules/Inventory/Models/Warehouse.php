@@ -24,6 +24,10 @@ class Warehouse extends Model
         'company_id',
         'code',
         'name',
+        'warehouse_type',
+        'capacity',
+        'low_level_alert',
+        'linked_item_id',
         'address',
         'city',
         'state',
@@ -37,6 +41,10 @@ class Warehouse extends Model
 
     protected $casts = [
         'company_id' => 'string',
+        'warehouse_type' => 'string',
+        'capacity' => 'decimal:2',
+        'low_level_alert' => 'decimal:2',
+        'linked_item_id' => 'string',
         'is_primary' => 'boolean',
         'is_active' => 'boolean',
         'created_by_user_id' => 'string',
@@ -63,5 +71,21 @@ class Warehouse extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * For tank warehouses, the linked fuel item.
+     */
+    public function linkedItem(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'linked_item_id');
+    }
+
+    /**
+     * Check if this warehouse is a tank.
+     */
+    public function isTank(): bool
+    {
+        return $this->warehouse_type === 'tank';
     }
 }

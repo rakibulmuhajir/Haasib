@@ -33,6 +33,7 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => 'restaurant', 'name' => 'Restaurant', 'sort_order' => 12],
             ['code' => 'retail', 'name' => 'Retail', 'sort_order' => 13],
             ['code' => 'wholesale', 'name' => 'Wholesale / Distribution', 'sort_order' => 14],
+            ['code' => 'fuel_station', 'name' => 'Fuel Station / Petrol Pump', 'sort_order' => 15],
         ];
 
         foreach ($industries as $industry) {
@@ -66,6 +67,7 @@ class IndustryCoaPackSeeder extends Seeder
         $this->seedRestaurant($industryIds['restaurant'], $now);
         $this->seedRetail($industryIds['retail'], $now);
         $this->seedWholesale($industryIds['wholesale'], $now);
+        $this->seedFuelStation($industryIds['fuel_station'], $now);
     }
 
     private function seedAccountant(string $industryId, $now): void
@@ -586,6 +588,59 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '6100', 'name' => 'General & Administrative', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
             ['code' => '6300', 'name' => 'Warehouse Rent', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6350', 'name' => 'Logistics Costs', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+        ];
+
+        $this->insertAccounts($industryId, $accounts, $now);
+    }
+
+    private function seedFuelStation(string $industryId, $now): void
+    {
+        $accounts = [
+            // Assets
+            ['code' => '1000', 'name' => 'Operating Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
+            ['code' => '1010', 'name' => 'Secondary Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
+            ['code' => '1020', 'name' => 'Card Machine Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
+            ['code' => '1030', 'name' => 'Parco Card Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Parco card sales pending settlement'],
+            ['code' => '1040', 'name' => 'Card Receipts Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Card sales pending settlement (processor clearing)'],
+            ['code' => '1050', 'name' => 'Cash on Hand', 'type' => 'asset', 'subtype' => 'cash', 'normal_balance' => 'debit'],
+            ['code' => '1060', 'name' => 'Attendant Cash in Transit', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Cash collected by attendants pending handover'],
+            ['code' => '1070', 'name' => 'Undeposited Funds', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Batch deposits pending'],
+            ['code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'ar_control'],
+            ['code' => '1200', 'name' => 'Fuel Inventory', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
+            ['code' => '1210', 'name' => 'Lubricants Inventory', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
+
+            // Liabilities
+            ['code' => '2100', 'name' => 'Accounts Payable – Parco', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control'],
+            ['code' => '2200', 'name' => 'Amanat Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Customer trust deposits'],
+            ['code' => '2210', 'name' => 'Investor Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Investor capital deposits'],
+            ['code' => '2220', 'name' => 'Commission Payable', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Investor commission payable'],
+
+            // Equity
+            ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
+
+            // Revenue
+            ['code' => '4100', 'name' => 'Fuel Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
+            ['code' => '4110', 'name' => 'Shop Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Convenience store / non-fuel sales'],
+            ['code' => '4200', 'name' => 'Lubricant Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            ['code' => '4210', 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'description' => 'Bulk discounts, reduces gross sales'],
+            ['code' => '4900', 'name' => 'Fuel Variance Gain', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Diesel gain from temperature expansion'],
+
+            // COGS
+            ['code' => '5100', 'name' => 'Cost of Goods – Fuel', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
+            ['code' => '5200', 'name' => 'Cost of Goods – Lubricants', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+
+            // Expenses
+            ['code' => '6100', 'name' => 'General & Administrative', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
+            ['code' => '6110', 'name' => 'Electricity', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6120', 'name' => 'Internet', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6130', 'name' => 'Food & Tea', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6140', 'name' => 'Stationery', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6150', 'name' => 'Salaries', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6160', 'name' => 'POS/Bank Charges', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'MDR, slip fees, settlement deductions'],
+            ['code' => '6170', 'name' => 'Pump Maintenance & Calibration', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6180', 'name' => 'Cash Short/Over', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Daily reconciliation variances'],
+            ['code' => '6200', 'name' => 'Investor Commission', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6300', 'name' => 'Fuel Shrinkage Loss', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Evaporation and loss from tank readings'],
         ];
 
         $this->insertAccounts($industryId, $accounts, $now);

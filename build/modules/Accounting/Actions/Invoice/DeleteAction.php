@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 
 class DeleteAction implements PaletteAction
@@ -39,8 +40,30 @@ class DeleteAction implements PaletteAction
             }
 
             // Prevent deletion of posted invoices
-            if (in_array($invoice->status, ['posted', 'paid'])) {
-                throw new \Exception('Cannot delete ' . $invoice->status . ' invoice.');
+            if (in_array($invoice->status, ['posted', 'paid', 'sent', 'viewed', 'overdue', 'partial'], true)) {
+                throw new \Exception('Cannot delete ' . $invoice->status . ' invoice. Void it to reverse the GL entry.');
+            }
+
+            $postedTx = null;
+            if ($invoice->transaction_id) {
+                $postedTx = Transaction::where('company_id', $company->id)
+                    ->where('id', $invoice->transaction_id)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+
+            if (! $postedTx) {
+                $postedTx = Transaction::where('company_id', $company->id)
+                    ->where('reference_type', 'acct.invoices')
+                    ->where('reference_id', $invoice->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+            }
+
+            if ($postedTx) {
+                throw new \Exception('Cannot delete a posted invoice. Void it to reverse the GL entry.');
             }
 
             $invoiceNumber = $invoice->invoice_number;

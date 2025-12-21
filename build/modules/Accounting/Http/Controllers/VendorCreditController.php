@@ -177,12 +177,22 @@ class VendorCreditController extends Controller
         // Get the vendor credit ID from route parameters explicitly
         $vendorCreditId = $request->route('vendorCredit');
 
-        app(CommandBus::class)->dispatch('vendor_credit.void', [
-            'id' => $vendorCreditId,
-            'company_id' => $company->id,
-            'cancellation_reason' => 'voided via controller',
-        ], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('vendor_credit.void', [
+                'id' => $vendorCreditId,
+                'company_id' => $company->id,
+                'cancellation_reason' => 'voided via controller',
+            ], $request->user());
 
-        return back()->with('success', 'Vendor credit deleted');
+            return back()->with('success', 'Vendor credit voided');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

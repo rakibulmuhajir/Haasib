@@ -25,6 +25,8 @@ interface VendorRef {
 }
 
 interface LineItem {
+  item_id?: string | null
+  warehouse_id?: string | null
   description: string
   quantity: number
   unit_price: number
@@ -57,12 +59,31 @@ interface AccountOption {
   subtype?: string
 }
 
+interface ItemOption {
+  id: string
+  sku: string
+  name: string
+  cost_price: number
+  unit_of_measure: string
+  track_inventory: boolean
+}
+
+interface WarehouseOption {
+  id: string
+  code: string
+  name: string
+  is_primary: boolean
+}
+
 const props = defineProps<{
   company: CompanyRef
   vendors: VendorRef[]
   bill: BillRef
   expenseAccounts?: AccountOption[]
   apAccounts?: AccountOption[]
+  inventoryEnabled?: boolean
+  items?: ItemOption[]
+  warehouses?: WarehouseOption[]
 }>()
 
 const { t } = useLexicon()
@@ -74,6 +95,13 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: t('edit'), href: `/${props.company.slug}/bills/${props.bill.id}/edit` },
 ]
 
+// Get default warehouse (primary or first)
+const defaultWarehouseId = computed(() => {
+  if (!props.warehouses?.length) return null
+  const primary = props.warehouses.find(w => w.is_primary)
+  return primary?.id ?? props.warehouses[0]?.id ?? null
+})
+
 const form = useForm({
   vendor_id: props.bill.vendor_id,
   bill_date: props.bill.bill_date,
@@ -84,7 +112,12 @@ const form = useForm({
   notes: props.bill.notes ?? '',
   internal_notes: props.bill.internal_notes ?? '',
   ap_account_id: props.bill.ap_account_id ?? '',
-  line_items: props.bill.line_items.map((li) => ({ ...li, expense_account_id: li.expense_account_id ?? '' })),
+  line_items: props.bill.line_items.map((li) => ({
+    ...li,
+    item_id: li.item_id ?? null,
+    warehouse_id: li.warehouse_id ?? defaultWarehouseId.value,
+    expense_account_id: li.expense_account_id ?? ''
+  })),
 })
 
 const totals = computed(() => {
@@ -101,10 +134,34 @@ const totals = computed(() => {
   return { subtotal, tax, discount, total }
 })
 
-const addLine = () => form.line_items.push({ description: '', quantity: 1, unit_price: 0, tax_rate: 0, discount_rate: 0, account_id: '' })
+const addLine = () => form.line_items.push({
+  item_id: null,
+  warehouse_id: defaultWarehouseId.value,
+  description: '',
+  quantity: 1,
+  unit_price: 0,
+  tax_rate: 0,
+  discount_rate: 0,
+  expense_account_id: ''
+})
+
 const removeLine = (idx: number) => {
   if (form.line_items.length > 1) {
     form.line_items.splice(idx, 1)
+  }
+}
+
+// Handle item selection - auto-fill description and cost price
+const handleItemSelect = (idx: number, itemId: string | null) => {
+  const line = form.line_items[idx]
+  line.item_id = itemId
+
+  if (itemId && props.items) {
+    const item = props.items.find(i => i.id === itemId)
+    if (item) {
+      line.description = item.name
+      line.unit_price = Number(item.cost_price) || 0
+    }
   }
 }
 
@@ -198,47 +255,95 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="grid gap-3 rounded border p-3 md:grid-cols-6"
+            class="rounded border p-3 space-y-3"
           >
-            <div class="md:col-span-2">
-              <Label>{{ t('description') }}</Label>
-              <Input v-model="line.description" required />
+            <!-- Item & Warehouse Row (if inventory enabled) -->
+            <div v-if="inventoryEnabled && items?.length" class="grid gap-3 md:grid-cols-3">
+              <div>
+                <Label>Item (Optional)</Label>
+                <Select
+                  :model-value="line.item_id ?? 'none'"
+                  @update:model-value="(v) => handleItemSelect(idx, v === 'none' ? null : v)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select item or enter manually" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Manual entry —</SelectItem>
+                    <SelectItem
+                      v-for="item in items"
+                      :key="item.id"
+                      :value="item.id"
+                    >
+                      {{ item.sku }} — {{ item.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div v-if="line.item_id && warehouses?.length">
+                <Label>Warehouse</Label>
+                <Select v-model="line.warehouse_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select warehouse" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="wh in warehouses"
+                      :key="wh.id"
+                      :value="wh.id"
+                    >
+                      {{ wh.code }} — {{ wh.name }}
+                      <span v-if="wh.is_primary" class="text-muted-foreground ml-1">(Primary)</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>{{ t('quantity') }}</Label>
-              <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+
+            <!-- Main Line Item Fields -->
+            <div class="grid gap-3 md:grid-cols-6">
+              <div class="md:col-span-2">
+                <Label>{{ t('description') }}</Label>
+                <Input v-model="line.description" required />
+              </div>
+              <div>
+                <Label>{{ t('quantity') }}</Label>
+                <Input v-model.number="line.quantity" type="number" min="0.01" step="0.01" required />
+              </div>
+              <div>
+                <Label>{{ t('unitPrice') }}</Label>
+                <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
+              </div>
+              <div>
+                <Label>{{ t('taxPercent') }}</Label>
+                <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
+              </div>
+              <div>
+                <Label>{{ t('discountPercent') }}</Label>
+                <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" />
+              </div>
             </div>
-            <div>
-              <Label>{{ t('unitPrice') }}</Label>
-              <Input v-model.number="line.unit_price" type="number" min="0" step="0.01" required />
-            </div>
-            <div>
-              <Label>{{ t('taxPercent') }}</Label>
-              <Input v-model.number="line.tax_rate" type="number" min="0" max="100" step="0.01" />
-            </div>
-            <div>
-              <Label>{{ t('discountPercent') }}</Label>
-              <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" />
-            </div>
-            <div>
-              <Label>{{ t('expenseAccount') }}</Label>
-              <Select v-model="line.expense_account_id">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('selectAccount')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">{{ t('useDefault') }}</SelectItem>
-                  <SelectItem
-                    v-for="acct in props.expenseAccounts || []"
-                    :key="acct.id"
-                    :value="acct.id"
-                  >
-                    {{ acct.code }} — {{ acct.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="flex items-end justify-between gap-2">
+
+            <!-- Account & Delete Row -->
+            <div class="flex items-end justify-between gap-3">
+              <div class="flex-1">
+                <Label>{{ t('expenseAccount') }}</Label>
+                <Select v-model="line.expense_account_id">
+                  <SelectTrigger>
+                    <SelectValue :placeholder="t('selectAccount')" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">{{ t('useDefault') }}</SelectItem>
+                    <SelectItem
+                      v-for="acct in props.expenseAccounts || []"
+                      :key="acct.id"
+                      :value="acct.id"
+                    >
+                      {{ acct.code }} — {{ acct.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button type="button" variant="destructive" size="icon" @click="removeLine(idx)">
                 <Trash2 class="h-4 w-4" />
               </Button>

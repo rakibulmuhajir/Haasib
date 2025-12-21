@@ -1,6 +1,6 @@
 # Master Contract Index — Haasib Accounting System
 
-**Last Updated**: 2025-12-07
+**Last Updated**: 2025-12-16
 **Purpose**: Central registry of all schema contracts with implementation status
 
 ---
@@ -30,10 +30,10 @@
 
 | Module | Schema | Contract | Status | Notes |
 |--------|--------|----------|--------|-------|
-| **Chart of Accounts** | `acct` | [coa-schema.md](./coa-schema.md) | 🔶 Partial | Migration done, views in progress |
-| **Fiscal Years & Periods** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Tables + models + routes/controller exist; Inertia pages not yet added |
-| **Transactions & Journal Entries** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Tables + models exist; manual journals UI implemented |
-| **Posting Templates** | `acct` | [posting-schema.md](./posting-schema.md) | 📋 Contract Only | Auto-post AR/AP to GL |
+| **Chart of Accounts** | `acct` | [coa-schema.md](./coa-schema.md) | ✅ Complete | COA views + integrity rules + default accounts workflow |
+| **Fiscal Years & Periods** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | ✅ Complete | Fiscal year/period pages + period close/reopen controls |
+| **Transactions & Journal Entries** | `acct` | [gl-core-schema.md](./gl-core-schema.md) | ✅ Complete | Tables + models + manual journals UI implemented |
+| **Posting Templates** | `acct` | [posting-schema.md](./posting-schema.md) | ✅ Complete | Tables + models + UI (create/edit/preview); default templates installer |
 
 ---
 
@@ -43,9 +43,9 @@ These are the non-✅ items that block an **Accounting MVP** (AR/AP + Banking + 
 
 | Area | Contract(s) | Current Status | MVP Impact | Immediate Deliverable |
 |------|-------------|----------------|------------|-----------------------|
-| **GL Core Tables** | [gl-core-schema.md](./gl-core-schema.md) | 🔶 Partial | Period control and GL screens not fully wired (fiscal year pages missing) | Add fiscal year/period Inertia pages + period close controls |
-| **Posting Engine** | [posting-schema.md](./posting-schema.md), [integration-plan.md](./integration-plan.md) | 📋 Contract Only | AR/AP and banking activity cannot flow into GL; reconciliation cannot tie out | PostingService + templates + test checklist in `integration-plan.md` |
-| **COA UI/Views** | [coa-schema.md](./coa-schema.md) | 🔶 Partial | Users can’t reliably maintain accounts needed by posting | Finish COA pages + seed/default accounts workflow |
+| **GL Core Tables** | [gl-core-schema.md](./gl-core-schema.md) | ✅ Complete | Fiscal year/period control wired end-to-end | Fiscal year/period Inertia pages + close/reopen controls |
+| **Posting Engine** | [posting-schema.md](./posting-schema.md), [integration-plan.md](./integration-plan.md) | ✅ Complete | AR/AP documents post to GL via templates, link `transaction_id`, and void/delete create GL reversals (base-currency journals) | PostingService + templates |
+| **COA UI/Views** | [coa-schema.md](./coa-schema.md) | ✅ Complete | Users can maintain accounts needed by posting | COA pages + seed/default accounts workflow |
 | **Tax (If Required for MVP Scope)** | [tax-schema.md](./tax-schema.md) | 📋 Contract Only | Invoices/bills can’t compute VAT/GST correctly | Tax tables + document-level tax calculation + UI fields |
 
 ---

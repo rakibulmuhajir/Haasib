@@ -69,6 +69,9 @@ class CreateAction implements PaletteAction
         if ($currency && !in_array($params['subtype'], $this->foreignCapable, true)) {
             throw new \InvalidArgumentException('Currency not allowed for this subtype');
         }
+        if ($currency && strtoupper($currency) !== strtoupper($company->base_currency ?? '')) {
+            throw new \InvalidArgumentException('Currency must match company base currency for now');
+        }
 
         $exists = Account::where('company_id', $company->id)
             ->where('code', $params['code'])

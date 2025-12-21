@@ -5,11 +5,13 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Transaction;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Stringable;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -117,10 +119,6 @@ class BillPaymentController extends Controller
 
     public function store(StoreBillPaymentRequest $request): RedirectResponse
     {
-        \Log::info('Bill payment store called', [
-            'request_data' => $request->all(),
-        ]);
-
         $company = app(CompanyContextService::class)->requireCompany();
 
         try {
@@ -129,16 +127,16 @@ class BillPaymentController extends Controller
                 'company_id' => $company->id,
             ], $request->user());
 
-            \Log::info('Bill payment created successfully', ['result' => $result]);
-
             return redirect()->route('bill-payments.index', ['company' => $company->slug])
                 ->with('success', 'Bill payment recorded');
+        } catch (ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
         } catch (\Exception $e) {
-            \Log::error('Bill payment creation failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
         }
     }
 
@@ -149,24 +147,42 @@ class BillPaymentController extends Controller
             ->where('company_id', $company->id)
             ->findOrFail($payment);
 
+        $journalTransactionId = Transaction::where('company_id', $company->id)
+            ->where('reference_type', 'acct.bill_payments')
+            ->where('reference_id', $record->id)
+            ->orderByDesc('posting_date')
+            ->value('id');
+
         return Inertia::render('accounting/bill-payments/Show', [
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
+            'journalTransactionId' => $journalTransactionId,
         ]);
     }
 
     public function destroy(Request $request, string $payment): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill_payment.void', [
-            'id' => $payment,
-            'company_id' => $company->id,
-        ], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('bill_payment.void', [
+                'id' => $payment,
+                'company_id' => $company->id,
+            ], $request->user());
 
-        return back()->with('success', 'Bill payment deleted');
+            return back()->with('success', 'Bill payment voided');
+        } catch (ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

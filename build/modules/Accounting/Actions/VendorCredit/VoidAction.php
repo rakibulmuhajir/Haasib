@@ -6,8 +6,10 @@ use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Models\VendorCredit;
 use App\Modules\Accounting\Models\VendorCreditApplication;
+use App\Modules\Accounting\Services\PostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -35,14 +37,53 @@ class VoidAction implements PaletteAction
             throw new \InvalidArgumentException('Already void');
         }
 
-        return DB::transaction(function () use ($credit, $params) {
+        return DB::transaction(function () use ($company, $credit, $params) {
+            $transaction = null;
+            if ($credit->transaction_id) {
+                $transaction = Transaction::where('company_id', $company->id)
+                    ->where('id', $credit->transaction_id)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+
+            if (! $transaction) {
+                $transaction = Transaction::where('company_id', $company->id)
+                    ->where('reference_type', 'acct.vendor_credits')
+                    ->where('reference_id', $credit->id)
+                    ->whereNull('reversal_of_id')
+                    ->whereNull('deleted_at')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($transaction && ! $credit->transaction_id) {
+                    $credit->transaction_id = $transaction->id;
+                    $credit->save();
+                }
+            }
+
+            if ($transaction) {
+                app(PostingService::class)->reverseTransaction($transaction, $params['cancellation_reason'] ?? null);
+            }
+
             $applications = VendorCreditApplication::where('vendor_credit_id', $credit->id)->get();
             foreach ($applications as $app) {
-                $bill = Bill::find($app->bill_id);
+                $bill = Bill::where('company_id', $company->id)->find($app->bill_id);
                 if ($bill) {
-                    $bill->paid_amount -= $app->amount_applied;
-                    $bill->balance = $bill->total_amount - $bill->paid_amount;
-                    $bill->status = $bill->balance <= 0 ? 'paid' : 'partial';
+                    $newPaidAmount = max(0, round((float) $bill->paid_amount - (float) $app->amount_applied, 6));
+                    $newBalance = max(0, round((float) $bill->total_amount - $newPaidAmount, 6));
+
+                    if ($newBalance <= 0.000001) {
+                        $newStatus = 'paid';
+                    } elseif ($newPaidAmount > 0.000001) {
+                        $newStatus = 'partial';
+                    } else {
+                        $newStatus = $bill->received_at ? 'received' : 'draft';
+                    }
+
+                    $bill->paid_amount = $newPaidAmount;
+                    $bill->balance = $newBalance;
+                    $bill->status = $newStatus;
+                    $bill->paid_at = $newStatus === 'paid' ? ($bill->paid_at ?? now()) : null;
                     $bill->save();
                 }
                 $app->delete();

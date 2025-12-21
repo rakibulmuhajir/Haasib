@@ -82,6 +82,7 @@ const props = defineProps<{
   company: CompanyRef
   recentVendors?: Vendor[]
   expenseAccounts?: AccountOption[]
+  defaultExpenseAccountId?: string | null
   defaultTaxCode?: TaxCode | null
   defaultTerms?: number
 }>()
@@ -133,7 +134,7 @@ const lineItemTemplate = (): LineItem => ({
 // Form
 const form = useForm({
   vendor_id: null as string | null,
-  account_id: null as string | null,  // Expense category - required
+  account_id: (props.defaultExpenseAccountId ?? null) as string | null,  // Expense category - required
   apply_tax: false,
   line_items: [lineItemTemplate()] as LineItem[],
   due_date: null as string | null,

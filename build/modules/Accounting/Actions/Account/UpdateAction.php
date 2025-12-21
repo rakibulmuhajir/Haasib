@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class UpdateAction implements PaletteAction
 {
@@ -55,11 +56,43 @@ class UpdateAction implements PaletteAction
         }
 
         if (array_key_exists('currency', $params)) {
+            $incoming = $params['currency'] ?: null;
+            $current = $account->currency ?: null;
+
+            if ($incoming !== $current) {
+                $hasPostedLines = DB::table('acct.journal_entries')
+                    ->where('company_id', $company->id)
+                    ->where('account_id', $account->id)
+                    ->exists();
+                if ($hasPostedLines) {
+                    throw new \InvalidArgumentException('Account currency cannot be changed after postings exist');
+                }
+            }
+
             $update['currency'] = $params['currency'];
         }
 
         if ($account->is_system && count(array_diff(array_keys($update), ['is_active'])) > 0) {
             throw new \InvalidArgumentException('Cannot edit system account fields');
+        }
+
+        if (($update['is_active'] ?? true) === false) {
+            $usedInCompanyDefaults = DB::table('auth.companies')
+                ->where('id', $company->id)
+                ->where(function ($q) use ($account) {
+                    $q->where('ar_account_id', $account->id)
+                        ->orWhere('ap_account_id', $account->id)
+                        ->orWhere('income_account_id', $account->id)
+                        ->orWhere('expense_account_id', $account->id)
+                        ->orWhere('bank_account_id', $account->id)
+                        ->orWhere('retained_earnings_account_id', $account->id)
+                        ->orWhere('sales_tax_payable_account_id', $account->id)
+                        ->orWhere('purchase_tax_receivable_account_id', $account->id);
+                })
+                ->exists();
+            if ($usedInCompanyDefaults) {
+                throw new \InvalidArgumentException('Cannot deactivate a company default account');
+            }
         }
 
         $update['updated_by_user_id'] = Auth::id();

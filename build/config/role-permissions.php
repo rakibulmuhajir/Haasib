@@ -61,6 +61,10 @@ return [
         'account.delete',
         'journal.create',
         'journal.view',
+        'posting_template.create',
+        'posting_template.view',
+        'posting_template.update',
+        'posting_template.delete',
         'bill.create',
         'bill.view',
         'bill.update',
@@ -172,6 +176,40 @@ return [
         'bank_rule.view',
         'bank_rule.update',
         'bank_rule.delete',
+
+        // Fuel Station - Pumps
+        'pump.create',
+        'pump.view',
+        'pump.update',
+        'pump.delete',
+
+        // Fuel Station - Tank Readings
+        'tank_reading.create',
+        'tank_reading.view',
+        'tank_reading.update',
+
+        // Fuel Station - Pump Readings
+        'pump_reading.create',
+        'pump_reading.view',
+
+        // Fuel Station - Rate Management
+        'fuel_rate.update',
+
+        // Fuel Station - Investors
+        'investor.create',
+        'investor.view',
+        'investor.update',
+
+        // Fuel Station - Handovers
+        'handover.create',
+        'handover.view',
+
+        // Fuel Station - Amanat
+        'amanat.deposit',
+        'amanat.withdraw',
+
+        // Fuel Station - Sales
+        'fuel_sale.create',
     ],
 
     'accountant' => [
@@ -205,6 +243,8 @@ return [
         'account.update',
         'journal.create',
         'journal.view',
+        'posting_template.view',
+        'posting_template.update',
         'bill.create',
         'bill.view',
         'bill.update',
@@ -300,6 +340,35 @@ return [
         'bank_rule.create',
         'bank_rule.view',
         'bank_rule.update',
+
+        // Fuel Station - Pumps (view only)
+        'pump.view',
+
+        // Fuel Station - Tank Readings
+        'tank_reading.create',
+        'tank_reading.view',
+        'tank_reading.update',
+
+        // Fuel Station - Pump Readings
+        'pump_reading.create',
+        'pump_reading.view',
+
+        // Fuel Station - Rate Management
+        'fuel_rate.update',
+
+        // Fuel Station - Investors (view only)
+        'investor.view',
+
+        // Fuel Station - Handovers
+        'handover.create',
+        'handover.view',
+
+        // Fuel Station - Amanat
+        'amanat.deposit',
+        'amanat.withdraw',
+
+        // Fuel Station - Sales
+        'fuel_sale.create',
     ],
 
     'member' => [
@@ -341,6 +410,13 @@ return [
         'bank_feed.view',
         'bank_reconciliation.view',
         'bank_rule.view',
+
+        // Fuel Station (read only)
+        'pump.view',
+        'tank_reading.view',
+        'pump_reading.view',
+        'investor.view',
+        'handover.view',
     ],
 
 ];

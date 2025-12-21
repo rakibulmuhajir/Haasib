@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CompaniesPageController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyModulesController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\UsersPageController;
@@ -20,6 +21,8 @@ use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use App\Modules\Accounting\Http\Controllers\BankFeedController;
 use App\Modules\Accounting\Http\Controllers\BankAccountController;
 use App\Modules\Accounting\Http\Controllers\BankReconciliationController;
+use App\Modules\Accounting\Http\Controllers\PostingTemplateController;
+use App\Modules\Accounting\Http\Controllers\AccountingDefaultsController;
 use App\Modules\Accounting\Http\Controllers\SaleController;
 use App\Modules\Accounting\Http\Controllers\ProfitLossReportController;
 use App\Modules\Inventory\Http\Controllers\ItemController;
@@ -69,12 +72,13 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
 
     // Company-scoped routes
-    Route::middleware(['identify.company'])->group(function () {
-        Route::get('/{company}', [CompanyController::class, 'show'])->name('company.show');
-        Route::put('/{company}', [CompanyController::class, 'update'])->name('company.update');
-        Route::get('/{company}/settings', [CompanyController::class, 'settings'])->name('company.settings');
-        Route::patch('/{company}/settings', [CompanyController::class, 'updateSettings'])->name('company.settings.update');
-        Route::get('/{company}/settings/tax-default', [CompanyController::class, 'taxDefault'])->name('company.settings.tax-default');
+	    Route::middleware(['identify.company'])->group(function () {
+	        Route::get('/{company}', [CompanyController::class, 'show'])->name('company.show');
+	        Route::put('/{company}', [CompanyController::class, 'update'])->name('company.update');
+	        Route::get('/{company}/settings', [CompanyController::class, 'settings'])->name('company.settings');
+	        Route::patch('/{company}/settings', [CompanyController::class, 'updateSettings'])->name('company.settings.update');
+	        Route::patch('/{company}/settings/modules', [CompanyModulesController::class, 'update'])->name('company.settings.modules.update');
+	        Route::get('/{company}/settings/tax-default', [CompanyController::class, 'taxDefault'])->name('company.settings.tax-default');
 
         // Sales (MVP)
         Route::get('/{company}/sales/create', [SaleController::class, 'create'])->name('sales.create');
@@ -169,6 +173,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/accounts/{account}/edit', [AccountController::class, 'edit'])->name('accounts.edit');
         Route::put('/{company}/accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
         Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
+        Route::get('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'edit'])->name('accounting-defaults.edit');
+        Route::patch('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'update'])->name('accounting-defaults.update');
 
         // Vendors
         Route::get('/{company}/vendors', [VendorController::class, 'index'])->name('vendors.index');
@@ -192,6 +198,8 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{company}/bills/{bill}', [BillController::class, 'update'])->name('bills.update');
         Route::delete('/{company}/bills/{bill}', [BillController::class, 'destroy'])->name('bills.destroy');
         Route::post('/{company}/bills/{bill}/receive', [BillController::class, 'receive'])->name('bills.receive');
+        Route::post('/{company}/bills/{bill}/receive-goods', [BillController::class, 'receiveGoods'])->name('bills.receive-goods');
+        Route::post('/{company}/bills/{bill}/void', [BillController::class, 'void'])->name('bills.void');
 
         // Bill Payments
         Route::get('/{company}/bill-payments', [BillPaymentController::class, 'index'])->name('bill-payments.index');
@@ -254,6 +262,15 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{company}/fiscal-years/{fiscalYear}', [FiscalYearController::class, 'update'])->name('fiscal-years.update');
         Route::delete('/{company}/fiscal-years/{fiscalYear}', [FiscalYearController::class, 'destroy'])->name('fiscal-years.destroy');
         Route::post('/{company}/fiscal-years/{fiscalYear}/periods', [FiscalYearController::class, 'createPeriods'])->name('fiscal-years.periods.create');
+        Route::post('/{company}/accounting-periods/{period}/close', [FiscalYearController::class, 'closePeriod'])->name('accounting-periods.close');
+        Route::post('/{company}/accounting-periods/{period}/reopen', [FiscalYearController::class, 'reopenPeriod'])->name('accounting-periods.reopen');
+
+        // Posting Templates
+        Route::get('/{company}/posting-templates', [PostingTemplateController::class, 'index'])->name('posting-templates.index');
+        Route::get('/{company}/posting-templates/create', [PostingTemplateController::class, 'create'])->name('posting-templates.create');
+        Route::post('/{company}/posting-templates', [PostingTemplateController::class, 'store'])->name('posting-templates.store');
+        Route::get('/{company}/posting-templates/{posting_template}/edit', [PostingTemplateController::class, 'edit'])->whereUuid('posting_template')->name('posting-templates.edit');
+        Route::put('/{company}/posting-templates/{posting_template}', [PostingTemplateController::class, 'update'])->whereUuid('posting_template')->name('posting-templates.update');
         
         // ─────────────────────────────────────────────────────────────────
         // Banking Module
@@ -294,48 +311,50 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'update'])->whereUuid('rule')->name('banking.rules.update');
         Route::delete('/{company}/banking/rules/{rule}', [\App\Modules\Accounting\Http\Controllers\BankRuleController::class, 'destroy'])->whereUuid('rule')->name('banking.rules.destroy');
 
-        // ─────────────────────────────────────────────────────────────────
-        // Inventory Module
-        // ─────────────────────────────────────────────────────────────────
-
-        // Items
-        Route::get('/{company}/items', [ItemController::class, 'index'])->name('items.index');
-        Route::get('/{company}/items/search', [ItemController::class, 'search'])->name('items.search');
-        Route::get('/{company}/items/create', [ItemController::class, 'create'])->name('items.create');
-        Route::post('/{company}/items', [ItemController::class, 'store'])->name('items.store');
-        Route::get('/{company}/items/{item}', [ItemController::class, 'show'])->whereUuid('item')->name('items.show');
-        Route::get('/{company}/items/{item}/edit', [ItemController::class, 'edit'])->whereUuid('item')->name('items.edit');
-        Route::put('/{company}/items/{item}', [ItemController::class, 'update'])->whereUuid('item')->name('items.update');
-        Route::delete('/{company}/items/{item}', [ItemController::class, 'destroy'])->whereUuid('item')->name('items.destroy');
-
-        // Item Categories
-        Route::get('/{company}/item-categories', [ItemCategoryController::class, 'index'])->name('item-categories.index');
-        Route::get('/{company}/item-categories/search', [ItemCategoryController::class, 'search'])->name('item-categories.search');
-        Route::get('/{company}/item-categories/create', [ItemCategoryController::class, 'create'])->name('item-categories.create');
-        Route::post('/{company}/item-categories', [ItemCategoryController::class, 'store'])->name('item-categories.store');
-        Route::get('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'show'])->whereUuid('item_category')->name('item-categories.show');
-        Route::get('/{company}/item-categories/{item_category}/edit', [ItemCategoryController::class, 'edit'])->whereUuid('item_category')->name('item-categories.edit');
-        Route::put('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'update'])->whereUuid('item_category')->name('item-categories.update');
-        Route::delete('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'destroy'])->whereUuid('item_category')->name('item-categories.destroy');
-
-        // Warehouses
-        Route::get('/{company}/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
-        Route::get('/{company}/warehouses/search', [WarehouseController::class, 'search'])->name('warehouses.search');
-        Route::get('/{company}/warehouses/create', [WarehouseController::class, 'create'])->name('warehouses.create');
-        Route::post('/{company}/warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
-        Route::get('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'show'])->whereUuid('warehouse')->name('warehouses.show');
-        Route::get('/{company}/warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->whereUuid('warehouse')->name('warehouses.edit');
-        Route::put('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'update'])->whereUuid('warehouse')->name('warehouses.update');
-        Route::delete('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->whereUuid('warehouse')->name('warehouses.destroy');
-
-        // Stock Management
-        Route::get('/{company}/stock', [StockController::class, 'index'])->name('stock.index');
-        Route::get('/{company}/stock/movements', [StockController::class, 'movements'])->name('stock.movements');
-        Route::get('/{company}/stock/adjustment', [StockController::class, 'createAdjustment'])->name('stock.adjustment.create');
-        Route::post('/{company}/stock/adjustment', [StockController::class, 'storeAdjustment'])->name('stock.adjustment.store');
-        Route::get('/{company}/stock/transfer', [StockController::class, 'createTransfer'])->name('stock.transfer.create');
-        Route::post('/{company}/stock/transfer', [StockController::class, 'storeTransfer'])->name('stock.transfer.store');
-        Route::get('/{company}/stock/items/{item}', [StockController::class, 'itemStock'])->whereUuid('item')->name('stock.item');
+	        // ─────────────────────────────────────────────────────────────────
+	        // Inventory Module
+	        // ─────────────────────────────────────────────────────────────────
+	
+	        Route::middleware(['require.module:inventory'])->group(function () {
+	            // Items
+	            Route::get('/{company}/items', [ItemController::class, 'index'])->name('items.index');
+	            Route::get('/{company}/items/search', [ItemController::class, 'search'])->name('items.search');
+	            Route::get('/{company}/items/create', [ItemController::class, 'create'])->name('items.create');
+	            Route::post('/{company}/items', [ItemController::class, 'store'])->name('items.store');
+	            Route::get('/{company}/items/{item}', [ItemController::class, 'show'])->whereUuid('item')->name('items.show');
+	            Route::get('/{company}/items/{item}/edit', [ItemController::class, 'edit'])->whereUuid('item')->name('items.edit');
+	            Route::put('/{company}/items/{item}', [ItemController::class, 'update'])->whereUuid('item')->name('items.update');
+	            Route::delete('/{company}/items/{item}', [ItemController::class, 'destroy'])->whereUuid('item')->name('items.destroy');
+	
+	            // Item Categories
+	            Route::get('/{company}/item-categories', [ItemCategoryController::class, 'index'])->name('item-categories.index');
+	            Route::get('/{company}/item-categories/search', [ItemCategoryController::class, 'search'])->name('item-categories.search');
+	            Route::get('/{company}/item-categories/create', [ItemCategoryController::class, 'create'])->name('item-categories.create');
+	            Route::post('/{company}/item-categories', [ItemCategoryController::class, 'store'])->name('item-categories.store');
+	            Route::get('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'show'])->whereUuid('item_category')->name('item-categories.show');
+	            Route::get('/{company}/item-categories/{item_category}/edit', [ItemCategoryController::class, 'edit'])->whereUuid('item_category')->name('item-categories.edit');
+	            Route::put('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'update'])->whereUuid('item_category')->name('item-categories.update');
+	            Route::delete('/{company}/item-categories/{item_category}', [ItemCategoryController::class, 'destroy'])->whereUuid('item_category')->name('item-categories.destroy');
+	
+	            // Warehouses
+	            Route::get('/{company}/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+	            Route::get('/{company}/warehouses/search', [WarehouseController::class, 'search'])->name('warehouses.search');
+	            Route::get('/{company}/warehouses/create', [WarehouseController::class, 'create'])->name('warehouses.create');
+	            Route::post('/{company}/warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
+	            Route::get('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'show'])->whereUuid('warehouse')->name('warehouses.show');
+	            Route::get('/{company}/warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->whereUuid('warehouse')->name('warehouses.edit');
+	            Route::put('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'update'])->whereUuid('warehouse')->name('warehouses.update');
+	            Route::delete('/{company}/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->whereUuid('warehouse')->name('warehouses.destroy');
+	
+	            // Stock Management
+	            Route::get('/{company}/stock', [StockController::class, 'index'])->name('stock.index');
+	            Route::get('/{company}/stock/movements', [StockController::class, 'movements'])->name('stock.movements');
+	            Route::get('/{company}/stock/adjustment', [StockController::class, 'createAdjustment'])->name('stock.adjustment.create');
+	            Route::post('/{company}/stock/adjustment', [StockController::class, 'storeAdjustment'])->name('stock.adjustment.store');
+	            Route::get('/{company}/stock/transfer', [StockController::class, 'createTransfer'])->name('stock.transfer.create');
+	            Route::post('/{company}/stock/transfer', [StockController::class, 'storeTransfer'])->name('stock.transfer.store');
+	            Route::get('/{company}/stock/items/{item}', [StockController::class, 'itemStock'])->whereUuid('item')->name('stock.item');
+	        });
 
         // ─────────────────────────────────────────────────────────────────
         // Payroll & HR Module
@@ -402,7 +421,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
         Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
         Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
-    });
+	    });
 });
+
+// Module routes
+require base_path('modules/FuelStation/Routes/fuel.php');
 
 require __DIR__.'/settings.php';

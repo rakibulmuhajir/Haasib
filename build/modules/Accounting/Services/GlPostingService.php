@@ -20,75 +20,68 @@ use Illuminate\Support\Carbon;
 class GlPostingService
 {
     /**
+     * Post a generic balanced transaction to the GL (used by non-accounting modules).
+     *
+     * @param array{
+     *   company_id:string,
+     *   transaction_number?:string,
+     *   transaction_type:string,
+     *   date:\Illuminate\Support\Carbon|string,
+     *   currency:string,
+     *   base_currency?:string,
+     *   exchange_rate?:float|null,
+     *   description?:string|null,
+     *   reference_type?:string|null,
+     *   reference_id?:string|null,
+     * } $headerData
+     * @param array<int, array{account_id:string,type:'debit'|'credit',amount:float,description?:string}> $entries
+     */
+    public function postBalancedTransaction(array $headerData, array $entries): Transaction
+    {
+        $companyId = $headerData['company_id'];
+        $transactionDate = $headerData['date'] ?? now();
+        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
+
+        $currency = strtoupper((string) $headerData['currency']);
+        $baseCurrency = strtoupper((string) ($headerData['base_currency'] ?? $currency));
+
+        $transactionNumber = $headerData['transaction_number'] ?? Transaction::generateJournalNumber($companyId);
+
+        // Defensive: ensure all accounts belong to the same company and are active.
+        $accountIds = array_values(array_unique(array_map(fn ($e) => (string) $e['account_id'], $entries)));
+        $validCount = Account::where('company_id', $companyId)
+            ->whereIn('id', $accountIds)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->count();
+        if ($validCount !== count($accountIds)) {
+            throw new \RuntimeException('One or more GL accounts are invalid or inactive for this company.');
+        }
+
+        return $this->createTransaction([
+            'company_id' => $companyId,
+            'transaction_number' => $transactionNumber,
+            'transaction_type' => $headerData['transaction_type'],
+            'transaction_date' => $transactionDate,
+            'posting_date' => $transactionDate,
+            'fiscal_year_id' => $period->fiscal_year_id,
+            'period_id' => $period->id,
+            'currency' => $currency,
+            'base_currency' => $baseCurrency,
+            'exchange_rate' => $headerData['exchange_rate'] ?? null,
+            'description' => $headerData['description'] ?? null,
+            'reference_type' => $headerData['reference_type'] ?? null,
+            'reference_id' => $headerData['reference_id'] ?? null,
+        ], $entries);
+    }
+
+    /**
      * Post an invoice to the general ledger.
      * Creates: DR AR, CR revenue per line (line total includes tax/discount for now).
      */
     public function postInvoice(Invoice $invoice): Transaction
     {
-        $invoice->loadMissing(['customer', 'lineItems']);
-
-        $companyId = $invoice->company_id;
-        $transactionDate = $invoice->invoice_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $arAccountId = $invoice->customer?->ar_account_id ?? $this->defaultArAccountId($companyId);
-        if (!$arAccountId) {
-            throw new \RuntimeException('Customer is missing an AR control account and no company default AR account is configured.');
-        }
-
-        if ($invoice->lineItems->isEmpty()) {
-            throw new \RuntimeException('Cannot post invoice without line items.');
-        }
-
-        $creditLines = [];
-        $creditTotal = 0.0;
-        foreach ($invoice->lineItems as $idx => $line) {
-            $accountId = $line->income_account_id ?? $this->defaultRevenueAccountId($companyId);
-            if (!$accountId) {
-                $lineNumber = $line->line_number ?? ($idx + 1);
-                throw new \RuntimeException("Income account is required on invoice line {$lineNumber}.");
-            }
-
-            $lineAmount = (float) $line->total;
-            $creditTotal += $lineAmount;
-            $creditLines[] = [
-                'account_id' => $accountId,
-                'type' => 'credit',
-                'amount' => $lineAmount,
-                'description' => $line->description,
-            ];
-        }
-
-        $debitAmount = (float) $invoice->total_amount;
-        $difference = round($debitAmount - $creditTotal, 2);
-        if (abs($difference) >= 0.01 && !empty($creditLines)) {
-            // Adjust the first credit line to maintain balance (handles rounding drift)
-            $creditLines[0]['amount'] = round($creditLines[0]['amount'] + $difference, 2);
-            $creditTotal = array_sum(array_column($creditLines, 'amount'));
-        }
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $invoice->invoice_number,
-            'transaction_type' => 'invoice',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $invoice->currency,
-            'base_currency' => $invoice->base_currency ?? $invoice->currency,
-            'exchange_rate' => $invoice->exchange_rate,
-            'reference_type' => 'acct.invoices',
-            'reference_id' => $invoice->id,
-            'description' => $invoice->notes ?? "Invoice {$invoice->invoice_number}",
-        ], array_merge([
-            [
-                'account_id' => $arAccountId,
-                'type' => 'debit',
-                'amount' => $debitAmount,
-                'description' => 'Accounts Receivable',
-            ],
-        ], $creditLines));
+        return app(PostingService::class)->postInvoice($invoice);
     }
 
     /**
@@ -97,40 +90,7 @@ class GlPostingService
      */
     public function postPayment(Payment $payment, string $depositAccountId, string $arAccountId): Transaction
     {
-        $companyId = $payment->company_id;
-        $transactionDate = $payment->payment_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $amount = (float) $payment->amount;
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $payment->payment_number,
-            'transaction_type' => 'payment',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $payment->currency,
-            'base_currency' => $payment->base_currency ?? $payment->currency,
-            'exchange_rate' => $payment->exchange_rate,
-            'reference_type' => 'acct.payments',
-            'reference_id' => $payment->id,
-            'description' => $payment->notes ?? "Payment {$payment->payment_number}",
-        ], [
-            [
-                'account_id' => $depositAccountId,
-                'type' => 'debit',
-                'amount' => $amount,
-                'description' => 'Deposit',
-            ],
-            [
-                'account_id' => $arAccountId,
-                'type' => 'credit',
-                'amount' => $amount,
-                'description' => 'Accounts Receivable',
-            ],
-        ]);
+        return app(PostingService::class)->postPayment($payment, $depositAccountId, $arAccountId);
     }
 
     /**
@@ -138,67 +98,7 @@ class GlPostingService
      */
     public function postBill(Bill $bill): Transaction
     {
-        $bill->loadMissing(['vendor', 'lineItems']);
-        $companyId = $bill->company_id;
-        $transactionDate = $bill->bill_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $apAccountId = $bill->vendor?->ap_account_id ?? $this->defaultApAccountId($companyId);
-        if (!$apAccountId) {
-            throw new \RuntimeException('Vendor is missing an AP control account and no company default AP account is configured.');
-        }
-
-        if ($bill->lineItems->isEmpty()) {
-            throw new \RuntimeException('Cannot post bill without line items.');
-        }
-
-        $debitLines = [];
-        $debitTotal = 0.0;
-        foreach ($bill->lineItems as $idx => $line) {
-            $accountId = $line->expense_account_id ?? $this->defaultExpenseAccountId($companyId);
-            if (!$accountId) {
-                $lineNumber = $line->line_number ?? ($idx + 1);
-                throw new \RuntimeException("Expense account is required on bill line {$lineNumber}.");
-            }
-            $lineAmount = (float) $line->total;
-            $debitTotal += $lineAmount;
-            $debitLines[] = [
-                'account_id' => $accountId,
-                'type' => 'debit',
-                'amount' => $lineAmount,
-                'description' => $line->description,
-            ];
-        }
-
-        $creditAmount = (float) $bill->total_amount;
-        $difference = round($creditAmount - $debitTotal, 2);
-        if (abs($difference) >= 0.01 && !empty($debitLines)) {
-            $debitLines[0]['amount'] = round($debitLines[0]['amount'] + $difference, 2);
-            $debitTotal = array_sum(array_column($debitLines, 'amount'));
-        }
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $bill->bill_number,
-            'transaction_type' => 'bill',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $bill->currency,
-            'base_currency' => $bill->base_currency ?? $bill->currency,
-            'exchange_rate' => $bill->exchange_rate,
-            'reference_type' => 'acct.bills',
-            'reference_id' => $bill->id,
-            'description' => $bill->notes ?? "Bill {$bill->bill_number}",
-        ], array_merge($debitLines, [
-            [
-                'account_id' => $apAccountId,
-                'type' => 'credit',
-                'amount' => $creditAmount,
-                'description' => 'Accounts Payable',
-            ],
-        ]));
+        return app(PostingService::class)->postBill($bill);
     }
 
     /**
@@ -206,40 +106,7 @@ class GlPostingService
      */
     public function postBillPayment(BillPayment $payment, string $paymentAccountId, string $apAccountId): Transaction
     {
-        $companyId = $payment->company_id;
-        $transactionDate = $payment->payment_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $amount = (float) $payment->amount;
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $payment->payment_number,
-            'transaction_type' => 'bill_payment',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $payment->currency,
-            'base_currency' => $payment->base_currency ?? $payment->currency,
-            'exchange_rate' => $payment->exchange_rate,
-            'reference_type' => 'acct.bill_payments',
-            'reference_id' => $payment->id,
-            'description' => $payment->notes ?? "Bill payment {$payment->payment_number}",
-        ], [
-            [
-                'account_id' => $apAccountId,
-                'type' => 'debit',
-                'amount' => $amount,
-                'description' => 'Accounts Payable',
-            ],
-            [
-                'account_id' => $paymentAccountId,
-                'type' => 'credit',
-                'amount' => $amount,
-                'description' => 'Cash/Bank',
-            ],
-        ]);
+        return app(PostingService::class)->postBillPayment($payment, $paymentAccountId, $apAccountId);
     }
 
     /**
@@ -247,78 +114,7 @@ class GlPostingService
      */
     public function postVendorCredit(VendorCredit $credit): Transaction
     {
-        $credit->loadMissing(['vendor', 'items']);
-        $companyId = $credit->company_id;
-        $transactionDate = $credit->credit_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $apAccountId = $credit->vendor?->ap_account_id ?? $this->defaultApAccountId($companyId);
-        if (!$apAccountId) {
-            throw new \RuntimeException('Vendor is missing an AP control account and no company default AP account is configured.');
-        }
-
-        $creditLines = [];
-        $creditTotal = 0.0;
-
-        if ($credit->items->isNotEmpty()) {
-            foreach ($credit->items as $idx => $item) {
-                $accountId = $item->expense_account_id ?? $this->defaultExpenseAccountId($companyId);
-                if (!$accountId) {
-                    $lineNumber = $item->line_number ?? ($idx + 1);
-                    throw new \RuntimeException("Expense account is required on vendor credit line {$lineNumber}.");
-                }
-                $lineAmount = (float) $item->total;
-                $creditTotal += $lineAmount;
-                $creditLines[] = [
-                    'account_id' => $accountId,
-                    'type' => 'credit',
-                    'amount' => $lineAmount,
-                    'description' => $item->description,
-                ];
-            }
-        } else {
-            $creditTotal = (float) $credit->amount;
-            $accountId = $this->defaultExpenseAccountId($companyId);
-            if (!$accountId) {
-                throw new \RuntimeException('Expense account required to post vendor credit.');
-            }
-            $creditLines[] = [
-                'account_id' => $accountId,
-                'type' => 'credit',
-                'amount' => $creditTotal,
-                'description' => 'Vendor credit',
-            ];
-        }
-
-        $debitAmount = (float) $credit->amount;
-        $difference = round($debitAmount - $creditTotal, 2);
-        if (abs($difference) >= 0.01 && !empty($creditLines)) {
-            $creditLines[0]['amount'] = round($creditLines[0]['amount'] + $difference, 2);
-            $creditTotal = array_sum(array_column($creditLines, 'amount'));
-        }
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $credit->credit_number,
-            'transaction_type' => 'vendor_credit',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $credit->currency,
-            'base_currency' => $credit->base_currency ?? $credit->currency,
-            'exchange_rate' => $credit->exchange_rate,
-            'reference_type' => 'acct.vendor_credits',
-            'reference_id' => $credit->id,
-            'description' => $credit->reason ?? "Vendor credit {$credit->credit_number}",
-        ], array_merge([
-            [
-                'account_id' => $apAccountId,
-                'type' => 'debit',
-                'amount' => $debitAmount,
-                'description' => 'Accounts Payable',
-            ],
-        ], $creditLines));
+        return app(PostingService::class)->postVendorCredit($credit);
     }
 
     /**
@@ -326,74 +122,7 @@ class GlPostingService
      */
     public function postCreditNote(CreditNote $creditNote): Transaction
     {
-        $creditNote->loadMissing(['customer', 'invoice.lineItems']);
-        $companyId = $creditNote->company_id;
-        $transactionDate = $creditNote->credit_date ?? now();
-        $period = $this->resolveOpenPeriod($companyId, $transactionDate);
-
-        $arAccountId = $creditNote->customer?->ar_account_id ?? $this->defaultArAccountId($companyId);
-        if (!$arAccountId) {
-            throw new \RuntimeException('Customer is missing an AR control account and no company default AR account is configured.');
-        }
-
-        $debitLines = [];
-        $debitTotal = 0.0;
-
-        if ($creditNote->invoice && $creditNote->invoice->lineItems->isNotEmpty()) {
-            foreach ($creditNote->invoice->lineItems as $idx => $line) {
-                $accountId = $line->income_account_id ?? $this->defaultRevenueAccountId($companyId);
-                $lineAmount = (float) $line->total;
-                $debitTotal += $lineAmount;
-                $debitLines[] = [
-                    'account_id' => $accountId,
-                    'type' => 'debit',
-                    'amount' => $lineAmount,
-                    'description' => "Reverse revenue: {$line->description}",
-                ];
-            }
-        } else {
-            $debitTotal = (float) $creditNote->amount;
-            $accountId = $this->defaultRevenueAccountId($companyId);
-            if (!$accountId) {
-                throw new \RuntimeException('Revenue account required to post credit note.');
-            }
-            $debitLines[] = [
-                'account_id' => $accountId,
-                'type' => 'debit',
-                'amount' => $debitTotal,
-                'description' => 'Credit note',
-            ];
-        }
-
-        $creditAmount = (float) $creditNote->amount;
-        $difference = round($debitTotal - $creditAmount, 2);
-        if (abs($difference) >= 0.01 && !empty($debitLines)) {
-            $debitLines[0]['amount'] = round($debitLines[0]['amount'] - $difference, 2);
-            $debitTotal = array_sum(array_column($debitLines, 'amount'));
-        }
-
-        return $this->createTransaction([
-            'company_id' => $companyId,
-            'transaction_number' => $creditNote->credit_note_number,
-            'transaction_type' => 'credit_note',
-            'transaction_date' => $transactionDate,
-            'posting_date' => $transactionDate,
-            'fiscal_year_id' => $period->fiscal_year_id,
-            'period_id' => $period->id,
-            'currency' => $creditNote->base_currency,
-            'base_currency' => $creditNote->base_currency,
-            'exchange_rate' => null,
-            'reference_type' => 'acct.credit_notes',
-            'reference_id' => $creditNote->id,
-            'description' => $creditNote->reason ?? "Credit note {$creditNote->credit_note_number}",
-        ], array_merge($debitLines, [
-            [
-                'account_id' => $arAccountId,
-                'type' => 'credit',
-                'amount' => $creditAmount,
-                'description' => 'Accounts Receivable',
-            ],
-        ]));
+        return app(PostingService::class)->postCreditNote($creditNote);
     }
 
     /**
@@ -519,19 +248,49 @@ class GlPostingService
      */
     protected function createTransaction(array $data, array $entries): Transaction
     {
+        $currency = $data['currency'];
+        $baseCurrency = $data['base_currency'] ?? $currency;
+        $exchangeRate = $data['exchange_rate'] ?? null;
+
+        if ($currency !== $baseCurrency && $exchangeRate === null) {
+            throw new \RuntimeException('exchange_rate is required when currency differs from base_currency.');
+        }
+
+        $computed = [];
         $debitTotal = 0.0;
         $creditTotal = 0.0;
 
-        foreach ($entries as $entry) {
+        foreach (array_values($entries) as $index => $entry) {
+            $currencyAmount = (float) $entry['amount'];
+            $baseAmount = round($currencyAmount * ($exchangeRate ?? 1), 2);
+
+            $computed[$index] = [
+                ...$entry,
+                'currency_amount' => $currencyAmount,
+                'base_amount' => $baseAmount,
+            ];
+
             if ($entry['type'] === 'debit') {
-                $debitTotal += (float) $entry['amount'];
+                $debitTotal += $baseAmount;
             } else {
-                $creditTotal += (float) $entry['amount'];
+                $creditTotal += $baseAmount;
             }
         }
 
-        if (abs($debitTotal - $creditTotal) >= 0.01) {
-            throw new \RuntimeException('Transaction not balanced; debits must equal credits.');
+        $diff = round($debitTotal - $creditTotal, 2);
+        if ($diff !== 0.0) {
+            if (abs($diff) > 0.01) {
+                throw new \RuntimeException('Transaction not balanced in base currency; debits must equal credits.');
+            }
+
+            if ($diff > 0) {
+                $this->applyBaseAdjustment($computed, 'credit', $diff);
+                $creditTotal += $diff;
+            } else {
+                $amount = abs($diff);
+                $this->applyBaseAdjustment($computed, 'debit', $amount);
+                $debitTotal += $amount;
+            }
         }
 
         return DB::transaction(function () use ($data, $entries, $debitTotal, $creditTotal) {
@@ -557,17 +316,41 @@ class GlPostingService
                 'created_by_user_id' => Auth::id(),
             ]);
 
-            foreach ($entries as $index => $entry) {
+            $currency = $data['currency'];
+            $baseCurrency = $data['base_currency'] ?? $currency;
+            $exchangeRate = $data['exchange_rate'] ?? null;
+            $isForeign = $currency !== $baseCurrency;
+
+            $computed = [];
+            foreach (array_values($entries) as $idx => $entry) {
+                $currencyAmount = (float) $entry['amount'];
+                $computed[$idx] = [
+                    ...$entry,
+                    'currency_amount' => $currencyAmount,
+                    'base_amount' => round($currencyAmount * ($exchangeRate ?? 1), 2),
+                ];
+            }
+            $diff = round(array_sum(array_map(fn ($e) => $e['type'] === 'debit' ? $e['base_amount'] : 0.0, $computed))
+                - array_sum(array_map(fn ($e) => $e['type'] === 'credit' ? $e['base_amount'] : 0.0, $computed)), 2);
+            if ($diff !== 0.0 && abs($diff) <= 0.01) {
+                if ($diff > 0) {
+                    $this->applyBaseAdjustment($computed, 'credit', $diff);
+                } else {
+                    $this->applyBaseAdjustment($computed, 'debit', abs($diff));
+                }
+            }
+
+            foreach ($computed as $index => $entry) {
                 JournalEntry::create([
                     'company_id' => $data['company_id'],
                     'transaction_id' => $transaction->id,
                     'account_id' => $entry['account_id'],
                     'line_number' => $index + 1,
                     'description' => $entry['description'] ?? null,
-                    'debit_amount' => $entry['type'] === 'debit' ? $entry['amount'] : 0,
-                    'credit_amount' => $entry['type'] === 'credit' ? $entry['amount'] : 0,
-                    'currency_debit' => null,
-                    'currency_credit' => null,
+                    'debit_amount' => $entry['type'] === 'debit' ? $entry['base_amount'] : 0,
+                    'credit_amount' => $entry['type'] === 'credit' ? $entry['base_amount'] : 0,
+                    'currency_debit' => ($isForeign && $entry['type'] === 'debit') ? $entry['currency_amount'] : null,
+                    'currency_credit' => ($isForeign && $entry['type'] === 'credit') ? $entry['currency_amount'] : null,
                     'exchange_rate' => $data['exchange_rate'] ?? null,
                     'reference_type' => $data['reference_type'] ?? null,
                     'reference_id' => $data['reference_id'] ?? null,
@@ -579,6 +362,28 @@ class GlPostingService
 
             return $transaction;
         });
+    }
+
+    /**
+     * @param array<int, array{type:'debit'|'credit',base_amount:float}> $entries
+     */
+    protected function applyBaseAdjustment(array &$entries, string $side, float $amount): void
+    {
+        for ($i = count($entries) - 1; $i >= 0; $i--) {
+            if ($entries[$i]['type'] !== $side) {
+                continue;
+            }
+
+            $new = round(((float) $entries[$i]['base_amount']) + $amount, 2);
+            if ($new <= 0.0) {
+                continue;
+            }
+
+            $entries[$i]['base_amount'] = $new;
+            return;
+        }
+
+        throw new \RuntimeException('Unable to apply FX rounding adjustment; no suitable journal line found.');
     }
 
     protected function resolveOpenPeriod(string $companyId, Carbon|string $date): AccountingPeriod
@@ -597,7 +402,7 @@ class GlPostingService
 
         if (!$period) {
             // Try to ensure a current fiscal year exists
-            $fiscalYearService = new FiscalYearService();
+            $fiscalYearService = app(FiscalYearService::class);
             $company = \App\Models\Company::find($companyId);
 
             if ($company && $company->getAutoCreateFiscalYear()) {

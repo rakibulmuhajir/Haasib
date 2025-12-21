@@ -6,6 +6,7 @@ return [
     'company.switch' => \App\Modules\Accounting\Actions\Company\SwitchAction::class,
     'company.view' => \App\Modules\Accounting\Actions\Company\ViewAction::class,
     'company.delete' => \App\Modules\Accounting\Actions\Company\DeleteAction::class,
+    'company.modules.update' => \App\Actions\Company\UpdateModulesAction::class,
 
     'user.invite' => \App\Modules\Accounting\Actions\User\InviteAction::class,
     'user.list' => \App\Modules\Accounting\Actions\User\IndexAction::class,
@@ -74,6 +75,7 @@ return [
     'bill.delete' => \App\Modules\Accounting\Actions\Bill\DeleteAction::class,
     'bill.void' => \App\Modules\Accounting\Actions\Bill\VoidAction::class,
     'bill.receive' => \App\Modules\Accounting\Actions\Bill\ReceiveAction::class,
+    'bill.receive_goods' => \App\Modules\Accounting\Actions\Bill\ReceiveGoodsAction::class,
 
     // Bill Payment
     'bill_payment.list' => \App\Modules\Accounting\Actions\BillPayment\IndexAction::class,
@@ -85,6 +87,17 @@ return [
     'vendor_credit.create' => \App\Modules\Accounting\Actions\VendorCredit\CreateAction::class,
     'vendor_credit.apply' => \App\Modules\Accounting\Actions\VendorCredit\ApplyAction::class,
     'vendor_credit.void' => \App\Modules\Accounting\Actions\VendorCredit\VoidAction::class,
+
+    // Fiscal Years & Periods
+    'fiscal_year.create' => \App\Modules\Accounting\Actions\FiscalYear\CreateAction::class,
+    'fiscal_year.update' => \App\Modules\Accounting\Actions\FiscalYear\UpdateAction::class,
+    'fiscal_year.delete' => \App\Modules\Accounting\Actions\FiscalYear\DeleteAction::class,
+    'fiscal_year.periods.create' => \App\Modules\Accounting\Actions\FiscalYear\CreatePeriodsAction::class,
+    'accounting_period.close' => \App\Modules\Accounting\Actions\AccountingPeriod\CloseAction::class,
+    'accounting_period.reopen' => \App\Modules\Accounting\Actions\AccountingPeriod\ReopenAction::class,
+
+    // Fuel Station
+    'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
 
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,

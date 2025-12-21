@@ -116,7 +116,7 @@ const parseInput = (input: string): number | null => {
   if (!input || input.trim() === '') return null
 
   // Remove currency symbols and formatting
-  let cleaned = input
+  const cleaned = input
     .replace(/[^\d.,\-]/g, '')  // Keep only digits, dots, commas, minus
     .replace(/,/g, '')           // Remove thousand separators
 

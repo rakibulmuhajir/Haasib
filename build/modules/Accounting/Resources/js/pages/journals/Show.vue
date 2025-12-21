@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +31,9 @@ interface JournalEntry {
 interface JournalRef {
   id: string
   transaction_number: string
+  transaction_type: string
+  reference_type: string | null
+  reference_id: string | null
   transaction_date: string
   posting_date: string
   description: string | null
@@ -50,6 +53,21 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Journals', href: `/${props.company.slug}/journals` },
   { title: props.journal.transaction_number, href: `/${props.company.slug}/journals/${props.journal.id}` },
 ]
+
+const sourceHref = computed(() => {
+  if (!props.journal.reference_type || !props.journal.reference_id) return null
+
+  const map: Record<string, (id: string) => string> = {
+    'acct.bills': (id) => `/${props.company.slug}/bills/${id}`,
+    'acct.bill_payments': (id) => `/${props.company.slug}/bill-payments/${id}`,
+    'acct.invoices': (id) => `/${props.company.slug}/invoices/${id}`,
+    'acct.payments': (id) => `/${props.company.slug}/payments/${id}`,
+    'acct.credit_notes': (id) => `/${props.company.slug}/credit-notes/${id}`,
+    'acct.vendor_credits': (id) => `/${props.company.slug}/vendor-credits/${id}`,
+  }
+
+  return map[props.journal.reference_type]?.(props.journal.reference_id) ?? null
+})
 
 const money = (val: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: props.company.base_currency || 'USD' }).format(val ?? 0)
@@ -89,13 +107,36 @@ const tableData = computed(() =>
     :icon="FileText"
   >
     <template #actions>
-      <Button variant="outline" @click="() => window.history.back()">
-        <ArrowLeft class="mr-2 h-4 w-4" />
-        Back
-      </Button>
+      <div class="flex gap-2">
+        <Button v-if="sourceHref" variant="outline" @click="router.get(sourceHref)">
+          Open Source
+        </Button>
+        <Button variant="outline" @click="() => window.history.back()">
+          <ArrowLeft class="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      </div>
     </template>
 
     <div class="grid gap-4 md:grid-cols-3">
+      <Card>
+        <CardHeader>
+          <CardTitle>Details</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span>Type</span>
+            <span class="capitalize">{{ (journal.transaction_type || '').replace(/_/g, ' ') }}</span>
+          </div>
+          <div v-if="journal.reference_type && journal.reference_id" class="flex justify-between">
+            <span>Reference</span>
+            <span class="truncate" :title="`${journal.reference_type} ${journal.reference_id}`">
+              {{ journal.reference_type }} {{ journal.reference_id }}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Dates</CardTitle>

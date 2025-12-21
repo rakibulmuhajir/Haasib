@@ -19,7 +19,6 @@ import { usePage } from '@inertiajs/vue3'
 import { useUserMode } from '@/composables/useUserMode'
 import {
   LayoutGrid,
-  Building2,
   FileText,
   BookOpen,
   Users,
@@ -30,11 +29,9 @@ import {
   Truck,
   Settings,
   CircleDollarSign,
-  CreditCard,
   Moon,
   SunMedium,
   Laptop2,
-  Mail,
   BarChart3,
   Package,
   Warehouse,
@@ -47,6 +44,10 @@ import {
   Landmark,
   RefreshCcw,
   Wand2,
+  Fuel,
+  TrendingUp,
+  Gauge,
+  Calculator,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -63,6 +64,22 @@ const page = usePage()
 const authProps = computed(() => (page.props.auth as any) || {})
 const currentCompany = computed(() => authProps.value.currentCompany || null)
 const userCompanies = computed(() => authProps.value.companies || [])
+const isFuelStationCompany = computed(() => {
+  const modules = currentCompany.value?.settings?.modules ?? {}
+  if (modules?.fuel_station === true) return true
+
+  const code = currentCompany.value?.industry_code ?? currentCompany.value?.industryCode ?? null
+  const legacy = currentCompany.value?.industry ?? null
+  return code === 'fuel_station' || legacy === 'fuel_station'
+})
+const isInventoryEnabled = computed(() => {
+  const modules = currentCompany.value?.settings?.modules ?? {}
+  return modules?.inventory !== false
+})
+const isPayrollEnabled = computed(() => {
+  const modules = currentCompany.value?.settings?.modules ?? {}
+  return modules?.payroll === true
+})
 const slugFromUrl = computed(() => {
   const match = page.url.match(/^\/([^/]+)/)
   const possibleSlug = match ? match[1] : null
@@ -81,122 +98,210 @@ const navGroups = computed<NavGroup[]>(() => {
 
   const groups: NavGroup[] = [
     {
-      label: t('dashboard'),
+      label: 'Overview',
       items: [
-        { title: t('dashboard'), href: dashboard(), icon: LayoutGrid },
+        { title: t('dashboard'), href: slug ? `/${slug}` : dashboard(), icon: LayoutGrid },
       ]
     }
   ]
 
   if (slug) {
-    // Add company item to Overview
-    groups[0].items.push({ title: 'Company', href: `/${slug}`, icon: Building2 })
-
     if (isAccountantMode.value) {
       // Accountant Mode navigation
+      if (isFuelStationCompany.value) {
+        groups.push({
+          label: 'Fuel Station',
+          items: [
+            {
+              title: 'Operations',
+              icon: Fuel,
+              children: [
+                { title: 'Shift Close', href: `/${slug}/fuel/shift-close`, icon: Calculator },
+                { title: 'Pump Readings', href: `/${slug}/fuel/pump-readings`, icon: FileText },
+                { title: 'Tank Readings', href: `/${slug}/fuel/tank-readings`, icon: Warehouse },
+              ],
+            },
+            {
+              title: 'Fuel Setup',
+              icon: Settings,
+              children: [
+                { title: 'Rates', href: `/${slug}/fuel/rates`, icon: TrendingUp },
+                { title: 'Pumps', href: `/${slug}/fuel/pumps`, icon: Gauge },
+                ...(isInventoryEnabled.value
+                  ? [
+                      { title: 'Products', href: `/${slug}/items`, icon: Package },
+                      { title: 'Tanks', href: `/${slug}/warehouses`, icon: Warehouse },
+                      { title: 'Categories', href: `/${slug}/item-categories`, icon: FolderTree },
+                    ]
+                  : []),
+                { title: 'Setup Wizard', href: `/${slug}/fuel/onboarding`, icon: Settings },
+              ],
+            },
+          ]
+        })
+      }
+
       groups.push({
         label: t('accounting'),
         items: [
-          { title: t('chartOfAccounts'), href: `/${slug}/accounts`, icon: BookOpen },
           { title: 'Journal Entries', href: `/${slug}/journals`, icon: FileText },
+          { title: t('chartOfAccounts'), href: `/${slug}/accounts`, icon: BookOpen },
+          { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
+          {
+            title: 'Setup',
+            icon: Settings,
+            children: [
+              { title: 'Default Accounts', href: `/${slug}/accounting/default-accounts`, icon: Settings },
+              { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: Calendar },
+              { title: 'Posting Templates', href: `/${slug}/posting-templates`, icon: Settings },
+            ],
+          },
         ]
       })
 
       groups.push({
-        label: t('receivables'),
+        label: 'Sales',
         items: [
-          { title: t('customers'), href: `/${slug}/customers`, icon: Users },
           { title: 'Invoices', href: `/${slug}/invoices`, icon: FileText },
+          { title: t('customers'), href: `/${slug}/customers`, icon: Users },
           { title: 'Payments', href: `/${slug}/payments`, icon: DollarSign },
           { title: 'Credit Notes', href: `/${slug}/credit-notes`, icon: Receipt },
         ]
       })
 
       groups.push({
-        label: t('payables'),
+        label: 'Purchases',
         items: [
-          { title: t('vendors'), href: `/${slug}/vendors`, icon: Truck },
           { title: 'Bills', href: `/${slug}/bills`, icon: ReceiptText },
-          { title: t('payBill'), href: `/${slug}/bill-payments`, icon: Banknote },
+          { title: 'Bill Payments', href: `/${slug}/bill-payments`, icon: Banknote },
+          { title: t('vendors'), href: `/${slug}/vendors`, icon: Truck },
           { title: 'Vendor Credits', href: `/${slug}/vendor-credits`, icon: Receipt },
         ]
       })
 
       groups.push({
-        label: t('inventory'),
+        label: 'Banking',
         items: [
-          { title: t('items'), href: `/${slug}/items`, icon: Package },
-          { title: t('warehouses'), href: `/${slug}/warehouses`, icon: Warehouse },
-          { title: t('categories'), href: `/${slug}/item-categories`, icon: FolderTree },
-          { title: t('stockLevels'), href: `/${slug}/stock`, icon: Layers },
-          { title: t('stockMovements'), href: `/${slug}/stock/movements`, icon: ArrowLeftRight },
+          {
+            title: 'Bank',
+            icon: Landmark,
+            children: [
+              { title: t('bankAccounts'), href: `/${slug}/banking/accounts`, icon: Landmark },
+              { title: t('reconciliation'), href: `/${slug}/banking/reconciliation`, icon: RefreshCcw },
+              { title: t('transactionsToReview'), href: `/${slug}/banking/feed`, icon: Receipt },
+              { title: t('bankRules'), href: `/${slug}/banking/rules`, icon: Wand2 },
+            ],
+          },
         ]
       })
 
-      groups.push({
-        label: t('payroll'),
-        items: [
-          { title: t('employees'), href: `/${slug}/employees`, icon: UserCog },
-          { title: t('payrollPeriods'), href: `/${slug}/payroll-periods`, icon: Calendar },
-          { title: t('payslips'), href: `/${slug}/payslips`, icon: FileCheck },
-        ]
-      })
+      if (isInventoryEnabled.value) {
+        groups.push({
+          label: t('inventory'),
+          items: [
+            { title: t('items'), href: `/${slug}/items`, icon: Package },
+            { title: t('warehouses'), href: `/${slug}/warehouses`, icon: Warehouse },
+            { title: t('categories'), href: `/${slug}/item-categories`, icon: FolderTree },
+            { title: t('stockLevels'), href: `/${slug}/stock`, icon: Layers },
+            { title: t('stockMovements'), href: `/${slug}/stock/movements`, icon: ArrowLeftRight },
+          ]
+        })
+      }
 
-      groups.push({
-        label: t('reports'),
-        items: [
-          { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
-        ]
-      })
+      if (isPayrollEnabled.value) {
+        groups.push({
+          label: t('payroll'),
+          items: [
+            { title: t('employees'), href: `/${slug}/employees`, icon: UserCog },
+            { title: t('payrollPeriods'), href: `/${slug}/payroll-periods`, icon: Calendar },
+            { title: t('payslips'), href: `/${slug}/payslips`, icon: FileCheck },
+          ]
+        })
+      }
+
     } else {
       // Owner Mode navigation
+      if (isFuelStationCompany.value) {
+        groups.push({
+          label: 'Fuel Station',
+          items: [
+            {
+              title: 'Operations',
+              icon: Fuel,
+              children: [
+                { title: 'Shift Close', href: `/${slug}/fuel/shift-close`, icon: Calculator },
+                { title: 'Pump Readings', href: `/${slug}/fuel/pump-readings`, icon: FileText },
+                { title: 'Tank Readings', href: `/${slug}/fuel/tank-readings`, icon: Warehouse },
+              ],
+            },
+            {
+              title: 'Fuel Setup',
+              icon: Settings,
+              children: [
+                { title: 'Rates', href: `/${slug}/fuel/rates`, icon: TrendingUp },
+                { title: 'Pumps', href: `/${slug}/fuel/pumps`, icon: Gauge },
+                { title: 'Setup Wizard', href: `/${slug}/fuel/onboarding`, icon: Settings },
+              ],
+            },
+          ]
+        })
+      }
+
       groups.push({
-        label: t('receivables'),
+        label: 'Sales',
         items: [
-          { title: t('recordSale'), href: `/${slug}/invoices/create`, icon: FileText },
           { title: 'Invoices', href: `/${slug}/invoices`, icon: CircleDollarSign },
           { title: t('customers'), href: `/${slug}/customers`, icon: Users },
         ]
       })
 
       groups.push({
-        label: t('payables'),
+        label: 'Purchases',
         items: [
-          { title: 'Create Bill', href: `/${slug}/bills/create`, icon: ReceiptText },
           { title: 'Bills', href: `/${slug}/bills`, icon: ReceiptText },
-          { title: t('payBill'), href: `/${slug}/bill-payments`, icon: Banknote },
+          { title: 'Bill Payments', href: `/${slug}/bill-payments`, icon: Banknote },
           { title: t('vendors'), href: `/${slug}/vendors`, icon: Truck },
         ]
       })
 
       groups.push({
-        label: t('banking'),
+        label: 'Banking',
         items: [
-          { title: t('transactionsToReview'), href: `/${slug}/banking/feed`, icon: Receipt },
-          { title: t('bankAccounts'), href: `/${slug}/banking/accounts`, icon: Landmark },
-          { title: t('reconciliation'), href: `/${slug}/banking/reconciliation`, icon: RefreshCcw },
-          { title: t('bankRules'), href: `/${slug}/banking/rules`, icon: Wand2 },
+          {
+            title: 'Bank',
+            icon: Landmark,
+            children: [
+              { title: t('bankAccounts'), href: `/${slug}/banking/accounts`, icon: Landmark },
+              { title: t('reconciliation'), href: `/${slug}/banking/reconciliation`, icon: RefreshCcw },
+              { title: t('transactionsToReview'), href: `/${slug}/banking/feed`, icon: Receipt },
+              { title: t('bankRules'), href: `/${slug}/banking/rules`, icon: Wand2 },
+            ],
+          },
         ]
       })
 
-      groups.push({
-        label: t('inventory'),
-        items: [
-          { title: t('items'), href: `/${slug}/items`, icon: Package },
-          { title: t('warehouses'), href: `/${slug}/warehouses`, icon: Warehouse },
-          { title: t('categories'), href: `/${slug}/item-categories`, icon: FolderTree },
-          { title: t('stockLevels'), href: `/${slug}/stock`, icon: Layers },
-        ]
-      })
+      if (isInventoryEnabled.value) {
+        groups.push({
+          label: t('inventory'),
+          items: [
+            { title: t('items'), href: `/${slug}/items`, icon: Package },
+            { title: t('warehouses'), href: `/${slug}/warehouses`, icon: Warehouse },
+            { title: t('categories'), href: `/${slug}/item-categories`, icon: FolderTree },
+            { title: t('stockLevels'), href: `/${slug}/stock`, icon: Layers },
+          ]
+        })
+      }
 
-      groups.push({
-        label: t('payroll'),
-        items: [
-          { title: t('employees'), href: `/${slug}/employees`, icon: UserCog },
-          { title: t('payrollPeriods'), href: `/${slug}/payroll-periods`, icon: Calendar },
-          { title: t('payslips'), href: `/${slug}/payslips`, icon: FileCheck },
-        ]
-      })
+      if (isPayrollEnabled.value) {
+        groups.push({
+          label: t('payroll'),
+          items: [
+            { title: t('employees'), href: `/${slug}/employees`, icon: UserCog },
+            { title: t('payrollPeriods'), href: `/${slug}/payroll-periods`, icon: Calendar },
+            { title: t('payslips'), href: `/${slug}/payslips`, icon: FileCheck },
+          ]
+        })
+      }
 
       groups.push({
         label: t('reports'),
@@ -204,16 +309,34 @@ const navGroups = computed<NavGroup[]>(() => {
           { title: t('profitAndLoss'), href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
         ]
       })
+
+      groups.push({
+        label: t('accounting'),
+        items: [
+          { title: 'Journal Entries', href: `/${slug}/journals`, icon: FileText },
+          { title: t('chartOfAccounts', 'accountant'), href: `/${slug}/accounts`, icon: BookOpen },
+          {
+            title: 'Setup',
+            icon: Settings,
+            children: [
+              { title: 'Default Accounts', href: `/${slug}/accounting/default-accounts`, icon: Settings },
+              { title: 'Fiscal Years', href: `/${slug}/fiscal-years`, icon: Calendar },
+            ],
+          },
+        ]
+      })
     }
   }
 
-  // Settings group
-  groups.push({
-    label: t('settings'),
-    items: [
-      { title: 'Companies', href: '/companies', icon: Settings },
-    ]
-  })
+  // Global admin group (non-company-scoped)
+  if (!slug) {
+    groups.push({
+      label: 'Admin',
+      items: [
+        { title: 'Companies', href: '/companies', icon: Settings },
+      ]
+    })
+  }
 
   return groups
 })

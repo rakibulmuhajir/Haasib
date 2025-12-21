@@ -4,8 +4,10 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillRequest;
+use App\Modules\Accounting\Http\Requests\VoidBillRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Transaction;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -79,8 +81,43 @@ class BillController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
-        // Owner mode → simplified quick create
-        if ($this->prefersOwnerMode($request)) {
+        // Inventory data (if module enabled)
+        $inventoryEnabled = $company->isModuleEnabled('inventory');
+        $items = [];
+        $warehouses = [];
+
+        if ($inventoryEnabled && class_exists(\App\Modules\Inventory\Models\Item::class)) {
+            $items = \App\Modules\Inventory\Models\Item::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'sku', 'name', 'cost_price', 'unit_of_measure', 'track_inventory']);
+
+            $warehouses = \App\Modules\Inventory\Models\Warehouse::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->orderByDesc('is_primary')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'is_primary']);
+        }
+
+        // Owner mode → simplified quick create (but use full form if inventory enabled with items)
+        $hasInventoryItems = $inventoryEnabled && count($items) > 0;
+        if ($this->prefersOwnerMode($request) && !$hasInventoryItems) {
+            $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
+                || ($company->industry ?? null) === 'fuel_station'
+                || $company->isModuleEnabled('fuel_station');
+
+            $defaultExpenseAccountId = $isFuelStation
+                ? (Account::where('company_id', $company->id)
+                    ->where('code', '1200')
+                    ->where('is_active', true)
+                    ->value('id')
+                    ?? Account::where('company_id', $company->id)
+                        ->where('subtype', 'inventory')
+                        ->where('is_active', true)
+                        ->orderBy('code')
+                        ->value('id'))
+                : null;
+
             return Inertia::render('accounting/bills/QuickCreate', [
                 'company' => [
                     'id' => $company->id,
@@ -91,10 +128,27 @@ class BillController extends Controller
                 ],
                 'recentVendors' => [],
                 'expenseAccounts' => $expenseAccounts,
+                'defaultExpenseAccountId' => $defaultExpenseAccountId,
                 'defaultTaxCode' => null,
                 'defaultTerms' => $company->default_payment_terms ?? null,
             ]);
         }
+
+        $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
+            || ($company->industry ?? null) === 'fuel_station'
+            || $company->isModuleEnabled('fuel_station');
+
+        $defaultExpenseAccountId = $isFuelStation
+            ? (Account::where('company_id', $company->id)
+                ->where('code', '1200')
+                ->where('is_active', true)
+                ->value('id')
+                ?? Account::where('company_id', $company->id)
+                    ->where('subtype', 'inventory')
+                    ->where('is_active', true)
+                    ->orderBy('code')
+                    ->value('id'))
+            : null;
 
         return Inertia::render('accounting/bills/Create', [
             'company' => [
@@ -106,6 +160,10 @@ class BillController extends Controller
             'vendors' => $vendors,
             'expenseAccounts' => $expenseAccounts,
             'apAccounts' => $apAccounts,
+            'defaultExpenseAccountId' => $defaultExpenseAccountId,
+            'inventoryEnabled' => $inventoryEnabled,
+            'items' => $items,
+            'warehouses' => $warehouses,
         ]);
     }
 
@@ -187,6 +245,12 @@ class BillController extends Controller
             ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
 
+        $journalTransactionId = Transaction::where('company_id', $companyModel->id)
+            ->where('reference_type', 'acct.bills')
+            ->where('reference_id', $record->id)
+            ->orderByDesc('posting_date')
+            ->value('id');
+
         return Inertia::render('accounting/bills/Show', [
             'company' => [
                 'id' => $companyModel->id,
@@ -196,6 +260,8 @@ class BillController extends Controller
                 'logo_url' => $companyModel->logo_url,
             ],
             'bill' => $record,
+            'journalTransactionId' => $journalTransactionId,
+            'inventoryEnabled' => $companyModel->isModuleEnabled('inventory'),
         ]);
     }
 
@@ -221,6 +287,24 @@ class BillController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        // Inventory data (if module enabled)
+        $inventoryEnabled = $companyModel->isModuleEnabled('inventory');
+        $items = [];
+        $warehouses = [];
+
+        if ($inventoryEnabled && class_exists(\App\Modules\Inventory\Models\Item::class)) {
+            $items = \App\Modules\Inventory\Models\Item::where('company_id', $companyModel->id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'sku', 'name', 'cost_price', 'unit_of_measure', 'track_inventory']);
+
+            $warehouses = \App\Modules\Inventory\Models\Warehouse::where('company_id', $companyModel->id)
+                ->where('is_active', true)
+                ->orderByDesc('is_primary')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'is_primary']);
+        }
+
         return Inertia::render('accounting/bills/Edit', [
             'company' => [
                 'id' => $companyModel->id,
@@ -232,22 +316,135 @@ class BillController extends Controller
             'vendors' => $vendors,
             'expenseAccounts' => $expenseAccounts,
             'apAccounts' => $apAccounts,
+            'inventoryEnabled' => $inventoryEnabled,
+            'items' => $items,
+            'warehouses' => $warehouses,
         ]);
+    }
+
+    public function update(StoreBillRequest $request, string $company, string $bill): RedirectResponse
+    {
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        $commandBus = app(CommandBus::class);
+
+        $payload = $request->validated();
+
+        try {
+            $result = $commandBus->dispatch('bill.update', [
+                'id' => $bill,
+                ...$payload,
+                'company_id' => $companyModel->id,
+            ], $request->user());
+
+            return redirect()->route('bills.show', [$companyModel->slug, $bill])
+                ->with('success', $result['message'] ?? 'Bill updated');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function destroy(Request $request, string $company, string $bill): RedirectResponse
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill.delete', ['id' => $bill, 'company_id' => $companyModel->id], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('bill.delete', ['id' => $bill, 'company_id' => $companyModel->id], $request->user());
 
-        return back()->with('success', 'Bill deleted');
+            return back()->with('success', 'Bill deleted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     public function receive(Request $request, string $company, string $bill): RedirectResponse
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-        app(CommandBus::class)->dispatch('bill.receive', ['id' => $bill], $request->user());
+        try {
+            app(CommandBus::class)->dispatch('bill.receive', ['id' => $bill], $request->user());
 
-        return back()->with('success', 'Bill marked as received');
+            return back()->with('success', 'Bill marked as received');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    public function void(VoidBillRequest $request, string $company, string $bill): RedirectResponse
+    {
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+
+        try {
+            app(CommandBus::class)->dispatch('bill.void', [
+                'id' => $bill,
+                ...$request->validated(),
+                'company_id' => $companyModel->id,
+            ], $request->user());
+
+            return back()->with('success', 'Bill voided');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    /**
+     * Receive goods for a bill (physical inventory receipt).
+     * Separate from receiving the bill document.
+     */
+    public function receiveGoods(Request $request, string $company, string $bill): RedirectResponse
+    {
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+
+        $validated = $request->validate([
+            'warehouse_id' => 'nullable|uuid',
+            'lines' => 'nullable|array',
+            'lines.*.line_id' => 'required_with:lines|uuid',
+            'lines.*.quantity' => 'required_with:lines|numeric|min:0.01',
+            'lines.*.warehouse_id' => 'nullable|uuid',
+        ]);
+
+        try {
+            $result = app(CommandBus::class)->dispatch('bill.receive_goods', [
+                'id' => $bill,
+                ...$validated,
+            ], $request->user());
+
+            return back()->with('success', $result['message'] ?? 'Goods received');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 }

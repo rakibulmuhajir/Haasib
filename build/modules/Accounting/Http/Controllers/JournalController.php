@@ -19,9 +19,12 @@ class JournalController extends Controller
         $company = CompanyContext::getCompany();
 
         $query = Transaction::where('company_id', $company->id)
-            ->where('transaction_type', 'manual')
             ->withCount('journalEntries')
             ->orderByDesc('transaction_date');
+
+        if ($request->filled('type') && $request->type !== 'all') {
+            $query->where('transaction_type', $request->type);
+        }
 
         if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
@@ -37,6 +40,13 @@ class JournalController extends Controller
 
         $journals = $query->paginate(20)->withQueryString();
 
+        $transactionTypes = Transaction::where('company_id', $company->id)
+            ->select('transaction_type')
+            ->distinct()
+            ->orderBy('transaction_type')
+            ->pluck('transaction_type')
+            ->values();
+
         return Inertia::render('accounting/journals/Index', [
             'company' => [
                 'id' => $company->id,
@@ -48,7 +58,9 @@ class JournalController extends Controller
             'filters' => [
                 'search' => $request->search ?? '',
                 'status' => $request->status ?? 'all',
+                'type' => $request->type ?? 'all',
             ],
+            'transactionTypes' => $transactionTypes,
         ]);
     }
 
@@ -90,7 +102,6 @@ class JournalController extends Controller
         $journalId = $request->route('journal');
 
         $transaction = Transaction::where('company_id', $company->id)
-            ->where('transaction_type', 'manual')
             ->with(['journalEntries.account'])
             ->findOrFail($journalId);
 

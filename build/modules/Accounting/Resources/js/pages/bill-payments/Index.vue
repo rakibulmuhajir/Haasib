@@ -75,14 +75,38 @@ const columns = [
 const formatMoney = (val: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(val)
 
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+const formatPaymentMethod = (method: string) => {
+  switch (method) {
+    case 'cash':
+      return 'Cash'
+    case 'bank_transfer':
+      return 'Bank Transfer'
+    case 'card':
+      return 'Card'
+    case 'cheque':
+    case 'check':
+      return 'Cheque'
+    default:
+      return method
+  }
+}
+
 const tableData = computed(() =>
   props.payments.data.map((p) => ({
     id: p.id,
     payment_number: p.payment_number,
     vendor: p.vendor?.name ?? '—',
-    payment_date: p.payment_date,
+    payment_date: formatDate(p.payment_date),
     amount: formatMoney(p.amount, p.currency),
-    payment_method: p.payment_method,
+    payment_method: formatPaymentMethod(p.payment_method),
     reference_number: p.reference_number ?? '—',
   }))
 )
@@ -142,11 +166,7 @@ const handleSearch = () => {
         :columns="columns"
         :data="tableData"
         :pagination="payments"
-      >
-        <template #payment_method="{ value }">
-          <Badge variant="outline">{{ value }}</Badge>
-        </template>
-      </DataTable>
+      />
     </div>
   </PageShell>
 </template>

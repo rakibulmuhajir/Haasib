@@ -11,6 +11,7 @@ use App\Modules\Accounting\Http\Requests\UpdateBankAccountRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bank;
 use App\Modules\Accounting\Models\BankAccount;
+use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,8 @@ class BankAccountController extends Controller
     public function index(Request $request): Response
     {
         $company = CompanyContext::getCompany();
+
+        app(CompanyBankAccountSyncService::class)->archiveSeededBankAccountsIfUserCreatedExist($company->id);
 
         $query = BankAccount::where('company_id', $company->id)
             ->with(['bank:id,name,swift_code', 'glAccount:id,code,name'])

@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import TankLevelGauge from '../../../components/TankLevelGauge.vue'
 import {
   Dialog,
   DialogContent,
@@ -90,6 +91,7 @@ const formatMoney = (n: number) => {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
+      currencyDisplay: 'narrowSymbol',
       currency: currencyCode.value,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -119,6 +121,13 @@ const variance = computed(() => {
     return { label: `Gain • ${formatLiters(Math.abs(v))}L`, cls: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100', v }
   }
   return { label: `Loss • ${formatLiters(Math.abs(v))}L`, cls: 'bg-red-100 text-red-800 hover:bg-red-100', v }
+})
+
+const tankFillPercent = computed(() => {
+  const capacity = Number(props.reading.tank?.capacity ?? 0)
+  const dip = Number(props.reading.dip_measurement_liters ?? 0)
+  if (capacity <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((dip / capacity) * 100)))
 })
 
 const confirmOpen = ref(false)
@@ -212,14 +221,20 @@ const submitEdit = () => {
       <Card class="border-border/80 lg:col-span-2">
         <CardHeader>
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle class="flex items-center gap-2">
-                <Droplet class="h-5 w-5 text-sky-600" />
-                {{ reading.tank?.name ?? 'Tank' }}
-              </CardTitle>
-              <CardDescription class="mt-1">
-                {{ reading.reading_date }} • {{ reading.reading_type.replace('_', ' ') }}
-              </CardDescription>
+            <div class="flex items-center gap-4">
+              <div class="flex flex-col items-center gap-1">
+                <TankLevelGauge :percent="tankFillPercent" :size="52" />
+                <span class="text-xs text-text-tertiary">{{ tankFillPercent }}%</span>
+              </div>
+              <div>
+                <CardTitle class="flex items-center gap-2">
+                  <Droplet class="h-5 w-5 text-sky-600" />
+                  {{ reading.tank?.name ?? 'Tank' }}
+                </CardTitle>
+                <CardDescription class="mt-1">
+                  {{ reading.reading_date }} • {{ reading.reading_type.replace('_', ' ') }}
+                </CardDescription>
+              </div>
             </div>
             <div class="flex flex-col items-end gap-2">
               <Badge :class="statusClass">{{ reading.status }}</Badge>

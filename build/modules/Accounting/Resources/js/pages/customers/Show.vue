@@ -214,6 +214,7 @@ const canManage = computed(() => props.canEdit !== false)
 const money = (val: number | null | undefined) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: props.customer.base_currency || props.company.base_currency,
   }).format(val ?? 0)
 

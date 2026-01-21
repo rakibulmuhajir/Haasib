@@ -98,6 +98,8 @@ return [
 
     // Fuel Station
     'fuel.shift_close.post' => \App\Modules\FuelStation\Actions\ShiftClose\PostAction::class,
+    'fuel.products.setup' => \App\Modules\FuelStation\Actions\Product\SetupAction::class,
+    'fuel.tanks.quick_create' => \App\Modules\FuelStation\Actions\Tank\QuickCreateAction::class,
 
     // General Ledger - Manual Journals
     'journal.create' => \App\Modules\Accounting\Actions\Journal\CreateAction::class,

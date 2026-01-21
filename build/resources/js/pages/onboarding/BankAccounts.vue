@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ArrowRight, ArrowLeft, Landmark, Plus, Trash2, Wallet } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { onMounted } from 'vue'
 
 interface Props {
   company: {
@@ -21,6 +21,12 @@ interface Props {
     name: string
     symbol: string
   }>
+  existingBankAccounts: Array<{
+    id: string
+    name: string
+    currency: string
+    subtype: string
+  }>
 }
 
 const props = defineProps<Props>()
@@ -28,6 +34,7 @@ const props = defineProps<Props>()
 const form = useForm({
   bank_accounts: [
     {
+      id: null,
       account_name: '',
       currency: props.company.base_currency,
       account_type: 'bank' as 'bank' | 'cash',
@@ -37,6 +44,7 @@ const form = useForm({
 
 const addAccount = () => {
   form.bank_accounts.push({
+    id: null,
     account_name: '',
     currency: props.company.base_currency,
     account_type: 'bank',
@@ -56,6 +64,17 @@ const submit = () => {
 const goBack = () => {
   router.visit(`/${props.company.slug}/onboarding/fiscal-year`)
 }
+
+onMounted(() => {
+  if (props.existingBankAccounts.length > 0) {
+    form.bank_accounts = props.existingBankAccounts.map(account => ({
+      id: account.id,
+      account_name: account.name,
+      currency: account.currency || props.company.base_currency,
+      account_type: account.subtype === 'cash' ? 'cash' : 'bank',
+    }))
+  }
+})
 </script>
 
 <template>
@@ -158,7 +177,7 @@ const goBack = () => {
                     :id="`account_name_${index}`"
                     v-model="account.account_name"
                     type="text"
-                    placeholder="e.g., Meezan Bank PKR, HBL USD Account, Cash Drawer"
+                    placeholder="e.g., Meezan Bank Rs, HBL USD Account, Cash Drawer"
                     required
                   />
                   <p class="text-xs text-slate-500 dark:text-slate-400">

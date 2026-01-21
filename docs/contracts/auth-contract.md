@@ -61,6 +61,10 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
   - `language` string(10) default `en`; `locale` string(10) default `en_US`.  
   - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string), `modules` (object of moduleKey => boolean), `fiscal_year_start_month` (int 1-12), `auto_create_fiscal_year` (boolean), `default_period_type` (string: monthly|quarterly|yearly). Do not add new keys without updating this contract.  
+  - Default account IDs (all nullable uuid FK → `acct.accounts.id`):
+    - `ar_account_id`, `ap_account_id`, `income_account_id`, `expense_account_id`, `bank_account_id`, `retained_earnings_account_id`,
+    - `sales_tax_payable_account_id`, `purchase_tax_receivable_account_id`,
+    - `transit_loss_account_id`, `transit_gain_account_id`.
   - `logo_url` string(500) nullable.  
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
@@ -75,8 +79,8 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Laravel model (canonical):  
   - `$connection = 'pgsql';`  
   - `$table = 'auth.companies';`  
-  - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id'];`  
-  - `$casts = ['settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean'];`
+  - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id', 'ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id', 'sales_tax_payable_account_id', 'purchase_tax_receivable_account_id', 'transit_loss_account_id', 'transit_gain_account_id'];`  
+  - `$casts = ['settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean', 'ar_account_id' => 'string', 'ap_account_id' => 'string', 'income_account_id' => 'string', 'expense_account_id' => 'string', 'bank_account_id' => 'string', 'retained_earnings_account_id' => 'string', 'sales_tax_payable_account_id' => 'string', 'purchase_tax_receivable_account_id' => 'string', 'transit_loss_account_id' => 'string', 'transit_gain_account_id' => 'string'];`
 - Relationships:  
   - belongsToMany User via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  
   - belongsTo User as creator via `created_by_user_id`.  

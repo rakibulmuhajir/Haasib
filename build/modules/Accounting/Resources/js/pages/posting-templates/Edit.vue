@@ -69,6 +69,16 @@ const props = defineProps<{
     }
     entries: PreviewEntry[]
   } | null
+  defaults: {
+    ar_account_id: string | null
+    ap_account_id: string | null
+    income_account_id: string | null
+    expense_account_id: string | null
+    bank_account_id: string | null
+    sales_tax_payable_account_id: string | null
+    purchase_tax_receivable_account_id: string | null
+    discount_received_account_id: string | null
+  }
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -147,6 +157,19 @@ const roles = computed(() => rolesByDocType[props.template.doc_type] ?? [])
 
 const accountLabel = (acc: AccountRef) => `${acc.code} — ${acc.name}`
 
+const roleHelp: Record<string, string> = {
+  AR: 'Customer balances owed to you.',
+  AP: 'Vendor balances you still need to pay.',
+  REVENUE: 'Used when a line has no specific income account.',
+  EXPENSE: 'Used when a line has no specific expense or inventory account.',
+  BANK: 'Where money is deposited for payments and receipts.',
+  CASH: 'Use if payments are handled as physical cash.',
+  TAX_PAYABLE: 'Sales tax you owe (only needed if tax is used).',
+  TAX_RECEIVABLE: 'Purchase tax you can claim (only needed if tax is used).',
+  DISCOUNT_GIVEN: 'Discounts you give on invoices.',
+  DISCOUNT_RECEIVED: 'Discounts you receive on bills.',
+}
+
 const save = () => {
   form.put(`/${props.company.slug}/posting-templates/${props.template.id}`, {
     preserveScroll: true,
@@ -179,6 +202,10 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
+        <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+          These mappings tell the system which accounts to debit or credit when a document is posted.
+          For bills, use inventory accounts on the bill lines for fuel purchases; EXPENSE is only a fallback.
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label>Name</Label>
@@ -216,22 +243,28 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
 	        <div class="space-y-3">
 	          <div class="font-medium">Role Mappings</div>
 	          <div v-for="line in form.lines" :key="line.role" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-	            <div class="flex items-center gap-2">
-	              <div class="text-sm font-medium">{{ line.role }}</div>
-	              <Badge v-if="roleMetaByRole[line.role]?.required" variant="secondary">Required</Badge>
+	            <div>
+	              <div class="flex items-center gap-2">
+	                <div class="text-sm font-medium">
+	                  {{ roleMetaByRole[line.role]?.label ?? line.role }}
+	                  <span class="text-xs text-muted-foreground">({{ line.role }})</span>
+	                </div>
+	                <Badge v-if="roleMetaByRole[line.role]?.required" variant="secondary">Required</Badge>
+	              </div>
+	              <div class="text-xs text-muted-foreground">{{ roleHelp[line.role] ?? '' }}</div>
 	            </div>
 	            <div class="md:col-span-2">
 	              <Select v-model="line.account_id">
-	                <SelectTrigger>
-	                  <SelectValue placeholder="Select account" />
-	                </SelectTrigger>
-	                <SelectContent>
-	                  <SelectItem value="">—</SelectItem>
-	                  <SelectItem v-for="acc in accounts" :key="acc.id" :value="acc.id">
-	                    {{ accountLabel(acc) }}
-	                  </SelectItem>
-	                </SelectContent>
-	              </Select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  <SelectItem v-for="acc in accounts" :key="acc.id" :value="acc.id">
+                    {{ accountLabel(acc) }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 	            </div>
 	          </div>
 	          <div v-if="form.errors.lines" class="text-sm text-destructive">{{ form.errors.lines }}</div>

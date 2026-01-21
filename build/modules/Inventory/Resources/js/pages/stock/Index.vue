@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { BreadcrumbItem } from '@/types'
+import { useLexicon } from '@/composables/useLexicon'
 import {
   Package,
   Search,
@@ -44,6 +45,8 @@ interface StockLevelRow {
   reserved_quantity: number
   available_quantity: number
   reorder_point: number | null
+  pending_receipts: number
+  pending_receipts_qty: number
 }
 
 interface PaginatedStockLevels {
@@ -68,6 +71,7 @@ const props = defineProps<{
 const search = ref(props.filters.search)
 const warehouseId = ref(props.filters.warehouse_id || 'all')
 const lowStockOnly = ref(props.filters.low_stock_only)
+const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -100,6 +104,7 @@ const columns = [
   { key: 'quantity', label: 'On Hand' },
   { key: 'available', label: 'Available' },
   { key: 'status', label: 'Status' },
+  { key: 'receive_stock', label: t('receiveStock') },
 ]
 
 const tableData = computed(() => {
@@ -115,6 +120,9 @@ const tableData = computed(() => {
       quantity: `${formatQuantity(level.quantity)} ${level.unit_of_measure}`,
       available: `${formatQuantity(level.available_quantity)} ${level.unit_of_measure}`,
       status: isLow ? 'low' : 'ok',
+      pending_receipts: level.pending_receipts ?? 0,
+      pending_receipts_qty: level.pending_receipts_qty ?? 0,
+      receive_stock: level.pending_receipts > 0 ? t('receiveStock') : '—',
       _raw: level,
     }
   })
@@ -122,6 +130,13 @@ const tableData = computed(() => {
 
 const handleRowClick = (row: any) => {
   router.get(`/${props.company.slug}/items/${row.item_id}`)
+}
+
+const openReceiptsForItem = (itemId: string) => {
+  router.get(`/${props.company.slug}/bills`, {
+    item_id: itemId,
+    needs_receiving: '1',
+  })
 }
 </script>
 
@@ -207,6 +222,30 @@ const handleRowClick = (row: any) => {
           Low Stock
         </Badge>
         <Badge v-else variant="success">In Stock</Badge>
+      </template>
+
+      <template #cell-quantity="{ row }">
+        <div class="space-y-1">
+          <div class="font-medium">{{ row.quantity }}</div>
+          <p v-if="row.pending_receipts_qty > 0" class="text-xs text-muted-foreground">
+            {{ t('expectedInbound') }}:
+            +{{ formatQuantity(row.pending_receipts_qty) }} {{ row._raw.unit_of_measure }}
+          </p>
+        </div>
+      </template>
+
+      <template #cell-receive_stock="{ row }">
+        <div class="flex justify-end">
+          <Button
+            v-if="row.pending_receipts > 0"
+            size="sm"
+            variant="outline"
+            @click.stop="openReceiptsForItem(row.item_id)"
+          >
+            {{ t('receiveStock') }}
+          </Button>
+          <span v-else class="text-xs text-muted-foreground">—</span>
+        </div>
       </template>
     </DataTable>
   </PageShell>

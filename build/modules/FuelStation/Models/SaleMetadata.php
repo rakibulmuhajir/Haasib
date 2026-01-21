@@ -30,7 +30,8 @@ class SaleMetadata extends Model
     public const TYPE_CREDIT = 'credit';
     public const TYPE_AMANAT = 'amanat';
     public const TYPE_INVESTOR = 'investor';
-    public const TYPE_PARCO_CARD = 'parco_card';
+    public const TYPE_VENDOR_CARD = 'parco_card';
+    public const TYPE_PARCO_CARD = self::TYPE_VENDOR_CARD;
 
     public const DISCOUNT_BULK = 'bulk_discount';
     public const DISCOUNT_INVESTOR = 'investor_commission';
@@ -77,11 +78,16 @@ class SaleMetadata extends Model
     }
 
     /**
-     * Check if this is a Parco card sale (goes to clearing account).
+     * Check if this is a vendor card sale (goes to clearing account).
      */
+    public function isVendorCardSale(): bool
+    {
+        return $this->sale_type === self::TYPE_VENDOR_CARD;
+    }
+
     public function isParcoCardSale(): bool
     {
-        return $this->sale_type === self::TYPE_PARCO_CARD;
+        return $this->isVendorCardSale();
     }
 
     /**
@@ -125,7 +131,7 @@ class SaleMetadata extends Model
             self::TYPE_CREDIT,
             self::TYPE_AMANAT,
             self::TYPE_INVESTOR,
-            self::TYPE_PARCO_CARD,
+            self::TYPE_VENDOR_CARD,
         ];
     }
 

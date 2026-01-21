@@ -6,6 +6,13 @@
 
 ---
 
+## Module Docs
+
+- `build/modules/FuelStation/permissions.md` - Module permissions and default role access.
+- `build/modules/FuelStation/coa.md` - Default chart of accounts and posting templates.
+
+---
+
 ## Business Context
 
 ### The Problem
@@ -14,7 +21,7 @@ Pakistani fuel station owners face unique operational challenges that generic ac
 
 1. **Government Price Controls** - Fuel prices are set by OGRA (Oil and Gas Regulatory Authority) and change frequently. Stations must track purchase rates vs sale rates, and rate changes affect existing inventory valuation.
 
-2. **Multiple Sales Channels** - Cash, credit accounts, mobile wallets (Easypaisa/JazzCash), card swipes, Parco fleet cards - each with different settlement timelines and fees.
+2. **Multiple Sales Channels** - Cash, credit accounts, mobile wallets (Easypaisa/JazzCash), card swipes, vendor fleet cards - each with different settlement timelines and fees.
 
 3. **Investor-Funded Operations** - Many stations operate on investor deposits where investors provide capital and earn commission per liter sold. Rate changes create disputes if not tracked properly.
 
@@ -22,7 +29,7 @@ Pakistani fuel station owners face unique operational challenges that generic ac
 
 5. **Attendant Accountability** - Multiple pump attendants handle cash across shifts. Tracking who collected what, and when it was handed over, is critical for fraud prevention.
 
-6. **Parco Card Settlement** - Fleet cards are processed through a clearing system with delayed settlement and fees. Receivables must be tracked separately.
+6. **Vendor Card Settlement** - Fleet cards are processed through a clearing system with delayed settlement and fees. Receivables must be tracked separately.
 
 7. **Tank/Pump Variance** - Physical dip measurements vs system calculations reveal losses (evaporation, theft, meter drift) or gains (temperature expansion).
 
@@ -72,9 +79,9 @@ A specialized module that extends Haasib's core accounting with fuel station-spe
 
 ### BR-6: Attendant Handovers
 - Track cash collection by attendant, pump, shift
-- Breakdown by payment channel (cash, easypaisa, jazzcash, bank transfer, card, parco)
+- Breakdown by payment channel (cash, easypaisa, jazzcash, bank transfer, card, vendor card)
 - Status workflow: Pending → Received → Reconciled
-- Parco card amounts tracked separately (goes to clearing, not cash)
+- Vendor card amounts tracked separately (goes to clearing, not cash)
 
 ### BR-7: Fuel Sales
 Six sale types with different accounting treatment:
@@ -85,13 +92,13 @@ Six sale types with different accounting treatment:
 | Credit | Deferred | Customer AR | None |
 | Amanat | From deposit | None | None |
 | Investor | From investor | None | Yes |
-| Parco Card | Via clearing | Parco AR | None |
+| Vendor Card | Via clearing | Vendor AR | None |
 
-### BR-8: Parco Settlement
-- List pending Parco card receivables
+### BR-8: Vendor Card Settlement
+- List pending vendor card receivables
 - Record settlement with fee deduction
 - Mark invoices as paid
-- Journal entry: Dr Bank, Dr Fees, Cr Parco Receivable
+- Journal entry: Dr Bank, Dr Fees, Cr Vendor Card Receivable
 
 ### BR-9: Dashboard
 Real-time visibility into:
@@ -102,7 +109,12 @@ Real-time visibility into:
 - Pending handovers awaiting receipt
 - Outstanding investor commissions
 - Total amanat liability
-- Parco receivable balance
+- Vendor card receivable balance
+
+### BR-10: Daily Close
+- Capture a full day register (sales, pump readings, tank readings, money in/out)
+- Reconcile expected cash vs closing cash with variance posting
+- One posted close per day with amendment/lock workflow
 
 ---
 
@@ -144,7 +156,7 @@ When a company enables the Fuel Station module, the following setup is required:
 
 ### Step 2: Create Fuel Items
 For each fuel type sold:
-- Create inventory item with `fuel_category` set (petrol, diesel, hi_octane)
+- Create inventory item with `fuel_category` set (petrol, diesel, high_octane)
 - Link to fuel inventory account
 
 ### Step 3: Create Tanks (Warehouses)
@@ -169,8 +181,8 @@ The module auto-creates these if missing:
 - `Investor Deposits` (liability) - for investor capital
 - `Customer Amanat Deposits` (liability) - for trust deposits
 - `Investor Commission Expense` (expense) - for commission payments
-- `Parco Card Receivable` (asset) - for pending settlements
-- `Parco Card Fees` (expense) - for settlement fees
+- `Vendor Card Receivable` (asset) - for pending settlements
+- `Vendor Card Fees` (expense) - for settlement fees
 - `Fuel Variance` (expense) - for tank losses
 
 ### Step 7: Initial Tank Reading
@@ -202,7 +214,7 @@ fuel.attendant_handovers - Cash collection records
 
 ```
 inv.warehouses           - Add warehouse_type='tank', capacity, linked_item_id
-inv.items                - Add fuel_category (petrol, diesel, hi_octane)
+inv.items                - Add fuel_category (petrol, diesel, high_octane)
 ```
 
 ---
@@ -238,6 +250,17 @@ All routes prefixed with `/{company}/fuel/`
 - `GET /pump-readings` - List readings
 - `POST /pump-readings` - Record meter reading
 
+### Daily Close
+- `GET /daily-close` - Create daily close
+- `POST /daily-close` - Store daily close
+- `GET /daily-close/history` - History index
+- `GET /daily-close/{transaction}` - Read-only view
+- `GET /daily-close/{transaction}/amend` - Amendment form
+- `POST /daily-close/{transaction}/amend` - Store amendment
+- `POST /daily-close/{transaction}/lock` - Lock
+- `POST /daily-close/{transaction}/unlock` - Unlock
+- `POST /daily-close/lock-month` - Lock month
+
 ### Investors
 - `GET /investors` - List with summary stats
 - `POST /investors` - Create investor
@@ -261,9 +284,9 @@ All routes prefixed with `/{company}/fuel/`
 ### Sales
 - `POST /sales` - Record fuel sale (handles all 6 types)
 
-### Parco Settlement
-- `GET /parco/pending` - Pending receivables
-- `POST /parco/settle` - Process settlement
+### Vendor Card Settlement
+- `GET /vendor-cards/pending` - Pending vendor card receivables
+- `POST /vendor-cards/settle` - Process vendor card settlement
 
 ---
 
@@ -289,11 +312,15 @@ pages/FuelStation/
 ├── Amanat/
 │   ├── Index.vue          - Amanat holders list
 │   └── Show.vue           - Customer amanat history
+├── DailyClose/
+│   ├── Create.vue         - Daily close register
+│   ├── Index.vue          - Daily close history
+│   └── Show.vue           - Read-only daily close view
 ├── Handovers/
 │   ├── Index.vue          - Handover list
 │   └── Show.vue           - Handover detail
-└── Parco/
-    └── Pending.vue        - Settlement interface
+└── VendorCards/
+    └── Settlement.vue     - Vendor card settlement interface
 ```
 
 ---
@@ -305,8 +332,9 @@ pages/FuelStation/
 2. Attendant records pump readings each shift
 3. Manager records tank dip, confirms, posts variance
 4. Retail sales throughout the day
-5. Attendant hands over cash at shift end
-6. Owner marks handover received
+5. Daily close posted with cash reconciliation
+6. Attendant hands over cash at shift end
+7. Owner marks handover received
 
 ### Investor Flow
 1. Create investor, add lot (locks rate)
@@ -321,7 +349,43 @@ pages/FuelStation/
 3. Balance decreases with each purchase
 4. Customer can withdraw remaining balance
 
-### Parco Settlement Flow
-1. Parco card sales accumulate
-2. Weekly, Parco sends settlement minus fees
+### Vendor Card Settlement Flow
+1. Vendor card sales accumulate
+2. Weekly, vendor sends settlement minus fees
 3. Owner records settlement, marks invoices paid
+
+---
+
+## Module Development
+- Follow `docs/modules.md` before adding new features.
+- Keep all module logic inside this module (migrations, models, controllers, services, routes, views, sidebar).
+- Create `permissions.md` and `coa.md` in this module root before implementation.
+
+## Module Type
+- Standalone business module (vertical).
+- Provides navigation via `Resources/js/nav.ts` and may override the host sidebar.
+
+## Module Navigation
+- Register entries in `Resources/js/nav.ts`.
+- Example:
+```ts
+import type { ModuleNavConfig } from '@/navigation/types'
+
+export const fuelStationNav: ModuleNavConfig = {
+  id: 'fuel_station',
+  label: 'Fuel Station',
+  mode: 'extend',
+  isEnabled: (context) => Boolean(context.slug && context.isFuelStationCompany),
+  getNavGroups: (context) => {
+    const { slug } = context
+    return [
+      {
+        label: 'Daily Operations',
+        items: [
+          { title: 'Daily Close', href: `/${slug}/fuel/daily-close` },
+        ],
+      },
+    ]
+  },
+}
+```

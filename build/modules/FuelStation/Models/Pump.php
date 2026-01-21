@@ -25,6 +25,7 @@ class Pump extends Model
         'name',
         'tank_id',
         'current_meter_reading',
+        'current_manual_reading',
         'is_active',
     ];
 
@@ -32,6 +33,7 @@ class Pump extends Model
         'company_id' => 'string',
         'tank_id' => 'string',
         'current_meter_reading' => 'decimal:2',
+        'current_manual_reading' => 'decimal:2',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -53,8 +55,26 @@ class Pump extends Model
         return $this->hasMany(PumpReading::class);
     }
 
+    public function nozzles(): HasMany
+    {
+        return $this->hasMany(Nozzle::class)->orderBy('sort_order')->orderBy('code');
+    }
+
+    public function activeNozzles(): HasMany
+    {
+        return $this->nozzles()->where('is_active', true);
+    }
+
     public function attendantHandovers(): HasMany
     {
         return $this->hasMany(AttendantHandover::class);
+    }
+
+    /**
+     * Get the count of active nozzles
+     */
+    public function getNozzleCountAttribute(): int
+    {
+        return $this->nozzles()->where('is_active', true)->count();
     }
 }

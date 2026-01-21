@@ -1,0 +1,55 @@
+{
+  "cookies": [
+    {
+      "name": "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d",
+      "value": "eyJpdiI6ImMwelo2Y2hRREx1WGpScmhNVUFieUE9PSIsInZhbHVlIjoicEpzelBjbUtqSi9WUDVyVXFEMGRYaGh0UEt0SjRHWnVNb2pZK0dpNXRqbUJMOTBDTkpLcmRPbEdIYmdDcVIxMGUvZEVhb3RtRzQ0TXRCbTNLL3lsSG9udG5seStFWXRxZ1hDS1NPU2RJZDRta0gwRFBWeW0rRmVKUzh6WGFyLzAxQ1JabHBhTzRHS1lCRE1RM0pkTnMxRkhUbjNsSkp5SGxxVjFIZjVXbjlKRFVwVUlSRXpRdzF6OHNNYVRacVErczdPYmRpQlRFWXZMVXFnVFE5cmxEemlQaHNOS25kdEIwREt4ZysrSXVWaDlUSXl0R250L1ZSVGoydi8xWTIwNlR4QXBXTmJkREozV2F5UlIyU0dBS3c9PSIsIm1hYyI6Ijc5YjMzZjU0ZWZhODYzMDI0ZmNjYWNiODAxZDIyYWZmYTI0MjkzNDdhNDYzNjg4MGM5MjUwZWY0MDI4NzgyY2MiLCJ0YWciOiIifQ%3D%3D",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1802003690.259117,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "haasib_user_mode",
+      "value": "owner",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1799031072.278131,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "XSRF-TOKEN",
+      "value": "eyJpdiI6ImE4SkZOUEpJR2ltcjhEdmxBTHJPaEE9PSIsInZhbHVlIjoiamt2Zk1RL0cxRkR4QU5UdUdKZGsvSnJqNUV6WjJBVEtXZHBRZldqdnREZy9jQ0l5dWkwSENyNDVQY2R5VnZ3YjZxcHpTSFlpSEY2Uk1Yb1liZWZVVEt5ODlFM2RrLzJsckEwaUNGbEJ5N0dHT1AzeUVMejkvOXNuWkJKMzljdmkiLCJtYWMiOiI4ODZlYmU2MmVkZmI3YjYyZjIyNTM4Mzk1ZGE5ZjYzNGIzM2Q5MDY1YjZjMjEzOGU3ZWYwMGU2NTIzNDc2MDkxIiwidGFnIjoiIn0%3D",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1767502271.469176,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "laravel-session",
+      "value": "eyJpdiI6InZWd0ZQL2FGYkdtdm5UMS9yemtQV1E9PSIsInZhbHVlIjoiekw3RFVTOThtWHFPalBYRktGRTdHSTgwbSs3UGhMN2ZaVkh6blFDWjI5SjNkNXljckMzN0V3RlQrcmFtOUlSRi9KUGFrME4vYlFIUnliUWs4VkwwSTVGTkFTZ09weTNFcllKTmtDSzZzZDN4cHpEZjA2VGdYL0ZIUDUxMnFBRmYiLCJtYWMiOiJmYWM4MDIwZjhlM2U0MTExNzZhMzg2NTBhZmM1MjVmM2MyNzRiZmZmMTM4MDYwYTg5NzZlZjBlMmM5NDI1MTlkIiwidGFnIjoiIn0%3D",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1767502271.469366,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:8000",
+      "localStorage": [
+        {
+          "name": "haasib_user_mode",
+          "value": "owner"
+        }
+      ]
+    }
+  ]
+}

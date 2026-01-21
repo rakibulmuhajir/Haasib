@@ -107,6 +107,10 @@ export const coreTerms: TermDictionary = {
     owner: 'Back',
     accountant: 'Back',
   },
+  receiveStock: {
+    owner: 'Receive stock',
+    accountant: 'Receive stock',
+  },
   apply: {
     owner: 'Apply',
     accountant: 'Apply',
@@ -861,6 +865,34 @@ export const inventoryTerms: TermDictionary = {
     owner: 'Stock',
     accountant: 'Stock Levels',
   },
+  stockReceipts: {
+    owner: 'Stock Receipts',
+    accountant: 'Stock Receipts',
+  },
+  stockStatus: {
+    owner: 'Stock status',
+    accountant: 'Stock status',
+  },
+  expectedInbound: {
+    owner: 'Expected inbound',
+    accountant: 'Expected inbound',
+  },
+  stockPending: {
+    owner: 'Pending receipt',
+    accountant: 'Pending receipt',
+  },
+  stockReceived: {
+    owner: 'Stock received',
+    accountant: 'Stock received',
+  },
+  stockNotTracked: {
+    owner: 'Not tracked',
+    accountant: 'Not tracked',
+  },
+  stockAwaitingPayment: {
+    owner: 'Awaiting payment',
+    accountant: 'Awaiting payment',
+  },
   stockMovements: {
     owner: 'Stock History',
     accountant: 'Stock Movements',
@@ -1208,6 +1240,7 @@ export const invoiceBillTerms: TermDictionary = {
   allVendors: { owner: 'All vendors', accountant: 'All vendors' },
   allStatus: { owner: 'All status', accountant: 'All status' },
   received: { owner: 'Received', accountant: 'Received' },
+  billReceived: { owner: 'Bill received', accountant: 'Bill received' },
   partial: { owner: 'Partial', accountant: 'Partial' },
   cancelled: { owner: 'Cancelled', accountant: 'Cancelled' },
   searchInvoicePlaceholder: { owner: 'Search invoices…', accountant: 'Search invoices…' },

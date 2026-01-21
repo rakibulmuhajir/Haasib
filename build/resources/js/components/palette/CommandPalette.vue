@@ -14,6 +14,7 @@ const {
   activeChipFieldType,
   activeChipIndex,
   activeCompany,
+  activateChip,
   canExecute,
   chipPickerHeader,
   chipSuggestionIndex,

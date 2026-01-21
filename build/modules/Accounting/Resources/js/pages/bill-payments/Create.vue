@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,6 +56,9 @@ const props = defineProps<{
     vendor_id?: string | null
     bill_id?: string | null
   }
+  defaults?: {
+    ap_account_id?: string | null
+  }
   bankAccounts?: AccountOption[]
   apAccounts?: AccountOption[]
 }>()
@@ -67,6 +70,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const { showSuccess, showError } = useFormFeedback()
+const page = usePage()
 
 const form = useForm({
   vendor_id: props.selectedBill?.vendor_id ?? props.filters?.vendor_id ?? '',
@@ -78,13 +82,14 @@ const form = useForm({
   reference_number: '',
   notes: props.selectedBill ? `Payment for ${props.selectedBill.bill_number}` : '',
   payment_account_id: '',
-  ap_account_id: '',
+  ap_account_id: props.defaults?.ap_account_id ?? '',
   allocations: props.selectedBill
     ? [{ bill_id: props.selectedBill.id, amount_allocated: props.selectedBill.balance }]
     : [] as { bill_id: string; amount_allocated: number }[],
 })
 
 const unpaidBills = ref<BillRef[]>(props.unpaidBills ?? [])
+const hasDefaultApAccount = computed(() => Boolean(props.defaults?.ap_account_id))
 
 const resetAllocations = (bills: BillRef[]) => {
   // Only reset allocations if we don't have a selected bill with pre-filled allocation
@@ -135,18 +140,23 @@ const totalAllocated = computed(() =>
   form.allocations.reduce((sum, a) => sum + (Number(a.amount_allocated) || 0), 0)
 )
 
-const updateAllocation = (billId: string, amount: number) => {
-  const existing = form.allocations.find((a) => a.bill_id === billId)
-  if (existing) {
-    existing.amount_allocated = amount
-    return
+const getAllocation = (billId: string) => {
+  let allocation = form.allocations.find((a) => a.bill_id === billId)
+  if (!allocation) {
+    allocation = { bill_id: billId, amount_allocated: 0 }
+    form.allocations.push(allocation)
   }
-  form.allocations.push({ bill_id: billId, amount_allocated: amount })
+  return allocation
 }
 
-const currentAllocation = (billId: string) => {
-  return form.allocations.find((a) => a.bill_id === billId)?.amount_allocated ?? 0
-}
+const hasAnyAllocation = computed(() =>
+  form.allocations.some((a) => (Number(a.amount_allocated) || 0) > 0)
+)
+
+watch(totalAllocated, (total) => {
+  if (!hasAnyAllocation.value) return
+  form.amount = Number(total.toFixed(2))
+})
 
 const formatNumber = (value: number, decimals: number = 2): string => {
   return new Intl.NumberFormat('en-US', {
@@ -172,15 +182,19 @@ const handleSubmit = () => {
     reference_number: form.reference_number || null,
     notes: form.notes || null,
     payment_account_id: form.payment_account_id,
-    ap_account_id: form.ap_account_id || null,
+    ap_account_id: form.ap_account_id === '__none' || !form.ap_account_id ? null : form.ap_account_id,
     allocations: form.allocations.filter(a => a.amount_allocated > 0),
   }
 
   form.transform(() => data).post(`/${props.company.slug}/bill-payments`, {
     preserveScroll: true,
     onSuccess: () => {
-      showSuccess('Bill payment recorded successfully')
-      router.visit(`/${props.company.slug}/bill-payments`)
+      const flash = (page.props as any)?.flash
+      if (flash?.error) {
+        showError(flash.error)
+        return
+      }
+      showSuccess(flash?.success ?? 'Bill payment recorded successfully')
     },
     onError: (errors) => {
       console.error('Validation errors:', errors)
@@ -244,11 +258,11 @@ const handleSubmit = () => {
         <div>
           <Label for="ap_account_id">AP Account</Label>
           <Select v-model="form.ap_account_id">
-            <SelectTrigger id="ap_account_id">
-              <SelectValue placeholder="Use company default" />
+            <SelectTrigger id="ap_account_id" :class="{ 'border-destructive': form.errors.ap_account_id }">
+              <SelectValue :placeholder="hasDefaultApAccount ? 'Use company default' : 'Select AP account'" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Use company default</SelectItem>
+              <SelectItem v-if="hasDefaultApAccount" value="__none">Use company default</SelectItem>
               <SelectItem
                 v-for="acct in props.apAccounts || []"
                 :key="acct.id"
@@ -258,6 +272,9 @@ const handleSubmit = () => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <p v-if="form.errors.ap_account_id" class="text-sm text-destructive mt-1">
+            {{ form.errors.ap_account_id }}
+          </p>
         </div>
         <div>
           <Label for="payment_method">Method</Label>
@@ -306,9 +323,8 @@ const handleSubmit = () => {
               type="number"
               min="0"
               step="0.01"
-              :value="currentAllocation(bill.id)"
+              v-model.number="getAllocation(bill.id).amount_allocated"
               placeholder="Allocate"
-              @input="(e: any) => updateAllocation(bill.id, parseFloat(e.target.value) || 0)"
             />
           </div>
         </div>

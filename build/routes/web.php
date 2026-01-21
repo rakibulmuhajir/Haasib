@@ -29,13 +29,15 @@ use App\Modules\Inventory\Http\Controllers\ItemController;
 use App\Modules\Inventory\Http\Controllers\ItemCategoryController;
 use App\Modules\Inventory\Http\Controllers\WarehouseController;
 use App\Modules\Inventory\Http\Controllers\StockController;
-use Modules\Payroll\Http\Controllers\EmployeeController;
-use Modules\Payroll\Http\Controllers\EarningTypeController;
-use Modules\Payroll\Http\Controllers\DeductionTypeController;
-use Modules\Payroll\Http\Controllers\LeaveTypeController;
-use Modules\Payroll\Http\Controllers\LeaveRequestController;
-use Modules\Payroll\Http\Controllers\PayrollPeriodController;
-use Modules\Payroll\Http\Controllers\PayslipController;
+use App\Modules\Payroll\Http\Controllers\EmployeeController;
+use App\Modules\Payroll\Http\Controllers\EarningTypeController;
+use App\Modules\Payroll\Http\Controllers\DeductionTypeController;
+use App\Modules\Payroll\Http\Controllers\LeaveTypeController;
+use App\Modules\Payroll\Http\Controllers\LeaveRequestController;
+use App\Modules\Payroll\Http\Controllers\PayrollPeriodController;
+use App\Modules\Payroll\Http\Controllers\PayslipController;
+use App\Modules\Payroll\Http\Controllers\SalaryAdvanceController;
+use App\Http\Controllers\PartnerController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -169,10 +171,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/accounts', [AccountController::class, 'index'])->name('accounts.index');
         Route::get('/{company}/accounts/create', [AccountController::class, 'create'])->name('accounts.create');
         Route::post('/{company}/accounts', [AccountController::class, 'store'])->name('accounts.store');
-        Route::get('/{company}/accounts/{account}', [AccountController::class, 'show'])->name('accounts.show');
-        Route::get('/{company}/accounts/{account}/edit', [AccountController::class, 'edit'])->name('accounts.edit');
-        Route::put('/{company}/accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
-        Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
+        Route::get('/{company}/accounts/{account}', [AccountController::class, 'show'])->whereUuid('account')->name('accounts.show');
+        Route::get('/{company}/accounts/{account}/edit', [AccountController::class, 'edit'])->whereUuid('account')->name('accounts.edit');
+        Route::put('/{company}/accounts/{account}', [AccountController::class, 'update'])->whereUuid('account')->name('accounts.update');
+        Route::delete('/{company}/accounts/{account}', [AccountController::class, 'destroy'])->whereUuid('account')->name('accounts.destroy');
         Route::get('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'edit'])->name('accounting-defaults.edit');
         Route::patch('/{company}/accounting/default-accounts', [AccountingDefaultsController::class, 'update'])->name('accounting-defaults.update');
 
@@ -348,6 +350,7 @@ Route::middleware(['auth'])->group(function () {
 	
 	            // Stock Management
 	            Route::get('/{company}/stock', [StockController::class, 'index'])->name('stock.index');
+	            Route::get('/{company}/stock/receipts', [StockController::class, 'receipts'])->name('stock.receipts');
 	            Route::get('/{company}/stock/movements', [StockController::class, 'movements'])->name('stock.movements');
 	            Route::get('/{company}/stock/adjustment', [StockController::class, 'createAdjustment'])->name('stock.adjustment.create');
 	            Route::post('/{company}/stock/adjustment', [StockController::class, 'storeAdjustment'])->name('stock.adjustment.store');
@@ -421,6 +424,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
         Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
         Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
+
+        // Salary Advances
+        Route::get('/{company}/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+
+        // ─────────────────────────────────────────────────────────────────
+        // Partners (Business Partners / Shareholders)
+        // ─────────────────────────────────────────────────────────────────
+        Route::get('/{company}/partners', [PartnerController::class, 'index'])->name('partners.index');
+        Route::get('/{company}/partners/create', [PartnerController::class, 'create'])->name('partners.create');
+        Route::post('/{company}/partners', [PartnerController::class, 'store'])->name('partners.store');
+        Route::get('/{company}/partners/{partner}', [PartnerController::class, 'show'])->whereUuid('partner')->name('partners.show');
+        Route::get('/{company}/partners/{partner}/edit', [PartnerController::class, 'edit'])->whereUuid('partner')->name('partners.edit');
+        Route::put('/{company}/partners/{partner}', [PartnerController::class, 'update'])->whereUuid('partner')->name('partners.update');
+        Route::post('/{company}/partners/{partner}/invest', [PartnerController::class, 'addInvestment'])->whereUuid('partner')->name('partners.invest');
+        Route::post('/{company}/partners/{partner}/withdraw', [PartnerController::class, 'addWithdrawal'])->whereUuid('partner')->name('partners.withdraw');
 	    });
 });
 

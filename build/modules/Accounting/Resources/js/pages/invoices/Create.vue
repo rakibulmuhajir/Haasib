@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import { EntitySearch, QuickAddModal } from '@/components/forms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,6 +52,9 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const lineItems = ref<LineItem[]>([
   { description: '', quantity: 1, unit_price: 0, tax_rate: 0, discount_amount: 0 }
 ])
+
+const showQuickAdd = ref(false)
+const quickAddQuery = ref('')
 
 const form = useForm({
   customer_id: '',
@@ -106,6 +110,16 @@ const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
   form.line_items = lineItems.value
 }
 
+const handleQuickAddClick = (query: string) => {
+  quickAddQuery.value = query
+  showQuickAdd.value = true
+}
+
+const handleCustomerCreated = (customer: { id: string }) => {
+  form.customer_id = customer.id
+  showQuickAdd.value = false
+}
+
 const submit = () => {
   form.post(`/${props.company.slug}/invoices`)
 }
@@ -113,6 +127,7 @@ const submit = () => {
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: form.currency || 'USD',
   }).format(amount)
 }
@@ -146,20 +161,21 @@ const formatCurrency = (amount: number) => {
         <CardContent class="space-y-4">
           <div>
             <Label for="customer_id">Customer *</Label>
-            <Select v-model="form.customer_id" required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a customer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="customer in customers"
-                  :key="customer.id"
-                  :value="customer.id"
-                >
-                  {{ customer.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <EntitySearch
+              v-model="form.customer_id"
+              entity-type="customer"
+              placeholder="Select or create a customer"
+              @quick-add-click="handleQuickAddClick"
+            />
+            <QuickAddModal
+              v-model:open="showQuickAdd"
+              entity-type="customer"
+              :initial-name="quickAddQuery"
+              @created="handleCustomerCreated"
+            />
+            <p v-if="form.errors.customer_id" class="text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.customer_id }}
+            </p>
           </div>
           <div>
             <Label for="ar_account_id">AR Account</Label>

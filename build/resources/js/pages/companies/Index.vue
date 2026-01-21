@@ -35,8 +35,23 @@ interface CompanyRow {
   user_count?: number
 }
 
+interface IndustryOption {
+  code: string
+  name: string
+  description?: string | null
+}
+
+interface CountryOption {
+  code: string
+  name: string
+  currency: string
+  timezone: string
+}
+
 const props = defineProps<{
   companies: CompanyRow[]
+  industries: IndustryOption[]
+  countries: CountryOption[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -54,81 +69,11 @@ const companyToDelete = ref<CompanyRow | null>(null)
 
 const createForm = useForm({
   name: '',
-  industry: '',
+  industry_code: '',
   country: '',
-  base_currency: 'USD',
+  base_currency: '',
+  timezone: '',
 })
-
-const countryCurrencyMap: Record<string, string> = {
-  US: 'USD',
-  CA: 'CAD',
-  GB: 'GBP',
-  UK: 'GBP',
-  AU: 'AUD',
-  NZ: 'NZD',
-  EU: 'EUR',
-  FR: 'EUR',
-  DE: 'EUR',
-  ES: 'EUR',
-  IT: 'EUR',
-  NL: 'EUR',
-  BE: 'EUR',
-  CH: 'CHF',
-  JP: 'JPY',
-  CN: 'CNY',
-  SG: 'SGD',
-  HK: 'HKD',
-  AE: 'AED',
-  SA: 'SAR',
-  IN: 'INR',
-  BR: 'BRL',
-  MX: 'MXN',
-  SE: 'SEK',
-  NO: 'NOK',
-  DK: 'DKK',
-}
-
-const countries = [
-  { code: 'US', name: 'United States' },
-  { code: 'AE', name: 'United Arab Emirates' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'BE', name: 'Belgium' },
-  { code: 'BR', name: 'Brazil' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'CH', name: 'Switzerland' },
-  { code: 'CN', name: 'China' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'DK', name: 'Denmark' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'EU', name: 'European Union' },
-  { code: 'FR', name: 'France' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'HK', name: 'Hong Kong' },
-  { code: 'IN', name: 'India' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'MX', name: 'Mexico' },
-  { code: 'NL', name: 'Netherlands' },
-  { code: 'NO', name: 'Norway' },
-  { code: 'NZ', name: 'New Zealand' },
-  { code: 'SA', name: 'Saudi Arabia' },
-  { code: 'SE', name: 'Sweden' },
-  { code: 'SG', name: 'Singapore' },
-]
-
-const industries = [
-  'AI',
-  'Education',
-  'Energy',
-  'Healthcare',
-  'Manufacturing',
-  'Media',
-  'Medical',
-  'Research',
-  'Retail',
-  'Technology',
-  'Transportation',
-]
 
 const switchForm = useForm({
   slug: '',
@@ -217,10 +162,12 @@ function handleDelete() {
               v-model="createForm.country"
               @update:modelValue="
                 (code) => {
-                  createForm.country = code
-                  const suggested = countryCurrencyMap[code]
-                  if (suggested) {
-                    createForm.base_currency = suggested
+                  const normalizedCode = typeof code === 'string' ? code : ''
+                  createForm.country = normalizedCode
+                  const selectedCountry = props.countries.find((country) => country.code === normalizedCode)
+                  if (selectedCountry) {
+                    createForm.base_currency = String(selectedCountry.currency || '').toUpperCase()
+                    createForm.timezone = selectedCountry.timezone
                   }
                 }
               "
@@ -229,7 +176,7 @@ function handleDelete() {
                 <SelectValue placeholder="Select country" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="c in countries" :key="c.code" :value="c.code">
+                <SelectItem v-for="c in props.countries" :key="c.code" :value="c.code">
                   {{ c.name }} ({{ c.code }})
                 </SelectItem>
               </SelectContent>
@@ -252,34 +199,18 @@ function handleDelete() {
           </div>
           <div class="space-y-2">
             <Label for="industry">Industry</Label>
-            <Select v-model="createForm.industry">
+            <Select v-model="createForm.industry_code">
               <SelectTrigger id="industry" class="border-zinc-300">
                 <SelectValue placeholder="Select industry" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="ind in industries" :key="ind" :value="ind">
-                  {{ ind }}
+                <SelectItem v-for="ind in props.industries" :key="ind.code" :value="ind.code">
+                  {{ ind.name }}
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="createForm.errors.industry" class="text-xs text-red-600">
-              {{ createForm.errors.industry }}
-            </p>
-          </div>
-          <div class="space-y-2">
-            <Label for="base_currency">Base Currency</Label>
-            <Input
-              id="base_currency"
-              v-model="createForm.base_currency"
-              @update:modelValue="
-                (value) => (createForm.base_currency = String(value ?? '').toUpperCase())
-              "
-              placeholder="USD"
-              maxlength="3"
-              class="border-zinc-300 uppercase"
-            />
-            <p v-if="createForm.errors.base_currency" class="text-xs text-red-600">
-              {{ createForm.errors.base_currency }}
+            <p v-if="createForm.errors.industry_code" class="text-xs text-red-600">
+              {{ createForm.errors.industry_code }}
             </p>
           </div>
         </div>
@@ -287,7 +218,10 @@ function handleDelete() {
           <Button variant="ghost" @click="showCreateForm = false" :disabled="createForm.processing">
             Cancel
           </Button>
-          <Button @click="submitCreate" :disabled="createForm.processing">
+          <Button
+            @click="submitCreate"
+            :disabled="createForm.processing || !createForm.name || !createForm.country || !createForm.industry_code || !createForm.base_currency"
+          >
             <Loader2 v-if="createForm.processing" class="mr-2 h-4 w-4 animate-spin" />
             Create Company
           </Button>

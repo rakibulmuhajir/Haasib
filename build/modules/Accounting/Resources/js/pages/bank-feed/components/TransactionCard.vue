@@ -42,6 +42,7 @@ const formatDate = (dateString: string) => {
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency.value
   }).format(Math.abs(val))
 }

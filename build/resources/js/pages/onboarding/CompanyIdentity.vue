@@ -115,7 +115,7 @@ const submit = () => {
               <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
                 Your chart of accounts will be customized based on your industry
               </p>
-              <Select v-model="form.industry_code" required>
+              <Select v-model="form.industry_code" :disabled="Boolean(company.industry_code)" required>
                 <SelectTrigger id="industry">
                   <SelectValue placeholder="Select your industry..." />
                 </SelectTrigger>
@@ -134,6 +134,9 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p v-if="company.industry_code" class="text-xs text-slate-500 dark:text-slate-400">
+                Industry is locked after initial setup.
+              </p>
               <p v-if="form.errors.industry_code" class="text-sm text-red-600 dark:text-red-400">
                 {{ form.errors.industry_code }}
               </p>

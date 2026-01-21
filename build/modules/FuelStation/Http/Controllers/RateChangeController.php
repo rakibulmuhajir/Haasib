@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\FuelStation\Http\Requests\StoreRateChangeRequest;
 use App\Modules\FuelStation\Models\RateChange;
+use App\Modules\FuelStation\Services\RateChangeService;
 use App\Modules\Inventory\Models\Item;
 use App\Services\CurrentCompany;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,10 @@ use Inertia\Response;
 
 class RateChangeController extends Controller
 {
+    public function __construct(
+        private readonly RateChangeService $rateChangeService,
+    ) {}
+
     public function index(): Response
     {
         $company = app(CurrentCompany::class)->get();
@@ -27,34 +32,42 @@ class RateChangeController extends Controller
             ->whereNotNull('fuel_category')
             ->get();
 
+        // Get current stock for each fuel item
+        $stockLevels = [];
+        foreach ($fuelItems as $item) {
+            $stockLevels[$item->id] = $this->rateChangeService->getCurrentStock($company->id, $item->id);
+        }
+
         return Inertia::render('FuelStation/Rates/Index', [
             'rates' => $rates,
             'items' => $fuelItems,
+            'stockLevels' => $stockLevels,
         ]);
     }
 
     public function store(StoreRateChangeRequest $request): RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
         $data = $request->validated();
 
-        // Calculate margin impact if stock quantity provided
-        if (isset($data['stock_quantity_at_change'])) {
-            $previousRate = RateChange::getCurrentRate($company->id, $data['item_id']);
-            if ($previousRate) {
-                $oldMargin = $previousRate->sale_rate - $previousRate->purchase_rate;
-                $newMargin = $data['sale_rate'] - $data['purchase_rate'];
-                $data['margin_impact'] = ($newMargin - $oldMargin) * $data['stock_quantity_at_change'];
+        try {
+            $rateChange = $this->rateChangeService->createWithRevaluation($data);
+
+            $message = 'Rate change recorded successfully.';
+            if ($rateChange->hasRevaluation()) {
+                $revalAmount = abs($rateChange->revaluation_amount);
+                $type = $rateChange->revaluation_amount > 0 ? 'gain' : 'loss';
+                $message = sprintf(
+                    'Rate change recorded. Stock revaluation of %s %s posted (%s).',
+                    number_format($revalAmount, 2),
+                    $rateChange->item->company->base_currency ?? 'PKR',
+                    $type
+                );
             }
+
+            return redirect()->back()->with('success', $message);
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Failed to record rate change: ' . $e->getMessage());
         }
-
-        RateChange::create([
-            'company_id' => $company->id,
-            'created_by_user_id' => auth()->id(),
-            ...$data,
-        ]);
-
-        return redirect()->back()->with('success', 'Rate change recorded successfully.');
     }
 
     // JSON endpoint by design - used for API calls to get current rates

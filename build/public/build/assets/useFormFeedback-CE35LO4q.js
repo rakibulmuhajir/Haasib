@@ -1,1 +1,0 @@
-import{C as t}from"./app-B-wLZQl0.js";let c=0,n="";function l(){return{showSuccess:r=>{t.success(r)},showError:r=>{let s="";if(typeof r=="string")s=r;else{const o=Object.values(r);s=Array.isArray(o[0])?o[0][0]:o[0]}const e=Date.now();s===n&&e-c<100||(c=e,n=s,t.error(s))}}}export{l as u};

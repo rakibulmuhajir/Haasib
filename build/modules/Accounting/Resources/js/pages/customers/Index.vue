@@ -81,7 +81,11 @@ const columns = [
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(val)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    currencyDisplay: 'narrowSymbol',
+  }).format(val)
 
 const tableData = computed(() =>
   props.customers.data.map((c) => ({

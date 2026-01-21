@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { watch } from 'vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,6 +67,7 @@ const form = useForm({
   category_id: null,
   unit_of_measure: 'unit',
   track_inventory: true,
+  delivery_mode: 'requires_receiving',
   is_purchasable: true,
   is_sellable: true,
   cost_price: 0,
@@ -79,6 +81,12 @@ const form = useForm({
   reorder_quantity: 0,
   barcode: '',
   is_active: true,
+})
+
+watch(() => form.track_inventory, (value) => {
+  if (!value) {
+    form.delivery_mode = 'immediate'
+  }
 })
 
 const submit = () => {
@@ -267,6 +275,20 @@ const submit = () => {
           </div>
 
           <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <Label for="delivery_mode">Delivery Mode</Label>
+              <Select v-model="form.delivery_mode">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select delivery mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="requires_receiving">Require receiving confirmation</SelectItem>
+                  <SelectItem value="immediate">Receive automatically on bill</SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-sm text-muted-foreground">Use confirmation for physical deliveries; auto-receive for instant items.</p>
+            </div>
+
             <div class="space-y-2">
               <Label for="reorder_point">Reorder Point</Label>
               <Input

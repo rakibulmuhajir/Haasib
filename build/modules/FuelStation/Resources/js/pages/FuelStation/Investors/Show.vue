@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import type { BreadcrumbItem } from '@/types'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
+import { currencySymbol } from '@/lib/utils'
 
 interface InvestorLot {
   id: string
@@ -70,10 +71,14 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.investor.name, href: `/${companySlug.value}/fuel/investors/${props.investor.id}` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+const currency = computed(() => currencySymbol(currencyCode.value))
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
@@ -348,7 +353,7 @@ const getStatusBadgeClass = (status: string) => {
           </DialogTitle>
           <DialogDescription>
             <span v-if="currentRate">
-              Current rate: {{ formatNumber(currentRate.purchase_rate) }} PKR/liter
+              Current rate: {{ formatNumber(currentRate.purchase_rate) }} {{ currency }}/liter
               (+ {{ formatNumber(currentRate.margin) }} commission)
             </span>
             <span v-else>Rate will be locked at deposit time.</span>
@@ -357,7 +362,7 @@ const getStatusBadgeClass = (status: string) => {
 
         <form class="space-y-4" @submit.prevent="submitLot">
           <div class="space-y-2">
-            <Label for="investment_amount">Investment Amount (PKR) *</Label>
+            <Label for="investment_amount">Investment Amount ({{ currency }}) *</Label>
             <Input
               id="investment_amount"
               v-model.number="lotForm.investment_amount"
@@ -419,7 +424,7 @@ const getStatusBadgeClass = (status: string) => {
 
         <form class="space-y-4" @submit.prevent="submitCommission">
           <div class="space-y-2">
-            <Label for="commission_amount">Payment Amount (PKR) *</Label>
+            <Label for="commission_amount">Payment Amount ({{ currency }}) *</Label>
             <Input
               id="commission_amount"
               v-model.number="commissionForm.amount"

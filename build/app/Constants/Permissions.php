@@ -135,6 +135,7 @@ class Permissions
 
     // Fuel Station - Rate Management
     public const FUEL_RATE_UPDATE = 'fuel_rate.update';
+    public const FUEL_PRODUCT_SETUP = 'fuel_product.setup';
 
     // Fuel Station - Investors
     public const INVESTOR_CREATE = 'investor.create';
@@ -151,6 +152,13 @@ class Permissions
 
     // Fuel Station - Sales
     public const FUEL_SALE_CREATE = 'fuel_sale.create';
+
+    // Fuel Station - Daily Close
+    public const DAILY_CLOSE_CREATE = 'daily_close.create';
+    public const DAILY_CLOSE_VIEW = 'daily_close.view';
+    public const DAILY_CLOSE_AMEND = 'daily_close.amend';
+    public const DAILY_CLOSE_LOCK = 'daily_close.lock';
+    public const DAILY_CLOSE_UNLOCK = 'daily_close.unlock';
 
     // Payroll - Employees
     public const EMPLOYEE_CREATE = 'employee.create';

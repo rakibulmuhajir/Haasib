@@ -79,6 +79,7 @@ export function useInlineEdit(options: InlineEditOptions) {
       savingField.value = fieldName
       const currentValue = fieldValues.value[fieldName]
 
+      // @ts-expect-error - dynamic field name with useForm requires type assertion
       const form = useForm({ [fieldName]: currentValue })
 
       return new Promise<void>((resolve, reject) => {
@@ -96,8 +97,15 @@ export function useInlineEdit(options: InlineEditOptions) {
           onError: (errors) => {
             savingField.value = null
             toast.error(errorMessage)
-            onError?.(fieldName, errors)
-            reject(errors)
+            const normalizedErrors: Record<string, string[]> = {}
+            Object.entries(errors).forEach(([key, value]) => {
+              if (value == null) {
+                return
+              }
+              normalizedErrors[key] = Array.isArray(value) ? value : [String(value)]
+            })
+            onError?.(fieldName, normalizedErrors)
+            reject(normalizedErrors)
           },
         })
       })

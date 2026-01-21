@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import { EntitySearch, QuickAddModal } from '@/components/forms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BreadcrumbItem } from '@/types'
-import { FileText, Save, Plus, Trash2, ArrowLeft } from 'lucide-vue-next'
+import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -58,6 +60,7 @@ const props = defineProps<{
   inventoryEnabled?: boolean
   items?: ItemOption[]
   warehouses?: WarehouseOption[]
+  selectedVendorId?: string | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -84,8 +87,11 @@ const lineItemTemplate = () => ({
   expense_account_id: props.defaultExpenseAccountId || 'company_default',
 })
 
+const showQuickAdd = ref(false)
+const quickAddQuery = ref('')
+
 const form = useForm({
-  vendor_id: '',
+  vendor_id: props.selectedVendorId ?? '',
   bill_number: '',
   vendor_invoice_number: '',
   bill_date: new Date().toISOString().slice(0, 10),
@@ -108,6 +114,16 @@ watch(() => form.vendor_id, (newVendorId) => {
     form.payment_terms = vendor.payment_terms
   }
 })
+
+const handleQuickAddClick = (query: string) => {
+  quickAddQuery.value = query
+  showQuickAdd.value = true
+}
+
+const handleVendorCreated = (vendor: { id: string }) => {
+  form.vendor_id = vendor.id
+  showQuickAdd.value = false
+}
 
 // Auto-calculate due date when bill_date or payment_terms changes
 watch([() => form.bill_date, () => form.payment_terms], () => {
@@ -135,6 +151,7 @@ const totals = computed(() => {
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: form.currency || 'USD',
   }).format(amount)
 }
@@ -217,20 +234,18 @@ const handleSubmit = () => {
         <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label for="vendor_id">Vendor *</Label>
-            <Select v-model="form.vendor_id" required>
-              <SelectTrigger id="vendor_id">
-                <SelectValue placeholder="Select a vendor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="v in vendors"
-                  :key="v.id"
-                  :value="v.id"
-                >
-                  {{ v.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <EntitySearch
+              v-model="form.vendor_id"
+              entity-type="vendor"
+              placeholder="Select or create a vendor"
+              @quick-add-click="handleQuickAddClick"
+            />
+            <QuickAddModal
+              v-model:open="showQuickAdd"
+              entity-type="vendor"
+              :initial-name="quickAddQuery"
+              @created="handleVendorCreated"
+            />
             <p v-if="form.errors.vendor_id" class="text-sm text-destructive mt-1">{{ form.errors.vendor_id }}</p>
           </div>
 
@@ -324,6 +339,10 @@ const handleSubmit = () => {
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
+          <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+            For fuel purchases, select the fuel item and set the line account to Fuel Inventory.
+            Use the default expense for general operating bills.
+          </div>
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
@@ -395,7 +414,22 @@ const handleSubmit = () => {
                 <Input v-model.number="line.discount_rate" type="number" min="0" max="100" step="0.01" placeholder="0" />
               </div>
               <div>
-                <Label>Expense Account</Label>
+                <div class="flex items-center gap-2">
+                  <Label>Expense Account</Label>
+                  <TooltipProvider :delay-duration="0">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button type="button" variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground">
+                          <Info class="h-3.5 w-3.5" />
+                          <span class="sr-only">Expense account help</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Use Fuel Inventory for fuel purchases. Use default expense for general bills.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Select v-model="line.expense_account_id">
                   <SelectTrigger>
                     <SelectValue placeholder="Select account" />

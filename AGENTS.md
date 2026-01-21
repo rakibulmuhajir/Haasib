@@ -5,6 +5,12 @@
 
 ---
 
+## ✅ PRODUCT MANTRA
+
+The product must be easy for non-accountants: beginners/amateurs should not be forced through complex accounting setup, while advanced users still have access to full accounting controls.
+
+---
+
 ## 🚨 BEFORE YOU START
 
 ### Creating/Modifying Database

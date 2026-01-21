@@ -25,9 +25,21 @@ interface AccountRef {
   subtype: string
 }
 
+interface Defaults {
+  ar_account_id: string | null
+  ap_account_id: string | null
+  income_account_id: string | null
+  expense_account_id: string | null
+  bank_account_id: string | null
+  sales_tax_payable_account_id: string | null
+  purchase_tax_receivable_account_id: string | null
+  discount_received_account_id: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   accounts: AccountRef[]
+  defaults: Defaults
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -93,14 +105,49 @@ const rolesByDocType: Record<string, { role: string; label: string }[]> = {
 
 const roles = computed(() => rolesByDocType[form.doc_type] ?? [])
 
-	const ensureLines = () => {
-	  const existing = new Map(form.lines.map((l) => [l.role, l]))
-	  form.lines = roles.value.map(({ role }) => existing.get(role) ?? { role, account_id: '' })
-	}
+const defaultRoleAccounts = computed<Record<string, string>>(() => ({
+  AR: props.defaults.ar_account_id ?? '',
+  AP: props.defaults.ap_account_id ?? '',
+  REVENUE: props.defaults.income_account_id ?? '',
+  EXPENSE: props.defaults.expense_account_id ?? '',
+  BANK: props.defaults.bank_account_id ?? '',
+  CASH: props.defaults.bank_account_id ?? '',
+  TAX_PAYABLE: props.defaults.sales_tax_payable_account_id ?? '',
+  TAX_RECEIVABLE: props.defaults.purchase_tax_receivable_account_id ?? '',
+  DISCOUNT_GIVEN: props.defaults.expense_account_id ?? '',
+  DISCOUNT_RECEIVED: props.defaults.discount_received_account_id ?? props.defaults.income_account_id ?? '',
+}))
+
+const ensureLines = () => {
+  const existing = new Map(form.lines.map((l) => [l.role, l]))
+  form.lines = roles.value.map(({ role }) => {
+    const current = existing.get(role)
+    if (current?.account_id) return current
+    return { role, account_id: defaultRoleAccounts.value[role] ?? '' }
+  })
+}
 
 ensureLines()
 
 const accountLabel = (acc: AccountRef) => `${acc.code} — ${acc.name}`
+
+const roleMetaByRole = computed(() => {
+  const entries = roles.value.map((r) => [r.role, r] as const)
+  return Object.fromEntries(entries) as Record<string, { role: string; label: string }>
+})
+
+const roleHelp: Record<string, string> = {
+  AR: 'Customer balances owed to you.',
+  AP: 'Vendor balances you still need to pay.',
+  REVENUE: 'Used when a line has no specific income account.',
+  EXPENSE: 'Used when a line has no specific expense or inventory account.',
+  BANK: 'Where money is deposited for payments and receipts.',
+  CASH: 'Use if payments are handled as physical cash.',
+  TAX_PAYABLE: 'Sales tax you owe (only needed if tax is used).',
+  TAX_RECEIVABLE: 'Purchase tax you can claim (only needed if tax is used).',
+  DISCOUNT_GIVEN: 'Discounts you give on invoices.',
+  DISCOUNT_RECEIVED: 'Discounts you receive on bills.',
+}
 
 const save = () => {
   ensureLines()
@@ -122,6 +169,10 @@ const save = () => {
         <CardDescription>Define account mappings for a document type.</CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
+        <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+          These mappings tell the system which accounts to debit or credit when a document is posted.
+          For bills, use inventory accounts on the bill lines for fuel purchases; EXPENSE is only a fallback.
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label>Doc Type</Label>
@@ -174,19 +225,25 @@ const save = () => {
         <div class="space-y-3">
           <div class="font-medium">Role Mappings</div>
           <div v-for="line in form.lines" :key="line.role" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-            <div class="text-sm font-medium">{{ line.role }}</div>
-	            <div class="md:col-span-2">
-	              <Select v-model="line.account_id">
-	                <SelectTrigger>
-	                  <SelectValue placeholder="Select account" />
-	                </SelectTrigger>
-	                <SelectContent>
-	                  <SelectItem value="">—</SelectItem>
-	                  <SelectItem v-for="acc in accounts" :key="acc.id" :value="acc.id">
-	                    {{ accountLabel(acc) }}
-	                  </SelectItem>
-	                </SelectContent>
-	              </Select>
+            <div>
+              <div class="text-sm font-medium">
+                {{ roleMetaByRole[line.role]?.label ?? line.role }}
+                <span class="text-xs text-muted-foreground">({{ line.role }})</span>
+              </div>
+              <div class="text-xs text-muted-foreground">{{ roleHelp[line.role] ?? '' }}</div>
+            </div>
+            <div class="md:col-span-2">
+              <Select v-model="line.account_id">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  <SelectItem v-for="acc in accounts" :key="acc.id" :value="acc.id">
+                    {{ accountLabel(acc) }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 	            </div>
 	          </div>
           <div v-if="form.errors.lines" class="text-sm text-destructive">{{ form.errors.lines }}</div>

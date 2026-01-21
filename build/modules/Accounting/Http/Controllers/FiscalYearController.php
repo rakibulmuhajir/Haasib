@@ -91,7 +91,7 @@ class FiscalYearController extends Controller
         }
     }
 
-    public function show(Request $request, string $fiscalYear): Response
+    public function show(Request $request, string $company, string $fiscalYear): Response
     {
         $company = $this->companyContext->requireCompany();
         if (! $request->user()?->hasCompanyPermission(Permissions::JOURNAL_VIEW)) {
@@ -112,7 +112,7 @@ class FiscalYearController extends Controller
         ]);
     }
 
-    public function edit(Request $request, string $fiscalYear): Response
+    public function edit(Request $request, string $company, string $fiscalYear): Response
     {
         $company = $this->companyContext->requireCompany();
         if (! $request->user()?->hasCompanyPermission(Permissions::JOURNAL_CREATE)) {
@@ -133,7 +133,7 @@ class FiscalYearController extends Controller
         ]);
     }
 
-    public function update(UpdateFiscalYearRequest $request, string $fiscalYear): RedirectResponse
+    public function update(UpdateFiscalYearRequest $request, string $company, string $fiscalYear): RedirectResponse
     {
         $company = $this->companyContext->requireCompany();
         try {
@@ -155,7 +155,7 @@ class FiscalYearController extends Controller
         }
     }
 
-    public function destroy(Request $request, string $fiscalYear): RedirectResponse
+    public function destroy(Request $request, string $company, string $fiscalYear): RedirectResponse
     {
         $company = $this->companyContext->requireCompany();
         try {
@@ -178,7 +178,7 @@ class FiscalYearController extends Controller
         }
     }
 
-    public function createPeriods(CreateFiscalYearPeriodsRequest $request, string $fiscalYear): RedirectResponse
+    public function createPeriods(CreateFiscalYearPeriodsRequest $request, string $company, string $fiscalYear): RedirectResponse
     {
         $company = $this->companyContext->requireCompany();
         try {
@@ -200,7 +200,7 @@ class FiscalYearController extends Controller
         }
     }
 
-    public function closePeriod(CloseAccountingPeriodRequest $request, string $period): RedirectResponse
+    public function closePeriod(CloseAccountingPeriodRequest $request, string $company, string $period): RedirectResponse
     {
         $company = $this->companyContext->requireCompany();
         try {
@@ -217,7 +217,7 @@ class FiscalYearController extends Controller
         }
     }
 
-    public function reopenPeriod(CloseAccountingPeriodRequest $request, string $period): RedirectResponse
+    public function reopenPeriod(CloseAccountingPeriodRequest $request, string $company, string $period): RedirectResponse
     {
         $company = $this->companyContext->requireCompany();
         try {

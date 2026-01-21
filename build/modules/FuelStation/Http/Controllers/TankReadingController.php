@@ -87,7 +87,7 @@ class TankReadingController extends Controller
         return redirect()->back()->with('success', 'Tank reading recorded successfully.');
     }
 
-    public function show(TankReading $tankReading): Response
+    public function show(string $company, TankReading $tankReading): Response
     {
         $tankReading->load(['tank.linkedItem', 'item', 'recordedBy', 'confirmedBy', 'journalEntry']);
 
@@ -97,7 +97,7 @@ class TankReadingController extends Controller
         ]);
     }
 
-    public function update(UpdateTankReadingRequest $request, TankReading $tankReading): RedirectResponse
+    public function update(UpdateTankReadingRequest $request, string $company, TankReading $tankReading): RedirectResponse
     {
         if (!$tankReading->isEditable()) {
             return redirect()->back()->with('error', 'Only draft readings can be edited.');
@@ -123,7 +123,7 @@ class TankReadingController extends Controller
         return redirect()->back()->with('success', 'Tank reading updated successfully.');
     }
 
-    public function confirm(TankReading $tankReading): RedirectResponse
+    public function confirm(string $company, TankReading $tankReading): RedirectResponse
     {
         try {
             $this->tankReadingService->confirm($tankReading, auth()->id());
@@ -134,7 +134,7 @@ class TankReadingController extends Controller
         }
     }
 
-    public function post(TankReading $tankReading): RedirectResponse
+    public function post(string $company, TankReading $tankReading): RedirectResponse
     {
         try {
             $this->tankReadingService->post($tankReading);

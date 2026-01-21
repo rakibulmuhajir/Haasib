@@ -1696,6 +1696,7 @@ function handleChipKeydown(e: KeyboardEvent, index: number) {
     activeChipFieldType,
     activeChipIndex,
     activeCompany,
+    activateChip,
     canExecute,
     chipPickerHeader,
     chipSuggestionIndex,

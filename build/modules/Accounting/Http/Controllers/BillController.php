@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillRequest;
+use App\Modules\Accounting\Http\Requests\ReceiveGoodsRequest;
 use App\Modules\Accounting\Http\Requests\VoidBillRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
@@ -12,6 +13,7 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,11 +26,58 @@ class BillController extends Controller
             ->where('company_id', $company->id)
             ->orderByDesc('bill_date');
 
+        $receivableLineItems = fn () => DB::table('acct.bill_line_items as li')
+            ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+            ->whereColumn('li.bill_id', 'acct.bills.id')
+            ->where('li.company_id', $company->id)
+            ->whereNull('li.deleted_at')
+            ->whereNull('items.deleted_at')
+            ->where('items.track_inventory', true)
+            ->where('items.delivery_mode', 'requires_receiving')
+            ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+
+        $query->addSelect([
+            'receivable_items_count' => $receivableLineItems()->selectRaw('COUNT(*)'),
+            'linked_items_count' => DB::table('acct.bill_line_items as li')
+                ->whereColumn('li.bill_id', 'acct.bills.id')
+                ->where('li.company_id', $company->id)
+                ->whereNull('li.deleted_at')
+                ->whereNotNull('li.item_id')
+                ->selectRaw('COUNT(*)'),
+        ]);
+
         if ($request->filled('vendor_id')) {
             $query->where('vendor_id', $request->string('vendor_id'));
         }
+        if ($request->filled('item_id')) {
+            $itemId = $request->string('item_id')->toString();
+            $query->whereExists(function ($sub) use ($company, $itemId) {
+                $sub->selectRaw('1')
+                    ->from('acct.bill_line_items as li')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->where('li.item_id', $itemId);
+            });
+        }
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
+        }
+        if ($request->boolean('needs_receiving')) {
+            $query->where('status', 'paid')
+                ->whereNull('goods_received_at')
+                ->whereExists(function ($sub) use ($company) {
+                    $sub->selectRaw('1')
+                        ->from('acct.bill_line_items as li')
+                        ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                        ->whereColumn('li.bill_id', 'acct.bills.id')
+                        ->where('li.company_id', $company->id)
+                        ->whereNull('li.deleted_at')
+                        ->whereNull('items.deleted_at')
+                        ->where('items.track_inventory', true)
+                        ->where('items.delivery_mode', 'requires_receiving')
+                        ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+                });
         }
         if ($request->filled('search')) {
             $term = $request->string('search');
@@ -57,7 +106,7 @@ class BillController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'bills' => $bills,
-            'filters' => $request->only(['vendor_id', 'status', 'search', 'from_date', 'to_date']),
+            'filters' => $request->only(['vendor_id', 'status', 'search', 'from_date', 'to_date', 'item_id', 'needs_receiving']),
             'vendors' => $vendors,
         ]);
     }
@@ -65,6 +114,21 @@ class BillController extends Controller
     public function create(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        $selectedVendorId = $request->string('vendor')->toString();
+        if ($selectedVendorId === '' && $request->filled('vendor_id')) {
+            $selectedVendorId = $request->string('vendor_id')->toString();
+        }
+
+        $selectedVendor = null;
+        if ($selectedVendorId !== '') {
+            $selectedVendor = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
+                ->where('id', $selectedVendorId)
+                ->first(['id', 'name', 'payment_terms', 'base_currency']);
+            if (! $selectedVendor) {
+                $selectedVendorId = '';
+            }
+        }
+
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
             ->get(['id', 'name', 'payment_terms', 'base_currency']);
@@ -127,6 +191,8 @@ class BillController extends Controller
                     'default_payment_terms' => $company->default_payment_terms ?? null,
                 ],
                 'recentVendors' => [],
+                'selectedVendorId' => $selectedVendorId ?: null,
+                'selectedVendor' => $selectedVendor,
                 'expenseAccounts' => $expenseAccounts,
                 'defaultExpenseAccountId' => $defaultExpenseAccountId,
                 'defaultTaxCode' => null,
@@ -158,6 +224,7 @@ class BillController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendors' => $vendors,
+            'selectedVendorId' => $selectedVendorId ?: null,
             'expenseAccounts' => $expenseAccounts,
             'apAccounts' => $apAccounts,
             'defaultExpenseAccountId' => $defaultExpenseAccountId,
@@ -241,7 +308,7 @@ class BillController extends Controller
     public function show(string $company, string $bill): Response
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\Bill::with(['vendor:id,name,logo_url', 'lineItems'])
+        $record = \App\Modules\Accounting\Models\Bill::with(['vendor:id,name,logo_url', 'lineItems.item'])
             ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
 
@@ -416,17 +483,10 @@ class BillController extends Controller
      * Receive goods for a bill (physical inventory receipt).
      * Separate from receiving the bill document.
      */
-    public function receiveGoods(Request $request, string $company, string $bill): RedirectResponse
+    public function receiveGoods(ReceiveGoodsRequest $request, string $company, string $bill): RedirectResponse
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-
-        $validated = $request->validate([
-            'warehouse_id' => 'nullable|uuid',
-            'lines' => 'nullable|array',
-            'lines.*.line_id' => 'required_with:lines|uuid',
-            'lines.*.quantity' => 'required_with:lines|numeric|min:0.01',
-            'lines.*.warehouse_id' => 'nullable|uuid',
-        ]);
+        $validated = $request->validated();
 
         try {
             $result = app(CommandBus::class)->dispatch('bill.receive_goods', [

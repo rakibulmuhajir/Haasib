@@ -59,6 +59,7 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - `item_type` varchar(30) not null default 'product'. Enum: product, service, non_inventory, bundle.
   - `unit_of_measure` varchar(50) not null default 'unit'.
   - `track_inventory` boolean not null default true.
+  - `delivery_mode` varchar(30) not null default 'requires_receiving'. Enum: immediate, requires_receiving.
   - `is_purchasable` boolean not null default true.
   - `is_sellable` boolean not null default true.
   - `cost_price` numeric(15,6) not null default 0.00.
@@ -89,14 +90,15 @@ Single source of truth for items, categories, warehouses, stock levels, movement
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'inv.items'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','category_id','sku','name','description','item_type','unit_of_measure','track_inventory','is_purchasable','is_sellable','cost_price','selling_price','currency','tax_rate_id','income_account_id','expense_account_id','asset_account_id','reorder_point','reorder_quantity','weight','weight_unit','dimensions','barcode','manufacturer','brand','image_url','is_active','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','category_id'=>'string','track_inventory'=>'boolean','is_purchasable'=>'boolean','is_sellable'=>'boolean','cost_price'=>'decimal:6','selling_price'=>'decimal:6','tax_rate_id'=>'string','income_account_id'=>'string','expense_account_id'=>'string','asset_account_id'=>'string','reorder_point'=>'decimal:3','reorder_quantity'=>'decimal:3','weight'=>'decimal:3','dimensions'=>'array','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','category_id','sku','name','description','item_type','unit_of_measure','track_inventory','delivery_mode','is_purchasable','is_sellable','cost_price','selling_price','currency','tax_rate_id','income_account_id','expense_account_id','asset_account_id','reorder_point','reorder_quantity','weight','weight_unit','dimensions','barcode','manufacturer','brand','image_url','is_active','notes','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','category_id'=>'string','track_inventory'=>'boolean','delivery_mode'=>'string','is_purchasable'=>'boolean','is_sellable'=>'boolean','cost_price'=>'decimal:6','selling_price'=>'decimal:6','tax_rate_id'=>'string','income_account_id'=>'string','expense_account_id'=>'string','asset_account_id'=>'string','reorder_point'=>'decimal:3','reorder_quantity'=>'decimal:3','weight'=>'decimal:3','dimensions'=>'array','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Category; belongsTo TaxRate; belongsTo IncomeAccount; belongsTo ExpenseAccount; belongsTo AssetAccount; hasMany StockLevel; hasMany StockMovement.
 - Validation:
   - `sku`: required|string|max:100; unique per company (soft-delete aware).
   - `name`: required|string|max:255.
   - `item_type`: required|in:product,service,non_inventory,bundle.
   - `unit_of_measure`: required|string|max:50.
+  - `delivery_mode`: required|in:immediate,requires_receiving.
   - `currency`: required|string|size:3|uppercase.
   - `cost_price`: numeric|min:0.
   - `selling_price`: numeric|min:0.
@@ -104,6 +106,10 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - `reorder_point`: numeric|min:0.
 - Business rules:
   - Services and non_inventory types don't track_inventory.
+  - delivery_mode governs when stock updates occur for purchasable items:
+    - immediate: stock increases when the bill is received.
+    - requires_receiving: stock increases only after goods receipt confirmation.
+  - If track_inventory is false, delivery_mode must be immediate.
   - Cannot delete item with stock on hand; adjust to zero first.
   - Barcode must be unique if provided.
   - income_account_id for revenue; expense_account_id for COGS; asset_account_id for inventory.
@@ -214,6 +220,69 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - Trigger updates stock_levels on insert.
   - Transfers create two movements: transfer_out and transfer_in.
   - unit_cost used for costing calculations.
+
+### inv.stock_receipts
+- Purpose: header for physical goods receipts (linked to bills). Supports partial receipts and variance tracking.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `bill_id` uuid nullable FK → `acct.bills.id` (SET NULL/CASCADE).
+  - `receipt_date` date not null default current_date.
+  - `notes` text nullable.
+  - `variance_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
+  - `created_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `created_at`, `updated_at` timestamps.
+- Indexes/constraints:
+  - PK `id`.
+  - Index: `company_id`; `bill_id`; `receipt_date`.
+- RLS: company_id + super-admin override.
+- Model:
+  - `$connection = 'pgsql'; $table = 'inv.stock_receipts'; $keyType = 'string'; public $incrementing = false;`
+  - `$fillable = ['company_id','bill_id','receipt_date','notes','variance_transaction_id','created_by_user_id'];`
+  - `$casts = ['company_id'=>'string','bill_id'=>'string','receipt_date'=>'date','variance_transaction_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+- Relationships: belongsTo Company; belongsTo Bill; belongsTo VarianceTransaction; hasMany StockReceiptLine; belongsTo User (created_by).
+- Business rules:
+  - One receipt can contain multiple lines; a bill line can appear in multiple receipts (partial deliveries).
+  - Variance transaction is created only when variance exists on one or more lines.
+
+### inv.stock_receipt_lines
+- Purpose: per-line receipt details (expected vs actual), linked to bill lines and stock movements.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `stock_receipt_id` uuid not null FK → `inv.stock_receipts.id` (CASCADE/CASCADE).
+  - `bill_line_item_id` uuid nullable FK → `acct.bill_line_items.id` (SET NULL/CASCADE).
+  - `item_id` uuid not null FK → `inv.items.id` (RESTRICT/CASCADE).
+  - `warehouse_id` uuid not null FK → `inv.warehouses.id` (RESTRICT/CASCADE).
+  - `expected_quantity` numeric(18,3) not null.
+  - `received_quantity` numeric(18,3) not null.
+  - `variance_quantity` numeric(18,3) not null default 0.
+  - `unit_cost` numeric(15,6) not null.
+  - `total_cost` numeric(15,2) not null.
+  - `variance_cost` numeric(15,2) not null default 0.
+  - `variance_reason` varchar(50) nullable. Enum: transit_loss, spillage, temperature_adjustment, measurement_error, other.
+  - `stock_movement_id` uuid nullable FK → `inv.stock_movements.id` (SET NULL/CASCADE).
+  - `notes` text nullable.
+  - `created_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `created_at`, `updated_at` timestamps.
+- Indexes/constraints:
+  - PK `id`.
+  - Index: `company_id`; `stock_receipt_id`; `bill_line_item_id`; `item_id`; `warehouse_id`.
+  - Check: `variance_reason` must be null or in enum list.
+- RLS: company_id + super-admin override.
+- Model:
+  - `$connection = 'pgsql'; $table = 'inv.stock_receipt_lines'; $keyType = 'string'; public $incrementing = false;`
+  - `$fillable = ['company_id','stock_receipt_id','bill_line_item_id','item_id','warehouse_id','expected_quantity','received_quantity','variance_quantity','unit_cost','total_cost','variance_cost','variance_reason','stock_movement_id','notes','created_by_user_id'];`
+  - `$casts = ['company_id'=>'string','stock_receipt_id'=>'string','bill_line_item_id'=>'string','item_id'=>'string','warehouse_id'=>'string','expected_quantity'=>'decimal:3','received_quantity'=>'decimal:3','variance_quantity'=>'decimal:3','unit_cost'=>'decimal:6','total_cost'=>'decimal:2','variance_cost'=>'decimal:2','variance_reason'=>'string','stock_movement_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+- Relationships: belongsTo Company; belongsTo StockReceipt; belongsTo BillLineItem; belongsTo Item; belongsTo Warehouse; belongsTo StockMovement; belongsTo User (created_by).
+- Validation:
+  - `expected_quantity`: required|numeric|min:0.01.
+  - `received_quantity`: required|numeric|min:0.01.
+  - `variance_reason`: required when variance_quantity != 0.
+- Business rules:
+  - `variance_quantity = received_quantity - expected_quantity`.
+  - Stock movements are created for `received_quantity`.
+  - If variance exists, post to GL using Transit Loss/Gain accounts.
 
 ### inv.cost_policies
 - Purpose: costing method configuration per company.

@@ -106,7 +106,12 @@ const handleKeydown = (e: KeyboardEvent) => {
       <Select
         v-else-if="type === 'select'"
         v-model="model"
-        @update:modelValue="(v) => (model = typeof options?.[0]?.value === 'number' ? Number(v) : v)"
+        @update:modelValue="
+          (v) => {
+            if (v == null || typeof v === 'bigint' || typeof v === 'object') return
+            model = typeof options?.[0]?.value === 'number' ? Number(v) : v
+          }
+        "
       >
         <SelectTrigger class="h-8 w-full">
           <SelectValue :placeholder="placeholder" />

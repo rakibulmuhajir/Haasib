@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -56,6 +57,7 @@ class BillPaymentController extends Controller
     public function create(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
+        app(DefaultAccountProvisioner::class)->ensureCoreDefaults($company);
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -104,6 +106,9 @@ class BillPaymentController extends Controller
                 'name' => $company->name,
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
+            ],
+            'defaults' => [
+                'ap_account_id' => $company->ap_account_id,
             ],
             'vendors' => $vendors,
             'bankAccounts' => $bankAccounts,

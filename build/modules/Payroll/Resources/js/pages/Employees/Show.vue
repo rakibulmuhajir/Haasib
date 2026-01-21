@@ -65,6 +65,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const formatCurrency = (amount: number, currency: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency || 'USD',
   }).format(amount)
 }

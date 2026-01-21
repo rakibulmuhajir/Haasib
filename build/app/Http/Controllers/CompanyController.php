@@ -7,11 +7,13 @@ use App\Constants\Permissions;
 use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
+use App\Services\CompanyBootstrapService;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use App\Services\RolePermissionSynchronizer;
 use App\Modules\Accounting\Services\DashboardService;
 use App\Modules\FuelStation\Services\FuelDashboardService;
+use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,34 +38,53 @@ class CompanyController extends Controller
      */
     public function create(Request $request): Response
     {
-        $guided = filter_var($request->query('guided', false), FILTER_VALIDATE_BOOLEAN);
-
         // Get available currencies
         $currencies = DB::table('public.currencies')
             ->where('is_active', true)
             ->orderBy('code')
             ->get(['code', 'name', 'symbol']);
 
+        $industries = DB::table('acct.industry_coa_packs')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get(['code', 'name', 'description']);
+
+        // Get countries with currency/timezone mappings
+        $countries = collect(config('countries', []))
+            ->map(fn ($country) => [
+                'code' => $country['code'],
+                'name' => $country['name'],
+                'currency' => $country['currency'],
+                'timezone' => $country['timezone'],
+            ])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
         return Inertia::render('companies/Create', [
             'currencies' => $currencies,
-            'guided' => $guided,
+            'countries' => $countries,
+            'industries' => $industries,
         ]);
     }
 
     public function store(CompanyStoreRequest $request, CompanyContextService $companyContext): RedirectResponse
     {
         $data = $request->validated();
+        $data['industry_code'] = strtolower($data['industry_code']);
         $data['base_currency'] = strtoupper($data['base_currency']);
         $data['slug'] = $data['slug'] ?? Str::slug($data['name']);
 
-        return DB::transaction(function () use ($data, $companyContext) {
+        $company = DB::transaction(function () use ($data, $companyContext) {
             $company = Company::create([
                 'name' => $data['name'],
-                'industry' => $data['industry'] ?? null,
+                'industry_code' => $data['industry_code'] ?? null,
+                'industry' => null,
                 'slug' => $data['slug'],
-                'country' => $data['country'] ?? null,
+                'country' => $data['country'],
                 'country_id' => $data['country_id'] ?? null,
                 'base_currency' => $data['base_currency'],
+                'timezone' => $data['timezone'] ?? null,
                 'language' => $data['language'] ?? 'en',
                 'locale' => $data['locale'] ?? 'en_US',
                 'settings' => $data['settings'] ?? null,
@@ -108,8 +129,29 @@ class CompanyController extends Controller
                 });
             }
 
-            return redirect("/{$company->slug}/onboarding")->with('success', 'Company created! Let\'s set it up.');
+            return $company;
         });
+
+        $bootstrapFailed = false;
+        try {
+            app(CompanyBootstrapService::class)->bootstrap($company, $data['industry_code'], Auth::id());
+        } catch (\Throwable $e) {
+            $bootstrapFailed = true;
+            Log::error('Company bootstrap failed', [
+                'company_id' => $company->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        $redirect = redirect("/{$company->slug}")
+            ->with('success', 'Company created! You can start working right away.');
+
+        if ($bootstrapFailed) {
+            $redirect->with('error', 'Company created, but some defaults could not be prepared. Visit Settings to review setup.');
+        }
+
+        return $redirect;
     }
 
     /**
@@ -127,6 +169,12 @@ class CompanyController extends Controller
             ->value('role');
 
         $settings = $company->settings ?? [];
+        $industryName = null;
+        if ($company->industry_code) {
+            $industryName = DB::table('acct.industry_coa_packs')
+                ->where('code', $company->industry_code)
+                ->value('name');
+        }
 
         return Inertia::render('company/Settings', [
             'company' => [
@@ -135,6 +183,7 @@ class CompanyController extends Controller
                 'slug' => $company->slug,
                 'industry' => $company->industry,
                 'industry_code' => $company->industry_code ?? null,
+                'industry_name' => $industryName,
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
                 'is_active' => $company->is_active,
@@ -327,6 +376,12 @@ class CompanyController extends Controller
             ->values();
 
         $settings = $company->settings ?? [];
+        $industryName = null;
+        if ($company->industry_code) {
+            $industryName = DB::table('acct.industry_coa_packs')
+                ->where('code', $company->industry_code)
+                ->value('name');
+        }
 
         // Fetch new Dashboard Data
         $cashPosition = $this->dashboardService->getCashPosition($company->id);
@@ -351,6 +406,24 @@ class CompanyController extends Controller
             }
         }
 
+        $fuelTanks = [];
+        if ($isFuelStation) {
+            try {
+                $fuelTanks = Warehouse::where('company_id', $company->id)
+                    ->where('warehouse_type', 'tank')
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'code', 'capacity', 'linked_item_id'])
+                    ->toArray();
+            } catch (\Throwable $e) {
+                Log::warning('Fuel tanks lookup failed', [
+                    'company_id' => $company->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $fuelTanks = [];
+            }
+        }
+
         return Inertia::render('company/Show', [
             'company' => [
                 'id' => $company->id,
@@ -360,6 +433,8 @@ class CompanyController extends Controller
                 'is_active' => $company->is_active,
                 'created_at' => $company->created_at,
                 'industry' => $company->industry,
+                'industry_code' => $company->industry_code,
+                'industry_name' => $industryName,
                 'country' => $company->country,
                 'language' => $company->language ?? 'en',
                 'locale' => $company->locale ?? 'en_US',
@@ -397,7 +472,9 @@ class CompanyController extends Controller
                 'needs_attention' => $needsAttention,
                 'profit_loss' => $profitLoss,
             ],
+            'isFuelStation' => $isFuelStation,
             'fuelDashboard' => $fuelDashboard,
+            'fuelTanks' => $fuelTanks,
         ]);
     }
 

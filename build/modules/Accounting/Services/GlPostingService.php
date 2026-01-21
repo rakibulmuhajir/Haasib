@@ -33,6 +33,7 @@ class GlPostingService
      *   description?:string|null,
      *   reference_type?:string|null,
      *   reference_id?:string|null,
+     *   metadata?:array<string,mixed>|null,
      * } $headerData
      * @param array<int, array{account_id:string,type:'debit'|'credit',amount:float,description?:string}> $entries
      */
@@ -72,6 +73,8 @@ class GlPostingService
             'description' => $headerData['description'] ?? null,
             'reference_type' => $headerData['reference_type'] ?? null,
             'reference_id' => $headerData['reference_id'] ?? null,
+            'metadata' => $headerData['metadata'] ?? null,
+            'reversal_of_id' => $headerData['reversal_of_id'] ?? null,
         ], $entries);
     }
 
@@ -305,12 +308,14 @@ class GlPostingService
                 'fiscal_year_id' => $data['fiscal_year_id'],
                 'period_id' => $data['period_id'],
                 'description' => $data['description'] ?? null,
+                'metadata' => $data['metadata'] ?? null,
                 'currency' => $data['currency'],
                 'base_currency' => $data['base_currency'] ?? $data['currency'],
                 'exchange_rate' => $data['exchange_rate'] ?? null,
                 'total_debit' => $debitTotal,
                 'total_credit' => $creditTotal,
                 'status' => 'posted',
+                'reversal_of_id' => $data['reversal_of_id'] ?? null,
                 'posted_at' => now(),
                 'posted_by_user_id' => Auth::id(),
                 'created_by_user_id' => Auth::id(),
@@ -406,7 +411,7 @@ class GlPostingService
             $company = \App\Models\Company::find($companyId);
 
             if ($company && $company->getAutoCreateFiscalYear()) {
-                $fiscalYear = $fiscalYearService->ensureCurrentFiscalYearExists($companyId);
+                $fiscalYear = $fiscalYearService->ensureCurrentFiscalYearExists($companyId, $dateObj);
 
                 // Try again to find the period
                 $period = AccountingPeriod::join('acct.fiscal_years', 'acct.accounting_periods.fiscal_year_id', '=', 'acct.fiscal_years.id')

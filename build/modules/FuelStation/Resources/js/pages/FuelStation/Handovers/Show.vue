@@ -48,10 +48,13 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.handover.attendant_name, href: `/${companySlug.value}/fuel/handovers/${props.handover.id}` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
@@ -82,7 +85,7 @@ const paymentBreakdown = computed(() => [
   { label: 'JazzCash', amount: props.handover.jazzcash_amount, icon: CreditCard, color: 'text-purple-600' },
   { label: 'Bank Transfer', amount: props.handover.bank_transfer_amount, icon: Banknote, color: 'text-indigo-600' },
   { label: 'Card Swipe', amount: props.handover.card_swipe_amount, icon: CreditCard, color: 'text-red-600' },
-  { label: 'Parco Card', amount: props.handover.parco_card_amount, icon: CreditCard, color: 'text-orange-600' },
+  { label: 'Vendor Card', amount: props.handover.parco_card_amount, icon: CreditCard, color: 'text-orange-600' },
 ])
 
 const getStatusBadge = (status: string) => {

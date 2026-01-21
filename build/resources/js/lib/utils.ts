@@ -16,3 +16,19 @@ export function urlIsActive(
 export function toUrl(href: NonNullable<InertiaLinkProps['href']>) {
     return typeof href === 'string' ? href : href?.url;
 }
+
+export function currencySymbol(code: string, locale = 'en-US') {
+    if (!code) return '';
+    try {
+        const parts = new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency: code,
+            currencyDisplay: 'narrowSymbol',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).formatToParts(0);
+        return parts.find((part) => part.type === 'currency')?.value ?? code;
+    } catch {
+        return code;
+    }
+}

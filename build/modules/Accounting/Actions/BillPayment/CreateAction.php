@@ -110,7 +110,9 @@ class CreateAction implements PaletteAction
 
             if (!empty($params['payment_account_id'])) {
                 $vendor = Vendor::where('company_id', $company->id)->find($params['vendor_id']);
-                $apAccountId = $params['ap_account_id'] ?? $vendor?->ap_account_id ?? null;
+                $apAccountId = $params['ap_account_id']
+                    ?? $vendor?->ap_account_id
+                    ?? $company->ap_account_id;
                 if (!$apAccountId) {
                     throw new \RuntimeException('AP account is required to post bill payment.');
                 }

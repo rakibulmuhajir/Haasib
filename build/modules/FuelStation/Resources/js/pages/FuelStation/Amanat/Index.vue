@@ -44,6 +44,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Amanat', href: `/${companySlug.value}/fuel/amanat` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+
 const search = ref('')
 
 const filteredCustomers = computed(() => {
@@ -59,7 +61,8 @@ const filteredCustomers = computed(() => {
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)

@@ -220,6 +220,7 @@ class AccountTemplateSeeder extends Seeder
             ['code' => '7010', 'name' => 'Dividend Income', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Dividend income from investments'],
             ['code' => '7020', 'name' => 'Gain on Sale of Assets', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Gain on disposal of fixed assets'],
             ['code' => '7030', 'name' => 'Foreign Exchange Gain', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Realized and unrealized FX gains'],
+            ['code' => '7050', 'name' => 'Transit Gain', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Gains from receiving more than expected'],
             ['code' => '7090', 'name' => 'Other Income', 'type' => 'other_income', 'subtype' => 'other_income', 'normal_balance' => 'credit', 'description' => 'Miscellaneous other income'],
 
             // ═══════════════════════════════════════════════════════════════
@@ -233,6 +234,7 @@ class AccountTemplateSeeder extends Seeder
             ['code' => '8030', 'name' => 'Penalties & Fines', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'description' => 'Late payment penalties and fines'],
             ['code' => '8040', 'name' => 'Income Tax Expense', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'description' => 'Corporate income tax expense'],
             ['code' => '8050', 'name' => 'Cash Short & Over', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'description' => 'Cash register/till discrepancies (debit=short, credit=over)'],
+            ['code' => '8060', 'name' => 'Transit Loss', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'description' => 'Losses from receiving less than expected'],
             ['code' => '8090', 'name' => 'Other Expense', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit', 'description' => 'Miscellaneous other expenses'],
         ];
 

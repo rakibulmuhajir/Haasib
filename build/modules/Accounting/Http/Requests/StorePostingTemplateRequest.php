@@ -19,6 +19,9 @@ class StorePostingTemplateRequest extends BaseFormRequest
                 if (($line['account_id'] ?? null) === '') {
                     $lines[$index]['account_id'] = null;
                 }
+                if (($line['account_id'] ?? null) === '__none') {
+                    $lines[$index]['account_id'] = null;
+                }
             }
         }
 

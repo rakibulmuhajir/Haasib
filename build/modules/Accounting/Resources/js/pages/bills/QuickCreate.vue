@@ -50,6 +50,7 @@ interface Vendor {
   email?: string
   payment_terms?: number
   tax_code_id?: string
+  base_currency?: string
 }
 
 interface TaxCode {
@@ -81,6 +82,8 @@ interface LineItem {
 const props = defineProps<{
   company: CompanyRef
   recentVendors?: Vendor[]
+  selectedVendorId?: string | null
+  selectedVendor?: Vendor | null
   expenseAccounts?: AccountOption[]
   defaultExpenseAccountId?: string | null
   defaultTaxCode?: TaxCode | null
@@ -121,7 +124,7 @@ const expenseCategories = computed<AccountGroup[]>(() => {
 
 // State
 const showQuickAdd = ref(false)
-const selectedVendor = ref<Vendor | null>(null)
+const selectedVendor = ref<Vendor | null>(props.selectedVendor ?? null)
 const resolvedTaxCode = ref<TaxCode | null>(props.defaultTaxCode || null)
 const showMoreDetails = ref(false)
 
@@ -133,7 +136,7 @@ const lineItemTemplate = (): LineItem => ({
 
 // Form
 const form = useForm({
-  vendor_id: null as string | null,
+  vendor_id: (props.selectedVendorId ?? null) as string | null,
   account_id: (props.defaultExpenseAccountId ?? null) as string | null,  // Expense category - required
   apply_tax: false,
   line_items: [lineItemTemplate()] as LineItem[],
@@ -149,6 +152,10 @@ const form = useForm({
   status: 'draft',
   pay_immediately: false,
 })
+
+if (!form.vendor_id && selectedVendor.value?.id) {
+  form.vendor_id = selectedVendor.value.id
+}
 
 // Computed
 const defaultTerms = computed(() => {
@@ -259,6 +266,7 @@ const saveAndPay = () => {
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: props.company.base_currency || 'USD',
   }).format(amount)
 }

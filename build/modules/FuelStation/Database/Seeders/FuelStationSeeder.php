@@ -5,6 +5,7 @@ namespace App\Modules\FuelStation\Database\Seeders;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\InvestorLot;
@@ -47,6 +48,9 @@ class FuelStationSeeder extends Seeder
         // Create fuel-specific accounts
         $this->createFuelAccounts($company);
 
+        // Create sample vendors
+        $this->createVendors($company);
+
         // Create sample investors
         $this->createInvestors($company, $fuelItems);
 
@@ -57,31 +61,71 @@ class FuelStationSeeder extends Seeder
     }
 
     /**
+     * Create sample vendors.
+     */
+    private function createVendors(Company $company): void
+    {
+        $vendors = [
+            [
+                'name' => 'Fuel Supplier',
+                'email' => 'fuel-supplier@example.com',
+                'phone' => '042-30001234',
+            ],
+        ];
+
+        $sequence = $this->nextVendorSequence($company->id);
+        $baseCurrency = $company->base_currency ?? 'USD';
+
+        foreach ($vendors as $vendorData) {
+            $vendor = Vendor::firstOrCreate(
+                [
+                    'company_id' => $company->id,
+                    'name' => $vendorData['name'],
+                ],
+                [
+                    'vendor_number' => 'VEND-' . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT),
+                    'email' => $vendorData['email'],
+                    'phone' => $vendorData['phone'],
+                    'base_currency' => $baseCurrency,
+                    'payment_terms' => 30,
+                    'is_active' => true,
+                ]
+            );
+
+            if ($vendor->wasRecentlyCreated) {
+                $sequence++;
+            }
+        }
+    }
+
+    /**
      * Create fuel inventory items.
      */
     private function createFuelItems(Company $company): array
     {
+        $baseCurrency = $company->base_currency ?? 'PKR';
+
         $fuelTypes = [
             [
                 'name' => 'Petrol',
                 'sku' => 'FUEL-PETROL',
                 'fuel_category' => 'petrol',
-                'unit' => 'liter',
-                'avg_cost' => 248.00,
+                'unit' => 'liters',
+                'cost_price' => 248.00,
             ],
             [
                 'name' => 'Diesel',
                 'sku' => 'FUEL-DIESEL',
                 'fuel_category' => 'diesel',
-                'unit' => 'liter',
-                'avg_cost' => 260.00,
+                'unit' => 'liters',
+                'cost_price' => 260.00,
             ],
             [
                 'name' => 'Hi-Octane',
                 'sku' => 'FUEL-HIOCTANE',
                 'fuel_category' => 'high_octane',
-                'unit' => 'liter',
-                'avg_cost' => 280.00,
+                'unit' => 'liters',
+                'cost_price' => 280.00,
             ],
         ];
 
@@ -97,10 +141,11 @@ class FuelStationSeeder extends Seeder
                     'description' => "{$fuel['name']} fuel",
                     'unit_of_measure' => $fuel['unit'],
                     'fuel_category' => $fuel['fuel_category'],
-                    'avg_cost' => $fuel['avg_cost'],
-                    'sale_price' => $fuel['avg_cost'] + 5, // Default margin
+                    'cost_price' => $fuel['cost_price'],
+                    'avg_cost' => $fuel['cost_price'],
+                    'selling_price' => $fuel['cost_price'] + 5, // Default margin
+                    'currency' => $baseCurrency,
                     'track_inventory' => true,
-                    'current_stock' => 10000, // 10,000 liters initial stock
                     'is_active' => true,
                 ]
             );
@@ -237,7 +282,7 @@ class FuelStationSeeder extends Seeder
     {
         $accounts = [
             // Assets
-            ['code' => '1030', 'name' => 'Parco Card Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset'],
+            ['code' => '1030', 'name' => 'Vendor Card Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset'],
             ['code' => '1040', 'name' => 'Card Payment Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset'],
             ['code' => '1050', 'name' => 'Cash on Hand', 'type' => 'asset', 'subtype' => 'cash'],
             ['code' => '1060', 'name' => 'Attendant Cash in Transit', 'type' => 'asset', 'subtype' => 'other_current_asset'],
@@ -263,7 +308,20 @@ class FuelStationSeeder extends Seeder
             ['code' => '6300', 'name' => 'Fuel Shrinkage Loss', 'type' => 'expense', 'subtype' => 'operating_expense'],
         ];
 
+        $baseCurrency = $company->base_currency ?? 'PKR';
+
+        $normalBalanceMap = [
+            'asset' => 'debit',
+            'expense' => 'debit',
+            'cogs' => 'debit',
+            'liability' => 'credit',
+            'equity' => 'credit',
+            'revenue' => 'credit',
+        ];
+
         foreach ($accounts as $account) {
+            $normalBalance = $normalBalanceMap[$account['type']] ?? 'debit';
+
             Account::firstOrCreate(
                 [
                     'company_id' => $company->id,
@@ -273,7 +331,8 @@ class FuelStationSeeder extends Seeder
                     'name' => $account['name'],
                     'type' => $account['type'],
                     'subtype' => $account['subtype'],
-                    'currency_code' => 'PKR',
+                    'normal_balance' => $normalBalance,
+                    'currency_code' => $baseCurrency,
                     'is_active' => true,
                     'is_system' => true,
                 ]
@@ -375,6 +434,9 @@ class FuelStationSeeder extends Seeder
             ],
         ];
 
+        $sequence = $this->nextCustomerSequence($company->id);
+        $baseCurrency = $company->base_currency ?? 'USD';
+
         foreach ($customers as $customerData) {
             // Create or find customer
             $customer = Customer::firstOrCreate(
@@ -383,12 +445,17 @@ class FuelStationSeeder extends Seeder
                     'name' => $customerData['name'],
                 ],
                 [
+                    'customer_number' => 'CUST-' . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT),
                     'email' => $customerData['email'],
                     'phone' => $customerData['phone'],
-                    'currency' => 'PKR',
+                    'base_currency' => $baseCurrency,
                     'is_active' => true,
                 ]
             );
+
+            if ($customer->wasRecentlyCreated) {
+                $sequence++;
+            }
 
             // Create fuel customer profile
             CustomerProfile::firstOrCreate(
@@ -406,5 +473,33 @@ class FuelStationSeeder extends Seeder
                 ]
             );
         }
+    }
+
+    private function nextCustomerSequence(string $companyId): int
+    {
+        $lastNumber = Customer::where('company_id', $companyId)
+            ->whereNotNull('customer_number')
+            ->orderByDesc('customer_number')
+            ->value('customer_number');
+
+        if ($lastNumber && preg_match('/(\d+)$/', $lastNumber, $matches)) {
+            return ((int) $matches[1]) + 1;
+        }
+
+        return 1;
+    }
+
+    private function nextVendorSequence(string $companyId): int
+    {
+        $lastNumber = Vendor::where('company_id', $companyId)
+            ->whereNotNull('vendor_number')
+            ->orderByDesc('vendor_number')
+            ->value('vendor_number');
+
+        if ($lastNumber && preg_match('/(\d+)$/', $lastNumber, $matches)) {
+            return ((int) $matches[1]) + 1;
+        }
+
+        return 1;
     }
 }

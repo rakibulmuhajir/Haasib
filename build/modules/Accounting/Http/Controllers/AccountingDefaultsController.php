@@ -7,10 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Modules\Accounting\Http\Requests\UpdateDefaultAccountsRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\PostingTemplateInstaller;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,6 +23,16 @@ class AccountingDefaultsController extends Controller
         $company = app(CompanyContextService::class)->requireCompany();
         if (! $request->user()?->hasCompanyPermission(Permissions::ACCOUNT_UPDATE)) {
             abort(403);
+        }
+
+        $hasTransitLoss = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_loss_account_id');
+        $hasTransitGain = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_gain_account_id');
+        $transitColumnsReady = $hasTransitLoss && $hasTransitGain;
+
+        $provisioner = app(DefaultAccountProvisioner::class);
+        $provisioner->ensureCoreDefaults($company);
+        if ($transitColumnsReady) {
+            $provisioner->ensureTransitAccounts($company);
         }
 
         $accounts = Account::where('company_id', $company->id)
@@ -45,8 +57,14 @@ class AccountingDefaultsController extends Controller
                 'retained_earnings_account_id' => $company->retained_earnings_account_id,
                 'sales_tax_payable_account_id' => $company->sales_tax_payable_account_id,
                 'purchase_tax_receivable_account_id' => $company->purchase_tax_receivable_account_id,
+                'transit_loss_account_id' => $company->transit_loss_account_id,
+                'transit_gain_account_id' => $company->transit_gain_account_id,
             ],
             'accounts' => $accounts,
+            'transitColumnsReady' => $transitColumnsReady,
+            'transitColumnsMessage' => $transitColumnsReady
+                ? null
+                : 'Transit Loss and Transit Gain require a system update before they can be saved. Please ask an admin to update the system and refresh this page.',
         ]);
     }
 
@@ -54,6 +72,12 @@ class AccountingDefaultsController extends Controller
     {
         /** @var Company $company */
         $company = app(CompanyContextService::class)->requireCompany();
+
+        $hasTransitLoss = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_loss_account_id');
+        $hasTransitGain = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_gain_account_id');
+        if (! ($hasTransitLoss && $hasTransitGain)) {
+            return back()->with('error', 'Default accounts cannot be saved until the system update is applied.');
+        }
 
         $data = $request->validated();
 
@@ -66,6 +90,8 @@ class AccountingDefaultsController extends Controller
             'retained_earnings_account_id' => $data['retained_earnings_account_id'],
             'sales_tax_payable_account_id' => $data['sales_tax_payable_account_id'] ?? null,
             'purchase_tax_receivable_account_id' => $data['purchase_tax_receivable_account_id'] ?? null,
+            'transit_loss_account_id' => $data['transit_loss_account_id'],
+            'transit_gain_account_id' => $data['transit_gain_account_id'],
         ]);
 
         app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
@@ -73,4 +99,3 @@ class AccountingDefaultsController extends Controller
         return back()->with('success', 'Default accounts updated.');
     }
 }
-

@@ -28,6 +28,7 @@ class Warehouse extends Model
         'capacity',
         'low_level_alert',
         'linked_item_id',
+        'dip_stick_id',
         'address',
         'city',
         'state',
@@ -45,6 +46,7 @@ class Warehouse extends Model
         'capacity' => 'decimal:2',
         'low_level_alert' => 'decimal:2',
         'linked_item_id' => 'string',
+        'dip_stick_id' => 'string',
         'is_primary' => 'boolean',
         'is_active' => 'boolean',
         'created_by_user_id' => 'string',
@@ -82,10 +84,30 @@ class Warehouse extends Model
     }
 
     /**
+     * For tank warehouses, the dip stick used for measurements.
+     */
+    public function dipStick(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\FuelStation\Models\DipStick::class);
+    }
+
+    /**
      * Check if this warehouse is a tank.
      */
     public function isTank(): bool
     {
         return $this->warehouse_type === 'tank';
+    }
+
+    /**
+     * Convert a dip stick reading to liters using the tank's dip chart.
+     */
+    public function convertDipReading(float $stickReading): ?float
+    {
+        if (!$this->isTank() || !$this->dip_stick_id) {
+            return null;
+        }
+
+        return $this->dipStick?->convertToLiters($stickReading);
     }
 }

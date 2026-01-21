@@ -70,7 +70,11 @@ const sourceHref = computed(() => {
 })
 
 const money = (val: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: props.company.base_currency || 'USD' }).format(val ?? 0)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: props.company.base_currency || 'USD',
+    currencyDisplay: 'narrowSymbol',
+  }).format(val ?? 0)
 
 const badgeVariant = (val: string) => {
   if (val === 'draft') return 'secondary'

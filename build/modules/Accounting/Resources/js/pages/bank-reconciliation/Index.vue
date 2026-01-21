@@ -105,6 +105,7 @@ const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | '
 const formatCurrency = (amount: number, currency: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency,
   }).format(amount)
 }

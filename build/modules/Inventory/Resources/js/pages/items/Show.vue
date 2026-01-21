@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
-import { Pencil, ArrowLeft, Package, Warehouse } from 'lucide-vue-next'
+import { useLexicon } from '@/composables/useLexicon'
+import { Pencil, ArrowLeft, Warehouse } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -66,11 +67,15 @@ const props = defineProps<{
   company: CompanyRef
   item: Item
   stockLevels: StockLevelRow[]
+  pendingReceiptsCount: number
+  pendingReceiptsQuantity: number
   summary: {
     total_quantity: number
     total_available: number
   }
 }>()
+
+const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -81,6 +86,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const formatCurrency = (amount: number, currency: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency || 'USD',
   }).format(amount)
 }
@@ -119,6 +125,13 @@ const getTypeBadgeVariant = (type: string) => {
       <Button variant="outline" @click="router.get(`/${company.slug}/items`)">
         <ArrowLeft class="mr-2 h-4 w-4" />
         Back
+      </Button>
+      <Button
+        v-if="pendingReceiptsCount > 0"
+        variant="outline"
+        @click="router.get(`/${company.slug}/bills?item_id=${item.id}&needs_receiving=1`)"
+      >
+        {{ t('receiveStock') }}
       </Button>
       <Button @click="router.get(`/${company.slug}/items/${item.id}/edit`)">
         <Pencil class="mr-2 h-4 w-4" />
@@ -181,6 +194,20 @@ const getTypeBadgeVariant = (type: string) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div
+              v-if="pendingReceiptsCount > 0"
+              class="mb-4 rounded-md border border-dashed bg-muted/40 p-3 text-sm"
+            >
+              <p class="text-xs text-muted-foreground">{{ t('expectedInbound') }}</p>
+              <div class="mt-1 flex items-baseline justify-between">
+                <p class="text-base font-semibold">
+                  {{ formatQuantity(pendingReceiptsQuantity) }} {{ item.unit_of_measure }}
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  {{ pendingReceiptsCount }} {{ t('bills') }}
+                </p>
+              </div>
+            </div>
             <div v-if="stockLevels.length === 0" class="text-center py-8 text-muted-foreground">
               No stock recorded yet
             </div>

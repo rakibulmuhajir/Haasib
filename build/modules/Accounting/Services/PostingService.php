@@ -888,7 +888,7 @@ class PostingService
                 $company = Company::find($companyId);
 
             if ($company && $company->getAutoCreateFiscalYear()) {
-                $fiscalYearService->ensureCurrentFiscalYearExists($companyId);
+                $fiscalYearService->ensureCurrentFiscalYearExists($companyId, $dateObj);
                 $period = AccountingPeriod::join('acct.fiscal_years', 'acct.accounting_periods.fiscal_year_id', '=', 'acct.fiscal_years.id')
                     ->where('acct.accounting_periods.company_id', $companyId)
                     ->where('acct.accounting_periods.start_date', '<=', $dateObj->toDateString())

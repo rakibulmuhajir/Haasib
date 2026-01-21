@@ -19,9 +19,10 @@ class InventoryService
      * @param BillLineItem $line The line item being received
      * @param float $quantity The quantity being received (may be partial)
      * @param string $warehouseId The warehouse to receive into
+     * @param string|null $movementDate Override movement date (Y-m-d)
      * @return StockMovement|null The created movement, or null if not tracked
      */
-    public function receiveLineItem(Bill $bill, BillLineItem $line, float $quantity, string $warehouseId): ?StockMovement
+    public function receiveLineItem(Bill $bill, BillLineItem $line, float $quantity, string $warehouseId, ?string $movementDate = null): ?StockMovement
     {
         // Load item if not loaded
         if (! $line->relationLoaded('item')) {
@@ -39,7 +40,7 @@ class InventoryService
             'company_id' => $bill->company_id,
             'warehouse_id' => $warehouseId,
             'item_id' => $line->item_id,
-            'movement_date' => now()->toDateString(),
+            'movement_date' => $movementDate ?? now()->toDateString(),
             'movement_type' => 'purchase',
             'quantity' => abs($quantity),
             'unit_cost' => $unitCost,

@@ -596,51 +596,91 @@ class IndustryCoaPackSeeder extends Seeder
     private function seedFuelStation(string $industryId, $now): void
     {
         $accounts = [
-            // Assets
+            // ========== ASSETS ==========
+            // Cash & Bank (1000-1099)
             ['code' => '1000', 'name' => 'Operating Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
             ['code' => '1010', 'name' => 'Secondary Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
             ['code' => '1020', 'name' => 'Card Machine Bank Account', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
-            ['code' => '1030', 'name' => 'Parco Card Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Parco card sales pending settlement'],
-            ['code' => '1040', 'name' => 'Card Receipts Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Card sales pending settlement (processor clearing)'],
             ['code' => '1050', 'name' => 'Cash on Hand', 'type' => 'asset', 'subtype' => 'cash', 'normal_balance' => 'debit'],
             ['code' => '1060', 'name' => 'Attendant Cash in Transit', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Cash collected by attendants pending handover'],
             ['code' => '1070', 'name' => 'Undeposited Funds', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Batch deposits pending'],
-            ['code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'ar_control'],
-            ['code' => '1200', 'name' => 'Fuel Inventory', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
-            ['code' => '1210', 'name' => 'Lubricants Inventory', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
+            ['code' => '1080', 'name' => 'Parco Card Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Parco card sales pending settlement'],
+            ['code' => '1090', 'name' => 'Card Receipts Clearing', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Card sales pending settlement'],
 
-            // Liabilities
-            ['code' => '2100', 'name' => 'Accounts Payable – Parco', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control'],
-            ['code' => '2200', 'name' => 'Amanat Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Customer trust deposits'],
+            // Receivables (1100-1199)
+            ['code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'ar_control', 'description' => 'Credit customer balances'],
+            ['code' => '1150', 'name' => 'Employee Advances', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit', 'description' => 'Salary advances given to employees'],
+
+            // Fuel Inventory (1200-1249)
+            ['code' => '1200', 'name' => 'Fuel Inventory - Petrol', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Petrol (MS) in tanks'],
+            ['code' => '1201', 'name' => 'Fuel Inventory - Hi-Octane', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Hi-Octane (HOBC) in tanks'],
+            ['code' => '1202', 'name' => 'Fuel Inventory - Diesel', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Diesel (HSD) in tanks'],
+
+            // Lubricant Inventory (1250-1299)
+            ['code' => '1250', 'name' => 'Lubricant Inventory - Open', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Open/loose lubricants sold by liter'],
+            ['code' => '1251', 'name' => 'Lubricant Inventory - Sealed Packs', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit', 'description' => 'Sealed pack lubricants (bottles/cans)'],
+
+            // ========== LIABILITIES ==========
+            // Payables (2100-2199)
+            ['code' => '2100', 'name' => 'Accounts Payable - Fuel Suppliers', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control', 'description' => 'Amount owed to PSO/Shell/Total'],
+            ['code' => '2110', 'name' => 'Accounts Payable - Lubricant Suppliers', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'description' => 'Amount owed to lubricant suppliers'],
+
+            // Trust & Deposits (2200-2299)
+            ['code' => '2200', 'name' => 'Amanat Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Customer trust deposits (advance payments)'],
             ['code' => '2210', 'name' => 'Investor Deposits', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Investor capital deposits'],
             ['code' => '2220', 'name' => 'Commission Payable', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Investor commission payable'],
+            ['code' => '2230', 'name' => 'Salaries Payable', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit', 'description' => 'Accrued employee salaries'],
 
-            // Equity
+            // ========== EQUITY ==========
+            ['code' => '3000', 'name' => 'Partner Capital', 'type' => 'equity', 'subtype' => 'equity', 'normal_balance' => 'credit', 'description' => 'Partner investment/capital accounts'],
             ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
+            ['code' => '3200', 'name' => 'Partner Drawings', 'type' => 'equity', 'subtype' => 'equity', 'normal_balance' => 'debit', 'is_contra' => true, 'description' => 'Partner withdrawals'],
 
-            // Revenue
-            ['code' => '4100', 'name' => 'Fuel Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
-            ['code' => '4110', 'name' => 'Shop Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Convenience store / non-fuel sales'],
-            ['code' => '4200', 'name' => 'Lubricant Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
-            ['code' => '4210', 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'description' => 'Bulk discounts, reduces gross sales'],
+            // ========== REVENUE ==========
+            // Fuel Sales (4100-4149)
+            ['code' => '4100', 'name' => 'Fuel Sales - Petrol', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue', 'description' => 'Petrol (MS) sales'],
+            ['code' => '4101', 'name' => 'Fuel Sales - Hi-Octane', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Hi-Octane (HOBC) sales'],
+            ['code' => '4102', 'name' => 'Fuel Sales - Diesel', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Diesel (HSD) sales'],
+
+            // Lubricant Sales (4150-4199)
+            ['code' => '4150', 'name' => 'Lubricant Sales - Open', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Open lubricant sales'],
+            ['code' => '4151', 'name' => 'Lubricant Sales - Sealed Packs', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Sealed pack lubricant sales'],
+
+            // Other Revenue (4200-4299)
+            ['code' => '4200', 'name' => 'Shop Sales', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Convenience store / non-fuel sales'],
+            ['code' => '4210', 'name' => 'Sales Discounts', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'debit', 'is_contra' => true, 'description' => 'Bulk discounts given'],
             ['code' => '4900', 'name' => 'Fuel Variance Gain', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'description' => 'Diesel gain from temperature expansion'],
 
-            // COGS
-            ['code' => '5100', 'name' => 'Cost of Goods – Fuel', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
-            ['code' => '5200', 'name' => 'Cost of Goods – Lubricants', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+            // ========== COST OF GOODS SOLD ==========
+            // Fuel COGS (5100-5149)
+            ['code' => '5100', 'name' => 'Cost of Fuel - Petrol', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs', 'description' => 'Petrol purchase cost'],
+            ['code' => '5101', 'name' => 'Cost of Fuel - Hi-Octane', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'description' => 'Hi-Octane purchase cost'],
+            ['code' => '5102', 'name' => 'Cost of Fuel - Diesel', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'description' => 'Diesel purchase cost'],
 
-            // Expenses
+            // Lubricant COGS (5150-5199)
+            ['code' => '5150', 'name' => 'Cost of Lubricants - Open', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'description' => 'Open lubricant purchase cost'],
+            ['code' => '5151', 'name' => 'Cost of Lubricants - Sealed Packs', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'description' => 'Sealed pack lubricant purchase cost'],
+
+            // ========== EXPENSES ==========
+            // Operating Expenses (6100-6199)
             ['code' => '6100', 'name' => 'General & Administrative', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
             ['code' => '6110', 'name' => 'Electricity', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
-            ['code' => '6120', 'name' => 'Internet', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6120', 'name' => 'Internet & Phone', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6130', 'name' => 'Food & Tea', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
-            ['code' => '6140', 'name' => 'Stationery', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
-            ['code' => '6150', 'name' => 'Salaries', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6140', 'name' => 'Stationery & Supplies', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6150', 'name' => 'Salaries & Wages', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6160', 'name' => 'POS/Bank Charges', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'MDR, slip fees, settlement deductions'],
             ['code' => '6170', 'name' => 'Pump Maintenance & Calibration', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
-            ['code' => '6180', 'name' => 'Cash Short/Over', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Daily reconciliation variances'],
+            ['code' => '6180', 'name' => 'Cash Short/Over', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Daily cash reconciliation variances'],
+            ['code' => '6190', 'name' => 'Rent', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+
+            // Commission & Loss Expenses (6200-6299)
             ['code' => '6200', 'name' => 'Investor Commission', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
-            ['code' => '6300', 'name' => 'Fuel Shrinkage Loss', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Evaporation and loss from tank readings'],
+
+            // Shrinkage & Loss (6300-6399)
+            ['code' => '6300', 'name' => 'Fuel Shrinkage - Petrol', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Petrol evaporation/loss'],
+            ['code' => '6301', 'name' => 'Fuel Shrinkage - Hi-Octane', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Hi-Octane evaporation/loss'],
+            ['code' => '6302', 'name' => 'Fuel Shrinkage - Diesel', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Diesel shrinkage/loss'],
         ];
 
         $this->insertAccounts($industryId, $accounts, $now);

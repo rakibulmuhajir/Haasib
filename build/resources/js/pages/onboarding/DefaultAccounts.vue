@@ -26,6 +26,8 @@ interface Props {
   retainedEarningsAccounts: Account[]
   taxPayableAccounts: Account[]
   taxReceivableAccounts: Account[]
+  transitLossAccounts: Account[]
+  transitGainAccounts: Account[]
 }
 
 const props = defineProps<Props>()
@@ -43,6 +45,8 @@ const form = useForm({
   retained_earnings_account_id: pickByCode(props.retainedEarningsAccounts, '3100'),
   sales_tax_payable_account_id: props.taxPayableAccounts[0]?.id || '',
   purchase_tax_receivable_account_id: props.taxReceivableAccounts[0]?.id || '',
+  transit_loss_account_id: pickByCode(props.transitLossAccounts, '8060'),
+  transit_gain_account_id: pickByCode(props.transitGainAccounts, '7050'),
 })
 
 const submit = () => {
@@ -281,6 +285,59 @@ const goBack = () => {
                 </Select>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
                   Used during year-end close to transfer profits/losses
+                </p>
+              </div>
+            </div>
+
+            <!-- Receiving Variance -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+                Receiving Variance
+              </h3>
+
+              <div class="space-y-2">
+                <Label for="transit_loss" class="font-medium">
+                  Transit Loss <span class="text-red-500">*</span>
+                </Label>
+                <Select v-model="form.transit_loss_account_id" required>
+                  <SelectTrigger id="transit_loss">
+                    <SelectValue placeholder="Select transit loss account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="account in transitLossAccounts"
+                      :key="account.id"
+                      :value="account.id"
+                    >
+                      {{ account.code }} - {{ account.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Used when received quantity is lower than expected
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="transit_gain" class="font-medium">
+                  Transit Gain <span class="text-red-500">*</span>
+                </Label>
+                <Select v-model="form.transit_gain_account_id" required>
+                  <SelectTrigger id="transit_gain">
+                    <SelectValue placeholder="Select transit gain account..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="account in transitGainAccounts"
+                      :key="account.id"
+                      :value="account.id"
+                    >
+                      {{ account.code }} - {{ account.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Used when received quantity is higher than expected
                 </p>
               </div>
             </div>

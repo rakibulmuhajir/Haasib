@@ -26,7 +26,7 @@ const CURRENCY_CONFIG: Record<string, { symbol: string; decimals: number; symbol
   EGP: { symbol: 'EGP', decimals: 2, symbolPosition: 'before' },
   JOD: { symbol: 'JOD', decimals: 3, symbolPosition: 'before' },
   INR: { symbol: '\u20B9', decimals: 2, symbolPosition: 'before' },
-  PKR: { symbol: 'PKR', decimals: 2, symbolPosition: 'before' },
+  PKR: { symbol: 'Rs', decimals: 2, symbolPosition: 'before' },
   JPY: { symbol: '\u00A5', decimals: 0, symbolPosition: 'before' },
   CNY: { symbol: '\u00A5', decimals: 2, symbolPosition: 'before' },
 }

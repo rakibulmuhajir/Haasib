@@ -192,8 +192,8 @@ class FuelSaleService
      */
     private function determineAmountPaid(string $saleType, float $total): float
     {
-        // Credit and Parco card sales are not paid immediately
-        if (in_array($saleType, [SaleMetadata::TYPE_CREDIT, SaleMetadata::TYPE_PARCO_CARD])) {
+        // Credit and vendor card sales are not paid immediately
+        if (in_array($saleType, [SaleMetadata::TYPE_CREDIT, SaleMetadata::TYPE_VENDOR_CARD])) {
             return 0;
         }
 
@@ -206,7 +206,7 @@ class FuelSaleService
      */
     private function determineInvoiceStatus(string $saleType): string
     {
-        if (in_array($saleType, [SaleMetadata::TYPE_CREDIT, SaleMetadata::TYPE_PARCO_CARD])) {
+        if (in_array($saleType, [SaleMetadata::TYPE_CREDIT, SaleMetadata::TYPE_VENDOR_CARD])) {
             return 'sent'; // Pending payment
         }
 

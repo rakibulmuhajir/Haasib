@@ -13,6 +13,13 @@ class StoreItemRequest extends BaseFormRequest
             && $this->validateRlsContext();
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('track_inventory') && ! $this->boolean('track_inventory')) {
+            $this->merge(['delivery_mode' => 'immediate']);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -23,6 +30,7 @@ class StoreItemRequest extends BaseFormRequest
             'item_type' => 'required|in:product,service,non_inventory,bundle',
             'unit_of_measure' => 'required|string|max:50',
             'track_inventory' => 'boolean',
+            'delivery_mode' => 'required|in:immediate,requires_receiving',
             'is_purchasable' => 'boolean',
             'is_sellable' => 'boolean',
             'cost_price' => 'numeric|min:0',

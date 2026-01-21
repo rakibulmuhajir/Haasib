@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
-import { FileText, Save, Plus, Trash2 } from 'lucide-vue-next'
+import { FileText, Save, Plus, Trash2, Info } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -251,6 +252,10 @@ const handleSubmit = () => {
             {{ t('addLineItem') }}
           </Button>
         </div>
+        <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+          For fuel purchases, select the fuel item and set the line account to Fuel Inventory.
+          Use the default expense for general operating bills.
+        </div>
         <div class="space-y-4">
           <div
             v-for="(line, idx) in form.line_items"
@@ -327,7 +332,22 @@ const handleSubmit = () => {
             <!-- Account & Delete Row -->
             <div class="flex items-end justify-between gap-3">
               <div class="flex-1">
-                <Label>{{ t('expenseAccount') }}</Label>
+                <div class="flex items-center gap-2">
+                  <Label>{{ t('expenseAccount') }}</Label>
+                  <TooltipProvider :delay-duration="0">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button type="button" variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground">
+                          <Info class="h-3.5 w-3.5" />
+                          <span class="sr-only">Expense account help</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Use Fuel Inventory for fuel purchases. Use default expense for general bills.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Select v-model="line.expense_account_id">
                   <SelectTrigger>
                     <SelectValue :placeholder="t('selectAccount')" />

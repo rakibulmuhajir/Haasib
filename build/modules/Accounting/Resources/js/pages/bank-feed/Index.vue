@@ -27,6 +27,7 @@ const { t } = useLexicon()
 const formatCurrency = (val: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency
   }).format(val)
 }

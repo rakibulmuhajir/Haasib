@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Calendar,
   TrendingUp,
+  Rocket,
 } from 'lucide-vue-next'
 
 interface Company {
@@ -27,6 +28,7 @@ interface Company {
   slug: string
   industry?: string
   industry_code?: string
+  industry_name?: string | null
   country?: string
   base_currency: string
   is_active: boolean
@@ -107,6 +109,15 @@ const settingsSections = [
     color: 'text-blue-600',
   },
   {
+    title: 'Setup Wizard',
+    description: 'Review optional setup steps and industry defaults',
+    icon: Rocket,
+    href: company.value.industry_code === 'fuel_station'
+      ? `/${company.value.slug}/fuel/onboarding`
+      : `/${company.value.slug}/onboarding`,
+    color: 'text-indigo-600',
+  },
+  {
     title: 'Users & Permissions',
     description: 'Manage team members and their access levels',
     icon: Users,
@@ -172,6 +183,7 @@ const quickActions = [
 const formatCurrency = (amount: number, currency: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency === 'SAR' ? 'SAR' : 'USD',
     minimumFractionDigits: 2,
   }).format(amount)
@@ -201,7 +213,7 @@ const getRoleBadgeVariant = (role: string) => {
 <template>
   <Head title="Company Settings" />
 
-  <PageShell>
+  <PageShell :title="`${company.name} Settings`">
     <div class="max-w-7xl mx-auto">
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">{{ company.name }} Settings</h1>
@@ -222,7 +234,9 @@ const getRoleBadgeVariant = (role: string) => {
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <div class="text-sm font-medium text-gray-500">Industry</div>
-              <div class="text-sm">{{ company.industry || 'Not specified' }}</div>
+              <div class="text-sm">
+                {{ company.industry_name || company.industry || company.industry_code || 'Not specified' }}
+              </div>
             </div>
             <div>
               <div class="text-sm font-medium text-gray-500">Country</div>

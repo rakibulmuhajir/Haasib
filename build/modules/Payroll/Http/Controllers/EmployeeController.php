@@ -7,9 +7,9 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StoreEmployeeRequest;
-use Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
-use Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Http\Requests\StoreEmployeeRequest;
+use App\Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
+use App\Modules\Payroll\Models\Employee;
 
 class EmployeeController extends Controller
 {

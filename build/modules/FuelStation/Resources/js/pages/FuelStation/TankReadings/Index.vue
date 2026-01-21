@@ -4,10 +4,10 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import TankLevelGauge from '../../../components/TankLevelGauge.vue'
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,6 @@ import type { BreadcrumbItem } from '@/types'
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
-  ClipboardCheck,
   Plus,
   Warehouse,
 } from 'lucide-vue-next'
@@ -96,10 +94,21 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const formatLiters = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n ?? 0)
 
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '—'
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 const formatMoney = (n: number) => {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
+      currencyDisplay: 'narrowSymbol',
       currency: currencyCode.value,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -156,6 +165,7 @@ const filtered = computed(() => {
 const columns = [
   { key: 'reading_date', label: 'Date' },
   { key: 'tank', label: 'Tank' },
+  { key: 'level', label: 'Level' },
   { key: 'reading_type', label: 'Type' },
   { key: 'dip', label: 'Dip (L)' },
   { key: 'system', label: 'System (L)' },
@@ -164,21 +174,30 @@ const columns = [
   { key: '_actions', label: '', sortable: false },
 ]
 
+const sortedFiltered = computed(() =>
+  filtered.value.slice().sort((a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime())
+)
+
 const tableData = computed(() =>
-  filtered.value
-    .slice()
-    .sort((a, b) => new Date(b.reading_date).getTime() - new Date(a.reading_date).getTime())
-    .map((r) => ({
+  sortedFiltered.value.map((r) => {
+    const capacity = Number(r.tank?.capacity ?? 0)
+    const dip = Number(r.dip_measurement_liters ?? 0)
+    const level = capacity > 0 ? Math.min(100, Math.max(0, Math.round((dip / capacity) * 100))) : 0
+
+    return {
       id: r.id,
-      reading_date: r.reading_date,
+      reading_date: formatDate(r.reading_date),
       tank: r.tank?.name ?? '—',
+      level: `${level}%`,
+      level_percent: level,
       reading_type: r.reading_type,
       dip: formatLiters(r.dip_measurement_liters),
       system: formatLiters(r.system_calculated_liters),
       variance: r.variance_liters,
       status: r.status,
       _raw: r,
-    }))
+    }
+  })
 )
 
 const pagination = computed(() => ({
@@ -194,12 +213,8 @@ const handlePageChange = (pageNum: number) => {
 }
 
 const dialogOpen = ref(false)
-const confirmOpen = ref(false)
-const postOpen = ref(false)
-const selected = ref<TankReadingRow | null>(null)
 
 const openCreate = () => {
-  selected.value = null
   form.reset()
   form.clearErrors()
   dialogOpen.value = true
@@ -260,30 +275,6 @@ const goToShow = (row: any) => {
   if (!slug) return
   router.get(`/${slug}/fuel/tank-readings/${row.id}`)
 }
-
-const openConfirm = (reading: TankReadingRow) => {
-  selected.value = reading
-  confirmOpen.value = true
-}
-
-const openPost = (reading: TankReadingRow) => {
-  selected.value = reading
-  postOpen.value = true
-}
-
-const doConfirm = () => {
-  const slug = companySlug.value
-  if (!slug || !selected.value) return
-  confirmOpen.value = false
-  router.post(`/${slug}/fuel/tank-readings/${selected.value.id}/confirm`, {}, { preserveScroll: true })
-}
-
-const doPost = () => {
-  const slug = companySlug.value
-  if (!slug || !selected.value) return
-  postOpen.value = false
-  router.post(`/${slug}/fuel/tank-readings/${selected.value.id}/post`, {}, { preserveScroll: true })
-}
 </script>
 
 <template>
@@ -291,7 +282,7 @@ const doPost = () => {
 
   <PageShell
     title="Tank Readings"
-    description="Dip measurements with a controlled workflow (draft → confirmed → posted)."
+    description="View dip measurements and variance calculations. Readings are posted automatically during daily close."
     :icon="Warehouse"
     :breadcrumbs="breadcrumbs"
   >
@@ -437,6 +428,13 @@ const doPost = () => {
             </Badge>
           </template>
 
+          <template #cell-level="{ row }">
+            <div class="flex items-center gap-2">
+              <TankLevelGauge :percent="row.level_percent" :size="30" />
+              <span class="text-xs text-text-secondary">{{ row.level_percent }}%</span>
+            </div>
+          </template>
+
           <template #cell-variance="{ row }">
             <Badge :class="varianceBadge(row._raw.variance_type, row._raw.variance_liters).cls">
               {{ varianceBadge(row._raw.variance_type, row._raw.variance_liters).label }}
@@ -454,25 +452,6 @@ const doPost = () => {
               <Button variant="outline" size="sm" @click.stop="goToShow(row)">
                 <ArrowRight class="h-4 w-4" />
               </Button>
-
-              <Button
-                v-if="row._raw.status === 'draft'"
-                variant="outline"
-                size="sm"
-                @click.stop="openConfirm(row._raw)"
-              >
-                <ClipboardCheck class="mr-2 h-4 w-4" />
-                Confirm
-              </Button>
-
-              <Button
-                v-if="row._raw.status === 'confirmed'"
-                size="sm"
-                @click.stop="openPost(row._raw)"
-              >
-                <CheckCircle2 class="mr-2 h-4 w-4" />
-                Post
-              </Button>
             </div>
           </template>
         </DataTable>
@@ -487,7 +466,7 @@ const doPost = () => {
             New tank reading
           </DialogTitle>
           <DialogDescription>
-            Dip measurement is the source of truth. Variance journals are created only after posting.
+            Record a manual dip reading. Variance is calculated and posted automatically during daily close.
           </DialogDescription>
         </DialogHeader>
 
@@ -608,28 +587,5 @@ const doPost = () => {
       </DialogContent>
     </Dialog>
 
-    <ConfirmDialog
-      v-model:open="confirmOpen"
-      title="Confirm this reading?"
-      description="After confirmation, the reading can’t be edited."
-      confirm-text="Confirm"
-      variant="success"
-      @confirm="doConfirm"
-    />
-
-    <ConfirmDialog
-      v-model:open="postOpen"
-      title="Post variance journal?"
-      confirm-text="Post"
-      variant="default"
-      @confirm="doPost"
-    >
-      <template #description>
-        <p>Posting creates the variance journal entry. This can’t be undone.</p>
-        <p v-if="selected" class="mt-2 text-sm text-text-secondary">
-          Tank: <span class="font-medium text-text-primary">{{ selected.tank?.name ?? '—' }}</span>
-        </p>
-      </template>
-    </ConfirmDialog>
   </PageShell>
 </template>

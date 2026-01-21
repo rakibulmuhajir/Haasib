@@ -194,6 +194,7 @@ return [
 
         // Fuel Station - Rate Management
         'fuel_rate.update',
+        'fuel_product.setup',
 
         // Fuel Station - Investors
         'investor.create',
@@ -210,6 +211,12 @@ return [
 
         // Fuel Station - Sales
         'fuel_sale.create',
+
+        // Fuel Station - Daily Close (admin can amend/lock)
+        'daily_close.create',
+        'daily_close.view',
+        'daily_close.amend',
+        'daily_close.lock',
     ],
 
     'accountant' => [
@@ -369,6 +376,10 @@ return [
 
         // Fuel Station - Sales
         'fuel_sale.create',
+
+        // Fuel Station - Daily Close (accountant can create/view only)
+        'daily_close.create',
+        'daily_close.view',
     ],
 
     'member' => [
@@ -417,6 +428,9 @@ return [
         'pump_reading.view',
         'investor.view',
         'handover.view',
+
+        // Fuel Station - Daily Close (view only)
+        'daily_close.view',
     ],
 
 ];

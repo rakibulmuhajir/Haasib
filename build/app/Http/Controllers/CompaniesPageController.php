@@ -30,8 +30,26 @@ class CompaniesPageController extends Controller
             ->orderBy('c.name')
             ->get();
 
+        $industries = DB::table('acct.industry_coa_packs')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get(['code', 'name', 'description']);
+
+        $countries = collect(config('countries', []))
+            ->map(fn ($country) => [
+                'code' => $country['code'],
+                'name' => $country['name'],
+                'currency' => $country['currency'],
+                'timezone' => $country['timezone'],
+            ])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
         return Inertia::render('companies/Index', [
             'companies' => $companies,
+            'industries' => $industries,
+            'countries' => $countries,
         ]);
     }
 

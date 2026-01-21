@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
@@ -7,12 +7,15 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
+import { useFormFeedback } from '@/composables/useFormFeedback'
 import { useLexicon } from '@/composables/useLexicon'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
@@ -55,6 +58,9 @@ import {
   Gauge,
   FileText,
   Warehouse,
+  Package,
+  Plus,
+  Loader2,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -66,6 +72,8 @@ interface Company {
   is_active: boolean
   created_at: string
   industry?: string
+  industry_code?: string | null
+  industry_name?: string | null
   country?: string
   language?: string
   locale?: string
@@ -179,6 +187,14 @@ interface FuelHomeDashboard {
   }>
 }
 
+interface FuelTankOption {
+  id: string
+  name: string
+  code: string
+  capacity: number | null
+  linked_item_id: string | null
+}
+
 const props = defineProps<{
   company: Company
   stats: Stats
@@ -187,7 +203,9 @@ const props = defineProps<{
   pendingInvitations: PendingInvitation[]
   financials: Financials
   dashboard: DashboardData
+  isFuelStation?: boolean
   fuelDashboard?: FuelHomeDashboard | null
+  fuelTanks?: FuelTankOption[]
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -206,6 +224,45 @@ const inlineEdit = useInlineEdit({
 })
 
 const { t, tpl } = useLexicon()
+const { showError } = useFormFeedback()
+
+const productsDialogOpen = ref(false)
+const tankDialogOpen = ref(false)
+const activeTankRowIndex = ref<number | null>(null)
+const tankDraft = ref({
+  name: '',
+  code: '',
+  capacity: '',
+  low_level_alert: '',
+})
+const tankDraftErrors = ref<Record<string, string>>({})
+const tankForm = useForm({
+  product: {
+    type: '',
+    name: '',
+    sku: '',
+    fuel_category: '',
+    lubricant_format: '',
+    packaging: '',
+    unit_of_measure: '',
+    track_inventory: true,
+  },
+  tank: {
+    name: '',
+    code: '',
+    capacity: '',
+    low_level_alert: '',
+  },
+})
+
+const fuelTanks = ref<FuelTankOption[]>(props.fuelTanks ?? [])
+
+watch(
+  () => props.fuelTanks,
+  (next) => {
+    fuelTanks.value = next ?? []
+  }
+)
 
 // Register editable fields
 const nameField = inlineEdit.registerField('name', props.company.name)
@@ -231,8 +288,259 @@ const roleForm = useForm({
 
 const removeForm = useForm({})
 
+const todayLocal = () => {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const buildProductRow = () => ({
+  type: 'fuel',
+  name: 'Petrol',
+  sku: '',
+  fuel_category: 'petrol',
+  lubricant_format: 'packaged',
+  packaging: 'open',
+  category_name: '',
+  unit_of_measure: 'liters',
+  track_inventory: true,
+  purchase_rate: '',
+  sale_rate: '',
+  opening_quantity: '',
+  tank_id: '',
+  new_tank: null as null | {
+    name: string
+    code: string
+    capacity: string | number
+    low_level_alert: string | number
+  },
+})
+
+const productsForm = useForm({
+  effective_date: todayLocal(),
+  products: [buildProductRow()],
+})
+
+const defaultFuelNames: Record<string, string> = {
+  petrol: 'Petrol',
+  diesel: 'Diesel',
+  high_octane: 'Hi-Octane',
+}
+
+const isOpenPackaging = (row: ReturnType<typeof buildProductRow>) => {
+  if (row.type === 'fuel') return true
+  if (row.type === 'lubricant') return row.lubricant_format === 'open'
+  if (row.type === 'other') return row.packaging === 'open'
+  return false
+}
+
+const setRowDefaults = (row: ReturnType<typeof buildProductRow>) => {
+  if (row.type === 'fuel') {
+    row.fuel_category = row.fuel_category || 'petrol'
+    row.packaging = 'open'
+    row.lubricant_format = 'packaged'
+    row.track_inventory = true
+    row.unit_of_measure = row.unit_of_measure || 'liters'
+    if (!row.name) {
+      row.name = defaultFuelNames[row.fuel_category] || 'Fuel'
+    }
+    return
+  }
+
+  if (row.type === 'lubricant') {
+    row.lubricant_format = row.lubricant_format || 'packaged'
+    row.packaging = row.lubricant_format
+    row.track_inventory = true
+    row.fuel_category = row.lubricant_format === 'open' ? 'lubricant' : ''
+    row.unit_of_measure = row.unit_of_measure || (row.lubricant_format === 'open' ? 'liters' : 'bottle')
+    return
+  }
+
+  row.packaging = row.packaging || 'packaged'
+  row.fuel_category = ''
+  row.lubricant_format = 'packaged'
+  row.unit_of_measure = row.unit_of_measure || 'unit'
+  if (row.track_inventory === null || row.track_inventory === undefined) {
+    row.track_inventory = true
+  }
+}
+
+const handleTypeChange = (row: ReturnType<typeof buildProductRow>) => {
+  row.name = row.type === 'fuel' ? '' : row.name
+  row.sku = row.sku || ''
+  row.category_name = row.type === 'other' ? row.category_name : ''
+  row.packaging = ''
+  row.lubricant_format = ''
+  row.fuel_category = ''
+  row.opening_quantity = ''
+  row.tank_id = ''
+  row.new_tank = null
+  setRowDefaults(row)
+}
+
+const handleFuelCategoryChange = (row: ReturnType<typeof buildProductRow>) => {
+  if (!row.name) {
+    row.name = defaultFuelNames[row.fuel_category] || 'Fuel'
+  }
+}
+
+const handleTankSelection = (row: ReturnType<typeof buildProductRow>) => {
+  if (row.tank_id) {
+    row.new_tank = null
+  }
+}
+
+const handleInventoryToggle = (row: ReturnType<typeof buildProductRow>) => {
+  if (!row.track_inventory) {
+    row.opening_quantity = ''
+    row.tank_id = ''
+    row.new_tank = null
+  }
+}
+
+const addProductRow = () => {
+  productsForm.products.push(buildProductRow())
+}
+
+const removeProductRow = (index: number) => {
+  if (productsForm.products.length <= 1) return
+  productsForm.products.splice(index, 1)
+}
+
+const openTankDialog = (index: number) => {
+  activeTankRowIndex.value = index
+  const row = productsForm.products[index]
+  tankDraft.value = {
+    name: row?.new_tank?.name || '',
+    code: row?.new_tank?.code || '',
+    capacity: row?.new_tank?.capacity || '',
+    low_level_alert: row?.new_tank?.low_level_alert || '',
+  }
+  tankDraftErrors.value = {}
+  tankDialogOpen.value = true
+}
+
+const saveTankDraft = () => {
+  if (activeTankRowIndex.value === null) return
+  const row = productsForm.products[activeTankRowIndex.value]
+  if (!row) return
+  tankDraftErrors.value = {}
+  if (!tankDraft.value.name.trim()) {
+    tankDraftErrors.value.name = 'Tank name is required.'
+  }
+  if (!tankDraft.value.code.trim()) {
+    tankDraftErrors.value.code = 'Tank code is required.'
+  }
+  if (tankDraft.value.capacity === '' || Number(tankDraft.value.capacity) < 1) {
+    tankDraftErrors.value.capacity = 'Tank capacity is required.'
+  }
+  if (Object.keys(tankDraftErrors.value).length > 0) {
+    showError('Fill all required tank details.')
+    return
+  }
+
+  if (!row.name.trim()) {
+    showError('Enter a product name before creating a tank.')
+    return
+  }
+  if (row.type === 'fuel' && !row.fuel_category) {
+    showError('Select a fuel type before creating a tank.')
+    return
+  }
+
+  tankForm.product = {
+    type: row.type,
+    name: row.name,
+    sku: row.sku || '',
+    fuel_category: row.fuel_category || '',
+    lubricant_format: row.lubricant_format || '',
+    packaging: row.packaging || '',
+    unit_of_measure: row.unit_of_measure || '',
+    track_inventory: row.track_inventory ?? true,
+  }
+  tankForm.tank = {
+    name: tankDraft.value.name.trim(),
+    code: tankDraft.value.code.trim(),
+    capacity: tankDraft.value.capacity,
+    low_level_alert: tankDraft.value.low_level_alert,
+  }
+
+  tankForm.post(`/${props.company.slug}/fuel/tanks/quick-create`, {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      const flash = (page.props as { flash?: { tank?: FuelTankOption; item?: { sku?: string } } })?.flash
+      const newTank = flash?.tank
+      const newItem = flash?.item
+      if (newTank) {
+        fuelTanks.value = [
+          newTank,
+          ...fuelTanks.value.filter((existing) => existing.id !== newTank.id),
+        ]
+        row.tank_id = newTank.id
+        row.new_tank = null
+      }
+      if (newItem?.sku && !row.sku) {
+        row.sku = newItem.sku
+      }
+      tankDraft.value = {
+        name: '',
+        code: '',
+        capacity: '',
+        low_level_alert: '',
+      }
+      tankForm.reset()
+      tankForm.clearErrors()
+      tankDialogOpen.value = false
+    },
+    onError: (errors) => {
+      tankDraftErrors.value = {
+        name: typeof errors['tank.name'] === 'string' ? errors['tank.name'] : (errors['tank.name']?.[0] ?? ''),
+        code: typeof errors['tank.code'] === 'string' ? errors['tank.code'] : (errors['tank.code']?.[0] ?? ''),
+        capacity: typeof errors['tank.capacity'] === 'string' ? errors['tank.capacity'] : (errors['tank.capacity']?.[0] ?? ''),
+      }
+      showError(errors)
+    },
+  })
+}
+
+const submitProducts = () => {
+  let handled = false
+  productsForm.post(`/${props.company.slug}/fuel/products/setup`, {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      handled = true
+      const flash = (page.props as { flash?: { error?: string; success?: string } })?.flash
+      if (flash?.error) {
+        return
+      }
+      const updatedTanks = (page.props as { fuelTanks?: FuelTankOption[] })?.fuelTanks
+      if (updatedTanks) {
+        fuelTanks.value = updatedTanks
+      }
+      if (!flash?.error && !flash?.success) {
+        toast.success('Products saved successfully')
+      }
+      productsForm.reset()
+      productsForm.products = [buildProductRow()]
+      productsForm.clearErrors()
+      productsDialogOpen.value = false
+    },
+    onError: (errors) => {
+      handled = true
+      showError(errors)
+    },
+    onFinish: () => {
+      if (!handled) {
+        toast.error('Failed to save products. Please try again.')
+      }
+    },
+  })
+}
+
 const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRole))
-const isFuelStationCompany = computed(() => !!props.fuelDashboard)
+const isFuelStationCompany = computed(() => props.isFuelStation === true)
 
 const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
@@ -393,6 +701,25 @@ const currencySymbol = (currencyCode: string) => {
 
       <!-- Overview Tab (Dashboard) -->
       <TabsContent value="overview" class="space-y-6">
+
+        <!-- Fuel Station Onboarding -->
+        <Card v-if="isFuelStationCompany" class="border-zinc-200/80 bg-white">
+          <CardHeader class="pb-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <Package class="h-5 w-5 text-zinc-700" />
+                <CardTitle class="text-base font-semibold text-zinc-900">Products You Sell</CardTitle>
+              </div>
+              <Button size="sm" @click="productsDialogOpen = true">
+                <Plus class="mr-2 h-4 w-4" />
+                Add Products
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent class="text-sm text-zinc-600">
+            Add fuels, lubricants, and other products in one place. Set purchase and sale rates, plus optional opening stock.
+          </CardContent>
+        </Card>
 
         <!-- Fuel Station Snapshot -->
         <Card v-if="isFuelStationCompany" class="border-zinc-200/80 bg-white">
@@ -742,7 +1069,9 @@ const currencySymbol = (currencyCode: string) => {
               <!-- Industry (Read-only) -->
               <div class="space-y-1.5">
                 <Label class="text-sm font-medium text-zinc-500">Industry</Label>
-                <div class="text-base text-zinc-900 capitalize">{{ company.industry || '—' }}</div>
+                <div class="text-base text-zinc-900 capitalize">
+                  {{ company.industry_name || company.industry || company.industry_code || '—' }}
+                </div>
               </div>
 
               <!-- Created Date (Read-only) -->
@@ -921,6 +1250,268 @@ const currencySymbol = (currencyCode: string) => {
           </template>
         </DataTable>
       </TabsContent>
+
+    <!-- Product Setup Dialog -->
+    <Dialog v-model:open="productsDialogOpen">
+      <DialogContent class="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle class="text-zinc-900">Products You Sell</DialogTitle>
+          <DialogDescription class="text-zinc-500">
+            Add fuels, lubricants, and other items with pricing and optional opening stock.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-6 py-2">
+          <div class="grid gap-4 md:grid-cols-3">
+            <div class="space-y-2">
+              <Label>Effective Date</Label>
+              <Input v-model="productsForm.effective_date" type="date" />
+              <p v-if="productsForm.errors.effective_date" class="text-xs text-red-600">
+                {{ productsForm.errors.effective_date }}
+              </p>
+            </div>
+            <div class="md:col-span-2 text-sm text-zinc-500 flex items-center">
+              Rates and opening stock will be recorded as of this date.
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <Card v-for="(row, index) in productsForm.products" :key="index" class="border-zinc-200/80">
+              <CardContent class="pt-6 space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm font-semibold text-zinc-900">Product {{ index + 1 }}</div>
+                  <Button
+                    v-if="productsForm.products.length > 1"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    @click="removeProductRow(index)"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="space-y-2">
+                    <Label>Type</Label>
+                    <Select v-model="row.type" @update:modelValue="handleTypeChange(row)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fuel">Fuel</SelectItem>
+                        <SelectItem value="lubricant">Lubricant</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div v-if="row.type === 'fuel'" class="space-y-2">
+                    <Label>Fuel Type</Label>
+                    <Select v-model="row.fuel_category" @update:modelValue="handleFuelCategoryChange(row)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select fuel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="petrol">Petrol</SelectItem>
+                        <SelectItem value="diesel">Diesel</SelectItem>
+                        <SelectItem value="high_octane">High Octane</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p v-if="productsForm.errors[`products.${index}.fuel_category`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.fuel_category`] }}
+                    </p>
+                  </div>
+
+                  <div v-if="row.type === 'lubricant'" class="space-y-2">
+                    <Label>Packaging</Label>
+                    <Select v-model="row.lubricant_format" @update:modelValue="setRowDefaults(row)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select packaging" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open / Bulk</SelectItem>
+                        <SelectItem value="packaged">Packaged</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p v-if="productsForm.errors[`products.${index}.lubricant_format`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.lubricant_format`] }}
+                    </p>
+                  </div>
+
+                  <div v-if="row.type === 'other'" class="space-y-2">
+                    <Label>Packaging</Label>
+                    <Select v-model="row.packaging">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select packaging" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open / Bulk</SelectItem>
+                        <SelectItem value="packaged">Packaged</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p v-if="productsForm.errors[`products.${index}.packaging`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.packaging`] }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="space-y-2">
+                    <Label>Name</Label>
+                    <Input v-model="row.name" placeholder="Product name" />
+                    <p v-if="productsForm.errors[`products.${index}.name`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.name`] }}
+                    </p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label>SKU (optional)</Label>
+                    <Input v-model="row.sku" placeholder="Auto-generated if blank" />
+                    <p v-if="productsForm.errors[`products.${index}.sku`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.sku`] }}
+                    </p>
+                  </div>
+
+                  <div v-if="row.type === 'other'" class="space-y-2">
+                    <Label>Category</Label>
+                    <Input v-model="row.category_name" placeholder="Free-form category" />
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="space-y-2">
+                    <Label>Unit</Label>
+                    <Input
+                      v-model="row.unit_of_measure"
+                      :disabled="row.type === 'fuel'"
+                      placeholder="e.g., liters, bottle, unit"
+                    />
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label>Purchase Rate</Label>
+                    <Input v-model="row.purchase_rate" type="number" step="0.01" min="0" />
+                    <p v-if="productsForm.errors[`products.${index}.purchase_rate`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.purchase_rate`] }}
+                    </p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label>Sale Rate</Label>
+                    <Input v-model="row.sale_rate" type="number" step="0.01" min="0" />
+                    <p v-if="productsForm.errors[`products.${index}.sale_rate`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.sale_rate`] }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div v-if="row.type === 'other'" class="space-y-2">
+                    <Label>Track Inventory</Label>
+                    <div class="flex items-center gap-2">
+                      <Switch v-model="row.track_inventory" @update:checked="handleInventoryToggle(row)" />
+                      <span class="text-xs text-zinc-500">Enable stock tracking</span>
+                    </div>
+                  </div>
+
+                  <div v-if="row.track_inventory" class="space-y-2">
+                    <Label>Opening Stock (optional)</Label>
+                    <Input v-model="row.opening_quantity" type="number" step="0.001" min="0" />
+                    <p v-if="productsForm.errors[`products.${index}.opening_quantity`]" class="text-xs text-red-600">
+                      {{ productsForm.errors[`products.${index}.opening_quantity`] }}
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="row.track_inventory && isOpenPackaging(row)" class="space-y-2">
+                  <Label>Tank (required if opening stock)</Label>
+                  <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Select v-model="row.tank_id" @update:modelValue="handleTankSelection(row)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a tank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="tank in fuelTanks" :key="tank.id" :value="tank.id">
+                          {{ tank.name }} ({{ tank.code }})
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" @click="openTankDialog(index)">
+                      Add Tank
+                    </Button>
+                  </div>
+                  <p v-if="productsForm.errors[`products.${index}.tank_id`]" class="text-xs text-red-600">
+                    {{ productsForm.errors[`products.${index}.tank_id`] }}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Button type="button" variant="outline" class="w-full border-dashed" @click="addProductRow">
+            <Plus class="mr-2 h-4 w-4" />
+            Add Another Product
+          </Button>
+        </div>
+
+        <DialogFooter class="mt-2">
+          <Button type="button" variant="outline" @click="productsDialogOpen = false">
+            Cancel
+          </Button>
+          <Button type="button" :disabled="productsForm.processing" @click="submitProducts">
+            <Loader2 v-if="productsForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+            Save Products
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Add Tank Dialog -->
+    <Dialog v-model:open="tankDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle class="text-zinc-900">Add Tank</DialogTitle>
+          <DialogDescription class="text-zinc-500">
+            Create a storage tank for open/bulk products.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4 py-4">
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Tank Name</Label>
+              <Input v-model="tankDraft.name" placeholder="e.g., Petrol Tank 1" />
+              <p v-if="tankDraftErrors.name" class="text-xs text-red-600">{{ tankDraftErrors.name }}</p>
+            </div>
+            <div class="space-y-2">
+              <Label>Tank Code</Label>
+              <Input v-model="tankDraft.code" placeholder="e.g., TANK-PET" />
+              <p v-if="tankDraftErrors.code" class="text-xs text-red-600">{{ tankDraftErrors.code }}</p>
+            </div>
+          </div>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Capacity (Liters)</Label>
+              <Input v-model="tankDraft.capacity" type="number" step="0.01" min="1" />
+              <p v-if="tankDraftErrors.capacity" class="text-xs text-red-600">{{ tankDraftErrors.capacity }}</p>
+            </div>
+            <div class="space-y-2">
+              <Label>Low Level Alert (optional)</Label>
+              <Input v-model="tankDraft.low_level_alert" type="number" step="0.01" min="0" />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" @click="tankDialogOpen = false">
+            Cancel
+          </Button>
+          <Button type="button" :disabled="tankForm.processing" @click="saveTankDraft">
+            <Loader2 v-if="tankForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+            Save Tank
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- Invite User Dialog -->
     <Dialog v-model:open="inviteDialogOpen">

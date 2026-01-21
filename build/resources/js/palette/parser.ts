@@ -97,7 +97,8 @@ function parseEntityVerb(
       }
     }
     // Use default verb
-    return { entity, verb: GRAMMAR[entity].defaultVerb, consumed: 1 }
+    const defaultVerb = GRAMMAR[entity].defaultVerb ?? GRAMMAR[entity].verbs[0]?.name ?? 'list'
+    return { entity, verb: defaultVerb, consumed: 1 }
   }
 
   return null

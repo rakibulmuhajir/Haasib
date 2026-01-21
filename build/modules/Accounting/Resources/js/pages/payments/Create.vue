@@ -120,6 +120,7 @@ watch(() => form.invoice_id, () => {
 const formatCurrency = (amount: number, currencyCode?: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currencyCode || form.currency || 'USD',
   }).format(amount)
 }

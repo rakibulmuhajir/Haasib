@@ -88,7 +88,11 @@ const validationState = computed(() => {
 
 // Formatting functions
 const formatMoney = (amount: number, currency: string) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(amount)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    currencyDisplay: 'narrowSymbol',
+  }).format(amount)
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—'

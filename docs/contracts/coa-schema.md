@@ -174,6 +174,8 @@ Company settings should store default account IDs:
 | `retained_earnings_account_id` | retained_earnings | Year-end close |
 | `sales_tax_payable_account_id` | other_current_liability | Output tax |
 | `purchase_tax_receivable_account_id` | other_current_asset | Input tax |
+| `transit_loss_account_id` | expense/cogs/other_expense | Receiving variances (short receipts) |
+| `transit_gain_account_id` | other_income | Receiving variances (over receipts) |
 
 ### Account Type → Normal Balance Mapping
 

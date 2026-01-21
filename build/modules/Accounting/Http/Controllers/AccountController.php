@@ -77,51 +77,51 @@ class AccountController extends Controller
         }
     }
 
-    public function show(string $account): Response
+    public function show(string $company, string $account): Response
     {
-        $company = app(CompanyContextService::class)->requireCompany();
+        $companyModel = app(CompanyContextService::class)->requireCompany();
         $record = Account::with('parent', 'children')
-            ->where('company_id', $company->id)
+            ->where('company_id', $companyModel->id)
             ->findOrFail($account);
 
         return Inertia::render('accounting/accounts/Show', [
             'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
+                'id' => $companyModel->id,
+                'name' => $companyModel->name,
+                'slug' => $companyModel->slug,
             ],
             'account' => $record,
         ]);
     }
 
-    public function edit(string $account): Response
+    public function edit(string $company, string $account): Response
     {
-        $company = app(CompanyContextService::class)->requireCompany();
-        $record = Account::where('company_id', $company->id)->findOrFail($account);
+        $companyModel = app(CompanyContextService::class)->requireCompany();
+        $record = Account::where('company_id', $companyModel->id)->findOrFail($account);
 
         return Inertia::render('accounting/accounts/Edit', [
             'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'slug' => $company->slug,
-                'base_currency' => $company->base_currency,
+                'id' => $companyModel->id,
+                'name' => $companyModel->name,
+                'slug' => $companyModel->slug,
+                'base_currency' => $companyModel->base_currency,
             ],
             'account' => $record,
-            'parents' => Account::where('company_id', $company->id)
+            'parents' => Account::where('company_id', $companyModel->id)
                 ->where('id', '!=', $record->id)
                 ->orderBy('code')
                 ->get(['id', 'code', 'name', 'type']),
         ]);
     }
 
-    public function update(UpdateAccountRequest $request, string $account): RedirectResponse
+    public function update(UpdateAccountRequest $request, string $company, string $account): RedirectResponse
     {
-        $company = app(CompanyContextService::class)->requireCompany();
+        $companyModel = app(CompanyContextService::class)->requireCompany();
         try {
             app(CommandBus::class)->dispatch('account.update', [
                 ...$request->validated(),
                 'id' => $account,
-                'company_id' => $company->id,
+                'company_id' => $companyModel->id,
             ], $request->user());
 
             return back()->with('success', 'Account updated');
@@ -136,13 +136,13 @@ class AccountController extends Controller
         }
     }
 
-    public function destroy(Request $request, string $account): RedirectResponse
+    public function destroy(Request $request, string $company, string $account): RedirectResponse
     {
-        $company = app(CompanyContextService::class)->requireCompany();
+        $companyModel = app(CompanyContextService::class)->requireCompany();
         try {
             app(CommandBus::class)->dispatch('account.delete', [
                 'id' => $account,
-                'company_id' => $company->id,
+                'company_id' => $companyModel->id,
             ], $request->user());
 
             return back()->with('success', 'Account deleted');

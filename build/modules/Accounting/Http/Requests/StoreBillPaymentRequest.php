@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,16 @@ class StoreBillPaymentRequest extends BaseFormRequest
         $companyContext = app(CompanyContextService::class);
         $companyId = $companyContext->getCompanyId();
         $companyBaseCurrency = $companyContext->getCompany()?->base_currency;
+        $companyApAccountId = $companyContext->getCompany()?->ap_account_id;
+        $vendorApAccountId = null;
+
+        if ($this->filled('vendor_id')) {
+            $vendorApAccountId = Vendor::where('company_id', $companyId)
+                ->where('id', $this->input('vendor_id'))
+                ->value('ap_account_id');
+        }
+
+        $requiresApAccount = $this->filled('vendor_id') && ! $companyApAccountId && ! $vendorApAccountId;
 
         $paymentNumberRule = Rule::unique('acct.bill_payments', 'payment_number')
             ->where(fn ($q) => $q->where('company_id', $companyId)->whereNull('deleted_at'));
@@ -58,6 +69,7 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'ap_account_id' => [
                 'nullable',
                 'uuid',
+                Rule::requiredIf(fn () => $requiresApAccount),
                 Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
                     ->where('subtype', 'accounts_payable')
                     ->where('is_active', true)),

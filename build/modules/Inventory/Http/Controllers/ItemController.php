@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -178,6 +179,29 @@ class ItemController extends Controller
         $totalStock = $stockLevels->sum('quantity');
         $totalAvailable = $stockLevels->sum('available_quantity');
 
+        $pendingReceiptsCount = 0;
+        $pendingReceiptsQuantity = 0.0;
+        if ($item->track_inventory && $item->delivery_mode === 'requires_receiving') {
+            $pendingReceiptSummary = DB::table('acct.bill_line_items as li')
+                ->join('acct.bills as b', 'b.id', '=', 'li.bill_id')
+                ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                ->where('b.company_id', $company->id)
+                ->whereNull('b.deleted_at')
+                ->whereNull('li.deleted_at')
+                ->whereNull('items.deleted_at')
+                ->where('b.status', 'paid')
+                ->whereNull('b.goods_received_at')
+                ->where('items.track_inventory', true)
+                ->where('items.delivery_mode', 'requires_receiving')
+                ->where('li.item_id', $item->id)
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                ->selectRaw('COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.quantity_received, 0)) as pending_qty')
+                ->first();
+
+            $pendingReceiptsCount = (int) ($pendingReceiptSummary?->pending_count ?? 0);
+            $pendingReceiptsQuantity = (float) ($pendingReceiptSummary?->pending_qty ?? 0);
+        }
+
         return Inertia::render('inventory/items/Show', [
             'company' => [
                 'id' => $company->id,
@@ -187,6 +211,8 @@ class ItemController extends Controller
             ],
             'item' => $item,
             'stockLevels' => $stockLevels,
+            'pendingReceiptsCount' => $pendingReceiptsCount,
+            'pendingReceiptsQuantity' => $pendingReceiptsQuantity,
             'summary' => [
                 'total_quantity' => (float) $totalStock,
                 'total_available' => (float) $totalAvailable,

@@ -74,6 +74,7 @@ const handleSearch = () => {
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: props.company.base_currency || 'USD',
   }).format(amount)
 

@@ -17,6 +17,7 @@ class StoreBankAccountsRequest extends BaseFormRequest
     {
         return [
             'bank_accounts' => 'required|array|min:1',
+            'bank_accounts.*.id' => 'nullable|uuid',
             'bank_accounts.*.account_name' => 'required|string|max:255',
             'bank_accounts.*.currency' => 'required|string|size:3|uppercase',
             'bank_accounts.*.account_type' => 'required|in:bank,cash',

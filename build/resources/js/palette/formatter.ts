@@ -78,6 +78,7 @@ export function formatMoney(amount: number | string, currency = 'USD'): string {
 
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency,
   }).format(num)
 }

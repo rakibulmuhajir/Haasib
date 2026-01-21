@@ -71,6 +71,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Quick Sale', href: `/${companySlug.value}/fuel/sales/form` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+
 // Sale form state
 const selectedPump = ref<Pump | null>(null)
 const selectedFuelItem = ref<FuelItem | null>(null)
@@ -161,7 +163,8 @@ watch(saleType, (newType) => {
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
@@ -348,7 +351,7 @@ const setPaymentTotal = () => {
                     <SelectItem value="credit">Credit</SelectItem>
                     <SelectItem value="amanat">Amanat</SelectItem>
                     <SelectItem value="investor">Investor</SelectItem>
-                    <SelectItem value="parco_card">Parco Card</SelectItem>
+                    <SelectItem value="parco_card">Vendor Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -443,7 +446,7 @@ const setPaymentTotal = () => {
               <div class="space-y-1">
                 <Label class="text-xs flex items-center gap-1">
                   <CreditCard class="h-3 w-3" />
-                  Parco Card
+                  Vendor Card
                 </Label>
                 <Input v-model.number="parcoCardAmount" type="number" min="0" step="1" placeholder="0" />
               </div>

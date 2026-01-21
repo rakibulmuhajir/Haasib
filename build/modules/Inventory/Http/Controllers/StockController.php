@@ -4,11 +4,13 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Inventory\Http\Requests\StoreStockAdjustmentRequest;
 use App\Modules\Inventory\Http\Requests\StoreStockTransferRequest;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockReceipt;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,6 +56,35 @@ class StockController extends Controller
         $query->orderBy('inv.items.name');
 
         $stockLevels = $query->paginate(50)->withQueryString();
+
+        $itemIds = $stockLevels->getCollection()->pluck('item_id')->filter()->unique()->values();
+        $pendingReceipts = collect();
+        if ($itemIds->isNotEmpty()) {
+            $pendingReceipts = DB::table('acct.bill_line_items as li')
+                ->join('acct.bills as b', 'b.id', '=', 'li.bill_id')
+                ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                ->where('b.company_id', $company->id)
+                ->whereNull('b.deleted_at')
+                ->whereNull('li.deleted_at')
+                ->whereNull('items.deleted_at')
+                ->whereIn('li.item_id', $itemIds)
+                ->where('b.status', 'paid')
+                ->whereNull('b.goods_received_at')
+                ->where('items.track_inventory', true)
+                ->where('items.delivery_mode', 'requires_receiving')
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                ->groupBy('li.item_id')
+                ->selectRaw('li.item_id, COUNT(*) as pending_count, SUM(li.quantity - COALESCE(li.quantity_received, 0)) as pending_qty')
+                ->get()
+                ->keyBy('item_id');
+        }
+
+        $stockLevels->getCollection()->transform(function ($level) use ($pendingReceipts) {
+            $pending = $pendingReceipts->get($level->item_id);
+            $level->pending_receipts = (int) ($pending?->pending_count ?? 0);
+            $level->pending_receipts_qty = (float) ($pending?->pending_qty ?? 0);
+            return $level;
+        });
 
         $warehouses = Warehouse::where('company_id', $company->id)
             ->where('is_active', true)
@@ -126,6 +157,68 @@ class StockController extends Controller
                 'movement_type' => $request->movement_type ?? '',
                 'date_from' => $request->date_from ?? '',
                 'date_to' => $request->date_to ?? '',
+            ],
+        ]);
+    }
+
+    public function receipts(Request $request): Response
+    {
+        $company = CompanyContext::getCompany();
+
+        $pendingBills = Bill::query()
+            ->select('acct.bills.*')
+            ->with('vendor:id,name')
+            ->where('company_id', $company->id)
+            ->where('status', 'paid')
+            ->whereNull('goods_received_at')
+            ->whereExists(function ($sub) use ($company) {
+                $sub->selectRaw('1')
+                    ->from('acct.bill_line_items as li')
+                    ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->whereNull('items.deleted_at')
+                    ->where('items.track_inventory', true)
+                    ->where('items.delivery_mode', 'requires_receiving')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+            })
+            ->addSelect([
+                'pending_lines' => DB::table('acct.bill_line_items as li')
+                    ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->whereNull('items.deleted_at')
+                    ->where('items.track_inventory', true)
+                    ->where('items.delivery_mode', 'requires_receiving')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                    ->selectRaw('COUNT(*)'),
+            ])
+            ->orderByDesc('bill_date')
+            ->paginate(20, ['*'], 'pending_page')
+            ->withQueryString();
+
+        $receipts = StockReceipt::query()
+            ->with(['bill.vendor:id,name', 'createdBy:id,name'])
+            ->withCount('lines')
+            ->withSum('lines as total_received', 'received_quantity')
+            ->withSum('lines as total_variance', 'variance_quantity')
+            ->where('company_id', $company->id)
+            ->orderByDesc('receipt_date')
+            ->paginate(20, ['*'], 'receipt_page')
+            ->withQueryString();
+
+        return Inertia::render('inventory/stock/Receipts', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+            ],
+            'pendingBills' => $pendingBills,
+            'receipts' => $receipts,
+            'filters' => [
+                'tab' => $request->string('tab')->toString() ?: 'pending',
             ],
         ]);
     }

@@ -24,10 +24,15 @@ class AttendantHandoverController extends Controller
             ->orderByDesc('handover_date')
             ->paginate(50);
 
-        // Get pending handovers count
-        $pendingCount = AttendantHandover::where('company_id', $company->id)
+        // Get pending handovers summary
+        $pendingHandovers = AttendantHandover::where('company_id', $company->id)
             ->where('status', AttendantHandover::STATUS_PENDING)
-            ->count();
+            ->get();
+
+        $summary = [
+            'pending_count' => $pendingHandovers->count(),
+            'pending_amount' => $pendingHandovers->sum('total_amount'),
+        ];
 
         // Get pumps and attendants for form
         $pumps = Pump::where('company_id', $company->id)
@@ -41,16 +46,13 @@ class AttendantHandoverController extends Controller
 
         // Get bank accounts for destination
         $bankAccounts = Account::where('company_id', $company->id)
-            ->where('account_type', 'asset')
-            ->where(function ($query) {
-                $query->where('name', 'like', '%Bank%')
-                    ->orWhere('name', 'like', '%Cash%');
-            })
+            ->whereIn('subtype', ['bank', 'cash'])
+            ->where('is_active', true)
             ->get();
 
         return Inertia::render('FuelStation/Handovers/Index', [
             'handovers' => $handovers,
-            'pendingCount' => $pendingCount,
+            'summary' => $summary,
             'pumps' => $pumps,
             'attendants' => $attendants,
             'bankAccounts' => $bankAccounts,

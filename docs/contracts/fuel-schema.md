@@ -78,7 +78,7 @@ Draft readings can be edited. Confirmation requires manager. JE only created on 
 
 ### Extensions to `inv.items`
 Add columns:
-- `fuel_category` varchar(20) nullable — 'petrol', 'diesel', 'high_octane', null for non-fuel.
+- `fuel_category` varchar(20) nullable — 'petrol', 'diesel', 'high_octane', 'lubricant', null for non-fuel.
 - `avg_cost` numeric(10,4) nullable — Weighted Average Cost for COGS calculation.
 
 ### Extensions to `inv.warehouses`

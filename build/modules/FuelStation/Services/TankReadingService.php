@@ -155,16 +155,33 @@ class TankReadingService
                 })
                 ->first();
 
-            $varianceAccount = $reading->variance_type === TankReading::VARIANCE_LOSS
-                ? Account::where('company_id', $company->id)
+            if ($reading->variance_type === TankReading::VARIANCE_LOSS) {
+                // For shrinkage: prefer 5900 (onboarding), then 6300 with Shrinkage in name, then any Shrinkage account
+                $varianceAccount = Account::where('company_id', $company->id)
                     ->where('is_active', true)
                     ->whereNull('deleted_at')
-                    ->where(function ($q) {
-                        $q->where('code', '6300')
-                          ->orWhere('name', 'like', '%Shrinkage%');
-                    })
-                    ->first()
-                : Account::where('company_id', $company->id)
+                    ->where('code', '5900')
+                    ->first();
+
+                if (!$varianceAccount) {
+                    $varianceAccount = Account::where('company_id', $company->id)
+                        ->where('is_active', true)
+                        ->whereNull('deleted_at')
+                        ->where('code', '6300')
+                        ->where('name', 'like', '%Shrinkage%')
+                        ->first();
+                }
+
+                if (!$varianceAccount) {
+                    $varianceAccount = Account::where('company_id', $company->id)
+                        ->where('is_active', true)
+                        ->whereNull('deleted_at')
+                        ->where('name', 'like', '%Shrinkage%')
+                        ->first();
+                }
+            } else {
+                // For gain: code 4900 or Variance Gain in name
+                $varianceAccount = Account::where('company_id', $company->id)
                     ->where('is_active', true)
                     ->whereNull('deleted_at')
                     ->where(function ($q) {
@@ -172,6 +189,7 @@ class TankReadingService
                           ->orWhere('name', 'like', '%Variance Gain%');
                     })
                     ->first();
+            }
 
             if (!$inventoryAccount || !$varianceAccount) {
                 throw new \RuntimeException('Required accounts not found. Ensure fuel_station COA is set up.');

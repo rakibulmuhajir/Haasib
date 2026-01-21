@@ -16,6 +16,7 @@ use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Accounting\Services\PostingTemplateValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -56,11 +57,28 @@ class PostingTemplateController extends Controller
             abort(403);
         }
 
+        try {
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+            if (!empty($company->base_currency)) {
+                DB::select("SELECT set_config('app.company_base_currency', ?, false)", [$company->base_currency]);
+            }
+        } catch (\Throwable $e) {
+            // If session config fails, queries will still use explicit company filters.
+        }
+
         $accounts = Account::where('company_id', $company->id)
             ->where('is_active', true)
             ->whereNull('deleted_at')
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'type', 'subtype']);
+        $discountReceivedAccountId = Account::where('company_id', $company->id)
+            ->whereIn('type', ['other_income', 'revenue'])
+            ->where(function ($q) {
+                $q->where('name', 'Discounts Received')
+                    ->orWhere('name', 'Purchase Discounts')
+                    ->orWhere('code', '4300');
+            })
+            ->value('id');
 
         return Inertia::render('accounting/posting-templates/Create', [
             'company' => [
@@ -70,6 +88,16 @@ class PostingTemplateController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'accounts' => $accounts,
+            'defaults' => [
+                'ar_account_id' => $company->ar_account_id,
+                'ap_account_id' => $company->ap_account_id,
+                'income_account_id' => $company->income_account_id,
+                'expense_account_id' => $company->expense_account_id,
+                'bank_account_id' => $company->bank_account_id,
+                'sales_tax_payable_account_id' => $company->sales_tax_payable_account_id,
+                'purchase_tax_receivable_account_id' => $company->purchase_tax_receivable_account_id,
+                'discount_received_account_id' => $discountReceivedAccountId,
+            ],
         ]);
     }
 
@@ -130,6 +158,15 @@ class PostingTemplateController extends Controller
             abort(403);
         }
 
+        try {
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+            if (!empty($company->base_currency)) {
+                DB::select("SELECT set_config('app.company_base_currency', ?, false)", [$company->base_currency]);
+            }
+        } catch (\Throwable $e) {
+            // If session config fails, queries will still use explicit company filters.
+        }
+
         $templateId = $request->route('posting_template');
         $template = PostingTemplate::where('company_id', $company->id)
             ->where('id', $templateId)
@@ -141,6 +178,14 @@ class PostingTemplateController extends Controller
             ->whereNull('deleted_at')
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'type', 'subtype']);
+        $discountReceivedAccountId = Account::where('company_id', $company->id)
+            ->whereIn('type', ['other_income', 'revenue'])
+            ->where(function ($q) {
+                $q->where('name', 'Discounts Received')
+                    ->orWhere('name', 'Purchase Discounts')
+                    ->orWhere('code', '4300');
+            })
+            ->value('id');
 
         $preview = null;
         $previewId = $request->query('preview_id');
@@ -163,6 +208,16 @@ class PostingTemplateController extends Controller
             'template' => $template,
             'accounts' => $accounts,
             'preview' => $preview,
+            'defaults' => [
+                'ar_account_id' => $company->ar_account_id,
+                'ap_account_id' => $company->ap_account_id,
+                'income_account_id' => $company->income_account_id,
+                'expense_account_id' => $company->expense_account_id,
+                'bank_account_id' => $company->bank_account_id,
+                'sales_tax_payable_account_id' => $company->sales_tax_payable_account_id,
+                'purchase_tax_receivable_account_id' => $company->purchase_tax_receivable_account_id,
+                'discount_received_account_id' => $discountReceivedAccountId,
+            ],
         ]);
     }
 

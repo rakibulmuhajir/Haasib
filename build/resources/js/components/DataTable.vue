@@ -58,8 +58,10 @@ const emit = defineEmits<{
   'row-click': [row: T]
 }>()
 
+const resolvedKeyField = computed<keyof T>(() => (props.keyField ?? ('id' as keyof T)))
+
 interface SortState {
-  column: keyof T | string | null
+  column: string | null
   direction: 'asc' | 'desc' | null
 }
 
@@ -71,7 +73,9 @@ const sortState = ref<SortState>({
 const handleSort = (column: Column<T>) => {
   if (!column.sortable) return
 
-  if (sortState.value.column === column.key) {
+  const columnKey = String(column.key)
+
+  if (sortState.value.column === columnKey) {
     if (sortState.value.direction === 'asc') {
       sortState.value.direction = 'desc'
     } else if (sortState.value.direction === 'desc') {
@@ -79,15 +83,15 @@ const handleSort = (column: Column<T>) => {
       sortState.value.direction = null
     }
   } else {
-    sortState.value.column = column.key
+    sortState.value.column = columnKey
     sortState.value.direction = 'asc'
   }
 
-  emit('sort', sortState.value.column ?? column.key, sortState.value.direction)
+  emit('sort', columnKey as keyof T | string, sortState.value.direction)
 }
 
 const getSortIcon = (column: Column<T>): Component => {
-  if (sortState.value.column !== column.key) return ArrowUpDown
+  if (sortState.value.column !== String(column.key)) return ArrowUpDown
   return sortState.value.direction === 'asc' ? ArrowUp : ArrowDown
 }
 
@@ -174,7 +178,7 @@ const handleRowClick = (row: T) => {
                   v-if="column.sortable"
                   class="h-3.5 w-3.5 transition-colors"
                   :class="[
-                    sortState.column === column.key ? 'text-primary' : 'text-text-quaternary'
+                    sortState.column === String(column.key) ? 'text-primary' : 'text-text-quaternary'
                   ]"
                 />
               </div>
@@ -205,7 +209,7 @@ const handleRowClick = (row: T) => {
           <tr
             v-else
             v-for="(row, index) in data"
-            :key="String(row[keyField])"
+            :key="String(row[resolvedKeyField])"
             :class="[
               'transition-colors',
               hoverable && 'hover:bg-muted/60',
@@ -245,7 +249,7 @@ const handleRowClick = (row: T) => {
         <slot 
           name="mobile-card" 
           v-for="row in data" 
-          :key="String(row[keyField])" 
+          :key="String(row[resolvedKeyField])" 
           :row="row"
         >
           <div 

@@ -49,8 +49,16 @@ interface Attendant {
   name: string
 }
 
+interface PaginatedResponse<T> {
+  data: T[]
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+}
+
 const props = defineProps<{
-  handovers: Handover[]
+  handovers: PaginatedResponse<Handover>
   pumps: Pump[]
   attendants: Attendant[]
   summary: {
@@ -73,17 +81,19 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Handovers', href: `/${companySlug.value}/fuel/handovers` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+
 const search = ref('')
 const statusFilter = ref<'all' | 'pending' | 'received'>('pending')
 
 const filteredHandovers = computed(() => {
-  return props.handovers.filter((h) => {
+  return (props.handovers.data || []).filter((h) => {
     if (statusFilter.value !== 'all' && h.status !== statusFilter.value) return false
     const q = search.value.trim().toLowerCase()
     if (!q) return true
     return (
-      h.attendant_name.toLowerCase().includes(q) ||
-      h.pump_name.toLowerCase().includes(q)
+      h.attendant_name?.toLowerCase().includes(q) ||
+      h.pump_name?.toLowerCase().includes(q)
     )
   })
 })
@@ -91,7 +101,8 @@ const filteredHandovers = computed(() => {
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
@@ -414,7 +425,7 @@ const getStatusBadge = (status: string) => {
                 <Input v-model.number="form.card_swipe_amount" type="number" min="0" step="1" placeholder="0" />
               </div>
               <div class="space-y-1">
-                <Label class="text-xs">Parco Card</Label>
+                <Label class="text-xs">Vendor Card</Label>
                 <Input v-model.number="form.parco_card_amount" type="number" min="0" step="1" placeholder="0" />
               </div>
             </div>

@@ -68,6 +68,7 @@ const formatMoney = (amount: number) => {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
+      currencyDisplay: 'narrowSymbol',
       currency: currencyCode.value,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,

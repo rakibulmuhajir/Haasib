@@ -36,6 +36,9 @@ class Company extends Model
         'retained_earnings_account_id' => 'string',
         'sales_tax_payable_account_id' => 'string',
         'purchase_tax_receivable_account_id' => 'string',
+        'transit_loss_account_id' => 'string',
+        'transit_gain_account_id' => 'string',
+        'default_drawing_limit_amount' => 'decimal:2',
     ];
 
     protected $fillable = [
@@ -72,9 +75,13 @@ class Company extends Model
         'retained_earnings_account_id',
         'sales_tax_payable_account_id',
         'purchase_tax_receivable_account_id',
+        'transit_loss_account_id',
+        'transit_gain_account_id',
         'settings',
         'logo_url',
         'created_by_user_id',
+        'default_drawing_limit_period',
+        'default_drawing_limit_amount',
     ];
 
     protected function industry(): Attribute
@@ -116,6 +123,11 @@ class Company extends Model
     public function onboarding()
     {
         return $this->hasOne(\App\Models\CompanyOnboarding::class, 'company_id');
+    }
+
+    public function partners()
+    {
+        return $this->hasMany(\App\Models\Partner::class, 'company_id');
     }
 
     public function getFiscalYearStartMonth(): int

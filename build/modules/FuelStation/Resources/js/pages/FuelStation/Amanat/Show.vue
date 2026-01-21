@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
+import { currencySymbol } from '@/lib/utils'
 
 interface AmanatTransaction {
   id: string
@@ -71,10 +72,14 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.customer.name, href: `/${companySlug.value}/fuel/amanat/${props.customer.id}` },
 ])
 
+const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
+const currency = computed(() => currencySymbol(currencyCode.value))
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'PKR',
+    currencyDisplay: 'narrowSymbol',
+    currency: currencyCode.value,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
@@ -303,7 +308,7 @@ const getTypeBadge = (type: string) => {
 
         <form class="space-y-4" @submit.prevent="submitDeposit">
           <div class="space-y-2">
-            <Label for="deposit_amount">Amount (PKR) *</Label>
+            <Label for="deposit_amount">Amount ({{ currency }}) *</Label>
             <Input
               id="deposit_amount"
               v-model.number="depositForm.amount"
@@ -368,7 +373,7 @@ const getTypeBadge = (type: string) => {
 
         <form class="space-y-4" @submit.prevent="submitWithdraw">
           <div class="space-y-2">
-            <Label for="withdraw_amount">Amount (PKR) *</Label>
+            <Label for="withdraw_amount">Amount ({{ currency }}) *</Label>
             <Input
               id="withdraw_amount"
               v-model.number="withdrawForm.amount"

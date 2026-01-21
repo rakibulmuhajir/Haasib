@@ -9,9 +9,11 @@ use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\IndustryCoaPack;
 use App\Modules\Accounting\Models\IndustryCoaTemplate;
+use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Modules\Accounting\Services\PostingTemplateInstaller;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Company Onboarding Service
@@ -56,18 +58,20 @@ class CompanyOnboardingService
         array $data
     ): Company {
         return DB::transaction(function () use ($company, $data) {
+            $industryCode = $company->industry_code ?: $data['industry_code'];
+
             // Update company with identity information
             $company->update([
-                'industry_code' => $data['industry_code'],
+                'industry_code' => $industryCode,
                 'registration_number' => $data['registration_number'] ?? null,
                 'trade_name' => $data['trade_name'] ?? null,
                 'timezone' => $data['timezone'] ?? 'UTC',
             ]);
 
-            $this->enableModulesForIndustry($company, $data['industry_code']);
+            $this->enableModulesForIndustry($company, $industryCode);
 
             // Create industry-specific chart of accounts (idempotent)
-            $this->createIndustryChartOfAccounts($company, $data['industry_code']);
+            $this->createIndustryChartOfAccounts($company, $industryCode);
 
             // Mark step as completed
             $onboarding = $this->initializeOnboarding($company);
@@ -94,6 +98,22 @@ class CompanyOnboardingService
     public function setupFiscalYear(Company $company, array $data): FiscalYear
     {
         return DB::transaction(function () use ($company, $data) {
+            $existingFiscalYear = FiscalYear::where('company_id', $company->id)
+                ->orderByDesc('start_date')
+                ->first();
+
+            if ($existingFiscalYear) {
+                $onboarding = $company->onboarding;
+                if ($onboarding) {
+                    $onboarding->completeStep('fiscal-year');
+                    if ($onboarding->current_step === 'fiscal-year') {
+                        $onboarding->advanceToStep('bank-accounts', 3);
+                    }
+                }
+
+                return $existingFiscalYear;
+            }
+
             // Update company with fiscal settings
             $company->update([
                 'fiscal_year_start_month' => $data['fiscal_year_start_month'],
@@ -149,17 +169,20 @@ class CompanyOnboardingService
     {
         return DB::transaction(function () use ($company, $bankAccounts) {
             $createdAccounts = [];
+            $updatedAccounts = [];
 
             foreach ($bankAccounts as $bankAccount) {
                 // Determine subtype based on account type
                 $subtype = $bankAccount['account_type'] === 'cash' ? 'cash' : 'bank';
 
-                // Find next available code in 1000-1049 range
-                $code = $this->getNextAvailableCode($company->id, '1000', '1049');
+                $account = null;
+                if (!empty($bankAccount['id'])) {
+                    $account = Account::where('company_id', $company->id)
+                        ->where('id', $bankAccount['id'])
+                        ->first();
+                }
 
-                $account = Account::create([
-                    'company_id' => $company->id,
-                    'code' => $code,
+                $payload = [
                     'name' => $bankAccount['account_name'],
                     'type' => 'asset',
                     'subtype' => $subtype,
@@ -167,16 +190,37 @@ class CompanyOnboardingService
                     'currency' => strtoupper($bankAccount['currency']), // Ensure uppercase
                     'is_active' => true,
                     'is_system' => false,
+                ];
+
+                if ($account) {
+                    $account->update($payload + [
+                        'updated_by_user_id' => $this->getCurrentUserId(),
+                    ]);
+                    $updatedAccounts[] = $account;
+                    continue;
+                }
+
+                // Find next available code in 1000-1049 range
+                $code = $this->getNextAvailableCode($company->id, '1000', '1049');
+
+                $account = Account::create($payload + [
+                    'company_id' => $company->id,
+                    'code' => $code,
                     'created_by_user_id' => $this->getCurrentUserId(),
                 ]);
 
                 $createdAccounts[] = $account;
             }
 
+            $syncIds = array_merge(
+                collect($createdAccounts)->pluck('id')->all(),
+                collect($updatedAccounts)->pluck('id')->all()
+            );
+
             app(CompanyBankAccountSyncService::class)->ensureForCompany(
                 $company->id,
                 $this->getCurrentUserId(),
-                collect($createdAccounts)->pluck('id')->all(),
+                empty($syncIds) ? null : $syncIds,
             );
 
             // Set default bank account if none exists
@@ -201,8 +245,12 @@ class CompanyOnboardingService
     public function setupDefaultAccounts(Company $company, array $defaults): Company
     {
         return DB::transaction(function () use ($company, $defaults) {
+            $transitDefaults = app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company);
+            $hasTransitLoss = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_loss_account_id');
+            $hasTransitGain = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_gain_account_id');
+
             // Store default account IDs in DB columns - these are ACTUALLY USED by the system
-            $company->update([
+            $updates = [
                 'ar_account_id' => $defaults['ar_account_id'],
                 'ap_account_id' => $defaults['ap_account_id'],
                 'income_account_id' => $defaults['income_account_id'],
@@ -211,7 +259,18 @@ class CompanyOnboardingService
                 'retained_earnings_account_id' => $defaults['retained_earnings_account_id'],
                 'sales_tax_payable_account_id' => $defaults['sales_tax_payable_account_id'] ?? null,
                 'purchase_tax_receivable_account_id' => $defaults['purchase_tax_receivable_account_id'] ?? null,
-            ]);
+            ];
+
+            if ($hasTransitLoss) {
+                $updates['transit_loss_account_id'] = $defaults['transit_loss_account_id']
+                    ?? $transitDefaults['transit_loss_account_id'];
+            }
+            if ($hasTransitGain) {
+                $updates['transit_gain_account_id'] = $defaults['transit_gain_account_id']
+                    ?? $transitDefaults['transit_gain_account_id'];
+            }
+
+            $company->update($updates);
 
             // Bootstrap default posting templates now that core accounts are mapped.
             app(PostingTemplateInstaller::class)->ensureDefaults($company->fresh());
@@ -396,6 +455,8 @@ class CompanyOnboardingService
                 'created_by_user_id' => $this->getCurrentUserId(),
             ]);
         }
+
+        app(DefaultAccountProvisioner::class)->ensureTransitAccounts($company);
     }
 
     /**

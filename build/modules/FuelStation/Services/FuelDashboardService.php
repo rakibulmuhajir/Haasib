@@ -91,7 +91,7 @@ class FuelDashboardService
             'pendingHandovers' => $this->getPendingHandovers($companyId),
             'outstandingInvestorCommissions' => $this->getOutstandingInvestorCommissions($companyId),
             'amanatSummary' => $this->getAmanatSummary($companyId),
-            'parcoReceivable' => $this->getParcoReceivable($companyId),
+            'vendorCardReceivable' => $this->getVendorCardReceivable($companyId),
         ];
     }
 
@@ -299,12 +299,12 @@ class FuelDashboardService
     }
 
     /**
-     * Get Parco card receivable (unpaid Parco card sales).
+     * Get vendor card receivable (unpaid vendor card sales).
      */
-    private function getParcoReceivable(string $companyId): float
+    private function getVendorCardReceivable(string $companyId): float
     {
         return SaleMetadata::where('company_id', $companyId)
-            ->where('sale_type', SaleMetadata::TYPE_PARCO_CARD)
+            ->where('sale_type', SaleMetadata::TYPE_VENDOR_CARD)
             ->whereHas('invoice', function ($query) {
                 $query->where('status', '!=', 'paid');
             })

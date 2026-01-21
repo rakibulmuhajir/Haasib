@@ -6,6 +6,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class UpdateDefaultAccountsRequest extends BaseFormRequest
@@ -50,6 +51,19 @@ class UpdateDefaultAccountsRequest extends BaseFormRequest
             };
         };
 
+        $hasTransitLoss = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_loss_account_id');
+        $hasTransitGain = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_gain_account_id');
+        $transitRules = [
+            'transit_loss_account_id' => ['required', 'uuid', $accountExists(), $requireType(['expense', 'cogs', 'other_expense'])],
+            'transit_gain_account_id' => ['required', 'uuid', $accountExists(), $requireType('other_income')],
+        ];
+        if (! ($hasTransitLoss && $hasTransitGain)) {
+            $transitRules = [
+                'transit_loss_account_id' => ['nullable'],
+                'transit_gain_account_id' => ['nullable'],
+            ];
+        }
+
         return [
             'ar_account_id' => ['required', 'uuid', $accountExists(), $requireSubtype('accounts_receivable')],
             'ap_account_id' => ['required', 'uuid', $accountExists(), $requireSubtype('accounts_payable')],
@@ -59,6 +73,7 @@ class UpdateDefaultAccountsRequest extends BaseFormRequest
             'retained_earnings_account_id' => ['required', 'uuid', $accountExists(), $requireSubtype('retained_earnings')],
             'sales_tax_payable_account_id' => ['nullable', 'uuid', $accountExists()],
             'purchase_tax_receivable_account_id' => ['nullable', 'uuid', $accountExists()],
+            ...$transitRules,
         ];
     }
 }

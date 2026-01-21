@@ -27,6 +27,7 @@ class Transaction extends Model
         'fiscal_year_id',
         'period_id',
         'description',
+        'metadata',
         'currency',
         'base_currency',
         'exchange_rate',
@@ -35,11 +36,19 @@ class Transaction extends Model
         'status',
         'reversal_of_id',
         'reversed_by_id',
+        'corrects_transaction_id',
+        'amendment_reason',
+        'amended_at',
+        'amended_by_user_id',
         'posted_at',
         'posted_by_user_id',
         'voided_at',
         'voided_by_user_id',
         'void_reason',
+        'is_locked',
+        'locked_at',
+        'locked_by_user_id',
+        'lock_reason',
         'created_by_user_id',
         'updated_by_user_id',
     ];
@@ -51,15 +60,22 @@ class Transaction extends Model
         'posting_date' => 'date',
         'fiscal_year_id' => 'string',
         'period_id' => 'string',
+        'metadata' => 'array',
         'exchange_rate' => 'decimal:8',
         'total_debit' => 'decimal:2',
         'total_credit' => 'decimal:2',
         'reversal_of_id' => 'string',
         'reversed_by_id' => 'string',
+        'corrects_transaction_id' => 'string',
+        'amended_at' => 'datetime',
+        'amended_by_user_id' => 'string',
         'posted_at' => 'datetime',
         'posted_by_user_id' => 'string',
         'voided_at' => 'datetime',
         'voided_by_user_id' => 'string',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
+        'locked_by_user_id' => 'string',
         'created_by_user_id' => 'string',
         'updated_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -90,6 +106,105 @@ class Transaction extends Model
     public function reversedBy()
     {
         return $this->hasOne(self::class, 'reversal_of_id');
+    }
+
+    /**
+     * The transaction that this entry corrects (for amendments).
+     */
+    public function correctsTransaction()
+    {
+        return $this->belongsTo(self::class, 'corrects_transaction_id');
+    }
+
+    /**
+     * The correction entry that replaced this transaction.
+     */
+    public function correctedBy()
+    {
+        return $this->hasOne(self::class, 'corrects_transaction_id');
+    }
+
+    /**
+     * User who locked this transaction.
+     */
+    public function lockedBy()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'locked_by_user_id');
+    }
+
+    /**
+     * User who amended this transaction.
+     */
+    public function amendedBy()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'amended_by_user_id');
+    }
+
+    /**
+     * Get the display status for this transaction.
+     */
+    public function getDisplayStatusAttribute(): string
+    {
+        if ($this->reversed_by_id) {
+            return 'reversed';
+        }
+        if ($this->reversal_of_id) {
+            return 'reversal';
+        }
+        if ($this->corrects_transaction_id) {
+            return 'correction';
+        }
+        if ($this->is_locked) {
+            return 'locked';
+        }
+        return 'posted';
+    }
+
+    /**
+     * Check if this transaction can be amended.
+     */
+    public function isAmendable(): bool
+    {
+        return !$this->is_locked
+            && !$this->reversed_by_id
+            && !$this->voided_at
+            && in_array($this->transaction_type, ['fuel_daily_close']);
+    }
+
+    /**
+     * Check if this transaction can be locked.
+     */
+    public function isLockable(): bool
+    {
+        return !$this->is_locked
+            && !$this->reversed_by_id
+            && !$this->voided_at;
+    }
+
+    /**
+     * Lock this transaction.
+     */
+    public function lock(string $userId, string $reason = 'manual'): void
+    {
+        $this->update([
+            'is_locked' => true,
+            'locked_at' => now(),
+            'locked_by_user_id' => $userId,
+            'lock_reason' => $reason,
+        ]);
+    }
+
+    /**
+     * Unlock this transaction (owner only).
+     */
+    public function unlock(): void
+    {
+        $this->update([
+            'is_locked' => false,
+            'locked_at' => null,
+            'locked_by_user_id' => null,
+            'lock_reason' => null,
+        ]);
     }
 
     /**

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import TankLevelGauge from '../../../components/TankLevelGauge.vue'
 import type { BreadcrumbItem } from '@/types'
 import {
   ArrowRight,
@@ -61,7 +62,7 @@ type DashboardData = {
     total_holders?: number
     total_balance?: number
   }
-  parcoReceivable?: number
+  vendorCardReceivable?: number
 }
 
 const props = defineProps<{
@@ -88,6 +89,7 @@ const formatMoney = (n: number) => {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
+      currencyDisplay: 'narrowSymbol',
       currency: currencyCode.value,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -302,10 +304,10 @@ const saleTypesToday = computed(() => {
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="rounded-xl border border-border/70 bg-gradient-to-br from-amber-500/10 to-rose-500/5 p-4">
               <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-text-tertiary">Parco receivable</p>
+                <p class="text-sm font-medium text-text-tertiary">Vendor card receivable</p>
                 <Receipt class="h-4 w-4 text-amber-600" />
               </div>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.parcoReceivable ?? 0) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.vendorCardReceivable ?? 0) }}</p>
             </div>
             <div class="rounded-xl border border-border/70 bg-gradient-to-br from-sky-500/10 to-indigo-500/5 p-4">
               <div class="flex items-center justify-between">
@@ -339,27 +341,32 @@ const saleTypesToday = computed(() => {
             :key="l.tank?.id ?? l.itemName"
             class="rounded-xl border border-border/70 bg-surface-1 p-4"
           >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="font-semibold text-text-primary">{{ l.tank?.name ?? 'Tank' }}</p>
-                <p class="mt-1 text-sm text-text-secondary">
-                  <span class="inline-flex items-center gap-2">
-                    <Droplet class="h-4 w-4 text-emerald-600" />
-                    {{ l.itemName }}
-                  </span>
-                </p>
-              </div>
-              <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
-                {{ l.percent }}%
-              </Badge>
-            </div>
+            <div class="flex items-start gap-4">
+              <TankLevelGauge :percent="l.percent" :size="44" />
+              <div class="flex-1">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="font-semibold text-text-primary">{{ l.tank?.name ?? 'Tank' }}</p>
+                    <p class="mt-1 text-sm text-text-secondary">
+                      <span class="inline-flex items-center gap-2">
+                        <Droplet class="h-4 w-4 text-emerald-600" />
+                        {{ l.itemName }}
+                      </span>
+                    </p>
+                  </div>
+                  <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                    {{ l.percent }}%
+                  </Badge>
+                </div>
 
-            <div class="mt-3">
-              <Progress :value="l.percent" class="h-2 bg-slate-200/70" />
-              <div class="mt-2 flex items-center justify-between text-xs text-text-tertiary">
-                <span>{{ formatLiters(l.current) }}L</span>
-                <span v-if="l.capacity > 0">{{ formatLiters(l.capacity) }}L capacity</span>
-                <span v-else>Capacity unknown</span>
+                <div class="mt-3">
+                  <Progress :value="l.percent" class="h-2 bg-slate-200/70" />
+                  <div class="mt-2 flex items-center justify-between text-xs text-text-tertiary">
+                    <span>{{ formatLiters(l.current) }}L</span>
+                    <span v-if="l.capacity > 0">{{ formatLiters(l.capacity) }}L capacity</span>
+                    <span v-else>Capacity unknown</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

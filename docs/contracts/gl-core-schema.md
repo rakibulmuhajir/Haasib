@@ -124,6 +124,7 @@ Single source of truth for fiscal years, accounting periods, transactions, and j
   - `fiscal_year_id` uuid not null FK → `acct.fiscal_years.id` (RESTRICT/CASCADE).
   - `period_id` uuid not null FK → `acct.accounting_periods.id` (RESTRICT/CASCADE).
   - `description` text nullable.
+  - `metadata` jsonb nullable (module-specific metadata; do not drive core logic).
   - `currency` char(3) not null FK → `public.currencies.code` (transaction currency).
   - `base_currency` char(3) not null FK → `public.currencies.code` (company base).
   - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency).
@@ -137,28 +138,37 @@ Single source of truth for fiscal years, accounting periods, transactions, and j
   - `voided_at` timestamp nullable.
   - `voided_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
   - `void_reason` varchar(255) nullable.
+  - `is_locked` boolean not null default false (prevents amendments when true).
+  - `locked_at` timestamp nullable.
+  - `locked_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `lock_reason` varchar(50) nullable. Enum: manual, month_end, reconciled.
+  - `corrects_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE) (for corrections/amendments).
+  - `amendment_reason` varchar(500) nullable (reason for the amendment).
+  - `amended_at` timestamp nullable.
+  - `amended_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
   - `created_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
   - `updated_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
   - `created_at`, `updated_at`, `deleted_at` timestamps.
 - Indexes/constraints:
   - PK `id`.
   - Unique (`company_id`, `transaction_number`) where deleted_at is null.
-  - Index: `company_id`; (`company_id`, `transaction_date`); (`company_id`, `status`); (`reference_type`, `reference_id`); `fiscal_year_id`; `period_id`.
+  - Index: `company_id`; (`company_id`, `transaction_date`); (`company_id`, `status`); (`reference_type`, `reference_id`); `fiscal_year_id`; `period_id`; `is_locked`; `corrects_transaction_id`.
   - Check: `total_debit = total_credit` (balanced entry).
   - Check: `total_debit >= 0` and `total_credit >= 0`.
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.transactions'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','transaction_number','transaction_type','reference_type','reference_id','transaction_date','posting_date','fiscal_year_id','period_id','description','currency','base_currency','exchange_rate','total_debit','total_credit','status','reversal_of_id','reversed_by_id','posted_at','posted_by_user_id','voided_at','voided_by_user_id','void_reason','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','reference_id'=>'string','transaction_date'=>'date','posting_date'=>'date','fiscal_year_id'=>'string','period_id'=>'string','exchange_rate'=>'decimal:8','total_debit'=>'decimal:2','total_credit'=>'decimal:2','reversal_of_id'=>'string','reversed_by_id'=>'string','posted_at'=>'datetime','posted_by_user_id'=>'string','voided_at'=>'datetime','voided_by_user_id'=>'string','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
-- Relationships: belongsTo Company; belongsTo FiscalYear; belongsTo AccountingPeriod; hasMany JournalEntry; belongsTo ReversalOf (self); hasOne ReversedBy (self).
+  - `$fillable = ['company_id','transaction_number','transaction_type','reference_type','reference_id','transaction_date','posting_date','fiscal_year_id','period_id','description','metadata','currency','base_currency','exchange_rate','total_debit','total_credit','status','reversal_of_id','reversed_by_id','corrects_transaction_id','amendment_reason','amended_at','amended_by_user_id','posted_at','posted_by_user_id','voided_at','voided_by_user_id','void_reason','is_locked','locked_at','locked_by_user_id','lock_reason','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','reference_id'=>'string','transaction_date'=>'date','posting_date'=>'date','fiscal_year_id'=>'string','period_id'=>'string','metadata'=>'array','exchange_rate'=>'decimal:8','total_debit'=>'decimal:2','total_credit'=>'decimal:2','reversal_of_id'=>'string','reversed_by_id'=>'string','corrects_transaction_id'=>'string','amended_at'=>'datetime','amended_by_user_id'=>'string','posted_at'=>'datetime','posted_by_user_id'=>'string','voided_at'=>'datetime','voided_by_user_id'=>'string','is_locked'=>'boolean','locked_at'=>'datetime','locked_by_user_id'=>'string','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+- Relationships: belongsTo Company; belongsTo FiscalYear; belongsTo AccountingPeriod; hasMany JournalEntry; belongsTo ReversalOf (self); hasOne ReversedBy (self); belongsTo CorrectsTransaction (self); hasOne CorrectedBy (self); belongsTo LockedBy (User); belongsTo AmendedBy (User).
 - Validation:
   - `transaction_number`: required|string|max:50; unique per company (soft-delete aware).
-  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing.
+  - `transaction_type`: required|in:manual,invoice,bill,payment,receipt,credit_note,vendor_credit,transfer,adjustment,opening,closing,fuel_daily_close,fuel_daily_close_reversal.
   - `transaction_date`: required|date.
   - `posting_date`: required|date.
   - `fiscal_year_id`: required|uuid|exists:acct.fiscal_years,id.
   - `period_id`: required|uuid|exists:acct.accounting_periods,id.
+  - `metadata`: nullable|array.
   - `currency`: required|string|size:3|uppercase.
   - `base_currency`: required|string|size:3|uppercase.
   - `exchange_rate`: nullable|numeric|min:0.00000001 (required if currency != base_currency).

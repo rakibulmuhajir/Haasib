@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * - "Boss, I already sent it" → which channel? verify
  * - Mobile wallet fraud detection
  * - Reconcile card swipes with bank settlement
- * - Track Parco card separately (goes to clearing, not cash)
+ * - Track vendor card separately (goes to clearing, not cash)
  */
 class AttendantHandover extends Model
 {
@@ -122,7 +122,7 @@ class AttendantHandover extends Model
     }
 
     /**
-     * Get the amount going to bank (excludes Parco card which goes to clearing).
+     * Get the amount going to bank (excludes vendor card which goes to clearing).
      */
     public function getBankableAmountAttribute(): float
     {

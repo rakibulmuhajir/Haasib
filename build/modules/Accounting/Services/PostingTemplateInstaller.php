@@ -3,26 +3,31 @@
 namespace App\Modules\Accounting\Services;
 
 use App\Models\Company;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\PostingTemplate;
 use App\Modules\Accounting\Models\PostingTemplateLine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Carbon;
 
 class PostingTemplateInstaller
 {
+    private const DEFAULT_EFFECTIVE_FROM = '2000-01-01';
+
     /**
      * Ensure minimal default posting templates exist for a company.
      * Intended as a bootstrap until a full template-management UI exists.
      */
     public function ensureDefaults(Company $company): void
     {
-        if (! Schema::hasTable('acct.posting_templates')) {
+        if (! Schema::hasTable('acct.posting_templates') && ! Schema::hasTable('posting_templates')) {
             return;
         }
 
         DB::transaction(function () use ($company) {
             $userId = Auth::id();
+            $discountReceivedAccountId = $this->resolveDiscountReceivedAccountId($company);
 
             $this->ensureTemplate($company, 'AR_INVOICE', 'Default AR Invoice', [
                 'AR' => $company->ar_account_id,
@@ -46,7 +51,7 @@ class PostingTemplateInstaller
                 'AP' => $company->ap_account_id,
                 'EXPENSE' => $company->expense_account_id,
                 'TAX_RECEIVABLE' => $company->purchase_tax_receivable_account_id,
-                'DISCOUNT_RECEIVED' => $company->income_account_id, // fallback (other_income ideally)
+                'DISCOUNT_RECEIVED' => $discountReceivedAccountId ?? $company->income_account_id, // fallback (other_income ideally)
             ], $userId);
 
             $this->ensureTemplate($company, 'AP_PAYMENT', 'Default AP Payment', [
@@ -60,6 +65,20 @@ class PostingTemplateInstaller
                 'TAX_RECEIVABLE' => $company->purchase_tax_receivable_account_id,
             ], $userId);
         });
+    }
+
+    private function resolveDiscountReceivedAccountId(Company $company): ?string
+    {
+        $account = Account::where('company_id', $company->id)
+            ->whereIn('type', ['other_income', 'revenue'])
+            ->where(function ($q) {
+                $q->where('name', 'Discounts Received')
+                    ->orWhere('name', 'Purchase Discounts')
+                    ->orWhere('code', '4300');
+            })
+            ->first(['id']);
+
+        return $account?->id;
     }
 
     /**
@@ -88,11 +107,13 @@ class PostingTemplateInstaller
                 'is_active' => true,
                 'is_default' => true,
                 'version' => 1,
-                'effective_from' => now()->toDateString(),
+                'effective_from' => self::DEFAULT_EFFECTIVE_FROM,
                 'effective_to' => null,
                 'created_by_user_id' => $userId,
                 'updated_by_user_id' => $userId,
             ]);
+        } else {
+            $this->backfillEffectiveFrom($template);
         }
 
         $precedence = 1;
@@ -112,5 +133,25 @@ class PostingTemplateInstaller
             );
         }
     }
-}
 
+    private function backfillEffectiveFrom(PostingTemplate $template): void
+    {
+        if (! $template->is_default || ! $template->is_active) {
+            return;
+        }
+
+        $description = strtolower((string) ($template->description ?? ''));
+        if (! str_contains($description, 'auto-created')) {
+            return;
+        }
+
+        if (! $template->effective_from instanceof Carbon) {
+            return;
+        }
+
+        $minimum = Carbon::parse(self::DEFAULT_EFFECTIVE_FROM);
+        if ($template->effective_from->greaterThan($minimum)) {
+            $template->update(['effective_from' => self::DEFAULT_EFFECTIVE_FROM]);
+        }
+    }
+}

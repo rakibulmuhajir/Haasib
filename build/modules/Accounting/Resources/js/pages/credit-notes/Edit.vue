@@ -100,6 +100,7 @@ const statusOptions = [
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: form.base_currency || 'USD',
   }).format(amount)
 }

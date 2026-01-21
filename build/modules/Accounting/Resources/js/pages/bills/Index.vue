@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
-import { FileText, Plus, Search } from 'lucide-vue-next'
+import { FileText, Package, Plus, Search } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -36,6 +36,9 @@ interface BillRow {
   balance: number
   status: string
   currency: string
+  goods_received_at: string | null
+  receivable_items_count?: number
+  linked_items_count?: number
 }
 
 interface PaginatedBills {
@@ -55,6 +58,8 @@ const props = defineProps<{
     search?: string
     from_date?: string
     to_date?: string
+    item_id?: string
+    needs_receiving?: string
   }
   vendors: VendorRef[]
 }>()
@@ -67,6 +72,8 @@ const vendorId = ref(props.filters.vendor_id ?? allVendorsValue)
 const status = ref(props.filters.status ?? allStatusValue)
 const fromDate = ref(props.filters.from_date ?? '')
 const toDate = ref(props.filters.to_date ?? '')
+const itemId = ref(props.filters.item_id ?? '')
+const needsReceivingFilter = ref(props.filters.needs_receiving ?? '')
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: t('dashboard'), href: `/${props.company.slug}` },
@@ -81,10 +88,15 @@ const columns = [
   { key: 'total_amount', label: t('total') },
   { key: 'balance', label: t('balance') },
   { key: 'status', label: t('status') },
+  { key: 'receive_stock', label: t('receiveStock') },
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(val)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    currencyDisplay: 'narrowSymbol',
+  }).format(val)
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -103,6 +115,25 @@ const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'ou
   return 'secondary'
 }
 
+const billStatusLabel = (s: string) => {
+  if (s === 'received') return t('billReceived')
+  if (s === 'partial') return t('partiallyPaid')
+  if (s === 'void') return t('voided')
+  if (s === 'cancelled') return t('cancelled')
+  if (t(s as any)) return t(s as any)
+  return s
+}
+
+const stockStatusLabel = (bill: BillRow) => {
+  const linkedCount = Number(bill.linked_items_count ?? 0)
+  const receivableCount = Number(bill.receivable_items_count ?? 0)
+  if (linkedCount === 0) return t('stockNotTracked')
+  if (bill.goods_received_at) return t('stockReceived')
+  if (receivableCount === 0) return t('stockReceived')
+  if (bill.status !== 'paid') return t('stockAwaitingPayment')
+  return t('stockPending')
+}
+
 const tableData = computed(() =>
   props.bills.data.map((b) => ({
     id: b.id,
@@ -114,9 +145,17 @@ const tableData = computed(() =>
     total_amount: formatMoney(b.total_amount, b.currency),
     balance: formatMoney(b.balance, b.currency),
     status: b.status,
-    _billObject: b,
+    goods_received_at: b.goods_received_at,
+    receivable_items_count: Number(b.receivable_items_count ?? 0),
+    linked_items_count: Number(b.linked_items_count ?? 0),
   }))
 )
+
+const needsReceiving = (bill: BillRow) => {
+  return bill.status === 'paid'
+    && !bill.goods_received_at
+    && Number(bill.receivable_items_count ?? 0) > 0
+}
 
 const handleSearch = () => {
   router.get(
@@ -127,6 +166,8 @@ const handleSearch = () => {
       status: status.value === allStatusValue ? '' : status.value,
       from_date: fromDate.value,
       to_date: toDate.value,
+      item_id: itemId.value,
+      needs_receiving: needsReceivingFilter.value,
     },
     { preserveState: true }
   )
@@ -238,15 +279,34 @@ const filterByStatus = (statusValue: string) => {
         </template>
 
         <!-- Status - Clickable Badge -->
-        <template #cell-status="{ value }">
+        <template #cell-status="{ value, row }">
           <button
             @click="filterByStatus(value)"
             class="inline-flex transition-opacity hover:opacity-70 focus:outline-none"
           >
             <Badge :variant="statusVariant(value)">
-              {{ value }}
+              {{ billStatusLabel(value) }}
             </Badge>
           </button>
+          <p class="text-xs text-muted-foreground mt-1">
+            {{ t('stockStatus') }}: {{ stockStatusLabel(row) }}
+          </p>
+        </template>
+
+        <!-- Receive Stock Action -->
+        <template #cell-receive_stock="{ row }">
+          <div class="flex justify-end">
+            <Button
+              v-if="needsReceiving(row)"
+              size="sm"
+              variant="outline"
+              @click.stop="navigateToBill(row.id)"
+            >
+              <Package class="mr-2 h-4 w-4" />
+              {{ t('receiveStock') }}
+            </Button>
+            <span v-else class="text-xs text-muted-foreground">—</span>
+          </div>
         </template>
 
         <!-- Mobile Card Template -->
@@ -274,7 +334,7 @@ const filterByStatus = (statusValue: string) => {
                   class="transition-opacity hover:opacity-70"
                 >
                   <Badge :variant="statusVariant(row.status)">
-                    {{ row.status }}
+                    {{ billStatusLabel(row.status) }}
                   </Badge>
                 </button>
               </div>
@@ -301,6 +361,21 @@ const filterByStatus = (statusValue: string) => {
                   <span class="text-sm text-zinc-500">Balance:</span>
                   <span class="font-medium ml-1">{{ row.balance }}</span>
                 </div>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ t('stockStatus') }}: {{ stockStatusLabel(row) }}
+              </p>
+
+              <div v-if="needsReceiving(row)" class="pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  class="w-full"
+                  @click.stop="navigateToBill(row.id)"
+                >
+                  <Package class="mr-2 h-4 w-4" />
+                  {{ t('receiveStock') }}
+                </Button>
               </div>
             </div>
           </div>

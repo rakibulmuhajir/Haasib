@@ -123,6 +123,25 @@ class Employee extends Model
         return $this->hasMany(LeaveRequest::class);
     }
 
+    public function salaryAdvances(): HasMany
+    {
+        return $this->hasMany(SalaryAdvance::class);
+    }
+
+    public function outstandingAdvances(): HasMany
+    {
+        return $this->hasMany(SalaryAdvance::class)
+            ->whereIn('status', ['pending', 'partially_recovered']);
+    }
+
+    /**
+     * Get total outstanding advance amount for this employee
+     */
+    public function getTotalOutstandingAdvancesAttribute(): float
+    {
+        return (float) $this->outstandingAdvances()->sum('amount_outstanding');
+    }
+
     public function getFullNameAttribute(): string
     {
         return "{$this->first_name} {$this->last_name}";

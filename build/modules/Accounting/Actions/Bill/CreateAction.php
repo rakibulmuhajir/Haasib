@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -129,6 +130,10 @@ class CreateAction implements PaletteAction
                 ]);
             }
 
+            if ($status === 'received') {
+                $this->autoReceiveImmediateItems($bill);
+            }
+
             if ($status === 'received' && !$bill->transaction_id) {
                 $posting = app(GlPostingService::class)->postBill($bill->fresh(['vendor', 'lineItems']));
                 $bill->transaction_id = $posting->id;
@@ -142,6 +147,39 @@ class CreateAction implements PaletteAction
                 'data' => ['id' => $bill->id],
             ];
         });
+    }
+
+    protected function autoReceiveImmediateItems(Bill $bill): void
+    {
+        $bill->loadMissing('lineItems.item');
+
+        $lines = [];
+        foreach ($bill->lineItems as $line) {
+            $item = $line->item;
+            if (! $item || $item->delivery_mode !== 'immediate') {
+                continue;
+            }
+
+            $remaining = (float) $line->quantity - (float) $line->quantity_received;
+            if ($remaining <= 0) {
+                continue;
+            }
+
+            $lines[] = [
+                'line_id' => $line->id,
+                'quantity' => $remaining,
+                'warehouse_id' => $line->warehouse_id,
+            ];
+        }
+
+        if (empty($lines)) {
+            return;
+        }
+
+        app(CommandBus::class)->dispatch('bill.receive_goods', [
+            'id' => $bill->id,
+            'lines' => $lines,
+        ], Auth::user());
     }
 
     private function nextNumber(string $companyId): string

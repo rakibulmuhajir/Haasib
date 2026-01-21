@@ -36,6 +36,20 @@ const goBack = () => {
 }
 
 const showTaxFields = computed(() => form.tax_registered)
+
+const taxRegisteredValue = computed({
+  get: () => (form.tax_registered ? 'true' : 'false'),
+  set: (value: string) => {
+    form.tax_registered = value === 'true'
+  },
+})
+
+const taxInclusiveValue = computed({
+  get: () => (form.tax_inclusive ? 'true' : 'false'),
+  set: (value: string) => {
+    form.tax_inclusive = value === 'true'
+  },
+})
 </script>
 
 <template>
@@ -115,9 +129,9 @@ const showTaxFields = computed(() => form.tax_registered)
                 </p>
               </div>
 
-              <RadioGroup v-model="form.tax_registered" class="space-y-3">
+              <RadioGroup v-model="taxRegisteredValue" class="space-y-3">
                 <div class="flex items-start space-x-3 border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <RadioGroupItem :value="true" id="tax_yes" class="mt-1" />
+                  <RadioGroupItem value="true" id="tax_yes" class="mt-1" />
                   <div class="flex-1">
                     <Label for="tax_yes" class="text-base font-medium cursor-pointer">
                       Yes, I'm registered
@@ -129,7 +143,7 @@ const showTaxFields = computed(() => form.tax_registered)
                 </div>
 
                 <div class="flex items-start space-x-3 border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <RadioGroupItem :value="false" id="tax_no" class="mt-1" />
+                  <RadioGroupItem value="false" id="tax_no" class="mt-1" />
                   <div class="flex-1">
                     <Label for="tax_no" class="text-base font-medium cursor-pointer">
                       No, I'm not registered
@@ -185,9 +199,9 @@ const showTaxFields = computed(() => form.tax_registered)
                   </p>
                 </div>
 
-                <RadioGroup v-model="form.tax_inclusive" class="space-y-3">
+                <RadioGroup v-model="taxInclusiveValue" class="space-y-3">
                   <div class="flex items-start space-x-3 border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <RadioGroupItem :value="false" id="tax_exclusive" class="mt-1" />
+                    <RadioGroupItem value="false" id="tax_exclusive" class="mt-1" />
                     <div class="flex-1">
                       <Label for="tax_exclusive" class="text-base font-medium cursor-pointer">
                         Tax Exclusive (Recommended)
@@ -202,7 +216,7 @@ const showTaxFields = computed(() => form.tax_registered)
                   </div>
 
                   <div class="flex items-start space-x-3 border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <RadioGroupItem :value="true" id="tax_inclusive" class="mt-1" />
+                    <RadioGroupItem value="true" id="tax_inclusive" class="mt-1" />
                     <div class="flex-1">
                       <Label for="tax_inclusive" class="text-base font-medium cursor-pointer">
                         Tax Inclusive

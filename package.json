@@ -3,6 +3,8 @@
     "lint:mode-copy": "bash scripts/check-mode-strings.sh"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "playwright": "^1.57.0",
     "shadcn-vue": "^2.3.3"
   },
   "dependencies": {
@@ -16,5 +18,25 @@
     "vue": "^3.5.25",
     "vue-sonner": "^2.0.9",
     "vue-tsc": "^2.2.12"
-  }
+  },
+  "name": "haasib",
+  "version": "1.0.0",
+  "description": "Covers deployment, table purposes, usage patterns, operations, and expansion for all modules: `00_core`, `10_acct`, `11_ar`, `12_ap`, `13_bank`, `14_tax`, `15_posting`, `20_inv`, `21_inventory_costing`, `30_reporting`, `31_fin_reports`, `40_crm`, `50_payroll`, `51_payroll_extended`, `60_vms`, `90_sys`, `91_webhook_deliveries`, `92_failed_jobs`, `93_schema_version`.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rakibulmuhajir/Haasib.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rakibulmuhajir/Haasib/issues"
+  },
+  "homepage": "https://github.com/rakibulmuhajir/Haasib#readme"
 }

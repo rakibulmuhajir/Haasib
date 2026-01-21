@@ -8,6 +8,7 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Services\CommandBus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -57,8 +58,42 @@ class ReceiveAction implements PaletteAction
                 }
             }
 
+            $this->autoReceiveImmediateItems($bill);
         });
 
         return ['message' => "Bill {$bill->bill_number} marked received"];
+    }
+
+    protected function autoReceiveImmediateItems(Bill $bill): void
+    {
+        $bill->loadMissing('lineItems.item');
+
+        $lines = [];
+        foreach ($bill->lineItems as $line) {
+            $item = $line->item;
+            if (! $item || $item->delivery_mode !== 'immediate') {
+                continue;
+            }
+
+            $remaining = (float) $line->quantity - (float) $line->quantity_received;
+            if ($remaining <= 0) {
+                continue;
+            }
+
+            $lines[] = [
+                'line_id' => $line->id,
+                'quantity' => $remaining,
+                'warehouse_id' => $line->warehouse_id,
+            ];
+        }
+
+        if (empty($lines)) {
+            return;
+        }
+
+        app(CommandBus::class)->dispatch('bill.receive_goods', [
+            'id' => $bill->id,
+            'lines' => $lines,
+        ], Auth::user());
     }
 }

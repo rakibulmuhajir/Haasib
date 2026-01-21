@@ -99,6 +99,7 @@ const isCancelled = computed(() => props.reconciliation.status === 'cancelled')
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency: currency,
   }).format(amount)
 }

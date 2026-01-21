@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
@@ -25,6 +27,13 @@ interface LineItem {
   id: string
   item_id: string | null
   warehouse_id: string | null
+  item?: {
+    id: string
+    name: string
+    unit_of_measure: string
+    track_inventory: boolean
+    delivery_mode: string
+  } | null
   description: string
   quantity: number
   quantity_received: number
@@ -64,6 +73,18 @@ interface BillRef {
   line_items: LineItem[]
 }
 
+interface ReceiptLineInput {
+  line_id: string
+  description: string
+  unit_of_measure: string
+  remaining: number
+  expected_quantity: number
+  received_quantity: number
+  variance_reason: string | null
+  warehouse_id: string | null
+  notes: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   bill: BillRef
@@ -77,6 +98,21 @@ const { t } = useLexicon()
 const showVoidDialog = ref(false)
 const voidReason = ref('')
 const isSubmittingVoid = ref(false)
+const showReceiptDialog = ref(false)
+
+const receiptForm = useForm({
+  receipt_date: new Date().toISOString().slice(0, 10),
+  notes: '',
+  lines: [] as ReceiptLineInput[],
+})
+
+const varianceReasonOptions = [
+  { value: 'transit_loss', label: 'Transit loss' },
+  { value: 'spillage', label: 'Spillage' },
+  { value: 'temperature_adjustment', label: 'Temperature adjustment' },
+  { value: 'measurement_error', label: 'Measurement error' },
+  { value: 'other', label: 'Other' },
+]
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: t('dashboard'), href: `/${props.company.slug}` },
@@ -85,7 +121,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(val)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    currencyDisplay: 'narrowSymbol',
+  }).format(val)
 
 const formatNumber = (val: number, decimals: number = 2) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val)
@@ -105,6 +145,15 @@ const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'ou
   if (s === 'paid') return 'default'
   if (s === 'overdue') return 'destructive'
   return 'secondary'
+}
+
+const billStatusLabel = (s: string) => {
+  if (s === 'received') return t('billReceived')
+  if (s === 'partial') return t('partiallyPaid')
+  if (s === 'void') return t('voided')
+  if (s === 'cancelled') return t('cancelled')
+  if (t(s as any)) return t(s as any)
+  return s
 }
 
 const handleDelete = () => {
@@ -132,36 +181,137 @@ const handleVoid = () => {
   })
 }
 
+const receivableLineItems = computed(() => {
+  return props.bill.line_items.filter((item) => {
+    const linkedItem = item.item
+    if (!linkedItem) return false
+    if (!linkedItem.track_inventory) return false
+    if (linkedItem.delivery_mode !== 'requires_receiving') return false
+    return item.quantity_received < item.quantity
+  })
+})
+
+const buildReceiptLines = (): ReceiptLineInput[] => {
+  return receivableLineItems.value.map((item) => {
+    const remaining = Math.max(0, Number(item.quantity) - Number(item.quantity_received))
+    return {
+      line_id: item.id,
+      description: item.item?.name || item.description,
+      unit_of_measure: item.item?.unit_of_measure || '',
+      remaining,
+      expected_quantity: remaining,
+      received_quantity: remaining,
+      variance_reason: null,
+      warehouse_id: item.warehouse_id,
+      notes: null,
+    }
+  })
+}
+
+const openReceiptDialog = () => {
+  receiptForm.clearErrors()
+  receiptForm.reset()
+  receiptForm.receipt_date = new Date().toISOString().slice(0, 10)
+  receiptForm.notes = ''
+  receiptForm.lines = buildReceiptLines()
+  showReceiptDialog.value = true
+}
+
+const varianceQuantity = (line: ReceiptLineInput) => {
+  const expected = Number(line.expected_quantity || 0)
+  const received = Number(line.received_quantity || 0)
+  return received - expected
+}
+
+const varianceLabelClass = (line: ReceiptLineInput) => {
+  const variance = varianceQuantity(line)
+  if (variance > 0) return 'text-emerald-600'
+  if (variance < 0) return 'text-amber-600'
+  return 'text-muted-foreground'
+}
+
+const hasMissingReasons = computed(() => {
+  return receiptForm.lines.some((line) => {
+    const variance = varianceQuantity(line)
+    return Math.abs(variance) > 0.0001 && !line.variance_reason
+  })
+})
+
+const submitReceipt = () => {
+  const lines = receiptForm.lines
+    .filter((line) => Number(line.received_quantity || 0) > 0)
+    .map((line) => {
+      const variance = varianceQuantity(line)
+      return {
+        line_id: line.line_id,
+        expected_quantity: Number(line.expected_quantity),
+        received_quantity: Number(line.received_quantity),
+        variance_reason: Math.abs(variance) > 0.0001 ? line.variance_reason : null,
+        warehouse_id: line.warehouse_id,
+        notes: line.notes,
+      }
+    })
+
+  receiptForm
+    .transform(() => ({
+      receipt_date: receiptForm.receipt_date,
+      notes: receiptForm.notes,
+      lines,
+    }))
+    .post(`/${props.company.slug}/bills/${props.bill.id}/receive-goods`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        showReceiptDialog.value = false
+      },
+    })
+}
+
 // Determine which actions to show based on bill status
 const canEdit = computed(() => !['paid', 'void', 'cancelled'].includes(props.bill.status))
 const canVoid = computed(() => ['received', 'partial', 'paid'].includes(props.bill.status))
 const canDelete = computed(() => props.bill.status === 'draft')
 
-// Check if any line items have inventory items
-const hasInventoryItems = computed(() => {
+// Check if any line items link to an item
+const hasLinkedItems = computed(() => {
   return props.bill.line_items.some(item => item.item_id !== null)
 })
+
+// Check if any line items require receiving confirmation
+const hasReceivableItems = computed(() => receivableLineItems.value.length > 0)
 
 // Check if goods can be received (has inventory items, not voided, not fully received)
 const canReceiveGoods = computed(() => {
   if (!props.inventoryEnabled) return false
-  if (!hasInventoryItems.value) return false
-  if (['void', 'cancelled', 'draft'].includes(props.bill.status)) return false
-  // Check if any line still has quantity to receive
-  return props.bill.line_items.some(item =>
-    item.item_id && item.quantity_received < item.quantity
-  )
+  if (!hasReceivableItems.value) return false
+  if (props.bill.status !== 'paid') return false
+  if (props.bill.goods_received_at) return false
+  return true
 })
 
 // Check if goods are fully received
 const goodsFullyReceived = computed(() => {
-  if (!hasInventoryItems.value) return false
+  if (!hasReceivableItems.value) return false
   return props.bill.goods_received_at !== null
 })
 
+const stockStatusLabel = computed(() => {
+  if (!props.inventoryEnabled || !hasLinkedItems.value) return t('stockNotTracked')
+  if (!hasReceivableItems.value) return t('stockReceived')
+  if (goodsFullyReceived.value) return t('stockReceived')
+  if (props.bill.status !== 'paid') return t('stockAwaitingPayment')
+  return t('stockPending')
+})
+
+const stockStatusVariant = computed((): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  if (!props.inventoryEnabled || !hasLinkedItems.value) return 'secondary'
+  if (!hasReceivableItems.value) return 'default'
+  if (goodsFullyReceived.value) return 'default'
+  if (props.bill.status !== 'paid') return 'outline'
+  return 'destructive'
+})
+
 const handleReceiveGoods = () => {
-  if (!confirm('Confirm that all goods have been physically received?')) return
-  router.post(`/${props.company.slug}/bills/${props.bill.id}/receive-goods`)
+  openReceiptDialog()
 }
 
 const navigateToVendor = () => {
@@ -237,7 +387,7 @@ const navigateToVendor = () => {
                 <CardDescription>{{ formatDate(bill.bill_date) }}</CardDescription>
               </div>
               <Badge :variant="statusVariant(bill.status)" class="text-base px-4 py-1">
-                {{ bill.status }}
+                {{ billStatusLabel(bill.status) }}
               </Badge>
             </div>
           </CardHeader>
@@ -365,7 +515,7 @@ const navigateToVendor = () => {
                 @click="handleReceiveGoods"
               >
                 <Package class="mr-2 h-4 w-4" />
-                Confirm Goods Received
+                {{ t('receiveStock') }}
               </Button>
 
               <!-- Goods Received Status -->
@@ -374,12 +524,12 @@ const navigateToVendor = () => {
                 class="flex items-center justify-center gap-2 p-2 rounded-md bg-green-50 text-green-700 text-sm"
               >
                 <PackageCheck class="h-4 w-4" />
-                <span>Goods Received</span>
+                <span>{{ t('stockReceived') }}</span>
               </div>
 
               <!-- No Inventory Items Warning -->
               <div
-                v-if="inventoryEnabled && !hasInventoryItems && !['void', 'cancelled', 'draft'].includes(bill.status)"
+                v-if="inventoryEnabled && !hasLinkedItems && !['void', 'cancelled', 'draft'].includes(bill.status)"
                 class="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs"
               >
                 <Package class="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -418,7 +568,11 @@ const navigateToVendor = () => {
             </div>
             <div class="flex justify-between">
               <span class="text-muted-foreground">{{ t('status') }}</span>
-              <Badge :variant="statusVariant(bill.status)">{{ bill.status }}</Badge>
+              <Badge :variant="statusVariant(bill.status)">{{ billStatusLabel(bill.status) }}</Badge>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-muted-foreground">{{ t('stockStatus') }}</span>
+              <Badge :variant="stockStatusVariant">{{ stockStatusLabel }}</Badge>
             </div>
           </CardContent>
         </Card>
@@ -434,6 +588,119 @@ const navigateToVendor = () => {
         </Card>
       </div>
     </div>
+
+    <Dialog v-model:open="showReceiptDialog">
+      <DialogContent class="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Receive Goods</DialogTitle>
+          <DialogDescription>
+            Record expected vs received quantities for this delivery. Variances post to Transit Loss/Gain.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="space-y-2">
+              <Label for="receipt_date">Receipt date</Label>
+              <Input id="receipt_date" v-model="receiptForm.receipt_date" type="date" />
+            </div>
+            <div class="space-y-2">
+              <Label for="receipt_notes">Notes</Label>
+              <Textarea id="receipt_notes" v-model="receiptForm.notes" rows="2" />
+            </div>
+          </div>
+
+          <div class="rounded-lg border">
+            <div class="grid grid-cols-12 gap-3 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+              <div class="col-span-4">Item</div>
+              <div class="col-span-2 text-right">Remaining</div>
+              <div class="col-span-2 text-right">Expected</div>
+              <div class="col-span-2 text-right">Received</div>
+              <div class="col-span-2 text-right">Variance</div>
+            </div>
+
+            <div
+              v-for="line in receiptForm.lines"
+              :key="line.line_id"
+              class="border-b px-4 py-3 last:border-b-0"
+            >
+              <div class="grid grid-cols-12 items-center gap-3">
+                <div class="col-span-4">
+                  <p class="text-sm font-medium text-foreground">{{ line.description }}</p>
+                  <p v-if="line.unit_of_measure" class="text-xs text-muted-foreground">
+                    Unit: {{ line.unit_of_measure }}
+                  </p>
+                </div>
+                <div class="col-span-2 text-right text-sm text-muted-foreground">
+                  {{ formatNumber(line.remaining, 3) }}
+                </div>
+                <div class="col-span-2">
+                  <Input
+                    v-model.number="line.expected_quantity"
+                    type="number"
+                    min="0.01"
+                    :max="line.remaining"
+                    step="0.001"
+                    class="h-9 text-right"
+                  />
+                </div>
+                <div class="col-span-2">
+                  <Input
+                    v-model.number="line.received_quantity"
+                    type="number"
+                    min="0.01"
+                    :max="line.remaining"
+                    step="0.001"
+                    class="h-9 text-right"
+                  />
+                </div>
+                <div class="col-span-2 text-right text-sm font-medium" :class="varianceLabelClass(line)">
+                  {{ formatNumber(varianceQuantity(line), 3) }}
+                </div>
+              </div>
+
+              <div v-if="Math.abs(varianceQuantity(line)) > 0.0001" class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div class="space-y-2">
+                  <Label>Variance reason</Label>
+                  <Select v-model="line.variance_reason">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select reason" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="option in varianceReasonOptions"
+                        :key="option.value"
+                        :value="option.value"
+                      >
+                        {{ option.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div class="space-y-2">
+                  <Label>Line notes</Label>
+                  <Input v-model="line.notes" placeholder="Optional notes" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="Object.keys(receiptForm.errors).length" class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {{ receiptForm.errors.lines ?? receiptForm.errors.receipt_date ?? receiptForm.errors.notes ?? 'Please review the receipt details.' }}
+          </div>
+          <p v-if="hasMissingReasons" class="text-xs text-amber-600">
+            Select a variance reason for each line with a non-zero variance.
+          </p>
+        </div>
+
+        <DialogFooter class="gap-2">
+          <Button type="button" variant="outline" @click="showReceiptDialog = false">Cancel</Button>
+          <Button type="button" :disabled="receiptForm.processing || hasMissingReasons" @click="submitReceipt">
+            Confirm receipt
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- Void Dialog -->
     <Dialog v-model:open="showVoidDialog">

@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface AmanatTransaction {
   id: string
@@ -86,13 +87,7 @@ const formatCurrency = (value: number) => {
 }
 
 const formatDateTime = (date: string) => {
-  return new Date(date).toLocaleString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
 }
 
 // Deposit dialog

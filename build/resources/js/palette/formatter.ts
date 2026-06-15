@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/datetime'
+
 /**
  * Format text with semantic color tags
  * Supports: {success}, {error}, {warning}, {accent}, {primary}, {secondary}, {link:url}
@@ -87,12 +89,5 @@ export function formatMoney(amount: number | string, currency = 'USD'): string {
  * Helper to format date
  */
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  if (isNaN(d.getTime())) return String(date)
-
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(d)
+  return formatDateTime(date, { mode: 'date' })
 }

@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Receipt, ArrowLeft, User, Calendar, Banknote, FileText, Clock } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface Collection {
   id: string
@@ -49,17 +50,11 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return formatSharedDateTime(dateStr, { mode: 'date' })
 }
 
 const formatDateTime = (dateStr: string) => {
-  return new Date(dateStr).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDateTime(dateStr, { mode: 'datetime' })
 }
 
 const paymentMethodLabel = (method: string) => {

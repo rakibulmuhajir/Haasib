@@ -5,12 +5,13 @@ namespace App\Modules\FuelStation\Actions\Product;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
-use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -59,7 +60,7 @@ class SetupAction implements PaletteAction
         $products = $params['products'];
         $userId = Auth::id();
         $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-        $priceColumns = $this->resolveItemPriceColumns();
+        $productCatalog = app(ProductCatalogService::class);
 
         $created = [];
         $updated = [];
@@ -75,7 +76,7 @@ class SetupAction implements PaletteAction
             $effectiveDate,
             $userId,
             $baseCurrency,
-            $priceColumns,
+            $productCatalog,
             &$created,
             &$updated,
             &$movements,
@@ -115,7 +116,7 @@ class SetupAction implements PaletteAction
                 $unit = trim((string) ($product['unit_of_measure'] ?? ''));
 
                 if ($type === 'fuel') {
-                    $fuelCategory = $this->normalizeFuelCategory($product['fuel_category']);
+                    $fuelCategory = $productCatalog->normalizeFuelCategory($product['fuel_category']);
                     $packaging = 'open';
                     $trackInventory = true;
                     $unit = $unit !== '' ? $unit : 'liters';
@@ -147,7 +148,7 @@ class SetupAction implements PaletteAction
                 }
 
                 $skuInput = trim((string) ($product['sku'] ?? ''));
-                $sku = $skuInput !== '' ? $skuInput : $this->generateSku($company->id, $type, $fuelCategory, $seenSkus);
+                $sku = $skuInput !== '' ? $skuInput : $productCatalog->generateSku($company->id, $type, $fuelCategory, $seenSkus);
 
                 if (in_array($sku, $seenSkus, true)) {
                     throw ValidationException::withMessages([
@@ -156,8 +157,15 @@ class SetupAction implements PaletteAction
                 }
                 $seenSkus[] = $sku;
 
-                $item = $this->resolveExistingItem($company->id, $type, $fuelCategory, $sku);
+                $item = $productCatalog->findExisting($company->id, $fuelCategory, $sku);
+                $accountMappings = $fuelCategory !== null
+                    ? app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $fuelCategory, $baseCurrency, $userId)
+                    : null;
                 $payload = [
+                    'company_id' => $company->id,
+                    'item' => $item,
+                    'type' => $type,
+                    'sku' => $sku,
                     'name' => $name,
                     'item_type' => $itemType,
                     'fuel_category' => $fuelCategory,
@@ -169,27 +177,26 @@ class SetupAction implements PaletteAction
                     'currency' => $baseCurrency,
                     'cost_price' => $purchaseRate,
                     'avg_cost' => $purchaseRate,
+                    'selling_price' => $saleRate,
                     'category_id' => $categoryId,
                     'is_active' => true,
+                    'user_id' => $userId,
                 ];
 
-                if ($item) {
-                    $item->update($payload + [
-                        'updated_by_user_id' => $userId,
-                    ]);
-                    $itemId = $item->id;
-                    $updated[] = $name;
-                } else {
-                    $item = Item::create($payload + [
-                        'company_id' => $company->id,
-                        'sku' => $sku,
-                        'created_by_user_id' => $userId,
-                    ]);
-                    $itemId = $item->id;
-                    $created[] = $name;
+                if ($accountMappings !== null && (!$item || !$item->income_account_id)) {
+                    $payload['income_account_id'] = $accountMappings['income']->id;
+                }
+                if ($accountMappings !== null && (!$item || !$item->expense_account_id)) {
+                    $payload['expense_account_id'] = $accountMappings['expense']->id;
+                }
+                if ($accountMappings !== null && (!$item || !$item->asset_account_id)) {
+                    $payload['asset_account_id'] = $accountMappings['asset']->id;
                 }
 
-                $this->updateItemPrices($itemId, $purchaseRate, $saleRate, $userId, $priceColumns);
+                $wasExisting = $item !== null;
+                $item = $productCatalog->save($payload);
+                $itemId = $item->id;
+                $wasExisting ? $updated[] = $name : $created[] = $name;
 
                 if ($fuelCategory !== null) {
                     RateChange::updateOrCreate(
@@ -262,76 +269,6 @@ class SetupAction implements PaletteAction
         ];
     }
 
-    private function normalizeFuelCategory(?string $category): ?string
-    {
-        if ($category === null) {
-            return null;
-        }
-
-        return $category === 'hi_octane' ? 'high_octane' : $category;
-    }
-
-    private function resolveExistingItem(string $companyId, string $type, ?string $fuelCategory, string $sku): ?Item
-    {
-        if ($fuelCategory !== null) {
-            $query = Item::where('company_id', $companyId);
-            if ($fuelCategory === 'high_octane') {
-                $query->whereIn('fuel_category', ['high_octane', 'hi_octane']);
-            } else {
-                $query->where('fuel_category', $fuelCategory);
-            }
-
-            return $query->first();
-        }
-
-        return Item::where('company_id', $companyId)
-            ->where('sku', $sku)
-            ->first();
-    }
-
-    private function resolveItemPriceColumns(): array
-    {
-        try {
-            $columns = DB::table('information_schema.columns')
-                ->where('table_schema', 'inv')
-                ->where('table_name', 'items')
-                ->whereIn('column_name', ['sale_price', 'selling_price'])
-                ->pluck('column_name')
-                ->all();
-        } catch (\Throwable $e) {
-            return [
-                'sale_price' => false,
-                'selling_price' => false,
-            ];
-        }
-
-        return [
-            'sale_price' => in_array('sale_price', $columns, true),
-            'selling_price' => in_array('selling_price', $columns, true),
-        ];
-    }
-
-    private function updateItemPrices(string $itemId, float $purchaseRate, float $saleRate, ?string $userId, array $priceColumns): void
-    {
-        $payload = [
-            'avg_cost' => $purchaseRate,
-            'updated_by_user_id' => $userId,
-            'updated_at' => now(),
-        ];
-
-        if (! empty($priceColumns['sale_price'])) {
-            $payload['sale_price'] = $saleRate;
-        }
-
-        if (! empty($priceColumns['selling_price'])) {
-            $payload['selling_price'] = $saleRate;
-        }
-
-        if (! empty($payload)) {
-            DB::table('inv.items')->where('id', $itemId)->update($payload);
-        }
-    }
-
     private function resolveCategoryId(string $companyId, string $name, ?string $userId, int &$createdCount): string
     {
         $existing = ItemCategory::where('company_id', $companyId)
@@ -367,36 +304,6 @@ class SetupAction implements PaletteAction
         $createdCount++;
 
         return $category->id;
-    }
-
-    private function generateSku(string $companyId, string $type, ?string $fuelCategory, array $seenSkus): string
-    {
-        $prefix = match ($type) {
-            'fuel' => match ($fuelCategory) {
-                'petrol' => 'FUEL-PET',
-                'diesel' => 'FUEL-DSL',
-                'high_octane' => 'FUEL-HOC',
-                default => 'FUEL',
-            },
-            'lubricant' => $fuelCategory === 'lubricant' ? 'FUEL-LUB' : 'LUB',
-            default => 'PROD',
-        };
-
-        $prefix = Str::upper($prefix);
-        $prefix = rtrim($prefix, '-') . '-';
-
-        for ($i = 1; $i <= 9999; $i++) {
-            $sku = $prefix . str_pad((string) $i, 3, '0', STR_PAD_LEFT);
-            if (in_array($sku, $seenSkus, true)) {
-                continue;
-            }
-            $exists = Item::where('company_id', $companyId)->where('sku', $sku)->exists();
-            if (! $exists) {
-                return $sku;
-            }
-        }
-
-        return $prefix . Str::upper(Str::random(6));
     }
 
     private function resolveTank(

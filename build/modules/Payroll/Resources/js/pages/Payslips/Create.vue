@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { Save, ArrowLeft, Plus, Trash2 } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -33,6 +34,7 @@ interface Employee {
   employee_number: string
   base_salary: number
   currency: string
+  outstanding_advances?: number | null
 }
 
 interface Period {
@@ -59,6 +61,7 @@ interface PayslipLine {
   line_type: 'earning' | 'deduction'
   earning_type_id: string
   deduction_type_id: string
+  salary_advance_id?: string | null
   description: string
   amount: number
   quantity: number | null
@@ -111,8 +114,8 @@ const addEarning = () => {
     deduction_type_id: '',
     description: '',
     amount: 0,
-    quantity: null,
-    rate: null,
+    quantity: 1,
+    rate: 0,
   })
 }
 
@@ -123,8 +126,8 @@ const addDeduction = () => {
     deduction_type_id: '',
     description: '',
     amount: 0,
-    quantity: null,
-    rate: null,
+    quantity: 1,
+    rate: 0,
   })
 }
 
@@ -145,6 +148,12 @@ const totalDeductions = computed(() => {
 
 const netPay = computed(() => grossPay.value - totalDeductions.value)
 
+const estimatedAdvanceRecovery = computed(() => {
+  const outstanding = Number(selectedEmployee.value?.outstanding_advances || 0)
+  if (outstanding <= 0 || grossPay.value <= 0) return 0
+  return Math.min(outstanding, grossPay.value * 0.5, Math.max(0, grossPay.value - totalDeductions.value))
+})
+
 const formatCurrency = (amount: number, currency: string) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -154,11 +163,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatDateTime(date, { mode: 'date' })
 }
 
 const submit = () => {
@@ -201,6 +206,9 @@ const submit = () => {
                     <SelectContent>
                       <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
                         {{ emp.first_name }} {{ emp.last_name }} ({{ emp.employee_number }})
+                        <span v-if="Number(emp.outstanding_advances || 0) > 0">
+                          · Advance {{ formatCurrency(Number(emp.outstanding_advances), emp.currency || company.base_currency) }}
+                        </span>
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -236,6 +244,16 @@ const submit = () => {
                   readonly
                   class="w-24"
                 />
+              </div>
+
+              <div v-if="selectedEmployee && Number(selectedEmployee.outstanding_advances || 0) > 0" class="rounded-lg border p-3 text-sm">
+                <p class="font-medium">Salary advance will be recovered automatically.</p>
+                <p class="mt-1 text-muted-foreground">
+                  Outstanding advance: {{ formatCurrency(Number(selectedEmployee.outstanding_advances || 0), form.currency) }}
+                </p>
+                <p class="mt-1 text-muted-foreground">
+                  Estimated recovery on this payslip: {{ formatCurrency(estimatedAdvanceRecovery, form.currency) }}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -343,7 +361,7 @@ const submit = () => {
               <div class="flex items-center justify-between">
                 <div>
                   <CardTitle>Deductions</CardTitle>
-                  <CardDescription>Add deductions for this payslip</CardDescription>
+                  <CardDescription>Add regular deductions. Salary advance recoveries are added automatically from outstanding advances.</CardDescription>
                 </div>
                 <Button type="button" variant="outline" size="sm" @click="addDeduction">
                   <Plus class="mr-2 h-4 w-4" />
@@ -448,11 +466,17 @@ const submit = () => {
                   -{{ formatCurrency(totalDeductions, form.currency) }}
                 </span>
               </div>
+              <div v-if="estimatedAdvanceRecovery > 0" class="flex justify-between items-center text-sm">
+                <span class="text-muted-foreground">Auto advance recovery</span>
+                <span class="font-medium text-destructive">
+                  -{{ formatCurrency(estimatedAdvanceRecovery, form.currency) }}
+                </span>
+              </div>
               <hr />
               <div class="flex justify-between items-center">
                 <span class="font-semibold">Net Pay</span>
                 <span class="font-bold text-xl text-primary">
-                  {{ formatCurrency(netPay, form.currency) }}
+                  {{ formatCurrency(netPay - estimatedAdvanceRecovery, form.currency) }}
                 </span>
               </div>
 

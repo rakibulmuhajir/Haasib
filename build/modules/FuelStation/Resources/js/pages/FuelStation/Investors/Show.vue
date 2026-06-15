@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -92,11 +93,7 @@ const formatNumber = (value: number, decimals = 2) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatDateTime(date, { mode: 'date' })
 }
 
 // Lot dialog

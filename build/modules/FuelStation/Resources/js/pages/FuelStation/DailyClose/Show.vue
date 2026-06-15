@@ -18,6 +18,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   Calculator,
   Calendar,
@@ -106,23 +107,11 @@ const formatCurrency = (amount: number | undefined) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-PK', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(date, { mode: 'date', locale: 'en-PK' })
 }
 
 const formatDateTime = (datetime: string | null) => {
-  if (!datetime) return ''
-  return new Date(datetime).toLocaleString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDateTime(datetime, { mode: 'datetime', locale: 'en-PK', fallback: '' })
 }
 
 const statusConfig = computed(() => {

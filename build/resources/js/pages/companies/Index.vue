@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { formatDateTime } from '@/lib/datetime'
 import {
   Building2,
   Plus,
@@ -23,6 +24,8 @@ import {
   Users,
   Globe,
 } from 'lucide-vue-next'
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
 interface CompanyRow {
   id: string
@@ -287,7 +290,7 @@ function handleDelete() {
               <span class="text-zinc-500">Created</span>
               <div class="flex items-center gap-1.5 text-zinc-700">
                 <Calendar class="h-3.5 w-3.5" />
-                <span>{{ new Date(company.created_at).toLocaleDateString() }}</span>
+                <span>{{ formatDate(company.created_at) }}</span>
               </div>
             </div>
           </div>

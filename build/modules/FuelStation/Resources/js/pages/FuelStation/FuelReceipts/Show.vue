@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Droplets, ArrowLeft, Truck, Calendar, FileText } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface ReceiptLine {
   tank_id: string
@@ -69,7 +70,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return formatSharedDateTime(dateStr, { mode: 'date' })
 }
 
 const goBack = () => {

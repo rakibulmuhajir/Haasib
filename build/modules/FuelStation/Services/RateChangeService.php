@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CurrentCompany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -49,8 +50,15 @@ class RateChangeService
             // Get the fuel item
             $item = Item::where('company_id', $company->id)
                 ->where('id', $data['item_id'])
-                ->whereNotNull('fuel_category')
                 ->firstOrFail();
+            if (! $item->fuel_category) {
+                $fuelCategory = app(ProductCatalogService::class)->inferFuelCategory($item->sku, $item->name);
+                if (! $fuelCategory) {
+                    throw new \RuntimeException('Selected product is not marked as a fuel product.');
+                }
+                $item->update(['fuel_category' => $fuelCategory]);
+                $item->refresh();
+            }
 
             // Get previous rate for margin impact calculation
             $previousRate = RateChange::getCurrentRate($company->id, $data['item_id']);
@@ -91,7 +99,13 @@ class RateChangeService
                 'created_by_user_id' => auth()->id(),
             ]);
 
-            // Only post GL entry and update avg_cost if there's actual stock to revalue
+            $itemRatePayload = [
+                'cost_price' => $newPurchaseRate,
+                'avg_cost' => $newPurchaseRate,
+                'selling_price' => (float) $data['sale_rate'],
+            ];
+
+            // Only post GL entry when there is actual stock to revalue.
             if ($stockQuantity > 0 && abs($revaluationAmount) > 0.01) {
                 // Post the revaluation GL entry
                 $transaction = $this->postRevaluationEntry(
@@ -107,8 +121,7 @@ class RateChangeService
                 // Update rate change with journal entry reference
                 $rateChange->update(['journal_entry_id' => $transaction->id]);
 
-                // Update Item.avg_cost to the new purchase rate
-                $item->update(['avg_cost' => $newPurchaseRate]);
+                $item->update($itemRatePayload);
 
                 Log::info('Fuel stock revaluation posted', [
                     'company_id' => $company->id,
@@ -121,13 +134,22 @@ class RateChangeService
                     'transaction_id' => $transaction->id,
                 ]);
             } elseif ($stockQuantity <= 0) {
-                // No stock to revalue, but still update avg_cost for future purchases
-                $item->update(['avg_cost' => $newPurchaseRate]);
+                $item->update($itemRatePayload);
 
                 Log::info('Fuel rate changed (no stock to revalue)', [
                     'company_id' => $company->id,
                     'item_id' => $item->id,
                     'new_avg_cost' => $newPurchaseRate,
+                ]);
+            } else {
+                $item->update($itemRatePayload);
+
+                Log::info('Fuel rate changed (no material revaluation)', [
+                    'company_id' => $company->id,
+                    'item_id' => $item->id,
+                    'new_avg_cost' => $newPurchaseRate,
+                    'stock_quantity' => $stockQuantity,
+                    'revaluation_amount' => $revaluationAmount,
                 ]);
             }
 

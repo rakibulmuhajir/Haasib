@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface CompanyRef {
   id: string
@@ -105,12 +106,7 @@ function formatCurrency(amount: number, currency: string) {
 }
 
 function formatDate(dateStr: string | null) {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatSharedDateTime(dateStr, { mode: 'date' })
 }
 
 function isCleared(transaction: TransactionRow) {

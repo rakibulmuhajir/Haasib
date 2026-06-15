@@ -7,8 +7,8 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StorePayrollPeriodRequest;
-use Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Http\Requests\StorePayrollPeriodRequest;
+use App\Modules\Payroll\Models\PayrollPeriod;
 
 class PayrollPeriodController extends Controller
 {

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { ArrowLeft, CheckCircle, DollarSign, Printer } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -41,6 +42,7 @@ interface PayslipLine {
   id: string
   line_type: 'earning' | 'deduction'
   description: string
+  salary_advance_id?: string | null
   amount: number
   quantity: number | null
   rate: number | null
@@ -59,6 +61,8 @@ interface Payslip {
   notes: string | null
   lines: PayslipLine[]
   created_at: string
+  gl_transaction_id?: string | null
+  payment_gl_transaction_id?: string | null
 }
 
 const props = defineProps<{
@@ -81,11 +85,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(date, { mode: 'date' })
 }
 
 const getStatusVariant = (status: string) => {
@@ -236,7 +236,12 @@ const handleMarkPaid = () => {
               </TableHeader>
               <TableBody>
                 <TableRow v-for="line in deductions" :key="line.id">
-                  <TableCell>{{ line.description }}</TableCell>
+                  <TableCell>
+                    <div>{{ line.description }}</div>
+                    <div v-if="line.salary_advance_id" class="text-xs text-muted-foreground">
+                      Salary advance recovery
+                    </div>
+                  </TableCell>
                   <TableCell class="text-right font-medium text-destructive">
                     -{{ formatCurrency(line.amount, payslip.currency) }}
                   </TableCell>
@@ -264,6 +269,42 @@ const handleMarkPaid = () => {
           </CardHeader>
           <CardContent>
             <p class="text-sm whitespace-pre-wrap">{{ payslip.notes }}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Accounting</CardTitle>
+          </CardHeader>
+          <CardContent class="grid gap-3 md:grid-cols-3">
+            <div class="rounded-lg border p-3 text-sm">
+              <p class="font-medium">Draft</p>
+              <p class="mt-1 text-muted-foreground">No accounting entry yet.</p>
+            </div>
+            <div class="rounded-lg border p-3 text-sm">
+              <p class="font-medium">Approval</p>
+              <p class="mt-1 text-muted-foreground">Salary expense increases and salary payable is created.</p>
+              <Button
+                v-if="payslip.gl_transaction_id"
+                variant="link"
+                class="mt-2 h-auto p-0"
+                @click="router.get(`/${company.slug}/journals/${payslip.gl_transaction_id}`)"
+              >
+                View approval journal
+              </Button>
+            </div>
+            <div class="rounded-lg border p-3 text-sm">
+              <p class="font-medium">Payment</p>
+              <p class="mt-1 text-muted-foreground">Salary payable reduces and cash or bank reduces.</p>
+              <Button
+                v-if="payslip.payment_gl_transaction_id"
+                variant="link"
+                class="mt-2 h-auto p-0"
+                @click="router.get(`/${company.slug}/journals/${payslip.payment_gl_transaction_id}`)"
+              >
+                View payment journal
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

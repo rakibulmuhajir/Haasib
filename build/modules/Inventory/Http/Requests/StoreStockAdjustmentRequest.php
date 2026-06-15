@@ -19,6 +19,7 @@ class StoreStockAdjustmentRequest extends BaseFormRequest
             'warehouse_id' => 'required|uuid|exists:inv.warehouses,id',
             'item_id' => 'required|uuid|exists:inv.items,id',
             'quantity' => 'required|numeric|not_in:0',
+            'unit_cost' => 'nullable|numeric|min:0',
             'reason' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'movement_date' => 'nullable|date',

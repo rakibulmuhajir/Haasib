@@ -7,9 +7,9 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StoreDeductionTypeRequest;
-use Modules\Payroll\Http\Requests\UpdateDeductionTypeRequest;
-use Modules\Payroll\Models\DeductionType;
+use App\Modules\Payroll\Http\Requests\StoreDeductionTypeRequest;
+use App\Modules\Payroll\Http\Requests\UpdateDeductionTypeRequest;
+use App\Modules\Payroll\Models\DeductionType;
 
 class DeductionTypeController extends Controller
 {

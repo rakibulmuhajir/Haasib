@@ -212,17 +212,15 @@ class Transaction extends Model
      */
     public static function generateJournalNumber(string $companyId): string
     {
-        $last = self::where('company_id', $companyId)
-            ->where('transaction_type', 'manual')
-            ->orderByDesc('created_at')
-            ->value('transaction_number');
-
         $prefix = 'JNL-';
-        $next = 1;
+        $lastNumber = self::withTrashed()
+            ->where('company_id', $companyId)
+            ->where('transaction_number', 'like', $prefix . '%')
+            ->whereRaw("transaction_number ~ '^JNL-[0-9]+$'")
+            ->selectRaw("MAX((substring(transaction_number from '[0-9]+$'))::integer) as max_number")
+            ->value('max_number');
 
-        if ($last && preg_match('/(\d+)$/', $last, $m)) {
-            $next = (int) $m[1] + 1;
-        }
+        $next = ((int) $lastNumber) + 1;
 
         return $prefix . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
     }

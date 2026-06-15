@@ -6,17 +6,22 @@ import EmptyState from '@/components/EmptyState.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   Package,
   Search,
   ArrowRightLeft,
   PlusCircle,
   AlertTriangle,
+  ClipboardCheck,
+  Boxes,
+  History,
 } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -49,6 +54,44 @@ interface StockLevelRow {
   pending_receipts_qty: number
 }
 
+interface VendorRef {
+  id: string
+  name: string
+  vendor_type?: string | null
+}
+
+interface PendingDelivery {
+  id: string
+  bill_number: string
+  bill_date: string
+  total_amount: number
+  currency: string
+  pending_lines: number | string
+  pending_quantity: number | string | null
+  vendor: VendorRef | null
+}
+
+interface RecentMovement {
+  id: string
+  movement_date: string
+  movement_type: string
+  quantity: number | string
+  unit_cost: number | string | null
+  total_cost: number | string | null
+  gl_transaction_id: string | null
+  item: {
+    id: string
+    sku: string
+    name: string
+    unit_of_measure: string
+  } | null
+  warehouse: {
+    id: string
+    name: string
+    code: string
+  } | null
+}
+
 interface PaginatedStockLevels {
   data: StockLevelRow[]
   current_page: number
@@ -61,6 +104,14 @@ const props = defineProps<{
   company: CompanyRef
   stockLevels: PaginatedStockLevels
   warehouses: Warehouse[]
+  summary: {
+    tracked_items: number
+    stock_records: number
+    low_stock: number
+    pending_deliveries: number
+  }
+  pendingDeliveries: PendingDelivery[]
+  recentMovements: RecentMovement[]
   filters: {
     search: string
     warehouse_id: string
@@ -75,7 +126,7 @@ const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Stock Levels', href: `/${props.company.slug}/stock` },
+  { title: 'Stock Management', href: `/${props.company.slug}/stock` },
 ]
 
 const handleSearch = () => {
@@ -95,6 +146,23 @@ const formatQuantity = (qty: number) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 3,
   }).format(qty)
+}
+
+const formatDate = (dateString: string) => {
+  return formatSharedDateTime(dateString, { mode: 'date' })
+}
+
+const formatMoney = (val: number | string | null, currency = 'USD') => {
+  const amount = Number(val ?? 0)
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(amount)
+}
+
+const formatMovementType = (type: string) => {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
 const columns = [
@@ -138,16 +206,25 @@ const openReceiptsForItem = (itemId: string) => {
     needs_receiving: '1',
   })
 }
+
+const openBill = (billId: string) => {
+  router.get(`/${props.company.slug}/bills/${billId}`)
+}
 </script>
 
 <template>
-  <Head title="Stock Levels" />
+  <Head title="Stock Management" />
 
   <PageShell
-    title="Stock Levels"
+    title="Stock Management"
+    description="Watch stock levels, receive paid purchases, and record correction adjustments."
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <Button variant="outline" @click="router.get(`/${company.slug}/stock/receipts`)">
+        <ClipboardCheck class="mr-2 h-4 w-4" />
+        Pending Receipts
+      </Button>
       <Button variant="outline" @click="router.get(`/${company.slug}/stock/movements`)">
         View Movements
       </Button>
@@ -160,6 +237,130 @@ const openReceiptsForItem = (itemId: string) => {
         Adjustment
       </Button>
     </template>
+
+    <div class="mb-6 grid gap-4 md:grid-cols-4">
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Boxes class="h-4 w-4" />
+            Tracked Items
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="text-2xl font-semibold">{{ summary.tracked_items }}</div>
+          <p class="text-xs text-muted-foreground">{{ summary.stock_records }} stock locations</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <AlertTriangle class="h-4 w-4" />
+            Low Stock
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="text-2xl font-semibold">{{ summary.low_stock }}</div>
+          <p class="text-xs text-muted-foreground">Below reorder point</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <ClipboardCheck class="h-4 w-4" />
+            Paid Bills to Receive
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="text-2xl font-semibold">{{ summary.pending_deliveries }}</div>
+          <p class="text-xs text-muted-foreground">Waiting for goods receipt</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <History class="h-4 w-4" />
+            Latest Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="text-2xl font-semibold">{{ recentMovements.length }}</div>
+          <p class="text-xs text-muted-foreground">Recent stock movements</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div class="mb-6 grid gap-4 lg:grid-cols-2">
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold">Paid Bills Waiting for Delivery</h2>
+          <Button variant="ghost" size="sm" @click="router.get(`/${company.slug}/stock/receipts`)">
+            View all
+          </Button>
+        </div>
+        <div v-if="pendingDeliveries.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          No paid inventory bills are waiting for receipt.
+        </div>
+        <div v-else class="divide-y rounded-md border">
+          <Button
+            v-for="bill in pendingDeliveries"
+            :key="bill.id"
+            type="button"
+            variant="ghost"
+            class="h-auto w-full justify-between gap-3 rounded-none p-3 text-left"
+            @click="openBill(bill.id)"
+          >
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-medium">{{ bill.bill_number }} · {{ bill.vendor?.name ?? 'No vendor' }}</span>
+              <span class="block text-xs text-muted-foreground">
+                {{ formatDate(bill.bill_date) }} · {{ bill.pending_lines }} pending line{{ Number(bill.pending_lines) === 1 ? '' : 's' }}
+              </span>
+            </span>
+            <span class="shrink-0 text-right text-sm">
+              <span class="block font-medium">{{ formatMoney(bill.total_amount, bill.currency) }}</span>
+              <span class="block text-xs text-muted-foreground">{{ formatQuantity(Number(bill.pending_quantity ?? 0)) }} pending</span>
+            </span>
+          </Button>
+        </div>
+      </section>
+
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold">Recent Stock Movements</h2>
+          <Button variant="ghost" size="sm" @click="router.get(`/${company.slug}/stock/movements`)">
+            View all
+          </Button>
+        </div>
+        <div v-if="recentMovements.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          Stock movements will appear after purchases, adjustments, or transfers.
+        </div>
+        <div v-else class="divide-y rounded-md border">
+          <div
+            v-for="movement in recentMovements"
+            :key="movement.id"
+            class="flex items-center justify-between gap-3 p-3"
+          >
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-medium">{{ movement.item?.name ?? 'Unknown item' }}</span>
+              <span class="block text-xs text-muted-foreground">
+                {{ formatMovementType(movement.movement_type) }} · {{ movement.warehouse?.name ?? 'No warehouse' }} · {{ formatDate(movement.movement_date) }}
+              </span>
+            </span>
+            <span class="shrink-0 text-right text-sm">
+              <span class="block font-medium">
+                {{ Number(movement.quantity) > 0 ? '+' : '' }}{{ formatQuantity(Number(movement.quantity)) }}
+                {{ movement.item?.unit_of_measure ?? '' }}
+              </span>
+              <span class="block text-xs text-muted-foreground">
+                {{ movement.gl_transaction_id ? 'Posted' : 'No GL' }}
+              </span>
+            </span>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <!-- Filters -->
     <div class="mb-6 flex flex-wrap items-center gap-4">

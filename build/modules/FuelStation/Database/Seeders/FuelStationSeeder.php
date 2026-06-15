@@ -11,8 +11,8 @@ use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\InvestorLot;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
-use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Database\Seeder;
 
 class FuelStationSeeder extends Seeder
@@ -86,6 +86,7 @@ class FuelStationSeeder extends Seeder
                     'vendor_number' => 'VEND-' . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT),
                     'email' => $vendorData['email'],
                     'phone' => $vendorData['phone'],
+                    'vendor_type' => Vendor::TYPE_FUEL_DISTRIBUTOR,
                     'base_currency' => $baseCurrency,
                     'payment_terms' => 30,
                     'is_active' => true,
@@ -130,13 +131,14 @@ class FuelStationSeeder extends Seeder
         ];
 
         $items = [];
+        $productCatalog = app(ProductCatalogService::class);
         foreach ($fuelTypes as $fuel) {
-            $item = Item::firstOrCreate(
-                [
+            $existing = $productCatalog->findExisting($company->id, $fuel['fuel_category'], $fuel['sku']);
+            $item = $productCatalog->save([
                     'company_id' => $company->id,
                     'sku' => $fuel['sku'],
-                ],
-                [
+                    'item' => $existing,
+                    'type' => 'fuel',
                     'name' => $fuel['name'],
                     'description' => "{$fuel['name']} fuel",
                     'unit_of_measure' => $fuel['unit'],
@@ -147,8 +149,7 @@ class FuelStationSeeder extends Seeder
                     'currency' => $baseCurrency,
                     'track_inventory' => true,
                     'is_active' => true,
-                ]
-            );
+                ]);
             $items[$fuel['fuel_category']] = $item;
         }
 

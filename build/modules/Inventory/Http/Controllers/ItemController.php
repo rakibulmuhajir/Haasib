@@ -9,9 +9,11 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Inventory\Http\Requests\StoreItemRequest;
 use App\Modules\Inventory\Http\Requests\UpdateItemRequest;
+use App\Modules\Inventory\Http\Requests\UpdateItemStatusRequest;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -153,9 +155,9 @@ class ItemController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $item = Item::create(array_merge($request->validated(), [
+        $item = app(ProductCatalogService::class)->save(array_merge($request->validated(), [
             'company_id' => $company->id,
-            'created_by_user_id' => $request->user()->id,
+            'user_id' => $request->user()->id,
         ]));
 
         return redirect()
@@ -284,8 +286,11 @@ class ItemController extends Controller
         $itemId = $request->route('item');
         $item = Item::where('company_id', $company->id)->findOrFail($itemId);
 
-        $item->update(array_merge($request->validated(), [
-            'updated_by_user_id' => $request->user()->id,
+        $item = app(ProductCatalogService::class)->save(array_merge($request->validated(), [
+            'id' => $item->id,
+            'item' => $item,
+            'company_id' => $company->id,
+            'user_id' => $request->user()->id,
         ]));
 
         return redirect()
@@ -311,9 +316,27 @@ class ItemController extends Controller
 
         $item->delete();
 
+        if ($request->input('return_to') === 'back') {
+            return back()->with('success', 'Product deleted successfully.');
+        }
+
         return redirect()
             ->route('items.index', ['company' => $company->slug])
             ->with('success', 'Item deleted successfully.');
+    }
+
+    public function updateStatus(UpdateItemStatusRequest $request): RedirectResponse
+    {
+        $company = CompanyContext::getCompany();
+
+        $itemId = $request->route('item');
+        $item = Item::where('company_id', $company->id)->findOrFail($itemId);
+        $item->update([
+            'is_active' => (bool) $request->validated('is_active'),
+            'updated_by_user_id' => $request->user()?->id,
+        ]);
+
+        return back()->with('success', $item->is_active ? 'Product activated.' : 'Product deactivated.');
     }
 
     public function search(Request $request): JsonResponse

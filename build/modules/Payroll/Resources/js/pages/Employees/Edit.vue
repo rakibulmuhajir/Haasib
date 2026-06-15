@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -80,7 +80,19 @@ const form = useForm({
 })
 
 const submit = () => {
-  form.put(`/${props.company.slug}/employees/${props.employee.id}`)
+  const showUrl = `/${props.company.slug}/employees/${props.employee.id}`
+
+  form.put(`/${props.company.slug}/employees/${props.employee.id}`, {
+    preserveScroll: false,
+    preserveState: false,
+    onSuccess: () => {
+      router.visit(showUrl, {
+        preserveScroll: false,
+        preserveState: false,
+        replace: true,
+      })
+    },
+  })
 }
 </script>
 

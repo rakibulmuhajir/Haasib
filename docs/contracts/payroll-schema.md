@@ -300,6 +300,7 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - `payment_method` varchar(30) nullable. Enum: bank_transfer, check, cash.
   - `payment_reference` varchar(100) nullable.
   - `gl_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
+  - `payment_gl_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
   - `notes` text nullable.
   - `created_at`, `updated_at` timestamps.
 - Indexes/constraints:
@@ -310,9 +311,9 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'pay.payslips'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','notes'];`
-  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','gross_pay'=>'decimal:2','total_earnings'=>'decimal:2','total_deductions'=>'decimal:2','employer_costs'=>'decimal:2','net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
-- Relationships: belongsTo Company; belongsTo PayrollPeriod; belongsTo Employee; hasMany PayslipLine; belongsTo GlTransaction.
+  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','payment_gl_transaction_id','notes'];`
+  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','gross_pay'=>'decimal:2','total_earnings'=>'decimal:2','total_deductions'=>'decimal:2','employer_costs'=>'decimal:2','net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','payment_gl_transaction_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+- Relationships: belongsTo Company; belongsTo PayrollPeriod; belongsTo Employee; hasMany PayslipLine; belongsTo GlTransaction; belongsTo PaymentGlTransaction.
 - Business rules:
   - net_pay = total_earnings - total_deductions.
   - Totals updated by trigger on payslip_lines.
@@ -326,6 +327,7 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - `line_type` varchar(20) not null. Enum: earning, deduction, employer.
   - `earning_type_id` uuid nullable FK → `pay.earning_types.id` (SET NULL/CASCADE).
   - `deduction_type_id` uuid nullable FK → `pay.deduction_types.id` (SET NULL/CASCADE).
+  - `salary_advance_id` uuid nullable FK → `pay.salary_advances.id` (SET NULL/CASCADE), used only when a deduction recovers a salary advance.
   - `description` varchar(255) nullable.
   - `quantity` numeric(10,3) not null default 1 (hours, units).
   - `rate` numeric(15,4) not null default 0.
@@ -340,11 +342,59 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
 - RLS: inherited from parent (payslips).
 - Model:
   - `$connection = 'pgsql'; $table = 'pay.payslip_lines'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['payslip_id','line_type','earning_type_id','deduction_type_id','description','quantity','rate','amount','sort_order'];`
-  - `$casts = ['payslip_id'=>'string','earning_type_id'=>'string','deduction_type_id'=>'string','quantity'=>'decimal:3','rate'=>'decimal:4','amount'=>'decimal:2','sort_order'=>'integer','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['payslip_id','line_type','earning_type_id','deduction_type_id','salary_advance_id','description','quantity','rate','amount','sort_order'];`
+  - `$casts = ['payslip_id'=>'string','earning_type_id'=>'string','deduction_type_id'=>'string','salary_advance_id'=>'string','quantity'=>'decimal:3','rate'=>'decimal:4','amount'=>'decimal:2','sort_order'=>'integer','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Business rules:
   - Trigger rolls up totals to payslip header.
   - line_type = 'employer' for employer-paid items (benefits, taxes).
+
+### pay.salary_advances
+- Purpose: advances given to employees and recovered from future payroll.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `employee_id` uuid not null FK → `pay.employees.id` (RESTRICT/CASCADE).
+  - `advance_date` date not null.
+  - `amount` numeric(15,2) not null.
+  - `amount_recovered` numeric(15,2) not null default 0.
+  - `amount_outstanding` numeric(15,2) not null.
+  - `reason` varchar(255) nullable.
+  - `status` varchar(20) not null default `pending`. Enum: pending, partially_recovered, fully_recovered, cancelled.
+  - `payment_method` varchar(30) not null default `cash`. Enum: cash, bank_transfer, cheque.
+  - `bank_account_id` uuid nullable FK → `acct.accounts.id` (SET NULL/CASCADE).
+  - `reference` varchar(100) nullable.
+  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE).
+  - `advance_account_id` uuid nullable FK → `acct.accounts.id` (SET NULL/CASCADE).
+  - `approved_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `approved_at` timestamp nullable.
+  - `recorded_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `notes` text nullable.
+  - `created_at`, `updated_at`, `deleted_at` timestamps.
+- Model:
+  - `$connection = 'pgsql'; $table = 'pay.salary_advances'; $keyType = 'string'; public $incrementing = false;`
+- Business rules:
+  - Daily close cash advances debit Employee Advances and reduce Cash on Hand through daily close cash movement.
+  - Payroll recovery credits Employee Advances when the payslip is approved.
+
+### pay.salary_advance_recoveries
+- Purpose: individual recovery records that reduce outstanding salary advances.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
+  - `salary_advance_id` uuid not null FK → `pay.salary_advances.id` (CASCADE/CASCADE).
+  - `payslip_id` uuid nullable FK → `pay.payslips.id` (SET NULL/CASCADE).
+  - `recovery_date` date not null.
+  - `amount` numeric(15,2) not null.
+  - `recovery_type` varchar(20) not null. Enum: payroll_deduction, manual_repayment, adjustment.
+  - `reference` varchar(100) nullable.
+  - `journal_entry_id` uuid nullable FK → `acct.journal_entries.id` (SET NULL/CASCADE).
+  - `recorded_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `notes` text nullable.
+  - `created_at`, `updated_at` timestamps.
+- Model:
+  - `$connection = 'pgsql'; $table = 'pay.salary_advance_recoveries'; $keyType = 'string'; public $incrementing = false;`
+- Business rules:
+  - Trigger updates `amount_recovered`, `amount_outstanding`, and `status` on the parent salary advance.
 
 ## Payroll Calculation Flow
 
@@ -373,9 +423,8 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
    - Mark as paid
 
 6. **Post to GL**
-   - Debit salary expense accounts
-   - Credit payroll liability
-   - Credit bank account
+   - On approval: debit salary/employer expense accounts; credit payroll payable, deduction payable, and Employee Advances for linked salary advance recoveries.
+   - On payment: debit payroll payable and credit the selected/default bank or cash account.
 
 ## Enums Reference
 

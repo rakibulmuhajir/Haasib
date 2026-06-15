@@ -21,6 +21,7 @@ class PayslipLine extends Model
         'line_type',
         'earning_type_id',
         'deduction_type_id',
+        'salary_advance_id',
         'description',
         'quantity',
         'rate',
@@ -32,6 +33,7 @@ class PayslipLine extends Model
         'payslip_id' => 'string',
         'earning_type_id' => 'string',
         'deduction_type_id' => 'string',
+        'salary_advance_id' => 'string',
         'quantity' => 'decimal:3',
         'rate' => 'decimal:4',
         'amount' => 'decimal:2',
@@ -53,5 +55,10 @@ class PayslipLine extends Model
     public function deductionType(): BelongsTo
     {
         return $this->belongsTo(DeductionType::class);
+    }
+
+    public function salaryAdvance(): BelongsTo
+    {
+        return $this->belongsTo(SalaryAdvance::class);
     }
 }

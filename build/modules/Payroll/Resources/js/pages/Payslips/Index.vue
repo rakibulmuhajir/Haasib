@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   FileText,
   Plus,
@@ -86,11 +87,7 @@ const columns = [
 ]
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(date, { mode: 'date' })
 }
 
 const formatCurrency = (amount: number, currency: string) => {

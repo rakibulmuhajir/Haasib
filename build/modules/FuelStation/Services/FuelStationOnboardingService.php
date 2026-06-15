@@ -11,6 +11,7 @@ use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Support\Facades\DB;
 
 class FuelStationOnboardingService
@@ -644,28 +645,24 @@ class FuelStationOnboardingService
             ['name' => 'Diesel', 'fuel_category' => 'diesel', 'sku' => 'FUEL-DSL'],
         ];
 
+        $productCatalog = app(ProductCatalogService::class);
         foreach ($fuelTypes as $fuel) {
-            $normalizedCategory = $this->normalizeFuelCategory($fuel['fuel_category']);
-            $existsQuery = Item::where('company_id', $companyId);
-            if ($normalizedCategory === 'high_octane') {
-                $existsQuery->whereIn('fuel_category', ['high_octane', 'hi_octane']);
-            } else {
-                $existsQuery->where('fuel_category', $normalizedCategory);
-            }
-            $exists = $existsQuery->exists();
+            $normalizedCategory = $productCatalog->normalizeFuelCategory($fuel['fuel_category']);
+            $existing = $productCatalog->findExisting($companyId, $normalizedCategory);
 
-            if (!$exists) {
-                Item::create([
+            if (!$existing) {
+                $productCatalog->save([
                     'company_id' => $companyId,
                     'name' => $fuel['name'],
                     'sku' => $fuel['sku'],
+                    'type' => 'fuel',
                     'fuel_category' => $normalizedCategory,
                     'item_type' => 'product',
                     'is_active' => true,
                     'track_inventory' => true,
                     'unit_of_measure' => 'liters',
                     'currency' => $baseCurrency,
-                    'created_by_user_id' => $company->created_by_user_id,
+                    'user_id' => $company->created_by_user_id,
                 ]);
                 $created[] = $fuel['name'];
             }

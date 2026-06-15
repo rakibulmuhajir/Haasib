@@ -20,6 +20,8 @@ class BillPayment extends Model
     protected $fillable = [
         'company_id',
         'vendor_id',
+        'payment_group_id',
+        'payment_group_number',
         'payment_number',
         'payment_date',
         'amount',
@@ -39,6 +41,7 @@ class BillPayment extends Model
     protected $casts = [
         'company_id' => 'string',
         'vendor_id' => 'string',
+        'payment_group_id' => 'string',
         'payment_date' => 'date',
         'amount' => 'decimal:6',
         'exchange_rate' => 'decimal:8',

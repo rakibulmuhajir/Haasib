@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { FileText, Pencil, Trash2, Building, Package, PackageCheck, Ban } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -131,11 +132,7 @@ const formatNumber = (val: number, decimals: number = 2) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val)
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatSharedDateTime(dateString, { mode: 'date' })
 }
 
 const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'outline' => {

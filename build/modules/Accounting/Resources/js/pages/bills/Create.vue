@@ -25,6 +25,7 @@ interface VendorRef {
   name: string
   payment_terms?: number
   base_currency?: string
+  vendor_type?: string | null
 }
 
 interface AccountOption {

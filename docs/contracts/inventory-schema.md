@@ -193,6 +193,7 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - `quantity` numeric(18,3) not null. Positive for in, negative for out.
   - `unit_cost` numeric(15,6) nullable.
   - `total_cost` numeric(15,2) nullable.
+  - `gl_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE) for GL-posted adjustments.
   - `reference_type` varchar(100) nullable (e.g., 'acct.bills', 'acct.invoices').
   - `reference_id` uuid nullable.
   - `related_movement_id` uuid nullable FK → `inv.stock_movements.id` (for transfers).
@@ -202,12 +203,12 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - `created_at` timestamp not null default now().
 - Indexes/constraints:
   - PK `id`.
-  - Index: `company_id`; `warehouse_id`; `item_id`; (`company_id`, `movement_date`); (`reference_type`, `reference_id`).
+  - Index: `company_id`; `warehouse_id`; `item_id`; `gl_transaction_id`; (`company_id`, `movement_date`); (`reference_type`, `reference_id`).
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'inv.stock_movements'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','warehouse_id','item_id','movement_date','movement_type','quantity','unit_cost','total_cost','reference_type','reference_id','related_movement_id','reason','notes','created_by_user_id'];`
-  - `$casts = ['company_id'=>'string','warehouse_id'=>'string','item_id'=>'string','movement_date'=>'date','quantity'=>'decimal:3','unit_cost'=>'decimal:6','total_cost'=>'decimal:2','reference_id'=>'string','related_movement_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime'];`
+  - `$fillable = ['company_id','warehouse_id','item_id','movement_date','movement_type','quantity','unit_cost','total_cost','gl_transaction_id','reference_type','reference_id','related_movement_id','reason','notes','created_by_user_id'];`
+  - `$casts = ['company_id'=>'string','warehouse_id'=>'string','item_id'=>'string','movement_date'=>'date','quantity'=>'decimal:3','unit_cost'=>'decimal:6','total_cost'=>'decimal:2','gl_transaction_id'=>'string','reference_id'=>'string','related_movement_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Warehouse; belongsTo Item; belongsTo RelatedMovement (self).
 - Validation:
   - `warehouse_id`: required|uuid|exists:inv.warehouses,id.
@@ -220,6 +221,7 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - Trigger updates stock_levels on insert.
   - Transfers create two movements: transfer_out and transfer_in.
   - unit_cost used for costing calculations.
+  - User-created adjustment_in posts Dr inventory asset / Cr transit gain. User-created adjustment_out posts Dr transit loss / Cr inventory asset.
 
 ### inv.stock_receipts
 - Purpose: header for physical goods receipts (linked to bills). Supports partial receipts and variance tracking.

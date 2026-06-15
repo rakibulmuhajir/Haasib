@@ -4,6 +4,7 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\FuelStation\Http\Requests\SettlePaymentChannelRequest;
 use App\Modules\FuelStation\Http\Requests\SettleVendorCardRequest;
 use App\Modules\FuelStation\Services\VendorCardSettlementService;
 use App\Services\CurrentCompany;
@@ -26,15 +27,17 @@ class VendorCardSettlementController extends Controller
 
         // Get bank accounts for settlement
         $bankAccounts = Account::where('company_id', $company->id)
-            ->where('account_type', 'asset')
-            ->where(function ($query) {
-                $query->where('name', 'like', '%Bank%');
-            })
-            ->get();
+            ->where('type', 'asset')
+            ->where('subtype', 'bank')
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
 
         return Inertia::render('FuelStation/VendorCards/Settlement', [
             'summary' => $summary,
             'pendingSales' => $pendingSales,
+            'clearingAccounts' => $summary['clearing_accounts'] ?? [],
             'todaySettlements' => [],
             'bankAccounts' => $bankAccounts,
         ]);
@@ -48,6 +51,19 @@ class VendorCardSettlementController extends Controller
             $this->vendorCardService->settle($company->id, $request->validated());
 
             return redirect()->back()->with('success', 'Vendor card settlement completed successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function settleClearing(SettlePaymentChannelRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+
+        try {
+            $this->vendorCardService->settleClearingAccount($company->id, $request->validated());
+
+            return redirect()->back()->with('success', 'Payment channel clearing settlement completed successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

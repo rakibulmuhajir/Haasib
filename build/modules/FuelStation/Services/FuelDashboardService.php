@@ -2,7 +2,7 @@
 
 namespace App\Modules\FuelStation\Services;
 
-use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Models\AttendantHandover;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\FuelStation\Models\Investor;
@@ -12,7 +12,10 @@ use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\SaleMetadata;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use Illuminate\Support\Carbon;
 
 class FuelDashboardService
@@ -71,6 +74,7 @@ class FuelDashboardService
             ],
             'tanks' => $tanks,
             'rates' => $rates,
+            'products' => $this->getProductDashboard($companyId),
         ];
     }
 
@@ -311,5 +315,312 @@ class FuelDashboardService
             ->with('invoice')
             ->get()
             ->sum(fn ($meta) => (float) ($meta->invoice?->total_amount ?? 0) - (float) ($meta->invoice?->paid_amount ?? 0));
+    }
+
+    private function getProductDashboard(string $companyId): array
+    {
+        $products = Item::where('company_id', $companyId)
+            ->where('is_sellable', true)
+            ->whereIn('item_type', ['product', 'non_inventory'])
+            ->orderByRaw('fuel_category IS NULL')
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get();
+
+        $productIds = $products->pluck('id')->all();
+        $stockByItem = $this->getStockByItem($companyId, $productIds);
+        $tankByItem = $this->getTankStockByItem($companyId);
+        $lastMovementByItem = $this->getLatestStockMovementByItem($companyId, $productIds);
+        $salesByItem = $this->getProductSales($companyId, $products);
+        $productCatalog = app(ProductCatalogService::class);
+
+        $rows = $products->map(function (Item $item) use ($stockByItem, $tankByItem, $lastMovementByItem, $salesByItem, $companyId, $productCatalog) {
+            $fuelCategory = $item->fuel_category ?: $productCatalog->inferFuelCategory($item->sku, $item->name);
+            $tankStock = $tankByItem[$item->id] ?? null;
+            $latestMovement = $lastMovementByItem[$item->id] ?? null;
+            $stock = $stockByItem[$item->id] ?? [
+                'quantity' => 0.0,
+                'available_quantity' => 0.0,
+                'reorder_point' => (float) ($item->reorder_point ?? 0),
+            ];
+
+            $currentStock = (float) $stock['quantity'];
+            $availableStock = (float) $stock['available_quantity'];
+            $lastDipQuantity = $tankStock && $tankStock['last_dip_quantity'] !== null
+                ? (float) $tankStock['last_dip_quantity']
+                : null;
+            $stockVariance = $lastDipQuantity !== null ? round($lastDipQuantity - $currentStock, 3) : null;
+            $lowStockLevel = $tankStock
+                ? (float) $tankStock['low_stock_level']
+                : (float) ($stock['reorder_point'] ?: $item->reorder_point ?: 0);
+            $capacity = $tankStock ? (float) $tankStock['capacity'] : null;
+            $fillPercentage = $capacity && $capacity > 0 ? round(($currentStock / $capacity) * 100, 1) : null;
+            $sales = $salesByItem[$item->id] ?? $this->emptyProductSales();
+            $rate = $fuelCategory ? RateChange::getCurrentRate($companyId, $item->id) : null;
+            $saleRate = (float) ($rate?->sale_rate ?? $item->selling_price ?? 0);
+            $purchaseRate = (float) ($rate?->purchase_rate ?? $item->avg_cost ?? $item->cost_price ?? 0);
+
+            return [
+                'id' => $item->id,
+                'name' => $item->name,
+                'sku' => $item->sku,
+                'fuel_category' => $fuelCategory,
+                'unit' => $item->unit_of_measure,
+                'is_active' => (bool) $item->is_active,
+                'track_inventory' => (bool) $item->track_inventory,
+                'current_stock' => round($currentStock, 3),
+                'available_stock' => round($availableStock, 3),
+                'last_stock_movement_at' => $latestMovement['created_at'] ?? null,
+                'last_stock_movement_date' => $latestMovement['movement_date'] ?? null,
+                'last_stock_movement_type' => $latestMovement['movement_type'] ?? null,
+                'low_stock_level' => round($lowStockLevel, 3),
+                'is_low_stock' => (bool) ($item->is_active && $item->track_inventory && $lowStockLevel > 0 && $currentStock <= $lowStockLevel),
+                'capacity' => $capacity,
+                'fill_percentage' => $fillPercentage,
+                'last_dip_quantity' => $lastDipQuantity !== null ? round($lastDipQuantity, 3) : null,
+                'last_dip_at' => $tankStock['last_dip_at'] ?? null,
+                'last_dip_recorded_at' => $tankStock['last_dip_recorded_at'] ?? null,
+                'last_dip_status' => $tankStock['last_dip_status'] ?? null,
+                'stock_variance' => $stockVariance,
+                'stock_value' => round($currentStock * (float) ($item->avg_cost ?: $item->cost_price ?: 0), 2),
+                'purchase_rate' => $purchaseRate,
+                'sale_rate' => $saleRate,
+                'margin' => round($saleRate - $purchaseRate, 2),
+                'last_sold_at' => $sales['last_sold_at'],
+                'sales' => $sales,
+            ];
+        })->values();
+
+        $lowStock = $rows->filter(fn ($row) => $row['is_low_stock'])->values();
+        $topProducts = $rows
+            ->filter(fn ($row) => $row['sales']['last_month']['amount'] > 0)
+            ->sortByDesc(fn ($row) => $row['sales']['last_month']['amount'])
+            ->take(5)
+            ->values();
+
+        return [
+            'summary' => [
+                'total_products' => $rows->count(),
+                'active_products' => $rows->filter(fn ($row) => $row['is_active'])->count(),
+                'fuel_products' => $rows->filter(fn ($row) => $row['fuel_category'] !== null)->count(),
+                'low_stock_count' => $lowStock->count(),
+                'inventory_value' => round($rows->sum('stock_value'), 2),
+                'yesterday_sales' => round($rows->sum(fn ($row) => $row['sales']['yesterday']['amount']), 2),
+                'last_week_sales' => round($rows->sum(fn ($row) => $row['sales']['last_week']['amount']), 2),
+                'last_month_sales' => round($rows->sum(fn ($row) => $row['sales']['last_month']['amount']), 2),
+                'yesterday_liters' => round($rows->sum(fn ($row) => $row['sales']['yesterday']['quantity']), 3),
+                'last_week_liters' => round($rows->sum(fn ($row) => $row['sales']['last_week']['quantity']), 3),
+                'last_month_liters' => round($rows->sum(fn ($row) => $row['sales']['last_month']['quantity']), 3),
+            ],
+            'low_stock' => $lowStock->take(6)->values()->all(),
+            'top_products' => $topProducts->all(),
+            'items' => $rows->all(),
+        ];
+    }
+
+    private function getStockByItem(string $companyId, array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+
+        return StockLevel::where('company_id', $companyId)
+            ->whereIn('item_id', $productIds)
+            ->selectRaw('item_id, SUM(quantity) as quantity, SUM(available_quantity) as available_quantity, MAX(COALESCE(reorder_point, 0)) as reorder_point')
+            ->groupBy('item_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $row->item_id => [
+                    'quantity' => (float) $row->quantity,
+                    'available_quantity' => (float) $row->available_quantity,
+                    'reorder_point' => (float) $row->reorder_point,
+                ],
+            ])
+            ->all();
+    }
+
+    private function getLatestStockMovementByItem(string $companyId, array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+
+        return StockMovement::where('company_id', $companyId)
+            ->whereIn('item_id', $productIds)
+            ->orderByDesc('movement_date')
+            ->orderByDesc('created_at')
+            ->get(['item_id', 'movement_date', 'movement_type', 'created_at'])
+            ->unique('item_id')
+            ->mapWithKeys(fn (StockMovement $movement) => [
+                $movement->item_id => [
+                    'movement_date' => $movement->movement_date?->toDateString(),
+                    'movement_type' => $movement->movement_type,
+                    'created_at' => $movement->created_at?->toIso8601String(),
+                ],
+            ])
+            ->all();
+    }
+
+    private function getTankStockByItem(string $companyId): array
+    {
+        $tanks = Warehouse::where('company_id', $companyId)
+            ->where('warehouse_type', 'tank')
+            ->where('is_active', true)
+            ->whereNotNull('linked_item_id')
+            ->get(['id', 'name', 'capacity', 'low_level_alert', 'linked_item_id']);
+
+        if ($tanks->isEmpty()) {
+            return [];
+        }
+
+        $latestReadings = TankReading::where('company_id', $companyId)
+            ->whereIn('tank_id', $tanks->pluck('id')->all())
+            ->orderByDesc('reading_date')
+            ->orderByDesc('created_at')
+            ->get(['tank_id', 'reading_date', 'dip_measurement_liters', 'status', 'created_at'])
+            ->unique('tank_id')
+            ->keyBy('tank_id');
+
+        $byItem = [];
+        foreach ($tanks as $tank) {
+            $itemId = (string) $tank->linked_item_id;
+            $reading = $latestReadings->get($tank->id);
+
+            if (! isset($byItem[$itemId])) {
+                $byItem[$itemId] = [
+                    'capacity' => 0.0,
+                    'low_stock_level' => 0.0,
+                    'tank_count' => 0,
+                    'last_dip_quantity' => null,
+                    'last_dip_at' => null,
+                    'last_dip_recorded_at' => null,
+                    'last_dip_status' => null,
+                ];
+            }
+
+            $byItem[$itemId]['capacity'] += (float) ($tank->capacity ?? 0);
+            $byItem[$itemId]['low_stock_level'] += (float) ($tank->low_level_alert ?? 0);
+            $byItem[$itemId]['tank_count']++;
+
+            if ($reading) {
+                $byItem[$itemId]['last_dip_quantity'] = (float) ($byItem[$itemId]['last_dip_quantity'] ?? 0)
+                    + (float) ($reading->dip_measurement_liters ?? 0);
+
+                $readingAt = $reading->reading_date;
+                $recordedAt = $reading->created_at;
+                $currentRecordedAt = $byItem[$itemId]['last_dip_recorded_at']
+                    ? Carbon::parse($byItem[$itemId]['last_dip_recorded_at'])
+                    : null;
+
+                if (! $currentRecordedAt || ($recordedAt && $recordedAt->gt($currentRecordedAt))) {
+                    $byItem[$itemId]['last_dip_at'] = $readingAt?->toIso8601String();
+                    $byItem[$itemId]['last_dip_recorded_at'] = $recordedAt?->toIso8601String();
+                    $byItem[$itemId]['last_dip_status'] = $reading->status;
+                }
+            }
+        }
+
+        return $byItem;
+    }
+
+    private function getProductSales(string $companyId, $products): array
+    {
+        $today = Carbon::today();
+        $yesterday = $today->copy()->subDay();
+        $lastWeekStart = $today->copy()->subDays(7);
+        $lastMonthStart = $today->copy()->subDays(30);
+
+        $byId = [];
+        $byCategory = [];
+        $byName = [];
+
+        foreach ($products as $product) {
+            $byId[$product->id] = $this->emptyProductSales();
+            if ($product->fuel_category) {
+                $byCategory[$product->fuel_category] = $product->id;
+                if ($product->fuel_category === 'high_octane') {
+                    $byCategory['hi_octane'] = $product->id;
+                }
+            }
+            $byName[strtolower((string) $product->name)] = $product->id;
+        }
+
+        $transactions = Transaction::where('company_id', $companyId)
+            ->whereIn('transaction_type', ['fuel_daily_close', 'daily_close'])
+            ->whereBetween('transaction_date', [$lastMonthStart->toDateString(), $yesterday->toDateString()])
+            ->where(function ($query) {
+                $query->whereIn('status', ['posted', 'locked'])
+                    ->orWhere('is_locked', true);
+            })
+            ->orderBy('transaction_date')
+            ->get(['id', 'transaction_date', 'metadata']);
+
+        foreach ($transactions as $transaction) {
+            $date = Carbon::parse($transaction->transaction_date);
+            $periods = [];
+            if ($date->isSameDay($yesterday)) {
+                $periods[] = 'yesterday';
+            }
+            if ($date->betweenIncluded($lastWeekStart, $yesterday)) {
+                $periods[] = 'last_week';
+            }
+            if ($date->betweenIncluded($lastMonthStart, $yesterday)) {
+                $periods[] = 'last_month';
+            }
+            if (empty($periods)) {
+                continue;
+            }
+
+            $metadata = $transaction->metadata ?? [];
+
+            foreach (($metadata['fuel_sales'] ?? []) as $category => $sale) {
+                $itemId = $byCategory[$category] ?? null;
+                if (! $itemId) {
+                    continue;
+                }
+                $this->addProductSale($byId[$itemId], $periods, (float) ($sale['liters'] ?? 0), (float) ($sale['revenue'] ?? 0), (float) ($sale['cogs'] ?? 0), $date);
+            }
+
+            foreach (($metadata['sales'] ?? []) as $sale) {
+                $itemId = $byName[strtolower((string) ($sale['fuel_name'] ?? ''))] ?? null;
+                if (! $itemId) {
+                    continue;
+                }
+                $this->addProductSale($byId[$itemId], $periods, (float) ($sale['liters'] ?? 0), (float) ($sale['amount'] ?? 0), 0.0, $date);
+            }
+
+            foreach (($metadata['other_sales_details'] ?? []) as $sale) {
+                $itemId = (string) ($sale['item_id'] ?? '');
+                if (! isset($byId[$itemId])) {
+                    continue;
+                }
+                $this->addProductSale($byId[$itemId], $periods, (float) ($sale['quantity'] ?? 0), (float) ($sale['amount'] ?? 0), 0.0, $date);
+            }
+        }
+
+        return $byId;
+    }
+
+    private function emptyProductSales(): array
+    {
+        return [
+            'yesterday' => ['quantity' => 0.0, 'amount' => 0.0, 'cogs' => 0.0],
+            'last_week' => ['quantity' => 0.0, 'amount' => 0.0, 'cogs' => 0.0],
+            'last_month' => ['quantity' => 0.0, 'amount' => 0.0, 'cogs' => 0.0],
+            'last_sold_at' => null,
+        ];
+    }
+
+    private function addProductSale(array &$sales, array $periods, float $quantity, float $amount, float $cogs, Carbon $date): void
+    {
+        foreach ($periods as $period) {
+            $sales[$period]['quantity'] += $quantity;
+            $sales[$period]['amount'] += $amount;
+            $sales[$period]['cogs'] += $cogs;
+        }
+
+        if ($amount > 0 && (! $sales['last_sold_at'] || $date->gt(Carbon::parse($sales['last_sold_at'])))) {
+            $sales['last_sold_at'] = $date->toDateString();
+        }
     }
 }

@@ -7,9 +7,9 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StoreEarningTypeRequest;
-use Modules\Payroll\Http\Requests\UpdateEarningTypeRequest;
-use Modules\Payroll\Models\EarningType;
+use App\Modules\Payroll\Http\Requests\StoreEarningTypeRequest;
+use App\Modules\Payroll\Http\Requests\UpdateEarningTypeRequest;
+use App\Modules\Payroll\Models\EarningType;
 
 class EarningTypeController extends Controller
 {

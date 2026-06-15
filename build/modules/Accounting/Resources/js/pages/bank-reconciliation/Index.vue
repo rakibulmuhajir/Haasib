@@ -24,6 +24,7 @@ import {
   Eye
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 
 interface CompanyRef {
   id: string
@@ -112,11 +113,7 @@ const formatCurrency = (amount: number, currency: string) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const handleFilter = () => {

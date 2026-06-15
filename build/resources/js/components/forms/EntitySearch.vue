@@ -29,6 +29,7 @@ export interface Entity {
   phone?: string | null
   customer_number?: string
   vendor_number?: string
+  vendor_type?: string | null
 }
 
 export interface EntitySearchProps {
@@ -99,6 +100,14 @@ const noResultsText = computed(() => {
     ? t('noCustomersFound')
     : t('noVendorsFound')
 })
+
+const formatVendorType = (type?: string | null) => {
+  if (!type) return ''
+  return type
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
 
 // Debounced search function
 const debouncedSearch = useDebounceFn(async (query: string) => {
@@ -332,8 +341,10 @@ onMounted(() => {
               <component :is="entityIcon" class="mr-2 h-4 w-4 opacity-50" />
               <div class="flex-1 text-left">
                 <div class="font-medium">{{ item.name }}</div>
-                <div v-if="item.email" class="text-xs text-muted-foreground">
-                  {{ item.email }}
+                <div v-if="item.email || item.vendor_type" class="text-xs text-muted-foreground">
+                  <span v-if="item.vendor_type">{{ formatVendorType(item.vendor_type) }}</span>
+                  <span v-if="item.vendor_type && item.email"> · </span>
+                  <span v-if="item.email">{{ item.email }}</span>
                 </div>
               </div>
               <Check
@@ -367,8 +378,10 @@ onMounted(() => {
               <component :is="entityIcon" class="mr-2 h-4 w-4 opacity-50" />
               <div class="flex-1 text-left">
                 <div class="font-medium">{{ item.name }}</div>
-                <div v-if="item.email" class="text-xs text-muted-foreground">
-                  {{ item.email }}
+                <div v-if="item.email || item.vendor_type" class="text-xs text-muted-foreground">
+                  <span v-if="item.vendor_type">{{ formatVendorType(item.vendor_type) }}</span>
+                  <span v-if="item.vendor_type && item.email"> · </span>
+                  <span v-if="item.email">{{ item.email }}</span>
                 </div>
               </div>
               <Check

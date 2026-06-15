@@ -72,7 +72,8 @@ class StoreDailyCloseAmendmentRequest extends BaseFormRequest
             'employee_advances.*.reason' => ['nullable', 'string', 'max:255'],
 
             'amanat_disbursements' => ['nullable', 'array'],
-            'amanat_disbursements.*.customer_name' => ['required', 'string', 'max:255'],
+            'amanat_disbursements.*.customer_id' => ['required', 'uuid'],
+            'amanat_disbursements.*.customer_name' => ['nullable', 'string', 'max:255'],
             'amanat_disbursements.*.amount' => ['required', 'numeric', 'min:0'],
 
             'expenses' => ['nullable', 'array'],

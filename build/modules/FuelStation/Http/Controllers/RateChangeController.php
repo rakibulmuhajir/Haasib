@@ -7,6 +7,7 @@ use App\Modules\FuelStation\Http\Requests\StoreRateChangeRequest;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Services\RateChangeService;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -28,9 +29,19 @@ class RateChangeController extends Controller
             ->orderByDesc('effective_date')
             ->get();
 
+        $productCatalog = app(ProductCatalogService::class);
         $fuelItems = Item::where('company_id', $company->id)
-            ->whereNotNull('fuel_category')
-            ->get();
+            ->where('is_sellable', true)
+            ->whereIn('item_type', ['product', 'non_inventory'])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Item $item) => $item->fuel_category || $productCatalog->inferFuelCategory($item->sku, $item->name))
+            ->each(function (Item $item) use ($productCatalog) {
+                if (! $item->fuel_category) {
+                    $item->fuel_category = $productCatalog->inferFuelCategory($item->sku, $item->name);
+                }
+            })
+            ->values();
 
         // Get current stock for each fuel item
         $stockLevels = [];
@@ -75,9 +86,19 @@ class RateChangeController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
 
+        $productCatalog = app(ProductCatalogService::class);
         $fuelItems = Item::where('company_id', $company->id)
-            ->whereNotNull('fuel_category')
-            ->get();
+            ->where('is_sellable', true)
+            ->whereIn('item_type', ['product', 'non_inventory'])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Item $item) => $item->fuel_category || $productCatalog->inferFuelCategory($item->sku, $item->name))
+            ->each(function (Item $item) use ($productCatalog) {
+                if (! $item->fuel_category) {
+                    $item->fuel_category = $productCatalog->inferFuelCategory($item->sku, $item->name);
+                }
+            })
+            ->values();
 
         $rates = [];
         foreach ($fuelItems as $item) {
@@ -86,7 +107,7 @@ class RateChangeController extends Controller
                 $rates[$item->id] = [
                     'item_id' => $item->id,
                     'item_name' => $item->name,
-                    'fuel_category' => $item->fuel_category,
+                    'fuel_category' => $item->fuel_category ?: $productCatalog->inferFuelCategory($item->sku, $item->name),
                     'purchase_rate' => $currentRate->purchase_rate,
                     'sale_rate' => $currentRate->sale_rate,
                     'margin' => $currentRate->margin,

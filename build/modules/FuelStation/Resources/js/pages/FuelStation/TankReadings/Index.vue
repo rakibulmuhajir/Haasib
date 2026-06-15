@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import {
   AlertTriangle,
   ArrowRight,
@@ -96,12 +97,7 @@ const formatLiters = (n: number) =>
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const formatMoney = (n: number) => {

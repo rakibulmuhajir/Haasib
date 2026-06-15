@@ -101,7 +101,7 @@ const tableData = computed(() =>
     id: j.id,
     transaction_number: j.transaction_number,
     transaction_type: (j.transaction_type || '').replace(/_/g, ' '),
-    transaction_date: new Date(j.transaction_date).toLocaleDateString(),
+    transaction_date: j.transaction_date,
     status: j.status,
     total_debit: formatCurrency(Number(j.total_debit)),
     total_credit: formatCurrency(Number(j.total_credit)),

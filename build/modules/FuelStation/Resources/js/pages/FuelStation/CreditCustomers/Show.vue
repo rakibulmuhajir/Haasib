@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -69,7 +70,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 // Credit limit dialog

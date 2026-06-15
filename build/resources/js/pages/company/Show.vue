@@ -6,9 +6,11 @@ import DataTable from '@/components/DataTable.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import DateTimeText from '@/components/DateTimeText.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useFormFeedback } from '@/composables/useFormFeedback'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime } from '@/lib/datetime'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,15 +56,19 @@ import {
   Languages,
   TrendingUp,
   TrendingDown,
-  Fuel,
-  Gauge,
   FileText,
-  Warehouse,
   Package,
   Plus,
   Loader2,
+  Eye,
+  Pencil,
+  Power,
+  PowerOff,
+  Warehouse,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
 interface Company {
   id: string
@@ -185,6 +191,67 @@ interface FuelHomeDashboard {
     margin: number
     effective_date: string | null
   }>
+  products?: FuelProductDashboard | null
+}
+
+interface FuelProductSalesPeriod {
+  quantity: number
+  amount: number
+  cogs: number
+}
+
+interface FuelProductDashboardItem {
+  id: string
+  name: string
+  sku: string | null
+  fuel_category: string | null
+  unit: string | null
+  is_active: boolean
+  track_inventory: boolean
+  current_stock: number
+  available_stock: number
+  last_stock_movement_at: string | null
+  last_stock_movement_date: string | null
+  last_stock_movement_type: string | null
+  low_stock_level: number
+  is_low_stock: boolean
+  capacity: number | null
+  fill_percentage: number | null
+  last_dip_quantity: number | null
+  last_dip_at: string | null
+  last_dip_recorded_at: string | null
+  last_dip_status: string | null
+  stock_variance: number | null
+  stock_value: number
+  purchase_rate: number
+  sale_rate: number
+  margin: number
+  last_sold_at: string | null
+  sales: {
+    yesterday: FuelProductSalesPeriod
+    last_week: FuelProductSalesPeriod
+    last_month: FuelProductSalesPeriod
+    last_sold_at: string | null
+  }
+}
+
+interface FuelProductDashboard {
+  summary: {
+    total_products: number
+    active_products: number
+    fuel_products: number
+    low_stock_count: number
+    inventory_value: number
+    yesterday_sales: number
+    last_week_sales: number
+    last_month_sales: number
+    yesterday_liters: number
+    last_week_liters: number
+    last_month_liters: number
+  }
+  low_stock: FuelProductDashboardItem[]
+  top_products: FuelProductDashboardItem[]
+  items: FuelProductDashboardItem[]
 }
 
 interface FuelTankOption {
@@ -236,24 +303,6 @@ const tankDraft = ref({
   low_level_alert: '',
 })
 const tankDraftErrors = ref<Record<string, string>>({})
-const tankForm = useForm({
-  product: {
-    type: '',
-    name: '',
-    sku: '',
-    fuel_category: '',
-    lubricant_format: '',
-    packaging: '',
-    unit_of_measure: '',
-    track_inventory: true,
-  },
-  tank: {
-    name: '',
-    code: '',
-    capacity: '',
-    low_level_alert: '',
-  },
-})
 
 const fuelTanks = ref<FuelTankOption[]>(props.fuelTanks ?? [])
 
@@ -275,6 +324,8 @@ const inviteDialogOpen = ref(false)
 const roleDialogOpen = ref(false)
 const removeDialogOpen = ref(false)
 const selectedUser = ref<User | null>(null)
+const productDeleteDialogOpen = ref(false)
+const selectedProduct = ref<FuelProductDashboardItem | null>(null)
 
 const inviteForm = useForm({
   email: '',
@@ -450,59 +501,20 @@ const saveTankDraft = () => {
     return
   }
 
-  tankForm.product = {
-    type: row.type,
-    name: row.name,
-    sku: row.sku || '',
-    fuel_category: row.fuel_category || '',
-    lubricant_format: row.lubricant_format || '',
-    packaging: row.packaging || '',
-    unit_of_measure: row.unit_of_measure || '',
-    track_inventory: row.track_inventory ?? true,
-  }
-  tankForm.tank = {
+  row.tank_id = ''
+  row.new_tank = {
     name: tankDraft.value.name.trim(),
     code: tankDraft.value.code.trim(),
     capacity: tankDraft.value.capacity,
     low_level_alert: tankDraft.value.low_level_alert,
   }
-
-  tankForm.post(`/${props.company.slug}/fuel/tanks/quick-create`, {
-    preserveScroll: true,
-    onSuccess: (page) => {
-      const flash = (page.props as { flash?: { tank?: FuelTankOption; item?: { sku?: string } } })?.flash
-      const newTank = flash?.tank
-      const newItem = flash?.item
-      if (newTank) {
-        fuelTanks.value = [
-          newTank,
-          ...fuelTanks.value.filter((existing) => existing.id !== newTank.id),
-        ]
-        row.tank_id = newTank.id
-        row.new_tank = null
-      }
-      if (newItem?.sku && !row.sku) {
-        row.sku = newItem.sku
-      }
-      tankDraft.value = {
-        name: '',
-        code: '',
-        capacity: '',
-        low_level_alert: '',
-      }
-      tankForm.reset()
-      tankForm.clearErrors()
-      tankDialogOpen.value = false
-    },
-    onError: (errors) => {
-      tankDraftErrors.value = {
-        name: typeof errors['tank.name'] === 'string' ? errors['tank.name'] : (errors['tank.name']?.[0] ?? ''),
-        code: typeof errors['tank.code'] === 'string' ? errors['tank.code'] : (errors['tank.code']?.[0] ?? ''),
-        capacity: typeof errors['tank.capacity'] === 'string' ? errors['tank.capacity'] : (errors['tank.capacity']?.[0] ?? ''),
-      }
-      showError(errors)
-    },
-  })
+  tankDraft.value = {
+    name: '',
+    code: '',
+    capacity: '',
+    low_level_alert: '',
+  }
+  tankDialogOpen.value = false
 }
 
 const submitProducts = () => {
@@ -526,6 +538,10 @@ const submitProducts = () => {
       productsForm.products = [buildProductRow()]
       productsForm.clearErrors()
       productsDialogOpen.value = false
+      router.reload({
+        only: ['fuelDashboard', 'fuelTanks'],
+        preserveScroll: true,
+      })
     },
     onError: (errors) => {
       handled = true
@@ -541,6 +557,29 @@ const submitProducts = () => {
 
 const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRole))
 const isFuelStationCompany = computed(() => props.isFuelStation === true)
+const pageTitle = computed(() => isFuelStationCompany.value ? 'Products You Sell' : props.company.name)
+const pageIcon = computed(() => isFuelStationCompany.value ? Package : Building2)
+const pageBreadcrumbs = computed<BreadcrumbItem[]>(() => isFuelStationCompany.value
+  ? [{ title: 'Products', href: `/${props.company.slug}` }]
+  : breadcrumbs.value
+)
+const fuelProductDashboard = computed(() => props.fuelDashboard?.products ?? null)
+const fuelProductSummary = computed(() => fuelProductDashboard.value?.summary ?? {
+  total_products: 0,
+  active_products: 0,
+  fuel_products: 0,
+  low_stock_count: 0,
+  inventory_value: 0,
+  yesterday_sales: 0,
+  last_week_sales: 0,
+  last_month_sales: 0,
+  yesterday_liters: 0,
+  last_week_liters: 0,
+  last_month_liters: 0,
+})
+const fuelProductRows = computed(() => fuelProductDashboard.value?.items ?? [])
+const lowStockProducts = computed(() => fuelProductDashboard.value?.low_stock ?? [])
+const topFuelProducts = computed(() => fuelProductDashboard.value?.top_products ?? [])
 
 const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
@@ -641,6 +680,46 @@ const handleRemoveUser = () => {
   })
 }
 
+const openProduct = (product: FuelProductDashboardItem) => {
+  router.visit(`/${props.company.slug}/items/${product.id}`)
+}
+
+const editProduct = (product: FuelProductDashboardItem) => {
+  router.visit(`/${props.company.slug}/items/${product.id}/edit`)
+}
+
+const openProductStock = (product: FuelProductDashboardItem) => {
+  router.visit(`/${props.company.slug}/stock/items/${product.id}`)
+}
+
+const toggleProductStatus = (product: FuelProductDashboardItem) => {
+  router.patch(`/${props.company.slug}/items/${product.id}/status`, {
+    is_active: !product.is_active,
+  }, {
+    preserveScroll: true,
+    only: ['fuelDashboard'],
+  })
+}
+
+const openProductDeleteDialog = (product: FuelProductDashboardItem) => {
+  selectedProduct.value = product
+  productDeleteDialogOpen.value = true
+}
+
+const deleteProduct = () => {
+  if (!selectedProduct.value) return
+
+  router.delete(`/${props.company.slug}/items/${selectedProduct.value.id}`, {
+    data: { return_to: 'back' },
+    preserveScroll: true,
+    only: ['fuelDashboard'],
+    onSuccess: () => {
+      productDeleteDialogOpen.value = false
+      selectedProduct.value = null
+    },
+  })
+}
+
 const tableColumns = [
   { key: 'name', label: 'User', sortable: true },
   { key: 'role', label: 'Role', sortable: true },
@@ -664,25 +743,83 @@ const currencySymbol = (currencyCode: string) => {
   })
   return formatter.formatToParts(0).find((p) => p.type === 'currency')?.value ?? currencyCode
 }
+
+const formatQuantity = (value?: number | null, unit?: string | null) => {
+  const quantity = Number(value ?? 0).toLocaleString(moneyLocale(props.company.base_currency), {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+  return `${quantity} ${unit || 'units'}`
+}
+
+const formatPercent = (value?: number | null) => {
+  if (value === null || value === undefined) return '—'
+  return `${Number(value).toFixed(1)}%`
+}
+
+const productCategoryLabel = (category?: string | null) => {
+  if (!category) return 'Product'
+  return category
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+const movementTypeLabel = (value?: string | null) => {
+  if (!value) return 'Stock entry'
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+const varianceClass = (value?: number | null) => {
+  if (value === null || value === undefined) return 'text-zinc-500'
+  if (Math.abs(value) < 0.001) return 'text-emerald-700'
+  return value < 0 ? 'text-red-700' : 'text-amber-700'
+}
+
+const variancePrefix = (value?: number | null) => {
+  if (value === null || value === undefined || Math.abs(value) < 0.001) return ''
+  return value > 0 ? '+' : ''
+}
+
+const stockPrecedence = (product: FuelProductDashboardItem) => {
+  const stockAt = product.last_stock_movement_at ? new Date(product.last_stock_movement_at) : null
+  const dipAt = product.last_dip_at ? new Date(product.last_dip_at) : null
+
+  if (!dipAt) return null
+  if (!stockAt) return 'No stock entry after this dip'
+  if (dipAt.getTime() > stockAt.getTime()) return 'Newer than latest stock entry'
+  if (dipAt.getTime() === stockAt.getTime()) return 'Same time as latest stock entry'
+  return 'Older than latest stock entry'
+}
+
+const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
+  if (product.stock_variance === null || product.stock_variance === undefined) return false
+  if (!product.last_dip_at || !product.last_stock_movement_at) return true
+
+  return new Date(product.last_dip_at).getTime() >= new Date(product.last_stock_movement_at).getTime()
+}
 </script>
 
 <template>
-  <Head :title="company.name" />
+  <Head :title="pageTitle" />
   <Tabs v-model="activeTab" class="w-full">
     <PageShell
-      :title="company.name"
-      :icon="Building2"
-      :breadcrumbs="breadcrumbs"
-      :badge="{ text: company.is_active ? 'Active' : 'Inactive', variant: company.is_active ? 'default' : 'secondary' }"
+      :title="pageTitle"
+      :icon="pageIcon"
+      :breadcrumbs="pageBreadcrumbs"
+      :badge="isFuelStationCompany ? undefined : { text: company.is_active ? 'Active' : 'Inactive', variant: company.is_active ? 'default' : 'secondary' }"
       compact
     >
-      <template #description>
+      <template v-if="!isFuelStationCompany" #description>
         <span class="font-mono text-zinc-400">{{ company.slug }}</span>
         <span class="mx-2 text-zinc-300">•</span>
         <span class="text-zinc-600">{{ currencySymbol(company.base_currency) }}</span>
       </template>
 
-      <template #actions>
+      <template v-if="!isFuelStationCompany" #actions>
         <TabsList class="bg-zinc-100">
         <TabsTrigger value="overview" class="gap-2">
           <BarChart3 class="h-4 w-4" />
@@ -702,95 +839,306 @@ const currencySymbol = (currencyCode: string) => {
       <!-- Overview Tab (Dashboard) -->
       <TabsContent value="overview" class="space-y-6">
 
-        <!-- Fuel Station Onboarding -->
-        <Card v-if="isFuelStationCompany" class="border-zinc-200/80 bg-white">
-          <CardHeader class="pb-2">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <Package class="h-5 w-5 text-zinc-700" />
-                <CardTitle class="text-base font-semibold text-zinc-900">Products You Sell</CardTitle>
-              </div>
-              <Button size="sm" @click="productsDialogOpen = true">
-                <Plus class="mr-2 h-4 w-4" />
-                Add Products
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent class="text-sm text-zinc-600">
-            Add fuels, lubricants, and other products in one place. Set purchase and sale rates, plus optional opening stock.
-          </CardContent>
-        </Card>
-
-        <!-- Fuel Station Snapshot -->
-        <Card v-if="isFuelStationCompany" class="border-zinc-200/80 bg-white">
-          <CardHeader class="pb-2">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <Fuel class="h-5 w-5 text-zinc-700" />
-                <CardTitle class="text-base font-semibold text-zinc-900">Fuel Station</CardTitle>
-              </div>
-              <div class="flex gap-2">
-                <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/fuel/shift-close`)">Shift Close</Button>
-                <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/fuel/pump-readings`)">Pump Readings</Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                <div class="flex items-center gap-2 text-xs text-zinc-500">
-                  <Gauge class="h-4 w-4" />
-                  Active pumps
+        <template v-if="isFuelStationCompany">
+          <Card class="border-zinc-200/80 bg-white">
+            <CardContent class="space-y-5 pt-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-sm text-zinc-600">Stock, rates, and recent sales for fuels, lubricants, and shop products.</p>
+                <div class="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/fuel/daily-close`)">
+                    <FileText class="mr-2 h-4 w-4" />
+                    Daily Close
+                  </Button>
+                  <Button size="sm" @click="productsDialogOpen = true">
+                    <Plus class="mr-2 h-4 w-4" />
+                    Add Products
+                  </Button>
                 </div>
-                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.active_pumps ?? 0 }}</div>
               </div>
-              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                <div class="flex items-center gap-2 text-xs text-zinc-500">
-                  <FileText class="h-4 w-4" />
-                  Today readings
+              <div class="grid grid-cols-2 gap-3 lg:grid-cols-6">
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Products</div>
+                  <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelProductSummary.total_products }}</div>
+                  <div class="text-xs text-zinc-500">{{ fuelProductSummary.active_products }} active</div>
                 </div>
-                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.today_readings ?? 0 }}</div>
-              </div>
-              <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                <div class="flex items-center gap-2 text-xs text-zinc-500">
-                  <Warehouse class="h-4 w-4" />
-                  Pending tank readings
-                </div>
-                <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelDashboard?.summary.pending_tank_readings ?? 0 }}</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              <div class="rounded-lg border border-zinc-100 bg-white p-3">
-                <div class="text-sm font-medium text-zinc-900">Pending handovers</div>
-                <div class="mt-1 flex items-baseline justify-between gap-3">
-                  <div class="text-sm text-zinc-600">{{ fuelDashboard?.pendingHandovers.count ?? 0 }} pending</div>
-                  <div class="font-semibold text-zinc-900">
-                    <MoneyText :amount="fuelDashboard?.pendingHandovers.total_amount ?? 0" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Low stock</div>
+                  <div class="mt-1 text-2xl font-semibold" :class="fuelProductSummary.low_stock_count > 0 ? 'text-amber-700' : 'text-zinc-900'">
+                    {{ fuelProductSummary.low_stock_count }}
                   </div>
+                  <div class="text-xs text-zinc-500">Needs refill</div>
+                </div>
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Yesterday</div>
+                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                    <MoneyText :amount="fuelProductSummary.yesterday_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                  </div>
+                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.yesterday_liters, 'L') }}</div>
+                </div>
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Last 7 days</div>
+                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                    <MoneyText :amount="fuelProductSummary.last_week_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                  </div>
+                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.last_week_liters, 'L') }}</div>
+                </div>
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Last 30 days</div>
+                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                    <MoneyText :amount="fuelProductSummary.last_month_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                  </div>
+                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.last_month_liters, 'L') }}</div>
+                </div>
+                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+                  <div class="text-xs text-zinc-500">Stock value</div>
+                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                    <MoneyText :amount="fuelProductSummary.inventory_value" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                  </div>
+                  <div class="text-xs text-zinc-500">At product cost</div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div class="rounded-lg border border-zinc-100 bg-white p-3 lg:col-span-2">
-                <div class="flex items-center justify-between">
-                  <div class="text-sm font-medium text-zinc-900">Tanks (lowest)</div>
-                  <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/fuel/tank-readings`)">View →</Button>
+          <div class="grid gap-6 lg:grid-cols-3">
+            <Card class="border-zinc-200/80 bg-white lg:col-span-2">
+              <CardHeader>
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle class="text-base font-semibold text-zinc-900">Product Overview</CardTitle>
+                    <CardDescription>Current stock, sale rate, margin, and recent movement.</CardDescription>
+                  </div>
+                  <Badge variant="outline">{{ fuelProductRows.length }} products · {{ fuelProductSummary.active_products }} active</Badge>
                 </div>
-                <div v-if="(fuelDashboard?.tanks?.length ?? 0) === 0" class="mt-2 text-sm text-zinc-500">No tank readings yet.</div>
-                <div v-else class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <div v-for="t in (fuelDashboard?.tanks ?? [])" :key="t.tank_id" class="rounded-md bg-zinc-50 p-2">
-                    <div class="text-xs text-zinc-500 truncate">{{ t.item_name }}</div>
-                    <div class="mt-1 flex items-center justify-between text-sm">
-                      <span class="font-semibold text-zinc-900">{{ t.fill_percentage }}%</span>
-                      <span class="text-zinc-600">{{ Math.round(t.current_level) }} / {{ Math.round(t.capacity) }} L</span>
+              </CardHeader>
+              <CardContent>
+                <div v-if="fuelProductRows.length === 0" class="rounded-lg border border-dashed border-zinc-200 p-6 text-center">
+                  <Package class="mx-auto h-8 w-8 text-zinc-400" />
+                  <p class="mt-2 text-sm font-medium text-zinc-900">No products yet</p>
+                  <p class="mt-1 text-sm text-zinc-500">Add the fuels and products this station sells.</p>
+                  <Button class="mt-4" size="sm" @click="productsDialogOpen = true">
+                    <Plus class="mr-2 h-4 w-4" />
+                    Add Products
+                  </Button>
+                </div>
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="product in fuelProductRows"
+                    :key="product.id"
+                    class="cursor-pointer rounded-lg border border-zinc-100 bg-white p-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                    role="button"
+                    tabindex="0"
+                    @click="openProduct(product)"
+                    @keydown.enter="openProduct(product)"
+                  >
+                    <div class="grid gap-3 lg:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1fr)_repeat(3,minmax(120px,0.8fr))_auto] lg:items-center">
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="truncate text-sm font-semibold text-zinc-900">{{ product.name }}</p>
+                          <Badge :variant="!product.is_active ? 'outline' : product.is_low_stock ? 'destructive' : 'secondary'" class="text-xs">
+                            {{ !product.is_active ? 'Inactive' : product.is_low_stock ? 'Low stock' : productCategoryLabel(product.fuel_category) }}
+                          </Badge>
+                        </div>
+                        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                          <span v-if="product.sku">{{ product.sku }}</span>
+                          <span>Rate <MoneyText :amount="product.sale_rate" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" /></span>
+                          <span>Margin <MoneyText :amount="product.margin" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" /></span>
+                        </div>
+                      </div>
+
+                      <div class="rounded-md bg-zinc-50 p-2">
+                        <div class="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          <span>System stock</span>
+                          <span v-if="product.capacity">{{ formatPercent(product.fill_percentage) }}</span>
+                        </div>
+                        <div class="mt-1 text-sm font-semibold text-zinc-900">
+                          {{ formatQuantity(product.current_stock, product.unit) }}
+                        </div>
+                        <div class="mt-1 space-y-1 text-xs text-zinc-500">
+                          <div v-if="product.last_stock_movement_at">
+                            {{ movementTypeLabel(product.last_stock_movement_type) }}:
+                            <DateTimeText :value="product.last_stock_movement_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
+                          </div>
+                          <div v-else>No stock entry yet</div>
+                          <div v-if="product.last_dip_quantity !== null">
+                            Last dip reading: {{ formatQuantity(product.last_dip_quantity, product.unit) }}
+                            <span v-if="product.last_dip_at">
+                              · <DateTimeText :value="product.last_dip_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
+                            </span>
+                          </div>
+                          <div v-if="product.last_dip_recorded_at">
+                            Entered:
+                            <DateTimeText :value="product.last_dip_recorded_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
+                          </div>
+                          <div v-if="stockPrecedence(product)" class="font-medium" :class="shouldShowCurrentVariance(product) ? 'text-zinc-700' : 'text-amber-700'">
+                            {{ stockPrecedence(product) }}
+                          </div>
+                          <div v-if="product.stock_variance !== null && shouldShowCurrentVariance(product)" :class="varianceClass(product.stock_variance)">
+                            Current variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
+                          </div>
+                          <div v-else-if="product.stock_variance !== null" class="text-zinc-500">
+                            Older dip variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
+                          </div>
+                          <div v-if="product.low_stock_level > 0">
+                            Alert at {{ formatQuantity(product.low_stock_level, product.unit) }}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div class="text-xs text-zinc-500">Yesterday</div>
+                        <div class="text-sm font-semibold text-zinc-900">
+                          <MoneyText :amount="product.sales.yesterday.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                        </div>
+                        <div class="text-xs text-zinc-500">{{ formatQuantity(product.sales.yesterday.quantity, product.unit) }}</div>
+                      </div>
+
+                      <div>
+                        <div class="text-xs text-zinc-500">Last 7 days</div>
+                        <div class="text-sm font-semibold text-zinc-900">
+                          <MoneyText :amount="product.sales.last_week.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                        </div>
+                        <div class="text-xs text-zinc-500">{{ formatQuantity(product.sales.last_week.quantity, product.unit) }}</div>
+                      </div>
+
+                      <div>
+                        <div class="text-xs text-zinc-500">Last 30 days</div>
+                        <div class="text-sm font-semibold text-zinc-900">
+                          <MoneyText :amount="product.sales.last_month.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                        </div>
+                        <div class="text-xs text-zinc-500">
+                          {{ formatQuantity(product.sales.last_month.quantity, product.unit) }}
+                          <span v-if="product.last_sold_at"> · {{ formatDate(product.last_sold_at) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="flex justify-end" @click.stop>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" size="sm" aria-label="Product actions">
+                              <MoreVertical class="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem @click="openProduct(product)">
+                              <Eye class="mr-2 h-4 w-4" />
+                              Open
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="editProduct(product)">
+                              <Pencil class="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="openProductStock(product)">
+                              <Warehouse class="mr-2 h-4 w-4" />
+                              Stock
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="toggleProductStatus(product)">
+                              <component :is="product.is_active ? PowerOff : Power" class="mr-2 h-4 w-4" />
+                              {{ product.is_active ? 'Deactivate' : 'Activate' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem class="text-red-600 focus:text-red-600" @click="openProductDeleteDialog(product)">
+                              <Trash2 class="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+
+            <div class="space-y-6">
+              <Card class="border-zinc-200/80 bg-white">
+                <CardHeader>
+                  <div class="flex items-center gap-2">
+                    <Warehouse class="h-5 w-5 text-zinc-700" />
+                    <CardTitle class="text-base font-semibold text-zinc-900">Stock Management</CardTitle>
+                  </div>
+                  <CardDescription>Add stock, manage tanks, and review stock movement.</CardDescription>
+                </CardHeader>
+                <CardContent class="grid gap-2">
+                  <Button variant="outline" class="justify-start" @click="router.visit(`/${company.slug}/stock/adjustment`)">
+                    <Plus class="mr-2 h-4 w-4" />
+                    Add or adjust stock
+                  </Button>
+                  <Button variant="outline" class="justify-start" @click="router.visit(`/${company.slug}/fuel/receipts`)">
+                    <FileText class="mr-2 h-4 w-4" />
+                    Fuel deliveries
+                  </Button>
+                  <Button variant="outline" class="justify-start" @click="router.visit(`/${company.slug}/warehouses`)">
+                    <Warehouse class="mr-2 h-4 w-4" />
+                    Tanks and warehouses
+                  </Button>
+                  <Button variant="ghost" class="justify-start" @click="router.visit(`/${company.slug}/stock`)">
+                    View stock levels
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card class="border-zinc-200/80 bg-white">
+                <CardHeader>
+                  <div class="flex items-center gap-2">
+                    <AlertTriangle class="h-5 w-5" :class="lowStockProducts.length > 0 ? 'text-amber-600' : 'text-zinc-400'" />
+                    <CardTitle class="text-base font-semibold text-zinc-900">Low Stock</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="lowStockProducts.length === 0" class="text-sm text-zinc-500">No product is below its alert level.</div>
+                  <div v-else class="space-y-3">
+                    <div v-for="product in lowStockProducts" :key="product.id" class="rounded-md border border-amber-100 bg-amber-50 p-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-semibold text-zinc-900">{{ product.name }}</p>
+                          <p class="text-xs text-zinc-600">{{ productCategoryLabel(product.fuel_category) }}</p>
+                        </div>
+                        <Badge variant="destructive">{{ formatPercent(product.fill_percentage) }}</Badge>
+                      </div>
+                      <div class="mt-2 text-sm text-zinc-700">
+                        {{ formatQuantity(product.current_stock, product.unit) }} left
+                      </div>
+                      <div class="text-xs text-zinc-500">
+                        Alert level {{ formatQuantity(product.low_stock_level, product.unit) }}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card class="border-zinc-200/80 bg-white">
+                <CardHeader>
+                  <div class="flex items-center gap-2">
+                    <TrendingUp class="h-5 w-5 text-emerald-600" />
+                    <CardTitle class="text-base font-semibold text-zinc-900">Top Products</CardTitle>
+                  </div>
+                  <CardDescription>Ranked by sales in the last 30 days.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="topFuelProducts.length === 0" class="text-sm text-zinc-500">No posted sales in the last 30 days.</div>
+                  <div v-else class="space-y-3">
+                    <div v-for="(product, index) in topFuelProducts" :key="product.id" class="flex items-center justify-between gap-3">
+                      <div class="flex min-w-0 items-center gap-3">
+                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-700">
+                          {{ index + 1 }}
+                        </div>
+                        <div class="min-w-0">
+                          <p class="truncate text-sm font-medium text-zinc-900">{{ product.name }}</p>
+                          <p class="text-xs text-zinc-500">{{ formatQuantity(product.sales.last_month.quantity, product.unit) }}</p>
+                        </div>
+                      </div>
+                      <div class="text-sm font-semibold text-zinc-900">
+                        <MoneyText :amount="product.sales.last_month.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-        
+          </div>
+        </template>
+        <template v-else>
+
         <!-- Cash Position -->
         <Card class="border-zinc-200/80 bg-white">
           <CardHeader class="pb-2">
@@ -1006,7 +1354,7 @@ const currencySymbol = (currencyCode: string) => {
             <div v-for="(item, idx) in financials.recent_activity" :key="idx" class="flex justify-between border-b border-zinc-200 pb-2 last:border-b-0 last:pb-0">
               <div>
                 <p class="font-medium text-zinc-900">{{ item.label }}</p>
-                <p class="text-xs text-zinc-500">{{ new Date(item.occurred_at).toLocaleDateString() }}</p>
+                <p class="text-xs text-zinc-500">{{ formatDate(item.occurred_at) }}</p>
               </div>
               <div v-if="item.amount" class="font-mono text-sm text-zinc-800">
                 <MoneyText :amount="item.amount" :currency="item.currency || company.base_currency" :locale="moneyLocale(item.currency || company.base_currency)" />
@@ -1015,10 +1363,11 @@ const currencySymbol = (currencyCode: string) => {
             <div v-if="financials.recent_activity.length === 0" class="text-sm text-zinc-500">No recent activity.</div>
           </CardContent>
         </Card>
+        </template>
       </TabsContent>
 
       <!-- Settings Tab -->
-      <TabsContent v-if="canManage" value="settings" class="space-y-6">
+      <TabsContent v-if="canManage && !isFuelStationCompany" value="settings" class="space-y-6">
         <!-- Editable Settings -->
         <Card class="border-zinc-200/80 bg-white">
           <CardHeader>
@@ -1079,7 +1428,7 @@ const currencySymbol = (currencyCode: string) => {
                 <Label class="text-sm font-medium text-zinc-500">Created</Label>
                 <div class="flex items-center gap-1.5 text-base text-zinc-900">
                   <Calendar class="h-3.5 w-3.5 text-zinc-400" />
-                  {{ new Date(company.created_at).toLocaleDateString() }}
+                  {{ formatDate(company.created_at) }}
                 </div>
               </div>
             </div>
@@ -1169,7 +1518,7 @@ const currencySymbol = (currencyCode: string) => {
                   </Badge>
                 </div>
                 <div class="text-xs text-amber-700">
-                  Expires {{ new Date(invite.expires_at).toLocaleDateString() }}
+                  Expires {{ formatDate(invite.expires_at) }}
                   <span v-if="invite.inviter_name"> • Invited by {{ invite.inviter_name }}</span>
                 </div>
               </div>
@@ -1179,7 +1528,7 @@ const currencySymbol = (currencyCode: string) => {
       </TabsContent>
 
       <!-- Users Tab -->
-      <TabsContent v-if="canManage" value="users" class="space-y-6">
+      <TabsContent v-if="canManage && !isFuelStationCompany" value="users" class="space-y-6">
         <DataTable
           :data="users"
           :columns="tableColumns"
@@ -1222,7 +1571,7 @@ const currencySymbol = (currencyCode: string) => {
           <template #cell-joined_at="{ row }">
             <div v-if="row.joined_at" class="flex items-center gap-1 text-zinc-700">
               <Calendar class="h-3 w-3 text-zinc-400" />
-              <span>{{ new Date(row.joined_at).toLocaleDateString() }}</span>
+              <span>{{ formatDate(row.joined_at) }}</span>
             </div>
             <span v-else class="text-zinc-400">—</span>
           </template>
@@ -1505,8 +1854,7 @@ const currencySymbol = (currencyCode: string) => {
           <Button type="button" variant="outline" @click="tankDialogOpen = false">
             Cancel
           </Button>
-          <Button type="button" :disabled="tankForm.processing" @click="saveTankDraft">
-            <Loader2 v-if="tankForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+          <Button type="button" @click="saveTankDraft">
             Save Tank
           </Button>
         </DialogFooter>
@@ -1623,6 +1971,15 @@ const currencySymbol = (currencyCode: string) => {
       confirm-text="Remove User"
       :loading="removeForm.processing"
       @confirm="handleRemoveUser"
+    />
+
+    <ConfirmDialog
+      v-model:open="productDeleteDialogOpen"
+      variant="destructive"
+      title="Delete Product"
+      :description="`Delete ${selectedProduct?.name || 'this product'}? Products with stock on hand cannot be deleted.`"
+      confirm-text="Delete Product"
+      @confirm="deleteProduct"
     />
   </PageShell>
   </Tabs>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import TankLevelGauge from '../../../components/TankLevelGauge.vue'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   Dialog,
   DialogContent,
@@ -91,14 +92,35 @@ interface Partner {
   drawing_limit_period: string
   drawing_limit_amount: number | null
   current_period_withdrawn: number
+  remaining_drawing_limit: number | null
+  total_invested: number
+  total_withdrawn: number
+  net_capital: number
 }
 
 interface Employee {
   id: string
   first_name: string
   last_name: string
+  full_name: string
   position: string
   base_salary: number
+  outstanding_advances: number
+}
+
+interface AmanatHolder {
+  id: string
+  name: string
+  phone: string | null
+  amanat_balance: number
+}
+
+interface Investor {
+  id: string
+  name: string
+  total_invested: number
+  outstanding_commission: number
+  units_remaining: number
 }
 
 interface BankAccount {
@@ -149,11 +171,20 @@ const props = defineProps<{
   nozzles: Nozzle[]
   partners: Partner[]
   employees: Employee[]
+  amanatHolders: AmanatHolder[]
+  investors: Investor[]
   bankAccounts: BankAccount[]
   expenseAccounts: ExpenseAccount[]
   lubricantItems: LubricantItem[]
   existingTankReadings: any[]
-  previousTankReadings: Array<{ tank_id: string; liters: number; stick_reading: number }>
+  previousTankReadings: Array<{
+    tank_id: string
+    liters: number
+    stick_reading: number
+    source?: string | null
+    source_label?: string | null
+    as_of?: string | null
+  }>
   previousClose: { date: string | null; closing_cash: number; exists: boolean }
   paymentChannels: PaymentChannel[]
   features: Features
@@ -195,7 +226,7 @@ const props = defineProps<{
     bank_deposits?: Array<{ bank_account_id: string; amount: number; reference?: string; purpose?: string }>
     partner_withdrawals?: Array<{ partner_id: string; amount: number }>
     employee_advances?: Array<{ employee_id: string; amount: number; reason?: string }>
-    amanat_disbursements?: Array<{ customer_name: string; amount: number }>
+    amanat_disbursements?: Array<{ customer_id?: string; customer_name?: string; amount: number }>
     expenses?: Array<{ account_id: string; description: string; amount: number }>
     notes?: string
   }
@@ -209,6 +240,22 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const activeTab = ref('sales')
 const currency = computed(() => currencySymbol(props.company.base_currency || 'PKR'))
+const partnerSearch = ref('')
+const employeeSearch = ref('')
+const amanatSearch = ref('')
+const investorSearch = ref('')
+
+const accountingHints = {
+  fuelSales: 'Posting: Dr Cash/Bank/Clearing · Cr Fuel Sales. Cost also posts Dr Fuel COGS · Cr Fuel Inventory.',
+  partnerDeposit: 'Posting: Dr Cash on Hand · Cr Partner Deposits.',
+  nonCashReceipt: 'Posting: Dr destination bank/clearing · Cr Fuel Sales.',
+  bankDeposit: 'Posting: Dr Bank · Cr Cash on Hand.',
+  partnerWithdrawal: 'Posting: Dr Partner Drawings · Cr Cash on Hand.',
+  employeeAdvance: 'Posting: Dr Employee Advances · Cr Cash on Hand.',
+  amanatDisbursement: 'Posting: Dr Amanat Deposits · Cr Cash on Hand, and the depositor balance is reduced.',
+  expense: 'Posting: Dr selected expense · Cr Cash on Hand.',
+  variance: 'Cash difference posts to Cash Over/Short.',
+}
 
 // Amendment mode
 const isAmendmentMode = computed(() => props.isAmendment && props.originalTransaction !== null)
@@ -387,6 +434,20 @@ const enabledChannels = computed(() => {
   return (props.paymentChannels || []).filter(ch => ch.enabled)
 })
 
+const searchMatches = (value: string | null | undefined, query: string): boolean => {
+  return (value || '').toLowerCase().includes(query.trim().toLowerCase())
+}
+
+const filteredPartners = computed(() => props.partners.filter(partner => searchMatches(partner.name, partnerSearch.value)))
+const filteredEmployees = computed(() => props.employees.filter(employee => {
+  const label = employee.full_name || `${employee.first_name} ${employee.last_name}`
+  return searchMatches(label, employeeSearch.value) || searchMatches(employee.position, employeeSearch.value)
+}))
+const filteredAmanatHolders = computed(() => props.amanatHolders.filter(holder => {
+  return searchMatches(holder.name, amanatSearch.value) || searchMatches(holder.phone, amanatSearch.value)
+}))
+const filteredInvestors = computed(() => props.investors.filter(investor => searchMatches(investor.name, investorSearch.value)))
+
 // Channels grouped by type for UI sections
 const bankTransferChannels = computed(() => enabledChannels.value.filter(ch => ch.type === 'bank_transfer'))
 const cardPosChannels = computed(() => enabledChannels.value.filter(ch => ch.type === 'card_pos'))
@@ -462,6 +523,9 @@ const form = useForm({
       dip_stick_code: tank.dip_stick?.code || '',
       previous_liters: prevReading?.liters ?? 0,
       previous_stick: prevReading?.stick_reading ?? 0,
+      previous_source: prevReading?.source ?? '',
+      previous_source_label: prevReading?.source_label ?? '',
+      previous_as_of: prevReading?.as_of ?? '',
       stick_reading: 0,
       liters: 0,
     }
@@ -478,7 +542,7 @@ const form = useForm({
   bank_deposits: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
   partner_withdrawals: [] as { partner_id: string; partner_name: string; amount: number }[],
   employee_advances: [] as { employee_id: string; employee_name: string; amount: number; reason: string }[],
-  amanat_disbursements: [] as { customer_name: string; amount: number }[],
+  amanat_disbursements: [] as { customer_id: string; customer_name: string; available_balance: number; amount: number }[],
   expenses: [] as { account_id: string; account_name: string; description: string; amount: number }[],
 
   // Tab 5: Summary
@@ -524,6 +588,9 @@ const resetFormToInitial = () => {
       dip_stick_code: tank.dip_stick?.code || '',
       previous_liters: prevReading?.liters ?? 0,
       previous_stick: prevReading?.stick_reading ?? 0,
+      previous_source: prevReading?.source ?? '',
+      previous_source_label: prevReading?.source_label ?? '',
+      previous_as_of: prevReading?.as_of ?? '',
       stick_reading: 0,
       liters: 0,
     }
@@ -719,10 +786,15 @@ const hydrateFormForAmendment = () => {
 
   // Hydrate amanat disbursements
   if (orig.amanat_disbursements && orig.amanat_disbursements.length > 0) {
-    form.amanat_disbursements = orig.amanat_disbursements.map(ad => ({
-      customer_name: ad.customer_name,
-      amount: ad.amount,
-    }))
+    form.amanat_disbursements = orig.amanat_disbursements.map(ad => {
+      const holder = props.amanatHolders.find(h => h.id === ad.customer_id)
+      return {
+        customer_id: ad.customer_id ?? '',
+        customer_name: holder?.name ?? ad.customer_name ?? '',
+        available_balance: holder?.amanat_balance ?? 0,
+        amount: ad.amount,
+      }
+    })
   }
 
   // Hydrate expenses
@@ -991,7 +1063,7 @@ const removeEmployeeAdvance = (index: number) => {
 }
 
 const addAmanat = () => {
-  form.amanat_disbursements.push({ customer_name: '', amount: 0 })
+  form.amanat_disbursements.push({ customer_id: '', customer_name: '', available_balance: 0, amount: 0 })
 }
 
 const removeAmanat = (index: number) => {
@@ -1006,6 +1078,21 @@ const removeExpense = (index: number) => {
   form.expenses.splice(index, 1)
 }
 
+const formatDraftTime = (value: string | null) => {
+  return formatSharedDateTime(value, { mode: 'datetime', fallback: 'earlier' })
+}
+
+const formatBaselineDate = (value?: string | null) => {
+  return value ? formatSharedDateTime(value, { mode: 'date' }) : ''
+}
+
+const baselineLabel = (tank: { previous_source_label?: string | null; previous_as_of?: string | null }) => {
+  if (!tank.previous_source_label) return ''
+
+  const date = formatBaselineDate(tank.previous_as_of)
+  return date ? `${tank.previous_source_label} · ${date}` : tank.previous_source_label
+}
+
 // Partner/Employee name helpers
 const setPartnerName = (index: number, field: 'deposits' | 'withdrawals') => {
   const list = field === 'deposits' ? form.partner_deposits : form.partner_withdrawals
@@ -1015,8 +1102,20 @@ const setPartnerName = (index: number, field: 'deposits' | 'withdrawals') => {
 
 const setEmployeeName = (index: number) => {
   const employee = props.employees.find(e => e.id === form.employee_advances[index].employee_id)
-  if (employee) form.employee_advances[index].employee_name = `${employee.first_name} ${employee.last_name}`
+  if (employee) form.employee_advances[index].employee_name = employee.full_name || `${employee.first_name} ${employee.last_name}`
 }
+
+const setAmanatCustomer = (index: number) => {
+  const holder = props.amanatHolders.find(h => h.id === form.amanat_disbursements[index].customer_id)
+  if (holder) {
+    form.amanat_disbursements[index].customer_name = holder.name
+    form.amanat_disbursements[index].available_balance = holder.amanat_balance
+  }
+}
+
+const getPartner = (id: string) => props.partners.find(p => p.id === id)
+const getEmployee = (id: string) => props.employees.find(e => e.id === id)
+const getAmanatHolder = (id: string) => props.amanatHolders.find(h => h.id === id)
 
 const setExpenseAccountName = (index: number) => {
   const account = props.expenseAccounts.find(a => a.id === form.expenses[index].account_id)
@@ -1100,7 +1199,7 @@ const getCleanedFormData = () => {
 
   // Filter out incomplete amanat disbursements
   data.amanat_disbursements = (data.amanat_disbursements || []).filter(
-    (a: { customer_name: string; amount: number }) => a.customer_name && a.amount > 0
+    (a: { customer_id: string; amount: number }) => a.customer_id && a.amount > 0
   )
 
   // Filter out incomplete other sales
@@ -1187,12 +1286,16 @@ const formatCurrency = (amount: number) => {
 }
 
 const tabs = [
-  { id: 'sales', label: 'Sales', icon: Fuel },
-  { id: 'tanks', label: 'Tank Readings', icon: Droplets },
-  { id: 'money-in', label: 'Money In', icon: Wallet },
-  { id: 'money-out', label: 'Money Out', icon: ArrowDownRight },
-  { id: 'summary', label: 'Summary', icon: Calculator },
+  { id: 'sales', label: 'Meter Sales', icon: Fuel },
+  { id: 'tanks', label: 'Tank Dip', icon: Droplets },
+  { id: 'money-in', label: 'Cash In', icon: Wallet },
+  { id: 'money-out', label: 'Cash Out', icon: ArrowDownRight },
+  { id: 'summary', label: 'Review & Post', icon: Calculator },
 ]
+
+const completedWorkflowSteps = computed(() => {
+  return Object.values(tabsSaved.value).filter(Boolean).length
+})
 </script>
 
 <template>
@@ -1200,7 +1303,7 @@ const tabs = [
 
   <PageShell
     :title="isAmendmentMode ? 'Amend Daily Close' : 'Daily Close'"
-    :description="isAmendmentMode ? `Amending ${originalTransaction?.transaction_number} for ${form.date}` : `Record daily transactions for ${form.date}`"
+    :description="isAmendmentMode ? `Amending ${originalTransaction?.transaction_number} for ${form.date}` : `Close the day in five steps: meters, tanks, cash in, cash out, and review.`"
     :icon="isAmendmentMode ? RotateCcw : Calculator"
     :breadcrumbs="breadcrumbs"
   >
@@ -1213,7 +1316,7 @@ const tabs = [
             Restore Draft?
           </DialogTitle>
           <DialogDescription>
-            You have an unsaved draft for this date from {{ draftTimestamp ? new Date(draftTimestamp).toLocaleString() : 'earlier' }}.
+            You have an unsaved draft for this date from {{ formatDraftTime(draftTimestamp) }}.
             Would you like to restore it?
           </DialogDescription>
         </DialogHeader>
@@ -1251,32 +1354,42 @@ const tabs = [
       </div>
     </div>
 
-    <!-- Date Selector -->
-    <Card class="mb-6">
-      <CardContent class="pt-6">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <div class="space-y-1">
+    <Card class="mb-6 border-border/80">
+      <CardContent class="space-y-4 p-4 lg:p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="grid gap-4 sm:grid-cols-[12rem_1fr] sm:items-end">
+            <div class="space-y-1.5">
               <Label>Date</Label>
-              <Input v-model="form.date" type="date" class="w-48" />
+              <Input v-model="form.date" type="date" />
             </div>
-            <div v-if="previousClose.exists" class="text-sm text-muted-foreground">
-              Previous close: {{ previousClose.date }} - {{ currency }} {{ formatCurrency(previousClose.closing_cash) }}
+            <div class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <template v-if="previousClose.exists">
+                Previous close was {{ previousClose.date }} with {{ currency }} {{ formatCurrency(previousClose.closing_cash) }} cash.
+              </template>
+              <template v-else>
+                No previous close found. Opening cash starts from zero unless you enter it under Cash In.
+              </template>
             </div>
           </div>
-          <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
-            {{ cashVariance > 0 ? 'Over' : 'Short' }}: {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
-          </Badge>
+
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Badge variant="secondary" class="justify-center">
+              {{ completedWorkflowSteps }}/4 sections saved
+            </Badge>
+            <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+              {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}: {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
+            </Badge>
+          </div>
         </div>
       </CardContent>
     </Card>
 
     <!-- Tabbed Content -->
     <Tabs v-model="activeTab" class="space-y-6">
-      <TabsList class="grid w-full grid-cols-5">
-        <TabsTrigger v-for="tab in tabs" :key="tab.id" :value="tab.id" class="flex items-center gap-2">
+      <TabsList class="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-5">
+        <TabsTrigger v-for="tab in tabs" :key="tab.id" :value="tab.id" class="min-h-10 gap-2 px-2 text-xs sm:text-sm">
           <component :is="tab.icon" class="h-4 w-4" />
-          {{ tab.label }}
+          <span class="truncate">{{ tab.label }}</span>
         </TabsTrigger>
       </TabsList>
 
@@ -1284,12 +1397,28 @@ const tabs = [
       <TabsContent value="sales">
         <Card>
           <CardHeader>
-            <CardTitle>Fuel Sales</CardTitle>
-            <CardDescription>Enter meter readings for each pump</CardDescription>
+            <CardTitle>Meter Sales</CardTitle>
+            <CardDescription>Enter opening and closing readings for each active nozzle.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
+            <!-- Empty State: No nozzles configured -->
+            <div v-if="form.nozzle_readings.length === 0" class="text-center py-12">
+              <Fuel class="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 class="text-lg font-semibold mb-2">No Fuel Points Configured</h3>
+              <p class="text-muted-foreground mb-6 max-w-md mx-auto">
+                To record daily sales, you need to add fuel pumps with nozzles first.
+                Each pump tracks meter readings to calculate your daily sales.
+              </p>
+              <Button as-child>
+                <Link :href="`/${company.slug}/fuel/pumps`">
+                  <Plus class="h-4 w-4 mr-2" />
+                  Add Fuel Pumps
+                </Link>
+              </Button>
+            </div>
+
             <!-- Nozzle Readings grouped by Pump -->
-            <div class="space-y-5">
+            <div v-else class="space-y-5">
               <div v-for="pump in nozzlesByPump" :key="pump.pump_id" class="rounded-lg border">
                 <!-- Pump Header -->
                 <div class="flex items-center justify-between px-5 py-3 bg-muted/40 border-b">
@@ -1533,7 +1662,7 @@ const tabs = [
               <Button @click="saveSales" :variant="tabsSaved.sales ? 'outline' : 'default'" class="min-w-32">
                 <CheckCircle v-if="tabsSaved.sales" class="h-4 w-4 mr-2 text-green-600" />
                 <Save v-else class="h-4 w-4 mr-2" />
-                {{ tabsSaved.sales ? 'Saved' : 'Save Sales' }}
+                {{ tabsSaved.sales ? 'Saved' : 'Save Meter Sales' }}
               </Button>
             </div>
           </CardContent>
@@ -1544,11 +1673,28 @@ const tabs = [
       <TabsContent value="tanks">
         <Card>
           <CardHeader>
-            <CardTitle>Tank Dip Readings</CardTitle>
-            <CardDescription>Record physical tank measurements and compare with nozzle sales to detect shrinkage</CardDescription>
+            <CardTitle>Tank Dip</CardTitle>
+            <CardDescription>Enter physical tank measurements and review stock variance.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
+            <!-- Empty State: No tanks configured -->
+            <div v-if="form.tank_readings.length === 0" class="text-center py-12">
+              <Droplets class="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 class="text-lg font-semibold mb-2">No Storage Tanks Configured</h3>
+              <p class="text-muted-foreground mb-6 max-w-md mx-auto">
+                Tank readings help track fuel inventory and detect shrinkage.
+                Add storage tanks to enable this feature.
+              </p>
+              <Button as-child>
+                <Link :href="`/${company.slug}/fuel/tanks`">
+                  <Plus class="h-4 w-4 mr-2" />
+                  Add Storage Tanks
+                </Link>
+              </Button>
+            </div>
+
             <!-- Tank Reading Cards -->
+            <template v-else>
             <div v-for="(tank, index) in form.tank_readings" :key="tank.tank_id" class="rounded-lg border">
               <!-- Tank Header -->
               <div class="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
@@ -1573,11 +1719,14 @@ const tabs = [
               <div class="p-4 space-y-4">
                 <!-- Readings Row -->
                 <div class="grid grid-cols-12 gap-4">
-                  <!-- Previous Day's Reading -->
+                  <!-- Opening baseline -->
                   <div class="col-span-3">
-                    <Label class="text-xs text-muted-foreground">Previous Closing (L)</Label>
+                    <Label class="text-xs text-muted-foreground">Opening baseline (L)</Label>
                     <div class="text-lg font-semibold mt-1">
                       {{ tank.previous_liters > 0 ? formatCurrency(tank.previous_liters) : '—' }}
+                    </div>
+                    <div v-if="baselineLabel(tank)" class="text-xs text-muted-foreground">
+                      {{ baselineLabel(tank) }}
                     </div>
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
                       Stick: {{ tank.previous_stick }} cm
@@ -1663,9 +1812,10 @@ const tabs = [
               <Button @click="saveTanks" :variant="tabsSaved.tanks ? 'outline' : 'default'" class="min-w-32">
                 <CheckCircle v-if="tabsSaved.tanks" class="h-4 w-4 mr-2 text-green-600" />
                 <Save v-else class="h-4 w-4 mr-2" />
-                {{ tabsSaved.tanks ? 'Saved' : 'Save Tank Readings' }}
+                {{ tabsSaved.tanks ? 'Saved' : 'Save Tank Dip' }}
               </Button>
             </div>
+            </template>
           </CardContent>
         </Card>
       </TabsContent>
@@ -1674,8 +1824,8 @@ const tabs = [
       <TabsContent value="money-in">
         <Card>
           <CardHeader>
-            <CardTitle>Money Received</CardTitle>
-            <CardDescription>Opening cash, cash sales, deposits, and non-cash receipts</CardDescription>
+            <CardTitle>Cash In</CardTitle>
+            <CardDescription>Opening cash, cash sales, deposits, and non-cash receipts.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
             <!-- Opening Cash -->
@@ -1696,6 +1846,7 @@ const tabs = [
                 <div>
                   <Label>Cash Sales (calculated)</Label>
                   <p class="text-xs text-muted-foreground">Fuel + other sales minus non-cash receipts</p>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.fuelSales }}</p>
                 </div>
                 <div class="text-right">
                   <div class="text-lg font-semibold">{{ currency }} {{ formatCurrency(cashSales) }}</div>
@@ -1710,11 +1861,16 @@ const tabs = [
 
               <div class="space-y-4">
                 <div class="flex items-center justify-between">
-                  <h4 class="font-medium">Partner Deposits</h4>
+                  <div>
+                    <h4 class="font-medium">Partner Deposits</h4>
+                    <p class="text-xs text-muted-foreground">{{ accountingHints.partnerDeposit }}</p>
+                  </div>
                   <Button variant="outline" size="sm" @click="addPartnerDeposit">
                     <Plus class="h-4 w-4 mr-1" /> Add
                   </Button>
                 </div>
+
+                <Input v-model="partnerSearch" placeholder="Search partners by name" class="max-w-sm" />
 
                 <div v-for="(deposit, index) in form.partner_deposits" :key="index" class="flex gap-4 items-end">
                   <div class="flex-1">
@@ -1724,9 +1880,14 @@ const tabs = [
                         <SelectValue placeholder="Select partner" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem v-for="p in partners" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
+                        <SelectItem v-for="p in filteredPartners" :key="p.id" :value="p.id">
+                          {{ p.name }} · Capital {{ currency }} {{ formatCurrency(p.net_capital) }}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                    <p v-if="getPartner(deposit.partner_id)" class="mt-1 text-xs text-muted-foreground">
+                      Current capital: {{ currency }} {{ formatCurrency(getPartner(deposit.partner_id)?.net_capital || 0) }}
+                    </p>
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
@@ -1753,6 +1914,7 @@ const tabs = [
                       {{ channel.type === 'fuel_card' ? `${fuelCardLabel} sales (goes to clearing)` : '' }}
                       {{ channel.type === 'mobile_wallet' ? 'Mobile wallet payments' : '' }}
                     </p>
+                    <p class="text-xs text-muted-foreground">{{ accountingHints.nonCashReceipt }}</p>
                   </div>
                   <Button variant="outline" size="sm" @click="addPaymentEntry(channel.code)">
                     <Plus class="h-4 w-4 mr-1" /> Add
@@ -1784,6 +1946,32 @@ const tabs = [
                 </div>
 
                 <Separator />
+              </div>
+            </template>
+
+            <template v-if="features.has_investors && investors.length > 0">
+              <Separator />
+
+              <div class="space-y-3 rounded-lg border p-4">
+                <div>
+                  <h4 class="font-medium">Investor Balances</h4>
+                  <p class="text-xs text-muted-foreground">Live lookup only. Investor lot posting stays in investor tools.</p>
+                </div>
+                <Input v-model="investorSearch" placeholder="Search investors by name" class="max-w-sm" />
+                <div class="grid gap-2 md:grid-cols-2">
+                  <div
+                    v-for="investor in filteredInvestors.slice(0, 6)"
+                    :key="investor.id"
+                    class="rounded-md border bg-muted/20 p-3 text-sm"
+                  >
+                    <div class="font-medium">{{ investor.name }}</div>
+                    <div class="text-xs text-muted-foreground">
+                      Invested {{ currency }} {{ formatCurrency(investor.total_invested) }} ·
+                      Remaining {{ investor.units_remaining.toFixed(2) }}L ·
+                      Commission due {{ currency }} {{ formatCurrency(investor.outstanding_commission) }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </template>
 
@@ -1839,7 +2027,7 @@ const tabs = [
               <Button @click="saveMoneyIn" :variant="tabsSaved.moneyIn ? 'outline' : 'default'" class="min-w-32">
                 <CheckCircle v-if="tabsSaved.moneyIn" class="h-4 w-4 mr-2 text-green-600" />
                 <Save v-else class="h-4 w-4 mr-2" />
-                {{ tabsSaved.moneyIn ? 'Saved' : 'Save Money In' }}
+                {{ tabsSaved.moneyIn ? 'Saved' : 'Save Cash In' }}
               </Button>
             </div>
           </CardContent>
@@ -1850,14 +2038,17 @@ const tabs = [
       <TabsContent value="money-out">
         <Card>
           <CardHeader>
-            <CardTitle>Money Out</CardTitle>
-            <CardDescription>Deposits, withdrawals, and expenses</CardDescription>
+            <CardTitle>Cash Out</CardTitle>
+            <CardDescription>Bank deposits, withdrawals, advances, amanat, and expenses.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
             <!-- Bank Deposits -->
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <h4 class="font-medium">Bank Deposits (for Vendor)</h4>
+                <div>
+                  <h4 class="font-medium">Bank Deposits</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.bankDeposit }}</p>
+                </div>
                 <Button variant="outline" size="sm" @click="addBankDeposit">
                   <Plus class="h-4 w-4 mr-1" /> Add
                 </Button>
@@ -1899,11 +2090,16 @@ const tabs = [
 
               <div class="space-y-4">
                 <div class="flex items-center justify-between">
-                  <h4 class="font-medium">Partner Withdrawals</h4>
+                  <div>
+                    <h4 class="font-medium">Partner Withdrawals</h4>
+                    <p class="text-xs text-muted-foreground">{{ accountingHints.partnerWithdrawal }}</p>
+                  </div>
                   <Button variant="outline" size="sm" @click="addPartnerWithdrawal">
                     <Plus class="h-4 w-4 mr-1" /> Add
                   </Button>
                 </div>
+
+                <Input v-model="partnerSearch" placeholder="Search partners by name" class="max-w-sm" />
 
                 <div v-for="(withdrawal, index) in form.partner_withdrawals" :key="index" class="flex gap-4 items-end">
                   <div class="flex-1">
@@ -1913,14 +2109,16 @@ const tabs = [
                         <SelectValue placeholder="Select partner" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem v-for="p in partners" :key="p.id" :value="p.id">
+                        <SelectItem v-for="p in filteredPartners" :key="p.id" :value="p.id">
                           {{ p.name }}
-                          <span v-if="p.drawing_limit_amount" class="text-xs text-muted-foreground ml-2">
-                            (Limit: {{ formatCurrency(p.drawing_limit_amount - p.current_period_withdrawn) }} left)
-                          </span>
+                          · {{ p.remaining_drawing_limit === null ? 'No drawing limit' : `${currency} ${formatCurrency(p.remaining_drawing_limit)} left` }}
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <p v-if="getPartner(withdrawal.partner_id)" class="mt-1 text-xs text-muted-foreground">
+                      Capital {{ currency }} {{ formatCurrency(getPartner(withdrawal.partner_id)?.net_capital || 0) }} ·
+                      Withdrawn this period {{ currency }} {{ formatCurrency(getPartner(withdrawal.partner_id)?.current_period_withdrawn || 0) }}
+                    </p>
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
@@ -1938,11 +2136,16 @@ const tabs = [
             <!-- Employee Advances -->
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <h4 class="font-medium">Employee Salary Advances</h4>
+                <div>
+                  <h4 class="font-medium">Employee Salary Advances</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.employeeAdvance }}</p>
+                </div>
                 <Button variant="outline" size="sm" @click="addEmployeeAdvance">
                   <Plus class="h-4 w-4 mr-1" /> Add
                 </Button>
               </div>
+
+              <Input v-model="employeeSearch" placeholder="Search employees by name or position" class="max-w-sm" />
 
               <div v-for="(advance, index) in form.employee_advances" :key="index" class="grid grid-cols-4 gap-4 items-end">
                 <div>
@@ -1952,11 +2155,14 @@ const tabs = [
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem v-for="e in employees" :key="e.id" :value="e.id">
-                        {{ e.first_name }} {{ e.last_name }}
+                      <SelectItem v-for="e in filteredEmployees" :key="e.id" :value="e.id">
+                        {{ e.full_name || `${e.first_name} ${e.last_name}` }} · Due {{ currency }} {{ formatCurrency(e.outstanding_advances) }}
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <p v-if="getEmployee(advance.employee_id)" class="mt-1 text-xs text-muted-foreground">
+                    Current advance balance: {{ currency }} {{ formatCurrency(getEmployee(advance.employee_id)?.outstanding_advances || 0) }}
+                  </p>
                 </div>
                 <div>
                   <Label class="text-xs">Amount</Label>
@@ -1978,16 +2184,33 @@ const tabs = [
 
               <div class="space-y-4">
                 <div class="flex items-center justify-between">
-                  <h4 class="font-medium">Amanat Disbursements</h4>
+                  <div>
+                    <h4 class="font-medium">Amanat Disbursements</h4>
+                    <p class="text-xs text-muted-foreground">{{ accountingHints.amanatDisbursement }}</p>
+                  </div>
                   <Button variant="outline" size="sm" @click="addAmanat">
                     <Plus class="h-4 w-4 mr-1" /> Add
                   </Button>
                 </div>
 
+                <Input v-model="amanatSearch" placeholder="Search Amanat depositors by name or phone" class="max-w-sm" />
+
                 <div v-for="(amanat, index) in form.amanat_disbursements" :key="index" class="flex gap-4 items-end">
                   <div class="flex-1">
-                    <Label class="text-xs">Customer Name</Label>
-                    <Input v-model="amanat.customer_name" placeholder="Name" />
+                    <Label class="text-xs">Depositor</Label>
+                    <Select v-model="amanat.customer_id" @update:model-value="setAmanatCustomer(index)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select depositor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="holder in filteredAmanatHolders" :key="holder.id" :value="holder.id">
+                          {{ holder.name }} · Balance {{ currency }} {{ formatCurrency(holder.amanat_balance) }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p v-if="getAmanatHolder(amanat.customer_id)" class="mt-1 text-xs text-muted-foreground">
+                      Available Amanat: {{ currency }} {{ formatCurrency(getAmanatHolder(amanat.customer_id)?.amanat_balance || 0) }}
+                    </p>
                   </div>
                   <div class="w-32">
                     <Label class="text-xs">Amount</Label>
@@ -2005,7 +2228,10 @@ const tabs = [
             <!-- Operating Expenses -->
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <h4 class="font-medium">Operating Expenses</h4>
+                <div>
+                  <h4 class="font-medium">Operating Expenses</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.expense }}</p>
+                </div>
                 <Button variant="outline" size="sm" @click="addExpense">
                   <Plus class="h-4 w-4 mr-1" /> Add
                 </Button>
@@ -2086,7 +2312,7 @@ const tabs = [
               <Button @click="saveMoneyOut" :variant="tabsSaved.moneyOut ? 'outline' : 'default'" class="min-w-32">
                 <CheckCircle v-if="tabsSaved.moneyOut" class="h-4 w-4 mr-2 text-green-600" />
                 <Save v-else class="h-4 w-4 mr-2" />
-                {{ tabsSaved.moneyOut ? 'Saved' : 'Save Money Out' }}
+                {{ tabsSaved.moneyOut ? 'Saved' : 'Save Cash Out' }}
               </Button>
             </div>
           </CardContent>
@@ -2097,8 +2323,8 @@ const tabs = [
       <TabsContent value="summary">
         <Card>
           <CardHeader>
-            <CardTitle>Daily Summary</CardTitle>
-            <CardDescription>Review and finalize the daily close</CardDescription>
+            <CardTitle>Review &amp; Post</CardTitle>
+            <CardDescription>Review totals, enter counted cash, and post the daily close.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
             <!-- Summary Grid -->
@@ -2165,6 +2391,7 @@ const tabs = [
                 <div>
                   <Label class="text-lg font-semibold">Actual Closing Cash</Label>
                   <p class="text-sm text-muted-foreground">Count the cash and enter the actual amount</p>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.variance }}</p>
                 </div>
                 <div class="w-64">
                   <Input v-model.number="form.closing_cash" type="number" class="text-right text-2xl font-bold h-14" />

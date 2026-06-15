@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Save } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -45,6 +46,8 @@ const form = useForm({
 const submit = () => {
   form.post(`/${props.company.slug}/fiscal-years`, { preserveScroll: true })
 }
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 </script>
 
 <template>
@@ -133,7 +136,7 @@ const submit = () => {
           >
             <div class="font-medium">{{ fy.name }}</div>
             <div class="text-xs text-muted-foreground">
-              {{ new Date(fy.start_date).toLocaleDateString() }} → {{ new Date(fy.end_date).toLocaleDateString() }}
+              {{ formatDate(fy.start_date) }} → {{ formatDate(fy.end_date) }}
             </div>
           </div>
         </CardContent>
@@ -141,4 +144,3 @@ const submit = () => {
     </div>
   </PageShell>
 </template>
-

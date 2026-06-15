@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm, usePage } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -17,7 +17,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, Search, Banknote } from 'lucide-vue-next'
 
 interface VendorCardSale {
@@ -37,12 +39,31 @@ interface VendorCardSummary {
   total_settled_today: number
   total_outstanding: number
   count_pending: number
+  total_clearing_outstanding?: number
+}
+
+interface ClearingAccountSummary {
+  channel_code: string
+  channel_label: string
+  channel_type: string
+  clearing_account_id: string
+  clearing_account_name: string
+  bank_account_id: string | null
+  balance: number
+}
+
+interface BankAccount {
+  id: string
+  code: string
+  name: string
 }
 
 const props = defineProps<{
   pendingSales: VendorCardSale[]
+  clearingAccounts: ClearingAccountSummary[]
   summary: VendorCardSummary
   todaySettlements: VendorCardSale[]
+  bankAccounts: BankAccount[]
 }>()
 
 const page = usePage()
@@ -83,11 +104,7 @@ const formatCurrency = (value: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatDateTime(date, { mode: 'date' })
 }
 
 const selectedTotal = computed(() => {
@@ -114,6 +131,21 @@ const settlementForm = useForm<{
 })
 
 const showSettlementDialog = ref(false)
+const showClearingDialog = ref(false)
+
+const clearingSettlementForm = useForm({
+  clearing_account_id: '',
+  bank_account_id: '',
+  amount_received: null as number | null,
+  fees: 0,
+  settlement_date: new Date().toISOString().split('T')[0],
+  reference: '',
+  notes: '',
+})
+
+const selectedClearingAccount = computed(() =>
+  props.clearingAccounts.find((account) => account.clearing_account_id === clearingSettlementForm.clearing_account_id)
+)
 
 const openSettlementDialog = () => {
   if (selectedSales.value.size === 0) return
@@ -137,6 +169,28 @@ const submitSettlement = () => {
       showSettlementDialog.value = false
       settlementForm.reset()
       selectedSales.value.clear()
+    },
+  })
+}
+
+const openClearingDialog = (account: ClearingAccountSummary) => {
+  clearingSettlementForm.clearing_account_id = account.clearing_account_id
+  clearingSettlementForm.bank_account_id = account.bank_account_id || props.bankAccounts[0]?.id || ''
+  clearingSettlementForm.amount_received = account.balance
+  clearingSettlementForm.fees = 0
+  clearingSettlementForm.reference = `${account.channel_label} Settlement ${new Date().toISOString().slice(0, 10)}`
+  showClearingDialog.value = true
+}
+
+const submitClearingSettlement = () => {
+  const slug = companySlug.value
+  if (!slug) return
+
+  clearingSettlementForm.post(`/${slug}/fuel/payment-channels/settle`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showClearingDialog.value = false
+      clearingSettlementForm.reset()
     },
   })
 }
@@ -326,6 +380,36 @@ const todayTableData = computed(() => {
       </CardContent>
     </Card>
 
+    <!-- Clearing Account Settlements -->
+    <Card class="border-border/80">
+      <CardHeader>
+        <CardTitle class="text-base">Payment Channel Clearing</CardTitle>
+        <CardDescription>Outstanding POS, fuel-card, and wallet balances posted from daily close</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <EmptyState
+          v-if="props.clearingAccounts.length === 0"
+          title="No clearing balances"
+          description="Mapped payment channels with pending balances will appear here."
+        />
+        <div
+          v-for="account in props.clearingAccounts"
+          v-else
+          :key="account.clearing_account_id"
+          class="flex items-center justify-between rounded-lg border p-3"
+        >
+          <div>
+            <div class="font-medium">{{ account.channel_label }}</div>
+            <div class="text-xs text-muted-foreground">{{ account.clearing_account_name }}</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="text-right font-semibold text-amber-600">{{ formatCurrency(account.balance) }}</div>
+            <Button size="sm" @click="openClearingDialog(account)">Settle</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
     <!-- Today's Settlements -->
     <Card v-if="props.todaySettlements.length > 0" class="border-border/80">
       <CardHeader>
@@ -339,7 +423,7 @@ const todayTableData = computed(() => {
     </Card>
 
     <!-- Settlement Dialog -->
-    <Dialog :open="showSettlementDialog" @update:open="(v) => showSettlementDialog = v">
+    <Dialog :open="showSettlementDialog" @update:open="(v: boolean) => showSettlementDialog = v">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
@@ -399,6 +483,58 @@ const todayTableData = computed(() => {
               />
               Process Settlement
             </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Clearing Account Settlement Dialog -->
+    <Dialog :open="showClearingDialog" @update:open="(v: boolean) => showClearingDialog = v">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Settle Payment Channel</DialogTitle>
+          <DialogDescription>
+            {{ selectedClearingAccount?.channel_label }} outstanding: {{ formatCurrency(selectedClearingAccount?.balance || 0) }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form class="space-y-4" @submit.prevent="submitClearingSettlement">
+          <div class="space-y-2">
+            <Label>Destination Bank *</Label>
+            <Select v-model="clearingSettlementForm.bank_account_id">
+              <SelectTrigger><SelectValue placeholder="Select bank" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="account in props.bankAccounts" :key="account.id" :value="account.id">
+                  {{ account.code }} - {{ account.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-2">
+              <Label>Amount Received *</Label>
+              <Input v-model.number="clearingSettlementForm.amount_received" type="number" min="0.01" step="0.01" />
+            </div>
+            <div class="space-y-2">
+              <Label>Fees</Label>
+              <Input v-model.number="clearingSettlementForm.fees" type="number" min="0" step="0.01" />
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Settlement Date</Label>
+            <Input v-model="clearingSettlementForm.settlement_date" type="date" />
+          </div>
+
+          <div class="space-y-2">
+            <Label>Reference</Label>
+            <Input v-model="clearingSettlementForm.reference" />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" @click="showClearingDialog = false">Cancel</Button>
+            <Button type="submit" :disabled="clearingSettlementForm.processing">Process Settlement</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import type { Component } from 'vue'
 import { Button } from '@/components/ui/button'
+import { formatDateTimeForDisplay } from '@/lib/datetime'
 import {
   ChevronLeft,
   ChevronRight,
@@ -131,6 +132,10 @@ const getCellValue = (row: T, column: Column<T>) => {
   return row[column.key as keyof T]
 }
 
+const getDisplayCellValue = (row: T, column: Column<T>) => {
+  return formatDateTimeForDisplay(getCellValue(row, column), String(column.key))
+}
+
 const handleRowClick = (row: T) => {
   if (props.clickable) {
     emit('row-click', row)
@@ -224,7 +229,7 @@ const handleRowClick = (row: T) => {
               :class="['px-6 py-4 text-sm text-text-secondary', column.class]"
             >
               <slot :name="`cell-${String(column.key)}`" :row="row" :value="getCellValue(row, column)">
-                {{ getCellValue(row, column) }}
+                {{ getDisplayCellValue(row, column) }}
               </slot>
             </td>
           </tr>
@@ -265,7 +270,7 @@ const handleRowClick = (row: T) => {
               >
                 <span class="text-text-tertiary">{{ column.label }}</span>
                 <span class="text-right font-medium text-text-primary">
-                  {{ getCellValue(row, column) }}
+                  {{ getDisplayCellValue(row, column) }}
                 </span>
               </div>
             </div>

@@ -11,6 +11,7 @@ use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Stringable;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -22,7 +23,8 @@ class BillPaymentController extends Controller
     {
         $company = app(CompanyContextService::class)->requireCompany();
 
-        $query = \App\Modules\Accounting\Models\BillPayment::with('vendor')
+        $query = \App\Modules\Accounting\Models\BillPayment::query()
+            ->with('vendor:id,name')
             ->where('company_id', $company->id)
             ->orderByDesc('payment_date');
 
@@ -36,7 +38,42 @@ class BillPaymentController extends Controller
             $query->where('payment_date', '<=', $request->string('to_date'));
         }
 
-        $payments = $query->paginate(25)->withQueryString();
+        $rawPayments = $query->get();
+        $groupedPayments = $rawPayments
+            ->groupBy(fn ($payment) => $payment->payment_group_id ?: $payment->id)
+            ->map(function ($rows) {
+                $first = $rows->sortBy('payment_number')->first();
+                $amount = round((float) $rows->sum('amount'), 6);
+
+                return [
+                    'id' => $first->id,
+                    'payment_group_id' => $first->payment_group_id ?: $first->id,
+                    'payment_group_number' => $first->payment_group_number ?: $first->payment_number,
+                    'payment_number' => $first->payment_group_number ?: $first->payment_number,
+                    'vendor' => $first->vendor,
+                    'payment_date' => $first->payment_date,
+                    'amount' => $amount,
+                    'currency' => $first->currency,
+                    'payment_method' => $rows->count() > 1 ? 'split' : $first->payment_method,
+                    'reference_number' => $first->reference_number,
+                    'source_count' => $rows->count(),
+                ];
+            })
+            ->sortByDesc('payment_date')
+            ->values();
+
+        $page = max(1, (int) $request->integer('page', 1));
+        $perPage = 25;
+        $payments = new \Illuminate\Pagination\LengthAwarePaginator(
+            $groupedPayments->forPage($page, $perPage)->values(),
+            $groupedPayments->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -66,7 +103,25 @@ class BillPaymentController extends Controller
             ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
             ->where('is_active', true)
             ->orderBy('code')
-            ->get(['id', 'code', 'name', 'subtype']);
+            ->get(['id', 'code', 'name', 'subtype', 'normal_balance']);
+
+        $accountBalances = $this->ledgerBalances($company->id, $bankAccounts->pluck('id')->all());
+        $bankAccounts = $bankAccounts->map(function (Account $account) use ($accountBalances) {
+            $debit = (float) ($accountBalances[$account->id]->debit ?? 0);
+            $credit = (float) ($accountBalances[$account->id]->credit ?? 0);
+            $balance = $account->normal_balance === 'credit'
+                ? $credit - $debit
+                : $debit - $credit;
+
+            return [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name,
+                'subtype' => $account->subtype,
+                'normal_balance' => $account->normal_balance,
+                'estimated_balance' => round($balance, 2),
+            ];
+        })->values();
 
         $apAccounts = Account::where('company_id', $company->id)
             ->where('subtype', 'accounts_payable')
@@ -145,12 +200,40 @@ class BillPaymentController extends Controller
         }
     }
 
-    public function show(string $payment): Response
+    private function ledgerBalances(string $companyId, array $accountIds): \Illuminate\Support\Collection
+    {
+        if (empty($accountIds)) {
+            return collect();
+        }
+
+        return DB::table('acct.journal_entries as je')
+            ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+            ->where('je.company_id', $companyId)
+            ->where('t.company_id', $companyId)
+            ->where('t.status', 'posted')
+            ->whereIn('je.account_id', $accountIds)
+            ->groupBy('je.account_id')
+            ->selectRaw('je.account_id, COALESCE(SUM(je.debit_amount), 0) as debit, COALESCE(SUM(je.credit_amount), 0) as credit')
+            ->get()
+            ->keyBy('account_id');
+    }
+
+    public function show(string $company, string $payment): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\BillPayment::with(['vendor', 'allocations.bill'])
+        $record = \App\Modules\Accounting\Models\BillPayment::with(['vendor', 'allocations.bill', 'paymentAccount:id,code,name'])
             ->where('company_id', $company->id)
             ->findOrFail($payment);
+
+        $groupId = $record->payment_group_id ?: $record->id;
+        $groupPayments = \App\Modules\Accounting\Models\BillPayment::with(['paymentAccount:id,code,name', 'allocations.bill'])
+            ->where('company_id', $company->id)
+            ->where(function ($query) use ($groupId, $record) {
+                $query->where('payment_group_id', $groupId)
+                    ->orWhere('id', $record->id);
+            })
+            ->orderBy('payment_number')
+            ->get();
 
         $journalTransactionId = Transaction::where('company_id', $company->id)
             ->where('reference_type', 'acct.bill_payments')
@@ -166,11 +249,12 @@ class BillPaymentController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payment' => $record,
+            'groupPayments' => $groupPayments,
             'journalTransactionId' => $journalTransactionId,
         ]);
     }
 
-    public function destroy(Request $request, string $payment): RedirectResponse
+    public function destroy(Request $request, string $company, string $payment): RedirectResponse
     {
         $company = app(CompanyContextService::class)->requireCompany();
         try {

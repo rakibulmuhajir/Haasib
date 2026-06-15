@@ -147,7 +147,7 @@ const tableData = computed(() => {
     status: has(invoice.status) ? t(invoice.status) : invoice.status,
     total_amount: formatCurrency(invoice.total_amount, invoice.currency),
     balance: formatCurrency(invoice.balance, invoice.currency),
-    due_date: new Date(invoice.due_date).toLocaleDateString(),
+    due_date: invoice.due_date,
     _actions: invoice.id, // Only store the ID for fallback
     _invoiceObject: invoice, // Store full object for template
   }))

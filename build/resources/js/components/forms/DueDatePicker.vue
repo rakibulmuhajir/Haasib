@@ -11,6 +11,7 @@ import { ref, computed, watch } from 'vue'
 import { useLexicon } from '@/composables/useLexicon'
 import { useUserMode } from '@/composables/useUserMode'
 import { cn } from '@/lib/utils'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   Select,
   SelectContent,
@@ -84,11 +85,7 @@ const computedDueDate = computed(() => {
 
 const formattedDueDate = computed(() => {
   if (!computedDueDate.value) return ''
-  return computedDueDate.value.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatSharedDateTime(computedDueDate.value, { mode: 'date' })
 })
 
 const daysFromNow = computed(() => {

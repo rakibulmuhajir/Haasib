@@ -7,6 +7,7 @@ use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
 use App\Modules\Accounting\Http\Requests\UpdateVendorRequest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Vendor;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -46,6 +47,7 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'vendors' => $vendors,
+            'vendorTypes' => Vendor::TYPES,
             'filters' => $request->only(['search', 'include_inactive']),
         ]);
     }
@@ -67,6 +69,7 @@ class VendorController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'apAccounts' => $apAccounts,
+            'vendorTypes' => Vendor::TYPES,
         ]);
     }
 
@@ -180,6 +183,7 @@ class VendorController extends Controller
             ],
             'vendor' => $record,
             'apAccounts' => $apAccounts,
+            'vendorTypes' => Vendor::TYPES,
         ]);
     }
 
@@ -217,7 +221,7 @@ class VendorController extends Controller
             })
             ->orderBy('name')
             ->limit($limit)
-            ->get(['id', 'name', 'email', 'phone', 'vendor_number']);
+            ->get(['id', 'name', 'email', 'phone', 'vendor_number', 'vendor_type']);
 
         return response()->json(['results' => $vendors]);
     }
@@ -241,7 +245,7 @@ class VendorController extends Controller
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->whereIn('id', $recentVendorIds)
             ->where('is_active', true)
-            ->get(['id', 'name', 'email', 'phone', 'vendor_number']);
+            ->get(['id', 'name', 'email', 'phone', 'vendor_number', 'vendor_type']);
 
         // Sort by the order they appear in recent bills
         $sorted = $recentVendorIds->map(fn($id) => $vendors->firstWhere('id', $id))
@@ -261,11 +265,13 @@ class VendorController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
+            'vendor_type' => 'nullable|in:' . implode(',', array_keys(Vendor::TYPES)),
         ]);
 
         $result = app(CommandBus::class)->dispatch('vendor.create', [
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
+            'vendor_type' => $validated['vendor_type'] ?? Vendor::TYPE_GENERAL,
             'company_id' => $company->id,
             'base_currency' => $company->base_currency,
             'is_active' => true,
@@ -279,6 +285,7 @@ class VendorController extends Controller
                 'id' => $vendor->id,
                 'name' => $vendor->name,
                 'email' => $vendor->email,
+                'vendor_type' => $vendor->vendor_type,
             ],
         ]);
     }

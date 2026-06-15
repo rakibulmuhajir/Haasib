@@ -30,6 +30,9 @@ class StoreBillPaymentRequest extends BaseFormRequest
                 ->value('ap_account_id');
         }
 
+        $hasPaymentSplits = collect($this->input('payment_splits', []))
+            ->filter(fn ($split) => (float) ($split['amount'] ?? 0) > 0)
+            ->isNotEmpty();
         $requiresApAccount = $this->filled('vendor_id') && ! $companyApAccountId && ! $vendorApAccountId;
 
         $paymentNumberRule = Rule::unique('acct.bill_payments', 'payment_number')
@@ -56,16 +59,27 @@ class StoreBillPaymentRequest extends BaseFormRequest
             'currency' => ['required', 'string', 'size:3', 'uppercase'],
             'exchange_rate' => $exchangeRateRules,
             'base_currency' => ['required', 'string', 'size:3', 'uppercase', $baseCurrencyRule],
-            'payment_method' => ['required', Rule::in(['cash', 'check', 'card', 'bank_transfer', 'ach', 'wire', 'other'])],
+            'payment_method' => [$hasPaymentSplits ? 'nullable' : 'required', Rule::in(['cash', 'check', 'card', 'fuel_card', 'bank_transfer', 'ach', 'wire', 'other'])],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
             'payment_account_id' => [
-                'required',
+                $hasPaymentSplits ? 'nullable' : 'required',
                 'uuid',
                 Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
                     ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
                     ->where('is_active', true)),
             ],
+            'payment_splits' => ['nullable', 'array'],
+            'payment_splits.*.payment_account_id' => [
+                'required_with:payment_splits',
+                'uuid',
+                Rule::exists('acct.accounts', 'id')->where(fn ($q) => $q
+                    ->whereIn('subtype', ['bank', 'cash', 'credit_card'])
+                    ->where('is_active', true)),
+            ],
+            'payment_splits.*.amount' => ['required_with:payment_splits', 'numeric', 'min:0.01'],
+            'payment_splits.*.payment_method' => ['required_with:payment_splits', Rule::in(['cash', 'check', 'card', 'fuel_card', 'bank_transfer', 'ach', 'wire', 'other'])],
+            'payment_splits.*.reference_number' => ['nullable', 'string', 'max:100'],
             'ap_account_id' => [
                 'nullable',
                 'uuid',

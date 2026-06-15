@@ -12,11 +12,14 @@ use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
+use App\Modules\FuelStation\Services\FuelVendorSyncService;
 use App\Modules\FuelStation\Models\TankReading;
+use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\FuelStation\Services\FuelStationOnboardingService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Modules\Payroll\Models\Employee;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -29,7 +32,8 @@ use Inertia\Response;
 class FuelStationOnboardingController extends Controller
 {
     public function __construct(
-        private FuelStationOnboardingService $onboardingService
+        private FuelStationOnboardingService $onboardingService,
+        private FuelProductAccountMapper $fuelProductAccountMapper
     ) {}
 
     /**
@@ -531,6 +535,7 @@ class FuelStationOnboardingController extends Controller
                 }
 
                 $settings->save();
+                app(FuelVendorSyncService::class)->ensureVendorForStationSetting($company, $settings->fuel_vendor);
             });
 
             $vendorName = StationSettings::VENDORS[$validated['fuel_vendor']] ?? $validated['fuel_vendor'];
@@ -576,6 +581,7 @@ class FuelStationOnboardingController extends Controller
         $created = [];
         $updated = [];
         $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
+        $productCatalog = app(ProductCatalogService::class);
         $skuMap = [
             'petrol' => 'FUEL-PET',
             'diesel' => 'FUEL-DSL',
@@ -583,24 +589,15 @@ class FuelStationOnboardingController extends Controller
             'lubricant' => 'FUEL-LUB',
         ];
 
-        // Track which categories were selected
-        $selectedCategories = [];
-
         foreach ($validated['fuel_items'] as $fuelData) {
-            $normalizedCategory = $this->normalizeFuelCategory($fuelData['fuel_category']);
-            $selectedCategories[] = $normalizedCategory;
-            if ($normalizedCategory === 'high_octane') {
-                $selectedCategories[] = 'hi_octane'; // Include alias
-            }
-
-            $existingQuery = Item::where('company_id', $company->id);
-            if ($normalizedCategory === 'high_octane') {
-                $existingQuery->whereIn('fuel_category', ['high_octane', 'hi_octane']);
-            } else {
-                $existingQuery->where('fuel_category', $normalizedCategory);
-            }
-
-            $existing = $existingQuery->first();
+            $normalizedCategory = $productCatalog->normalizeFuelCategory($fuelData['fuel_category']);
+            $existing = $productCatalog->findExisting($company->id, $normalizedCategory);
+            $accountMappings = $this->fuelProductAccountMapper->resolveAccounts(
+                $company->id,
+                $normalizedCategory,
+                $baseCurrency,
+                $request->user()->id
+            );
             $payload = [
                 'name' => $fuelData['name'],
                 'fuel_category' => $normalizedCategory,
@@ -608,34 +605,32 @@ class FuelStationOnboardingController extends Controller
                 'currency' => $baseCurrency,
             ];
 
-            if ($existing) {
-                $existing->update($payload + [
-                    'updated_by_user_id' => $request->user()->id,
-                ]);
-                $updated[] = $fuelData['name'];
-                continue;
+            if (!$existing || !$existing->income_account_id) {
+                $payload['income_account_id'] = $accountMappings['income']->id;
+            }
+            if (!$existing || !$existing->expense_account_id) {
+                $payload['expense_account_id'] = $accountMappings['expense']->id;
+            }
+            if (!$existing || !$existing->asset_account_id) {
+                $payload['asset_account_id'] = $accountMappings['asset']->id;
             }
 
             $sku = $skuMap[$normalizedCategory] ?? ('FUEL-' . strtoupper($normalizedCategory));
-            Item::create($payload + [
+            $productCatalog->save($payload + [
                 'company_id' => $company->id,
+                'item' => $existing,
+                'type' => 'fuel',
                 'sku' => $sku,
                 'item_type' => 'product',
                 'track_inventory' => true,
                 'unit_of_measure' => 'liters',
                 'cost_price' => 0,
                 'avg_cost' => 0,
-                'created_by_user_id' => $request->user()->id,
+                'selling_price' => 0,
+                'user_id' => $request->user()->id,
             ]);
-            $created[] = $fuelData['name'];
+            $existing ? $updated[] = $fuelData['name'] : $created[] = $fuelData['name'];
         }
-
-        // Mark unselected fuel items as inactive
-        $deactivated = Item::where('company_id', $company->id)
-            ->whereNotNull('fuel_category')
-            ->whereNotIn('fuel_category', $selectedCategories)
-            ->where('is_active', true)
-            ->update(['is_active' => false]);
 
         $messageParts = [];
         if (!empty($created)) {
@@ -644,10 +639,6 @@ class FuelStationOnboardingController extends Controller
         if (!empty($updated)) {
             $messageParts[] = 'Updated: ' . implode(', ', $updated);
         }
-        if ($deactivated > 0) {
-            $messageParts[] = "Deactivated {$deactivated} item(s)";
-        }
-
         if (empty($messageParts)) {
             return redirect()->back()->with('info', 'No changes made.');
         }
@@ -864,12 +855,9 @@ class FuelStationOnboardingController extends Controller
 
         $created = [];
         $updated = [];
-        $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-        $priceColumns = $this->resolveItemPriceColumns();
-        $hasSalePrice = $priceColumns['sale_price'];
-        $hasSellingPrice = $priceColumns['selling_price'];
+        $productCatalog = app(ProductCatalogService::class);
 
-        DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $hasSalePrice, $hasSellingPrice, &$created, &$updated) {
+        DB::transaction(function () use ($validated, $company, $request, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
             foreach ($validated['tanks'] as $tankData) {
                 if (empty($tankData['fuel_category']) && empty($tankData['linked_item_id']) && empty($tankData['linked_item_sku'])) {
@@ -889,46 +877,13 @@ class FuelStationOnboardingController extends Controller
                         ->first();
 
                     if (!$fuelItem) {
-                        $fuelItem = Item::create([
-                            'company_id' => $company->id,
-                            'name' => $tankData['linked_item_name'] ?? $tankData['name'],
-                            'sku' => $tankData['linked_item_sku'],
-                            'item_type' => 'product',
-                            'is_active' => true,
-                            'track_inventory' => true,
-                            'unit_of_measure' => 'liter',
-                            'cost_price' => 0,
-                            'avg_cost' => 0,
-                            'currency' => $baseCurrency,
-                            'created_by_user_id' => $request->user()->id,
-                        ]);
-                        $pricePayload = [];
-                        if ($hasSalePrice) {
-                            $pricePayload['sale_price'] = 0;
-                        }
-                        if ($hasSellingPrice) {
-                            $pricePayload['selling_price'] = 0;
-                        }
-                        if (!empty($pricePayload)) {
-                            DB::table('inv.items')
-                                ->where('id', $fuelItem->id)
-                                ->update($pricePayload + [
-                                    'updated_by_user_id' => $request->user()->id,
-                                    'updated_at' => now(),
-                                ]);
-                        }
+                        throw new \RuntimeException("No product found for SKU {$tankData['linked_item_sku']}. Create the product first, then link the tank.");
                     }
                 }
 
                 if (!$fuelItem && !empty($tankData['fuel_category'])) {
-                    $normalizedCategory = $this->normalizeFuelCategory($tankData['fuel_category']);
-                    $fuelItemQuery = Item::where('company_id', $company->id);
-                    if ($normalizedCategory === 'high_octane') {
-                        $fuelItemQuery->whereIn('fuel_category', ['high_octane', 'hi_octane']);
-                    } else {
-                        $fuelItemQuery->where('fuel_category', $normalizedCategory);
-                    }
-                    $fuelItem = $fuelItemQuery->first();
+                    $normalizedCategory = $productCatalog->normalizeFuelCategory($tankData['fuel_category']);
+                    $fuelItem = $productCatalog->findExisting($company->id, $normalizedCategory);
                 }
 
                 if (!$fuelItem) {
@@ -1223,11 +1178,9 @@ class FuelStationOnboardingController extends Controller
         $created = [];
         $updated = [];
 
-        $priceColumns = $this->resolveItemPriceColumns();
-        $hasSalePrice = $priceColumns['sale_price'];
-        $hasSellingPrice = $priceColumns['selling_price'];
+        $productCatalog = app(ProductCatalogService::class);
 
-        DB::transaction(function () use ($validated, $company, $request, $hasSalePrice, $hasSellingPrice, &$created, &$updated) {
+        DB::transaction(function () use ($validated, $company, $request, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
             foreach ($validated['rates'] as $rateData) {
                 // Verify item belongs to this company
@@ -1252,20 +1205,12 @@ class FuelStationOnboardingController extends Controller
 
                 if ($existingRate) {
                     $existingRate->update($payload);
-                    $itemUpdate = [
-                        'avg_cost' => $rateData['purchase_rate'],
-                        'updated_by_user_id' => $request->user()->id,
-                        'updated_at' => now(),
-                    ];
-                    if ($hasSalePrice) {
-                        $itemUpdate['sale_price'] = $rateData['sale_rate'];
-                    }
-                    if ($hasSellingPrice) {
-                        $itemUpdate['selling_price'] = $rateData['sale_rate'];
-                    }
-                    DB::table('inv.items')
-                        ->where('id', $item->id)
-                        ->update($itemUpdate);
+                    $productCatalog->syncOptionalPriceColumns(
+                        $item->id,
+                        (float) $rateData['purchase_rate'],
+                        (float) $rateData['sale_rate'],
+                        $request->user()->id
+                    );
                     $updated[] = $item->name;
                     continue;
                 }
@@ -1276,20 +1221,12 @@ class FuelStationOnboardingController extends Controller
                     'effective_date' => $validated['effective_date'],
                     'created_by_user_id' => $request->user()->id,
                 ]);
-                $itemUpdate = [
-                    'avg_cost' => $rateData['purchase_rate'],
-                    'updated_by_user_id' => $request->user()->id,
-                    'updated_at' => now(),
-                ];
-                if ($hasSalePrice) {
-                    $itemUpdate['sale_price'] = $rateData['sale_rate'];
-                }
-                if ($hasSellingPrice) {
-                    $itemUpdate['selling_price'] = $rateData['sale_rate'];
-                }
-                DB::table('inv.items')
-                    ->where('id', $item->id)
-                    ->update($itemUpdate);
+                $productCatalog->syncOptionalPriceColumns(
+                    $item->id,
+                    (float) $rateData['purchase_rate'],
+                    (float) $rateData['sale_rate'],
+                    $request->user()->id
+                );
 
                 $created[] = $item->name;
             }
@@ -1329,11 +1266,9 @@ class FuelStationOnboardingController extends Controller
         $created = [];
         $updated = [];
         $baseCurrency = strtoupper((string) ($company->base_currency ?: 'PKR'));
-        $priceColumns = $this->resolveItemPriceColumns();
-        $hasSalePrice = $priceColumns['sale_price'];
-        $hasSellingPrice = $priceColumns['selling_price'];
+        $productCatalog = app(ProductCatalogService::class);
 
-        DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $hasSalePrice, $hasSellingPrice, &$created, &$updated) {
+        DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
             // Get or create lubricants inventory account
             $lubricantsAccount = Account::where('company_id', $company->id)
@@ -1364,43 +1299,24 @@ class FuelStationOnboardingController extends Controller
                     'unit_of_measure' => $lubricantData['unit'] ?? 'bottle',
                     'cost_price' => $lubricantData['cost_price'],
                     'avg_cost' => $lubricantData['cost_price'],
+                    'selling_price' => $lubricantData['sale_price'],
                     'currency' => $baseCurrency,
-                    'inventory_account_id' => $lubricantsAccount?->id,
+                    'asset_account_id' => $lubricantsAccount?->id,
+                    'user_id' => $request->user()->id,
                 ];
-                $pricePayload = [];
-                if ($hasSalePrice) {
-                    $pricePayload['sale_price'] = $lubricantData['sale_price'];
-                }
-                if ($hasSellingPrice) {
-                    $pricePayload['selling_price'] = $lubricantData['sale_price'];
-                }
 
                 if ($item) {
-                    $item->update($payload + [
-                        'updated_by_user_id' => $request->user()->id,
+                    $item = $productCatalog->save($payload + [
+                        'company_id' => $company->id,
+                        'item' => $item,
+                        'type' => 'lubricant',
                     ]);
-                    if (!empty($pricePayload)) {
-                        DB::table('inv.items')
-                            ->where('id', $item->id)
-                            ->update($pricePayload + [
-                                'updated_by_user_id' => $request->user()->id,
-                                'updated_at' => now(),
-                            ]);
-                    }
                     $updated[] = $lubricantData['name'];
                 } else {
-                    $item = Item::create($payload + [
+                    $item = $productCatalog->save($payload + [
                         'company_id' => $company->id,
-                        'created_by_user_id' => $request->user()->id,
+                        'type' => 'lubricant',
                     ]);
-                    if (!empty($pricePayload)) {
-                        DB::table('inv.items')
-                            ->where('id', $item->id)
-                            ->update($pricePayload + [
-                                'updated_by_user_id' => $request->user()->id,
-                                'updated_at' => now(),
-                            ]);
-                    }
                     $created[] = $lubricantData['name'];
                 }
 

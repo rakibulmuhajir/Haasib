@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Lock, Unlock, Pencil } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -75,6 +76,7 @@ const reopenPeriod = (id: string) => {
 
 const badgeVariant = (val: boolean) => (val ? 'outline' : 'success')
 const badgeLabel = (val: boolean) => (val ? 'Closed' : 'Open')
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 </script>
 
 <template>
@@ -100,7 +102,7 @@ const badgeLabel = (val: boolean) => (val ? 'Closed' : 'Open')
           <div class="flex items-center justify-between">
             <span>Dates</span>
             <span class="font-medium">
-              {{ new Date(fiscalYear.start_date).toLocaleDateString() }} → {{ new Date(fiscalYear.end_date).toLocaleDateString() }}
+              {{ formatDate(fiscalYear.start_date) }} → {{ formatDate(fiscalYear.end_date) }}
             </span>
           </div>
           <div class="flex items-center justify-between">
@@ -158,7 +160,7 @@ const badgeLabel = (val: boolean) => (val ? 'Closed' : 'Open')
                 <TableCell class="font-medium">{{ p.period_number }}</TableCell>
                 <TableCell>{{ p.name }}</TableCell>
                 <TableCell>
-                  {{ new Date(p.start_date).toLocaleDateString() }} → {{ new Date(p.end_date).toLocaleDateString() }}
+                  {{ formatDate(p.start_date) }} → {{ formatDate(p.end_date) }}
                 </TableCell>
                 <TableCell>
                   <Badge :variant="badgeVariant(p.is_closed)">{{ badgeLabel(p.is_closed) }}</Badge>
@@ -191,4 +193,3 @@ const badgeLabel = (val: boolean) => (val ? 'Closed' : 'Open')
     </div>
   </PageShell>
 </template>
-

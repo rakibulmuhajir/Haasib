@@ -13,6 +13,8 @@ use App\Modules\FuelStation\Models\NozzleReading;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\StationSettings;
 use App\Modules\FuelStation\Models\TankReading;
+use App\Modules\FuelStation\Models\AmanatTransaction;
+use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\SalaryAdvance;
@@ -91,6 +93,9 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
             $totalRevenue = 0;
             $totalCogs = 0;
+            $revenuePostings = [];
+            $cogsPostings = [];
+            $inventoryPostings = [];
             $salesByFuel = [];
             $nozzleReadingsData = [];
 
@@ -113,12 +118,35 @@ class DailyCloseService
                     $totalCogs += $cogs;
 
                     $fuelCategory = $item?->fuel_category ?? 'unknown';
+                    $fuelLabel = $item?->name ?? str_replace('_', ' ', ucfirst($fuelCategory));
                     if (!isset($salesByFuel[$fuelCategory])) {
                         $salesByFuel[$fuelCategory] = ['liters' => 0, 'revenue' => 0, 'cogs' => 0];
                     }
                     $salesByFuel[$fuelCategory]['liters'] += $liters;
                     $salesByFuel[$fuelCategory]['revenue'] += $revenue;
                     $salesByFuel[$fuelCategory]['cogs'] += $cogs;
+
+                    $this->addGroupedPosting(
+                        $revenuePostings,
+                        $item?->income_account_id ?: $accounts['fuel_sales'],
+                        $revenue,
+                        $fuelLabel
+                    );
+
+                    if ($cogs > 0) {
+                        $this->addGroupedPosting(
+                            $cogsPostings,
+                            $item?->expense_account_id ?: $accounts['fuel_cogs'],
+                            $cogs,
+                            $fuelLabel
+                        );
+                        $this->addGroupedPosting(
+                            $inventoryPostings,
+                            $item?->asset_account_id ?: $accounts['fuel_inventory'],
+                            $cogs,
+                            $fuelLabel
+                        );
+                    }
                 }
 
                 // Store nozzle reading data for later save
@@ -146,7 +174,22 @@ class DailyCloseService
             $otherSalesDetails = [];
             if (!empty($data['other_sales'])) {
                 foreach ($data['other_sales'] as $sale) {
-                    $otherSalesTotal += (float) $sale['amount'];
+                    $amount = (float) $sale['amount'];
+                    $otherSalesTotal += $amount;
+                    $item = Item::where('id', $sale['item_id'])
+                        ->where('company_id', $companyId)
+                        ->first();
+                    $label = $item?->name ?? ($sale['item_name'] ?? 'Other sales');
+
+                    if ($amount > 0) {
+                        $this->addGroupedPosting(
+                            $revenuePostings,
+                            $item?->income_account_id ?: $accounts['fuel_sales'],
+                            $amount,
+                            $label
+                        );
+                    }
+
                     $otherSalesDetails[] = [
                         'item_id' => $sale['item_id'],
                         'item_name' => $sale['item_name'],
@@ -292,6 +335,7 @@ class DailyCloseService
             // 4b. Process Dynamic Payment Channels (non-cash receipts)
             // ─────────────────────────────────────────────────────────────────
             $paymentReceiptsTotals = [];
+            $paymentReceiptPostings = [];
             $totalNonCashReceipts = 0;
             $bankTransfersTotal = 0;
             $cardSwipesTotal = 0;
@@ -301,9 +345,9 @@ class DailyCloseService
                 // Get station settings to understand channel types
                 $stationSettings = StationSettings::where('company_id', $companyId)->first();
                 $paymentChannels = $stationSettings?->payment_channels ?? [];
-                $channelTypeMap = [];
+                $channelMap = [];
                 foreach ($paymentChannels as $ch) {
-                    $channelTypeMap[$ch['code']] = $ch['type'];
+                    $channelMap[$ch['code']] = $ch;
                 }
 
                 foreach ($data['payment_receipts'] as $channelCode => $channelData) {
@@ -315,10 +359,30 @@ class DailyCloseService
                     }
 
                     $paymentReceiptsTotals[$channelCode] = $channelTotal;
-                    $totalNonCashReceipts += $channelTotal;
+                    if ($channelTotal <= 0) {
+                        continue;
+                    }
 
                     // Categorize by type for GL posting
-                    $channelType = $channelTypeMap[$channelCode] ?? 'bank_transfer';
+                    $channel = $channelMap[$channelCode] ?? [
+                        'code' => $channelCode,
+                        'label' => $channelCode,
+                        'type' => 'bank_transfer',
+                    ];
+                    $channelType = $channel['type'] ?? 'bank_transfer';
+                    $destinationAccountId = $this->resolvePaymentChannelAccount($channel, $accounts);
+
+                    if ($channelType !== 'cash') {
+                        $totalNonCashReceipts += $channelTotal;
+                        $paymentReceiptPostings[] = [
+                            'channel_code' => $channelCode,
+                            'channel_label' => $channel['label'] ?? $channelCode,
+                            'channel_type' => $channelType,
+                            'account_id' => $destinationAccountId,
+                            'amount' => $channelTotal,
+                        ];
+                    }
+
                     if ($channelType === 'bank_transfer') {
                         $bankTransfersTotal += $channelTotal;
                     } elseif ($channelType === 'card_pos') {
@@ -333,6 +397,7 @@ class DailyCloseService
             }
 
             $metadata['payment_receipts'] = $paymentReceiptsTotals;
+            $metadata['payment_receipt_postings'] = $paymentReceiptPostings;
             $metadata['bank_transfers_received'] = $bankTransfersTotal;
             $metadata['card_swipes'] = $cardSwipesTotal;
             $metadata['fuel_cards'] = $fuelCardsTotal;
@@ -343,12 +408,24 @@ class DailyCloseService
 
             // Bank deposits
             $bankDepositsTotal = 0;
+            $bankDepositsByAccount = [];
             if (!empty($data['bank_deposits'])) {
                 foreach ($data['bank_deposits'] as $deposit) {
-                    $bankDepositsTotal += (float) $deposit['amount'];
+                    $amount = (float) $deposit['amount'];
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    $bankDepositsTotal += $amount;
+                    $accountId = $deposit['bank_account_id'] ?? $accounts['operating_bank'];
+                    if (!isset($bankDepositsByAccount[$accountId])) {
+                        $bankDepositsByAccount[$accountId] = 0;
+                    }
+                    $bankDepositsByAccount[$accountId] += $amount;
                 }
             }
             $metadata['bank_deposits'] = $bankDepositsTotal;
+            $metadata['bank_deposits_by_account'] = $bankDepositsByAccount;
 
             // Partner withdrawals
             $partnerWithdrawalsTotal = 0;
@@ -410,12 +487,57 @@ class DailyCloseService
 
             // Amanat disbursements
             $amanatTotal = 0;
+            $amanatDetails = [];
             if (!empty($data['amanat_disbursements'])) {
                 foreach ($data['amanat_disbursements'] as $amanat) {
-                    $amanatTotal += (float) $amanat['amount'];
+                    $amount = (float) $amanat['amount'];
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    $customerId = $amanat['customer_id'] ?? null;
+                    if (!$customerId) {
+                        throw new \RuntimeException('Select an Amanat depositor before posting a disbursement.');
+                    }
+
+                    $profile = CustomerProfile::where('company_id', $companyId)
+                        ->where('customer_id', $customerId)
+                        ->where('is_amanat_holder', true)
+                        ->with('customer:id,name')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$profile) {
+                        throw new \RuntimeException('Selected Amanat depositor was not found.');
+                    }
+
+                    if ($amount > (float) $profile->amanat_balance) {
+                        $name = $profile->customer?->name ?? 'Selected Amanat depositor';
+                        throw new \RuntimeException("{$name} has only {$profile->amanat_balance} available in Amanat.");
+                    }
+
+                    AmanatTransaction::create([
+                        'company_id' => $companyId,
+                        'customer_id' => $customerId,
+                        'transaction_type' => AmanatTransaction::TYPE_WITHDRAWAL,
+                        'amount' => $amount,
+                        'reference' => 'Daily close ' . $date,
+                        'notes' => $amanat['notes'] ?? 'Daily close cash disbursement',
+                        'recorded_by_user_id' => $user->id,
+                    ]);
+
+                    $profile->adjustAmanatBalance(-$amount);
+
+                    $amanatTotal += $amount;
+                    $amanatDetails[] = [
+                        'customer_id' => $customerId,
+                        'customer_name' => $profile->customer?->name ?? ($amanat['customer_name'] ?? null),
+                        'amount' => $amount,
+                    ];
                 }
             }
             $metadata['amanat_disbursements'] = $amanatTotal;
+            $metadata['amanat_disbursement_details'] = $amanatDetails;
 
             // Expenses
             $expensesTotal = 0;
@@ -446,7 +568,7 @@ class DailyCloseService
             // ─────────────────────────────────────────────────────────────────
 
             // Cash from sales (total revenue goes to cash initially)
-            $cashFromSales = $totalRevenue - $cardSwipesTotal - $fuelCardsTotal - $bankTransfersTotal;
+            $cashFromSales = $totalRevenue - $totalNonCashReceipts;
             $totalCashIn = $openingCash + $partnerDepositsTotal + $cashFromSales;
             $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $amanatTotal + $expensesTotal;
 
@@ -475,29 +597,32 @@ class DailyCloseService
                 'notes' => $data['notes'] ?? null,
             ];
 
-            // Revenue entry
-            if ($totalRevenue > 0) {
+            // Revenue entries. Prefer product-level mappings; station settings are fallback defaults.
+            foreach ($revenuePostings as $posting) {
                 $entries[] = [
-                    'account_id' => $accounts['fuel_sales'],
+                    'account_id' => $posting['account_id'],
                     'type' => 'credit',
-                    'amount' => round($totalRevenue, 2),
-                    'description' => 'Daily fuel + oil sales',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Daily sales - ' . implode(', ', $posting['labels']),
                 ];
             }
 
-            // COGS entry
-            if ($totalCogs > 0) {
+            // COGS entries. Prefer product-level mappings; station settings are fallback defaults.
+            foreach ($cogsPostings as $posting) {
                 $entries[] = [
-                    'account_id' => $accounts['fuel_cogs'],
+                    'account_id' => $posting['account_id'],
                     'type' => 'debit',
-                    'amount' => round($totalCogs, 2),
-                    'description' => 'Cost of goods sold',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Cost of goods sold - ' . implode(', ', $posting['labels']),
                 ];
+            }
+
+            foreach ($inventoryPostings as $posting) {
                 $entries[] = [
-                    'account_id' => $accounts['fuel_inventory'],
+                    'account_id' => $posting['account_id'],
                     'type' => 'credit',
-                    'amount' => round($totalCogs, 2),
-                    'description' => 'Inventory reduction',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Inventory reduction - ' . implode(', ', $posting['labels']),
                 ];
             }
 
@@ -512,43 +637,23 @@ class DailyCloseService
                 ];
             }
 
-            // Bank deposits (cash goes out, bank goes up)
-            if ($bankDepositsTotal > 0 && $accounts['operating_bank']) {
+            // Bank deposits (cash goes out, selected bank goes up)
+            foreach ($bankDepositsByAccount as $bankAccountId => $amount) {
                 $entries[] = [
-                    'account_id' => $accounts['operating_bank'],
+                    'account_id' => $bankAccountId,
                     'type' => 'debit',
-                    'amount' => round($bankDepositsTotal, 2),
+                    'amount' => round($amount, 2),
                     'description' => 'Cash deposited to bank',
                 ];
             }
 
-            // Card swipes clearing
-            if ($cardSwipesTotal > 0 && $accounts['card_clearing']) {
+            // Non-cash payment channels land in their configured clearing/bank accounts.
+            foreach ($paymentReceiptPostings as $posting) {
                 $entries[] = [
-                    'account_id' => $accounts['card_clearing'],
+                    'account_id' => $posting['account_id'],
                     'type' => 'debit',
-                    'amount' => round($cardSwipesTotal, 2),
-                    'description' => 'Card swipes pending settlement',
-                ];
-            }
-
-            // Fuel card clearing (vendor cards)
-            if ($fuelCardsTotal > 0 && $accounts['fuel_card_clearing']) {
-                $entries[] = [
-                    'account_id' => $accounts['fuel_card_clearing'],
-                    'type' => 'debit',
-                    'amount' => round($fuelCardsTotal, 2),
-                    'description' => 'Fuel card sales pending settlement',
-                ];
-            }
-
-            // Bank transfers received
-            if ($bankTransfersTotal > 0 && $accounts['operating_bank']) {
-                $entries[] = [
-                    'account_id' => $accounts['operating_bank'],
-                    'type' => 'debit',
-                    'amount' => round($bankTransfersTotal, 2),
-                    'description' => 'Customer bank transfers received',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => ($posting['channel_label'] ?? 'Payment channel') . ' receipts',
                 ];
             }
 
@@ -788,6 +893,27 @@ class DailyCloseService
         return $base;
     }
 
+    private function resolvePaymentChannelAccount(array $channel, array $accounts): string
+    {
+        $type = $channel['type'] ?? 'bank_transfer';
+        $label = $channel['label'] ?? $channel['code'] ?? 'payment channel';
+
+        $accountId = match ($type) {
+            'cash' => $accounts['cash_on_hand'] ?? null,
+            'bank_transfer' => $channel['bank_account_id'] ?? $accounts['operating_bank'] ?? null,
+            'card_pos' => $channel['clearing_account_id'] ?? $accounts['card_clearing'] ?? null,
+            'fuel_card' => $channel['clearing_account_id'] ?? $accounts['fuel_card_clearing'] ?? null,
+            'mobile_wallet' => $channel['clearing_account_id'] ?? $channel['bank_account_id'] ?? $accounts['operating_bank'] ?? null,
+            default => $channel['bank_account_id'] ?? $channel['clearing_account_id'] ?? $accounts['operating_bank'] ?? null,
+        };
+
+        if (!$accountId) {
+            throw new \RuntimeException("No GL account configured for payment channel: {$label}.");
+        }
+
+        return $accountId;
+    }
+
     private function resolveAccounts(string $companyId): array
     {
         // First try to get accounts from station settings
@@ -896,5 +1022,27 @@ class DailyCloseService
         }
 
         return $required;
+    }
+
+    private function addGroupedPosting(array &$postings, string $accountId, float $amount, string $label): void
+    {
+        if ($amount <= 0) {
+            return;
+        }
+
+        $label = trim($label) !== '' ? trim($label) : 'Fuel';
+
+        if (!isset($postings[$accountId])) {
+            $postings[$accountId] = [
+                'account_id' => $accountId,
+                'amount' => 0,
+                'labels' => [],
+            ];
+        }
+
+        $postings[$accountId]['amount'] += $amount;
+        if (!in_array($label, $postings[$accountId]['labels'], true)) {
+            $postings[$accountId]['labels'][] = $label;
+        }
     }
 }

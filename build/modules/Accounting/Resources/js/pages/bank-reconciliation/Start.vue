@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RefreshCcw, ArrowRight, Calendar, Landmark, Info } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 
 interface CompanyRef {
   id: string
@@ -63,11 +64,7 @@ const formatCurrency = (amount: number, currency: string) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 // Pre-populate statement ending balance with current balance when account is selected

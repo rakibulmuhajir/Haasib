@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { Droplets, Download, AlertTriangle, TrendingDown, Calendar, DollarSign } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -152,7 +153,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const columns = [

@@ -24,6 +24,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `name` varchar(255) not null.
   - `email` varchar(255) null.
   - `phone` varchar(50) null.
+  - `vendor_type` varchar(30) not null default 'general'. Enum: general, fuel_refinery, fuel_distributor, fuel_station, lubricant_supplier, contractor, utility, service_provider.
   - `address` jsonb null (keys: street, city, state, zip, country).
   - `tax_id` varchar(100) null.
   - `base_currency` char(3) not null default (company base); FK → `public.currencies.code`.
@@ -55,7 +56,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `$connection = 'pgsql';`
   - `$table = 'acct.vendors';`
   - `$keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','vendor_number','name','email','phone','address','tax_id','base_currency','payment_terms','account_number','notes','website','is_active','created_by_user_id','updated_by_user_id'];`
+  - `$fillable = ['company_id','vendor_number','name','email','phone','vendor_type','address','tax_id','base_currency','payment_terms','account_number','notes','website','is_active','created_by_user_id','updated_by_user_id'];`
   - `$casts = ['id'=>'string','company_id'=>'string','address'=>'array','payment_terms'=>'integer','is_active'=>'boolean','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships:
   - belongsTo Company.
@@ -67,6 +68,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `name`: required|string|max:255.
   - `email`: nullable|email|max:255, unique per company (soft-delete aware).
   - `phone`: nullable|string|max:50.
+  - `vendor_type`: required|in:general,fuel_refinery,fuel_distributor,fuel_station,lubricant_supplier,contractor,utility,service_provider.
   - `address.*`: nullable|string with max lengths (street 255, city/state 100, zip 20, country 2).
   - `tax_id`: nullable|string|max:100.
   - `base_currency`: required|string|size:3|uppercase (must equal company base).
@@ -80,6 +82,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - Email unique per company when present.
   - Base currency should match company base currency for now; disallow changes once bills exist.
   - Cannot delete vendor with unpaid bills.
+  - Fuel station companies may have multiple active fuel vendors; Station Settings' brand/vendor selection is only a default label and should be backed by an `acct.vendors` row for bill entry.
 
 ### acct.bills
 - Purpose: purchase invoice/bill headers (what you owe vendors).
@@ -195,6 +198,8 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `id` uuid PK.
   - `company_id` uuid not null FK → `auth.companies.id` (CASCADE/CASCADE).
   - `vendor_id` uuid not null FK → `acct.vendors.id` (RESTRICT/CASCADE).
+  - `payment_group_id` uuid nullable. Same value for rows created by one split-payment action.
+  - `payment_group_number` varchar(50) nullable. User-facing group number for split-payment display.
   - `payment_number` varchar(50) not null; unique per company (filtered).
   - `payment_date` date not null default `current_date`.
   - `amount` numeric(18,6) not null default 0.00 (payment currency).
@@ -202,7 +207,7 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `exchange_rate` numeric(18,8) nullable (required if currency != base_currency; NULL if currency = base).
   - `base_currency` char(3) not null (company base, denormalized); FK → `public.currencies.code`.
   - `base_amount` numeric(15,2) not null default 0.00 (amount in base currency).
-  - `payment_method` varchar(50) not null; constrained values: cash, check, card, bank_transfer, ach, wire, other.
+  - `payment_method` varchar(50) not null; constrained values: cash, check, card, fuel_card, bank_transfer, ach, wire, other.
   - `reference_number` varchar(100) null.
   - `notes` text null.
   - `created_by_user_id` uuid null FK → `auth.users.id` (SET NULL/CASCADE).
@@ -211,12 +216,12 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
 - Indexes/constraints:
   - PK `id`.
   - Unique (`company_id`, `payment_number`) where `deleted_at is null`.
-  - Indexes: `company_id`; `vendor_id`; `payment_date`.
+  - Indexes: `company_id`; `vendor_id`; `payment_group_id`; (`company_id`, `payment_group_number`); `payment_date`.
 - RLS: same pattern with company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'acct.bill_payments'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','vendor_id','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
-  - `$casts = ['company_id'=>'string','vendor_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
+  - `$fillable = ['company_id','vendor_id','payment_group_id','payment_group_number','payment_number','payment_date','amount','currency','exchange_rate','base_currency','base_amount','payment_method','reference_number','notes','created_by_user_id','updated_by_user_id'];`
+  - `$casts = ['company_id'=>'string','vendor_id'=>'string','payment_group_id'=>'string','payment_date'=>'date','amount'=>'decimal:6','exchange_rate'=>'decimal:8','base_amount'=>'decimal:2','created_by_user_id'=>'string','updated_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime','deleted_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Vendor; hasMany BillPaymentAllocation.
 - Validation:
   - `vendor_id`: required|uuid|exists:acct.vendors,id.
@@ -226,13 +231,15 @@ Single source of truth for vendors, bills, bill payments, vendor credits, and al
   - `currency`: required|string|size:3|uppercase (enabled for company); must equal bill currency or company base when allocating.
   - `exchange_rate`: nullable|numeric|min:0.00000001|decimal:8 (required if currency != base_currency; NULL if currency = base).
   - `base_currency`: required|string|size:3|uppercase (company base).
-  - `payment_method`: required|in:cash,check,card,bank_transfer,ach,wire,other.
+  - `payment_method`: required|in:cash,check,card,fuel_card,bank_transfer,ach,wire,other.
   - `reference_number`: nullable|string|max:100.
   - `notes`: nullable|string.
 - Business rules:
   - base_amount = ROUND(amount * COALESCE(exchange_rate,1), 2).
   - Payment currency must match bill currency or company base currency when allocating (Phase 1 rule).
   - Payment amount cannot exceed sum of allocations.
+  - A UI request may submit `payment_splits[]` to record one bill payment from multiple source accounts. Each split is saved as a separate `acct.bill_payments` row and posts its own DR AP / CR source account journal.
+  - All rows created from the same split-payment action share `payment_group_id` and `payment_group_number`. Frontend lists should group by these fields and show source rows as details.
   - Cannot delete payment with allocations; void instead if required.
 
 ### acct.bill_payment_allocations

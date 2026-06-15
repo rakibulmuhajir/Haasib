@@ -145,7 +145,7 @@ const tableData = computed(() => {
     reason: creditNote.reason,
     amount: formatCurrency(creditNote.amount, creditNote.base_currency),
     status: creditNote.status,
-    credit_date: new Date(creditNote.credit_date).toLocaleDateString(),
+    credit_date: creditNote.credit_date,
     actions: creditNote.id, // Only store the ID for fallback
     _creditNoteObject: creditNote, // Store full object for template
   }))

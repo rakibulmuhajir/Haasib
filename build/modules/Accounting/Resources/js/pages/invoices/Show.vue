@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   ArrowLeft,
   Edit,
@@ -116,11 +117,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatSharedDateTime(dateString, { mode: 'date' })
 }
 
 const isOverdue = computed(() => {

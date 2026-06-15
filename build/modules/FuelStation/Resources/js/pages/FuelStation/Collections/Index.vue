@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { Receipt, Plus, Eye, Wallet, Banknote, CreditCard, TrendingUp } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -126,7 +127,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const paymentMethodLabel = (method: string) => {

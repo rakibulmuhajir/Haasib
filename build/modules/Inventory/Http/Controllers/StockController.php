@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockReceipt;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\StockAdjustmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,10 @@ use Inertia\Response;
 
 class StockController extends Controller
 {
+    public function __construct(private readonly StockAdjustmentService $stockAdjustmentService)
+    {
+    }
+
     public function index(Request $request): Response
     {
         $company = CompanyContext::getCompany();
@@ -92,6 +97,84 @@ class StockController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
+        $summary = [
+            'tracked_items' => Item::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->where('track_inventory', true)
+                ->count(),
+            'stock_records' => StockLevel::where('company_id', $company->id)->count(),
+            'low_stock' => StockLevel::where('inv.stock_levels.company_id', $company->id)
+                ->join('inv.items', 'inv.stock_levels.item_id', '=', 'inv.items.id')
+                ->whereRaw('inv.stock_levels.quantity < COALESCE(inv.stock_levels.reorder_point, inv.items.reorder_point, 0)')
+                ->whereRaw('COALESCE(inv.stock_levels.reorder_point, inv.items.reorder_point, 0) > 0')
+                ->count(),
+            'pending_deliveries' => DB::table('acct.bill_line_items as li')
+                ->join('acct.bills as b', 'b.id', '=', 'li.bill_id')
+                ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                ->where('b.company_id', $company->id)
+                ->whereNull('b.deleted_at')
+                ->whereNull('li.deleted_at')
+                ->whereNull('items.deleted_at')
+                ->where('b.status', 'paid')
+                ->whereNull('b.goods_received_at')
+                ->where('items.track_inventory', true)
+                ->where('items.delivery_mode', 'requires_receiving')
+                ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                ->distinct('b.id')
+                ->count('b.id'),
+        ];
+
+        $pendingDeliveries = Bill::query()
+            ->select('acct.bills.*')
+            ->with('vendor:id,name,vendor_type')
+            ->where('company_id', $company->id)
+            ->where('status', 'paid')
+            ->whereNull('goods_received_at')
+            ->whereExists(function ($sub) use ($company) {
+                $sub->selectRaw('1')
+                    ->from('acct.bill_line_items as li')
+                    ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->whereNull('items.deleted_at')
+                    ->where('items.track_inventory', true)
+                    ->where('items.delivery_mode', 'requires_receiving')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity');
+            })
+            ->addSelect([
+                'pending_lines' => DB::table('acct.bill_line_items as li')
+                    ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->whereNull('items.deleted_at')
+                    ->where('items.track_inventory', true)
+                    ->where('items.delivery_mode', 'requires_receiving')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                    ->selectRaw('COUNT(*)'),
+                'pending_quantity' => DB::table('acct.bill_line_items as li')
+                    ->join('inv.items as items', 'items.id', '=', 'li.item_id')
+                    ->whereColumn('li.bill_id', 'acct.bills.id')
+                    ->where('li.company_id', $company->id)
+                    ->whereNull('li.deleted_at')
+                    ->whereNull('items.deleted_at')
+                    ->where('items.track_inventory', true)
+                    ->where('items.delivery_mode', 'requires_receiving')
+                    ->whereRaw('COALESCE(li.quantity_received, 0) < li.quantity')
+                    ->selectRaw('SUM(li.quantity - COALESCE(li.quantity_received, 0))'),
+            ])
+            ->orderByDesc('bill_date')
+            ->limit(5)
+            ->get();
+
+        $recentMovements = StockMovement::query()
+            ->with(['item:id,sku,name,unit_of_measure', 'warehouse:id,name,code'])
+            ->where('company_id', $company->id)
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get(['id', 'item_id', 'warehouse_id', 'movement_date', 'movement_type', 'quantity', 'unit_cost', 'total_cost', 'gl_transaction_id']);
+
         return Inertia::render('inventory/stock/Index', [
             'company' => [
                 'id' => $company->id,
@@ -100,6 +183,9 @@ class StockController extends Controller
             ],
             'stockLevels' => $stockLevels,
             'warehouses' => $warehouses,
+            'summary' => $summary,
+            'pendingDeliveries' => $pendingDeliveries,
+            'recentMovements' => $recentMovements,
             'filters' => [
                 'search' => $request->search ?? '',
                 'warehouse_id' => $request->warehouse_id ?? '',
@@ -237,7 +323,7 @@ class StockController extends Controller
             ->where('is_active', true)
             ->where('track_inventory', true)
             ->orderBy('name')
-            ->get(['id', 'sku', 'name', 'unit_of_measure']);
+            ->get(['id', 'sku', 'name', 'unit_of_measure', 'cost_price', 'avg_cost']);
 
         return Inertia::render('inventory/stock/Adjustment', [
             'company' => [
@@ -255,23 +341,15 @@ class StockController extends Controller
         $company = CompanyContext::getCompany();
         $data = $request->validated();
 
-        $movementType = $data['quantity'] > 0 ? 'adjustment_in' : 'adjustment_out';
-
-        StockMovement::create([
-            'company_id' => $company->id,
-            'warehouse_id' => $data['warehouse_id'],
-            'item_id' => $data['item_id'],
-            'movement_date' => $data['movement_date'] ?? now()->toDateString(),
-            'movement_type' => $movementType,
-            'quantity' => $data['quantity'],
-            'reason' => $data['reason'] ?? null,
-            'notes' => $data['notes'] ?? null,
-            'created_by_user_id' => $request->user()->id,
-        ]);
+        try {
+            $this->stockAdjustmentService->record($company, $data, $request->user()?->id);
+        } catch (\Throwable $exception) {
+            return back()->withInput()->with('error', $exception->getMessage());
+        }
 
         return redirect()
             ->route('stock.index', ['company' => $company->slug])
-            ->with('success', 'Stock adjustment recorded successfully.');
+            ->with('success', 'Stock adjustment recorded and posted to accounts.');
     }
 
     public function createTransfer(): Response

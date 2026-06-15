@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,8 @@ interface Item {
   sku: string
   name: string
   unit_of_measure: string
+  cost_price: number | string | null
+  avg_cost: number | string | null
 }
 
 const props = defineProps<{
@@ -49,6 +51,7 @@ const form = useForm({
   warehouse_id: '',
   item_id: '',
   quantity: 0,
+  unit_cost: '',
   reason: '',
   notes: '',
   movement_date: new Date().toISOString().split('T')[0],
@@ -58,11 +61,46 @@ const selectedItem = computed(() => {
   return props.items.find(i => i.id === form.item_id)
 })
 
+const defaultUnitCost = computed(() => {
+  const item = selectedItem.value
+  if (!item) return ''
+
+  const cost = Number(item.avg_cost || item.cost_price || 0)
+  return cost > 0 ? cost.toFixed(6).replace(/\.?0+$/, '') : ''
+})
+
+watch(
+  () => form.item_id,
+  () => {
+    form.unit_cost = defaultUnitCost.value
+  }
+)
+
+const estimatedValue = computed(() => {
+  const quantity = Math.abs(Number(form.quantity || 0))
+  const unitCost = Number(form.unit_cost || 0)
+  return quantity * unitCost
+})
+
+const formatMoney = (amount: number) => new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(amount)
+
+const accountingHint = computed(() => {
+  if (adjustmentType.value === 'increase') {
+    return 'Accounts: Inventory increases; stock gain/adjustment income increases.'
+  }
+
+  return 'Accounts: Stock loss/adjustment expense increases; inventory decreases.'
+})
+
 const submit = () => {
   const qty = adjustmentType.value === 'decrease' ? -Math.abs(form.quantity) : Math.abs(form.quantity)
   form.transform((data) => ({
     ...data,
     quantity: qty,
+    unit_cost: data.unit_cost === '' ? null : data.unit_cost,
   })).post(`/${props.company.slug}/stock/adjustment`)
 }
 
@@ -71,7 +109,8 @@ const reasons = [
   'Damaged goods',
   'Theft/loss',
   'Found inventory',
-  'Opening balance',
+  'Correction after tank dip',
+  'Opening balance correction',
   'Other',
 ]
 </script>
@@ -94,7 +133,7 @@ const reasons = [
       <Card>
         <CardHeader>
           <CardTitle>Adjustment Details</CardTitle>
-          <CardDescription>Record a stock adjustment</CardDescription>
+          <CardDescription>Use this for corrections. Use bills and receiving for normal fuel purchases.</CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
           <!-- Warehouse -->
@@ -148,6 +187,7 @@ const reasons = [
                 </Label>
               </div>
             </RadioGroup>
+            <p class="text-sm text-muted-foreground">{{ accountingHint }}</p>
           </div>
 
           <!-- Quantity -->
@@ -168,6 +208,32 @@ const reasons = [
               </span>
             </div>
             <p v-if="form.errors.quantity" class="text-sm text-destructive">{{ form.errors.quantity }}</p>
+          </div>
+
+          <!-- Unit Cost -->
+          <div class="space-y-2">
+            <Label for="unit_cost">Value per unit *</Label>
+            <div class="flex items-center gap-2">
+              <Input
+                id="unit_cost"
+                v-model="form.unit_cost"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="max-w-[200px]"
+                :class="{ 'border-destructive': form.errors.unit_cost }"
+              />
+              <span v-if="selectedItem" class="text-muted-foreground">
+                per {{ selectedItem.unit_of_measure }}
+              </span>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Used to post the inventory value. Existing item cost is filled automatically when available.
+            </p>
+            <p v-if="estimatedValue > 0" class="text-sm text-muted-foreground">
+              Estimated value: {{ formatMoney(estimatedValue) }}
+            </p>
+            <p v-if="form.errors.unit_cost" class="text-sm text-destructive">{{ form.errors.unit_cost }}</p>
           </div>
 
           <!-- Date -->

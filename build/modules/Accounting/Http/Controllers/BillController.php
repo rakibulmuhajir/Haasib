@@ -123,7 +123,7 @@ class BillController extends Controller
         if ($selectedVendorId !== '') {
             $selectedVendor = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
                 ->where('id', $selectedVendorId)
-                ->first(['id', 'name', 'payment_terms', 'base_currency']);
+                ->first(['id', 'name', 'payment_terms', 'base_currency', 'vendor_type']);
             if (! $selectedVendor) {
                 $selectedVendorId = '';
             }
@@ -131,7 +131,7 @@ class BillController extends Controller
 
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'payment_terms', 'base_currency']);
+            ->get(['id', 'name', 'payment_terms', 'base_currency', 'vendor_type']);
 
         $expenseAccounts = Account::where('company_id', $company->id)
             ->whereIn('type', ['expense', 'cogs', 'asset'])
@@ -340,7 +340,7 @@ class BillController extends Controller
             ->findOrFail($bill);
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $companyModel->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'payment_terms', 'base_currency']);
+            ->get(['id', 'name', 'payment_terms', 'base_currency', 'vendor_type']);
 
         $expenseAccounts = Account::where('company_id', $companyModel->id)
             ->whereIn('type', ['expense', 'cogs', 'asset'])

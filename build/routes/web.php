@@ -35,7 +35,9 @@ use App\Modules\Payroll\Http\Controllers\DeductionTypeController;
 use App\Modules\Payroll\Http\Controllers\LeaveTypeController;
 use App\Modules\Payroll\Http\Controllers\LeaveRequestController;
 use App\Modules\Payroll\Http\Controllers\PayrollPeriodController;
+use App\Modules\Payroll\Http\Controllers\PayrollDashboardController;
 use App\Modules\Payroll\Http\Controllers\PayslipController;
+use App\Modules\Payroll\Http\Controllers\SalaryReportController;
 use App\Modules\Payroll\Http\Controllers\SalaryAdvanceController;
 use App\Http\Controllers\PartnerController;
 use Illuminate\Support\Facades\Route;
@@ -326,6 +328,7 @@ Route::middleware(['auth'])->group(function () {
 	            Route::get('/{company}/items/{item}', [ItemController::class, 'show'])->whereUuid('item')->name('items.show');
 	            Route::get('/{company}/items/{item}/edit', [ItemController::class, 'edit'])->whereUuid('item')->name('items.edit');
 	            Route::put('/{company}/items/{item}', [ItemController::class, 'update'])->whereUuid('item')->name('items.update');
+	            Route::patch('/{company}/items/{item}/status', [ItemController::class, 'updateStatus'])->whereUuid('item')->name('items.update-status');
 	            Route::delete('/{company}/items/{item}', [ItemController::class, 'destroy'])->whereUuid('item')->name('items.destroy');
 	
 	            // Item Categories
@@ -362,6 +365,10 @@ Route::middleware(['auth'])->group(function () {
         // ─────────────────────────────────────────────────────────────────
         // Payroll & HR Module
         // ─────────────────────────────────────────────────────────────────
+
+        Route::get('/{company}/payroll', [PayrollDashboardController::class, 'index'])->name('payroll.index');
+        Route::post('/{company}/payroll/run-monthly', [PayrollDashboardController::class, 'runMonthly'])->name('payroll.run-monthly');
+        Route::get('/{company}/payroll/reports/salary', [SalaryReportController::class, 'index'])->name('payroll.reports.salary');
 
         // Employees
         Route::get('/{company}/employees', [EmployeeController::class, 'index'])->name('employees.index');
@@ -412,6 +419,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{company}/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create');
         Route::post('/{company}/payroll-periods', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store');
         Route::get('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'show'])->whereUuid('payroll_period')->name('payroll-periods.show');
+        Route::post('/{company}/payroll-periods/{payroll_period}/generate-payslips', [PayslipController::class, 'generateForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.generate-payslips');
+        Route::post('/{company}/payroll-periods/{payroll_period}/approve-payslips', [PayslipController::class, 'approveForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.approve-payslips');
+        Route::post('/{company}/payroll-periods/{payroll_period}/pay-payslips', [PayslipController::class, 'payForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.pay-payslips');
         Route::post('/{company}/payroll-periods/{payroll_period}/close', [PayrollPeriodController::class, 'close'])->whereUuid('payroll_period')->name('payroll-periods.close');
         Route::delete('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'destroy'])->whereUuid('payroll_period')->name('payroll-periods.destroy');
 
@@ -427,6 +437,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Salary Advances
         Route::get('/{company}/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+        Route::post('/{company}/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
 
         // ─────────────────────────────────────────────────────────────────
         // Partners (Business Partners / Shareholders)

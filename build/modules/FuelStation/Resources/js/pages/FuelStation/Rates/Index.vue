@@ -26,6 +26,9 @@ interface FuelItemRef {
   id: string
   name: string
   fuel_category?: string | null
+  cost_price?: number | string | null
+  avg_cost?: number | string | null
+  selling_price?: number | string | null
 }
 
 interface RateChangeRow {
@@ -108,7 +111,19 @@ const currentCards = computed(() => {
   return props.items
     .map((item) => {
       const r = byItemCurrent.value.get(item.id) || null
-      return { item, rate: r }
+      const productPurchase = Number(item.avg_cost || item.cost_price || 0)
+      const productSale = Number(item.selling_price || 0)
+      const fallbackRate = !r && (productPurchase > 0 || productSale > 0)
+        ? {
+            id: `product-${item.id}`,
+            item_id: item.id,
+            effective_date: '',
+            purchase_rate: productPurchase,
+            sale_rate: productSale,
+            item,
+          } as RateChangeRow
+        : null
+      return { item, rate: r || fallbackRate, source: r ? 'history' : fallbackRate ? 'product' : 'none' }
     })
     .sort((a, b) => (a.item.name || '').localeCompare(b.item.name || ''))
 })
@@ -232,7 +247,8 @@ const submit = () => {
                 <span v-else>Fuel item</span>
               </CardDescription>
             </div>
-            <Badge v-if="rate" class="bg-emerald-600 text-white hover:bg-emerald-600">Current</Badge>
+            <Badge v-if="rate && source === 'history'" class="bg-emerald-600 text-white hover:bg-emerald-600">Current</Badge>
+            <Badge v-else-if="rate" variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">Product rate</Badge>
             <Badge v-else variant="secondary" class="bg-zinc-200 text-zinc-800 hover:bg-zinc-200">No rate</Badge>
           </div>
         </CardHeader>
@@ -264,7 +280,7 @@ const submit = () => {
             </div>
             <div class="flex items-center gap-2 text-xs text-text-secondary">
               <CalendarClock class="h-4 w-4 text-text-tertiary" />
-              <span>{{ rate ? `${formatEffectiveDate(rate.effective_date)} (from 00:00)` : 'No effective date' }}</span>
+              <span>{{ rate && source === 'history' ? `${formatEffectiveDate(rate.effective_date)} (from 00:00)` : rate ? 'From product setup' : 'No effective date' }}</span>
             </div>
           </div>
         </CardContent>

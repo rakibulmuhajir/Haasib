@@ -7,9 +7,9 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StoreLeaveTypeRequest;
-use Modules\Payroll\Http\Requests\UpdateLeaveTypeRequest;
-use Modules\Payroll\Models\LeaveType;
+use App\Modules\Payroll\Http\Requests\StoreLeaveTypeRequest;
+use App\Modules\Payroll\Http\Requests\UpdateLeaveTypeRequest;
+use App\Modules\Payroll\Models\LeaveType;
 
 class LeaveTypeController extends Controller
 {

@@ -4,6 +4,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { Building2, Save } from 'lucide-vue-next'
 
@@ -26,6 +27,7 @@ interface VendorRef {
   name: string
   email: string | null
   phone: string | null
+  vendor_type: string
   base_currency: string
   payment_terms: number
   tax_id: string | null
@@ -40,6 +42,7 @@ const props = defineProps<{
   company: CompanyRef
   vendor: VendorRef
   apAccounts?: AccountOption[]
+  vendorTypes: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -53,6 +56,7 @@ const form = useForm({
   name: props.vendor.name,
   email: props.vendor.email ?? '',
   phone: props.vendor.phone ?? '',
+  vendor_type: props.vendor.vendor_type ?? 'general',
   address: {
     street: props.vendor.address?.street ?? '',
     city: props.vendor.address?.city ?? '',
@@ -100,6 +104,19 @@ const handleSubmit = () => {
         <div>
           <Label for="phone">Phone</Label>
           <Input id="phone" v-model="form.phone" />
+        </div>
+        <div>
+          <Label for="vendor_type">Supplier Type</Label>
+          <Select v-model="form.vendor_type">
+            <SelectTrigger id="vendor_type">
+              <SelectValue placeholder="Select supplier type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="(label, value) in vendorTypes" :key="value" :value="value">
+                {{ label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label for="tax_id">Tax ID</Label>

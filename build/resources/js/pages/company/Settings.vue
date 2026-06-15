@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Rocket,
 } from 'lucide-vue-next'
+import { formatDateTime } from '@/lib/datetime'
 
 interface Company {
   id: string
@@ -48,6 +49,7 @@ const page = usePage()
 const props = page.props as any
 
 const company = ref<Company>(props.company)
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
 // Fiscal year form
 const fiscalYearForm = useForm({
@@ -256,7 +258,7 @@ const getRoleBadgeVariant = (role: string) => {
             </div>
             <div>
               <div class="text-sm font-medium text-gray-500">Created</div>
-              <div class="text-sm">{{ new Date(company.created_at).toLocaleDateString() }}</div>
+              <div class="text-sm">{{ formatDate(company.created_at) }}</div>
             </div>
             <div>
               <div class="text-sm font-medium text-gray-500">Your Role</div>

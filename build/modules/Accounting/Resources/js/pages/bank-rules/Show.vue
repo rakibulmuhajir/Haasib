@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Wand2, Pencil, Trash2, Landmark, ArrowRight } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 
 interface CompanyRef {
   id: string
@@ -79,13 +80,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr, { mode: 'datetime' })
 }
 
 const getFieldLabel = (value: string) => {

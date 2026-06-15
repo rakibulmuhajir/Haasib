@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import {
   ReceiptText,
   Save,
@@ -96,7 +97,7 @@ const formatMoney = (amount: number, currency: string) =>
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—'
-  return new Date(dateString).toLocaleDateString()
+  return formatDateTime(dateString, { mode: 'date' })
 }
 
 // Helper functions

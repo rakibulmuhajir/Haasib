@@ -37,6 +37,7 @@ class Payslip extends Model
         'payment_method',
         'payment_reference',
         'gl_transaction_id',
+        'payment_gl_transaction_id',
         'notes',
     ];
 
@@ -53,6 +54,7 @@ class Payslip extends Model
         'approved_by_user_id' => 'string',
         'paid_at' => 'datetime',
         'gl_transaction_id' => 'string',
+        'payment_gl_transaction_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -95,5 +97,15 @@ class Payslip extends Model
     public function employerCosts(): HasMany
     {
         return $this->hasMany(PayslipLine::class)->where('line_type', 'employer');
+    }
+
+    public function glTransaction(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class, 'gl_transaction_id');
+    }
+
+    public function paymentGlTransaction(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class, 'payment_gl_transaction_id');
     }
 }

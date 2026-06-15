@@ -124,7 +124,7 @@ const formatType = (type: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
+  { key: 'movement_date', label: 'Date' },
   { key: 'item', label: 'Item' },
   { key: 'warehouse', label: 'Warehouse' },
   { key: 'type', label: 'Type' },
@@ -135,7 +135,7 @@ const columns = [
 const tableData = computed(() => {
   return props.movements.data.map((movement) => ({
     id: movement.id,
-    date: new Date(movement.movement_date).toLocaleDateString(),
+    movement_date: movement.movement_date,
     item: `${movement.item.sku} - ${movement.item.name}`,
     item_id: movement.item.id,
     warehouse: movement.warehouse.name,

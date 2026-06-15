@@ -7,7 +7,7 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Link } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 
 interface BreadcrumbItemType {
     title: string;
@@ -17,6 +17,15 @@ interface BreadcrumbItemType {
 defineProps<{
     breadcrumbs: BreadcrumbItemType[];
 }>();
+
+const visitBreadcrumb = (href?: string) => {
+    if (!href || href === '#') return;
+
+    router.visit(href, {
+        preserveScroll: false,
+        preserveState: false,
+    });
+};
 </script>
 
 <template>
@@ -29,9 +38,13 @@ defineProps<{
                     </template>
                     <template v-else>
                         <BreadcrumbLink as-child>
-                            <Link :href="item.href ?? '#'">{{
-                                item.title
-                            }}</Link>
+                            <button
+                                type="button"
+                                class="cursor-pointer text-left hover:text-foreground"
+                                @click="visitBreadcrumb(item.href)"
+                            >
+                                {{ item.title }}
+                            </button>
                         </BreadcrumbLink>
                     </template>
                 </BreadcrumbItem>

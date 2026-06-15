@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import { Badge } from '@/components/ui/badge'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
   CheckCircle,
   XCircle,
@@ -27,13 +28,7 @@ const props = defineProps<{
 }>()
 
 const formatDateTime = (datetime: string) => {
-  return new Date(datetime).toLocaleString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDateTime(datetime, { mode: 'datetime', locale: 'en-PK' })
 }
 
 const getTypeConfig = (type: string, status: string) => {

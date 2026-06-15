@@ -12,6 +12,8 @@ use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\StoreDailyCloseAmendmentRequest;
 use App\Modules\FuelStation\Http\Requests\UnlockDailyCloseRequest;
+use App\Modules\FuelStation\Models\CustomerProfile;
+use App\Modules\FuelStation\Models\Investor;
 use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\NozzleReading;
 use App\Modules\FuelStation\Models\Pump;
@@ -21,8 +23,11 @@ use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Services\DailyCloseAmendmentService;
 use App\Modules\FuelStation\Services\DailyCloseService;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +41,240 @@ class DailyCloseController extends Controller
         private readonly DailyCloseService $dailyCloseService,
         private readonly DailyCloseAmendmentService $amendmentService,
     ) {}
+
+    /**
+     * Get employees selectable for daily close salary advances.
+     *
+     * Some payroll entry points can create employees without an explicit
+     * is_active value. Treat employees as selectable unless they are
+     * explicitly inactive/terminated or soft-deleted.
+     */
+    private function getEmployeesForAdvances(string $companyId)
+    {
+        $columns = ['id', 'first_name', 'last_name', 'position', 'base_salary'];
+
+        try {
+            DB::connection('pay')->select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
+
+            return DB::connection('pay')
+                ->table('employees')
+                ->where('company_id', $companyId)
+                ->where(function ($query) {
+                    $query->where('is_active', true)
+                        ->orWhereNull('is_active');
+                })
+                ->where(function ($query) {
+                    $query->where('employment_status', '!=', 'terminated')
+                        ->orWhereNull('employment_status');
+                })
+                ->whereNull('deleted_at')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get($columns)
+                ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
+        } catch (\Throwable $e) {
+            try {
+                return Employee::where('company_id', $companyId)
+                    ->where(function ($query) {
+                        $query->where('is_active', true)
+                            ->orWhereNull('is_active');
+                    })
+                    ->where(function ($query) {
+                        $query->where('employment_status', '!=', 'terminated')
+                            ->orWhereNull('employment_status');
+                    })
+                    ->orderBy('first_name')
+                    ->orderBy('last_name')
+                    ->get($columns)
+                    ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
+            } catch (\Throwable $fallbackException) {
+                return collect();
+            }
+        }
+    }
+
+    private function formatEmployeeForDailyClose(string $companyId, object $employee): array
+    {
+        $outstandingAdvances = SalaryAdvance::where('company_id', $companyId)
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'partially_recovered'])
+            ->sum('amount_outstanding');
+
+        return [
+            'id' => $employee->id,
+            'first_name' => $employee->first_name,
+            'last_name' => $employee->last_name,
+            'full_name' => trim($employee->first_name . ' ' . $employee->last_name),
+            'position' => $employee->position,
+            'base_salary' => (float) ($employee->base_salary ?? 0),
+            'outstanding_advances' => (float) $outstandingAdvances,
+        ];
+    }
+
+    private function getPartnersForDailyClose(string $companyId)
+    {
+        return Partner::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn', 'total_invested', 'total_withdrawn'])
+            ->map(fn (Partner $partner) => [
+                'id' => $partner->id,
+                'name' => $partner->name,
+                'drawing_limit_period' => $partner->drawing_limit_period,
+                'drawing_limit_amount' => $partner->drawing_limit_amount !== null ? (float) $partner->drawing_limit_amount : null,
+                'current_period_withdrawn' => (float) $partner->current_period_withdrawn,
+                'remaining_drawing_limit' => $partner->remaining_drawing_limit,
+                'total_invested' => (float) $partner->total_invested,
+                'total_withdrawn' => (float) $partner->total_withdrawn,
+                'net_capital' => $partner->net_capital,
+            ]);
+    }
+
+    private function getAmanatHoldersForDailyClose(string $companyId)
+    {
+        return CustomerProfile::where('company_id', $companyId)
+            ->where('is_amanat_holder', true)
+            ->with('customer:id,name,phone')
+            ->orderByDesc('amanat_balance')
+            ->get(['id', 'company_id', 'customer_id', 'amanat_balance'])
+            ->map(fn (CustomerProfile $profile) => [
+                'id' => $profile->customer_id,
+                'name' => $profile->customer?->name ?? 'Unknown customer',
+                'phone' => $profile->customer?->phone,
+                'amanat_balance' => (float) $profile->amanat_balance,
+            ]);
+    }
+
+    private function getInvestorsForDailyClose(string $companyId)
+    {
+        return Investor::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'total_invested', 'total_commission_earned', 'total_commission_paid'])
+            ->map(fn (Investor $investor) => [
+                'id' => $investor->id,
+                'name' => $investor->name,
+                'total_invested' => (float) $investor->total_invested,
+                'outstanding_commission' => $investor->outstanding_commission,
+                'units_remaining' => $investor->total_units_remaining,
+            ]);
+    }
+
+    private function getTankBaselines(string $companyId, $tanks, string $date, string $previousDate)
+    {
+        $baselines = collect();
+
+        foreach ($tanks as $tank) {
+            $dipReading = $this->latestTankDipBeforeClose($companyId, $tank->id, $date, $previousDate);
+            $stockBaseline = $this->latestStockBaselineBeforeClose($companyId, $tank->id, $tank->linked_item_id, $date);
+
+            $baseline = $this->stockBaselineIsNewer($stockBaseline, $dipReading)
+                ? $stockBaseline
+                : $dipReading;
+
+            if ($baseline) {
+                $baselines->put($tank->id, $baseline);
+            }
+        }
+
+        return $baselines;
+    }
+
+    private function latestTankDipBeforeClose(string $companyId, string $tankId, string $date, string $previousDate): ?object
+    {
+        $reading = TankReading::where('company_id', $companyId)
+            ->where('tank_id', $tankId)
+            ->whereDate('reading_date', $previousDate)
+            ->where('reading_type', 'closing')
+            ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date', 'created_at']);
+
+        if (! $reading) {
+            $reading = TankReading::where('company_id', $companyId)
+                ->where('tank_id', $tankId)
+                ->whereDate('reading_date', '<', $date)
+                ->orderByDesc('reading_date')
+                ->orderByDesc('created_at')
+                ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date', 'created_at']);
+        }
+
+        if (! $reading) {
+            return null;
+        }
+
+        $reading->source = 'tank_dip';
+        $reading->source_label = 'Tank dip';
+        $reading->as_of = $reading->reading_date?->toDateString();
+
+        return $reading;
+    }
+
+    private function latestStockBaselineBeforeClose(string $companyId, string $tankId, ?string $itemId, string $date): ?object
+    {
+        if (! $itemId) {
+            return null;
+        }
+
+        $stockMovement = StockMovement::where('company_id', $companyId)
+            ->where('warehouse_id', $tankId)
+            ->where('item_id', $itemId)
+            ->whereDate('movement_date', '<=', $date)
+            ->orderByDesc('movement_date')
+            ->orderByDesc('created_at')
+            ->first(['warehouse_id', 'item_id', 'movement_date', 'movement_type', 'created_at']);
+
+        if (! $stockMovement) {
+            return null;
+        }
+
+        $stockLevel = StockLevel::where('company_id', $companyId)
+            ->where('warehouse_id', $tankId)
+            ->where('item_id', $itemId)
+            ->first();
+
+        if (! $stockLevel) {
+            return null;
+        }
+
+        return (object) [
+            'tank_id' => $tankId,
+            'dip_measurement_liters' => (float) $stockLevel->quantity,
+            'stick_reading' => 0,
+            'reading_date' => $stockMovement->movement_date,
+            'source' => 'stock_level',
+            'source_label' => $this->stockMovementLabel($stockMovement->movement_type),
+            'as_of' => $stockMovement->movement_date?->toDateString(),
+            'created_at' => $stockMovement->created_at,
+        ];
+    }
+
+    private function stockBaselineIsNewer(?object $stockBaseline, ?object $dipReading): bool
+    {
+        if (! $stockBaseline) {
+            return false;
+        }
+
+        if (! $dipReading) {
+            return true;
+        }
+
+        $stockDate = $stockBaseline->reading_date ? strtotime((string) $stockBaseline->reading_date) : 0;
+        $dipDate = $dipReading->reading_date ? strtotime((string) $dipReading->reading_date) : 0;
+
+        return $stockDate >= $dipDate;
+    }
+
+    private function stockMovementLabel(?string $movementType): string
+    {
+        return match ($movementType) {
+            'adjustment_in' => 'Stock adjustment in',
+            'adjustment_out' => 'Stock adjustment out',
+            'purchase' => 'Stock receipt',
+            'transfer_in' => 'Stock transfer in',
+            'transfer_out' => 'Stock transfer out',
+            'opening' => 'Opening stock',
+            default => 'Inventory stock',
+        };
+    }
 
     /**
      * Show the daily close form - tabbed wizard matching their manual register.
@@ -99,30 +338,7 @@ class DailyCloseController extends Controller
         // Get previous day for lookups
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
 
-        // Get previous day's tank readings for variance calculation
-        // First try closing readings from previous day, then fall back to most recent reading (including opening)
-        $previousTankReadings = collect();
-        foreach ($tanks as $tank) {
-            // Try previous day closing first
-            $reading = TankReading::where('company_id', $companyId)
-                ->where('tank_id', $tank->id)
-                ->whereDate('reading_date', $previousDate)
-                ->where('reading_type', 'closing')
-                ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date']);
-
-            // If no closing, get most recent reading before today (could be opening or older closing)
-            if (!$reading) {
-                $reading = TankReading::where('company_id', $companyId)
-                    ->where('tank_id', $tank->id)
-                    ->whereDate('reading_date', '<', $date)
-                    ->orderByDesc('reading_date')
-                    ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date']);
-            }
-
-            if ($reading) {
-                $previousTankReadings->put($tank->id, $reading);
-            }
-        }
+        $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
 
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
@@ -187,30 +403,13 @@ class DailyCloseController extends Controller
         // Get previous day's closing balance (cash)
         $previousClose = $this->dailyCloseService->getPreviousDayClosing($companyId, $date);
 
-        // Get partners for withdrawals
-        $partners = Partner::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn']);
+        // Get live people/balance lookups for daily close
+        $partners = $this->getPartnersForDailyClose($companyId);
+        $amanatHolders = $this->getAmanatHoldersForDailyClose($companyId);
+        $investors = $this->getInvestorsForDailyClose($companyId);
 
         // Get employees for advances
-        $employees = collect();
-        try {
-            DB::connection('pay')->select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
-            $employees = DB::connection('pay')
-                ->table('employees')
-                ->where('company_id', $companyId)
-                ->where('is_active', true)
-                ->whereNull('deleted_at')
-                ->get(['id', 'first_name', 'last_name', 'position', 'base_salary']);
-        } catch (\Throwable $e) {
-            try {
-                $employees = Employee::where('company_id', $companyId)
-                    ->where('is_active', true)
-                    ->get(['id', 'first_name', 'last_name', 'position', 'base_salary']);
-            } catch (\Throwable $fallbackException) {
-                $employees = collect();
-            }
-        }
+        $employees = $this->getEmployeesForAdvances($companyId);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -301,6 +500,8 @@ class DailyCloseController extends Controller
             'nozzles' => $nozzles,
             'partners' => $partners,
             'employees' => $employees,
+            'amanatHolders' => $amanatHolders,
+            'investors' => $investors,
             'bankAccounts' => $bankAccounts,
             'expenseAccounts' => $expenseAccounts,
             'lubricantItems' => $lubricantItems,
@@ -309,6 +510,9 @@ class DailyCloseController extends Controller
                 'tank_id' => $r->tank_id,
                 'liters' => (float) $r->dip_measurement_liters,
                 'stick_reading' => (float) $r->stick_reading,
+                'source' => $r->source ?? 'tank_dip',
+                'source_label' => $r->source_label ?? 'Tank dip',
+                'as_of' => $r->as_of ?? null,
             ])->values(),
             'previousClose' => $previousClose,
             'paymentChannels' => $paymentChannels,
@@ -383,7 +587,8 @@ class DailyCloseController extends Controller
             'employee_advances.*.reason' => 'nullable|string|max:255',
 
             'amanat_disbursements' => 'nullable|array',
-            'amanat_disbursements.*.customer_name' => 'required|string|max:255',
+            'amanat_disbursements.*.customer_id' => 'required|uuid',
+            'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
             'amanat_disbursements.*.amount' => 'required|numeric|min:0',
 
             'expenses' => 'nullable|array',
@@ -733,30 +938,7 @@ class DailyCloseController extends Controller
         // Get previous day for lookups
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
 
-        // Get previous day's tank readings for variance calculation
-        // First try closing readings from previous day, then fall back to most recent reading (including opening)
-        $previousTankReadings = collect();
-        foreach ($tanks as $tank) {
-            // Try previous day closing first
-            $reading = TankReading::where('company_id', $companyId)
-                ->where('tank_id', $tank->id)
-                ->whereDate('reading_date', $previousDate)
-                ->where('reading_type', 'closing')
-                ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date']);
-
-            // If no closing, get most recent reading before today (could be opening or older closing)
-            if (!$reading) {
-                $reading = TankReading::where('company_id', $companyId)
-                    ->where('tank_id', $tank->id)
-                    ->whereDate('reading_date', '<', $date)
-                    ->orderByDesc('reading_date')
-                    ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date']);
-            }
-
-            if ($reading) {
-                $previousTankReadings->put($tank->id, $reading);
-            }
-        }
+        $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
 
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
@@ -820,15 +1002,13 @@ class DailyCloseController extends Controller
         // Get previous day's closing balance
         $previousClose = $this->dailyCloseService->getPreviousDayClosing($companyId, $date);
 
-        // Get partners
-        $partners = Partner::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->get(['id', 'name', 'drawing_limit_period', 'drawing_limit_amount', 'current_period_withdrawn']);
+        // Get live people/balance lookups for daily close
+        $partners = $this->getPartnersForDailyClose($companyId);
+        $amanatHolders = $this->getAmanatHoldersForDailyClose($companyId);
+        $investors = $this->getInvestorsForDailyClose($companyId);
 
         // Get employees
-        $employees = Employee::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->get(['id', 'first_name', 'last_name', 'position', 'base_salary']);
+        $employees = $this->getEmployeesForAdvances($companyId);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -917,6 +1097,8 @@ class DailyCloseController extends Controller
             'nozzles' => $nozzles,
             'partners' => $partners,
             'employees' => $employees,
+            'amanatHolders' => $amanatHolders,
+            'investors' => $investors,
             'bankAccounts' => $bankAccounts,
             'expenseAccounts' => $expenseAccounts,
             'lubricantItems' => $lubricantItems,
@@ -925,6 +1107,9 @@ class DailyCloseController extends Controller
                 'tank_id' => $r->tank_id,
                 'liters' => (float) $r->dip_measurement_liters,
                 'stick_reading' => (float) $r->stick_reading,
+                'source' => $r->source ?? 'tank_dip',
+                'source_label' => $r->source_label ?? 'Tank dip',
+                'as_of' => $r->as_of ?? null,
             ])->values(),
             'previousClose' => $previousClose,
             'paymentChannels' => $paymentChannels,

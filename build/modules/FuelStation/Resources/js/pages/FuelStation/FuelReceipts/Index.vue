@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { Droplets, Plus, Eye, Search, TrendingUp, Calendar, Truck } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -91,7 +92,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const columns = [

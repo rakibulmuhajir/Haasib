@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DataTable from '@/components/DataTable.vue'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { ArrowLeft, Lock, Calendar, FileText, Plus } from 'lucide-vue-next'
 import { computed } from 'vue'
 
@@ -49,17 +50,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 function formatPeriodLabel(period: Period) {
-  const start = new Date(period.period_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  const end = new Date(period.period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const start = formatDateTime(period.period_start, { mode: 'date' })
+  const end = formatDateTime(period.period_end, { mode: 'date' })
   return `${start} - ${end}`
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatDateTime(date, { mode: 'date' })
 }
 
 const formatCurrency = (amount: number, currency: string) => {
@@ -116,6 +113,21 @@ const handleRowClick = (row: any) => {
   router.get(`/${props.company.slug}/payslips/${row.id}`)
 }
 
+const generatePayslips = () => {
+  router.post(`/${props.company.slug}/payroll-periods/${props.period.id}/generate-payslips`)
+}
+
+const approvePayslips = () => {
+  router.post(`/${props.company.slug}/payroll-periods/${props.period.id}/approve-payslips`)
+}
+
+const payPayslips = () => {
+  router.post(`/${props.company.slug}/payroll-periods/${props.period.id}/pay-payslips`)
+}
+
+const draftCount = computed(() => props.period.payslips.filter((payslip) => payslip.status === 'draft').length)
+const approvedCount = computed(() => props.period.payslips.filter((payslip) => payslip.status === 'approved').length)
+
 const handleClose = () => {
   if (confirm('Are you sure you want to close this payroll period? This action cannot be undone.')) {
     router.post(`/${props.company.slug}/payroll-periods/${props.period.id}/close`)
@@ -142,6 +154,27 @@ const handleClose = () => {
       >
         <Plus class="mr-2 h-4 w-4" />
         Create Payslip
+      </Button>
+      <Button
+        v-if="period.status === 'open'"
+        variant="outline"
+        @click="generatePayslips"
+      >
+        Generate All
+      </Button>
+      <Button
+        v-if="draftCount > 0"
+        variant="outline"
+        @click="approvePayslips"
+      >
+        Approve Drafts
+      </Button>
+      <Button
+        v-if="approvedCount > 0"
+        variant="outline"
+        @click="payPayslips"
+      >
+        Mark Paid
       </Button>
       <Button v-if="period.status === 'open'" @click="handleClose">
         <Lock class="mr-2 h-4 w-4" />

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { Pencil, ArrowLeft, User, Briefcase, DollarSign, Users } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -51,9 +52,47 @@ interface Employee {
   notes: string | null
 }
 
+interface Statement {
+  summary: {
+    salary_due: number
+    salary_paid: number
+    advance_given: number
+    advance_recovered: number
+    advance_outstanding: number
+  }
+  payslips: Array<{
+    id: string
+    date: string | null
+    label: string
+    gross_pay: number
+    deductions: number
+    net_pay: number
+    status: string
+    currency: string
+  }>
+  advances: Array<{
+    id: string
+    date: string
+    amount: number
+    recovered: number
+    outstanding: number
+    status: string
+    reason: string | null
+    payment_method: string
+  }>
+  recoveries: Array<{
+    id: string
+    date: string
+    label: string
+    amount: number
+    recovery_type: string
+  }>
+}
+
 const props = defineProps<{
   company: CompanyRef
   employee: Employee
+  statement: Statement
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -71,12 +110,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (date: string | null) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(date, { mode: 'date', fallback: '-' })
 }
 
 const getStatusVariant = (status: string) => {
@@ -225,6 +259,91 @@ const formatPayFrequency = (freq: string) => {
                   <p class="text-sm text-muted-foreground">{{ report.employee_number }}</p>
                 </div>
                 <Badge variant="secondary">{{ report.position ?? 'No position' }}</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Employee Statement</CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div class="rounded-lg border p-3">
+                <p class="text-xs text-muted-foreground">Salary due</p>
+                <p class="mt-1 font-semibold">{{ formatCurrency(statement.summary.salary_due, employee.currency) }}</p>
+              </div>
+              <div class="rounded-lg border p-3">
+                <p class="text-xs text-muted-foreground">Salary paid</p>
+                <p class="mt-1 font-semibold">{{ formatCurrency(statement.summary.salary_paid, employee.currency) }}</p>
+              </div>
+              <div class="rounded-lg border p-3">
+                <p class="text-xs text-muted-foreground">Advances given</p>
+                <p class="mt-1 font-semibold">{{ formatCurrency(statement.summary.advance_given, employee.currency) }}</p>
+              </div>
+              <div class="rounded-lg border p-3">
+                <p class="text-xs text-muted-foreground">Recovered</p>
+                <p class="mt-1 font-semibold">{{ formatCurrency(statement.summary.advance_recovered, employee.currency) }}</p>
+              </div>
+              <div class="rounded-lg border p-3">
+                <p class="text-xs text-muted-foreground">Advance balance</p>
+                <p class="mt-1 font-semibold">{{ formatCurrency(statement.summary.advance_outstanding, employee.currency) }}</p>
+              </div>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-3">
+              <div>
+                <h3 class="mb-3 text-sm font-medium">Recent Payslips</h3>
+                <div class="space-y-2">
+                  <div
+                    v-for="payslip in statement.payslips"
+                    :key="payslip.id"
+                    class="rounded-lg border p-3 text-sm cursor-pointer hover:bg-muted/50"
+                    @click="router.get(`/${company.slug}/payslips/${payslip.id}`)"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="font-medium">{{ payslip.label }}</span>
+                      <Badge>{{ payslip.status }}</Badge>
+                    </div>
+                    <div class="mt-2 flex items-center justify-between text-muted-foreground">
+                      <span>{{ formatDate(payslip.date) }}</span>
+                      <span>{{ formatCurrency(payslip.net_pay, payslip.currency) }}</span>
+                    </div>
+                  </div>
+                  <p v-if="statement.payslips.length === 0" class="text-sm text-muted-foreground">No payslips yet.</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 class="mb-3 text-sm font-medium">Salary Advances</h3>
+                <div class="space-y-2">
+                  <div v-for="advance in statement.advances" :key="advance.id" class="rounded-lg border p-3 text-sm">
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="font-medium">{{ formatCurrency(advance.amount, employee.currency) }}</span>
+                      <Badge>{{ advance.status }}</Badge>
+                    </div>
+                    <p class="mt-1 text-muted-foreground">{{ formatDate(advance.date) }} · {{ advance.payment_method }}</p>
+                    <p class="mt-1 text-muted-foreground">
+                      Remaining {{ formatCurrency(advance.outstanding, employee.currency) }}
+                    </p>
+                  </div>
+                  <p v-if="statement.advances.length === 0" class="text-sm text-muted-foreground">No advances yet.</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 class="mb-3 text-sm font-medium">Advance Recoveries</h3>
+                <div class="space-y-2">
+                  <div v-for="recovery in statement.recoveries" :key="recovery.id" class="rounded-lg border p-3 text-sm">
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="font-medium">{{ recovery.label }}</span>
+                      <span>{{ formatCurrency(recovery.amount, employee.currency) }}</span>
+                    </div>
+                    <p class="mt-1 text-muted-foreground">{{ formatDate(recovery.date) }} · {{ recovery.recovery_type }}</p>
+                  </div>
+                  <p v-if="statement.recoveries.length === 0" class="text-sm text-muted-foreground">No recoveries yet.</p>
+                </div>
               </div>
             </div>
           </CardContent>

@@ -11,14 +11,15 @@ import type { BreadcrumbItem } from '@/types'
 import {
   ArrowRight,
   BarChart3,
+  ClipboardCheck,
   Droplet,
   Fuel,
   Gauge,
   HandCoins,
   Receipt,
   TrendingUp,
+  Truck,
   Warehouse,
-  FileText,
 } from 'lucide-vue-next'
 
 type DashboardData = {
@@ -106,32 +107,46 @@ const quickLinks = computed(() => {
   const slug = companySlug.value
   return [
     {
-      title: 'Pumps',
-      description: 'Manage pumps and tank links',
-      href: `/${slug}/fuel/pumps`,
+      title: 'Start Today\'s Close',
+      description: 'Enter meter readings, tank dip, cash, and post the day.',
+      href: `/${slug}/fuel/daily-close`,
+      icon: ClipboardCheck,
+      tone: 'Primary',
+    },
+    {
+      title: 'Pump Reading',
+      description: 'Capture a shift meter when you are not closing the full day.',
+      href: `/${slug}/fuel/pump-readings`,
       icon: Gauge,
-      accent: 'from-sky-500/15 via-indigo-500/10 to-emerald-500/15',
+      tone: 'Daily',
     },
     {
-      title: 'Rates',
-      description: 'Track margins and rate history',
-      href: `/${slug}/fuel/rates`,
-      icon: TrendingUp,
-      accent: 'from-emerald-500/15 via-sky-500/10 to-indigo-500/15',
-    },
-    {
-      title: 'Tank Readings',
-      description: 'Draft → Confirm → Post workflow',
+      title: 'Tank Dip',
+      description: 'Review physical stock and confirm variance before posting.',
       href: `/${slug}/fuel/tank-readings`,
       icon: Warehouse,
-      accent: 'from-amber-500/15 via-rose-500/10 to-sky-500/15',
+      tone: 'Stock',
     },
     {
-      title: 'Pump Readings',
-      description: 'Day/night shift meter captures',
-      href: `/${slug}/fuel/pump-readings`,
-      icon: FileText,
-      accent: 'from-indigo-500/15 via-sky-500/10 to-amber-500/15',
+      title: 'Fuel Delivery',
+      description: 'Record tanker receipts and update stock.',
+      href: `/${slug}/fuel/receipts/create`,
+      icon: Truck,
+      tone: 'Stock',
+    },
+    {
+      title: 'Rate Change',
+      description: 'Update sale rates and keep margin history clean.',
+      href: `/${slug}/fuel/rates`,
+      icon: TrendingUp,
+      tone: 'Price',
+    },
+    {
+      title: 'Sales Report',
+      description: 'Check daily totals by sale type and payment channel.',
+      href: `/${slug}/fuel/reports/sales`,
+      icon: BarChart3,
+      tone: 'Report',
     },
   ]
 })
@@ -175,6 +190,24 @@ const saleTypesToday = computed(() => {
   }))
   return entries.sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
 })
+
+const workflowStats = computed(() => [
+  {
+    label: 'Pumps ready',
+    value: summary.value.active_pumps ?? 0,
+    detail: 'configured dispensers',
+  },
+  {
+    label: 'Readings today',
+    value: summary.value.today_readings ?? 0,
+    detail: 'meter captures',
+  },
+  {
+    label: 'Tank drafts',
+    value: summary.value.pending_tank_readings ?? 0,
+    detail: 'need review',
+  },
+])
 </script>
 
 <template>
@@ -182,10 +215,51 @@ const saleTypesToday = computed(() => {
 
   <PageShell
     title="Fuel Dashboard"
-    description="Everything you need to run daily fuel operations."
+    description="Run today's close, watch stock, and jump to the few tools operators use most."
     :icon="Fuel"
     :breadcrumbs="breadcrumbs"
   >
+    <template #actions>
+      <Button @click="router.get(`/${companySlug}/fuel/daily-close`)">
+        <ClipboardCheck class="mr-2 h-4 w-4" />
+        Start today's close
+      </Button>
+    </template>
+
+    <Card class="border-border/80">
+      <CardContent class="grid gap-4 p-4 lg:grid-cols-[1.4fr_1fr] lg:p-5">
+        <div class="rounded-lg border border-border/70 bg-muted/30 p-4">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-sm font-medium text-text-tertiary">Recommended next step</p>
+              <h2 class="mt-1 text-xl font-semibold text-text-primary">Complete today&apos;s close</h2>
+              <p class="mt-1 max-w-2xl text-sm text-text-secondary">
+                Use one flow for meter readings, tank dip, money in, money out, and final cash review.
+              </p>
+            </div>
+            <Button class="shrink-0" @click="router.get(`/${companySlug}/fuel/daily-close`)">
+              Open close
+              <ArrowRight class="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          <div
+            v-for="item in workflowStats"
+            :key="item.label"
+            class="flex items-center justify-between rounded-lg border border-border/70 bg-surface-1 px-4 py-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-text-primary">{{ item.label }}</p>
+              <p class="text-xs text-text-tertiary">{{ item.detail }}</p>
+            </div>
+            <span class="text-xl font-semibold text-text-primary">{{ item.value }}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card class="border-border/80">
         <CardHeader class="pb-2">
@@ -216,8 +290,8 @@ const saleTypesToday = computed(() => {
             <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
               <Gauge class="mr-1 h-3.5 w-3.5" /> Meter captures
             </Badge>
-            <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/rates`)">
-              Rates <ArrowRight class="ml-2 h-4 w-4" />
+            <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/pump-readings`)">
+              Open <ArrowRight class="ml-2 h-4 w-4" />
             </Button>
           </div>
         </CardContent>
@@ -259,24 +333,27 @@ const saleTypesToday = computed(() => {
     <div class="grid gap-4 lg:grid-cols-2">
       <Card class="border-border/80">
         <CardHeader>
-          <CardTitle class="text-base">Quick Links</CardTitle>
-          <CardDescription>Jump straight into daily operations.</CardDescription>
+          <CardTitle class="text-base">Daily Workflow</CardTitle>
+          <CardDescription>One place for the common fuel station jobs.</CardDescription>
         </CardHeader>
-        <CardContent class="grid gap-3 sm:grid-cols-2">
+        <CardContent class="grid gap-3">
           <Button
             v-for="link in quickLinks"
             :key="link.title"
             type="button"
             variant="outline"
-            class="group h-auto justify-start rounded-xl border-border/80 bg-surface-1 p-4 text-left transition hover:shadow-sm"
+            class="group h-auto justify-start rounded-lg border-border/80 bg-surface-1 p-4 text-left transition hover:shadow-sm"
             @click="router.get(link.href)"
           >
-            <div class="relative overflow-hidden rounded-lg border border-border/70 bg-gradient-to-br p-3" :class="link.accent">
+            <div class="rounded-md border border-border/70 bg-muted/40 p-2.5">
               <component :is="link.icon" class="h-5 w-5 text-text-primary" />
             </div>
-            <div class="mt-3">
-              <p class="font-semibold text-text-primary group-hover:underline">{{ link.title }}</p>
-              <p class="mt-1 text-sm text-text-secondary">{{ link.description }}</p>
+            <div class="ml-3 min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-3">
+                <p class="font-semibold text-text-primary group-hover:underline">{{ link.title }}</p>
+                <Badge variant="secondary" class="hidden shrink-0 sm:inline-flex">{{ link.tone }}</Badge>
+              </div>
+              <p class="mt-1 whitespace-normal text-sm text-text-secondary">{{ link.description }}</p>
             </div>
           </Button>
         </CardContent>

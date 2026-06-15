@@ -4,12 +4,12 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatDateTime } from '@/lib/datetime'
 import type { BreadcrumbItem } from '@/types'
-import { CreditCard, Plus } from 'lucide-vue-next'
+import { CreditCard, Eye, Plus } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -25,6 +25,8 @@ interface VendorRef {
 
 interface PaymentRow {
   id: string
+  payment_group_id?: string
+  payment_group_number?: string
   payment_number: string
   vendor: VendorRef | null
   payment_date: string
@@ -32,6 +34,7 @@ interface PaymentRow {
   currency: string
   payment_method: string
   reference_number: string | null
+  source_count?: number
 }
 
 interface PaginatedPayments {
@@ -70,6 +73,7 @@ const columns = [
   { key: 'amount', label: 'Amount' },
   { key: 'payment_method', label: 'Method' },
   { key: 'reference_number', label: 'Reference' },
+  { key: 'actions', label: 'Actions' },
 ]
 
 const formatMoney = (val: number, currency: string) =>
@@ -79,14 +83,6 @@ const formatMoney = (val: number, currency: string) =>
     currencyDisplay: 'narrowSymbol',
   }).format(val)
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
 const formatPaymentMethod = (method: string) => {
   switch (method) {
     case 'cash':
@@ -95,6 +91,10 @@ const formatPaymentMethod = (method: string) => {
       return 'Bank Transfer'
     case 'card':
       return 'Card'
+    case 'fuel_card':
+      return 'Fuel Card'
+    case 'split':
+      return 'Split sources'
     case 'cheque':
     case 'check':
       return 'Cheque'
@@ -106,14 +106,21 @@ const formatPaymentMethod = (method: string) => {
 const tableData = computed(() =>
   props.payments.data.map((p) => ({
     id: p.id,
-    payment_number: p.payment_number,
+    payment_number: p.payment_group_number ?? p.payment_number,
     vendor: p.vendor?.name ?? '—',
-    payment_date: formatDate(p.payment_date),
+    payment_date: formatDateTime(p.payment_date, { mode: 'date' }),
     amount: formatMoney(p.amount, p.currency),
-    payment_method: formatPaymentMethod(p.payment_method),
+    payment_method: p.source_count && p.source_count > 1
+      ? `${formatPaymentMethod(p.payment_method)} (${p.source_count})`
+      : formatPaymentMethod(p.payment_method),
     reference_number: p.reference_number ?? '—',
+    source_count: p.source_count ?? 1,
   }))
 )
+
+const openPayment = (id: string) => {
+  router.get(`/${props.company.slug}/bill-payments/${id}`)
+}
 
 const handleSearch = () => {
   router.get(
@@ -170,7 +177,34 @@ const handleSearch = () => {
         :columns="columns"
         :data="tableData"
         :pagination="payments"
-      />
+        clickable
+        hoverable
+        @row-click="(row) => openPayment(row.id)"
+      >
+        <template #cell-payment_number="{ row }">
+          <Button
+            variant="link"
+            class="h-auto p-0 font-medium"
+            @click.stop="openPayment(row.id)"
+          >
+            {{ row.payment_number }}
+          </Button>
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              title="Open payment"
+              @click.stop="openPayment(row.id)"
+            >
+              <Eye class="h-4 w-4" />
+            </Button>
+          </div>
+        </template>
+      </DataTable>
     </div>
   </PageShell>
 </template>

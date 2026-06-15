@@ -23,6 +23,7 @@ class Vendor extends Model
         'name',
         'email',
         'phone',
+        'vendor_type',
         'address',
         'tax_id',
         'base_currency',
@@ -49,6 +50,26 @@ class Vendor extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+    ];
+
+    public const TYPE_GENERAL = 'general';
+    public const TYPE_FUEL_REFINERY = 'fuel_refinery';
+    public const TYPE_FUEL_DISTRIBUTOR = 'fuel_distributor';
+    public const TYPE_FUEL_STATION = 'fuel_station';
+    public const TYPE_LUBRICANT_SUPPLIER = 'lubricant_supplier';
+    public const TYPE_CONTRACTOR = 'contractor';
+    public const TYPE_UTILITY = 'utility';
+    public const TYPE_SERVICE_PROVIDER = 'service_provider';
+
+    public const TYPES = [
+        self::TYPE_GENERAL => 'General supplier',
+        self::TYPE_FUEL_REFINERY => 'Fuel refinery',
+        self::TYPE_FUEL_DISTRIBUTOR => 'Fuel distributor',
+        self::TYPE_FUEL_STATION => 'Fuel station',
+        self::TYPE_LUBRICANT_SUPPLIER => 'Lubricant supplier',
+        self::TYPE_CONTRACTOR => 'Contractor',
+        self::TYPE_UTILITY => 'Utility',
+        self::TYPE_SERVICE_PROVIDER => 'Service provider',
     ];
 
     public function company()

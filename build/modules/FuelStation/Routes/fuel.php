@@ -8,7 +8,6 @@ use App\Modules\FuelStation\Http\Controllers\FuelReceiptController;
 use App\Modules\FuelStation\Http\Controllers\AttendantHandoverController;
 use App\Modules\FuelStation\Http\Controllers\FuelDashboardController;
 use App\Modules\FuelStation\Http\Controllers\FuelProductSetupController;
-use App\Modules\FuelStation\Http\Controllers\FuelTankQuickCreateController;
 use App\Modules\FuelStation\Http\Controllers\FuelSaleController;
 use App\Modules\FuelStation\Http\Controllers\FuelStationOnboardingController;
 use App\Modules\FuelStation\Http\Controllers\InvestorController;
@@ -21,6 +20,7 @@ use App\Modules\FuelStation\Http\Controllers\StationSettingsController;
 use App\Modules\FuelStation\Http\Controllers\TankReadingController;
 use App\Modules\FuelStation\Http\Controllers\DailyCloseController;
 use App\Modules\FuelStation\Http\Controllers\SalesReportController;
+use App\Modules\FuelStation\Http\Controllers\GuideController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -54,9 +54,11 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     // Dashboard
     Route::get('dashboard', [FuelDashboardController::class, 'index'])->name('fuel.dashboard');
 
+    // Setup guide
+    Route::get('guide', [GuideController::class, 'index'])->name('fuel.guide');
+
     // Product setup (dashboard quick add)
     Route::post('products/setup', [FuelProductSetupController::class, 'store'])->name('fuel.products.setup');
-    Route::post('tanks/quick-create', [FuelTankQuickCreateController::class, 'store'])->name('fuel.tanks.quick-create');
 
     // Pumps
     Route::get('pumps', [PumpController::class, 'index'])->name('fuel.pumps.index');
@@ -120,6 +122,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     // Vendor Card Settlement
     Route::get('vendor-cards/pending', [VendorCardSettlementController::class, 'pending'])->name('fuel.vendor-cards.pending');
     Route::post('vendor-cards/settle', [VendorCardSettlementController::class, 'settle'])->name('fuel.vendor-cards.settle');
+    Route::post('payment-channels/settle', [VendorCardSettlementController::class, 'settleClearing'])->name('fuel.payment-channels.settle');
 
     // Station Settings
     Route::get('settings', [StationSettingsController::class, 'edit'])->name('fuel.settings.edit');

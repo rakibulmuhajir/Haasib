@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface CompanyRef {
   id: string
@@ -118,12 +119,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatSharedDateTime(dateStr, { mode: 'date', fallback: 'Never' })
 }
 
 const handleSearch = () => {

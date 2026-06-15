@@ -213,6 +213,17 @@ const props = defineProps<{
   openingReadings: OpeningReadingRow[]
   openingBalances: Record<string, any>
   dipSticks: Array<{ id: string; code: string }>
+  stationSettings?: {
+    id?: string
+    payment_channels?: Array<{
+      code: string
+      label: string
+      type: string
+      enabled: boolean
+      bank_account_id?: string | null
+      clearing_account_id?: string | null
+    }> | null
+  } | null
 }>()
 
 const companySlug = computed(() => props.company.slug)
@@ -291,6 +302,63 @@ const completeStep = computed(() => ({
 }))
 
 const stepsForNav = computed(() => [...visibleSteps.value, completeStep.value])
+
+const requiredStepIds = new Set([
+  'company_identity',
+  'fiscal_year',
+  'bank_accounts',
+  'default_accounts',
+  'fuel_items',
+  'tanks',
+  'pumps',
+  'rates',
+])
+
+const setupGroups = computed(() => [
+  {
+    title: 'Foundation',
+    description: 'Company, fiscal year, bank/cash, and default GL accounts.',
+    stepIds: ['company_identity', 'fiscal_year', 'bank_accounts', 'default_accounts'],
+  },
+  {
+    title: 'Operations',
+    description: 'Products, tanks, pumps, and rates required for daily close.',
+    stepIds: ['fuel_items', 'tanks', 'pumps', 'rates'],
+  },
+  {
+    title: 'Optional details',
+    description: 'Useful for richer reporting but can be completed later.',
+    stepIds: ['partners', 'employees', 'tax_settings', 'numbering', 'payment_terms', 'lubricants', 'initial_stock', 'opening_cash'],
+  },
+])
+
+const completedRequiredCount = computed(() =>
+  visibleSteps.value.filter((step) => requiredStepIds.has(step.id) && isStepComplete(step.id)).length
+)
+
+const totalRequiredCount = computed(() => visibleSteps.value.filter((step) => requiredStepIds.has(step.id)).length)
+
+const firstIncompleteRequiredStep = computed(() =>
+  visibleSteps.value.find((step) => requiredStepIds.has(step.id) && !isStepComplete(step.id))
+)
+
+const paymentChannelStatus = computed(() => {
+  const channels = props.stationSettings?.payment_channels || []
+  const enabled = channels.filter((channel) => channel.enabled)
+  const mapped = enabled.filter((channel) => {
+    if (channel.type === 'cash') return true
+    if (channel.type === 'bank_transfer') return Boolean(channel.bank_account_id)
+    if (['card_pos', 'fuel_card'].includes(channel.type)) return Boolean(channel.clearing_account_id)
+    if (channel.type === 'mobile_wallet') return Boolean(channel.clearing_account_id || channel.bank_account_id)
+    return true
+  })
+
+  return {
+    enabledCount: enabled.length,
+    mappedCount: mapped.length,
+    isReady: enabled.length > 0 && enabled.length === mapped.length,
+  }
+})
 
 const activeStepId = ref<string>('')
 const hasInitialized = ref(false)
@@ -719,6 +787,7 @@ const fuelItemsForm = useForm({
     fuel_category: item.fuel_category,
     description: item.description,
     enabled: item.enabledByDefault,
+    locked: false,
   })),
 })
 
@@ -746,6 +815,7 @@ const applyFuelItemsPrefill = () => {
       description: item.description,
       // If items exist in DB, only check the ones that are saved; otherwise use defaults
       enabled: hasExistingItems ? !!matched : item.enabledByDefault,
+      locked: !!matched,
     }
   })
 }
@@ -1486,17 +1556,55 @@ onMounted(() => {
 
   <PageShell
     title="Fuel Station Setup"
-    description="Complete setup wizard for your fuel station operations"
+    description="Set only what is needed to start daily close; optional details can be finished later."
     :icon="Fuel"
     :breadcrumbs="breadcrumbs"
   >
+    <div class="mb-6 grid gap-4 lg:grid-cols-3">
+      <Card class="border-border/80 lg:col-span-2">
+        <CardHeader>
+          <CardTitle class="text-base">Recommended path</CardTitle>
+          <CardDescription>
+            Complete foundation and operations first. Partners, employees, opening balances, tax, and lubricants can be added later without blocking daily operations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="grid gap-3 md:grid-cols-3">
+          <div v-for="group in setupGroups" :key="group.title" class="rounded-lg border p-3">
+            <div class="text-sm font-semibold">{{ group.title }}</div>
+            <div class="mt-1 text-xs text-text-secondary">{{ group.description }}</div>
+            <div class="mt-3 text-xs font-medium">
+              {{ group.stepIds.filter((id) => isStepComplete(id)).length }} / {{ group.stepIds.length }} done
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="border-border/80">
+        <CardHeader>
+          <CardTitle class="text-base">Payment routing</CardTitle>
+          <CardDescription>Daily close now posts cards, wallets, fuel cards, and bank transfers into mapped accounts.</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <Badge :class="paymentChannelStatus.isReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
+            {{ paymentChannelStatus.mappedCount }} / {{ paymentChannelStatus.enabledCount }} channels mapped
+          </Badge>
+          <p class="text-xs text-text-secondary">
+            This does not block setup. Configure mappings before you rely on settlement/reconciliation.
+          </p>
+          <Button as-child variant="outline" size="sm" class="w-full">
+            <a :href="`/${companySlug}/fuel/settings`">Open Station Settings</a>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+
     <Card class="border-border/80 mb-6">
       <CardHeader>
         <div class="flex items-center justify-between">
           <div>
             <CardTitle class="text-base">Setup Progress</CardTitle>
             <CardDescription>
-              {{ completedStepCount }} of {{ visibleSteps.length }} steps complete
+              {{ completedStepCount }} of {{ visibleSteps.length }} steps complete · {{ completedRequiredCount }} of {{ totalRequiredCount }} required steps done
             </CardDescription>
           </div>
           <Badge :class="props.wizard.is_complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
@@ -1511,6 +1619,11 @@ onMounted(() => {
           <span>{{ progress }}% Complete</span>
           <span>100%</span>
         </div>
+        <Alert v-if="firstIncompleteRequiredStep" class="mt-4 border-blue-200 bg-blue-50 text-blue-900">
+          <AlertTriangle class="h-4 w-4 text-blue-600" />
+          <AlertTitle>Next best step: {{ firstIncompleteRequiredStep.title }}</AlertTitle>
+          <AlertDescription>{{ firstIncompleteRequiredStep.description }}</AlertDescription>
+        </Alert>
       </CardContent>
     </Card>
 
@@ -1519,6 +1632,7 @@ onMounted(() => {
         <Card class="border-border/80">
           <CardHeader>
             <CardTitle class="text-base">Steps</CardTitle>
+            <CardDescription>Required steps are marked; optional ones improve reporting.</CardDescription>
           </CardHeader>
           <CardContent class="p-0">
             <div class="space-y-1">
@@ -1542,7 +1656,10 @@ onMounted(() => {
                   />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium truncate">{{ step.title }}</p>
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-medium truncate">{{ step.title }}</p>
+                    <Badge v-if="requiredStepIds.has(step.id)" variant="outline" class="text-[10px]">Required</Badge>
+                  </div>
                   <p class="text-xs text-text-secondary truncate">{{ step.description }}</p>
                 </div>
               </div>
@@ -2202,7 +2319,7 @@ onMounted(() => {
             <!-- Products You Sell -->
             <div v-if="activeStepId === 'fuel_items'" class="space-y-6">
               <p class="text-sm text-text-secondary">
-                Select the products your station sells. These will be available as options when configuring tanks, pumps, and rates.
+                Select products your station sells. Saved products stay available for tanks, pumps, rates, and reports.
               </p>
 
               <div class="space-y-3">
@@ -2214,17 +2331,21 @@ onMounted(() => {
                   <Checkbox
                     :id="'fuel-' + item.fuel_category"
                     v-model="item.enabled"
+                    :disabled="item.locked"
                     class="mt-0.5"
                   />
                   <div class="grid gap-1 font-normal">
-                    <span class="text-sm font-medium leading-none">{{ item.name }}</span>
+                    <span class="text-sm font-medium leading-none">
+                      {{ item.name }}
+                      <span v-if="item.locked" class="text-xs font-normal text-muted-foreground">(saved)</span>
+                    </span>
                     <span class="text-sm text-muted-foreground">{{ item.description }}</span>
                   </div>
                 </Label>
               </div>
 
               <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <strong>Note:</strong> Prices will be set in the Rates step. Packaged lubricant bottles (0.7L, 1L, etc.) are configured separately in the Lubricants step.
+                <strong>Note:</strong> Accounts are mapped automatically. Prices will be set in the Rates step. Packaged lubricant bottles (0.7L, 1L, etc.) are configured separately in the Lubricants step.
               </div>
 
               <div class="flex items-center justify-between pt-6 border-t">

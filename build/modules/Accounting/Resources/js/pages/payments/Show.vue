@@ -24,6 +24,7 @@ import {
   FileText,
   Calendar,
 } from 'lucide-vue-next'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface Invoice {
   id: string
@@ -115,11 +116,7 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatSharedDateTime(dateString, { mode: 'date' })
 }
 </script>
 

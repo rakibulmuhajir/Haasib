@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { Package, PackageCheck } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -76,11 +77,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(dateString, { mode: 'date' })
 }
 
 const formatQuantity = (qty: number) => {

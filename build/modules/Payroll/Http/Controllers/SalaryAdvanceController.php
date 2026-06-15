@@ -3,9 +3,13 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Payroll\Http\Requests\StoreSalaryAdvanceRequest;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\SalaryAdvance;
+use App\Modules\Payroll\Services\PayrollPostingService;
 use App\Services\CurrentCompany;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -65,10 +69,43 @@ class SalaryAdvanceController extends Controller
         }
 
         return Inertia::render('Payroll/SalaryAdvances/Index', [
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
+            ],
             'advances' => $advances,
             'employees' => $employees,
+            'paymentAccounts' => Account::where('company_id', $company->id)
+                ->whereIn('subtype', ['bank', 'cash'])
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'subtype']),
             'stats' => $stats,
             'currency' => $company->base_currency ?? 'PKR',
         ]);
+    }
+
+    public function store(StoreSalaryAdvanceRequest $request, PayrollPostingService $postingService): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+        try {
+            $postingService->createSalaryAdvance(
+                $request->validated(),
+                $company->id,
+                (string) $request->user()->id,
+                $company->base_currency ?? 'PKR'
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Salary advance could not be recorded. Check the payment account and open accounting period.');
+        }
+
+        return back()->with('success', 'Salary advance recorded and posted to accounting.');
     }
 }

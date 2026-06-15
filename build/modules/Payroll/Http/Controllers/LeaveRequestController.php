@@ -7,11 +7,11 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Payroll\Http\Requests\StoreLeaveRequestRequest;
-use Modules\Payroll\Http\Requests\UpdateLeaveRequestRequest;
-use Modules\Payroll\Models\Employee;
-use Modules\Payroll\Models\LeaveRequest;
-use Modules\Payroll\Models\LeaveType;
+use App\Modules\Payroll\Http\Requests\StoreLeaveRequestRequest;
+use App\Modules\Payroll\Http\Requests\UpdateLeaveRequestRequest;
+use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\LeaveRequest;
+use App\Modules\Payroll\Models\LeaveType;
 
 class LeaveRequestController extends Controller
 {

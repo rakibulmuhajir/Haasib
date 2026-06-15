@@ -39,6 +39,7 @@ import {
   CalendarDays,
 } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface DailyClose {
   id: string
@@ -81,12 +82,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-PK', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatSharedDateTime(date, { mode: 'date', locale: 'en-PK' })
 }
 
 const getStatusConfig = (close: DailyClose) => {

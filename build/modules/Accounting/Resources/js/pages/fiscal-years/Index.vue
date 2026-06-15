@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Plus, Eye, Pencil } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -70,6 +71,8 @@ const badgeLabel = (fy: FiscalYearRow) => {
   if (fy.is_current) return 'Current'
   return 'Open'
 }
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 </script>
 
 <template>
@@ -105,7 +108,7 @@ const badgeLabel = (fy: FiscalYearRow) => {
             <TableRow v-for="fy in rows" :key="fy.id">
               <TableCell class="font-medium">{{ fy.name }}</TableCell>
               <TableCell>
-                {{ new Date(fy.start_date).toLocaleDateString() }} → {{ new Date(fy.end_date).toLocaleDateString() }}
+                {{ formatDate(fy.start_date) }} → {{ formatDate(fy.end_date) }}
               </TableCell>
               <TableCell>
                 <Badge :variant="badgeVariant(fy)">{{ badgeLabel(fy) }}</Badge>
@@ -143,4 +146,3 @@ const badgeLabel = (fy: FiscalYearRow) => {
     </Card>
   </PageShell>
 </template>
-

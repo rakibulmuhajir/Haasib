@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { HandCoins, Plus, Eye, Check, Search, Clock, CheckCircle, Banknote } from 'lucide-vue-next'
 
 interface Handover {
@@ -109,13 +110,7 @@ const formatCurrency = (value: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(date, { mode: 'datetime' })
 }
 
 const columns = [

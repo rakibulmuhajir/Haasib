@@ -20,8 +20,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
-import { Fuel, Gauge, Plus, Eye, Pencil, Trash2, Search } from 'lucide-vue-next'
+import { Fuel, Gauge, Plus, Eye, Pencil, Trash2, Search, GaugeCircle } from 'lucide-vue-next'
 
 interface FuelItemRef {
   id: string
@@ -142,11 +143,21 @@ const form = useForm<{
   tank_id: string
   current_meter_reading: number | null
   is_active: boolean
+  nozzle_count: number
+  front_electronic: number | null
+  front_manual: number | null
+  back_electronic: number | null
+  back_manual: number | null
 }>({
   name: '',
   tank_id: '',
   current_meter_reading: null,
   is_active: true,
+  nozzle_count: 2,
+  front_electronic: null,
+  front_manual: null,
+  back_electronic: null,
+  back_manual: null,
 })
 
 const openCreate = () => {
@@ -467,31 +478,100 @@ const goToWarehouses = () => {
             </div>
           </div>
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <Label for="meter">Current meter</Label>
-              <Input
-                id="meter"
-                v-model.number="form.current_meter_reading"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                :class="{ 'border-destructive': form.errors.current_meter_reading }"
-              />
-              <p v-if="form.errors.current_meter_reading" class="text-sm text-destructive">
-                {{ form.errors.current_meter_reading }}
-              </p>
+          <div class="flex items-end gap-3 rounded-lg border border-border/70 bg-muted/40 px-4 py-3">
+            <div class="flex-1">
+              <Label for="isActive">Active</Label>
+              <p class="text-sm text-text-secondary">Hide pumps under maintenance.</p>
             </div>
-
-            <div class="flex items-end gap-3 rounded-lg border border-border/70 bg-muted/40 px-4 py-3">
-              <div class="flex-1">
-                <Label for="isActive">Active</Label>
-                <p class="text-sm text-text-secondary">Hide pumps under maintenance.</p>
-              </div>
-              <Switch id="isActive" v-model:checked="form.is_active" />
-            </div>
+            <Switch id="isActive" v-model:checked="form.is_active" />
           </div>
+
+          <!-- Nozzle Configuration (only for new pumps) -->
+          <template v-if="!selectedPump">
+            <Separator />
+
+            <div class="space-y-4">
+              <div class="flex items-center gap-2">
+                <GaugeCircle class="h-4 w-4 text-sky-600" />
+                <span class="font-medium text-sm">Nozzle Configuration</span>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="nozzle_count">Number of Nozzles</Label>
+                <Select
+                  :model-value="String(form.nozzle_count)"
+                  @update:model-value="form.nozzle_count = Number($event)"
+                >
+                  <SelectTrigger id="nozzle_count" class="w-32">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 Nozzle</SelectItem>
+                    <SelectItem value="2">2 Nozzles</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="form.errors.nozzle_count" class="text-sm text-destructive">{{ form.errors.nozzle_count }}</p>
+              </div>
+
+              <p class="text-xs text-muted-foreground">
+                Enter the current meter reading from each nozzle's display. These readings track fuel dispensed and are used in the daily close.
+              </p>
+
+              <!-- Front Nozzle Readings -->
+              <div class="rounded-lg border p-3 space-y-3">
+                <p class="text-sm font-medium">Front Nozzle (Side A)</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="space-y-1">
+                    <Label class="text-xs">Electronic Reading</Label>
+                    <Input
+                      v-model.number="form.front_electronic"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Manual Reading</Label>
+                    <Input
+                      v-model.number="form.front_manual"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Back Nozzle Readings (only if 2 nozzles) -->
+              <div v-if="form.nozzle_count === 2" class="rounded-lg border p-3 space-y-3">
+                <p class="text-sm font-medium">Back Nozzle (Side B)</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="space-y-1">
+                    <Label class="text-xs">Electronic Reading</Label>
+                    <Input
+                      v-model.number="form.back_electronic"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Manual Reading</Label>
+                    <Input
+                      v-model.number="form.back_manual"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
 
           <DialogFooter class="gap-2">
             <Button type="button" variant="outline" :disabled="form.processing" @click="closeDialog">

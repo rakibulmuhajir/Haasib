@@ -5,6 +5,7 @@ namespace App\Modules\Payroll\Http\Requests;
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
 use App\Services\CurrentCompany;
+use Illuminate\Validation\Rule;
 
 class StorePayslipRequest extends BaseFormRequest
 {
@@ -27,6 +28,11 @@ class StorePayslipRequest extends BaseFormRequest
             'lines.*.line_type' => 'required|in:earning,deduction,employer',
             'lines.*.earning_type_id' => 'nullable|uuid|exists:pay.earning_types,id',
             'lines.*.deduction_type_id' => 'nullable|uuid|exists:pay.deduction_types,id',
+            'lines.*.salary_advance_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('pay.salary_advances', 'id')->where('company_id', $company->id),
+            ],
             'lines.*.description' => 'nullable|string|max:255',
             'lines.*.quantity' => 'required|numeric|min:0',
             'lines.*.rate' => 'required|numeric|min:0',

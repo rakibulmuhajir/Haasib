@@ -1,6 +1,8 @@
 /**
  * Format data as an ASCII table
  */
+import { formatDateTimeForDisplay } from '@/lib/datetime'
+
 export function formatTable(
   rows: string[][],
   headers?: string[],
@@ -156,7 +158,7 @@ function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '—'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'number') return value.toLocaleString()
-  if (value instanceof Date) return value.toLocaleDateString()
+  if (value instanceof Date) return String(formatDateTimeForDisplay(value))
   if (Array.isArray(value)) return value.join(', ')
-  return String(value)
+  return String(formatDateTimeForDisplay(value) ?? value)
 }

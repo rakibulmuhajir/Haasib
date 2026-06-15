@@ -4,6 +4,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { Building2, Save, Mail, Phone, ImageIcon } from 'lucide-vue-next'
@@ -18,6 +19,7 @@ interface CompanyRef {
 
 const props = defineProps<{
   company: CompanyRef
+  vendorTypes: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -30,6 +32,7 @@ const form = useForm({
   name: '',
   email: '',
   phone: '',
+  vendor_type: 'general',
   logo_url: '',
 })
 
@@ -39,6 +42,7 @@ const handleSubmit = () => {
       name: data.name,
       email: data.email || null,
       phone: data.phone || null,
+      vendor_type: data.vendor_type,
       logo_url: data.logo_url || null,
     }))
     .post(`/${props.company.slug}/vendors`, {
@@ -112,6 +116,25 @@ const handleSubmit = () => {
                 class="border-zinc-200"
               />
               <p v-if="form.errors.phone" class="text-xs text-red-600">{{ form.errors.phone }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="vendor_type" class="flex items-center gap-2 text-zinc-700">
+                <Building2 class="h-4 w-4 text-zinc-400" />
+                Supplier Type
+              </Label>
+              <Select v-model="form.vendor_type">
+                <SelectTrigger id="vendor_type" class="border-zinc-200">
+                  <SelectValue placeholder="Select supplier type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="(label, value) in vendorTypes" :key="value" :value="value">
+                    {{ label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-zinc-500">Use fuel refinery/distributor/station for fuel suppliers.</p>
+              <p v-if="form.errors.vendor_type" class="text-xs text-red-600">{{ form.errors.vendor_type }}</p>
             </div>
 
             <div class="space-y-2">

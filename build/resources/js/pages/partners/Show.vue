@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import { UsersRound, Pencil, ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
@@ -78,7 +79,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 // Investment dialog

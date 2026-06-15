@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Modules\Accounting\Models\Vendor;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
@@ -33,6 +34,7 @@ class UpdateVendorRequest extends BaseFormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'nullable', 'email', 'max:255', $emailRule],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'vendor_type' => ['sometimes', Rule::in(array_keys(Vendor::TYPES))],
             'address' => ['sometimes', 'nullable', 'array'],
             'address.street' => ['nullable', 'string', 'max:255'],
             'address.city' => ['nullable', 'string', 'max:100'],

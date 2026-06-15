@@ -9,7 +9,7 @@ class SettleVendorCardRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->hasCompanyPermission(Permissions::PAYMENTS_CREATE)
+        return $this->hasCompanyPermission(Permissions::PAYMENT_CREATE)
             && $this->validateRlsContext();
     }
 
@@ -22,6 +22,7 @@ class SettleVendorCardRequest extends BaseFormRequest
             'settlement_date' => ['nullable', 'date'],
             'bank_account_id' => ['nullable', 'uuid', 'exists:acct.accounts,id'],
             'reference' => ['nullable', 'string', 'max:50'],
+            'notes' => ['nullable', 'string', 'max:500'],
         ];
     }
 

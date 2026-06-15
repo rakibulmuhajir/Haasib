@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Head, router } from '@inertiajs/vue3'
+import { formatDateTime } from '@/lib/datetime'
 import { Mail, Building2, Clock3 } from 'lucide-vue-next'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -32,6 +33,8 @@ const props = defineProps<{
 const goToInvitation = (invitation: (typeof props.pendingInvitations)[number]) => {
   router.visit(`/invite/${invitation.token}`)
 }
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 </script>
 
 <template>
@@ -71,7 +74,7 @@ const goToInvitation = (invitation: (typeof props.pendingInvitations)[number]) =
               </div>
               <div class="flex items-center justify-between text-xs text-amber-700">
                 <span class="flex items-center gap-1">
-                  <Clock3 class="h-3 w-3" /> Expires {{ new Date(invite.expires_at).toLocaleDateString() }}
+                  <Clock3 class="h-3 w-3" /> Expires {{ formatDate(invite.expires_at) }}
                 </span>
                 <Button variant="outline" size="sm" @click="goToInvitation(invite)">
                   View

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { FileText, Package, Plus, Search } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -99,11 +100,7 @@ const formatMoney = (val: number, currency: string) =>
   }).format(val)
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  return formatSharedDateTime(dateString, { mode: 'date' })
 }
 
 const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'outline' => {

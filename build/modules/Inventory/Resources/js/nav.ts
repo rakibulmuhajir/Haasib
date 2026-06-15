@@ -6,6 +6,7 @@ import {
   Layers,
   ArrowLeftRight,
   PackageCheck,
+  PlusCircle,
 } from 'lucide-vue-next'
 
 export const inventoryNav: ModuleNavConfig = {
@@ -23,8 +24,9 @@ export const inventoryNav: ModuleNavConfig = {
           { title: t('items'), href: `/${slug}/items`, icon: Package },
           { title: t('warehouses'), href: `/${slug}/warehouses`, icon: Warehouse },
           { title: t('categories'), href: `/${slug}/item-categories`, icon: FolderTree },
-          { title: t('stockLevels'), href: `/${slug}/stock`, icon: Layers },
+          { title: 'Stock Management', href: `/${slug}/stock`, icon: Layers },
           { title: t('stockReceipts'), href: `/${slug}/stock/receipts`, icon: PackageCheck },
+          { title: t('adjustment'), href: `/${slug}/stock/adjustment`, icon: PlusCircle },
           { title: t('stockMovements'), href: `/${slug}/stock/movements`, icon: ArrowLeftRight },
         ],
       },

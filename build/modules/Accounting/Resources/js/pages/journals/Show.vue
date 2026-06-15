@@ -6,6 +6,7 @@ import DataTable from '@/components/DataTable.vue'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import DateTimeText from '@/components/DateTimeText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, ArrowLeft } from 'lucide-vue-next'
 
@@ -148,11 +149,11 @@ const tableData = computed(() =>
         <CardContent class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span>Transaction</span>
-            <span>{{ new Date(journal.transaction_date).toLocaleDateString() }}</span>
+            <DateTimeText :value="journal.transaction_date" mode="date" />
           </div>
           <div class="flex justify-between">
             <span>Posting</span>
-            <span>{{ new Date(journal.posting_date).toLocaleDateString() }}</span>
+            <DateTimeText :value="journal.posting_date" mode="date" />
           </div>
         </CardContent>
       </Card>

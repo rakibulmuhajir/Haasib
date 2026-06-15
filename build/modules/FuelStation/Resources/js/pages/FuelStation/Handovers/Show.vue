@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { HandCoins, ArrowLeft, Check, Clock, CheckCircle, Banknote, CreditCard } from 'lucide-vue-next'
+import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface Handover {
   id: string
@@ -61,13 +62,7 @@ const formatCurrency = (value: number) => {
 }
 
 const formatDateTime = (date: string) => {
-  return new Date(date).toLocaleString('en-PK', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
 }
 
 const receiveHandover = () => {

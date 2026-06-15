@@ -3,6 +3,7 @@ import { Head, useForm } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { formatDateTime } from '@/lib/datetime'
 import { CheckCircle2, XCircle, Mail } from 'lucide-vue-next'
 
 interface InvitationProps {
@@ -31,6 +32,7 @@ const props = defineProps<{
 
 const acceptForm = useForm({})
 const rejectForm = useForm({})
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
 const handleAccept = () => {
   acceptForm.post(`/invite/${props.token}/accept`, {
@@ -83,7 +85,7 @@ const handleReject = () => {
             <div class="text-right">
               <div class="text-sm text-slate-500">Expires</div>
               <div class="text-base font-medium text-slate-900">
-                {{ new Date(invitation.expires_at).toLocaleDateString() }}
+                {{ formatDate(invitation.expires_at) }}
               </div>
             </div>
           </div>

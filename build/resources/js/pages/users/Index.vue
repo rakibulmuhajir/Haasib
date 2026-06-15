@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
+import { formatDateTime } from '@/lib/datetime'
 import {
   Users,
   UserPlus,
@@ -32,6 +33,8 @@ import {
   ArrowLeft,
   Settings,
 } from 'lucide-vue-next'
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
 interface CompanyRef {
   id: string
@@ -230,7 +233,7 @@ const tableColumns = [
       <template #cell-joined_at="{ row }">
         <div v-if="row.joined_at" class="flex items-center gap-1 text-slate-300">
           <Calendar class="h-3 w-3" />
-          <span>{{ new Date(row.joined_at).toLocaleDateString() }}</span>
+          <span>{{ formatDate(row.joined_at) }}</span>
         </div>
         <span v-else class="text-slate-500">—</span>
       </template>

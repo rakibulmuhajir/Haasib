@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, usePage } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import type { BreadcrumbItem } from '@/types'
-import { Wallet, Search, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { formatDateTime } from '@/lib/datetime'
+import { Wallet, Search, TrendingUp, Clock, CheckCircle, Plus } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
 interface Advance {
@@ -34,6 +45,20 @@ interface Employee {
   position: string | null
 }
 
+interface CompanyRef {
+  id: string
+  name: string
+  slug: string
+  base_currency: string
+}
+
+interface PaymentAccount {
+  id: string
+  code: string
+  name: string
+  subtype: string
+}
+
 interface Stats {
   total_advances: number
   total_amount: number
@@ -44,8 +69,10 @@ interface Stats {
 }
 
 const props = defineProps<{
+  company: CompanyRef
   advances: Advance[]
   employees: Employee[]
+  paymentAccounts: PaymentAccount[]
   stats: Stats
   currency: string
 }>()
@@ -68,6 +95,18 @@ const currency = computed(() => currencySymbol(props.currency))
 const search = ref('')
 const statusFilter = ref('all')
 const employeeFilter = ref('all')
+const showAdvanceDialog = ref(false)
+
+const form = useForm({
+  employee_id: '',
+  advance_date: new Date().toISOString().slice(0, 10),
+  amount: '',
+  payment_method: 'cash',
+  bank_account_id: 'default',
+  reference: '',
+  reason: '',
+  notes: '',
+})
 
 const filteredAdvances = computed(() => {
   return props.advances.filter((adv) => {
@@ -92,7 +131,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  return formatDateTime(dateStr, { mode: 'date' })
 }
 
 const getStatusBadge = (status: string) => {
@@ -136,6 +175,24 @@ const recoveryPercentage = computed(() => {
   if (props.stats.total_amount === 0) return 0
   return Math.round((props.stats.total_recovered / props.stats.total_amount) * 100)
 })
+
+const submitAdvance = () => {
+  form
+    .transform((data) => ({
+      ...data,
+      bank_account_id: data.bank_account_id === 'default' ? null : data.bank_account_id,
+    }))
+    .post(`/${props.company.slug}/salary-advances`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showAdvanceDialog.value = false
+      form.reset()
+      form.advance_date = new Date().toISOString().slice(0, 10)
+      form.payment_method = 'cash'
+      form.bank_account_id = 'default'
+    },
+  })
+}
 </script>
 
 <template>
@@ -147,6 +204,13 @@ const recoveryPercentage = computed(() => {
     :icon="Wallet"
     :breadcrumbs="breadcrumbs"
   >
+    <template #actions>
+      <Button @click="showAdvanceDialog = true">
+        <Plus class="mr-2 h-4 w-4" />
+        Record Advance
+      </Button>
+    </template>
+
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
@@ -199,20 +263,6 @@ const recoveryPercentage = computed(() => {
       </Card>
     </div>
 
-    <!-- Info Banner -->
-    <div class="rounded-lg border border-sky-200 bg-sky-50 p-4">
-      <div class="flex items-start gap-3">
-        <AlertCircle class="h-5 w-5 text-sky-600 mt-0.5" />
-        <div>
-          <h4 class="font-medium text-sky-900">About Salary Advances</h4>
-          <p class="text-sm text-sky-700 mt-1">
-            Salary advances are recorded through the Daily Close when cash is given to employees.
-            Recovery happens automatically through payroll deductions when processing payslips.
-          </p>
-        </div>
-      </div>
-    </div>
-
     <!-- List -->
     <Card class="border-border/80">
       <CardHeader class="pb-3">
@@ -260,7 +310,7 @@ const recoveryPercentage = computed(() => {
           <template #empty>
             <EmptyState
               title="No salary advances yet"
-              description="Salary advances are recorded through the Daily Close when giving cash advances to employees."
+              description="Record an advance here or from Daily Close when cash is paid during station closing."
             />
           </template>
 
@@ -295,5 +345,98 @@ const recoveryPercentage = computed(() => {
         </DataTable>
       </CardContent>
     </Card>
+
+    <Dialog v-model:open="showAdvanceDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Record Salary Advance</DialogTitle>
+          <DialogDescription>
+            Advance given increases Employee Advances and reduces the selected cash or bank account.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form class="space-y-4" @submit.prevent="submitAdvance">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2 sm:col-span-2">
+              <Label>Employee</Label>
+              <Select v-model="form.employee_id">
+                <SelectTrigger :class="{ 'border-destructive': form.errors.employee_id }">
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="employee in employees" :key="employee.id" :value="employee.id">
+                    {{ employee.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="form.errors.employee_id" class="text-sm text-destructive">{{ form.errors.employee_id }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="advance_date">Date</Label>
+              <Input id="advance_date" v-model="form.advance_date" type="date" :class="{ 'border-destructive': form.errors.advance_date }" />
+              <p v-if="form.errors.advance_date" class="text-sm text-destructive">{{ form.errors.advance_date }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="amount">Amount</Label>
+              <Input id="amount" v-model="form.amount" type="number" min="0" step="0.01" :class="{ 'border-destructive': form.errors.amount }" />
+              <p v-if="form.errors.amount" class="text-sm text-destructive">{{ form.errors.amount }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Payment method</Label>
+              <Select v-model="form.payment_method">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Paid from</Label>
+              <Select v-model="form.bank_account_id">
+                <SelectTrigger>
+                  <SelectValue placeholder="Default cash/bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default cash/bank</SelectItem>
+                  <SelectItem v-for="account in paymentAccounts" :key="account.id" :value="account.id">
+                    {{ account.code }} — {{ account.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="reference">Reference</Label>
+              <Input id="reference" v-model="form.reference" placeholder="Optional" />
+            </div>
+
+            <div class="space-y-2">
+              <Label for="reason">Reason</Label>
+              <Input id="reason" v-model="form.reason" placeholder="Optional" />
+            </div>
+
+            <div class="space-y-2 sm:col-span-2">
+              <Label for="notes">Notes</Label>
+              <Textarea id="notes" v-model="form.notes" rows="2" />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" :disabled="form.processing" @click="showAdvanceDialog = false">Cancel</Button>
+            <Button type="submit" :disabled="form.processing">
+              {{ form.processing ? 'Recording...' : 'Record Advance' }}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   </PageShell>
 </template>

@@ -62,6 +62,7 @@ interface TransactionData {
     bank_deposits?: number
     partner_withdrawals?: number
     employee_advances?: number
+    payroll_payouts?: number
     expenses?: number
     partner_deposits?: number
   }
@@ -380,6 +381,10 @@ const unlockTransaction = () => {
             <div v-if="metadata.employee_advances" class="flex justify-between items-center py-2">
               <span>Employee Advances</span>
               <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.employee_advances) }}</span>
+            </div>
+            <div v-if="metadata.payroll_payouts" class="flex justify-between items-center py-2">
+              <span>Approved Salaries</span>
+              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.payroll_payouts) }}</span>
             </div>
             <div v-if="metadata.expenses" class="flex justify-between items-center py-2">
               <span>Expenses</span>

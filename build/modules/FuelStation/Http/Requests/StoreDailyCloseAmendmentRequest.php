@@ -33,7 +33,7 @@ class StoreDailyCloseAmendmentRequest extends BaseFormRequest
             'other_sales' => ['nullable', 'array'],
             'other_sales.*.item_id' => ['required', 'uuid'],
             'other_sales.*.item_name' => ['required', 'string', 'max:255'],
-            'other_sales.*.quantity' => ['required', 'integer', 'min:1'],
+            'other_sales.*.quantity' => ['required', 'numeric', 'min:0.001'],
             'other_sales.*.unit_price' => ['required', 'numeric', 'min:0'],
             'other_sales.*.amount' => ['required', 'numeric', 'min:0'],
 

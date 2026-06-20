@@ -63,7 +63,7 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - Consider `$hidden = ['national_id','bank_account_number']` for API responses.
 - Relationships: belongsTo Company; belongsTo User; belongsTo Manager (self); hasMany DirectReports (self); hasMany Payslip; hasMany EmployeeBenefit; hasMany LeaveRequest.
 - Validation:
-  - `employee_number`: required|string|max:50; unique per company (soft-delete aware).
+  - `employee_number`: nullable on create and generated as `EMP-00001` style when omitted; required on update; unique per company (soft-delete aware).
   - `first_name`: required|string|max:100.
   - `last_name`: required|string|max:100.
   - `email`: nullable|email|max:255.

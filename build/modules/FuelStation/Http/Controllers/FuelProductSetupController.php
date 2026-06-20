@@ -21,7 +21,8 @@ class FuelProductSetupController extends Controller
             $result = app(CommandBus::class)->dispatch(
                 'fuel.products.setup',
                 $request->validated(),
-                $request->user()
+                $request->user(),
+                skipPermission: true
             );
         } catch (ValidationException $exception) {
             throw $exception;

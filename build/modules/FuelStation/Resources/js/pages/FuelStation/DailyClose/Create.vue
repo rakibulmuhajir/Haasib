@@ -58,6 +58,10 @@ interface Tank {
   dip_stick_id: string | null
   linked_item?: { id: string; name: string; fuel_category: string }
   dip_stick?: { id: string; code: string; name: string; unit: string }
+  current_stock_liters?: number | null
+  current_stock_source_label?: string | null
+  current_stock_as_of?: string | null
+  current_stock_after_close_date?: boolean
 }
 
 interface Pump {
@@ -106,6 +110,16 @@ interface Employee {
   position: string
   base_salary: number
   outstanding_advances: number
+}
+
+interface PayrollPayout {
+  payslip_id: string
+  payslip_number: string
+  employee_id: string
+  employee_name: string
+  employee_number: string | null
+  amount: number
+  approved_at: string | null
 }
 
 interface AmanatHolder {
@@ -171,6 +185,7 @@ const props = defineProps<{
   nozzles: Nozzle[]
   partners: Partner[]
   employees: Employee[]
+  approvedPayrollPayouts: PayrollPayout[]
   amanatHolders: AmanatHolder[]
   investors: Investor[]
   bankAccounts: BankAccount[]
@@ -226,6 +241,7 @@ const props = defineProps<{
     bank_deposits?: Array<{ bank_account_id: string; amount: number; reference?: string; purpose?: string }>
     partner_withdrawals?: Array<{ partner_id: string; amount: number }>
     employee_advances?: Array<{ employee_id: string; amount: number; reason?: string }>
+    payroll_payouts?: PayrollPayout[]
     amanat_disbursements?: Array<{ customer_id?: string; customer_name?: string; amount: number }>
     expenses?: Array<{ account_id: string; description: string; amount: number }>
     notes?: string
@@ -241,8 +257,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const activeTab = ref('sales')
 const currency = computed(() => currencySymbol(props.company.base_currency || 'PKR'))
 const partnerSearch = ref('')
-const employeeSearch = ref('')
-const amanatSearch = ref('')
 const investorSearch = ref('')
 
 const accountingHints = {
@@ -252,6 +266,7 @@ const accountingHints = {
   bankDeposit: 'Posting: Dr Bank · Cr Cash on Hand.',
   partnerWithdrawal: 'Posting: Dr Partner Drawings · Cr Cash on Hand.',
   employeeAdvance: 'Posting: Dr Employee Advances · Cr Cash on Hand.',
+  payrollPayout: 'Posting: Dr Payroll Payable · Cr Cash on Hand.',
   amanatDisbursement: 'Posting: Dr Amanat Deposits · Cr Cash on Hand, and the depositor balance is reduced.',
   expense: 'Posting: Dr selected expense · Cr Cash on Hand.',
   variance: 'Cash difference posts to Cash Over/Short.',
@@ -306,6 +321,9 @@ const hasFormData = (formData: Record<string, unknown>): boolean => {
   // Check employee advances
   const employeeAdvances = formData.employee_advances as Array<{ amount: number }> | undefined
   if (employeeAdvances && employeeAdvances.length > 0) return true
+
+  const payrollPayouts = formData.payroll_payouts as Array<{ amount: number }> | undefined
+  if (payrollPayouts && payrollPayouts.length > 0) return true
 
   // Check amanat disbursements
   const amanatDisbursements = formData.amanat_disbursements as Array<{ amount: number }> | undefined
@@ -439,13 +457,6 @@ const searchMatches = (value: string | null | undefined, query: string): boolean
 }
 
 const filteredPartners = computed(() => props.partners.filter(partner => searchMatches(partner.name, partnerSearch.value)))
-const filteredEmployees = computed(() => props.employees.filter(employee => {
-  const label = employee.full_name || `${employee.first_name} ${employee.last_name}`
-  return searchMatches(label, employeeSearch.value) || searchMatches(employee.position, employeeSearch.value)
-}))
-const filteredAmanatHolders = computed(() => props.amanatHolders.filter(holder => {
-  return searchMatches(holder.name, amanatSearch.value) || searchMatches(holder.phone, amanatSearch.value)
-}))
 const filteredInvestors = computed(() => props.investors.filter(investor => searchMatches(investor.name, investorSearch.value)))
 
 // Channels grouped by type for UI sections
@@ -515,6 +526,7 @@ const form = useForm({
     const prevReading = props.previousTankReadings?.find(r => r.tank_id === tank.id)
     return {
       tank_id: tank.id,
+      item_id: tank.linked_item_id,
       tank_name: tank.name,
       tank_code: tank.code,
       capacity: tank.capacity,
@@ -526,6 +538,10 @@ const form = useForm({
       previous_source: prevReading?.source ?? '',
       previous_source_label: prevReading?.source_label ?? '',
       previous_as_of: prevReading?.as_of ?? '',
+      current_stock_liters: tank.current_stock_liters ?? null,
+      current_stock_source_label: tank.current_stock_source_label ?? '',
+      current_stock_as_of: tank.current_stock_as_of ?? '',
+      current_stock_after_close_date: tank.current_stock_after_close_date ?? false,
       stick_reading: 0,
       liters: 0,
     }
@@ -542,6 +558,7 @@ const form = useForm({
   bank_deposits: [] as { bank_account_id: string; amount: number; reference: string; purpose: string }[],
   partner_withdrawals: [] as { partner_id: string; partner_name: string; amount: number }[],
   employee_advances: [] as { employee_id: string; employee_name: string; amount: number; reason: string }[],
+  payroll_payouts: props.approvedPayrollPayouts.map(payout => ({ ...payout })),
   amanat_disbursements: [] as { customer_id: string; customer_name: string; available_balance: number; amount: number }[],
   expenses: [] as { account_id: string; account_name: string; description: string; amount: number }[],
 
@@ -580,6 +597,7 @@ const resetFormToInitial = () => {
     const prevReading = props.previousTankReadings?.find(r => r.tank_id === tank.id)
     return {
       tank_id: tank.id,
+      item_id: tank.linked_item_id,
       tank_name: tank.name,
       tank_code: tank.code,
       capacity: tank.capacity,
@@ -591,6 +609,10 @@ const resetFormToInitial = () => {
       previous_source: prevReading?.source ?? '',
       previous_source_label: prevReading?.source_label ?? '',
       previous_as_of: prevReading?.as_of ?? '',
+      current_stock_liters: tank.current_stock_liters ?? null,
+      current_stock_source_label: tank.current_stock_source_label ?? '',
+      current_stock_as_of: tank.current_stock_as_of ?? '',
+      current_stock_after_close_date: tank.current_stock_after_close_date ?? false,
       stick_reading: 0,
       liters: 0,
     }
@@ -612,6 +634,7 @@ const resetFormToInitial = () => {
   form.bank_deposits = []
   form.partner_withdrawals = []
   form.employee_advances = []
+  form.payroll_payouts = props.approvedPayrollPayouts.map(payout => ({ ...payout }))
   form.amanat_disbursements = []
   form.expenses = []
 
@@ -784,6 +807,10 @@ const hydrateFormForAmendment = () => {
     })
   }
 
+  if (orig.payroll_payouts && orig.payroll_payouts.length > 0) {
+    form.payroll_payouts = orig.payroll_payouts.map(payout => ({ ...payout }))
+  }
+
   // Hydrate amanat disbursements
   if (orig.amanat_disbursements && orig.amanat_disbursements.length > 0) {
     form.amanat_disbursements = orig.amanat_disbursements.map(ad => {
@@ -844,7 +871,7 @@ const getChannelTotal = (channelCode: string): number => {
 
 // Computed calculations
 
-// Calculate liters sold per tank (from nozzle readings)
+// Calculate quantity sold per tank from both meter readings and open/bulk product sales.
 const litersSoldByTank = computed(() => {
   const byTank: Record<string, number> = {}
   form.nozzle_readings.forEach(r => {
@@ -854,8 +881,22 @@ const litersSoldByTank = computed(() => {
       byTank[nozzle.tank_id] = (byTank[nozzle.tank_id] || 0) + r.liters_sold
     }
   })
+  form.other_sales.forEach(sale => {
+    const tank = form.tank_readings.find(t => t.item_id === sale.item_id)
+    if (tank?.tank_id) {
+      byTank[tank.tank_id] = (byTank[tank.tank_id] || 0) + Number(sale.quantity || 0)
+    }
+  })
   return byTank
 })
+
+const tankSalesLabel = (tank: { item_id?: string; tank_id: string }) => {
+  const hasNozzle = props.nozzles.some(nozzle => nozzle.tank_id === tank.tank_id)
+  if (hasNozzle) return 'Meter Sales'
+
+  const hasBulkSaleRow = form.other_sales.some(sale => sale.item_id === tank.item_id)
+  return hasBulkSaleRow ? 'Recorded Sales' : 'Recorded Sales'
+}
 
 // Calculate tank variance (shrinkage/gain)
 // Formula: Previous Closing - Today's Closing = Usage from Dip
@@ -942,6 +983,10 @@ const totalEmployeeAdvances = computed(() => {
   return form.employee_advances.reduce((sum, a) => sum + a.amount, 0)
 })
 
+const totalPayrollPayouts = computed(() => {
+  return form.payroll_payouts.reduce((sum, payout) => sum + payout.amount, 0)
+})
+
 const totalAmanatDisbursements = computed(() => {
   return form.amanat_disbursements.reduce((sum, a) => sum + a.amount, 0)
 })
@@ -976,10 +1021,11 @@ const totalMoneyOut = computed(() => {
   const bankDeposits = form.bank_deposits.reduce((sum, d) => sum + d.amount, 0)
   const partnerWithdrawals = form.partner_withdrawals.reduce((sum, w) => sum + w.amount, 0)
   const employeeAdvances = form.employee_advances.reduce((sum, a) => sum + a.amount, 0)
+  const payrollPayouts = form.payroll_payouts.reduce((sum, payout) => sum + payout.amount, 0)
   const amanat = form.amanat_disbursements.reduce((sum, a) => sum + a.amount, 0)
   const expenses = form.expenses.reduce((sum, e) => sum + e.amount, 0)
 
-  return bankDeposits + partnerWithdrawals + employeeAdvances + amanat + expenses
+  return bankDeposits + partnerWithdrawals + employeeAdvances + payrollPayouts + amanat + expenses
 })
 
 const expectedClosingCash = computed(() => {
@@ -1093,6 +1139,17 @@ const baselineLabel = (tank: { previous_source_label?: string | null; previous_a
   return date ? `${tank.previous_source_label} · ${date}` : tank.previous_source_label
 }
 
+const currentStockLabel = (tank: {
+  current_stock_source_label?: string | null
+  current_stock_as_of?: string | null
+}) => {
+  if (!tank.current_stock_source_label && !tank.current_stock_as_of) return ''
+
+  const date = formatBaselineDate(tank.current_stock_as_of)
+  if (tank.current_stock_source_label && date) return `${tank.current_stock_source_label} · ${date}`
+  return tank.current_stock_source_label || date
+}
+
 // Partner/Employee name helpers
 const setPartnerName = (index: number, field: 'deposits' | 'withdrawals') => {
   const list = field === 'deposits' ? form.partner_deposits : form.partner_withdrawals
@@ -1130,6 +1187,15 @@ const tabsSaved = ref({
   moneyOut: false,
 })
 
+const tabSequence = ['sales', 'tanks', 'money-in', 'money-out', 'summary']
+
+const goToNextTab = (current: string) => {
+  const index = tabSequence.indexOf(current)
+  if (index >= 0 && index < tabSequence.length - 1) {
+    activeTab.value = tabSequence[index + 1]
+  }
+}
+
 // Per-tab validation functions (local save with toast feedback)
 const saveSales = () => {
   // Validate: check if all nozzles have closing readings
@@ -1141,6 +1207,7 @@ const saveSales = () => {
 
   tabsSaved.value.sales = true
   toast.success('Sales data saved', { description: `Total: ${currency.value} ${formatCurrency(totalSales.value)}` })
+  goToNextTab('sales')
 }
 
 const saveTanks = () => {
@@ -1152,17 +1219,20 @@ const saveTanks = () => {
     toast.success('Tank readings saved')
   }
   tabsSaved.value.tanks = true
+  goToNextTab('tanks')
 }
 
 const saveMoneyIn = () => {
   tabsSaved.value.moneyIn = true
   toast.success('Money In saved', { description: `Opening cash: ${currency.value} ${formatCurrency(form.opening_cash)}` })
+  goToNextTab('money-in')
 }
 
 const saveMoneyOut = () => {
   tabsSaved.value.moneyOut = true
   const total = totalMoneyOut.value
   toast.success('Money Out saved', { description: `Total outflows: ${currency.value} ${formatCurrency(total)}` })
+  goToNextTab('money-out')
 }
 
 // Final submit - posts everything to server
@@ -1195,6 +1265,10 @@ const getCleanedFormData = () => {
   // Filter out incomplete employee advances
   data.employee_advances = (data.employee_advances || []).filter(
     (a: { employee_id: string; amount: number }) => a.employee_id && a.amount > 0
+  )
+
+  data.payroll_payouts = (data.payroll_payouts || []).filter(
+    (p: { payslip_id: string; amount: number }) => p.payslip_id && p.amount > 0
   )
 
   // Filter out incomplete amanat disbursements
@@ -1721,15 +1795,29 @@ const completedWorkflowSteps = computed(() => {
                 <div class="grid grid-cols-12 gap-4">
                   <!-- Opening baseline -->
                   <div class="col-span-3">
-                    <Label class="text-xs text-muted-foreground">Opening baseline (L)</Label>
+                    <Label class="text-xs text-muted-foreground">Opening baseline for {{ formatBaselineDate(form.date) }} (L)</Label>
                     <div class="text-lg font-semibold mt-1">
                       {{ tank.previous_liters > 0 ? formatCurrency(tank.previous_liters) : '—' }}
                     </div>
                     <div v-if="baselineLabel(tank)" class="text-xs text-muted-foreground">
                       {{ baselineLabel(tank) }}
                     </div>
+                    <div v-else class="text-xs text-amber-700">
+                      No stock entry before this close date.
+                    </div>
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
                       Stick: {{ tank.previous_stick }} cm
+                    </div>
+                    <div v-if="tank.current_stock_liters !== null && tank.current_stock_liters !== undefined" class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs">
+                      <div class="font-medium text-foreground">
+                        Current system stock: {{ formatCurrency(tank.current_stock_liters) }} L
+                      </div>
+                      <div class="text-muted-foreground">
+                        {{ currentStockLabel(tank) }}
+                      </div>
+                      <div v-if="tank.current_stock_after_close_date" class="text-amber-700">
+                        This stock entry is after the selected close date, so it is not used as the opening baseline.
+                      </div>
                     </div>
                   </div>
 
@@ -1751,7 +1839,7 @@ const completedWorkflowSteps = computed(() => {
                     </div>
                   </div>
                   <div class="col-span-2">
-                    <Label class="text-xs text-muted-foreground">Nozzle Sales</Label>
+                    <Label class="text-xs text-muted-foreground">{{ tankSalesLabel(tank) }}</Label>
                     <div class="text-base font-medium mt-1">
                       {{ formatCurrency(litersSoldByTank[tank.tank_id] || 0) }} L
                     </div>
@@ -2140,22 +2228,29 @@ const completedWorkflowSteps = computed(() => {
                   <h4 class="font-medium">Employee Salary Advances</h4>
                   <p class="text-xs text-muted-foreground">{{ accountingHints.employeeAdvance }}</p>
                 </div>
-                <Button variant="outline" size="sm" @click="addEmployeeAdvance">
+                <Button variant="outline" size="sm" :disabled="props.employees.length === 0" @click="addEmployeeAdvance">
                   <Plus class="h-4 w-4 mr-1" /> Add
                 </Button>
               </div>
 
-              <Input v-model="employeeSearch" placeholder="Search employees by name or position" class="max-w-sm" />
+              <div v-if="props.employees.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>No active payroll employees are available for salary advances.</span>
+                  <Button variant="outline" size="sm" as-child>
+                    <Link :href="`/${company.slug}/employees/create`">Add employee</Link>
+                  </Button>
+                </div>
+              </div>
 
               <div v-for="(advance, index) in form.employee_advances" :key="index" class="grid grid-cols-4 gap-4 items-end">
                 <div>
                   <Label class="text-xs">Employee</Label>
-                  <Select v-model="advance.employee_id" @update:model-value="setEmployeeName(index)">
+                  <Select v-model="advance.employee_id" :disabled="props.employees.length === 0" @update:model-value="setEmployeeName(index)">
                     <SelectTrigger>
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem v-for="e in filteredEmployees" :key="e.id" :value="e.id">
+                      <SelectItem v-for="e in props.employees" :key="e.id" :value="e.id">
                         {{ e.full_name || `${e.first_name} ${e.last_name}` }} · Due {{ currency }} {{ formatCurrency(e.outstanding_advances) }}
                       </SelectItem>
                     </SelectContent>
@@ -2178,6 +2273,35 @@ const completedWorkflowSteps = computed(() => {
               </div>
             </div>
 
+            <template v-if="form.payroll_payouts.length > 0">
+              <Separator />
+
+              <div class="space-y-4">
+                <div>
+                  <h4 class="font-medium">Approved Salaries</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.payrollPayout }}</p>
+                </div>
+
+                <div class="space-y-2">
+                  <div
+                    v-for="payout in form.payroll_payouts"
+                    :key="payout.payslip_id"
+                    class="flex items-center justify-between rounded-md border p-3 text-sm"
+                  >
+                    <div>
+                      <p class="font-medium">{{ payout.employee_name }}</p>
+                      <p class="text-xs text-muted-foreground">
+                        {{ payout.payslip_number }}
+                        <span v-if="payout.employee_number"> · {{ payout.employee_number }}</span>
+                        <span v-if="payout.approved_at"> · Approved {{ formatSharedDateTime(payout.approved_at, { mode: 'datetime' }) }}</span>
+                      </p>
+                    </div>
+                    <span class="font-semibold text-destructive">{{ currency }} {{ formatCurrency(payout.amount) }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+
             <!-- Amanat Disbursements (only if amanat feature enabled) -->
             <template v-if="features.has_amanat">
               <Separator />
@@ -2188,22 +2312,29 @@ const completedWorkflowSteps = computed(() => {
                     <h4 class="font-medium">Amanat Disbursements</h4>
                     <p class="text-xs text-muted-foreground">{{ accountingHints.amanatDisbursement }}</p>
                   </div>
-                  <Button variant="outline" size="sm" @click="addAmanat">
+                  <Button variant="outline" size="sm" :disabled="props.amanatHolders.length === 0" @click="addAmanat">
                     <Plus class="h-4 w-4 mr-1" /> Add
                   </Button>
                 </div>
 
-                <Input v-model="amanatSearch" placeholder="Search Amanat depositors by name or phone" class="max-w-sm" />
+                <div v-if="props.amanatHolders.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span>No Amanat depositors are available for disbursement yet.</span>
+                    <Button variant="outline" size="sm" as-child>
+                      <Link :href="`/${company.slug}/fuel/amanat`">Add Amanat depositor</Link>
+                    </Button>
+                  </div>
+                </div>
 
                 <div v-for="(amanat, index) in form.amanat_disbursements" :key="index" class="flex gap-4 items-end">
                   <div class="flex-1">
                     <Label class="text-xs">Depositor</Label>
-                    <Select v-model="amanat.customer_id" @update:model-value="setAmanatCustomer(index)">
+                    <Select v-model="amanat.customer_id" :disabled="props.amanatHolders.length === 0" @update:model-value="setAmanatCustomer(index)">
                       <SelectTrigger>
                         <SelectValue placeholder="Select depositor" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem v-for="holder in filteredAmanatHolders" :key="holder.id" :value="holder.id">
+                        <SelectItem v-for="holder in props.amanatHolders" :key="holder.id" :value="holder.id">
                           {{ holder.name }} · Balance {{ currency }} {{ formatCurrency(holder.amanat_balance) }}
                         </SelectItem>
                       </SelectContent>
@@ -2283,6 +2414,10 @@ const completedWorkflowSteps = computed(() => {
                 <div v-if="totalEmployeeAdvances > 0" class="flex justify-between text-sm">
                   <span>Employee Salary Advances</span>
                   <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalEmployeeAdvances) }}</span>
+                </div>
+                <div v-if="totalPayrollPayouts > 0" class="flex justify-between text-sm">
+                  <span>Approved Salaries</span>
+                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalPayrollPayouts) }}</span>
                 </div>
                 <!-- Amanat Disbursements -->
                 <div v-if="totalAmanatDisbursements > 0" class="flex justify-between text-sm">

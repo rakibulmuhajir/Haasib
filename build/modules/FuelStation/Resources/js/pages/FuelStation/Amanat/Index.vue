@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -8,8 +8,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { BreadcrumbItem } from '@/types'
-import { Wallet, Eye, Search, Users, Banknote } from 'lucide-vue-next'
+import { Wallet, Eye, Search, Users, Banknote, Plus, UserCog } from 'lucide-vue-next'
 
 interface AmanatCustomer {
   id: string
@@ -22,13 +32,19 @@ interface AmanatCustomer {
   relationship?: string | null
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   customers: AmanatCustomer[]
   summary: {
     total_holders: number
     total_balance: number
   }
-}>()
+}>(), {
+  customers: () => [],
+  summary: () => ({
+    total_holders: 0,
+    total_balance: 0,
+  }),
+})
 
 const page = usePage()
 const companySlug = computed(() => {
@@ -47,11 +63,42 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
 const search = ref('')
+const addDialogOpen = ref(false)
+
+const holderForm = useForm({
+  name: '',
+  phone: '',
+  cnic: '',
+  relationship: 'external',
+  opening_deposit: '',
+  reference: '',
+  notes: '',
+})
+
+const openAddHolder = () => {
+  holderForm.reset()
+  holderForm.clearErrors()
+  addDialogOpen.value = true
+}
+
+const submitHolder = () => {
+  const slug = companySlug.value
+  if (!slug) return
+
+  holderForm.post(`/${slug}/fuel/amanat`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      addDialogOpen.value = false
+      holderForm.reset()
+    },
+  })
+}
 
 const filteredCustomers = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return props.customers
-  return props.customers.filter((c) =>
+  const customers = props.customers ?? []
+  if (!q) return customers
+  return customers.filter((c) =>
     c.customer_name.toLowerCase().includes(q) ||
     (c.customer_phone ?? '').toLowerCase().includes(q) ||
     (c.cnic ?? '').toLowerCase().includes(q)
@@ -115,6 +162,17 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
     :icon="Wallet"
     :breadcrumbs="breadcrumbs"
   >
+    <template #actions>
+      <Button variant="outline" @click="router.get(`/${companySlug}/customers`)">
+        <UserCog class="mr-2 h-4 w-4" />
+        Manage Customers
+      </Button>
+      <Button @click="openAddHolder">
+        <Plus class="mr-2 h-4 w-4" />
+        Add Holder
+      </Button>
+    </template>
+
     <div class="grid gap-4 md:grid-cols-2">
       <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-sky-500/10">
         <CardHeader class="pb-2">
@@ -151,9 +209,15 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
             <CardDescription>Click on a customer to view transactions and manage deposits.</CardDescription>
           </div>
 
-          <div class="relative w-full sm:w-[280px]">
-            <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-            <Input v-model="search" placeholder="Search customers..." class="pl-9" />
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div class="relative w-full sm:w-[280px]">
+              <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+              <Input v-model="search" placeholder="Search customers..." class="pl-9" />
+            </div>
+            <Button variant="outline" @click="openAddHolder">
+              <Plus class="mr-2 h-4 w-4" />
+              Add
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -168,7 +232,8 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
           <template #empty>
             <EmptyState
               title="No amanat holders"
-              description="Customers with trust deposits will appear here."
+              description="Add a depositor here, then record deposits or withdrawals from their account."
+              :actions="[{ label: 'Add Holder', icon: Plus, onClick: openAddHolder }]"
             />
           </template>
 
@@ -196,5 +261,80 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
         </DataTable>
       </CardContent>
     </Card>
+
+    <Dialog v-model:open="addDialogOpen">
+      <DialogContent class="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Add Amanat Holder</DialogTitle>
+          <DialogDescription>
+            Create the depositor account. Opening deposit is optional.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2 sm:col-span-2">
+              <Label>Name</Label>
+              <Input v-model="holderForm.name" placeholder="Customer name" />
+              <p v-if="holderForm.errors.name" class="text-xs text-red-600">{{ holderForm.errors.name }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Phone</Label>
+              <Input v-model="holderForm.phone" placeholder="Optional" />
+              <p v-if="holderForm.errors.phone" class="text-xs text-red-600">{{ holderForm.errors.phone }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>CNIC</Label>
+              <Input v-model="holderForm.cnic" placeholder="Optional" />
+              <p v-if="holderForm.errors.cnic" class="text-xs text-red-600">{{ holderForm.errors.cnic }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Type</Label>
+              <Select v-model="holderForm.relationship">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="external">External</SelectItem>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="holderForm.errors.relationship" class="text-xs text-red-600">{{ holderForm.errors.relationship }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Opening Deposit</Label>
+              <Input v-model="holderForm.opening_deposit" type="number" min="0" step="0.01" placeholder="Optional" />
+              <p v-if="holderForm.errors.opening_deposit" class="text-xs text-red-600">{{ holderForm.errors.opening_deposit }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Reference</Label>
+              <Input v-model="holderForm.reference" placeholder="Optional" />
+              <p v-if="holderForm.errors.reference" class="text-xs text-red-600">{{ holderForm.errors.reference }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Notes</Label>
+              <Input v-model="holderForm.notes" placeholder="Optional" />
+              <p v-if="holderForm.errors.notes" class="text-xs text-red-600">{{ holderForm.errors.notes }}</p>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" @click="addDialogOpen = false">
+            Cancel
+          </Button>
+          <Button type="button" :disabled="holderForm.processing" @click="submitHolder">
+            Add Holder
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </PageShell>
 </template>

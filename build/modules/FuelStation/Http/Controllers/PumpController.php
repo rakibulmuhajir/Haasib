@@ -137,7 +137,7 @@ class PumpController extends Controller
                             'label' => $validated['name'] . ' - ' . $nozzleSideNames[$i],
                             'current_meter_reading' => $electronicReading,
                             'last_closing_reading' => $electronicReading,
-                            'last_manual_reading' => $manualReading > 0 ? $manualReading : null,
+                            'last_manual_reading' => $manualReading,
                             'has_electronic_meter' => true,
                             'is_active' => true,
                             'sort_order' => $i,

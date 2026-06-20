@@ -5,6 +5,8 @@ namespace App\Modules\FuelStation\Actions\Product;
 use App\Contracts\PaletteAction;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
+use App\Modules\FuelStation\Models\Nozzle;
+use App\Modules\FuelStation\Models\Pump;
 use App\Modules\FuelStation\Services\FuelProductAccountMapper;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Models\TankReading;
@@ -43,6 +45,23 @@ class SetupAction implements PaletteAction
             'products.*.new_tank.code' => 'required_with:products.*.new_tank|string|max:50',
             'products.*.new_tank.capacity' => 'required_with:products.*.new_tank|numeric|min:1',
             'products.*.new_tank.low_level_alert' => 'nullable|numeric|min:0',
+            'products.*.pump_setup' => 'nullable|array',
+            'products.*.pump_setup.enabled' => 'nullable|boolean',
+            'products.*.pump_setup.name' => 'nullable|string|max:100',
+            'products.*.pump_setup.nozzle_count' => 'nullable|integer|min:1|max:2',
+            'products.*.pump_setup.nozzles' => 'nullable|array',
+            'products.*.pump_setup.nozzles.*.code' => 'nullable|string|max:50',
+            'products.*.pump_setup.nozzles.*.label' => 'nullable|string|max:255',
+            'products.*.pump_setup.nozzles.*.opening_electronic' => 'nullable|numeric|min:0',
+            'products.*.pump_setup.nozzles.*.opening_manual' => 'nullable|numeric|min:0',
+            'products.*.pump_setups' => 'nullable|array',
+            'products.*.pump_setups.*.name' => 'nullable|string|max:100',
+            'products.*.pump_setups.*.nozzle_count' => 'nullable|integer|min:1|max:2',
+            'products.*.pump_setups.*.nozzles' => 'nullable|array',
+            'products.*.pump_setups.*.nozzles.*.code' => 'nullable|string|max:50',
+            'products.*.pump_setups.*.nozzles.*.label' => 'nullable|string|max:255',
+            'products.*.pump_setups.*.nozzles.*.opening_electronic' => 'nullable|numeric|min:0',
+            'products.*.pump_setups.*.nozzles.*.opening_manual' => 'nullable|numeric|min:0',
         ];
     }
 
@@ -67,6 +86,8 @@ class SetupAction implements PaletteAction
         $movements = 0;
         $tanksCreated = 0;
         $categoriesCreated = 0;
+        $pumpsCreated = 0;
+        $nozzlesCreated = 0;
 
         $seenSkus = [];
 
@@ -82,6 +103,8 @@ class SetupAction implements PaletteAction
             &$movements,
             &$tanksCreated,
             &$categoriesCreated,
+            &$pumpsCreated,
+            &$nozzlesCreated,
             &$seenSkus
         ) {
             foreach ($products as $index => $product) {
@@ -218,6 +241,9 @@ class SetupAction implements PaletteAction
                 }
 
                 if ($packaging === 'open') {
+                    $pumpSetups = $this->normalizePumpSetups($product);
+                    $wantsPumpSetup = $type === 'fuel' && count($pumpSetups) > 0;
+
                     Log::info('Fuel product setup: resolving tank', [
                         'company_id' => $company->id,
                         'item_id' => $itemId,
@@ -227,6 +253,12 @@ class SetupAction implements PaletteAction
                         'opening_quantity' => $openingQty,
                     ]);
                     $tank = $this->resolveTank($company->id, $itemId, $product, $userId, $tanksCreated, $index, $openingQty);
+
+                    if (! $tank && $wantsPumpSetup) {
+                        throw ValidationException::withMessages([
+                            "products.{$index}.tank_id" => 'Select or add a tank before creating pump nozzles.',
+                        ]);
+                    }
 
                     if ($tank && $openingQty > 0) {
                         $this->recordOpeningTankBalance(
@@ -239,6 +271,21 @@ class SetupAction implements PaletteAction
                             $userId
                         );
                         $movements++;
+                    }
+
+                    if ($tank && $wantsPumpSetup) {
+                        foreach ($pumpSetups as $pumpIndex => $pumpSetup) {
+                            $createdNozzles = $this->createPumpSetup(
+                                $company->id,
+                                $tank->id,
+                                $itemId,
+                                $pumpSetup,
+                                $index,
+                                $pumpIndex
+                            );
+                            $pumpsCreated++;
+                            $nozzlesCreated += $createdNozzles;
+                        }
                     }
                 } elseif ($openingQty > 0) {
                     $warehouse = $this->resolveStandardWarehouse($company->id, $userId);
@@ -265,8 +312,218 @@ class SetupAction implements PaletteAction
                 'movements' => $movements,
                 'tanks_created' => $tanksCreated,
                 'categories_created' => $categoriesCreated,
+                'pumps_created' => $pumpsCreated,
+                'nozzles_created' => $nozzlesCreated,
             ],
         ];
+    }
+
+    private function normalizePumpSetups(array $product): array
+    {
+        $pumpSetups = array_values(array_filter(
+            (array) ($product['pump_setups'] ?? []),
+            fn ($setup) => is_array($setup)
+        ));
+
+        if (count($pumpSetups) > 0) {
+            return $pumpSetups;
+        }
+
+        $legacySetup = $product['pump_setup'] ?? null;
+        if (is_array($legacySetup) && (bool) ($legacySetup['enabled'] ?? false)) {
+            return [$legacySetup];
+        }
+
+        return [];
+    }
+
+    private function createPumpSetup(
+        string $companyId,
+        string $tankId,
+        string $itemId,
+        array $pumpData,
+        int $index,
+        int $pumpIndex = 0
+    ): int
+    {
+        $pumpName = trim((string) ($pumpData['name'] ?? ''));
+        $fieldPrefix = isset($pumpData['enabled'])
+            ? "products.{$index}.pump_setup"
+            : "products.{$index}.pump_setups.{$pumpIndex}";
+
+        if ($pumpName === '') {
+            throw ValidationException::withMessages([
+                "{$fieldPrefix}.name" => 'Enter the pump point name.',
+            ]);
+        }
+
+        $pumpExists = Pump::where('company_id', $companyId)
+            ->whereRaw('lower(name) = ?', [Str::lower($pumpName)])
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($pumpExists) {
+            throw ValidationException::withMessages([
+                "{$fieldPrefix}.name" => 'A pump point with this name already exists.',
+            ]);
+        }
+
+        $nozzleCount = (int) ($pumpData['nozzle_count'] ?? 2);
+        $nozzleCount = max(1, min(2, $nozzleCount));
+        $nozzleRows = array_values((array) ($pumpData['nozzles'] ?? []));
+        $needsGeneratedCode = false;
+
+        for ($i = 0; $i < $nozzleCount; $i++) {
+            if (trim((string) ($nozzleRows[$i]['code'] ?? '')) === '') {
+                $needsGeneratedCode = true;
+                break;
+            }
+        }
+
+        $pumpNumber = null;
+        if ($needsGeneratedCode) {
+            $preferredPumpNumber = $this->preferredNozzlePrefix($companyId, $pumpName);
+            $pumpNumber = $this->nextAvailableNozzlePrefix($companyId, $preferredPumpNumber, $nozzleCount);
+
+            if ($this->pumpNameHasNumber($pumpName) && $pumpNumber !== $preferredPumpNumber) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.name" => "Point {$preferredPumpNumber} already exists. Edit that point or use Point {$pumpNumber}.",
+                ]);
+            }
+        }
+
+        $firstElectronicReading = (float) ($nozzleRows[0]['opening_electronic'] ?? 0);
+        $firstManualReading = (float) ($nozzleRows[0]['opening_manual'] ?? 0);
+        $pump = Pump::create([
+            'company_id' => $companyId,
+            'name' => $pumpName,
+            'tank_id' => $tankId,
+            'current_meter_reading' => $firstElectronicReading,
+            'current_manual_reading' => $firstManualReading,
+            'is_active' => true,
+        ]);
+
+        $suffixes = ['A', 'B'];
+        $sideNames = ['Front', 'Back'];
+        $created = 0;
+        $seenCodes = [];
+
+        for ($i = 0; $i < $nozzleCount; $i++) {
+            $row = $nozzleRows[$i] ?? [];
+            $code = trim((string) ($row['code'] ?? ''));
+            $code = $code !== '' ? Str::upper($code) : $pumpNumber . $suffixes[$i];
+
+            if (isset($seenCodes[$code])) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.nozzles.{$i}.code" => 'Nozzle code is duplicated in this product setup.',
+                ]);
+            }
+
+            $codeExists = Nozzle::where('company_id', $companyId)
+                ->whereRaw('upper(code) = ?', [$code])
+                ->whereNull('deleted_at')
+                ->exists();
+
+            if ($codeExists) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.nozzles.{$i}.code" => 'This nozzle code already exists.',
+                ]);
+            }
+
+            $seenCodes[$code] = true;
+            $electronicReading = (float) ($row['opening_electronic'] ?? 0);
+            $manualReading = (float) ($row['opening_manual'] ?? 0);
+            $label = trim((string) ($row['label'] ?? ''));
+            $label = $label !== '' ? $label : $pumpName . ' - ' . $sideNames[$i];
+
+            Nozzle::create([
+                'company_id' => $companyId,
+                'pump_id' => $pump->id,
+                'tank_id' => $tankId,
+                'item_id' => $itemId,
+                'code' => $code,
+                'label' => $label,
+                'current_meter_reading' => $electronicReading,
+                'last_closing_reading' => $electronicReading,
+                'last_manual_reading' => $manualReading,
+                'has_electronic_meter' => true,
+                'is_active' => true,
+                'sort_order' => $i,
+            ]);
+
+            $created++;
+        }
+
+        return $created;
+    }
+
+    private function preferredNozzlePrefix(string $companyId, string $pumpName): int
+    {
+        preg_match('/\d+/', $pumpName, $matches);
+
+        if (isset($matches[0]) && (int) $matches[0] > 0) {
+            return (int) $matches[0];
+        }
+
+        return $this->nextNozzlePrefix($companyId);
+    }
+
+    private function pumpNameHasNumber(string $pumpName): bool
+    {
+        return preg_match('/\d+/', $pumpName) === 1;
+    }
+
+    private function nextNozzlePrefix(string $companyId): int
+    {
+        $maxPrefix = Nozzle::where('company_id', $companyId)
+            ->pluck('code')
+            ->map(function ($code) {
+                preg_match('/^(\d+)/', (string) $code, $matches);
+
+                return isset($matches[1]) ? (int) $matches[1] : 0;
+            })
+            ->max();
+
+        return max(1, ((int) $maxPrefix) + 1);
+    }
+
+    private function nextAvailableNozzlePrefix(string $companyId, int $preferredPrefix, int $nozzleCount): int
+    {
+        $takenCodes = Nozzle::where('company_id', $companyId)
+            ->pluck('code')
+            ->mapWithKeys(fn ($code) => [Str::upper((string) $code) => true])
+            ->all();
+
+        $preferredPrefix = max(1, $preferredPrefix);
+
+        for ($prefix = $preferredPrefix; $prefix <= 9999; $prefix++) {
+            if ($this->nozzleCodesAreAvailable($prefix, $takenCodes, $nozzleCount)) {
+                return $prefix;
+            }
+        }
+
+        for ($prefix = 1; $prefix < $preferredPrefix; $prefix++) {
+            if ($this->nozzleCodesAreAvailable($prefix, $takenCodes, $nozzleCount)) {
+                return $prefix;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'products' => 'No available nozzle number was found. Deactivate or remove unused nozzles first.',
+        ]);
+    }
+
+    private function nozzleCodesAreAvailable(int $prefix, array $takenCodes, int $nozzleCount): bool
+    {
+        $suffixes = array_slice(['A', 'B'], 0, $nozzleCount);
+
+        foreach ($suffixes as $suffix) {
+            if (isset($takenCodes[Str::upper($prefix . $suffix)])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function resolveCategoryId(string $companyId, string $name, ?string $userId, int &$createdCount): string

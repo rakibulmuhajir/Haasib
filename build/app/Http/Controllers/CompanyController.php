@@ -9,8 +9,7 @@ use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Services\CompanyBootstrapService;
 use App\Services\CommandBus;
-use App\Services\CompanyContextService;
-use App\Services\RolePermissionSynchronizer;
+use App\Services\CompanyRbacBootstrapper;
 use App\Modules\Accounting\Services\DashboardService;
 use App\Modules\FuelStation\Services\FuelDashboardService;
 use App\Modules\Inventory\Models\Warehouse;
@@ -68,14 +67,14 @@ class CompanyController extends Controller
         ]);
     }
 
-    public function store(CompanyStoreRequest $request, CompanyContextService $companyContext): RedirectResponse
+    public function store(CompanyStoreRequest $request): RedirectResponse
     {
         $data = $request->validated();
         $data['industry_code'] = strtolower($data['industry_code']);
         $data['base_currency'] = strtoupper($data['base_currency']);
         $data['slug'] = $data['slug'] ?? Str::slug($data['name']);
 
-        $company = DB::transaction(function () use ($data, $companyContext) {
+        $company = DB::transaction(function () use ($data) {
             $company = Company::create([
                 'name' => $data['name'],
                 'industry_code' => $data['industry_code'] ?? null,
@@ -97,13 +96,6 @@ class CompanyController extends Controller
                 ['is_base' => true, 'enabled_at' => now()]
             );
 
-            // Create roles for the new company BEFORE assigning owner role
-            $roleMatrix = config('role-permissions', []);
-            if (!empty($roleMatrix)) {
-                $syncer = app(RolePermissionSynchronizer::class);
-                $syncer->syncForCompany($company, $roleMatrix);
-            }
-
             if (Auth::check()) {
                 DB::table('auth.company_user')->updateOrInsert(
                     [
@@ -120,13 +112,9 @@ class CompanyController extends Controller
                     ]
                 );
 
-                // Assign the spatie role so permission checks succeed
-                $companyContext->withContext($company, function () use ($companyContext) {
-                    $user = Auth::user();
-                    if ($user) {
-                        $companyContext->assignRole($user, 'owner');
-                    }
-                });
+                app(CompanyRbacBootstrapper::class)->bootstrap($company, Auth::user());
+            } else {
+                app(CompanyRbacBootstrapper::class)->bootstrap($company);
             }
 
             return $company;
@@ -553,7 +541,7 @@ class CompanyController extends Controller
         return back()->with('success', 'Settings updated successfully.');
     }
 
-    public function destroy(string $companyId): JsonResponse
+    public function destroy(Request $request, string $companyId): RedirectResponse
     {
         $company = Company::findOrFail($companyId);
 
@@ -568,12 +556,11 @@ class CompanyController extends Controller
         }
 
         $commandBus = app(CommandBus::class);
-        $result = $commandBus->dispatch('company.delete', ['id' => $companyId], $request->user());
+        $result = $commandBus->dispatch('company.delete', ['slug' => $company->slug], $request->user());
 
-        return response()->json([
-            'success' => true,
-            'message' => $result['message'] ?? 'Company deleted successfully.',
-        ]);
+        return redirect()
+            ->route('companies.index')
+            ->with('success', $result['message'] ?? 'Company deleted successfully.');
     }
 
     /**

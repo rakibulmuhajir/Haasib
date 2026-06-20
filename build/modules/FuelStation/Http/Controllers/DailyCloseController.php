@@ -27,6 +27,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -53,44 +54,21 @@ class DailyCloseController extends Controller
     {
         $columns = ['id', 'first_name', 'last_name', 'position', 'base_salary'];
 
-        try {
-            DB::connection('pay')->select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
+        DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
 
-            return DB::connection('pay')
-                ->table('employees')
-                ->where('company_id', $companyId)
-                ->where(function ($query) {
-                    $query->where('is_active', true)
-                        ->orWhereNull('is_active');
-                })
-                ->where(function ($query) {
-                    $query->where('employment_status', '!=', 'terminated')
-                        ->orWhereNull('employment_status');
-                })
-                ->whereNull('deleted_at')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get($columns)
-                ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
-        } catch (\Throwable $e) {
-            try {
-                return Employee::where('company_id', $companyId)
-                    ->where(function ($query) {
-                        $query->where('is_active', true)
-                            ->orWhereNull('is_active');
-                    })
-                    ->where(function ($query) {
-                        $query->where('employment_status', '!=', 'terminated')
-                            ->orWhereNull('employment_status');
-                    })
-                    ->orderBy('first_name')
-                    ->orderBy('last_name')
-                    ->get($columns)
-                    ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
-            } catch (\Throwable $fallbackException) {
-                return collect();
-            }
-        }
+        return Employee::where('company_id', $companyId)
+            ->where(function ($query) {
+                $query->where('is_active', true)
+                    ->orWhereNull('is_active');
+            })
+            ->where(function ($query) {
+                $query->where('employment_status', '!=', 'terminated')
+                    ->orWhereNull('employment_status');
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get($columns)
+            ->map(fn ($employee) => $this->formatEmployeeForDailyClose($companyId, $employee));
     }
 
     private function formatEmployeeForDailyClose(string $companyId, object $employee): array
@@ -109,6 +87,33 @@ class DailyCloseController extends Controller
             'base_salary' => (float) ($employee->base_salary ?? 0),
             'outstanding_advances' => (float) $outstandingAdvances,
         ];
+    }
+
+    private function getApprovedPayrollPayouts(string $companyId, string $date)
+    {
+        try {
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
+
+            return Payslip::where('company_id', $companyId)
+                ->where('status', 'approved')
+                ->whereNull('payment_gl_transaction_id')
+                ->whereDate('approved_at', $date)
+                ->where('net_pay', '>', 0)
+                ->with('employee:id,first_name,last_name,employee_number')
+                ->orderBy('approved_at')
+                ->get(['id', 'company_id', 'employee_id', 'payslip_number', 'net_pay', 'approved_at'])
+                ->map(fn (Payslip $payslip) => [
+                    'payslip_id' => $payslip->id,
+                    'payslip_number' => $payslip->payslip_number,
+                    'employee_id' => $payslip->employee_id,
+                    'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
+                    'employee_number' => $payslip->employee?->employee_number,
+                    'amount' => (float) $payslip->net_pay,
+                    'approved_at' => $payslip->approved_at?->toISOString(),
+                ]);
+        } catch (\Throwable $e) {
+            return collect();
+        }
     }
 
     private function getPartnersForDailyClose(string $companyId)
@@ -260,7 +265,7 @@ class DailyCloseController extends Controller
         $stockDate = $stockBaseline->reading_date ? strtotime((string) $stockBaseline->reading_date) : 0;
         $dipDate = $dipReading->reading_date ? strtotime((string) $dipReading->reading_date) : 0;
 
-        return $stockDate >= $dipDate;
+        return $stockDate > $dipDate;
     }
 
     private function stockMovementLabel(?string $movementType): string
@@ -274,6 +279,35 @@ class DailyCloseController extends Controller
             'opening' => 'Opening stock',
             default => 'Inventory stock',
         };
+    }
+
+    private function decorateTanksWithStockSnapshot(string $companyId, $tanks, string $date): void
+    {
+        foreach ($tanks as $tank) {
+            $stockLevel = null;
+            $latestMovement = null;
+
+            if ($tank->linked_item_id) {
+                $stockLevel = StockLevel::where('company_id', $companyId)
+                    ->where('warehouse_id', $tank->id)
+                    ->where('item_id', $tank->linked_item_id)
+                    ->first(['quantity', 'available_quantity']);
+
+                $latestMovement = StockMovement::where('company_id', $companyId)
+                    ->where('warehouse_id', $tank->id)
+                    ->where('item_id', $tank->linked_item_id)
+                    ->orderByDesc('movement_date')
+                    ->orderByDesc('created_at')
+                    ->first(['movement_date', 'movement_type', 'created_at']);
+            }
+
+            $movementDate = $latestMovement?->movement_date?->toDateString();
+
+            $tank->setAttribute('current_stock_liters', $stockLevel ? (float) $stockLevel->quantity : null);
+            $tank->setAttribute('current_stock_source_label', $this->stockMovementLabel($latestMovement?->movement_type));
+            $tank->setAttribute('current_stock_as_of', $movementDate);
+            $tank->setAttribute('current_stock_after_close_date', $movementDate !== null && $movementDate > $date);
+        }
     }
 
     /**
@@ -339,6 +373,7 @@ class DailyCloseController extends Controller
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
 
         $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
+        $this->decorateTanksWithStockSnapshot($companyId, $tanks, $date);
 
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
@@ -410,6 +445,7 @@ class DailyCloseController extends Controller
 
         // Get employees for advances
         $employees = $this->getEmployeesForAdvances($companyId);
+        $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -500,6 +536,7 @@ class DailyCloseController extends Controller
             'nozzles' => $nozzles,
             'partners' => $partners,
             'employees' => $employees,
+            'approvedPayrollPayouts' => $approvedPayrollPayouts,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
@@ -547,7 +584,7 @@ class DailyCloseController extends Controller
             'other_sales' => 'nullable|array',
             'other_sales.*.item_id' => 'required|uuid',
             'other_sales.*.item_name' => 'required|string|max:255',
-            'other_sales.*.quantity' => 'required|integer|min:1',
+            'other_sales.*.quantity' => 'required|numeric|min:0.001',
             'other_sales.*.unit_price' => 'required|numeric|min:0',
             'other_sales.*.amount' => 'required|numeric|min:0',
 
@@ -586,6 +623,11 @@ class DailyCloseController extends Controller
             'employee_advances.*.amount' => 'required|numeric|min:0',
             'employee_advances.*.reason' => 'nullable|string|max:255',
 
+            'payroll_payouts' => 'nullable|array',
+            'payroll_payouts.*.payslip_id' => 'required|uuid',
+            'payroll_payouts.*.employee_id' => 'required|uuid',
+            'payroll_payouts.*.amount' => 'required|numeric|min:0',
+
             'amanat_disbursements' => 'nullable|array',
             'amanat_disbursements.*.customer_id' => 'required|uuid',
             'amanat_disbursements.*.customer_name' => 'nullable|string|max:255',
@@ -605,7 +647,9 @@ class DailyCloseController extends Controller
         try {
             $result = $this->dailyCloseService->processDailyClose($company->id, $validated, $request->user());
 
-            return redirect()->back()->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number']);
+            return redirect()
+                ->route('fuel.daily-close.index', ['company' => $company->slug])
+                ->with('success', 'Daily close processed successfully. Transaction: ' . $result['transaction_number']);
         } catch (\Throwable $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

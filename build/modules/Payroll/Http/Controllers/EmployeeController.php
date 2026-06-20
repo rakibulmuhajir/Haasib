@@ -17,6 +17,19 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeController extends Controller
 {
+    private function nextEmployeeNumber(string $companyId): string
+    {
+        DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ["pay.employee_number:{$companyId}"]);
+
+        $lastNumber = Employee::where('company_id', $companyId)
+            ->where('employee_number', 'like', 'EMP-%')
+            ->whereRaw("employee_number ~ '^EMP-[0-9]+$'")
+            ->selectRaw("MAX((substring(employee_number from '[0-9]+$'))::integer) as max_number")
+            ->value('max_number');
+
+        return 'EMP-' . str_pad((string) (((int) $lastNumber) + 1), 5, '0', STR_PAD_LEFT);
+    }
+
     private function setPayrollContext(string $companyId): void
     {
         try {
@@ -79,15 +92,22 @@ class EmployeeController extends Controller
         $company = app(CurrentCompany::class)->get();
         $this->setPayrollContext($company->id);
 
-        $employee = Employee::create([
-            ...$request->validated(),
-            'company_id' => $company->id,
-            'created_by_user_id' => auth()->id(),
-        ]);
+        $employee = DB::transaction(function () use ($request, $company) {
+            $data = $request->validated();
+            $data['employee_number'] = filled($data['employee_number'] ?? null)
+                ? $data['employee_number']
+                : $this->nextEmployeeNumber($company->id);
+
+            return Employee::create([
+                ...$data,
+                'company_id' => $company->id,
+                'created_by_user_id' => auth()->id(),
+            ]);
+        });
 
         return redirect()
-            ->route('employees.show', ['company' => $company->slug, 'employee' => $employee->id])
-            ->with('success', 'Employee created successfully.');
+            ->route('employees.index', ['company' => $company->slug])
+            ->with('success', "Employee {$employee->employee_number} created successfully.");
     }
 
     public function show(string $companySlug, string $employeeId): Response

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,8 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import type { BreadcrumbItem } from '@/types'
-import { Save, ArrowLeft } from 'lucide-vue-next'
+import { AlertCircle, Save, ArrowLeft } from 'lucide-vue-next'
+
+const NO_MANAGER = '__no_manager__'
 
 interface CompanyRef {
   id: string
@@ -36,7 +41,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const form = useForm({
-  employee_number: '',
   first_name: '',
   last_name: '',
   email: '',
@@ -46,15 +50,27 @@ const form = useForm({
   employment_status: 'active',
   department: '',
   position: '',
-  manager_id: '',
+  manager_id: NO_MANAGER,
   pay_frequency: 'monthly',
   base_salary: 0,
   currency: props.company.base_currency || 'USD',
   notes: '',
 })
 
+const errorMessages = computed(() => Object.values(form.errors).filter(Boolean))
+
 const submit = () => {
-  form.post(`/${props.company.slug}/employees`)
+  form
+    .transform((data) => ({
+      ...data,
+      manager_id: data.manager_id === NO_MANAGER ? null : data.manager_id,
+    }))
+    .post(`/${props.company.slug}/employees`, {
+      preserveScroll: true,
+      onError: () => {
+        toast.error('Employee was not saved. Check the highlighted fields.')
+      },
+    })
 }
 </script>
 
@@ -73,6 +89,16 @@ const submit = () => {
     </template>
 
     <form @submit.prevent="submit" class="space-y-6 max-w-4xl">
+      <Alert v-if="errorMessages.length > 0" variant="destructive">
+        <AlertCircle class="h-4 w-4" />
+        <AlertTitle>Employee was not saved</AlertTitle>
+        <AlertDescription>
+          <ul class="list-disc pl-4">
+            <li v-for="message in errorMessages" :key="message">{{ message }}</li>
+          </ul>
+        </AlertDescription>
+      </Alert>
+
       <!-- Personal Information -->
       <Card>
         <CardHeader>
@@ -80,18 +106,7 @@ const submit = () => {
           <CardDescription>Basic employee details</CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="space-y-2">
-              <Label for="employee_number">Employee ID *</Label>
-              <Input
-                id="employee_number"
-                v-model="form.employee_number"
-                placeholder="EMP001"
-                :class="{ 'border-destructive': form.errors.employee_number }"
-              />
-              <p v-if="form.errors.employee_number" class="text-sm text-destructive">{{ form.errors.employee_number }}</p>
-            </div>
-
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-2">
               <Label for="first_name">First Name *</Label>
               <Input
@@ -112,6 +127,8 @@ const submit = () => {
               <p v-if="form.errors.last_name" class="text-sm text-destructive">{{ form.errors.last_name }}</p>
             </div>
           </div>
+
+          <p class="text-sm text-muted-foreground">Employee ID will be generated automatically after saving.</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-2">
@@ -209,7 +226,7 @@ const submit = () => {
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No manager</SelectItem>
+                  <SelectItem :value="NO_MANAGER">No manager</SelectItem>
                   <SelectItem v-for="mgr in managers" :key="mgr.id" :value="mgr.id">
                     {{ mgr.first_name }} {{ mgr.last_name }} ({{ mgr.employee_number }})
                   </SelectItem>
@@ -289,7 +306,7 @@ const submit = () => {
         <Button variant="outline" type="button" @click="$inertia.get(`/${company.slug}/employees`)">
           Cancel
         </Button>
-        <Button type="submit" :disabled="form.processing">
+        <Button type="button" :disabled="form.processing" @click="submit">
           <Save class="mr-2 h-4 w-4" />
           {{ form.processing ? 'Saving...' : 'Save Employee' }}
         </Button>

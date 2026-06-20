@@ -106,6 +106,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
 
     // Amanat (Trust Deposits)
     Route::get('amanat', [AmanatController::class, 'index'])->name('fuel.amanat.index');
+    Route::post('amanat', [AmanatController::class, 'store'])->name('fuel.amanat.store');
     Route::get('amanat/{customer}', [AmanatController::class, 'show'])->name('fuel.amanat.show');
     Route::post('amanat/{customer}/deposit', [AmanatController::class, 'deposit'])->name('fuel.amanat.deposit');
     Route::post('amanat/{customer}/withdraw', [AmanatController::class, 'withdraw'])->name('fuel.amanat.withdraw');

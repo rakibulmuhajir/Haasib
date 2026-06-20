@@ -16,15 +16,39 @@ use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Payroll\Models\Employee;
+use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
+use App\Modules\Payroll\Services\PayrollPostingService;
 use Illuminate\Support\Facades\DB;
 
 class DailyCloseService
 {
     public function __construct(
         private readonly GlPostingService $postingService,
+        private readonly PayrollPostingService $payrollPostingService,
     ) {}
+
+    private function getOpeningLitersForTank(string $companyId, string $tankId, string $itemId, string $date): float
+    {
+        $previousReading = TankReading::where('company_id', $companyId)
+            ->where('tank_id', $tankId)
+            ->where('reading_date', '<', $date)
+            ->orderByDesc('reading_date')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($previousReading) {
+            return (float) $previousReading->dip_measurement_liters;
+        }
+
+        return (float) StockMovement::where('company_id', $companyId)
+            ->where('warehouse_id', $tankId)
+            ->where('item_id', $itemId)
+            ->whereDate('movement_date', '<=', $date)
+            ->sum('quantity');
+    }
 
     /**
      * Get the previous day's closing cash balance.
@@ -213,7 +237,8 @@ class DailyCloseService
             if (!empty($data['tank_readings'])) {
                 foreach ($data['tank_readings'] as $tankData) {
                     // Get the tank to find linked item
-                    $tank = \App\Modules\Inventory\Models\Warehouse::find($tankData['tank_id']);
+                    $tank = \App\Modules\Inventory\Models\Warehouse::where('company_id', $companyId)
+                        ->find($tankData['tank_id']);
                     $itemId = $tank?->linked_item_id;
 
                     if (!$itemId) {
@@ -221,20 +246,19 @@ class DailyCloseService
                     }
 
                     // Calculate system expected liters:
-                    // Opening (previous closing dip) + Receipts - Sales = Expected
-                    $previousReading = TankReading::where('company_id', $companyId)
-                        ->where('tank_id', $tankData['tank_id'])
-                        ->where('reading_date', '<', $date)
-                        ->orderByDesc('reading_date')
-                        ->first();
+                    // Opening (previous closing dip, or stock baseline for first close) + Receipts - Sales = Expected
+                    $openingLiters = $this->getOpeningLitersForTank($companyId, $tankData['tank_id'], $itemId, $date);
 
-                    $openingLiters = $previousReading ? (float) $previousReading->dip_measurement_liters : 0;
-
-                    // Get today's sales for this tank's item from nozzle readings
+                    // Get today's sales for this tank's item from nozzle readings and open/bulk product sales.
                     $todaysSales = 0;
                     foreach ($nozzleReadingsData as $nozzleData) {
                         if ($nozzleData['item_id'] === $itemId) {
                             $todaysSales += $nozzleData['liters_dispensed'];
+                        }
+                    }
+                    foreach ($otherSalesDetails as $sale) {
+                        if (($sale['item_id'] ?? null) === $itemId) {
+                            $todaysSales += (float) ($sale['quantity'] ?? 0);
                         }
                     }
 
@@ -485,6 +509,52 @@ class DailyCloseService
             }
             $metadata['employee_advances'] = $employeeAdvancesTotal;
 
+            // Approved salary payouts paid from station cash.
+            $payrollPayoutsTotal = 0;
+            $payrollPayoutDetails = [];
+            $payrollPayoutIds = [];
+            if (!empty($data['payroll_payouts'])) {
+                DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
+                DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+
+                foreach ($data['payroll_payouts'] as $payout) {
+                    $amount = round((float) ($payout['amount'] ?? 0), 2);
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    $payslip = Payslip::where('company_id', $companyId)
+                        ->where('status', 'approved')
+                        ->whereNull('payment_gl_transaction_id')
+                        ->whereDate('approved_at', $date)
+                        ->with('employee:id,first_name,last_name,employee_number')
+                        ->lockForUpdate()
+                        ->find($payout['payslip_id'] ?? null);
+
+                    if (!$payslip) {
+                        throw new \RuntimeException('One approved salary payout is no longer available for this daily close.');
+                    }
+
+                    $netPay = round((float) $payslip->net_pay, 2);
+                    if (abs($amount - $netPay) > 0.01) {
+                        throw new \RuntimeException("Salary payout for {$payslip->payslip_number} must equal remaining net salary.");
+                    }
+
+                    $payrollPayoutsTotal = round($payrollPayoutsTotal + $netPay, 2);
+                    $payrollPayoutIds[] = $payslip->id;
+                    $payrollPayoutDetails[] = [
+                        'payslip_id' => $payslip->id,
+                        'payslip_number' => $payslip->payslip_number,
+                        'employee_id' => $payslip->employee_id,
+                        'employee_name' => trim(($payslip->employee?->first_name ?? '') . ' ' . ($payslip->employee?->last_name ?? '')) ?: 'Employee',
+                        'employee_number' => $payslip->employee?->employee_number,
+                        'amount' => $netPay,
+                    ];
+                }
+            }
+            $metadata['payroll_payouts'] = $payrollPayoutsTotal;
+            $metadata['payroll_payout_details'] = $payrollPayoutDetails;
+
             // Amanat disbursements
             $amanatTotal = 0;
             $amanatDetails = [];
@@ -570,7 +640,7 @@ class DailyCloseService
             // Cash from sales (total revenue goes to cash initially)
             $cashFromSales = $totalRevenue - $totalNonCashReceipts;
             $totalCashIn = $openingCash + $partnerDepositsTotal + $cashFromSales;
-            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $amanatTotal + $expensesTotal;
+            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal;
 
             // Debit: Cash on Hand (opening + deposits + cash sales - withdrawals)
             $closingCash = (float) $data['closing_cash'];
@@ -591,6 +661,7 @@ class DailyCloseService
                 'bank_deposits' => $data['bank_deposits'] ?? [],
                 'partner_withdrawals' => $data['partner_withdrawals'] ?? [],
                 'employee_advances' => $data['employee_advances'] ?? [],
+                'payroll_payouts' => $payrollPayoutDetails,
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
                 'expenses' => $data['expenses'] ?? [],
                 'closing_cash' => $data['closing_cash'],
@@ -687,6 +758,16 @@ class DailyCloseService
                     'type' => 'debit',
                     'amount' => round($employeeAdvancesTotal, 2),
                     'description' => 'Employee salary advances',
+                ];
+            }
+
+            if ($payrollPayoutsTotal > 0) {
+                $payrollAccounts = $this->payrollPostingService->ensureDefaultPayrollAccounts($companyId);
+                $entries[] = [
+                    'account_id' => $payrollAccounts['payroll_payable']['id'],
+                    'type' => 'debit',
+                    'amount' => round($payrollPayoutsTotal, 2),
+                    'description' => 'Approved salary payouts',
                 ];
             }
 
@@ -803,6 +884,18 @@ class DailyCloseService
 
                 Nozzle::where('id', $nozzleData['nozzle_id'])
                     ->update($nozzleUpdate);
+            }
+
+            if (!empty($payrollPayoutIds)) {
+                Payslip::where('company_id', $companyId)
+                    ->whereIn('id', $payrollPayoutIds)
+                    ->update([
+                        'status' => 'paid',
+                        'paid_at' => now(),
+                        'payment_method' => 'cash',
+                        'payment_reference' => $transactionNumber,
+                        'payment_gl_transaction_id' => $transaction->id,
+                    ]);
             }
 
             return [

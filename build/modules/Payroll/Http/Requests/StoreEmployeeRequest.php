@@ -20,7 +20,7 @@ class StoreEmployeeRequest extends BaseFormRequest
 
         return [
             'employee_number' => [
-                'required',
+                'nullable',
                 'string',
                 'max:50',
                 "unique:pay.employees,employee_number,NULL,id,company_id,{$company->id},deleted_at,NULL",

@@ -8,13 +8,10 @@ use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
-use App\Models\Role;
-use App\Services\RolePermissionSynchronizer;
+use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\PermissionRegistrar;
 
 class CreateAction implements PaletteAction
 {
@@ -71,20 +68,10 @@ class CreateAction implements PaletteAction
                 'updated_at' => now(),
             ]);
 
-            // Ensure company-scoped roles exist and carry permissions, then assign owner to creator
-            CompanyContext::withContext($company, function () use ($company) {
-                $this->syncRolesForCompany($company);
-                CompanyContext::assignRole(Auth::user(), 'owner');
-            });
+            app(CompanyRbacBootstrapper::class)->bootstrap($company, Auth::user());
 
             // Set as active context
             CompanyContext::setContext($company);
-
-            // Seed role-permission matrix for this company (handles wildcard expansion)
-            $matrix = config('role-permissions', []);
-            if (!empty($matrix)) {
-                app(RolePermissionSynchronizer::class)->syncForCompany($company, $matrix);
-            }
 
             return [
                 'message' => "Company created: {$company->name} ({$company->slug})",
@@ -97,54 +84,6 @@ class CreateAction implements PaletteAction
                 'redirect' => "/{$company->slug}/dashboard",
             ];
         });
-    }
-
-    private function syncRolesForCompany(Company $company): void
-    {
-        $matrix = config('role-permissions', []);
-        if (empty($matrix)) {
-            return;
-        }
-
-        $registrar = app(PermissionRegistrar::class);
-        $registrar->setPermissionsTeamId($company->id);
-
-        foreach ($matrix as $roleName => $permissionNames) {
-            // Create role if missing (raw to avoid team scoping issues)
-            $role = Role::where('name', $roleName)
-                ->where('guard_name', 'web')
-                ->where('company_id', $company->id)
-                ->first();
-
-            if (!$role) {
-                $role = Role::forceCreate([
-                    'id' => (string) \Illuminate\Support\Str::orderedUuid(),
-                    'name' => $roleName,
-                    'guard_name' => 'web',
-                    'company_id' => $company->id,
-                ]);
-            }
-
-            $permissionIds = Permission::whereIn('name', $permissionNames)
-                ->where('guard_name', 'web')
-                ->pluck('id')
-                ->filter()
-                ->all();
-
-            // Manually sync permissions to avoid null IDs or team context issues
-            DB::table(Tables::ROLE_HAS_PERMISSIONS)
-                ->where('role_id', $role->id)
-                ->delete();
-
-            foreach ($permissionIds as $permissionId) {
-                DB::table(Tables::ROLE_HAS_PERMISSIONS)->insert([
-                    'permission_id' => $permissionId,
-                    'role_id' => $role->id,
-                ]);
-            }
-        }
-
-        $registrar->forgetCachedPermissions();
     }
 
     private function uniqueSlug(string $base): string

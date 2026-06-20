@@ -52,11 +52,17 @@ interface Customer {
   phone?: string | null
 }
 
-const props = defineProps<{
+interface PaginatedTransactions {
+  data: AmanatTransaction[]
+}
+
+const props = withDefaults(defineProps<{
   customer: Customer
   profile: CustomerProfile
-  transactions: AmanatTransaction[]
-}>()
+  transactions: AmanatTransaction[] | PaginatedTransactions
+}>(), {
+  transactions: () => [],
+})
 
 const page = usePage()
 const companySlug = computed(() => {
@@ -160,8 +166,13 @@ const txColumns = [
   { key: 'amount', label: 'Amount', align: 'right' as const },
 ]
 
+const transactionRows = computed(() => {
+  if (Array.isArray(props.transactions)) return props.transactions
+  return props.transactions?.data ?? []
+})
+
 const txTableData = computed(() => {
-  return props.transactions.map((tx) => {
+  return transactionRows.value.map((tx) => {
     let details = tx.reference ?? ''
     if (tx.transaction_type === 'fuel_purchase' && tx.fuel_item_name) {
       details = `${tx.fuel_quantity?.toFixed(2) ?? '?'} L ${tx.fuel_item_name}`

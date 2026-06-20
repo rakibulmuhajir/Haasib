@@ -381,6 +381,7 @@ class FuelDashboardService
                 'last_dip_at' => $tankStock['last_dip_at'] ?? null,
                 'last_dip_recorded_at' => $tankStock['last_dip_recorded_at'] ?? null,
                 'last_dip_status' => $tankStock['last_dip_status'] ?? null,
+                'last_tank_reading_type' => $tankStock['last_tank_reading_type'] ?? null,
                 'stock_variance' => $stockVariance,
                 'stock_value' => round($currentStock * (float) ($item->avg_cost ?: $item->cost_price ?: 0), 2),
                 'purchase_rate' => $purchaseRate,
@@ -477,7 +478,7 @@ class FuelDashboardService
             ->whereIn('tank_id', $tanks->pluck('id')->all())
             ->orderByDesc('reading_date')
             ->orderByDesc('created_at')
-            ->get(['tank_id', 'reading_date', 'dip_measurement_liters', 'status', 'created_at'])
+            ->get(['tank_id', 'reading_date', 'reading_type', 'dip_measurement_liters', 'status', 'created_at'])
             ->unique('tank_id')
             ->keyBy('tank_id');
 
@@ -495,6 +496,7 @@ class FuelDashboardService
                     'last_dip_at' => null,
                     'last_dip_recorded_at' => null,
                     'last_dip_status' => null,
+                    'last_tank_reading_type' => null,
                 ];
             }
 
@@ -516,6 +518,7 @@ class FuelDashboardService
                     $byItem[$itemId]['last_dip_at'] = $readingAt?->toIso8601String();
                     $byItem[$itemId]['last_dip_recorded_at'] = $recordedAt?->toIso8601String();
                     $byItem[$itemId]['last_dip_status'] = $reading->status;
+                    $byItem[$itemId]['last_tank_reading_type'] = $reading->reading_type;
                 }
             }
         }

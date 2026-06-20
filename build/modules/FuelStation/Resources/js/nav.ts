@@ -73,7 +73,7 @@ export const fuelStationNav: ModuleNavConfig = {
               { title: 'Credit Customers', href: `/${slug}/fuel/credit-customers`, icon: CreditCard },
               { title: 'Payroll Overview', href: `/${slug}/payroll`, icon: Banknote },
               { title: 'Employees', href: `/${slug}/employees`, icon: UserCog },
-              { title: 'Salary Advances', href: `/${slug}/salary-advances`, icon: HandCoins },
+              { title: 'Advance Balances', href: `/${slug}/salary-advances`, icon: HandCoins },
               { title: 'Partners', href: `/${slug}/partners`, icon: UsersRound },
               { title: 'Investors', href: `/${slug}/fuel/investors`, icon: UsersRound },
             ],

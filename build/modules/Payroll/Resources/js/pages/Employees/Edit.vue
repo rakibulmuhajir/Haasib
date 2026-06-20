@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { Save, ArrowLeft } from 'lucide-vue-next'
 
+const NO_MANAGER = '__no_manager__'
+
 interface CompanyRef {
   id: string
   name: string
@@ -72,7 +74,7 @@ const form = useForm({
   employment_status: props.employee.employment_status,
   department: props.employee.department ?? '',
   position: props.employee.position ?? '',
-  manager_id: props.employee.manager_id ?? '',
+  manager_id: props.employee.manager_id ?? NO_MANAGER,
   pay_frequency: props.employee.pay_frequency,
   base_salary: props.employee.base_salary,
   currency: props.employee.currency,
@@ -82,7 +84,12 @@ const form = useForm({
 const submit = () => {
   const showUrl = `/${props.company.slug}/employees/${props.employee.id}`
 
-  form.put(`/${props.company.slug}/employees/${props.employee.id}`, {
+  form
+    .transform((data) => ({
+      ...data,
+      manager_id: data.manager_id === NO_MANAGER ? null : data.manager_id,
+    }))
+    .put(`/${props.company.slug}/employees/${props.employee.id}`, {
     preserveScroll: false,
     preserveState: false,
     onSuccess: () => {
@@ -266,7 +273,7 @@ const submit = () => {
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No manager</SelectItem>
+                  <SelectItem :value="NO_MANAGER">No manager</SelectItem>
                   <SelectItem v-for="mgr in managers" :key="mgr.id" :value="mgr.id">
                     {{ mgr.first_name }} {{ mgr.last_name }} ({{ mgr.employee_number }})
                   </SelectItem>

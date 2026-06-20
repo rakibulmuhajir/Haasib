@@ -1,28 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, useForm, usePage } from '@inertiajs/vue3'
+import { Head, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { Wallet, Search, TrendingUp, Clock, CheckCircle, Plus } from 'lucide-vue-next'
+import { Wallet, Search, TrendingUp, Clock, CheckCircle } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 
 interface Advance {
@@ -52,13 +41,6 @@ interface CompanyRef {
   base_currency: string
 }
 
-interface PaymentAccount {
-  id: string
-  code: string
-  name: string
-  subtype: string
-}
-
 interface Stats {
   total_advances: number
   total_amount: number
@@ -72,7 +54,6 @@ const props = defineProps<{
   company: CompanyRef
   advances: Advance[]
   employees: Employee[]
-  paymentAccounts: PaymentAccount[]
   stats: Stats
   currency: string
 }>()
@@ -95,18 +76,6 @@ const currency = computed(() => currencySymbol(props.currency))
 const search = ref('')
 const statusFilter = ref('all')
 const employeeFilter = ref('all')
-const showAdvanceDialog = ref(false)
-
-const form = useForm({
-  employee_id: '',
-  advance_date: new Date().toISOString().slice(0, 10),
-  amount: '',
-  payment_method: 'cash',
-  bank_account_id: 'default',
-  reference: '',
-  reason: '',
-  notes: '',
-})
 
 const filteredAdvances = computed(() => {
   return props.advances.filter((adv) => {
@@ -137,9 +106,9 @@ const formatDate = (dateStr: string) => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', label: 'Pending' }
+      return { class: 'bg-amber-100 text-amber-800', label: 'Outstanding' }
     case 'partially_recovered':
-      return { class: 'bg-sky-100 text-sky-800', label: 'Partial' }
+      return { class: 'bg-sky-100 text-sky-800', label: 'Partly recovered' }
     case 'fully_recovered':
       return { class: 'bg-emerald-100 text-emerald-800', label: 'Recovered' }
     case 'cancelled':
@@ -155,7 +124,7 @@ const columns = [
   { key: 'amount', label: 'Amount' },
   { key: 'recovered', label: 'Recovered' },
   { key: 'outstanding', label: 'Outstanding' },
-  { key: 'status', label: 'Status' },
+  { key: 'status', label: 'Recovery' },
 ]
 
 const tableData = computed(() => {
@@ -176,23 +145,6 @@ const recoveryPercentage = computed(() => {
   return Math.round((props.stats.total_recovered / props.stats.total_amount) * 100)
 })
 
-const submitAdvance = () => {
-  form
-    .transform((data) => ({
-      ...data,
-      bank_account_id: data.bank_account_id === 'default' ? null : data.bank_account_id,
-    }))
-    .post(`/${props.company.slug}/salary-advances`, {
-    preserveScroll: true,
-    onSuccess: () => {
-      showAdvanceDialog.value = false
-      form.reset()
-      form.advance_date = new Date().toISOString().slice(0, 10)
-      form.payment_method = 'cash'
-      form.bank_account_id = 'default'
-    },
-  })
-}
 </script>
 
 <template>
@@ -200,17 +152,10 @@ const submitAdvance = () => {
 
   <PageShell
     title="Salary Advances"
-    description="View salary advances given to employees. Recovery happens via payroll deductions."
+    description="View advances recorded from Daily Close. Recovery happens automatically through payroll deductions."
     :icon="Wallet"
     :breadcrumbs="breadcrumbs"
   >
-    <template #actions>
-      <Button @click="showAdvanceDialog = true">
-        <Plus class="mr-2 h-4 w-4" />
-        Record Advance
-      </Button>
-    </template>
-
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
@@ -234,7 +179,7 @@ const submitAdvance = () => {
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Clock class="h-4 w-4 text-amber-600" />
-            <span>{{ stats.pending_count + stats.partially_recovered_count }} pending</span>
+            <span>{{ stats.pending_count + stats.partially_recovered_count }} outstanding</span>
           </div>
         </CardContent>
       </Card>
@@ -269,7 +214,7 @@ const submitAdvance = () => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle class="text-base">Advance History</CardTitle>
-            <CardDescription>All salary advances given to employees.</CardDescription>
+            <CardDescription>Daily Close is the source of truth for station cash advances.</CardDescription>
           </div>
 
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -295,9 +240,9 @@ const submitAdvance = () => {
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="partially_recovered">Partial</SelectItem>
+                <SelectItem value="all">All Recovery</SelectItem>
+                <SelectItem value="pending">Outstanding</SelectItem>
+                <SelectItem value="partially_recovered">Partly recovered</SelectItem>
                 <SelectItem value="fully_recovered">Recovered</SelectItem>
               </SelectContent>
             </Select>
@@ -310,7 +255,7 @@ const submitAdvance = () => {
           <template #empty>
             <EmptyState
               title="No salary advances yet"
-              description="Record an advance here or from Daily Close when cash is paid during station closing."
+              description="Record employee cash advances in Daily Close so station cash stays reconciled."
             />
           </template>
 
@@ -345,98 +290,5 @@ const submitAdvance = () => {
         </DataTable>
       </CardContent>
     </Card>
-
-    <Dialog v-model:open="showAdvanceDialog">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Record Salary Advance</DialogTitle>
-          <DialogDescription>
-            Advance given increases Employee Advances and reduces the selected cash or bank account.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form class="space-y-4" @submit.prevent="submitAdvance">
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2 sm:col-span-2">
-              <Label>Employee</Label>
-              <Select v-model="form.employee_id">
-                <SelectTrigger :class="{ 'border-destructive': form.errors.employee_id }">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="employee in employees" :key="employee.id" :value="employee.id">
-                    {{ employee.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p v-if="form.errors.employee_id" class="text-sm text-destructive">{{ form.errors.employee_id }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="advance_date">Date</Label>
-              <Input id="advance_date" v-model="form.advance_date" type="date" :class="{ 'border-destructive': form.errors.advance_date }" />
-              <p v-if="form.errors.advance_date" class="text-sm text-destructive">{{ form.errors.advance_date }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="amount">Amount</Label>
-              <Input id="amount" v-model="form.amount" type="number" min="0" step="0.01" :class="{ 'border-destructive': form.errors.amount }" />
-              <p v-if="form.errors.amount" class="text-sm text-destructive">{{ form.errors.amount }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label>Payment method</Label>
-              <Select v-model="form.payment_method">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-2">
-              <Label>Paid from</Label>
-              <Select v-model="form.bank_account_id">
-                <SelectTrigger>
-                  <SelectValue placeholder="Default cash/bank" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default cash/bank</SelectItem>
-                  <SelectItem v-for="account in paymentAccounts" :key="account.id" :value="account.id">
-                    {{ account.code }} — {{ account.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="reference">Reference</Label>
-              <Input id="reference" v-model="form.reference" placeholder="Optional" />
-            </div>
-
-            <div class="space-y-2">
-              <Label for="reason">Reason</Label>
-              <Input id="reason" v-model="form.reason" placeholder="Optional" />
-            </div>
-
-            <div class="space-y-2 sm:col-span-2">
-              <Label for="notes">Notes</Label>
-              <Textarea id="notes" v-model="form.notes" rows="2" />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" :disabled="form.processing" @click="showAdvanceDialog = false">Cancel</Button>
-            <Button type="submit" :disabled="form.processing">
-              {{ form.processing ? 'Recording...' : 'Record Advance' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   </PageShell>
 </template>

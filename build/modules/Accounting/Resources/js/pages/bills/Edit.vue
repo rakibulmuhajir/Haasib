@@ -67,6 +67,10 @@ interface ItemOption {
   cost_price: number
   unit_of_measure: string
   track_inventory: boolean
+  asset_account_id?: string | null
+  expense_account_id?: string | null
+  preferred_warehouse_id?: string | null
+  preferred_line_account_id?: string | null
 }
 
 interface WarehouseOption {
@@ -74,6 +78,8 @@ interface WarehouseOption {
   code: string
   name: string
   is_primary: boolean
+  warehouse_type?: string | null
+  linked_item_id?: string | null
 }
 
 const props = defineProps<{
@@ -116,8 +122,8 @@ const form = useForm({
   line_items: props.bill.line_items.map((li) => ({
     ...li,
     item_id: li.item_id ?? null,
-    warehouse_id: li.warehouse_id ?? defaultWarehouseId.value,
-    expense_account_id: li.expense_account_id ?? ''
+    warehouse_id: li.warehouse_id ?? null,
+    expense_account_id: li.expense_account_id ?? '__none'
   })),
 })
 
@@ -137,13 +143,13 @@ const totals = computed(() => {
 
 const addLine = () => form.line_items.push({
   item_id: null,
-  warehouse_id: defaultWarehouseId.value,
+  warehouse_id: null,
   description: '',
   quantity: 1,
   unit_price: 0,
   tax_rate: 0,
   discount_rate: 0,
-  expense_account_id: ''
+  expense_account_id: '__none'
 })
 
 const removeLine = (idx: number) => {
@@ -162,12 +168,28 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
     if (item) {
       line.description = item.name
       line.unit_price = Number(item.cost_price) || 0
+      line.warehouse_id = item.preferred_warehouse_id ?? defaultWarehouseId.value
+      line.expense_account_id = item.preferred_line_account_id ?? '__none'
     }
+  } else {
+    line.warehouse_id = null
+    line.expense_account_id = '__none'
   }
 }
 
 const handleSubmit = () => {
-  form.put(`/${props.company.slug}/bills/${props.bill.id}`, {
+  const data = {
+    ...form.data(),
+    ap_account_id: form.ap_account_id === '__none' ? null : form.ap_account_id,
+    line_items: form.line_items.map((item) => ({
+      ...item,
+      item_id: item.item_id || null,
+      warehouse_id: item.warehouse_id || null,
+      expense_account_id: item.expense_account_id === '__none' ? null : item.expense_account_id,
+    })),
+  }
+
+  form.transform(() => data).put(`/${props.company.slug}/bills/${props.bill.id}`, {
     preserveScroll: true,
   })
 }
@@ -253,8 +275,8 @@ const handleSubmit = () => {
           </Button>
         </div>
         <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-          For fuel purchases, select the fuel item and set the line account to Fuel Inventory.
-          Use the default expense for general operating bills.
+          Select the product. Haasib will choose its tank/warehouse and inventory account automatically.
+          Use the default account only for non-inventory bills.
         </div>
         <div class="space-y-4">
           <div
@@ -333,17 +355,17 @@ const handleSubmit = () => {
             <div class="flex items-end justify-between gap-3">
               <div class="flex-1">
                 <div class="flex items-center gap-2">
-                  <Label>{{ t('expenseAccount') }}</Label>
+                  <Label>Line Account</Label>
                   <TooltipProvider :delay-duration="0">
                     <Tooltip>
                       <TooltipTrigger as-child>
                         <Button type="button" variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground">
                           <Info class="h-3.5 w-3.5" />
-                          <span class="sr-only">Expense account help</span>
+                          <span class="sr-only">Line account help</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Use Fuel Inventory for fuel purchases. Use default expense for general bills.
+                        Inventory products use their own stock account. General bills can use the company default.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

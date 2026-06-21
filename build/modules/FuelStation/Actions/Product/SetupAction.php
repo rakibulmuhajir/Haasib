@@ -181,8 +181,13 @@ class SetupAction implements PaletteAction
                 $seenSkus[] = $sku;
 
                 $item = $productCatalog->findExisting($company->id, $fuelCategory, $sku);
-                $accountMappings = $fuelCategory !== null
-                    ? app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $fuelCategory, $baseCurrency, $userId)
+                $accountMappingKey = $fuelCategory;
+                if ($type === 'lubricant' && $packaging === 'packaged') {
+                    $accountMappingKey = 'lubricant_packaged';
+                }
+
+                $accountMappings = $accountMappingKey !== null
+                    ? app(FuelProductAccountMapper::class)->resolveAccounts($company->id, $accountMappingKey, $baseCurrency, $userId)
                     : null;
                 $payload = [
                     'company_id' => $company->id,

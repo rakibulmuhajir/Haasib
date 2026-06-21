@@ -57,7 +57,6 @@ export const fuelStationNav: ModuleNavConfig = {
             title: 'Purchases',
             icon: ReceiptText,
             children: [
-              { title: 'Bills', href: `/${slug}/bills?type=fuel`, icon: ReceiptText },
               { title: 'Bill Payments', href: `/${slug}/bill-payments`, icon: Banknote },
               { title: 'Vendors', href: `/${slug}/vendors`, icon: Truck },
               { title: 'Fuel Deliveries', href: `/${slug}/fuel/receipts`, icon: Droplets },

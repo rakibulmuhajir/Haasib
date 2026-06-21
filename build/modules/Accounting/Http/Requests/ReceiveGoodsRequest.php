@@ -25,6 +25,7 @@ class ReceiveGoodsRequest extends BaseFormRequest
             'lines.*.expected_quantity' => 'nullable|numeric|min:0.01',
             'lines.*.received_quantity' => 'nullable|numeric|min:0.01',
             'lines.*.variance_reason' => 'nullable|string|in:transit_loss,spillage,temperature_adjustment,measurement_error,other',
+            'lines.*.variance_treatment' => 'nullable|string|in:final_loss,supplier_claim',
             'lines.*.warehouse_id' => 'nullable|uuid',
             'lines.*.notes' => 'nullable|string|max:1000',
         ];

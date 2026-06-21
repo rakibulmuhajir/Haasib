@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Partner;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\FuelStation\Http\Requests\LockDailyCloseRequest;
 use App\Modules\FuelStation\Http\Requests\LockMonthDailyCloseRequest;
@@ -114,6 +115,55 @@ class DailyCloseController extends Controller
         } catch (\Throwable $e) {
             return collect();
         }
+    }
+
+    private function getPendingBillPaymentsForDailyClose(string $companyId, string $date)
+    {
+        $cashAccountId = StationSettings::where('company_id', $companyId)->value('cash_account_id')
+            ?? Account::where('company_id', $companyId)
+                ->whereNull('deleted_at')
+                ->where('is_active', true)
+                ->where('subtype', 'cash')
+                ->orderBy('code')
+                ->value('id');
+
+        return BillPayment::where('company_id', $companyId)
+            ->whereDate('payment_date', $date)
+            ->whereNull('transaction_id')
+            ->with([
+                'vendor:id,name',
+                'paymentAccount:id,code,name,subtype',
+                'allocations.bill:id,bill_number',
+            ])
+            ->orderBy('payment_date')
+            ->orderBy('payment_number')
+            ->get(['id', 'company_id', 'vendor_id', 'payment_group_number', 'payment_number', 'payment_date', 'amount', 'currency', 'payment_method', 'payment_account_id', 'reference_number'])
+            ->map(function (BillPayment $payment) use ($cashAccountId) {
+                $accountLabel = trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code . ' — ' : '') . ($payment->paymentAccount?->name ?? 'Payment account'));
+                $billNumbers = $payment->allocations
+                    ->map(fn ($allocation) => $allocation->bill?->bill_number)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [
+                    'payment_id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
+                    'payment_group_number' => $payment->payment_group_number,
+                    'vendor_id' => $payment->vendor_id,
+                    'vendor_name' => $payment->vendor?->name ?? 'Supplier',
+                    'payment_account_id' => $payment->payment_account_id,
+                    'payment_account_name' => $accountLabel,
+                    'payment_account_subtype' => $payment->paymentAccount?->subtype,
+                    'payment_method' => $payment->payment_method,
+                    'amount' => (float) $payment->amount,
+                    'currency' => $payment->currency,
+                    'reference_number' => $payment->reference_number,
+                    'bill_numbers' => $billNumbers,
+                    'affects_cash_drawer' => $payment->payment_account_id === $cashAccountId,
+                ];
+            });
     }
 
     private function getPartnersForDailyClose(string $companyId)
@@ -446,6 +496,7 @@ class DailyCloseController extends Controller
         // Get employees for advances
         $employees = $this->getEmployeesForAdvances($companyId);
         $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
+        $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -463,6 +514,13 @@ class DailyCloseController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        $otherDepositAccounts = Account::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->whereIn('type', ['revenue', 'other_income', 'liability', 'equity'])
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'type']);
+
         // Get lubricant items for other sales
         $lubricantSelect = ['id', 'name', 'sku', 'brand', 'unit_of_measure', 'cost_price'];
         if ($hasSalePrice) {
@@ -472,7 +530,10 @@ class DailyCloseController extends Controller
             $lubricantSelect[] = 'selling_price';
         }
         $lubricantItems = Item::where('company_id', $companyId)
-            ->whereNull('fuel_category')
+            ->where(function ($query) {
+                $query->whereNull('fuel_category')
+                    ->orWhere('fuel_category', 'lubricant');
+            })
             ->where('item_type', 'product')
             ->where('is_active', true)
             ->whereNull('deleted_at')
@@ -537,10 +598,12 @@ class DailyCloseController extends Controller
             'partners' => $partners,
             'employees' => $employees,
             'approvedPayrollPayouts' => $approvedPayrollPayouts,
+            'pendingBillPayments' => $pendingBillPayments,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
             'expenseAccounts' => $expenseAccounts,
+            'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,
             'existingTankReadings' => $existingTankReadings,
             'previousTankReadings' => $previousTankReadings->map(fn($r) => [
@@ -599,6 +662,18 @@ class DailyCloseController extends Controller
             'partner_deposits' => 'nullable|array',
             'partner_deposits.*.partner_id' => 'required|uuid',
             'partner_deposits.*.amount' => 'required|numeric|min:0',
+
+            'amanat_deposits' => 'nullable|array',
+            'amanat_deposits.*.customer_id' => 'required|uuid',
+            'amanat_deposits.*.customer_name' => 'nullable|string|max:255',
+            'amanat_deposits.*.amount' => 'required|numeric|min:0',
+            'amanat_deposits.*.reference' => 'nullable|string|max:255',
+
+            'other_deposits' => 'nullable|array',
+            'other_deposits.*.deposit_type' => 'required|in:loss_compensation,fuel_disbursement,misc_income',
+            'other_deposits.*.account_id' => 'nullable|uuid',
+            'other_deposits.*.description' => 'nullable|string|max:255',
+            'other_deposits.*.amount' => 'required|numeric|min:0',
 
             // Dynamic payment receipts (replaces hardcoded bank_transfers, card_swipes, parco_cards)
             'payment_receipts' => 'nullable|array',
@@ -1053,6 +1128,8 @@ class DailyCloseController extends Controller
 
         // Get employees
         $employees = $this->getEmployeesForAdvances($companyId);
+        $approvedPayrollPayouts = $this->getApprovedPayrollPayouts($companyId, $date);
+        $pendingBillPayments = $this->getPendingBillPaymentsForDailyClose($companyId, $date);
 
         // Get bank accounts
         $bankAccounts = Account::where('company_id', $companyId)
@@ -1070,6 +1147,13 @@ class DailyCloseController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
+        $otherDepositAccounts = Account::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->whereIn('type', ['revenue', 'other_income', 'liability', 'equity'])
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'type']);
+
         // Get lubricant items
         $lubricantSelect = ['id', 'name', 'sku', 'brand', 'unit_of_measure', 'cost_price'];
         if ($hasSalePrice) {
@@ -1079,7 +1163,10 @@ class DailyCloseController extends Controller
             $lubricantSelect[] = 'selling_price';
         }
         $lubricantItems = Item::where('company_id', $companyId)
-            ->whereNull('fuel_category')
+            ->where(function ($query) {
+                $query->whereNull('fuel_category')
+                    ->orWhere('fuel_category', 'lubricant');
+            })
             ->where('item_type', 'product')
             ->where('is_active', true)
             ->whereNull('deleted_at')
@@ -1141,10 +1228,13 @@ class DailyCloseController extends Controller
             'nozzles' => $nozzles,
             'partners' => $partners,
             'employees' => $employees,
+            'approvedPayrollPayouts' => $approvedPayrollPayouts,
+            'pendingBillPayments' => $pendingBillPayments,
             'amanatHolders' => $amanatHolders,
             'investors' => $investors,
             'bankAccounts' => $bankAccounts,
             'expenseAccounts' => $expenseAccounts,
+            'otherDepositAccounts' => $otherDepositAccounts,
             'lubricantItems' => $lubricantItems,
             'existingTankReadings' => $existingTankReadings,
             'previousTankReadings' => $previousTankReadings->map(fn($r) => [

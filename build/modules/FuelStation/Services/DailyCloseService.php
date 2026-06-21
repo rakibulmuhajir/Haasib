@@ -6,6 +6,7 @@ use App\Models\Partner;
 use App\Models\PartnerTransaction;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\Nozzle;
@@ -355,6 +356,117 @@ class DailyCloseService
             }
             $metadata['partner_deposits'] = $partnerDepositsTotal;
 
+            // Amanat deposits/top-ups received in station cash.
+            $amanatDepositsTotal = 0;
+            $amanatDepositDetails = [];
+            if (!empty($data['amanat_deposits'])) {
+                foreach ($data['amanat_deposits'] as $deposit) {
+                    $amount = (float) ($deposit['amount'] ?? 0);
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    $customerId = $deposit['customer_id'] ?? null;
+                    if (!$customerId) {
+                        throw new \RuntimeException('Select an Amanat depositor before posting a deposit.');
+                    }
+
+                    $profile = CustomerProfile::where('company_id', $companyId)
+                        ->where('customer_id', $customerId)
+                        ->where('is_amanat_holder', true)
+                        ->with('customer:id,name')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$profile) {
+                        throw new \RuntimeException('Selected Amanat depositor was not found.');
+                    }
+
+                    AmanatTransaction::create([
+                        'company_id' => $companyId,
+                        'customer_id' => $customerId,
+                        'transaction_type' => AmanatTransaction::TYPE_DEPOSIT,
+                        'amount' => $amount,
+                        'reference' => $deposit['reference'] ?? 'Daily close ' . $date,
+                        'notes' => $deposit['notes'] ?? 'Daily close Amanat deposit',
+                        'recorded_by_user_id' => $user->id,
+                    ]);
+
+                    $profile->adjustAmanatBalance($amount);
+
+                    $amanatDepositsTotal += $amount;
+                    $amanatDepositDetails[] = [
+                        'customer_id' => $customerId,
+                        'customer_name' => $profile->customer?->name ?? ($deposit['customer_name'] ?? null),
+                        'amount' => $amount,
+                        'reference' => $deposit['reference'] ?? null,
+                    ];
+                }
+            }
+            $metadata['amanat_deposits'] = $amanatDepositsTotal;
+            $metadata['amanat_deposit_details'] = $amanatDepositDetails;
+
+            // Controlled other cash-in deposits.
+            $otherDepositsTotal = 0;
+            $otherDepositPostings = [];
+            $otherDepositDetails = [];
+            if (!empty($data['other_deposits'])) {
+                foreach ($data['other_deposits'] as $deposit) {
+                    $amount = (float) ($deposit['amount'] ?? 0);
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    $type = $deposit['deposit_type'] ?? null;
+                    $accountId = $deposit['account_id'] ?? null;
+                    $label = match ($type) {
+                        'loss_compensation' => 'Loss compensation',
+                        'fuel_disbursement' => 'Fuel disbursement recovery',
+                        'misc_income' => 'Other cash income',
+                        default => throw new \RuntimeException('Invalid cash-in deposit type.'),
+                    };
+
+                    if ($type === 'loss_compensation') {
+                        $accountId = $accounts['cash_over_short'];
+                    } elseif ($type === 'fuel_disbursement') {
+                        $accountId = $accountId ?: $accounts['fuel_sales'];
+                    }
+
+                    if (!$accountId) {
+                        throw new \RuntimeException("Select an account for {$label}.");
+                    }
+
+                    $accountAllowed = Account::where('company_id', $companyId)
+                        ->where('id', $accountId)
+                        ->where('is_active', true)
+                        ->whereNull('deleted_at')
+                        ->whereIn('type', ['revenue', 'other_income', 'liability', 'equity'])
+                        ->exists();
+
+                    if (!$accountAllowed && $type !== 'loss_compensation') {
+                        throw new \RuntimeException("Selected account is not valid for {$label}.");
+                    }
+
+                    $otherDepositsTotal += $amount;
+                    if (!isset($otherDepositPostings[$accountId])) {
+                        $otherDepositPostings[$accountId] = [
+                            'amount' => 0,
+                            'labels' => [],
+                        ];
+                    }
+                    $otherDepositPostings[$accountId]['amount'] += $amount;
+                    $otherDepositPostings[$accountId]['labels'][] = $label;
+                    $otherDepositDetails[] = [
+                        'deposit_type' => $type,
+                        'account_id' => $accountId,
+                        'description' => $deposit['description'] ?? $label,
+                        'amount' => $amount,
+                    ];
+                }
+            }
+            $metadata['other_deposits'] = $otherDepositsTotal;
+            $metadata['other_deposit_details'] = $otherDepositDetails;
+
             // ─────────────────────────────────────────────────────────────────
             // 4b. Process Dynamic Payment Channels (non-cash receipts)
             // ─────────────────────────────────────────────────────────────────
@@ -633,14 +745,83 @@ class DailyCloseService
             }
             $metadata['expenses'] = $expensesTotal;
 
+            // Supplier bill payments recorded elsewhere are still posted through Daily Close.
+            $billPaymentIds = [];
+            $billPaymentDetails = [];
+            $billPaymentPostings = [];
+            $billPaymentsTotal = 0;
+            $cashBillPaymentsTotal = 0;
+            $nonCashBillPaymentsTotal = 0;
+
+            $billPayments = $this->getPendingBillPaymentsForDate($companyId, $date);
+            foreach ($billPayments as $payment) {
+                $amount = round((float) $payment->amount, 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                if (!$payment->payment_account_id) {
+                    throw new \RuntimeException("Payment {$payment->payment_number} is missing a payment account.");
+                }
+
+                $apAccountId = $payment->vendor?->ap_account_id ?: $accounts['accounts_payable'];
+                if (!$apAccountId) {
+                    throw new \RuntimeException("Payment {$payment->payment_number} needs an Accounts Payable account.");
+                }
+
+                $affectsCashDrawer = $payment->payment_account_id === $accounts['cash_on_hand'];
+                $billNumbers = $payment->allocations
+                    ->map(fn ($allocation) => $allocation->bill?->bill_number)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                $billPaymentIds[] = $payment->id;
+                $billPaymentsTotal = round($billPaymentsTotal + $amount, 2);
+                if ($affectsCashDrawer) {
+                    $cashBillPaymentsTotal = round($cashBillPaymentsTotal + $amount, 2);
+                } else {
+                    $nonCashBillPaymentsTotal = round($nonCashBillPaymentsTotal + $amount, 2);
+                }
+
+                $billPaymentPostings[] = [
+                    'payment_id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
+                    'ap_account_id' => $apAccountId,
+                    'payment_account_id' => $payment->payment_account_id,
+                    'affects_cash_drawer' => $affectsCashDrawer,
+                    'amount' => $amount,
+                ];
+
+                $billPaymentDetails[] = [
+                    'payment_id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
+                    'payment_group_number' => $payment->payment_group_number,
+                    'vendor_id' => $payment->vendor_id,
+                    'vendor_name' => $payment->vendor?->name ?? 'Supplier',
+                    'payment_account_id' => $payment->payment_account_id,
+                    'payment_account_name' => trim(($payment->paymentAccount?->code ? $payment->paymentAccount->code . ' — ' : '') . ($payment->paymentAccount?->name ?? 'Payment account')),
+                    'payment_method' => $payment->payment_method,
+                    'amount' => $amount,
+                    'bill_numbers' => $billNumbers,
+                    'affects_cash_drawer' => $affectsCashDrawer,
+                ];
+            }
+
+            $metadata['bill_payments'] = $billPaymentsTotal;
+            $metadata['cash_bill_payments'] = $cashBillPaymentsTotal;
+            $metadata['non_cash_bill_payments'] = $nonCashBillPaymentsTotal;
+            $metadata['bill_payment_details'] = $billPaymentDetails;
+
             // ─────────────────────────────────────────────────────────────────
             // 6. Build Journal Entries
             // ─────────────────────────────────────────────────────────────────
 
             // Cash from sales (total revenue goes to cash initially)
             $cashFromSales = $totalRevenue - $totalNonCashReceipts;
-            $totalCashIn = $openingCash + $partnerDepositsTotal + $cashFromSales;
-            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal;
+            $totalCashIn = $openingCash + $partnerDepositsTotal + $amanatDepositsTotal + $otherDepositsTotal + $cashFromSales;
+            $totalCashOut = $bankDepositsTotal + $partnerWithdrawalsTotal + $employeeAdvancesTotal + $payrollPayoutsTotal + $amanatTotal + $expensesTotal + $cashBillPaymentsTotal;
 
             // Debit: Cash on Hand (opening + deposits + cash sales - withdrawals)
             $closingCash = (float) $data['closing_cash'];
@@ -657,11 +838,14 @@ class DailyCloseService
                 'tank_readings' => $data['tank_readings'] ?? [],
                 'opening_cash' => $data['opening_cash'],
                 'partner_deposits' => $data['partner_deposits'] ?? [],
+                'amanat_deposits' => $data['amanat_deposits'] ?? [],
+                'other_deposits' => $data['other_deposits'] ?? [],
                 'payment_receipts' => $data['payment_receipts'] ?? [],
                 'bank_deposits' => $data['bank_deposits'] ?? [],
                 'partner_withdrawals' => $data['partner_withdrawals'] ?? [],
                 'employee_advances' => $data['employee_advances'] ?? [],
                 'payroll_payouts' => $payrollPayoutDetails,
+                'bill_payments' => $billPaymentDetails,
                 'amanat_disbursements' => $data['amanat_disbursements'] ?? [],
                 'expenses' => $data['expenses'] ?? [],
                 'closing_cash' => $data['closing_cash'],
@@ -741,6 +925,28 @@ class DailyCloseService
                 ];
             }
 
+            // Amanat deposits (increase customer liability)
+            if ($amanatDepositsTotal > 0) {
+                if (!$accounts['amanat_deposits']) {
+                    throw new \RuntimeException('Amanat deposits account missing. Set up account 2200 (Amanat Deposits) or update station settings.');
+                }
+                $entries[] = [
+                    'account_id' => $accounts['amanat_deposits'],
+                    'type' => 'credit',
+                    'amount' => round($amanatDepositsTotal, 2),
+                    'description' => 'Amanat deposits received',
+                ];
+            }
+
+            foreach ($otherDepositPostings as $accountId => $posting) {
+                $entries[] = [
+                    'account_id' => $accountId,
+                    'type' => 'credit',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Cash in - ' . implode(', ', array_unique($posting['labels'])),
+                ];
+            }
+
             // Partner withdrawals (drawings)
             if ($partnerWithdrawalsTotal > 0 && $accounts['partner_drawings']) {
                 $entries[] = [
@@ -769,6 +975,24 @@ class DailyCloseService
                     'amount' => round($payrollPayoutsTotal, 2),
                     'description' => 'Approved salary payouts',
                 ];
+            }
+
+            foreach ($billPaymentPostings as $posting) {
+                $entries[] = [
+                    'account_id' => $posting['ap_account_id'],
+                    'type' => 'debit',
+                    'amount' => round($posting['amount'], 2),
+                    'description' => 'Supplier payment ' . $posting['payment_number'],
+                ];
+
+                if (!$posting['affects_cash_drawer']) {
+                    $entries[] = [
+                        'account_id' => $posting['payment_account_id'],
+                        'type' => 'credit',
+                        'amount' => round($posting['amount'], 2),
+                        'description' => 'Supplier payment ' . $posting['payment_number'],
+                    ];
+                }
             }
 
             // Amanat disbursements (reduce liability)
@@ -898,6 +1122,17 @@ class DailyCloseService
                     ]);
             }
 
+            if (!empty($billPaymentIds)) {
+                BillPayment::where('company_id', $companyId)
+                    ->whereIn('id', $billPaymentIds)
+                    ->whereNull('transaction_id')
+                    ->update([
+                        'transaction_id' => $transaction->id,
+                        'updated_by_user_id' => $user->id,
+                        'updated_at' => now(),
+                    ]);
+            }
+
             return [
                 'transaction_number' => $transactionNumber,
                 'transaction_id' => $transaction->id,
@@ -1007,6 +1242,22 @@ class DailyCloseService
         return $accountId;
     }
 
+    private function getPendingBillPaymentsForDate(string $companyId, string $date)
+    {
+        return BillPayment::where('company_id', $companyId)
+            ->whereDate('payment_date', $date)
+            ->whereNull('transaction_id')
+            ->with([
+                'vendor:id,name,ap_account_id',
+                'paymentAccount:id,code,name,subtype',
+                'allocations.bill:id,bill_number',
+            ])
+            ->lockForUpdate()
+            ->orderBy('payment_date')
+            ->orderBy('payment_number')
+            ->get();
+    }
+
     private function resolveAccounts(string $companyId): array
     {
         // First try to get accounts from station settings
@@ -1067,6 +1318,10 @@ class DailyCloseService
             ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('subtype', 'receivable')->orderByDesc('code')->value('id')
             ?? $cashOnHand;
 
+        $accountsPayable = $byCode->get('2100')?->id
+            ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('subtype', 'accounts_payable')->orderBy('code')->value('id')
+            ?? Account::where('company_id', $companyId)->whereNull('deleted_at')->where('is_active', true)->where('type', 'liability')->where('name', 'like', '%Payable%')->orderBy('code')->value('id');
+
         // Fuel shrinkage account - prefer 5900 (onboarding), then 6300 with Shrinkage in name
         $fuelShrinkage = $stationSettings?->fuel_shrinkage_account_id
             ?? $byCode->get('5900')?->id
@@ -1104,6 +1359,7 @@ class DailyCloseService
             'partner_deposits' => $partnerDeposits,
             'partner_drawings' => $partnerDrawings,
             'employee_advances' => $employeeAdvances,
+            'accounts_payable' => $accountsPayable,
             'fuel_shrinkage' => $fuelShrinkage,
             'fuel_variance_gain' => $fuelVarianceGain,
         ];

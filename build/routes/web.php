@@ -203,6 +203,7 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{company}/bills/{bill}', [BillController::class, 'destroy'])->name('bills.destroy');
         Route::post('/{company}/bills/{bill}/receive', [BillController::class, 'receive'])->name('bills.receive');
         Route::post('/{company}/bills/{bill}/receive-goods', [BillController::class, 'receiveGoods'])->name('bills.receive-goods');
+        Route::post('/{company}/bills/{bill}/supplier-claims/receive', [BillController::class, 'receiveSupplierClaim'])->name('bills.supplier-claims.receive');
         Route::post('/{company}/bills/{bill}/void', [BillController::class, 'void'])->name('bills.void');
 
         // Bill Payments

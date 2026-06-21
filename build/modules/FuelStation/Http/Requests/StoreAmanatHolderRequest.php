@@ -20,9 +20,6 @@ class StoreAmanatHolderRequest extends BaseFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'cnic' => ['nullable', 'string', 'max:50'],
             'relationship' => ['nullable', 'in:owner,employee,external'],
-            'opening_deposit' => ['nullable', 'numeric', 'min:0'],
-            'reference' => ['nullable', 'string', 'max:50'],
-            'notes' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

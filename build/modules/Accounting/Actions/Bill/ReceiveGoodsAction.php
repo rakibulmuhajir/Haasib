@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
+use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\Inventory\Models\StockReceipt;
 use App\Modules\Inventory\Models\StockReceiptLine;
@@ -38,6 +39,7 @@ class ReceiveGoodsAction implements PaletteAction
             'lines.*.expected_quantity' => 'nullable|numeric|min:0.01',
             'lines.*.received_quantity' => 'nullable|numeric|min:0.01',
             'lines.*.variance_reason' => 'nullable|string|in:transit_loss,spillage,temperature_adjustment,measurement_error,other',
+            'lines.*.variance_treatment' => 'nullable|string|in:final_loss,supplier_claim',
             'lines.*.warehouse_id' => 'nullable|uuid', // Override per line
             'lines.*.notes' => 'nullable|string|max:1000',
         ];
@@ -200,6 +202,7 @@ class ReceiveGoodsAction implements PaletteAction
                     'warehouse_id' => $warehouseId,
                     'bill' => $bill,
                     'variance_reason' => $lineInput['variance_reason'] ?? null,
+                    'variance_treatment' => $lineInput['variance_treatment'] ?? null,
                     'notes' => $lineInput['notes'] ?? null,
                 ];
             }
@@ -300,6 +303,14 @@ class ReceiveGoodsAction implements PaletteAction
             throw new \InvalidArgumentException('Variance reason is required when received quantity differs from expected.');
         }
 
+        if ($varianceQty < -0.0001 && empty($lineData['variance_treatment'])) {
+            throw new \InvalidArgumentException('Choose whether the shortage is a final loss or a supplier claim.');
+        }
+
+        $varianceTreatment = $varianceQty < -0.0001
+            ? $lineData['variance_treatment']
+            : null;
+
         return StockReceiptLine::create([
             'company_id' => $receipt->company_id,
             'stock_receipt_id' => $receipt->id,
@@ -313,6 +324,8 @@ class ReceiveGoodsAction implements PaletteAction
             'total_cost' => $totalCost,
             'variance_cost' => $varianceCost,
             'variance_reason' => $lineData['variance_reason'],
+            'variance_treatment' => $varianceTreatment,
+            'claim_status' => $varianceTreatment === 'supplier_claim' ? 'pending' : null,
             'stock_movement_id' => $movement?->id,
             'notes' => $lineData['notes'],
             'created_by_user_id' => Auth::id(),
@@ -340,9 +353,11 @@ class ReceiveGoodsAction implements PaletteAction
         }
 
         if ($varianceCost < 0) {
-            $lossAccountId = $company->transit_loss_account_id;
+            $lossAccountId = $receiptLine->variance_treatment === 'supplier_claim'
+                ? $this->supplierClaimsReceivableAccountId($company)
+                : $company->transit_loss_account_id;
             if (! $lossAccountId) {
-                throw new \RuntimeException('Transit loss account is required to record receipt variance.');
+                throw new \RuntimeException('A loss or supplier claim account is required to record receipt variance.');
             }
 
             $amount = abs($varianceCost);
@@ -358,6 +373,12 @@ class ReceiveGoodsAction implements PaletteAction
 
         $debits[$inventoryAccountId] = round(($debits[$inventoryAccountId] ?? 0) + $varianceCost, 2);
         $credits[$gainAccountId] = round(($credits[$gainAccountId] ?? 0) + $varianceCost, 2);
+    }
+
+    private function supplierClaimsReceivableAccountId(object $company): ?string
+    {
+        return app(DefaultAccountProvisioner::class)
+            ->ensureTransitVarianceAccounts($company)['supplier_claims_receivable_account_id'] ?? null;
     }
 
     /**

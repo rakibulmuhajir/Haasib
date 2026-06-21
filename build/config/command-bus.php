@@ -76,6 +76,7 @@ return [
     'bill.void' => \App\Modules\Accounting\Actions\Bill\VoidAction::class,
     'bill.receive' => \App\Modules\Accounting\Actions\Bill\ReceiveAction::class,
     'bill.receive_goods' => \App\Modules\Accounting\Actions\Bill\ReceiveGoodsAction::class,
+    'bill.receive_supplier_claim' => \App\Modules\Accounting\Actions\Bill\ReceiveSupplierClaimAction::class,
 
     // Bill Payment
     'bill_payment.list' => \App\Modules\Accounting\Actions\BillPayment\IndexAction::class,

@@ -161,6 +161,29 @@ class DefaultAccountProvisioner
             ]);
         }
 
+        $claimAccount = Account::where('company_id', $company->id)
+            ->where(function ($query) {
+                $query->where('code', '1160')
+                    ->orWhere('name', 'Supplier Claims Receivable');
+            })
+            ->first();
+
+        if (! $claimAccount) {
+            $claimAccount = Account::create([
+                'company_id' => $company->id,
+                'code' => $this->nextAvailableCode($company->id, 1160, 1199),
+                'name' => 'Supplier Claims Receivable',
+                'type' => 'asset',
+                'subtype' => 'other_current_asset',
+                'normal_balance' => 'debit',
+                'currency' => $company->base_currency,
+                'is_contra' => false,
+                'is_active' => true,
+                'is_system' => false,
+                'description' => 'Recoverable shortages claimed from fuel or inventory suppliers.',
+            ]);
+        }
+
         $updates = [];
         $hasTransitLoss = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_loss_account_id');
         $hasTransitGain = Schema::connection('pgsql')->hasColumn('auth.companies', 'transit_gain_account_id');
@@ -178,6 +201,7 @@ class DefaultAccountProvisioner
         return [
             'transit_loss_account_id' => $lossAccount->id,
             'transit_gain_account_id' => $gainAccount->id,
+            'supplier_claims_receivable_account_id' => $claimAccount->id,
         ];
     }
 

@@ -5,6 +5,8 @@ namespace App\Modules\Inventory\Models;
 use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\BillLineItem;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Transaction;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -32,6 +34,12 @@ class StockReceiptLine extends Model
         'total_cost',
         'variance_cost',
         'variance_reason',
+        'variance_treatment',
+        'claim_status',
+        'claim_received_at',
+        'claim_received_amount',
+        'claim_received_account_id',
+        'claim_received_transaction_id',
         'stock_movement_id',
         'notes',
         'created_by_user_id',
@@ -50,6 +58,12 @@ class StockReceiptLine extends Model
         'total_cost' => 'decimal:2',
         'variance_cost' => 'decimal:2',
         'variance_reason' => 'string',
+        'variance_treatment' => 'string',
+        'claim_status' => 'string',
+        'claim_received_at' => 'datetime',
+        'claim_received_amount' => 'decimal:2',
+        'claim_received_account_id' => 'string',
+        'claim_received_transaction_id' => 'string',
         'stock_movement_id' => 'string',
         'created_by_user_id' => 'string',
         'created_at' => 'datetime',
@@ -84,6 +98,16 @@ class StockReceiptLine extends Model
     public function stockMovement(): BelongsTo
     {
         return $this->belongsTo(StockMovement::class, 'stock_movement_id');
+    }
+
+    public function claimReceivedAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'claim_received_account_id');
+    }
+
+    public function claimReceivedTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'claim_received_transaction_id');
     }
 
     public function createdBy(): BelongsTo

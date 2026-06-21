@@ -4,8 +4,6 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Customer;
-use App\Modules\FuelStation\Http\Requests\AmanatDepositRequest;
-use App\Modules\FuelStation\Http\Requests\AmanatWithdrawRequest;
 use App\Modules\FuelStation\Http\Requests\StoreAmanatHolderRequest;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
@@ -90,18 +88,9 @@ class AmanatController extends Controller
             return $customer;
         });
 
-        $openingDeposit = (float) ($data['opening_deposit'] ?? 0);
-        if ($openingDeposit > 0) {
-            $this->amanatService->deposit($customer, [
-                'amount' => $openingDeposit,
-                'reference' => $data['reference'] ?? null,
-                'notes' => $data['notes'] ?? 'Opening Amanat deposit',
-            ]);
-        }
-
         return redirect()
             ->route('fuel.amanat.show', ['company' => $company->slug, 'customer' => $customer->id])
-            ->with('success', 'Amanat holder added successfully.');
+            ->with('success', 'Amanat holder added successfully. Record deposits from Daily Close.');
     }
 
     public function show(Request $request): Response|RedirectResponse
@@ -132,40 +121,22 @@ class AmanatController extends Controller
         ]);
     }
 
-    public function deposit(AmanatDepositRequest $request): RedirectResponse
+    public function deposit(Request $request): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $customerModel = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
 
-        if (! $customerModel) {
-            return redirect()->back()->with('error', 'Amanat holder was not found.');
-        }
-
-        try {
-            $this->amanatService->deposit($customerModel, $request->validated());
-
-            return redirect()->back()->with('success', 'Amanat deposit recorded successfully.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
+        return redirect()
+            ->route('fuel.daily-close.create', ['company' => $company->slug])
+            ->with('error', 'Amanat deposits are recorded from Daily Close so station cash has one source of truth.');
     }
 
-    public function withdraw(AmanatWithdrawRequest $request): RedirectResponse
+    public function withdraw(Request $request): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $customerModel = $this->findCompanyCustomer($company->id, (string) $request->route('customer'));
 
-        if (! $customerModel) {
-            return redirect()->back()->with('error', 'Amanat holder was not found.');
-        }
-
-        try {
-            $this->amanatService->withdraw($customerModel, $request->validated());
-
-            return redirect()->back()->with('success', 'Amanat withdrawal processed successfully.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->with('error', $e->getMessage());
-        }
+        return redirect()
+            ->route('fuel.daily-close.create', ['company' => $company->slug])
+            ->with('error', 'Amanat withdrawals are recorded from Daily Close so station cash has one source of truth.');
     }
 
     private function findCompanyCustomer(string $companyId, string $customerId): ?Customer

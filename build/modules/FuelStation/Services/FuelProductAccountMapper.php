@@ -28,6 +28,11 @@ class FuelProductAccountMapper
             'expense' => ['code' => '5150', 'name' => 'Cost of Lubricants - Open', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
             'asset' => ['code' => '1250', 'name' => 'Lubricant Inventory - Open', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
         ],
+        'lubricant_packaged' => [
+            'income' => ['code' => '4151', 'name' => 'Lubricant Sales - Sealed Packs', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            'expense' => ['code' => '5151', 'name' => 'Cost of Lubricants - Sealed Packs', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+            'asset' => ['code' => '1251', 'name' => 'Lubricant Inventory - Sealed Packs', 'type' => 'asset', 'subtype' => 'inventory', 'normal_balance' => 'debit'],
+        ],
     ];
 
     public function ensureItemMappings(Item $item, ?string $userId = null): Item
@@ -112,6 +117,10 @@ class FuelProductAccountMapper
             return null;
         }
 
-        return $category === 'hi_octane' ? 'high_octane' : $category;
+        return match ($category) {
+            'hi_octane' => 'high_octane',
+            'sealed_lubricant', 'packaged_lubricant' => 'lubricant_packaged',
+            default => $category,
+        };
     }
 }

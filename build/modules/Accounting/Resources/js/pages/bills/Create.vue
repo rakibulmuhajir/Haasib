@@ -43,6 +43,10 @@ interface ItemOption {
   cost_price: number
   unit_of_measure: string
   track_inventory: boolean
+  asset_account_id?: string | null
+  expense_account_id?: string | null
+  preferred_warehouse_id?: string | null
+  preferred_line_account_id?: string | null
 }
 
 interface WarehouseOption {
@@ -50,6 +54,8 @@ interface WarehouseOption {
   code: string
   name: string
   is_primary: boolean
+  warehouse_type?: string | null
+  linked_item_id?: string | null
 }
 
 const props = defineProps<{
@@ -79,13 +85,13 @@ const defaultWarehouseId = computed(() => {
 
 const lineItemTemplate = () => ({
   item_id: null as string | null,
-  warehouse_id: defaultWarehouseId.value,
+  warehouse_id: null as string | null,
   description: '',
   quantity: 1,
   unit_price: 0,
   tax_rate: 0,
   discount_rate: 0,
-  expense_account_id: props.defaultExpenseAccountId || 'company_default',
+  expense_account_id: 'company_default',
 })
 
 const showQuickAdd = ref(false)
@@ -174,7 +180,12 @@ const handleItemSelect = (idx: number, itemId: string | null) => {
     if (item) {
       line.description = item.name
       line.unit_price = Number(item.cost_price) || 0
+      line.warehouse_id = item.preferred_warehouse_id ?? defaultWarehouseId.value
+      line.expense_account_id = item.preferred_line_account_id ?? 'company_default'
     }
+  } else {
+    line.warehouse_id = null
+    line.expense_account_id = 'company_default'
   }
 }
 
@@ -341,8 +352,8 @@ const handleSubmit = () => {
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-            For fuel purchases, select the fuel item and set the line account to Fuel Inventory.
-            Use the default expense for general operating bills.
+            Select the product. Haasib will choose its tank/warehouse and inventory account automatically.
+            Use the default account only for non-inventory bills.
           </div>
           <div
             v-for="(line, idx) in form.line_items"
@@ -416,17 +427,17 @@ const handleSubmit = () => {
               </div>
               <div>
                 <div class="flex items-center gap-2">
-                  <Label>Expense Account</Label>
+                  <Label>Line Account</Label>
                   <TooltipProvider :delay-duration="0">
                     <Tooltip>
                       <TooltipTrigger as-child>
                         <Button type="button" variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground">
                           <Info class="h-3.5 w-3.5" />
-                          <span class="sr-only">Expense account help</span>
+                          <span class="sr-only">Line account help</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Use Fuel Inventory for fuel purchases. Use default expense for general bills.
+                        Inventory products use their own stock account. General bills can use the company default.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

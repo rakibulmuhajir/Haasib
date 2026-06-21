@@ -149,6 +149,13 @@ interface ExpenseAccount {
   name: string
 }
 
+interface OtherDepositAccount {
+  id: string
+  code: string
+  name: string
+  type: string
+}
+
 interface LubricantItem {
   id: string
   name: string
@@ -165,6 +172,23 @@ interface PaymentChannel {
   enabled: boolean
   bank_account_id: string | null
   clearing_account_id: string | null
+}
+
+interface PendingBillPayment {
+  payment_id: string
+  payment_number: string
+  payment_group_number: string | null
+  vendor_id: string
+  vendor_name: string
+  payment_account_id: string
+  payment_account_name: string
+  payment_account_subtype: string | null
+  payment_method: string
+  amount: number
+  currency: string
+  reference_number: string | null
+  bill_numbers: string[]
+  affects_cash_drawer: boolean
 }
 
 interface Features {
@@ -186,10 +210,12 @@ const props = defineProps<{
   partners: Partner[]
   employees: Employee[]
   approvedPayrollPayouts: PayrollPayout[]
+  pendingBillPayments: PendingBillPayment[]
   amanatHolders: AmanatHolder[]
   investors: Investor[]
   bankAccounts: BankAccount[]
   expenseAccounts: ExpenseAccount[]
+  otherDepositAccounts: OtherDepositAccount[]
   lubricantItems: LubricantItem[]
   existingTankReadings: any[]
   previousTankReadings: Array<{
@@ -237,11 +263,14 @@ const props = defineProps<{
     opening_cash?: number
     closing_cash?: number
     partner_deposits?: Array<{ partner_id: string; amount: number }>
+    amanat_deposits?: Array<{ customer_id?: string; customer_name?: string; amount: number; reference?: string }>
+    other_deposits?: Array<{ deposit_type: string; account_id?: string; description?: string; amount: number }>
     payment_receipts?: Record<string, { entries: Array<{ reference?: string; last_four?: string; amount: number }> }>
     bank_deposits?: Array<{ bank_account_id: string; amount: number; reference?: string; purpose?: string }>
     partner_withdrawals?: Array<{ partner_id: string; amount: number }>
     employee_advances?: Array<{ employee_id: string; amount: number; reason?: string }>
     payroll_payouts?: PayrollPayout[]
+    bill_payments?: PendingBillPayment[]
     amanat_disbursements?: Array<{ customer_id?: string; customer_name?: string; amount: number }>
     expenses?: Array<{ account_id: string; description: string; amount: number }>
     notes?: string
@@ -262,11 +291,14 @@ const investorSearch = ref('')
 const accountingHints = {
   fuelSales: 'Posting: Dr Cash/Bank/Clearing · Cr Fuel Sales. Cost also posts Dr Fuel COGS · Cr Fuel Inventory.',
   partnerDeposit: 'Posting: Dr Cash on Hand · Cr Partner Deposits.',
+  amanatDeposit: 'Posting: Dr Cash on Hand · Cr Amanat Deposits, and the depositor balance is increased.',
+  otherDeposit: 'Posting: Dr Cash on Hand · Cr selected income/liability account.',
   nonCashReceipt: 'Posting: Dr destination bank/clearing · Cr Fuel Sales.',
   bankDeposit: 'Posting: Dr Bank · Cr Cash on Hand.',
   partnerWithdrawal: 'Posting: Dr Partner Drawings · Cr Cash on Hand.',
   employeeAdvance: 'Posting: Dr Employee Advances · Cr Cash on Hand.',
   payrollPayout: 'Posting: Dr Payroll Payable · Cr Cash on Hand.',
+  billPayment: 'Posting: Dr Accounts Payable · Cr selected payment account. Cash account payments reduce drawer cash; bank/fuel-card payments do not.',
   amanatDisbursement: 'Posting: Dr Amanat Deposits · Cr Cash on Hand, and the depositor balance is reduced.',
   expense: 'Posting: Dr selected expense · Cr Cash on Hand.',
   variance: 'Cash difference posts to Cash Over/Short.',
@@ -301,6 +333,12 @@ const hasFormData = (formData: Record<string, unknown>): boolean => {
   // Check partner deposits
   const partnerDeposits = formData.partner_deposits as Array<{ amount: number }> | undefined
   if (partnerDeposits && partnerDeposits.length > 0) return true
+
+  const amanatDeposits = formData.amanat_deposits as Array<{ amount: number }> | undefined
+  if (amanatDeposits && amanatDeposits.length > 0) return true
+
+  const otherDeposits = formData.other_deposits as Array<{ amount: number }> | undefined
+  if (otherDeposits && otherDeposits.length > 0) return true
 
   // Check payment receipts
   const paymentReceipts = formData.payment_receipts as Record<string, { entries: Array<{ amount: number }> }> | undefined
@@ -550,6 +588,8 @@ const form = useForm({
   // Tab 3: Money In - Dynamic payment receipts
   opening_cash: props.previousClose.closing_cash || 0,
   partner_deposits: [] as { partner_id: string; partner_name: string; amount: number }[],
+  amanat_deposits: [] as { customer_id: string; customer_name: string; available_balance: number; amount: number; reference: string }[],
+  other_deposits: [] as { deposit_type: string; account_id: string; description: string; amount: number }[],
 
   // Dynamic payment channel receipts (money coming in via non-cash methods)
   payment_receipts: {} as Record<string, { entries: Array<{ reference: string; amount: number; customer_name?: string; last_four?: string }> }>,
@@ -559,6 +599,7 @@ const form = useForm({
   partner_withdrawals: [] as { partner_id: string; partner_name: string; amount: number }[],
   employee_advances: [] as { employee_id: string; employee_name: string; amount: number; reason: string }[],
   payroll_payouts: props.approvedPayrollPayouts.map(payout => ({ ...payout })),
+  bill_payments: props.pendingBillPayments.map(payment => ({ ...payment })),
   amanat_disbursements: [] as { customer_id: string; customer_name: string; available_balance: number; amount: number }[],
   expenses: [] as { account_id: string; account_name: string; description: string; amount: number }[],
 
@@ -621,6 +662,8 @@ const resetFormToInitial = () => {
   // Reset money in
   form.opening_cash = props.previousClose.closing_cash || 0
   form.partner_deposits = []
+  form.amanat_deposits = []
+  form.other_deposits = []
 
   // Reset payment receipts - reinitialize empty structure for each channel
   form.payment_receipts = {}
@@ -635,6 +678,7 @@ const resetFormToInitial = () => {
   form.partner_withdrawals = []
   form.employee_advances = []
   form.payroll_payouts = props.approvedPayrollPayouts.map(payout => ({ ...payout }))
+  form.bill_payments = props.pendingBillPayments.map(payment => ({ ...payment }))
   form.amanat_disbursements = []
   form.expenses = []
 
@@ -756,6 +800,28 @@ const hydrateFormForAmendment = () => {
     })
   }
 
+  if (orig.amanat_deposits && orig.amanat_deposits.length > 0) {
+    form.amanat_deposits = orig.amanat_deposits.map(deposit => {
+      const holder = props.amanatHolders.find(h => h.id === deposit.customer_id)
+      return {
+        customer_id: deposit.customer_id ?? '',
+        customer_name: holder?.name ?? deposit.customer_name ?? '',
+        available_balance: holder?.amanat_balance ?? 0,
+        amount: deposit.amount,
+        reference: deposit.reference ?? '',
+      }
+    })
+  }
+
+  if (orig.other_deposits && orig.other_deposits.length > 0) {
+    form.other_deposits = orig.other_deposits.map(deposit => ({
+      deposit_type: deposit.deposit_type,
+      account_id: deposit.account_id ?? '',
+      description: deposit.description ?? '',
+      amount: deposit.amount,
+    }))
+  }
+
   // Hydrate payment receipts
   if (orig.payment_receipts) {
     Object.keys(orig.payment_receipts).forEach(channelCode => {
@@ -809,6 +875,10 @@ const hydrateFormForAmendment = () => {
 
   if (orig.payroll_payouts && orig.payroll_payouts.length > 0) {
     form.payroll_payouts = orig.payroll_payouts.map(payout => ({ ...payout }))
+  }
+
+  if (orig.bill_payments && orig.bill_payments.length > 0) {
+    form.bill_payments = orig.bill_payments.map(payment => ({ ...payment }))
   }
 
   // Hydrate amanat disbursements
@@ -970,6 +1040,14 @@ const totalPartnerDeposits = computed(() => {
   return form.partner_deposits.reduce((sum, d) => sum + d.amount, 0)
 })
 
+const totalAmanatDeposits = computed(() => {
+  return form.amanat_deposits.reduce((sum, d) => sum + d.amount, 0)
+})
+
+const totalOtherDeposits = computed(() => {
+  return form.other_deposits.reduce((sum, d) => sum + d.amount, 0)
+})
+
 // Money out breakdown totals
 const totalBankDeposits = computed(() => {
   return form.bank_deposits.reduce((sum, d) => sum + d.amount, 0)
@@ -985,6 +1063,20 @@ const totalEmployeeAdvances = computed(() => {
 
 const totalPayrollPayouts = computed(() => {
   return form.payroll_payouts.reduce((sum, payout) => sum + payout.amount, 0)
+})
+
+const totalBillPayments = computed(() => {
+  return form.bill_payments.reduce((sum, payment) => sum + payment.amount, 0)
+})
+
+const totalCashBillPayments = computed(() => {
+  return form.bill_payments
+    .filter(payment => payment.affects_cash_drawer)
+    .reduce((sum, payment) => sum + payment.amount, 0)
+})
+
+const totalNonCashBillPayments = computed(() => {
+  return totalBillPayments.value - totalCashBillPayments.value
 })
 
 const totalAmanatDisbursements = computed(() => {
@@ -1010,7 +1102,9 @@ const cashSales = computed(() => {
 
 const totalMoneyIn = computed(() => {
   const partnerDeposits = form.partner_deposits.reduce((sum, d) => sum + d.amount, 0)
-  return form.opening_cash + partnerDeposits + totalSales.value
+  const amanatDeposits = form.amanat_deposits.reduce((sum, d) => sum + d.amount, 0)
+  const otherDeposits = form.other_deposits.reduce((sum, d) => sum + d.amount, 0)
+  return form.opening_cash + partnerDeposits + amanatDeposits + otherDeposits + totalSales.value
 })
 
 const totalCardAndBank = computed(() => {
@@ -1022,15 +1116,18 @@ const totalMoneyOut = computed(() => {
   const partnerWithdrawals = form.partner_withdrawals.reduce((sum, w) => sum + w.amount, 0)
   const employeeAdvances = form.employee_advances.reduce((sum, a) => sum + a.amount, 0)
   const payrollPayouts = form.payroll_payouts.reduce((sum, payout) => sum + payout.amount, 0)
+  const cashBillPayments = totalCashBillPayments.value
   const amanat = form.amanat_disbursements.reduce((sum, a) => sum + a.amount, 0)
   const expenses = form.expenses.reduce((sum, e) => sum + e.amount, 0)
 
-  return bankDeposits + partnerWithdrawals + employeeAdvances + payrollPayouts + amanat + expenses
+  return bankDeposits + partnerWithdrawals + employeeAdvances + payrollPayouts + cashBillPayments + amanat + expenses
 })
 
 const expectedClosingCash = computed(() => {
   const cashIn = form.opening_cash +
     form.partner_deposits.reduce((sum, d) => sum + d.amount, 0) +
+    form.amanat_deposits.reduce((sum, d) => sum + d.amount, 0) +
+    form.other_deposits.reduce((sum, d) => sum + d.amount, 0) +
     (totalSales.value - totalCardAndBank.value)
 
   return cashIn - totalMoneyOut.value
@@ -1082,6 +1179,40 @@ const addPartnerDeposit = () => {
 
 const removePartnerDeposit = (index: number) => {
   form.partner_deposits.splice(index, 1)
+}
+
+const addAmanatDeposit = () => {
+  form.amanat_deposits.push({ customer_id: '', customer_name: '', available_balance: 0, amount: 0, reference: '' })
+}
+
+const removeAmanatDeposit = (index: number) => {
+  form.amanat_deposits.splice(index, 1)
+}
+
+const setAmanatDepositCustomer = (index: number) => {
+  const holder = props.amanatHolders.find(h => h.id === form.amanat_deposits[index].customer_id)
+  if (holder) {
+    form.amanat_deposits[index].customer_name = holder.name
+    form.amanat_deposits[index].available_balance = holder.amanat_balance
+  }
+}
+
+const otherDepositTypes = [
+  { value: 'loss_compensation', label: 'Loss compensation' },
+  { value: 'fuel_disbursement', label: 'Fuel disbursement recovery' },
+  { value: 'misc_income', label: 'Other cash income' },
+]
+
+const addOtherDeposit = () => {
+  form.other_deposits.push({ deposit_type: 'loss_compensation', account_id: '', description: '', amount: 0 })
+}
+
+const removeOtherDeposit = (index: number) => {
+  form.other_deposits.splice(index, 1)
+}
+
+const getOtherDepositTypeLabel = (type: string) => {
+  return otherDepositTypes.find(option => option.value === type)?.label ?? 'Other deposit'
 }
 
 const addBankDeposit = () => {
@@ -1250,6 +1381,14 @@ const getCleanedFormData = () => {
   // Filter out incomplete partner deposits
   data.partner_deposits = (data.partner_deposits || []).filter(
     (d: { partner_id: string; amount: number }) => d.partner_id && d.amount > 0
+  )
+
+  data.amanat_deposits = (data.amanat_deposits || []).filter(
+    (d: { customer_id: string; amount: number }) => d.customer_id && d.amount > 0
+  )
+
+  data.other_deposits = (data.other_deposits || []).filter(
+    (d: { deposit_type: string; amount: number }) => d.deposit_type && d.amount > 0
   )
 
   // Filter out incomplete bank deposits
@@ -1990,6 +2129,112 @@ const completedWorkflowSteps = computed(() => {
 
             <Separator />
 
+            <template v-if="features.has_amanat">
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h4 class="font-medium">Amanat Deposits</h4>
+                    <p class="text-xs text-muted-foreground">{{ accountingHints.amanatDeposit }}</p>
+                  </div>
+                  <Button variant="outline" size="sm" :disabled="props.amanatHolders.length === 0" @click="addAmanatDeposit">
+                    <Plus class="h-4 w-4 mr-1" /> Add
+                  </Button>
+                </div>
+
+                <div v-if="props.amanatHolders.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span>No Amanat depositors are available for deposits yet.</span>
+                    <Button variant="outline" size="sm" as-child>
+                      <Link :href="`/${company.slug}/fuel/amanat`">Add Amanat depositor</Link>
+                    </Button>
+                  </div>
+                </div>
+
+                <div v-for="(deposit, index) in form.amanat_deposits" :key="index" class="grid grid-cols-12 gap-3 items-end">
+                  <div class="col-span-5">
+                    <Label class="text-xs">Depositor</Label>
+                    <Select v-model="deposit.customer_id" :disabled="props.amanatHolders.length === 0" @update:model-value="setAmanatDepositCustomer(index)">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select depositor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="holder in props.amanatHolders" :key="holder.id" :value="holder.id">
+                          {{ holder.name }} · Balance {{ currency }} {{ formatCurrency(holder.amanat_balance) }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="col-span-3">
+                    <Label class="text-xs">Reference</Label>
+                    <Input v-model="deposit.reference" placeholder="Optional" />
+                  </div>
+                  <div class="col-span-3">
+                    <Label class="text-xs">Amount</Label>
+                    <Input v-model.number="deposit.amount" type="number" />
+                  </div>
+                  <Button variant="ghost" size="icon" @click="removeAmanatDeposit(index)">
+                    <Trash2 class="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+            </template>
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="font-medium">Other Cash In</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.otherDeposit }}</p>
+                </div>
+                <Button variant="outline" size="sm" @click="addOtherDeposit">
+                  <Plus class="h-4 w-4 mr-1" /> Add
+                </Button>
+              </div>
+
+              <div v-for="(deposit, index) in form.other_deposits" :key="index" class="grid grid-cols-12 gap-3 items-end">
+                <div class="col-span-3">
+                  <Label class="text-xs">Type</Label>
+                  <Select v-model="deposit.deposit_type">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="type in otherDepositTypes" :key="type.value" :value="type.value">
+                        {{ type.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div class="col-span-4">
+                  <Label class="text-xs">Account</Label>
+                  <Select v-model="deposit.account_id" :disabled="deposit.deposit_type === 'loss_compensation'">
+                    <SelectTrigger>
+                      <SelectValue :placeholder="deposit.deposit_type === 'loss_compensation' ? 'Cash Over/Short' : 'Select account'" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="account in props.otherDepositAccounts" :key="account.id" :value="account.id">
+                        {{ account.code }} — {{ account.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div class="col-span-3">
+                  <Label class="text-xs">Description</Label>
+                  <Input v-model="deposit.description" :placeholder="getOtherDepositTypeLabel(deposit.deposit_type)" />
+                </div>
+                <div class="col-span-1">
+                  <Label class="text-xs">Amount</Label>
+                  <Input v-model.number="deposit.amount" type="number" />
+                </div>
+                <Button variant="ghost" size="icon" @click="removeOtherDeposit(index)">
+                  <Trash2 class="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
             <!-- Dynamic Payment Channels -->
             <template v-for="channel in enabledChannels" :key="channel.code">
               <div v-if="channel.type !== 'cash'" class="space-y-4">
@@ -2077,6 +2322,14 @@ const completedWorkflowSteps = computed(() => {
                   <span>Partner Deposits</span>
                   <span class="font-medium">{{ currency }} {{ formatCurrency(totalPartnerDeposits) }}</span>
                 </div>
+                <div v-if="totalAmanatDeposits > 0" class="flex justify-between text-sm">
+                  <span>Amanat Deposits</span>
+                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalAmanatDeposits) }}</span>
+                </div>
+                <div v-if="totalOtherDeposits > 0" class="flex justify-between text-sm">
+                  <span>Other Cash In</span>
+                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalOtherDeposits) }}</span>
+                </div>
                 <!-- Cash Sales -->
                 <div class="flex justify-between text-sm">
                   <span>Cash Sales</span>
@@ -2086,7 +2339,7 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Total Cash Available -->
                 <div class="flex justify-between text-sm font-semibold">
                   <span>Total Cash Available</span>
-                  <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + cashSales) }}</span>
+                  <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + cashSales) }}</span>
                 </div>
                 <Separator class="my-2" />
                 <!-- Non-Cash Section -->
@@ -2105,7 +2358,7 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Grand Total -->
                 <div class="flex justify-between text-base font-semibold">
                   <span>Total Money In (All Sources)</span>
-                  <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + totalSales) }}</span>
+                  <span>{{ currency }} {{ formatCurrency(totalMoneyIn) }}</span>
                 </div>
               </div>
             </div>
@@ -2302,6 +2555,48 @@ const completedWorkflowSteps = computed(() => {
               </div>
             </template>
 
+            <template v-if="form.bill_payments.length > 0">
+              <Separator />
+
+              <div class="space-y-4">
+                <div>
+                  <h4 class="font-medium">Supplier Bill Payments</h4>
+                  <p class="text-xs text-muted-foreground">{{ accountingHints.billPayment }}</p>
+                </div>
+
+                <div class="space-y-2">
+                  <div
+                    v-for="payment in form.bill_payments"
+                    :key="payment.payment_id"
+                    class="rounded-md border p-3 text-sm"
+                  >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="space-y-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="font-medium">{{ payment.vendor_name }}</p>
+                          <Badge :variant="payment.affects_cash_drawer ? 'destructive' : 'secondary'" class="text-xs">
+                            {{ payment.affects_cash_drawer ? 'Drawer cash' : 'No drawer cash effect' }}
+                          </Badge>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                          {{ payment.payment_number }}
+                          <span v-if="payment.payment_group_number"> · {{ payment.payment_group_number }}</span>
+                          <span v-if="payment.bill_numbers.length"> · Bills {{ payment.bill_numbers.join(', ') }}</span>
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                          {{ payment.payment_account_name }} · {{ payment.payment_method.replace(/_/g, ' ') }}
+                          <span v-if="payment.reference_number"> · Ref {{ payment.reference_number }}</span>
+                        </p>
+                      </div>
+                      <span :class="payment.affects_cash_drawer ? 'text-destructive' : 'text-foreground'" class="font-semibold">
+                        {{ currency }} {{ formatCurrency(payment.amount) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
             <!-- Amanat Disbursements (only if amanat feature enabled) -->
             <template v-if="features.has_amanat">
               <Separator />
@@ -2419,6 +2714,14 @@ const completedWorkflowSteps = computed(() => {
                   <span>Approved Salaries</span>
                   <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalPayrollPayouts) }}</span>
                 </div>
+                <div v-if="totalCashBillPayments > 0" class="flex justify-between text-sm">
+                  <span>Supplier Bill Payments (station cash)</span>
+                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalCashBillPayments) }}</span>
+                </div>
+                <div v-if="totalNonCashBillPayments > 0" class="flex justify-between text-sm">
+                  <span>Supplier Bill Payments (bank/fuel card)</span>
+                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalNonCashBillPayments) }}</span>
+                </div>
                 <!-- Amanat Disbursements -->
                 <div v-if="totalAmanatDisbursements > 0" class="flex justify-between text-sm">
                   <span>Amanat Disbursements</span>
@@ -2476,6 +2779,14 @@ const completedWorkflowSteps = computed(() => {
                     <span>+ Partner Deposits</span>
                     <span>{{ currency }} {{ formatCurrency(form.partner_deposits.reduce((s, d) => s + d.amount, 0)) }}</span>
                   </div>
+                  <div v-if="totalAmanatDeposits > 0" class="flex justify-between">
+                    <span>+ Amanat Deposits</span>
+                    <span>{{ currency }} {{ formatCurrency(totalAmanatDeposits) }}</span>
+                  </div>
+                  <div v-if="totalOtherDeposits > 0" class="flex justify-between">
+                    <span>+ Other Cash In</span>
+                    <span>{{ currency }} {{ formatCurrency(totalOtherDeposits) }}</span>
+                  </div>
                   <div class="flex justify-between">
                     <span>+ Cash Sales</span>
                     <span>{{ currency }} {{ formatCurrency(totalSales - totalCardAndBank) }}</span>
@@ -2483,7 +2794,7 @@ const completedWorkflowSteps = computed(() => {
                   <Separator />
                   <div class="flex justify-between font-medium">
                     <span>Total Cash Available</span>
-                    <span>{{ currency }} {{ formatCurrency(form.opening_cash + form.partner_deposits.reduce((s, d) => s + d.amount, 0) + totalSales - totalCardAndBank) }}</span>
+                    <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + totalSales - totalCardAndBank) }}</span>
                   </div>
                   <div class="flex justify-between text-destructive">
                     <span>- Money Out</span>

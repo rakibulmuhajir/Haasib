@@ -5,10 +5,12 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreBillRequest;
 use App\Modules\Accounting\Http\Requests\ReceiveGoodsRequest;
+use App\Modules\Accounting\Http\Requests\ReceiveSupplierClaimRequest;
 use App\Modules\Accounting\Http\Requests\VoidBillRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Transaction;
+use App\Modules\Inventory\Models\StockReceiptLine;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
 use Illuminate\Http\RedirectResponse;
@@ -151,16 +153,57 @@ class BillController extends Controller
         $warehouses = [];
 
         if ($inventoryEnabled && class_exists(\App\Modules\Inventory\Models\Item::class)) {
-            $items = \App\Modules\Inventory\Models\Item::where('company_id', $company->id)
+            $itemRows = \App\Modules\Inventory\Models\Item::where('company_id', $company->id)
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get(['id', 'sku', 'name', 'cost_price', 'unit_of_measure', 'track_inventory']);
+                ->get([
+                    'id',
+                    'sku',
+                    'name',
+                    'cost_price',
+                    'unit_of_measure',
+                    'track_inventory',
+                    'asset_account_id',
+                    'expense_account_id',
+                ]);
 
             $warehouses = \App\Modules\Inventory\Models\Warehouse::where('company_id', $company->id)
                 ->where('is_active', true)
+                ->orderByRaw("case when warehouse_type = 'tank' then 0 else 1 end")
                 ->orderByDesc('is_primary')
                 ->orderBy('name')
-                ->get(['id', 'code', 'name', 'is_primary']);
+                ->get(['id', 'code', 'name', 'is_primary', 'warehouse_type', 'linked_item_id']);
+
+            $primaryWarehouseId = $warehouses->firstWhere('is_primary', true)?->id ?? $warehouses->first()?->id;
+            $warehouseByLinkedItem = $warehouses
+                ->filter(fn ($warehouse) => !empty($warehouse->linked_item_id))
+                ->groupBy('linked_item_id')
+                ->map(fn ($group) => $group->first()->id);
+
+            $stockWarehouseByItem = \App\Modules\Inventory\Models\StockLevel::where('company_id', $company->id)
+                ->whereIn('item_id', $itemRows->pluck('id'))
+                ->where('quantity', '>', 0)
+                ->orderByDesc('quantity')
+                ->get(['item_id', 'warehouse_id'])
+                ->groupBy('item_id')
+                ->map(fn ($group) => $group->first()->warehouse_id);
+
+            $items = $itemRows->map(fn ($item) => [
+                'id' => $item->id,
+                'sku' => $item->sku,
+                'name' => $item->name,
+                'cost_price' => (float) $item->cost_price,
+                'unit_of_measure' => $item->unit_of_measure,
+                'track_inventory' => (bool) $item->track_inventory,
+                'asset_account_id' => $item->asset_account_id,
+                'expense_account_id' => $item->expense_account_id,
+                'preferred_warehouse_id' => $warehouseByLinkedItem->get($item->id)
+                    ?? $stockWarehouseByItem->get($item->id)
+                    ?? $primaryWarehouseId,
+                'preferred_line_account_id' => $item->asset_account_id
+                    ?? $item->expense_account_id
+                    ?? null,
+            ])->values();
         }
 
         // Owner mode → simplified quick create (but use full form if inventory enabled with items)
@@ -318,6 +361,45 @@ class BillController extends Controller
             ->orderByDesc('posting_date')
             ->value('id');
 
+        $supplierClaims = StockReceiptLine::where('company_id', $companyModel->id)
+            ->where('variance_treatment', 'supplier_claim')
+            ->whereHas('receipt', fn ($query) => $query->where('bill_id', $record->id))
+            ->with([
+                'item:id,name,unit_of_measure',
+                'warehouse:id,name',
+                'claimReceivedAccount:id,code,name',
+                'claimReceivedTransaction:id,transaction_number',
+            ])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (StockReceiptLine $line) => [
+                'id' => $line->id,
+                'item_name' => $line->item?->name ?? 'Item',
+                'warehouse_name' => $line->warehouse?->name,
+                'expected_quantity' => (float) $line->expected_quantity,
+                'received_quantity' => (float) $line->received_quantity,
+                'variance_quantity' => (float) $line->variance_quantity,
+                'variance_cost' => (float) $line->variance_cost,
+                'claim_amount' => abs((float) $line->variance_cost),
+                'claim_status' => $line->claim_status,
+                'claim_received_at' => $line->claim_received_at?->toISOString(),
+                'claim_received_amount' => $line->claim_received_amount !== null ? (float) $line->claim_received_amount : null,
+                'claim_received_account' => $line->claimReceivedAccount ? [
+                    'id' => $line->claimReceivedAccount->id,
+                    'code' => $line->claimReceivedAccount->code,
+                    'name' => $line->claimReceivedAccount->name,
+                ] : null,
+                'claim_received_transaction_id' => $line->claim_received_transaction_id,
+                'claim_received_transaction_number' => $line->claimReceivedTransaction?->transaction_number,
+            ]);
+
+        $claimReceiptAccounts = Account::where('company_id', $companyModel->id)
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->whereIn('subtype', ['bank', 'cash', 'other_current_asset', 'accounts_receivable'])
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return Inertia::render('accounting/bills/Show', [
             'company' => [
                 'id' => $companyModel->id,
@@ -329,6 +411,8 @@ class BillController extends Controller
             'bill' => $record,
             'journalTransactionId' => $journalTransactionId,
             'inventoryEnabled' => $companyModel->isModuleEnabled('inventory'),
+            'supplierClaims' => $supplierClaims,
+            'claimReceiptAccounts' => $claimReceiptAccounts,
         ]);
     }
 
@@ -360,16 +444,57 @@ class BillController extends Controller
         $warehouses = [];
 
         if ($inventoryEnabled && class_exists(\App\Modules\Inventory\Models\Item::class)) {
-            $items = \App\Modules\Inventory\Models\Item::where('company_id', $companyModel->id)
+            $itemRows = \App\Modules\Inventory\Models\Item::where('company_id', $companyModel->id)
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get(['id', 'sku', 'name', 'cost_price', 'unit_of_measure', 'track_inventory']);
+                ->get([
+                    'id',
+                    'sku',
+                    'name',
+                    'cost_price',
+                    'unit_of_measure',
+                    'track_inventory',
+                    'asset_account_id',
+                    'expense_account_id',
+                ]);
 
             $warehouses = \App\Modules\Inventory\Models\Warehouse::where('company_id', $companyModel->id)
                 ->where('is_active', true)
+                ->orderByRaw("case when warehouse_type = 'tank' then 0 else 1 end")
                 ->orderByDesc('is_primary')
                 ->orderBy('name')
-                ->get(['id', 'code', 'name', 'is_primary']);
+                ->get(['id', 'code', 'name', 'is_primary', 'warehouse_type', 'linked_item_id']);
+
+            $primaryWarehouseId = $warehouses->firstWhere('is_primary', true)?->id ?? $warehouses->first()?->id;
+            $warehouseByLinkedItem = $warehouses
+                ->filter(fn ($warehouse) => !empty($warehouse->linked_item_id))
+                ->groupBy('linked_item_id')
+                ->map(fn ($group) => $group->first()->id);
+
+            $stockWarehouseByItem = \App\Modules\Inventory\Models\StockLevel::where('company_id', $companyModel->id)
+                ->whereIn('item_id', $itemRows->pluck('id'))
+                ->where('quantity', '>', 0)
+                ->orderByDesc('quantity')
+                ->get(['item_id', 'warehouse_id'])
+                ->groupBy('item_id')
+                ->map(fn ($group) => $group->first()->warehouse_id);
+
+            $items = $itemRows->map(fn ($item) => [
+                'id' => $item->id,
+                'sku' => $item->sku,
+                'name' => $item->name,
+                'cost_price' => (float) $item->cost_price,
+                'unit_of_measure' => $item->unit_of_measure,
+                'track_inventory' => (bool) $item->track_inventory,
+                'asset_account_id' => $item->asset_account_id,
+                'expense_account_id' => $item->expense_account_id,
+                'preferred_warehouse_id' => $warehouseByLinkedItem->get($item->id)
+                    ?? $stockWarehouseByItem->get($item->id)
+                    ?? $primaryWarehouseId,
+                'preferred_line_account_id' => $item->asset_account_id
+                    ?? $item->expense_account_id
+                    ?? null,
+            ])->values();
         }
 
         return Inertia::render('accounting/bills/Edit', [
@@ -507,4 +632,29 @@ class BillController extends Controller
                 ->withInput();
         }
     }
+
+    public function receiveSupplierClaim(ReceiveSupplierClaimRequest $request, string $company, string $bill): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        try {
+            $result = app(CommandBus::class)->dispatch('bill.receive_supplier_claim', [
+                'bill_id' => $bill,
+                ...$validated,
+            ], $request->user());
+
+            return back()->with('success', $result['message'] ?? 'Supplier claim received');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
+    }
+
 }

@@ -8,8 +8,6 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\BillPaymentAllocation;
-use App\Modules\Accounting\Models\Vendor;
-use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -122,24 +120,13 @@ class CreateAction implements PaletteAction
                     $bill->save();
                 }
 
-                $vendor = Vendor::where('company_id', $company->id)->find($params['vendor_id']);
-                $apAccountId = $params['ap_account_id']
-                    ?? $vendor?->ap_account_id
-                    ?? $company->ap_account_id;
-                if (!$apAccountId) {
-                    throw new \RuntimeException('AP account is required to post bill payment.');
-                }
-                $transaction = app(GlPostingService::class)->postBillPayment($payment, $split['payment_account_id'], $apAccountId);
-                $payment->transaction_id = $transaction->id;
-                $payment->save();
-
                 $createdPayments[] = $payment;
             }
 
             return [
                 'message' => count($createdPayments) === 1
-                    ? "Payment {$createdPayments[0]->payment_number} created"
-                    : count($createdPayments) . ' split payments created',
+                    ? "Payment {$createdPayments[0]->payment_number} recorded for Daily Close"
+                    : count($createdPayments) . ' split payments recorded for Daily Close',
                 'data' => ['id' => $createdPayments[0]->id, 'ids' => collect($createdPayments)->pluck('id')->all()],
             ];
         });

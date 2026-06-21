@@ -70,9 +70,6 @@ const holderForm = useForm({
   phone: '',
   cnic: '',
   relationship: 'external',
-  opening_deposit: '',
-  reference: '',
-  notes: '',
 })
 
 const openAddHolder = () => {
@@ -158,7 +155,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
 
   <PageShell
     title="Amanat Deposits"
-    description="Manage trust deposits (amanat) for customers who prepay for fuel."
+    description="View depositor balances and history. Record deposits and withdrawals from Daily Close."
     :icon="Wallet"
     :breadcrumbs="breadcrumbs"
   >
@@ -206,7 +203,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle class="text-base">Amanat Holders</CardTitle>
-            <CardDescription>Click on a customer to view transactions and manage deposits.</CardDescription>
+            <CardDescription>Click on a customer to view balance and transaction history.</CardDescription>
           </div>
 
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -232,7 +229,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
           <template #empty>
             <EmptyState
               title="No amanat holders"
-              description="Add a depositor here, then record deposits or withdrawals from their account."
+              description="Add a depositor here, then record deposits or withdrawals from Daily Close."
               :actions="[{ label: 'Add Holder', icon: Plus, onClick: openAddHolder }]"
             />
           </template>
@@ -267,7 +264,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
         <DialogHeader>
           <DialogTitle>Add Amanat Holder</DialogTitle>
           <DialogDescription>
-            Create the depositor account. Opening deposit is optional.
+            Create the depositor profile. Cash deposits are recorded from Daily Close.
           </DialogDescription>
         </DialogHeader>
 
@@ -306,23 +303,6 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
               <p v-if="holderForm.errors.relationship" class="text-xs text-red-600">{{ holderForm.errors.relationship }}</p>
             </div>
 
-            <div class="space-y-2">
-              <Label>Opening Deposit</Label>
-              <Input v-model="holderForm.opening_deposit" type="number" min="0" step="0.01" placeholder="Optional" />
-              <p v-if="holderForm.errors.opening_deposit" class="text-xs text-red-600">{{ holderForm.errors.opening_deposit }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label>Reference</Label>
-              <Input v-model="holderForm.reference" placeholder="Optional" />
-              <p v-if="holderForm.errors.reference" class="text-xs text-red-600">{{ holderForm.errors.reference }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label>Notes</Label>
-              <Input v-model="holderForm.notes" placeholder="Optional" />
-              <p v-if="holderForm.errors.notes" class="text-xs text-red-600">{{ holderForm.errors.notes }}</p>
-            </div>
           </div>
         </div>
 

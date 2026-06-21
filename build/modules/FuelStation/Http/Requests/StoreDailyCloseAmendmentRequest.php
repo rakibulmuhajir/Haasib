@@ -49,6 +49,18 @@ class StoreDailyCloseAmendmentRequest extends BaseFormRequest
             'partner_deposits.*.partner_id' => ['required', 'uuid'],
             'partner_deposits.*.amount' => ['required', 'numeric', 'min:0'],
 
+            'amanat_deposits' => ['nullable', 'array'],
+            'amanat_deposits.*.customer_id' => ['required', 'uuid'],
+            'amanat_deposits.*.customer_name' => ['nullable', 'string', 'max:255'],
+            'amanat_deposits.*.amount' => ['required', 'numeric', 'min:0'],
+            'amanat_deposits.*.reference' => ['nullable', 'string', 'max:255'],
+
+            'other_deposits' => ['nullable', 'array'],
+            'other_deposits.*.deposit_type' => ['required', 'in:loss_compensation,fuel_disbursement,misc_income'],
+            'other_deposits.*.account_id' => ['nullable', 'uuid'],
+            'other_deposits.*.description' => ['nullable', 'string', 'max:255'],
+            'other_deposits.*.amount' => ['required', 'numeric', 'min:0'],
+
             'payment_receipts' => ['nullable', 'array'],
             'payment_receipts.*.entries' => ['nullable', 'array'],
             'payment_receipts.*.entries.*.reference' => ['nullable', 'string', 'max:255'],

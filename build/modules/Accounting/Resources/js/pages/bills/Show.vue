@@ -82,8 +82,32 @@ interface ReceiptLineInput {
   expected_quantity: number
   received_quantity: number
   variance_reason: string | null
+  variance_treatment: string | null
   warehouse_id: string | null
   notes: string | null
+}
+
+interface ClaimReceiptAccount {
+  id: string
+  code: string
+  name: string
+}
+
+interface SupplierClaim {
+  id: string
+  item_name: string
+  warehouse_name: string | null
+  expected_quantity: number
+  received_quantity: number
+  variance_quantity: number
+  variance_cost: number
+  claim_amount: number
+  claim_status: string | null
+  claim_received_at: string | null
+  claim_received_amount: number | null
+  claim_received_account: ClaimReceiptAccount | null
+  claim_received_transaction_id: string | null
+  claim_received_transaction_number: string | null
 }
 
 const props = defineProps<{
@@ -91,6 +115,8 @@ const props = defineProps<{
   bill: BillRef
   inventoryEnabled?: boolean
   journalTransactionId?: string | null
+  supplierClaims: SupplierClaim[]
+  claimReceiptAccounts: ClaimReceiptAccount[]
 }>()
 
 const { t } = useLexicon()
@@ -100,11 +126,21 @@ const showVoidDialog = ref(false)
 const voidReason = ref('')
 const isSubmittingVoid = ref(false)
 const showReceiptDialog = ref(false)
+const showClaimReceiptDialog = ref(false)
+const selectedClaim = ref<SupplierClaim | null>(null)
 
 const receiptForm = useForm({
   receipt_date: new Date().toISOString().slice(0, 10),
   notes: '',
   lines: [] as ReceiptLineInput[],
+})
+
+const claimReceiptForm = useForm({
+  receipt_line_id: '',
+  received_date: new Date().toISOString().slice(0, 10),
+  received_amount: 0,
+  received_account_id: '',
+  notes: '',
 })
 
 const varianceReasonOptions = [
@@ -199,6 +235,7 @@ const buildReceiptLines = (): ReceiptLineInput[] => {
       expected_quantity: remaining,
       received_quantity: remaining,
       variance_reason: null,
+      variance_treatment: null,
       warehouse_id: item.warehouse_id,
       notes: null,
     }
@@ -234,6 +271,10 @@ const hasMissingReasons = computed(() => {
   })
 })
 
+const hasMissingTreatments = computed(() => {
+  return receiptForm.lines.some((line) => varianceQuantity(line) < -0.0001 && !line.variance_treatment)
+})
+
 const submitReceipt = () => {
   const lines = receiptForm.lines
     .filter((line) => Number(line.received_quantity || 0) > 0)
@@ -244,6 +285,7 @@ const submitReceipt = () => {
         expected_quantity: Number(line.expected_quantity),
         received_quantity: Number(line.received_quantity),
         variance_reason: Math.abs(variance) > 0.0001 ? line.variance_reason : null,
+        variance_treatment: variance < -0.0001 ? line.variance_treatment : null,
         warehouse_id: line.warehouse_id,
         notes: line.notes,
       }
@@ -261,6 +303,32 @@ const submitReceipt = () => {
         showReceiptDialog.value = false
       },
     })
+}
+
+const pendingSupplierClaims = computed(() =>
+  props.supplierClaims.filter((claim) => claim.claim_status === 'pending')
+)
+
+const openClaimReceiptDialog = (claim: SupplierClaim) => {
+  selectedClaim.value = claim
+  claimReceiptForm.clearErrors()
+  claimReceiptForm.reset()
+  claimReceiptForm.receipt_line_id = claim.id
+  claimReceiptForm.received_date = new Date().toISOString().slice(0, 10)
+  claimReceiptForm.received_amount = claim.claim_amount
+  claimReceiptForm.received_account_id = props.claimReceiptAccounts[0]?.id ?? ''
+  claimReceiptForm.notes = ''
+  showClaimReceiptDialog.value = true
+}
+
+const submitClaimReceipt = () => {
+  claimReceiptForm.post(`/${props.company.slug}/bills/${props.bill.id}/supplier-claims/receive`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showClaimReceiptDialog.value = false
+      selectedClaim.value = null
+    },
+  })
 }
 
 // Determine which actions to show based on bill status
@@ -455,6 +523,58 @@ const navigateToVendor = () => {
             <div v-if="bill.notes" class="pt-4 border-t">
               <h4 class="text-sm font-medium text-muted-foreground mb-2">{{ t('notes') }}</h4>
               <p class="text-sm">{{ bill.notes }}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card v-if="supplierClaims.length > 0">
+          <CardHeader>
+            <CardTitle>Supplier Claims</CardTitle>
+            <CardDescription>Short deliveries claimed from the supplier stay here until compensation is received.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-3">
+            <div
+              v-for="claim in supplierClaims"
+              :key="claim.id"
+              class="rounded-lg border p-4"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="space-y-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-medium">{{ claim.item_name }}</p>
+                    <Badge :variant="claim.claim_status === 'received' ? 'default' : 'outline'">
+                      {{ claim.claim_status === 'received' ? 'Received' : 'Pending' }}
+                    </Badge>
+                  </div>
+                  <p class="text-sm text-muted-foreground">
+                    Short {{ formatNumber(Math.abs(claim.variance_quantity), 3) }}
+                    <span v-if="claim.warehouse_name"> · {{ claim.warehouse_name }}</span>
+                  </p>
+                  <p v-if="claim.claim_received_at" class="text-xs text-muted-foreground">
+                    Received {{ formatDate(claim.claim_received_at) }}
+                    <span v-if="claim.claim_received_account"> · {{ claim.claim_received_account.code }} — {{ claim.claim_received_account.name }}</span>
+                  </p>
+                </div>
+                <div class="flex flex-col items-start gap-2 sm:items-end">
+                  <span class="font-semibold">{{ formatMoney(claim.claim_amount, bill.currency) }}</span>
+                  <Button
+                    v-if="claim.claim_status === 'pending'"
+                    size="sm"
+                    variant="outline"
+                    @click="openClaimReceiptDialog(claim)"
+                  >
+                    Mark Received
+                  </Button>
+                  <Button
+                    v-else-if="claim.claim_received_transaction_id"
+                    size="sm"
+                    variant="ghost"
+                    @click="router.get(`/${company.slug}/journals/${claim.claim_received_transaction_id}`)"
+                  >
+                    View Journal
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -674,6 +794,18 @@ const navigateToVendor = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div v-if="varianceQuantity(line) < -0.0001" class="space-y-2">
+                  <Label>Shortage treatment</Label>
+                  <Select v-model="line.variance_treatment">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose treatment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="supplier_claim">Claim from supplier</SelectItem>
+                      <SelectItem value="final_loss">Final loss</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div class="space-y-2">
                   <Label>Line notes</Label>
                   <Input v-model="line.notes" placeholder="Optional notes" />
@@ -685,15 +817,78 @@ const navigateToVendor = () => {
           <div v-if="Object.keys(receiptForm.errors).length" class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {{ receiptForm.errors.lines ?? receiptForm.errors.receipt_date ?? receiptForm.errors.notes ?? 'Please review the receipt details.' }}
           </div>
-          <p v-if="hasMissingReasons" class="text-xs text-amber-600">
-            Select a variance reason for each line with a non-zero variance.
+          <p v-if="hasMissingReasons || hasMissingTreatments" class="text-xs text-amber-600">
+            Select a variance reason for every variance and a treatment for every shortage.
           </p>
         </div>
 
         <DialogFooter class="gap-2">
           <Button type="button" variant="outline" @click="showReceiptDialog = false">Cancel</Button>
-          <Button type="button" :disabled="receiptForm.processing || hasMissingReasons" @click="submitReceipt">
+          <Button type="button" :disabled="receiptForm.processing || hasMissingReasons || hasMissingTreatments" @click="submitReceipt">
             Confirm receipt
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showClaimReceiptDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Receive Supplier Claim</DialogTitle>
+          <DialogDescription>
+            Record compensation for the short delivery claim.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <div v-if="selectedClaim" class="rounded-md border bg-muted/30 p-3 text-sm">
+            <div class="flex justify-between">
+              <span>{{ selectedClaim.item_name }}</span>
+              <span class="font-medium">{{ formatMoney(selectedClaim.claim_amount, bill.currency) }}</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label for="claim_received_date">Received date</Label>
+              <Input id="claim_received_date" v-model="claimReceiptForm.received_date" type="date" />
+            </div>
+            <div class="space-y-2">
+              <Label for="claim_received_amount">Amount</Label>
+              <Input id="claim_received_amount" v-model.number="claimReceiptForm.received_amount" type="number" min="0.01" step="0.01" />
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Received in</Label>
+            <Select v-model="claimReceiptForm.received_account_id">
+              <SelectTrigger>
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="account in claimReceiptAccounts" :key="account.id" :value="account.id">
+                  {{ account.code }} — {{ account.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="claim_notes">Notes</Label>
+            <Input id="claim_notes" v-model="claimReceiptForm.notes" placeholder="Optional" />
+          </div>
+
+          <div v-if="Object.keys(claimReceiptForm.errors).length" class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {{ claimReceiptForm.errors.received_amount ?? claimReceiptForm.errors.received_account_id ?? claimReceiptForm.errors.received_date ?? 'Please review the claim receipt.' }}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" :disabled="claimReceiptForm.processing" @click="showClaimReceiptDialog = false">
+            Cancel
+          </Button>
+          <Button :disabled="claimReceiptForm.processing || !claimReceiptForm.received_account_id" @click="submitClaimReceipt">
+            Mark Received
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -263,6 +263,12 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - `total_cost` numeric(15,2) not null.
   - `variance_cost` numeric(15,2) not null default 0.
   - `variance_reason` varchar(50) nullable. Enum: transit_loss, spillage, temperature_adjustment, measurement_error, other.
+  - `variance_treatment` varchar(50) nullable. Enum: final_loss, supplier_claim. Required for negative variance.
+  - `claim_status` varchar(50) nullable. Enum: pending, received, cancelled. Used when `variance_treatment = supplier_claim`.
+  - `claim_received_at` timestamp nullable.
+  - `claim_received_amount` numeric(15,2) nullable.
+  - `claim_received_account_id` uuid nullable FK → `acct.accounts.id` (SET NULL/CASCADE).
+  - `claim_received_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
   - `stock_movement_id` uuid nullable FK → `inv.stock_movements.id` (SET NULL/CASCADE).
   - `notes` text nullable.
   - `created_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
@@ -271,18 +277,23 @@ Single source of truth for items, categories, warehouses, stock levels, movement
   - PK `id`.
   - Index: `company_id`; `stock_receipt_id`; `bill_line_item_id`; `item_id`; `warehouse_id`.
   - Check: `variance_reason` must be null or in enum list.
+  - Check: `variance_treatment` must be null or in enum list.
+  - Check: `claim_status` must be null or in enum list.
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'inv.stock_receipt_lines'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','stock_receipt_id','bill_line_item_id','item_id','warehouse_id','expected_quantity','received_quantity','variance_quantity','unit_cost','total_cost','variance_cost','variance_reason','stock_movement_id','notes','created_by_user_id'];`
-  - `$casts = ['company_id'=>'string','stock_receipt_id'=>'string','bill_line_item_id'=>'string','item_id'=>'string','warehouse_id'=>'string','expected_quantity'=>'decimal:3','received_quantity'=>'decimal:3','variance_quantity'=>'decimal:3','unit_cost'=>'decimal:6','total_cost'=>'decimal:2','variance_cost'=>'decimal:2','variance_reason'=>'string','stock_movement_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','stock_receipt_id','bill_line_item_id','item_id','warehouse_id','expected_quantity','received_quantity','variance_quantity','unit_cost','total_cost','variance_cost','variance_reason','variance_treatment','claim_status','claim_received_at','claim_received_amount','claim_received_account_id','claim_received_transaction_id','stock_movement_id','notes','created_by_user_id'];`
+  - `$casts = ['company_id'=>'string','stock_receipt_id'=>'string','bill_line_item_id'=>'string','item_id'=>'string','warehouse_id'=>'string','expected_quantity'=>'decimal:3','received_quantity'=>'decimal:3','variance_quantity'=>'decimal:3','unit_cost'=>'decimal:6','total_cost'=>'decimal:2','variance_cost'=>'decimal:2','variance_reason'=>'string','variance_treatment'=>'string','claim_status'=>'string','claim_received_at'=>'datetime','claim_received_amount'=>'decimal:2','claim_received_account_id'=>'string','claim_received_transaction_id'=>'string','stock_movement_id'=>'string','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo StockReceipt; belongsTo BillLineItem; belongsTo Item; belongsTo Warehouse; belongsTo StockMovement; belongsTo User (created_by).
 - Validation:
   - `expected_quantity`: required|numeric|min:0.01.
   - `received_quantity`: required|numeric|min:0.01.
   - `variance_reason`: required when variance_quantity != 0.
+  - `variance_treatment`: required when variance_quantity < 0.
 - Business rules:
   - `variance_quantity = received_quantity - expected_quantity`.
+  - Negative variance with `final_loss` posts to Transit Loss immediately.
+  - Negative variance with `supplier_claim` posts to Supplier Claims Receivable and remains pending until received.
   - Stock movements are created for `received_quantity`.
   - If variance exists, post to GL using Transit Loss/Gain accounts.
 

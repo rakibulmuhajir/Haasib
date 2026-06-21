@@ -17,6 +17,23 @@ class AmanatService
         private readonly GlPostingService $postingService,
     ) {}
 
+    private function nextTransactionNumber(string $companyId, string $prefix, string $customerId, string $date): string
+    {
+        DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', [
+            "amanat_transaction_number:{$companyId}:{$prefix}:{$date}",
+        ]);
+
+        $base = $prefix . '-' . strtoupper(substr($customerId, 0, 8)) . '-' . date('Ymd', strtotime($date));
+        $lastSequence = Transaction::where('company_id', $companyId)
+            ->where('transaction_number', 'like', $base . '-%')
+            ->selectRaw('MAX((RIGHT(transaction_number, 4))::integer) as max_sequence')
+            ->value('max_sequence');
+
+        $sequence = ((int) $lastSequence) + 1;
+
+        return $base . '-' . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+    }
+
     /**
      * Process an amanat deposit.
      *
@@ -39,13 +56,14 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $cashAccount = $this->getCashAccount($company->id);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
+            $date = now()->toDateString();
 
             // Create GL transaction
             $glTransaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $company->id,
-                'transaction_number' => 'AMANAT-DEP-' . strtoupper(substr($customer->id, 0, 8)) . '-' . now()->format('Ymd'),
+                'transaction_number' => $this->nextTransactionNumber($company->id, 'AMANAT-DEP', $customer->id, $date),
                 'transaction_type' => 'amanat_deposit',
-                'date' => now()->toDateString(),
+                'date' => $date,
                 'currency' => $currency,
                 'base_currency' => $currency,
                 'description' => "Amanat deposit from: {$customer->name}",
@@ -110,13 +128,14 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $cashAccount = $this->getCashAccount($company->id);
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
+            $date = now()->toDateString();
 
             // Create GL transaction (reversed from deposit)
             $glTransaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $company->id,
-                'transaction_number' => 'AMANAT-WDR-' . strtoupper(substr($customer->id, 0, 8)) . '-' . now()->format('Ymd'),
+                'transaction_number' => $this->nextTransactionNumber($company->id, 'AMANAT-WDR', $customer->id, $date),
                 'transaction_type' => 'amanat_withdrawal',
-                'date' => now()->toDateString(),
+                'date' => $date,
                 'currency' => $currency,
                 'base_currency' => $currency,
                 'description' => "Amanat withdrawal to: {$customer->name}",
@@ -186,13 +205,14 @@ class AmanatService
             $currency = strtoupper((string) ($company->base_currency ?: 'PKR'));
             $amanatLiabilityAccount = $this->getAmanatLiabilityAccount($company->id);
             $fuelSalesAccount = $this->getFuelSalesAccount($company->id);
+            $date = now()->toDateString();
 
             // Create GL transaction: Dr Amanat Liability, Cr Fuel Sales
             $glTransaction = $this->postingService->postBalancedTransaction([
                 'company_id' => $company->id,
-                'transaction_number' => 'AMANAT-FUEL-' . strtoupper(substr($customer->id, 0, 8)) . '-' . now()->format('YmdHis'),
+                'transaction_number' => $this->nextTransactionNumber($company->id, 'AMANAT-FUEL', $customer->id, $date),
                 'transaction_type' => 'amanat_fuel_purchase',
-                'date' => now()->toDateString(),
+                'date' => $date,
                 'currency' => $currency,
                 'base_currency' => $currency,
                 'description' => "Amanat fuel purchase by: {$customer->name} ({$quantity}L)",

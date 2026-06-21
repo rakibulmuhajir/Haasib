@@ -1270,10 +1270,8 @@ class FuelStationOnboardingController extends Controller
 
         DB::transaction(function () use ($validated, $company, $request, $baseCurrency, $productCatalog, &$created, &$updated) {
             CompanyContext::setContext($company);
-            // Get or create lubricants inventory account
-            $lubricantsAccount = Account::where('company_id', $company->id)
-                ->where('code', '1210')
-                ->first();
+            $lubricantsAccount = app(\App\Modules\FuelStation\Services\FuelProductAccountMapper::class)
+                ->resolveAccounts($company->id, 'lubricant_packaged', $baseCurrency, $request->user()->id)['asset'];
 
             foreach ($validated['lubricants'] as $lubricantData) {
                 $item = null;

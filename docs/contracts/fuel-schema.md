@@ -211,6 +211,13 @@ This keeps the core accounting module industry-agnostic.
   - `sale_rate` numeric(10,2) not null — new sale rate per liter.
   - `stock_quantity_at_change` numeric(12,2) nullable — snapshot for margin impact.
   - `margin_impact` numeric(12,2) nullable — (new_margin - old_margin) * stock.
+  - `revaluation_amount` numeric(15,2) nullable — inventory revaluation amount posted for the rate change.
+  - `previous_avg_cost` numeric(10,4) nullable — item average cost before revaluation.
+  - `journal_entry_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
+  - `snapshot_tank_id` uuid nullable FK → `inv.warehouses.id` (SET NULL/CASCADE) — tank used for optional midnight/rate-change dip.
+  - `snapshot_stick_reading` numeric(12,2) nullable — physical stick reading at rate change.
+  - `snapshot_dip_liters` numeric(12,2) nullable — physical tank quantity at rate change.
+  - `snapshot_nozzle_readings` jsonb nullable — optional per-nozzle meter snapshot at rate change; rows contain `nozzle_id`, `electronic_reading`, `manual_reading`.
   - `notes` text nullable.
   - `created_by_user_id` uuid not null FK → `auth.users.id` (SET NULL/CASCADE).
   - `created_at`, `updated_at` timestamps.
@@ -221,19 +228,25 @@ This keeps the core accounting module industry-agnostic.
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'fuel.rate_changes'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','item_id','effective_date','purchase_rate','sale_rate','stock_quantity_at_change','margin_impact','notes','created_by_user_id'];`
-  - `$casts = ['company_id'=>'string','item_id'=>'string','effective_date'=>'date','purchase_rate'=>'decimal:2','sale_rate'=>'decimal:2','stock_quantity_at_change'=>'decimal:2','margin_impact'=>'decimal:2','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','item_id','effective_date','purchase_rate','sale_rate','stock_quantity_at_change','margin_impact','revaluation_amount','previous_avg_cost','journal_entry_id','snapshot_tank_id','snapshot_stick_reading','snapshot_dip_liters','snapshot_nozzle_readings','notes','created_by_user_id'];`
+  - `$casts = ['company_id'=>'string','item_id'=>'string','effective_date'=>'date','purchase_rate'=>'decimal:2','sale_rate'=>'decimal:2','stock_quantity_at_change'=>'decimal:2','margin_impact'=>'decimal:2','revaluation_amount'=>'decimal:2','previous_avg_cost'=>'decimal:4','journal_entry_id'=>'string','snapshot_tank_id'=>'string','snapshot_stick_reading'=>'decimal:2','snapshot_dip_liters'=>'decimal:2','snapshot_nozzle_readings'=>'array','created_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo Item.
 - Validation:
   - `item_id`: required|uuid|exists:inv.items,id (must have fuel_category).
   - `effective_date`: required|date.
   - `purchase_rate`: required|numeric|min:0.
   - `sale_rate`: required|numeric|min:0.
+  - `snapshot_tank_id`: nullable|uuid|exists:inv.warehouses,id.
+  - `snapshot_stick_reading`: nullable|numeric|min:0.
+  - `snapshot_dip_liters`: nullable|numeric|min:0.
+  - `snapshot_nozzle_readings`: nullable|array.
 - Business rules:
   - First row created during onboarding with initial rates.
   - To get current rate: `WHERE effective_date <= NOW() ORDER BY effective_date DESC LIMIT 1`.
   - Do NOT store rates on inv.items — rates change over time.
   - margin_impact calculated: (new_sale_rate - new_purchase_rate - old_margin) * stock.
+  - Optional rate-change snapshots are used by Daily Close to split nozzle sales before/after a midnight rate change.
+  - If `snapshot_dip_liters` is entered, it is used as the stock quantity for rate-change revaluation.
 
 ### fuel.tank_readings
 - Purpose: Manual dip measurements for variance calculation. **Variance JE only created from here.**

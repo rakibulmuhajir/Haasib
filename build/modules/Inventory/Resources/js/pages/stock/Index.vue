@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   Boxes,
   History,
+  Droplets,
 } from 'lucide-vue-next'
 
 interface CompanyRef {
@@ -79,6 +80,7 @@ interface RecentMovement {
   unit_cost: number | string | null
   total_cost: number | string | null
   gl_transaction_id: string | null
+  gl_status_label: string
   item: {
     id: string
     sku: string
@@ -221,6 +223,10 @@ const openBill = (billId: string) => {
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
+      <Button variant="outline" @click="router.get(`/${company.slug}/fuel/tank-readings`)">
+        <Droplets class="mr-2 h-4 w-4" />
+        Tank Dip
+      </Button>
       <Button variant="outline" @click="router.get(`/${company.slug}/stock/receipts`)">
         <ClipboardCheck class="mr-2 h-4 w-4" />
         Pending Receipts
@@ -354,7 +360,7 @@ const openBill = (billId: string) => {
                 {{ movement.item?.unit_of_measure ?? '' }}
               </span>
               <span class="block text-xs text-muted-foreground">
-                {{ movement.gl_transaction_id ? 'Posted' : 'No GL' }}
+                {{ movement.gl_status_label }}
               </span>
             </span>
           </div>

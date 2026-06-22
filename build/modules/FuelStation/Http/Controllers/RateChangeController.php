@@ -4,9 +4,11 @@ namespace App\Modules\FuelStation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\FuelStation\Http\Requests\StoreRateChangeRequest;
+use App\Modules\FuelStation\Models\Nozzle;
 use App\Modules\FuelStation\Models\RateChange;
 use App\Modules\FuelStation\Services\RateChangeService;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Services\ProductCatalogService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\JsonResponse;
@@ -49,10 +51,36 @@ class RateChangeController extends Controller
             $stockLevels[$item->id] = $this->rateChangeService->getCurrentStock($company->id, $item->id);
         }
 
+        $tanks = Warehouse::where('company_id', $company->id)
+            ->where('warehouse_type', 'tank')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'linked_item_id', 'capacity']);
+
+        $nozzles = Nozzle::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->with('pump:id,name')
+            ->orderBy('sort_order')
+            ->orderBy('code')
+            ->get(['id', 'code', 'label', 'pump_id', 'tank_id', 'item_id', 'last_closing_reading', 'last_manual_reading', 'has_electronic_meter'])
+            ->map(fn (Nozzle $nozzle) => [
+                'id' => $nozzle->id,
+                'code' => $nozzle->code,
+                'label' => $nozzle->label,
+                'pump_name' => $nozzle->pump?->name,
+                'tank_id' => $nozzle->tank_id,
+                'item_id' => $nozzle->item_id,
+                'last_closing_reading' => (float) ($nozzle->last_closing_reading ?? 0),
+                'last_manual_reading' => $nozzle->last_manual_reading !== null ? (float) $nozzle->last_manual_reading : null,
+                'has_electronic_meter' => (bool) $nozzle->has_electronic_meter,
+            ]);
+
         return Inertia::render('FuelStation/Rates/Index', [
             'rates' => $rates,
             'items' => $fuelItems,
             'stockLevels' => $stockLevels,
+            'tanks' => $tanks,
+            'nozzles' => $nozzles,
         ]);
     }
 

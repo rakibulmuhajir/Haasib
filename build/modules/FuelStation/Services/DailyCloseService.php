@@ -17,6 +17,7 @@ use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\FuelStation\Models\AmanatTransaction;
 use App\Modules\FuelStation\Models\CustomerProfile;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
@@ -31,7 +32,7 @@ class DailyCloseService
         private readonly PayrollPostingService $payrollPostingService,
     ) {}
 
-    private function getOpeningLitersForTank(string $companyId, string $tankId, string $itemId, string $date): float
+    private function getOpeningBaselineForTank(string $companyId, string $tankId, string $itemId, string $date): array
     {
         $previousReading = TankReading::where('company_id', $companyId)
             ->where('tank_id', $tankId)
@@ -41,14 +42,40 @@ class DailyCloseService
             ->first();
 
         if ($previousReading) {
-            return (float) $previousReading->dip_measurement_liters;
+            return [
+                'liters' => (float) $previousReading->dip_measurement_liters,
+                'date' => $previousReading->reading_date?->toDateString(),
+                'created_at' => $previousReading->created_at,
+            ];
         }
 
-        return (float) StockMovement::where('company_id', $companyId)
+        $stockMovement = StockMovement::where('company_id', $companyId)
             ->where('warehouse_id', $tankId)
             ->where('item_id', $itemId)
             ->whereDate('movement_date', '<=', $date)
-            ->sum('quantity');
+            ->orderByDesc('movement_date')
+            ->orderByDesc('created_at')
+            ->first(['movement_date', 'created_at']);
+
+        if (! $stockMovement) {
+            return [
+                'liters' => 0.0,
+                'date' => null,
+                'created_at' => null,
+            ];
+        }
+
+        $movementDate = $stockMovement->movement_date?->toDateString();
+
+        return [
+            'liters' => (float) StockMovement::where('company_id', $companyId)
+                ->where('warehouse_id', $tankId)
+                ->where('item_id', $itemId)
+                ->whereDate('movement_date', '<=', $movementDate)
+                ->sum('quantity'),
+            'date' => $movementDate,
+            'created_at' => $stockMovement->created_at,
+        ];
     }
 
     /**
@@ -123,6 +150,8 @@ class DailyCloseService
             $inventoryPostings = [];
             $salesByFuel = [];
             $nozzleReadingsData = [];
+            $rateChangeSnapshots = $this->getRateChangeSnapshotsForDate($companyId, $date);
+            $rateChangeSegments = [];
 
             foreach ($data['nozzle_readings'] as $reading) {
                 $liters = (float) $reading['liters_sold'];
@@ -135,7 +164,8 @@ class DailyCloseService
                 $saleRate = (float) $reading['sale_rate'];
                 $avgCost = (float) ($item?->avg_cost ?? 0);
 
-                $revenue = round($liters * $saleRate, 2);
+                $rateSplit = $this->calculateRateChangeSplit($reading, $rateChangeSnapshots[$reading['item_id']] ?? null, $saleRate);
+                $revenue = $rateSplit['revenue'];
                 $cogs = round($liters * $avgCost, 2);
 
                 if ($liters > 0) {
@@ -172,6 +202,22 @@ class DailyCloseService
                             $fuelLabel
                         );
                     }
+
+                    if ($rateSplit['used_snapshot']) {
+                        $rateChangeSegments[] = [
+                            'item_id' => $reading['item_id'],
+                            'item_name' => $item?->name,
+                            'nozzle_id' => $reading['nozzle_id'],
+                            'rate_change_id' => $rateSplit['rate_change_id'],
+                            'snapshot_electronic_reading' => $rateSplit['snapshot_electronic_reading'],
+                            'old_rate' => $rateSplit['old_rate'],
+                            'new_rate' => $rateSplit['new_rate'],
+                            'old_rate_liters' => $rateSplit['old_rate_liters'],
+                            'new_rate_liters' => $rateSplit['new_rate_liters'],
+                            'fallback_liters' => $rateSplit['fallback_liters'],
+                            'revenue' => $rateSplit['revenue'],
+                        ];
+                    }
                 }
 
                 // Store nozzle reading data for later save
@@ -185,10 +231,12 @@ class DailyCloseService
                     'liters_dispensed' => $liters,
                     'revenue' => $revenue,
                     'sale_rate' => $saleRate,
+                    'rate_segments' => $rateSplit['segments'],
                 ];
             }
 
             $metadata['fuel_sales'] = $salesByFuel;
+            $metadata['rate_change_segments'] = $rateChangeSegments;
             $metadata['total_revenue'] = $totalRevenue;
             $metadata['total_cogs'] = $totalCogs;
 
@@ -232,6 +280,7 @@ class DailyCloseService
             // 3. Process Tank Readings (calculate variance and save)
             // ─────────────────────────────────────────────────────────────────
             $tankVariances = [];
+            $stockReconciliations = [];
             $totalShrinkage = 0;
             $totalGain = 0;
 
@@ -248,7 +297,8 @@ class DailyCloseService
 
                     // Calculate system expected liters:
                     // Opening (previous closing dip, or stock baseline for first close) + Receipts - Sales = Expected
-                    $openingLiters = $this->getOpeningLitersForTank($companyId, $tankData['tank_id'], $itemId, $date);
+                    $openingBaseline = $this->getOpeningBaselineForTank($companyId, $tankData['tank_id'], $itemId, $date);
+                    $openingLiters = $openingBaseline['liters'];
 
                     // Get today's sales for this tank's item from nozzle readings and open/bulk product sales.
                     $todaysSales = 0;
@@ -263,8 +313,19 @@ class DailyCloseService
                         }
                     }
 
-                    // TODO: Add fuel receipts when implemented
-                    $todaysReceipts = 0;
+                    $todaysReceipts = 0.0;
+                    if ($openingBaseline['date']) {
+                        $todaysReceipts = (float) StockMovement::where('company_id', $companyId)
+                            ->where('warehouse_id', $tankData['tank_id'])
+                            ->where('item_id', $itemId)
+                            ->whereDate('movement_date', '>', $openingBaseline['date'])
+                            ->whereDate('movement_date', '<=', $date)
+                            ->where(function ($query) {
+                                $query->whereNull('reference_type')
+                                    ->orWhere('reference_type', '!=', 'fuel.daily_close');
+                            })
+                            ->sum('quantity');
+                    }
 
                     $systemCalculatedLiters = round($openingLiters + $todaysReceipts - $todaysSales, 2);
                     $dipMeasurement = (float) $tankData['liters'];
@@ -304,6 +365,26 @@ class DailyCloseService
                         ];
                     }
 
+                    $ledgerLiters = (float) (StockLevel::where('company_id', $companyId)
+                        ->where('warehouse_id', $tankData['tank_id'])
+                        ->where('item_id', $itemId)
+                        ->value('quantity') ?? $systemCalculatedLiters);
+                    $ledgerDeltaToDip = round($dipMeasurement - $ledgerLiters, 3);
+
+                    if (abs($ledgerDeltaToDip) >= 0.001) {
+                        $totalCost = round(abs($ledgerDeltaToDip) * $avgCost, 2);
+                        $stockReconciliations[] = [
+                            'warehouse_id' => $tankData['tank_id'],
+                            'item_id' => $itemId,
+                            'quantity' => $ledgerDeltaToDip,
+                            'unit_cost' => $avgCost,
+                            'total_cost' => $ledgerDeltaToDip > 0 ? $totalCost : -$totalCost,
+                            'movement_type' => $ledgerDeltaToDip > 0 ? 'adjustment_in' : 'adjustment_out',
+                            'reason' => 'Daily close physical dip',
+                            'notes' => "Daily close {$date}: stock ledger reconciled to physical tank dip",
+                        ];
+                    }
+
                     // Save tank reading with calculated values
                     TankReading::updateOrCreate(
                         [
@@ -329,6 +410,7 @@ class DailyCloseService
             $metadata['tank_variances'] = $tankVariances;
             $metadata['total_shrinkage'] = $totalShrinkage;
             $metadata['total_gain'] = $totalGain;
+            $metadata['stock_reconciliations'] = $stockReconciliations;
 
             // ─────────────────────────────────────────────────────────────────
             // 4. Calculate Money In totals
@@ -1076,6 +1158,25 @@ class DailyCloseService
                 'metadata' => $metadata,
             ], $entries);
 
+            foreach ($stockReconciliations as $reconciliation) {
+                StockMovement::create([
+                    'company_id' => $companyId,
+                    'warehouse_id' => $reconciliation['warehouse_id'],
+                    'item_id' => $reconciliation['item_id'],
+                    'movement_date' => $date,
+                    'movement_type' => $reconciliation['movement_type'],
+                    'quantity' => $reconciliation['quantity'],
+                    'unit_cost' => $reconciliation['unit_cost'],
+                    'total_cost' => $reconciliation['total_cost'],
+                    'gl_transaction_id' => $transaction->id,
+                    'reference_type' => 'fuel.daily_close',
+                    'reference_id' => $transaction->id,
+                    'reason' => $reconciliation['reason'],
+                    'notes' => $reconciliation['notes'],
+                    'created_by_user_id' => $user->id,
+                ]);
+            }
+
             // ─────────────────────────────────────────────────────────────────
             // 7. Save Nozzle Readings and update nozzle last_closing_reading
             // ─────────────────────────────────────────────────────────────────
@@ -1393,5 +1494,81 @@ class DailyCloseService
         if (!in_array($label, $postings[$accountId]['labels'], true)) {
             $postings[$accountId]['labels'][] = $label;
         }
+    }
+
+    private function getRateChangeSnapshotsForDate(string $companyId, string $date): array
+    {
+        return RateChange::where('company_id', $companyId)
+            ->whereDate('effective_date', $date)
+            ->whereNotNull('snapshot_nozzle_readings')
+            ->get()
+            ->mapWithKeys(function (RateChange $rateChange) use ($companyId) {
+                $previousRate = RateChange::where('company_id', $companyId)
+                    ->where('item_id', $rateChange->item_id)
+                    ->whereDate('effective_date', '<', $rateChange->effective_date)
+                    ->orderByDesc('effective_date')
+                    ->first();
+
+                return [
+                    $rateChange->item_id => [
+                        'rate_change_id' => $rateChange->id,
+                        'old_rate' => $previousRate ? (float) $previousRate->sale_rate : null,
+                        'new_rate' => (float) $rateChange->sale_rate,
+                        'nozzles' => collect($rateChange->snapshot_nozzle_readings ?? [])
+                            ->keyBy('nozzle_id')
+                            ->all(),
+                    ],
+                ];
+            })
+            ->all();
+    }
+
+    private function calculateRateChangeSplit(array $reading, ?array $snapshot, float $fallbackRate): array
+    {
+        $liters = (float) $reading['liters_sold'];
+        $opening = (float) $reading['opening_electronic'];
+        $closing = (float) $reading['closing_electronic'];
+        $snapshotReading = $snapshot['nozzles'][$reading['nozzle_id']]['electronic_reading'] ?? null;
+        $oldRate = $snapshot['old_rate'] ?? null;
+        $newRate = $snapshot['new_rate'] ?? $fallbackRate;
+
+        if ($snapshotReading === null || $oldRate === null || $snapshotReading <= $opening || $snapshotReading >= $closing) {
+            return [
+                'used_snapshot' => false,
+                'rate_change_id' => $snapshot['rate_change_id'] ?? null,
+                'snapshot_electronic_reading' => $snapshotReading,
+                'old_rate' => $oldRate,
+                'new_rate' => $newRate,
+                'old_rate_liters' => 0,
+                'new_rate_liters' => 0,
+                'fallback_liters' => $liters,
+                'revenue' => round($liters * $fallbackRate, 2),
+                'segments' => [
+                    ['liters' => $liters, 'rate' => $fallbackRate, 'amount' => round($liters * $fallbackRate, 2)],
+                ],
+            ];
+        }
+
+        $oldLiters = max(0, round($snapshotReading - $opening, 3));
+        $newLiters = max(0, round($closing - $snapshotReading, 3));
+        $segmentedLiters = $oldLiters + $newLiters;
+        $fallbackLiters = max(0, round($liters - $segmentedLiters, 3));
+        $revenue = round(($oldLiters * $oldRate) + ($newLiters * $newRate) + ($fallbackLiters * $fallbackRate), 2);
+
+        return [
+            'used_snapshot' => true,
+            'rate_change_id' => $snapshot['rate_change_id'] ?? null,
+            'snapshot_electronic_reading' => (float) $snapshotReading,
+            'old_rate' => $oldRate,
+            'new_rate' => $newRate,
+            'old_rate_liters' => $oldLiters,
+            'new_rate_liters' => $newLiters,
+            'fallback_liters' => $fallbackLiters,
+            'revenue' => $revenue,
+            'segments' => [
+                ['liters' => $oldLiters, 'rate' => $oldRate, 'amount' => round($oldLiters * $oldRate, 2), 'period' => 'before_rate_change'],
+                ['liters' => $newLiters, 'rate' => $newRate, 'amount' => round($newLiters * $newRate, 2), 'period' => 'after_rate_change'],
+            ],
+        ];
     }
 }

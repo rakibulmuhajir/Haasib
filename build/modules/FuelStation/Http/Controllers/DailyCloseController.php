@@ -215,17 +215,42 @@ class DailyCloseController extends Controller
             ]);
     }
 
+    private function getRateChangeSnapshotsForDailyClose(string $companyId, string $date)
+    {
+        return RateChange::where('company_id', $companyId)
+            ->whereDate('effective_date', $date)
+            ->where(function ($query) {
+                $query->whereNotNull('snapshot_dip_liters')
+                    ->orWhereNotNull('snapshot_nozzle_readings');
+            })
+            ->with('item:id,name,fuel_category')
+            ->get()
+            ->map(fn (RateChange $rateChange) => [
+                'id' => $rateChange->id,
+                'item_id' => $rateChange->item_id,
+                'item_name' => $rateChange->item?->name,
+                'effective_date' => $rateChange->effective_date?->toDateString(),
+                'old_sale_rate' => (float) (RateChange::where('company_id', $companyId)
+                    ->where('item_id', $rateChange->item_id)
+                    ->whereDate('effective_date', '<', $rateChange->effective_date)
+                    ->orderByDesc('effective_date')
+                    ->value('sale_rate') ?? 0),
+                'new_sale_rate' => (float) $rateChange->sale_rate,
+                'snapshot_dip_liters' => $rateChange->snapshot_dip_liters !== null ? (float) $rateChange->snapshot_dip_liters : null,
+                'snapshot_nozzle_count' => count($rateChange->snapshot_nozzle_readings ?? []),
+                'snapshot_nozzle_readings' => $rateChange->snapshot_nozzle_readings ?? [],
+            ]);
+    }
+
     private function getTankBaselines(string $companyId, $tanks, string $date, string $previousDate)
     {
         $baselines = collect();
 
         foreach ($tanks as $tank) {
-            $dipReading = $this->latestTankDipBeforeClose($companyId, $tank->id, $date, $previousDate);
+            $dipReading = $this->latestTankDipBeforeClose($companyId, $tank->id, $date);
             $stockBaseline = $this->latestStockBaselineBeforeClose($companyId, $tank->id, $tank->linked_item_id, $date);
 
-            $baseline = $this->stockBaselineIsNewer($stockBaseline, $dipReading)
-                ? $stockBaseline
-                : $dipReading;
+            $baseline = $dipReading ?: $stockBaseline;
 
             if ($baseline) {
                 $baselines->put($tank->id, $baseline);
@@ -235,22 +260,15 @@ class DailyCloseController extends Controller
         return $baselines;
     }
 
-    private function latestTankDipBeforeClose(string $companyId, string $tankId, string $date, string $previousDate): ?object
+    private function latestTankDipBeforeClose(string $companyId, string $tankId, string $date): ?object
     {
         $reading = TankReading::where('company_id', $companyId)
             ->where('tank_id', $tankId)
-            ->whereDate('reading_date', $previousDate)
-            ->where('reading_type', 'closing')
+            ->where('status', TankReading::STATUS_POSTED)
+            ->whereDate('reading_date', '<', $date)
+            ->orderByDesc('reading_date')
+            ->orderByDesc('created_at')
             ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date', 'created_at']);
-
-        if (! $reading) {
-            $reading = TankReading::where('company_id', $companyId)
-                ->where('tank_id', $tankId)
-                ->whereDate('reading_date', '<', $date)
-                ->orderByDesc('reading_date')
-                ->orderByDesc('created_at')
-                ->first(['tank_id', 'dip_measurement_liters', 'stick_reading', 'reading_date', 'created_at']);
-        }
 
         if (! $reading) {
             return null;
@@ -281,41 +299,23 @@ class DailyCloseController extends Controller
             return null;
         }
 
-        $stockLevel = StockLevel::where('company_id', $companyId)
+        $movementDate = $stockMovement->movement_date?->toDateString();
+        $stockQuantity = (float) StockMovement::where('company_id', $companyId)
             ->where('warehouse_id', $tankId)
             ->where('item_id', $itemId)
-            ->first();
-
-        if (! $stockLevel) {
-            return null;
-        }
+            ->whereDate('movement_date', '<=', $movementDate)
+            ->sum('quantity');
 
         return (object) [
             'tank_id' => $tankId,
-            'dip_measurement_liters' => (float) $stockLevel->quantity,
+            'dip_measurement_liters' => $stockQuantity,
             'stick_reading' => 0,
             'reading_date' => $stockMovement->movement_date,
             'source' => 'stock_level',
             'source_label' => $this->stockMovementLabel($stockMovement->movement_type),
-            'as_of' => $stockMovement->movement_date?->toDateString(),
+            'as_of' => $movementDate,
             'created_at' => $stockMovement->created_at,
         ];
-    }
-
-    private function stockBaselineIsNewer(?object $stockBaseline, ?object $dipReading): bool
-    {
-        if (! $stockBaseline) {
-            return false;
-        }
-
-        if (! $dipReading) {
-            return true;
-        }
-
-        $stockDate = $stockBaseline->reading_date ? strtotime((string) $stockBaseline->reading_date) : 0;
-        $dipDate = $dipReading->reading_date ? strtotime((string) $dipReading->reading_date) : 0;
-
-        return $stockDate > $dipDate;
     }
 
     private function stockMovementLabel(?string $movementType): string
@@ -331,11 +331,12 @@ class DailyCloseController extends Controller
         };
     }
 
-    private function decorateTanksWithStockSnapshot(string $companyId, $tanks, string $date): void
+    private function decorateTanksWithStockSnapshot(string $companyId, $tanks, string $date, $baselines = null): void
     {
         foreach ($tanks as $tank) {
             $stockLevel = null;
             $latestMovement = null;
+            $movementsSinceBaseline = 0.0;
 
             if ($tank->linked_item_id) {
                 $stockLevel = StockLevel::where('company_id', $companyId)
@@ -349,6 +350,22 @@ class DailyCloseController extends Controller
                     ->orderByDesc('movement_date')
                     ->orderByDesc('created_at')
                     ->first(['movement_date', 'movement_type', 'created_at']);
+
+                $baseline = $baselines?->get($tank->id);
+                $baselineDate = $baseline?->as_of ?? $baseline?->reading_date?->toDateString();
+
+                if ($baselineDate) {
+                    $movementsSinceBaseline = (float) StockMovement::where('company_id', $companyId)
+                        ->where('warehouse_id', $tank->id)
+                        ->where('item_id', $tank->linked_item_id)
+                        ->whereDate('movement_date', '>', $baselineDate)
+                        ->whereDate('movement_date', '<=', $date)
+                        ->where(function ($query) {
+                            $query->whereNull('reference_type')
+                                ->orWhere('reference_type', '!=', 'fuel.daily_close');
+                        })
+                        ->sum('quantity');
+                }
             }
 
             $movementDate = $latestMovement?->movement_date?->toDateString();
@@ -357,6 +374,7 @@ class DailyCloseController extends Controller
             $tank->setAttribute('current_stock_source_label', $this->stockMovementLabel($latestMovement?->movement_type));
             $tank->setAttribute('current_stock_as_of', $movementDate);
             $tank->setAttribute('current_stock_after_close_date', $movementDate !== null && $movementDate > $date);
+            $tank->setAttribute('stock_movements_since_baseline_liters', $movementsSinceBaseline);
         }
     }
 
@@ -423,7 +441,7 @@ class DailyCloseController extends Controller
         $previousDate = date('Y-m-d', strtotime($date . ' -1 day'));
 
         $previousTankReadings = $this->getTankBaselines($companyId, $tanks, $date, $previousDate);
-        $this->decorateTanksWithStockSnapshot($companyId, $tanks, $date);
+        $this->decorateTanksWithStockSnapshot($companyId, $tanks, $date, $previousTankReadings);
 
         // Get nozzles with pump info, item info, and previous day's closing reading
         $nozzles = Nozzle::where('company_id', $companyId)
@@ -592,6 +610,7 @@ class DailyCloseController extends Controller
             'date' => $date,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
+            'rateChangeSnapshots' => $this->getRateChangeSnapshotsForDailyClose($companyId, $date),
             'tanks' => $tanks,
             'pumps' => $pumps,
             'nozzles' => $nozzles,
@@ -1223,6 +1242,7 @@ class DailyCloseController extends Controller
             'date' => $date,
             'fuelItems' => $fuelItems,
             'rates' => $rates,
+            'rateChangeSnapshots' => $this->getRateChangeSnapshotsForDailyClose($companyId, $date),
             'tanks' => $tanks,
             'pumps' => $pumps,
             'nozzles' => $nozzles,

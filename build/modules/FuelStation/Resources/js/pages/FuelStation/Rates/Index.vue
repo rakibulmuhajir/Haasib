@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
@@ -39,13 +39,46 @@ interface RateChangeRow {
   sale_rate: number
   stock_quantity_at_change?: number | null
   margin_impact?: number | null
+  snapshot_tank_id?: string | null
+  snapshot_stick_reading?: number | null
+  snapshot_dip_liters?: number | null
+  snapshot_nozzle_readings?: SnapshotNozzleReading[] | null
   notes?: string | null
   item?: FuelItemRef | null
+}
+
+interface TankRef {
+  id: string
+  code: string
+  name: string
+  linked_item_id: string
+  capacity?: number | string | null
+}
+
+interface NozzleRef {
+  id: string
+  code: string
+  label?: string | null
+  pump_name?: string | null
+  tank_id: string
+  item_id: string
+  last_closing_reading: number
+  last_manual_reading?: number | null
+  has_electronic_meter: boolean
+}
+
+interface SnapshotNozzleReading {
+  nozzle_id: string
+  electronic_reading: number | null
+  manual_reading: number | null
 }
 
 const props = defineProps<{
   rates: RateChangeRow[]
   items: FuelItemRef[]
+  stockLevels: Record<string, number>
+  tanks: TankRef[]
+  nozzles: NozzleRef[]
 }>()
 
 const page = usePage()
@@ -179,6 +212,10 @@ const form = useForm<{
   purchase_rate: number | null
   sale_rate: number | null
   stock_quantity_at_change: number | null
+  snapshot_tank_id: string
+  snapshot_stick_reading: number | null
+  snapshot_dip_liters: number | null
+  snapshot_nozzle_readings: SnapshotNozzleReading[]
   notes: string
 }>({
   item_id: '',
@@ -186,12 +223,31 @@ const form = useForm<{
   purchase_rate: null,
   sale_rate: null,
   stock_quantity_at_change: null,
+  snapshot_tank_id: '',
+  snapshot_stick_reading: null,
+  snapshot_dip_liters: null,
+  snapshot_nozzle_readings: [],
   notes: '',
 })
 
 const currentRateForSelectedItem = computed(() => {
   if (!form.item_id) return null
   return byItemCurrent.value.get(form.item_id) ?? null
+})
+
+const selectedItemTanks = computed(() => {
+  if (!form.item_id) return []
+  return props.tanks.filter((tank) => tank.linked_item_id === form.item_id)
+})
+
+const selectedItemNozzles = computed(() => {
+  if (!form.item_id) return []
+  return props.nozzles.filter((nozzle) => nozzle.item_id === form.item_id)
+})
+
+const selectedStockLevel = computed(() => {
+  if (!form.item_id) return 0
+  return Number(props.stockLevels?.[form.item_id] ?? 0)
 })
 
 const prefillFromCurrent = () => {
@@ -202,14 +258,45 @@ const prefillFromCurrent = () => {
   if (form.sale_rate === null) form.sale_rate = Number(current.sale_rate)
 }
 
+const syncSnapshotRows = () => {
+  const existing = new Map(form.snapshot_nozzle_readings.map((row) => [row.nozzle_id, row]))
+  form.snapshot_nozzle_readings = selectedItemNozzles.value.map((nozzle) => ({
+    nozzle_id: nozzle.id,
+    electronic_reading: existing.get(nozzle.id)?.electronic_reading ?? null,
+    manual_reading: existing.get(nozzle.id)?.manual_reading ?? null,
+  }))
+
+  if (!selectedItemTanks.value.some((tank) => tank.id === form.snapshot_tank_id)) {
+    form.snapshot_tank_id = selectedItemTanks.value[0]?.id ?? ''
+  }
+  if (form.stock_quantity_at_change === null && selectedStockLevel.value > 0) {
+    form.stock_quantity_at_change = selectedStockLevel.value
+  }
+}
+
+watch(() => form.item_id, () => {
+  prefillFromCurrent()
+  syncSnapshotRows()
+})
+
+const nozzleForSnapshot = (nozzleId: string) => props.nozzles.find((nozzle) => nozzle.id === nozzleId)
+
 const submit = () => {
   const slug = companySlug.value
   if (!slug) return
 
-  form.post(`/${slug}/fuel/rates`, {
-    preserveScroll: true,
-    onSuccess: () => closeDialog(),
-  })
+  form
+    .transform((data) => ({
+      ...data,
+      snapshot_tank_id: data.snapshot_tank_id || null,
+      snapshot_nozzle_readings: data.snapshot_nozzle_readings.filter((row) =>
+        row.electronic_reading !== null || row.manual_reading !== null
+      ),
+    }))
+    .post(`/${slug}/fuel/rates`, {
+      preserveScroll: true,
+      onSuccess: () => closeDialog(),
+    })
 }
 </script>
 
@@ -231,7 +318,7 @@ const submit = () => {
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <Card
-        v-for="{ item, rate } in currentCards"
+        v-for="{ item, rate, source } in currentCards"
         :key="item.id"
         class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10"
       >
@@ -380,7 +467,7 @@ const submit = () => {
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="item_id">Fuel item</Label>
-              <Select v-model="form.item_id" @update:modelValue="prefillFromCurrent">
+              <Select v-model="form.item_id">
                 <SelectTrigger id="item_id" :class="{ 'border-destructive': form.errors.item_id }">
                   <SelectValue placeholder="Select fuel item..." />
                 </SelectTrigger>
@@ -443,29 +530,124 @@ const submit = () => {
           <div class="rounded-xl border border-border/70 bg-muted/30 p-4">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-text-primary">Optional margin impact</p>
+                <p class="text-sm font-medium text-text-primary">Optional rate-change snapshot</p>
                 <p class="text-sm text-text-secondary">
-                  Enter stock on hand at the time of the change to estimate impact. This does not update inventory or accounting.
+                  If staff records midnight dip and meters, Daily Close can split sales before and after the rate change.
                 </p>
               </div>
               <Badge variant="outline" class="border-sky-200 text-sky-700">
                 {{ currencyCode }}
               </Badge>
             </div>
-            <div class="mt-3 space-y-2">
-              <Label for="stock_quantity_at_change">Stock on hand (liters)</Label>
-              <Input
-                id="stock_quantity_at_change"
-                v-model.number="form.stock_quantity_at_change"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Leave empty to skip"
-                :class="{ 'border-destructive': form.errors.stock_quantity_at_change }"
-              />
-              <p v-if="form.errors.stock_quantity_at_change" class="text-sm text-destructive">
-                {{ form.errors.stock_quantity_at_change }}
-              </p>
+            <div class="mt-3 grid gap-4 sm:grid-cols-2">
+              <div class="space-y-2">
+                <Label for="stock_quantity_at_change">System stock at change (L)</Label>
+                <Input
+                  id="stock_quantity_at_change"
+                  v-model.number="form.stock_quantity_at_change"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
+                  :class="{ 'border-destructive': form.errors.stock_quantity_at_change }"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Current estimate: {{ formatLiters(selectedStockLevel) }} L.
+                </p>
+                <p v-if="form.errors.stock_quantity_at_change" class="text-sm text-destructive">
+                  {{ form.errors.stock_quantity_at_change }}
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="snapshot_tank_id">Tank</Label>
+                <Select v-model="form.snapshot_tank_id" :disabled="selectedItemTanks.length === 0">
+                  <SelectTrigger id="snapshot_tank_id" :class="{ 'border-destructive': form.errors.snapshot_tank_id }">
+                    <SelectValue placeholder="Select tank..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="tank in selectedItemTanks" :key="tank.id" :value="tank.id">
+                      {{ tank.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="selectedItemTanks.length === 0" class="text-xs text-muted-foreground">
+                  No tank is linked to this product.
+                </p>
+                <p v-if="form.errors.snapshot_tank_id" class="text-sm text-destructive">
+                  {{ form.errors.snapshot_tank_id }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <div class="space-y-2">
+                <Label for="snapshot_stick_reading">Recorded stick reading</Label>
+                <Input
+                  id="snapshot_stick_reading"
+                  v-model.number="form.snapshot_stick_reading"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="cm"
+                  :class="{ 'border-destructive': form.errors.snapshot_stick_reading }"
+                />
+                <p v-if="form.errors.snapshot_stick_reading" class="text-sm text-destructive">
+                  {{ form.errors.snapshot_stick_reading }}
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="snapshot_dip_liters">Recorded dip quantity</Label>
+                <Input
+                  id="snapshot_dip_liters"
+                  v-model.number="form.snapshot_dip_liters"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="liters"
+                  :class="{ 'border-destructive': form.errors.snapshot_dip_liters }"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Used for revaluation if entered.
+                </p>
+                <p v-if="form.errors.snapshot_dip_liters" class="text-sm text-destructive">
+                  {{ form.errors.snapshot_dip_liters }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="selectedItemNozzles.length > 0" class="mt-4 space-y-3">
+              <div>
+                <p class="text-sm font-medium text-text-primary">Pump point meters at rate change</p>
+                <p class="text-xs text-muted-foreground">Leave blank if not recorded.</p>
+              </div>
+              <div
+                v-for="(snapshot, index) in form.snapshot_nozzle_readings"
+                :key="snapshot.nozzle_id"
+                class="grid gap-3 rounded-lg border border-border/70 bg-background p-3 sm:grid-cols-[1fr_140px_140px]"
+              >
+                <div>
+                  <p class="text-sm font-medium text-text-primary">
+                    {{ nozzleForSnapshot(snapshot.nozzle_id)?.pump_name || 'Pump point' }}
+                    · {{ nozzleForSnapshot(snapshot.nozzle_id)?.code }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    Last: {{ formatLiters(nozzleForSnapshot(snapshot.nozzle_id)?.last_closing_reading || 0) }}
+                    <span v-if="nozzleForSnapshot(snapshot.nozzle_id)?.last_manual_reading !== null">
+                      · manual {{ formatLiters(nozzleForSnapshot(snapshot.nozzle_id)?.last_manual_reading || 0) }}
+                    </span>
+                  </p>
+                </div>
+                <div class="space-y-1">
+                  <Label class="text-xs">Auto meter</Label>
+                  <Input v-model.number="snapshot.electronic_reading" type="number" min="0" step="0.01" />
+                </div>
+                <div class="space-y-1">
+                  <Label class="text-xs">Manual meter</Label>
+                  <Input v-model.number="snapshot.manual_reading" type="number" min="0" step="0.01" />
+                </div>
+              </div>
             </div>
           </div>
 

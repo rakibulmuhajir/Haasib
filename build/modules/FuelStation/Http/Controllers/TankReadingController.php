@@ -43,48 +43,17 @@ class TankReadingController extends Controller
 
     public function store(StoreTankReadingRequest $request): RedirectResponse
     {
-        $company = app(CurrentCompany::class)->get();
         $data = $request->validated();
 
-        // Get tank and derive item_id
-        $tank = Warehouse::find($data['tank_id']);
+        try {
+            $reading = $this->tankReadingService->create($data);
+            $this->tankReadingService->confirm($reading, auth()->id());
+            $this->tankReadingService->post($reading->fresh());
 
-        if (!$tank || $tank->warehouse_type !== 'tank') {
-            return redirect()->back()->with('error', 'Invalid tank selected.');
+            return redirect()->back()->with('success', 'Tank dip recorded and stock updated.');
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         }
-
-        if (!$tank->linked_item_id) {
-            return redirect()->back()->with('error', 'Tank does not have a linked fuel item. Please configure the tank first.');
-        }
-
-        $data['item_id'] = $tank->linked_item_id;
-
-        // Calculate system expected liters
-        $data['system_calculated_liters'] = $this->tankReadingService->calculateSystemLiters(
-            $data['tank_id'],
-            $data['item_id'],
-            $data['reading_date']
-        );
-
-        // Calculate variance
-        $data['variance_liters'] = $data['dip_measurement_liters'] - $data['system_calculated_liters'];
-
-        if ($data['variance_liters'] < 0) {
-            $data['variance_type'] = TankReading::VARIANCE_LOSS;
-        } elseif ($data['variance_liters'] > 0) {
-            $data['variance_type'] = TankReading::VARIANCE_GAIN;
-        } else {
-            $data['variance_type'] = TankReading::VARIANCE_NONE;
-        }
-
-        TankReading::create([
-            'company_id' => $company->id,
-            'recorded_by_user_id' => auth()->id(),
-            'status' => TankReading::STATUS_DRAFT,
-            ...$data,
-        ]);
-
-        return redirect()->back()->with('success', 'Tank reading recorded successfully.');
     }
 
     public function show(string $company, TankReading $tankReading): Response

@@ -215,6 +215,7 @@ interface FuelProductDashboardItem {
   last_stock_movement_at: string | null
   last_stock_movement_date: string | null
   last_stock_movement_type: string | null
+  last_stock_movement_reason: string | null
   low_stock_level: number
   is_low_stock: boolean
   capacity: number | null
@@ -240,6 +241,7 @@ interface FuelProductDashboardItem {
 
 interface FuelProductDashboard {
   summary: {
+    as_of_date?: string
     total_products: number
     active_products: number
     fuel_products: number
@@ -275,6 +277,7 @@ const props = defineProps<{
   dashboard: DashboardData
   isFuelStation?: boolean
   fuelDashboard?: FuelHomeDashboard | null
+  productDashboardDate?: string
   fuelTanks?: FuelTankOption[]
 }>()
 
@@ -297,6 +300,7 @@ const { t, tpl } = useLexicon()
 const { showError } = useFormFeedback()
 
 const productsDialogOpen = ref(false)
+const productAsOfDate = ref(props.productDashboardDate ?? new Date().toISOString().slice(0, 10))
 const tankDialogOpen = ref(false)
 const activeTankRowIndex = ref<number | null>(null)
 const tankDraft = ref({
@@ -313,6 +317,13 @@ watch(
   () => props.fuelTanks,
   (next) => {
     fuelTanks.value = next ?? []
+  }
+)
+
+watch(
+  () => props.productDashboardDate,
+  (next) => {
+    productAsOfDate.value = next ?? new Date().toISOString().slice(0, 10)
   }
 )
 
@@ -713,6 +724,24 @@ const fuelProductRows = computed(() => fuelProductDashboard.value?.items ?? [])
 const lowStockProducts = computed(() => fuelProductDashboard.value?.low_stock ?? [])
 const topFuelProducts = computed(() => fuelProductDashboard.value?.top_products ?? [])
 
+const applyProductDate = () => {
+  router.get(`/${props.company.slug}`, {
+    product_date: productAsOfDate.value,
+  }, {
+    only: ['fuelDashboard', 'productDashboardDate'],
+    preserveScroll: true,
+    preserveState: true,
+  })
+}
+
+const resetProductDate = () => {
+  router.get(`/${props.company.slug}`, {}, {
+    only: ['fuelDashboard', 'productDashboardDate'],
+    preserveScroll: true,
+    preserveState: true,
+  })
+}
+
 const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
 
 const languageOptions = [
@@ -897,7 +926,8 @@ const productCategoryLabel = (category?: string | null) => {
     .join(' ')
 }
 
-const movementTypeLabel = (value?: string | null) => {
+const movementTypeLabel = (value?: string | null, reason?: string | null) => {
+  if (reason === 'Daily close tank reconciliation') return 'Reconciled by Daily Close'
   if (!value) return 'Stock entry'
   return value
     .split('_')
@@ -926,23 +956,47 @@ const variancePrefix = (value?: number | null) => {
   return value > 0 ? '+' : ''
 }
 
-const stockPrecedence = (product: FuelProductDashboardItem) => {
-  const stockAt = product.last_stock_movement_at ? new Date(product.last_stock_movement_at) : null
-  const readingAt = product.last_dip_at ? new Date(product.last_dip_at) : null
+const dateOnlyTime = (value?: string | null) => {
+  if (!value) return null
+  const parsed = new Date(value.slice(0, 10))
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
+}
 
-  if (!readingAt || product.last_tank_reading_type === 'opening') return null
-  if (!stockAt) return 'No stock entry after this reading'
-  if (readingAt.getTime() > stockAt.getTime()) return 'Newer than latest stock entry'
-  if (readingAt.getTime() === stockAt.getTime()) return 'Same time as latest stock entry'
-  return 'Older than latest stock entry'
+const dateTimeValue = (value?: string | null) => {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
+}
+
+const stockPrecedence = (product: FuelProductDashboardItem) => {
+  const stockDate = dateOnlyTime(product.last_stock_movement_date ?? product.last_stock_movement_at)
+  const readingDate = dateOnlyTime(product.last_dip_at)
+  const stockAt = dateTimeValue(product.last_stock_movement_at)
+  const readingRecordedAt = dateTimeValue(product.last_dip_recorded_at ?? product.last_dip_at)
+
+  if (product.last_stock_movement_reason === 'Daily close tank reconciliation') return 'Reconciled by Daily Close'
+  if (!readingDate || product.last_tank_reading_type === 'opening') return null
+  if (!stockDate) return 'No stock entry after this reading'
+  if (stockAt && readingRecordedAt && stockAt > readingRecordedAt) return 'Stock changed after this reading'
+  if (readingDate > stockDate) return 'Physical reading newer than stock'
+  if (readingDate === stockDate) return 'Same business day as latest stock entry'
+  return 'Older physical reading'
 }
 
 const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
   if (product.stock_variance === null || product.stock_variance === undefined) return false
   if (!hasPhysicalTankReading(product)) return false
-  if (!product.last_dip_at || !product.last_stock_movement_at) return true
+  if (product.last_stock_movement_reason === 'Daily close tank reconciliation') return false
 
-  return new Date(product.last_dip_at).getTime() >= new Date(product.last_stock_movement_at).getTime()
+  const stockDate = dateOnlyTime(product.last_stock_movement_date ?? product.last_stock_movement_at)
+  const readingDate = dateOnlyTime(product.last_dip_at)
+  const stockAt = dateTimeValue(product.last_stock_movement_at)
+  const readingRecordedAt = dateTimeValue(product.last_dip_recorded_at ?? product.last_dip_at)
+
+  if (!readingDate || !stockDate) return true
+  if (stockAt && readingRecordedAt && stockAt > readingRecordedAt) return false
+
+  return readingDate >= stockDate
 }
 </script>
 
@@ -956,6 +1010,29 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       :badge="isFuelStationCompany ? undefined : { text: company.is_active ? 'Active' : 'Inactive', variant: company.is_active ? 'default' : 'secondary' }"
       compact
     >
+      <template v-if="isFuelStationCompany" #before-header>
+        <div class="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs font-medium uppercase text-zinc-500">Working date</p>
+            <p class="text-sm text-zinc-600">Products, stock, rates, and sales are shown for this business date.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1">
+              <Calendar class="h-4 w-4 text-zinc-500" />
+              <Input
+                v-model="productAsOfDate"
+                type="date"
+                class="h-8 w-[9.5rem] border-0 px-0 text-sm shadow-none focus-visible:ring-0"
+                @change="applyProductDate"
+              />
+            </div>
+            <Button size="sm" variant="ghost" @click="resetProductDate">
+              Today
+            </Button>
+          </div>
+        </div>
+      </template>
+
       <template v-if="!isFuelStationCompany" #description>
         <span class="font-mono text-zinc-400">{{ company.slug }}</span>
         <span class="mx-2 text-zinc-300">•</span>
@@ -987,7 +1064,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
             <CardContent class="space-y-5 pt-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-sm text-zinc-600">Stock, rates, and recent sales for fuels, lubricants, and shop products.</p>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/fuel/daily-close`)">
                     <FileText class="mr-2 h-4 w-4" />
                     Daily Close
@@ -1099,7 +1176,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                         </div>
                         <div class="mt-1 space-y-1 text-xs text-zinc-500">
                           <div v-if="product.last_stock_movement_at">
-                            {{ movementTypeLabel(product.last_stock_movement_type) }}:
+                            {{ movementTypeLabel(product.last_stock_movement_type, product.last_stock_movement_reason) }}:
                             <DateTimeText :value="product.last_stock_movement_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
                           </div>
                           <div v-else>No stock entry yet</div>
@@ -1117,10 +1194,11 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                             {{ stockPrecedence(product) }}
                           </div>
                           <div v-if="product.stock_variance !== null && shouldShowCurrentVariance(product)" :class="varianceClass(product.stock_variance)">
-                            Current variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
+                            {{ Math.abs(product.stock_variance) < 0.001 ? 'No open variance' : 'Open variance' }}:
+                            {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
                           </div>
                           <div v-else-if="product.stock_variance !== null && hasPhysicalTankReading(product)" class="text-zinc-500">
-                            Older reading variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
+                            Last checked variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
                           </div>
                           <div v-if="product.low_stock_level > 0">
                             Alert at {{ formatQuantity(product.low_stock_level, product.unit) }}

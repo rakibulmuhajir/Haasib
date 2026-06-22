@@ -88,8 +88,8 @@ const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${companySlug.value}` },
-  { title: 'Fuel', href: `/${companySlug.value}/fuel/tank-readings` },
-  { title: 'Tank Readings', href: `/${companySlug.value}/fuel/tank-readings` },
+  { title: 'Stock Management', href: `/${companySlug.value}/stock` },
+  { title: 'Tank Dip', href: `/${companySlug.value}/fuel/tank-readings` },
 ])
 
 const formatLiters = (n: number) =>
@@ -208,32 +208,53 @@ const handlePageChange = (pageNum: number) => {
   router.get(`/${slug}/fuel/tank-readings`, { page: pageNum }, { preserveScroll: true, preserveState: true })
 }
 
+const NO_VARIANCE_REASON = 'none'
 const dialogOpen = ref(false)
+const tankSelectOpen = ref(false)
+const readingTypeSelectOpen = ref(false)
+const varianceReasonSelectOpen = ref(false)
+
+const closeModalSelects = () => {
+  tankSelectOpen.value = false
+  readingTypeSelectOpen.value = false
+  varianceReasonSelectOpen.value = false
+}
 
 const openCreate = () => {
+  closeModalSelects()
   form.reset()
   form.clearErrors()
   dialogOpen.value = true
 }
 
 const closeDialog = () => {
+  closeModalSelects()
   dialogOpen.value = false
   form.reset()
   form.clearErrors()
+}
+
+const setDialogOpen = (open: boolean) => {
+  if (open) {
+    dialogOpen.value = true
+    return
+  }
+
+  closeDialog()
 }
 
 const readingTypes = computed(() => {
   const values = props.readingTypes?.length ? props.readingTypes : ['opening', 'closing', 'spot_check']
   return values.map((v) => ({
     value: v,
-    label: v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
+    label: v === 'spot_check' ? 'Post-delivery / check' : v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
   }))
 })
 
 const varianceReasons = computed(() => {
   const values = props.varianceReasons?.length ? props.varianceReasons : []
   return [
-    { value: '', label: 'No reason' },
+    { value: NO_VARIANCE_REASON, label: 'No reason' },
     ...values.map((v) => ({
       value: v,
       label: v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
@@ -245,25 +266,33 @@ const form = useForm<{
   tank_id: string
   reading_date: string
   reading_type: 'opening' | 'closing' | 'spot_check'
+  stick_reading: number | null
   dip_measurement_liters: number | null
   variance_reason: string
   notes: string
 }>({
   tank_id: '',
   reading_date: new Date().toISOString().slice(0, 10),
-  reading_type: 'closing',
+  reading_type: 'spot_check',
+  stick_reading: null,
   dip_measurement_liters: null,
-  variance_reason: '',
+  variance_reason: NO_VARIANCE_REASON,
   notes: '',
 })
 
 const submit = () => {
   const slug = companySlug.value
   if (!slug) return
-  form.post(`/${slug}/fuel/tank-readings`, {
-    preserveScroll: true,
-    onSuccess: () => closeDialog(),
-  })
+  closeModalSelects()
+  form
+    .transform((data) => ({
+      ...data,
+      variance_reason: data.variance_reason === NO_VARIANCE_REASON ? null : data.variance_reason,
+    }))
+    .post(`/${slug}/fuel/tank-readings`, {
+      preserveScroll: true,
+      onSuccess: () => closeDialog(),
+    })
 }
 
 const goToShow = (row: any) => {
@@ -274,25 +303,25 @@ const goToShow = (row: any) => {
 </script>
 
 <template>
-  <Head title="Tank Readings" />
+  <Head title="Tank Dip" />
 
   <PageShell
-    title="Tank Readings"
-    description="View dip measurements and variance calculations. Readings are posted automatically during daily close."
+    title="Tank Dip"
+    description="Record routine and post-delivery dip readings. A posted dip updates tank stock."
     :icon="Warehouse"
     :breadcrumbs="breadcrumbs"
   >
     <template #actions>
       <Button @click="openCreate">
         <Plus class="mr-2 h-4 w-4" />
-        New reading
+        Record dip
       </Button>
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
       <Card class="border-border/80 lg:col-span-2">
         <CardHeader class="pb-2">
-          <CardDescription>Total readings</CardDescription>
+            <CardDescription>Total dips</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -351,8 +380,8 @@ const goToShow = (row: any) => {
       <CardHeader class="pb-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle class="text-base">Reading List</CardTitle>
-            <CardDescription>Confirm and post to generate variance journals.</CardDescription>
+            <CardTitle class="text-base">Dip History</CardTitle>
+            <CardDescription>Latest posted dip is the source of truth for tank stock.</CardDescription>
           </div>
 
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -406,13 +435,13 @@ const goToShow = (row: any) => {
         >
           <template #empty>
             <EmptyState
-              title="No tank readings yet"
-              description="Start with an opening or closing dip reading."
+              title="No tank dips yet"
+              description="Record a routine closing dip or a post-delivery dip."
             >
               <template #actions>
                 <Button @click="openCreate">
                   <Plus class="mr-2 h-4 w-4" />
-                  New reading
+                  Record dip
                 </Button>
               </template>
             </EmptyState>
@@ -454,15 +483,15 @@ const goToShow = (row: any) => {
       </CardContent>
     </Card>
 
-    <Dialog :open="dialogOpen" @update:open="(v) => (v ? (dialogOpen = true) : closeDialog())">
+    <Dialog :open="dialogOpen" @update:open="setDialogOpen">
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
             <Warehouse class="h-5 w-5 text-sky-600" />
-            New tank reading
+            Record tank dip
           </DialogTitle>
           <DialogDescription>
-            Record a manual dip reading. Variance is calculated and posted automatically during daily close.
+            Record the physical quantity inside the tank. This dip posts immediately and updates tank stock.
           </DialogDescription>
         </DialogHeader>
 
@@ -470,7 +499,7 @@ const goToShow = (row: any) => {
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="tank_id">Tank</Label>
-            <Select v-model="form.tank_id">
+            <Select v-model="form.tank_id" v-model:open="tankSelectOpen" @update:model-value="tankSelectOpen = false">
               <SelectTrigger id="tank_id" :class="{ 'border-destructive': form.errors.tank_id }">
                 <SelectValue placeholder="Select a tank..." />
               </SelectTrigger>
@@ -498,7 +527,11 @@ const goToShow = (row: any) => {
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="reading_type">Reading type</Label>
-            <Select v-model="form.reading_type">
+            <Select
+              v-model="form.reading_type"
+              v-model:open="readingTypeSelectOpen"
+              @update:model-value="readingTypeSelectOpen = false"
+            >
               <SelectTrigger id="reading_type" :class="{ 'border-destructive': form.errors.reading_type }">
                 <SelectValue placeholder="Select type..." />
               </SelectTrigger>
@@ -512,7 +545,24 @@ const goToShow = (row: any) => {
             </div>
 
             <div class="space-y-2">
-              <Label for="dip_measurement_liters">Dip measurement (liters)</Label>
+              <Label for="stick_reading">Stick reading</Label>
+              <Input
+                id="stick_reading"
+                v-model.number="form.stick_reading"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="cm"
+                :class="{ 'border-destructive': form.errors.stick_reading }"
+              />
+              <p v-if="form.errors.stick_reading" class="text-sm text-destructive">
+                {{ form.errors.stick_reading }}
+              </p>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+              <Label for="dip_measurement_liters">Tank quantity (liters)</Label>
               <Input
                 id="dip_measurement_liters"
                 v-model.number="form.dip_measurement_liters"
@@ -525,7 +575,6 @@ const goToShow = (row: any) => {
               <p v-if="form.errors.dip_measurement_liters" class="text-sm text-destructive">
                 {{ form.errors.dip_measurement_liters }}
               </p>
-            </div>
           </div>
 
           <div class="rounded-xl border border-border/70 bg-muted/30 p-4">
@@ -541,7 +590,11 @@ const goToShow = (row: any) => {
             </div>
             <div class="mt-3 space-y-2">
               <Label for="variance_reason">Reason</Label>
-            <Select v-model="form.variance_reason">
+            <Select
+              v-model="form.variance_reason"
+              v-model:open="varianceReasonSelectOpen"
+              @update:model-value="varianceReasonSelectOpen = false"
+            >
               <SelectTrigger id="variance_reason" :class="{ 'border-destructive': form.errors.variance_reason }">
                 <SelectValue placeholder="Select reason..." />
               </SelectTrigger>
@@ -576,7 +629,7 @@ const goToShow = (row: any) => {
                 v-if="form.processing"
                 class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
               />
-              Save draft
+              Save dip
             </Button>
           </DialogFooter>
         </form>

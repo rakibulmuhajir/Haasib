@@ -8,8 +8,10 @@ use App\Modules\Accounting\Services\GlPostingService;
 use App\Modules\FuelStation\Models\PumpReading;
 use App\Modules\FuelStation\Models\TankReading;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Services\CurrentCompany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -199,7 +201,7 @@ class TankReadingService
             $amount = round(abs($reading->variance_liters) * ($item->avg_cost ?? 0), 2);
 
             if ($amount <= 0) {
-                // No monetary impact, just mark as posted
+                $this->recordDipStockMovement($company->id, $reading, $item, null);
                 $reading->update(['status' => TankReading::STATUS_POSTED]);
                 return $reading->fresh();
             }
@@ -263,8 +265,47 @@ class TankReadingService
                 'journal_entry_id' => $transaction->id, // Store transaction ID
             ]);
 
+            $this->recordDipStockMovement($company->id, $reading, $item, $transaction->id);
+
             return $reading->fresh();
         });
+    }
+
+    private function recordDipStockMovement(string $companyId, TankReading $reading, ?Item $item, ?string $transactionId): void
+    {
+        if (! $item) {
+            return;
+        }
+
+        $currentLiters = (float) (StockLevel::where('company_id', $companyId)
+            ->where('warehouse_id', $reading->tank_id)
+            ->where('item_id', $reading->item_id)
+            ->value('quantity') ?? $reading->system_calculated_liters);
+
+        $delta = round((float) $reading->dip_measurement_liters - $currentLiters, 3);
+        if (abs($delta) < 0.001) {
+            return;
+        }
+
+        $unitCost = (float) ($item->avg_cost ?: $item->cost_price ?: 0);
+        $totalCost = round(abs($delta) * $unitCost, 2);
+
+        StockMovement::create([
+            'company_id' => $companyId,
+            'warehouse_id' => $reading->tank_id,
+            'item_id' => $reading->item_id,
+            'movement_date' => $reading->reading_date,
+            'movement_type' => $delta > 0 ? 'adjustment_in' : 'adjustment_out',
+            'quantity' => $delta,
+            'unit_cost' => $unitCost,
+            'total_cost' => $delta > 0 ? $totalCost : -$totalCost,
+            'gl_transaction_id' => $transactionId,
+            'reference_type' => 'fuel.tank_readings',
+            'reference_id' => $reading->id,
+            'reason' => 'Physical tank dip',
+            'notes' => 'Stock ledger reconciled to physical tank dip.',
+            'created_by_user_id' => $reading->recorded_by_user_id,
+        ]);
     }
 
     /**
@@ -281,7 +322,9 @@ class TankReadingService
         }
 
         $itemId = $tank->linked_item_id;
-        $readingDate = $data['reading_date'] ?? now();
+        $readingDate = isset($data['reading_date'])
+            ? Carbon::parse($data['reading_date'])
+            : now();
 
         // Calculate system expected liters
         $systemLiters = $this->calculateSystemLiters($data['tank_id'], $itemId, $readingDate);
@@ -297,6 +340,7 @@ class TankReadingService
             'company_id' => $company->id,
             'tank_id' => $data['tank_id'],
             'item_id' => $itemId,
+            'stick_reading' => $data['stick_reading'] ?? null,
             'reading_date' => $readingDate,
             'reading_type' => $data['reading_type'] ?? 'spot_check',
             'dip_measurement_liters' => $dipLiters,

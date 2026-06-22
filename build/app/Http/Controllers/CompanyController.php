@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -382,9 +383,17 @@ class CompanyController extends Controller
             || ($company->industry ?? null) === 'fuel_station';
 
         $fuelDashboard = null;
+        $productDashboardDate = Carbon::today()->toDateString();
+        if ($request->filled('product_date')) {
+            try {
+                $productDashboardDate = Carbon::parse((string) $request->input('product_date'))->toDateString();
+            } catch (\Throwable) {
+                $productDashboardDate = Carbon::today()->toDateString();
+            }
+        }
         if ($isFuelStation) {
             try {
-                $fuelDashboard = app(FuelDashboardService::class)->getHomeCards($company->id);
+                $fuelDashboard = app(FuelDashboardService::class)->getHomeCards($company->id, Carbon::parse($productDashboardDate));
             } catch (\Throwable $e) {
                 Log::warning('Fuel dashboard home cards failed', [
                     'company_id' => $company->id,
@@ -462,6 +471,7 @@ class CompanyController extends Controller
             ],
             'isFuelStation' => $isFuelStation,
             'fuelDashboard' => $fuelDashboard,
+            'productDashboardDate' => $productDashboardDate,
             'fuelTanks' => $fuelTanks,
         ]);
     }

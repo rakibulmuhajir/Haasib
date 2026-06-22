@@ -17,6 +17,7 @@ class UpdateTankReadingRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
+            'stick_reading' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'dip_measurement_liters' => ['sometimes', 'required', 'numeric', 'min:0'],
             'variance_reason' => ['nullable', 'in:' . implode(',', TankReading::getVarianceReasons())],
             'notes' => ['nullable', 'string', 'max:1000'],

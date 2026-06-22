@@ -20,6 +20,7 @@ class StoreTankReadingRequest extends BaseFormRequest
             'tank_id' => ['required', 'uuid', 'exists:inv.warehouses,id'],
             'reading_date' => ['required', 'date'],
             'reading_type' => ['required', 'in:' . implode(',', TankReading::getReadingTypes())],
+            'stick_reading' => ['nullable', 'numeric', 'min:0'],
             'dip_measurement_liters' => ['required', 'numeric', 'min:0'],
             'variance_reason' => ['nullable', 'in:' . implode(',', TankReading::getVarianceReasons())],
             'notes' => ['nullable', 'string', 'max:1000'],

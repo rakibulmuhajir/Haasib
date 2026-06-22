@@ -64,8 +64,12 @@ class RateChangeService
             $previousRate = RateChange::getCurrentRate($company->id, $data['item_id']);
             $previousAvgCost = (float) ($item->avg_cost ?? 0);
 
-            // Get current stock quantity from item or use provided value
-            $stockQuantity = $data['stock_quantity_at_change'] ?? (float) ($item->current_stock ?? 0);
+            $snapshotNozzleReadings = $this->cleanSnapshotNozzleReadings($data['snapshot_nozzle_readings'] ?? []);
+
+            // Use the rate-change dip first, then manual stock quantity, then product stock fallback.
+            $stockQuantity = $data['snapshot_dip_liters']
+                ?? $data['stock_quantity_at_change']
+                ?? (float) ($item->current_stock ?? 0);
 
             // Calculate margin impact (informational)
             $marginImpact = null;
@@ -95,6 +99,10 @@ class RateChangeService
                 'margin_impact' => $marginImpact,
                 'revaluation_amount' => $revaluationAmount != 0 ? $revaluationAmount : null,
                 'previous_avg_cost' => $previousAvgCost > 0 ? $previousAvgCost : null,
+                'snapshot_tank_id' => $data['snapshot_tank_id'] ?? null,
+                'snapshot_stick_reading' => $data['snapshot_stick_reading'] ?? null,
+                'snapshot_dip_liters' => $data['snapshot_dip_liters'] ?? null,
+                'snapshot_nozzle_readings' => $snapshotNozzleReadings ?: null,
                 'notes' => $data['notes'] ?? null,
                 'created_by_user_id' => auth()->id(),
             ]);
@@ -155,6 +163,24 @@ class RateChangeService
 
             return $rateChange;
         });
+    }
+
+    private function cleanSnapshotNozzleReadings(array $readings): array
+    {
+        return collect($readings)
+            ->filter(fn (array $reading) => ! empty($reading['nozzle_id'])
+                && (($reading['electronic_reading'] ?? null) !== null || ($reading['manual_reading'] ?? null) !== null))
+            ->map(fn (array $reading) => [
+                'nozzle_id' => $reading['nozzle_id'],
+                'electronic_reading' => ($reading['electronic_reading'] ?? null) !== null
+                    ? (float) $reading['electronic_reading']
+                    : null,
+                'manual_reading' => ($reading['manual_reading'] ?? null) !== null
+                    ? (float) $reading['manual_reading']
+                    : null,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

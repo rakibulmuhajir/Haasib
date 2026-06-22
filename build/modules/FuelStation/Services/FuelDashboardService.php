@@ -30,9 +30,10 @@ class FuelDashboardService
      *   rates: array<int, array{item_name:string,purchase_rate:float,sale_rate:float,margin:float,effective_date:mixed}>
      * }
      */
-    public function getHomeCards(string $companyId): array
+    public function getHomeCards(string $companyId, ?Carbon $asOfDate = null): array
     {
-        $summary = $this->getSummary($companyId, Carbon::today());
+        $asOfDate ??= Carbon::today();
+        $summary = $this->getSummary($companyId, $asOfDate);
 
         $pending = $this->getPendingHandovers($companyId);
         $pendingCount = is_iterable($pending['items'] ?? null) ? count($pending['items']) : 0;
@@ -74,7 +75,7 @@ class FuelDashboardService
             ],
             'tanks' => $tanks,
             'rates' => $rates,
-            'products' => $this->getProductDashboard($companyId),
+            'products' => $this->getProductDashboard($companyId, $asOfDate),
         ];
     }
 
@@ -317,7 +318,7 @@ class FuelDashboardService
             ->sum(fn ($meta) => (float) ($meta->invoice?->total_amount ?? 0) - (float) ($meta->invoice?->paid_amount ?? 0));
     }
 
-    private function getProductDashboard(string $companyId): array
+    private function getProductDashboard(string $companyId, Carbon $asOfDate): array
     {
         $products = Item::where('company_id', $companyId)
             ->where('is_sellable', true)
@@ -328,13 +329,13 @@ class FuelDashboardService
             ->get();
 
         $productIds = $products->pluck('id')->all();
-        $stockByItem = $this->getStockByItem($companyId, $productIds);
-        $tankByItem = $this->getTankStockByItem($companyId);
-        $lastMovementByItem = $this->getLatestStockMovementByItem($companyId, $productIds);
-        $salesByItem = $this->getProductSales($companyId, $products);
+        $stockByItem = $this->getStockByItem($companyId, $productIds, $asOfDate);
+        $tankByItem = $this->getTankStockByItem($companyId, $asOfDate);
+        $lastMovementByItem = $this->getLatestStockMovementByItem($companyId, $productIds, $asOfDate);
+        $salesByItem = $this->getProductSales($companyId, $products, $asOfDate);
         $productCatalog = app(ProductCatalogService::class);
 
-        $rows = $products->map(function (Item $item) use ($stockByItem, $tankByItem, $lastMovementByItem, $salesByItem, $companyId, $productCatalog) {
+        $rows = $products->map(function (Item $item) use ($stockByItem, $tankByItem, $lastMovementByItem, $salesByItem, $companyId, $productCatalog, $asOfDate) {
             $fuelCategory = $item->fuel_category ?: $productCatalog->inferFuelCategory($item->sku, $item->name);
             $tankStock = $tankByItem[$item->id] ?? null;
             $latestMovement = $lastMovementByItem[$item->id] ?? null;
@@ -356,7 +357,7 @@ class FuelDashboardService
             $capacity = $tankStock ? (float) $tankStock['capacity'] : null;
             $fillPercentage = $capacity && $capacity > 0 ? round(($currentStock / $capacity) * 100, 1) : null;
             $sales = $salesByItem[$item->id] ?? $this->emptyProductSales();
-            $rate = $fuelCategory ? RateChange::getCurrentRate($companyId, $item->id) : null;
+            $rate = $fuelCategory ? RateChange::getRateForDate($companyId, $item->id, $asOfDate->toDateString()) : null;
             $saleRate = (float) ($rate?->sale_rate ?? $item->selling_price ?? 0);
             $purchaseRate = (float) ($rate?->purchase_rate ?? $item->avg_cost ?? $item->cost_price ?? 0);
 
@@ -373,6 +374,7 @@ class FuelDashboardService
                 'last_stock_movement_at' => $latestMovement['created_at'] ?? null,
                 'last_stock_movement_date' => $latestMovement['movement_date'] ?? null,
                 'last_stock_movement_type' => $latestMovement['movement_type'] ?? null,
+                'last_stock_movement_reason' => $latestMovement['reason'] ?? null,
                 'low_stock_level' => round($lowStockLevel, 3),
                 'is_low_stock' => (bool) ($item->is_active && $item->track_inventory && $lowStockLevel > 0 && $currentStock <= $lowStockLevel),
                 'capacity' => $capacity,
@@ -401,6 +403,7 @@ class FuelDashboardService
 
         return [
             'summary' => [
+                'as_of_date' => $asOfDate->toDateString(),
                 'total_products' => $rows->count(),
                 'active_products' => $rows->filter(fn ($row) => $row['is_active'])->count(),
                 'fuel_products' => $rows->filter(fn ($row) => $row['fuel_category'] !== null)->count(),
@@ -419,13 +422,27 @@ class FuelDashboardService
         ];
     }
 
-    private function getStockByItem(string $companyId, array $productIds): array
+    private function getStockByItem(string $companyId, array $productIds, Carbon $asOfDate): array
     {
         if (empty($productIds)) {
             return [];
         }
 
-        return StockLevel::where('company_id', $companyId)
+        $movementStock = StockMovement::where('company_id', $companyId)
+            ->whereIn('item_id', $productIds)
+            ->whereDate('movement_date', '<=', $asOfDate->toDateString())
+            ->selectRaw('item_id, SUM(quantity) as quantity')
+            ->groupBy('item_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $row->item_id => [
+                    'quantity' => (float) $row->quantity,
+                    'available_quantity' => (float) $row->quantity,
+                    'reorder_point' => 0.0,
+                ],
+            ]);
+
+        $levels = StockLevel::where('company_id', $companyId)
             ->whereIn('item_id', $productIds)
             ->selectRaw('item_id, SUM(quantity) as quantity, SUM(available_quantity) as available_quantity, MAX(COALESCE(reorder_point, 0)) as reorder_point')
             ->groupBy('item_id')
@@ -436,11 +453,25 @@ class FuelDashboardService
                     'available_quantity' => (float) $row->available_quantity,
                     'reorder_point' => (float) $row->reorder_point,
                 ],
-            ])
+            ]);
+
+        return collect($productIds)
+            ->mapWithKeys(function ($itemId) use ($movementStock, $levels) {
+                $levelRow = $levels->get($itemId);
+                $row = $movementStock->get($itemId) ?? $levels->get($itemId) ?? [
+                    'quantity' => 0.0,
+                    'available_quantity' => 0.0,
+                    'reorder_point' => 0.0,
+                ];
+
+                $row['reorder_point'] = (float) ($levelRow['reorder_point'] ?? $row['reorder_point'] ?? 0);
+
+                return [$itemId => $row];
+            })
             ->all();
     }
 
-    private function getLatestStockMovementByItem(string $companyId, array $productIds): array
+    private function getLatestStockMovementByItem(string $companyId, array $productIds, Carbon $asOfDate): array
     {
         if (empty($productIds)) {
             return [];
@@ -448,21 +479,23 @@ class FuelDashboardService
 
         return StockMovement::where('company_id', $companyId)
             ->whereIn('item_id', $productIds)
+            ->whereDate('movement_date', '<=', $asOfDate->toDateString())
             ->orderByDesc('movement_date')
             ->orderByDesc('created_at')
-            ->get(['item_id', 'movement_date', 'movement_type', 'created_at'])
+            ->get(['item_id', 'movement_date', 'movement_type', 'reason', 'created_at'])
             ->unique('item_id')
             ->mapWithKeys(fn (StockMovement $movement) => [
                 $movement->item_id => [
                     'movement_date' => $movement->movement_date?->toDateString(),
                     'movement_type' => $movement->movement_type,
+                    'reason' => $movement->reason,
                     'created_at' => $movement->created_at?->toIso8601String(),
                 ],
             ])
             ->all();
     }
 
-    private function getTankStockByItem(string $companyId): array
+    private function getTankStockByItem(string $companyId, Carbon $asOfDate): array
     {
         $tanks = Warehouse::where('company_id', $companyId)
             ->where('warehouse_type', 'tank')
@@ -476,6 +509,7 @@ class FuelDashboardService
 
         $latestReadings = TankReading::where('company_id', $companyId)
             ->whereIn('tank_id', $tanks->pluck('id')->all())
+            ->whereDate('reading_date', '<=', $asOfDate->toDateString())
             ->orderByDesc('reading_date')
             ->orderByDesc('created_at')
             ->get(['tank_id', 'reading_date', 'reading_type', 'dip_measurement_liters', 'status', 'created_at'])
@@ -526,9 +560,9 @@ class FuelDashboardService
         return $byItem;
     }
 
-    private function getProductSales(string $companyId, $products): array
+    private function getProductSales(string $companyId, $products, Carbon $asOfDate): array
     {
-        $today = Carbon::today();
+        $today = $asOfDate->copy();
         $yesterday = $today->copy()->subDay();
         $lastWeekStart = $today->copy()->subDays(7);
         $lastMonthStart = $today->copy()->subDays(30);

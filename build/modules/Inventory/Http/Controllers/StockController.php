@@ -173,7 +173,26 @@ class StockController extends Controller
             ->where('company_id', $company->id)
             ->orderByDesc('created_at')
             ->limit(5)
-            ->get(['id', 'item_id', 'warehouse_id', 'movement_date', 'movement_type', 'quantity', 'unit_cost', 'total_cost', 'gl_transaction_id']);
+            ->get(['id', 'item_id', 'warehouse_id', 'movement_date', 'movement_type', 'quantity', 'unit_cost', 'total_cost', 'gl_transaction_id', 'reference_type', 'reference_id', 'reason']);
+
+        $billIds = $recentMovements
+            ->filter(fn (StockMovement $movement) => $movement->reference_type === 'acct.bills' && $movement->reference_id)
+            ->pluck('reference_id')
+            ->unique()
+            ->values();
+
+        $postedBillIds = $billIds->isNotEmpty()
+            ? Bill::where('company_id', $company->id)
+                ->whereIn('id', $billIds)
+                ->whereNotNull('transaction_id')
+                ->pluck('id')
+                ->flip()
+            : collect();
+
+        $recentMovements->transform(function (StockMovement $movement) use ($postedBillIds) {
+            $movement->gl_status_label = $this->stockMovementStatusLabel($movement, $postedBillIds);
+            return $movement;
+        });
 
         return Inertia::render('inventory/stock/Index', [
             'company' => [
@@ -192,6 +211,27 @@ class StockController extends Controller
                 'low_stock_only' => $request->boolean('low_stock_only'),
             ],
         ]);
+    }
+
+    private function stockMovementStatusLabel(StockMovement $movement, $postedBillIds): string
+    {
+        if ($movement->gl_transaction_id) {
+            return 'Posted';
+        }
+
+        if ($movement->reference_type === 'acct.bills') {
+            return $postedBillIds->has($movement->reference_id) ? 'Bill posted' : 'Receipt only';
+        }
+
+        if ($movement->reference_type === 'fuel.daily_close') {
+            return 'Daily Close';
+        }
+
+        if (in_array($movement->movement_type, ['adjustment_in', 'adjustment_out'], true)) {
+            return 'Needs journal';
+        }
+
+        return 'Stock only';
     }
 
     public function movements(Request $request): Response

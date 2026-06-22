@@ -62,6 +62,7 @@ interface Tank {
   current_stock_source_label?: string | null
   current_stock_as_of?: string | null
   current_stock_after_close_date?: boolean
+  stock_movements_since_baseline_liters?: number | null
 }
 
 interface Pump {
@@ -174,6 +175,22 @@ interface PaymentChannel {
   clearing_account_id: string | null
 }
 
+interface RateChangeSnapshot {
+  id: string
+  item_id: string
+  item_name: string | null
+  effective_date: string
+  old_sale_rate: number
+  new_sale_rate: number
+  snapshot_dip_liters: number | null
+  snapshot_nozzle_count: number
+  snapshot_nozzle_readings: Array<{
+    nozzle_id: string
+    electronic_reading: number | null
+    manual_reading: number | null
+  }>
+}
+
 interface PendingBillPayment {
   payment_id: string
   payment_number: string
@@ -204,6 +221,7 @@ const props = defineProps<{
   date: string
   fuelItems: FuelItem[]
   rates: Record<string, { purchase_rate: number; sale_rate: number }>
+  rateChangeSnapshots: RateChangeSnapshot[]
   tanks: Tank[]
   pumps: Pump[]
   nozzles: Nozzle[]
@@ -530,7 +548,7 @@ const getPumpTotalLiters = (nozzleIndices: number[]) => {
 const getPumpTotalAmount = (nozzleIndices: number[]) => {
   return nozzleIndices.reduce((sum, idx) => {
     const r = form.nozzle_readings[idx]
-    return sum + (r.liters_sold * r.sale_rate)
+    return sum + rateAdjustedNozzleRevenue(r)
   }, 0)
 }
 
@@ -580,6 +598,7 @@ const form = useForm({
       current_stock_source_label: tank.current_stock_source_label ?? '',
       current_stock_as_of: tank.current_stock_as_of ?? '',
       current_stock_after_close_date: tank.current_stock_after_close_date ?? false,
+      stock_movements_since_baseline_liters: tank.stock_movements_since_baseline_liters ?? 0,
       stick_reading: 0,
       liters: 0,
     }
@@ -654,6 +673,7 @@ const resetFormToInitial = () => {
       current_stock_source_label: tank.current_stock_source_label ?? '',
       current_stock_as_of: tank.current_stock_as_of ?? '',
       current_stock_after_close_date: tank.current_stock_after_close_date ?? false,
+      stock_movements_since_baseline_liters: tank.stock_movements_since_baseline_liters ?? 0,
       stick_reading: 0,
       liters: 0,
     }
@@ -968,15 +988,29 @@ const tankSalesLabel = (tank: { item_id?: string; tank_id: string }) => {
   return hasBulkSaleRow ? 'Recorded Sales' : 'Recorded Sales'
 }
 
+const stockMovementLabel = (liters: number) => {
+  if (Math.abs(liters) < 0.001) return 'No stock movement since opening'
+  return liters > 0 ? 'Stock added since opening' : 'Stock removed since opening'
+}
+
+const expectedTankClosingLiters = (tank: { previous_liters: number; stock_movements_since_baseline_liters?: number | null; tank_id: string }) => {
+  const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0
+  return Number(tank.previous_liters || 0)
+    + Number(tank.stock_movements_since_baseline_liters || 0)
+    - soldFromTank
+}
+
 // Calculate tank variance (shrinkage/gain)
-// Formula: Previous Closing - Today's Closing = Usage from Dip
-// If Usage from Dip > Liters Sold => Loss (shrinkage/evaporation)
-// If Usage from Dip < Liters Sold => Gain (rare, might indicate measurement error)
+// Formula: Opening baseline + stock movements - sales = expected closing.
+// Difference between physical dip and expected closing is the variance.
 const tankVariances = computed(() => {
   return form.tank_readings.map(tank => {
     const soldFromTank = litersSoldByTank.value[tank.tank_id] || 0
-    const usageFromDip = tank.previous_liters - tank.liters // What dip says was used
-    const variance = usageFromDip - soldFromTank // Positive = loss, Negative = gain
+    const expectedClosing = expectedTankClosingLiters(tank)
+    const variance = expectedClosing - tank.liters // Positive = loss, Negative = gain
+    const usageFromDip = tank.previous_liters
+      + Number(tank.stock_movements_since_baseline_liters || 0)
+      - tank.liters
 
     return {
       tank_id: tank.tank_id,
@@ -984,6 +1018,7 @@ const tankVariances = computed(() => {
       fuel_category: tank.fuel_category,
       previous_liters: tank.previous_liters,
       current_liters: tank.liters,
+      expected_closing_liters: expectedClosing,
       usage_from_dip: usageFromDip,
       liters_sold: soldFromTank,
       variance: variance,
@@ -1006,9 +1041,75 @@ const getTankFillPercent = (tank: { capacity?: number; liters?: number; previous
 
 const totalFuelSales = computed(() => {
   return form.nozzle_readings.reduce((sum, r) => {
-    return sum + (r.liters_sold * r.sale_rate)
+    return sum + rateAdjustedNozzleRevenue(r)
   }, 0)
 })
+
+const rateSnapshotByItem = computed(() => {
+  const map = new Map<string, RateChangeSnapshot>()
+  ;(props.rateChangeSnapshots || []).forEach((snapshot) => {
+    if (snapshot.snapshot_nozzle_count > 0) {
+      map.set(snapshot.item_id, snapshot)
+    }
+  })
+  return map
+})
+
+const rateAdjustedNozzleRevenue = (reading: {
+  nozzle_id: string
+  item_id: string
+  opening_electronic: number
+  closing_electronic: number
+  liters_sold: number
+  sale_rate: number
+}) => {
+  const snapshot = rateSnapshotByItem.value.get(reading.item_id)
+  if (!snapshot || snapshot.old_sale_rate <= 0) {
+    return Number(reading.liters_sold || 0) * Number(reading.sale_rate || 0)
+  }
+
+  const snapshotRow = snapshot.snapshot_nozzle_readings.find((row) => row.nozzle_id === reading.nozzle_id)
+  const snapshotMeter = Number(snapshotRow?.electronic_reading ?? 0)
+  const opening = Number(reading.opening_electronic || 0)
+  const closing = Number(reading.closing_electronic || 0)
+
+  if (snapshotMeter <= opening || snapshotMeter >= closing) {
+    return Number(reading.liters_sold || 0) * Number(reading.sale_rate || 0)
+  }
+
+  const oldLiters = Math.max(0, snapshotMeter - opening)
+  const newLiters = Math.max(0, closing - snapshotMeter)
+  const segmentedLiters = oldLiters + newLiters
+  const fallbackLiters = Math.max(0, Number(reading.liters_sold || 0) - segmentedLiters)
+
+  return (oldLiters * snapshot.old_sale_rate)
+    + (newLiters * snapshot.new_sale_rate)
+    + (fallbackLiters * Number(reading.sale_rate || 0))
+}
+
+const rateChangeSplitForReading = (reading: {
+  nozzle_id: string
+  item_id: string
+  opening_electronic: number
+  closing_electronic: number
+}) => {
+  const snapshot = rateSnapshotByItem.value.get(reading.item_id)
+  const snapshotRow = snapshot?.snapshot_nozzle_readings.find((row) => row.nozzle_id === reading.nozzle_id)
+  const snapshotMeter = Number(snapshotRow?.electronic_reading ?? 0)
+  const opening = Number(reading.opening_electronic || 0)
+  const closing = Number(reading.closing_electronic || 0)
+
+  if (!snapshot || snapshot.old_sale_rate <= 0 || snapshotMeter <= opening || snapshotMeter >= closing) {
+    return null
+  }
+
+  return {
+    oldLiters: Math.max(0, snapshotMeter - opening),
+    newLiters: Math.max(0, closing - snapshotMeter),
+    oldRate: snapshot.old_sale_rate,
+    newRate: snapshot.new_sale_rate,
+  }
+}
 
 const totalOtherSales = computed(() => {
   return form.other_sales.reduce((sum, s) => sum + s.amount, 0)
@@ -1030,7 +1131,7 @@ const salesByFuelType = computed(() => {
       }
     }
     byFuel[key].liters += r.liters_sold
-    byFuel[key].amount += r.liters_sold * r.sale_rate
+    byFuel[key].amount += rateAdjustedNozzleRevenue(r)
   })
   return Object.values(byFuel).filter(f => f.liters > 0)
 })
@@ -1268,17 +1369,6 @@ const baselineLabel = (tank: { previous_source_label?: string | null; previous_a
 
   const date = formatBaselineDate(tank.previous_as_of)
   return date ? `${tank.previous_source_label} · ${date}` : tank.previous_source_label
-}
-
-const currentStockLabel = (tank: {
-  current_stock_source_label?: string | null
-  current_stock_as_of?: string | null
-}) => {
-  if (!tank.current_stock_source_label && !tank.current_stock_as_of) return ''
-
-  const date = formatBaselineDate(tank.current_stock_as_of)
-  if (tank.current_stock_source_label && date) return `${tank.current_stock_source_label} · ${date}`
-  return tank.current_stock_source_label || date
 }
 
 // Partner/Employee name helpers
@@ -1700,7 +1790,10 @@ const completedWorkflowSteps = computed(() => {
                       </div>
                       <!-- Amount -->
                       <div class="col-span-3 text-right">
-                        <span class="text-base font-semibold">{{ currency }} {{ formatCurrency(form.nozzle_readings[idx].liters_sold * form.nozzle_readings[idx].sale_rate) }}</span>
+                        <span class="text-base font-semibold">{{ currency }} {{ formatCurrency(rateAdjustedNozzleRevenue(form.nozzle_readings[idx])) }}</span>
+                        <div v-if="rateChangeSplitForReading(form.nozzle_readings[idx])" class="text-xs text-sky-700">
+                          Split by rate-change meter
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1947,12 +2040,22 @@ const completedWorkflowSteps = computed(() => {
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
                       Stick: {{ tank.previous_stick }} cm
                     </div>
-                    <div v-if="tank.current_stock_liters !== null && tank.current_stock_liters !== undefined" class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs">
+                    <div class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs">
                       <div class="font-medium text-foreground">
-                        Current system stock: {{ formatCurrency(tank.current_stock_liters) }} L
+                        Expected closing stock: {{ formatCurrency(expectedTankClosingLiters(tank)) }} L
                       </div>
                       <div class="text-muted-foreground">
-                        {{ currentStockLabel(tank) }}
+                        {{ formatCurrency(tank.previous_liters) }} L opening
+                        <span v-if="Math.abs(tank.stock_movements_since_baseline_liters || 0) >= 0.001">
+                          {{ (tank.stock_movements_since_baseline_liters || 0) > 0 ? '+' : '-' }}
+                          {{ formatCurrency(Math.abs(tank.stock_movements_since_baseline_liters || 0)) }} L stock
+                        </span>
+                        <span v-if="(litersSoldByTank[tank.tank_id] || 0) > 0">
+                          - {{ formatCurrency(litersSoldByTank[tank.tank_id] || 0) }} L sales
+                        </span>
+                      </div>
+                      <div class="text-muted-foreground">
+                        {{ stockMovementLabel(tank.stock_movements_since_baseline_liters || 0) }}
                       </div>
                       <div v-if="tank.current_stock_after_close_date" class="text-amber-700">
                         This stock entry is after the selected close date, so it is not used as the opening baseline.

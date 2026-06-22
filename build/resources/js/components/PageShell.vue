@@ -75,6 +75,10 @@ const searchValue = computed({
 <template>
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="flex flex-col gap-6">
+      <div v-if="$slots['before-header']">
+        <slot name="before-header" />
+      </div>
+
       <PageHeader
         :title="title"
         :description="description"

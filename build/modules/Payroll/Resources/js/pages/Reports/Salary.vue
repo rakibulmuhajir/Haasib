@@ -4,12 +4,14 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { Banknote, Calendar, FileText, UserCog, WalletCards } from 'lucide-vue-next'
+import { Banknote, Calendar, FileText, HandCoins, UserCog } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
@@ -34,6 +36,22 @@ interface SalaryRow {
   advance_given: number
   advance_recovered: number
   advance_outstanding: number
+  payslips: Array<{
+    id: string
+    payslip_number: string
+    status: string
+    gross_pay: number
+    deductions: number
+    net_pay: number
+    period_id: string
+    period_start: string | null
+    period_end: string | null
+  }>
+}
+
+interface EmployeeOption {
+  id: string
+  label: string
 }
 
 const props = defineProps<{
@@ -42,6 +60,8 @@ const props = defineProps<{
     month: string
     start_date: string
     end_date: string
+    employee_id: string
+    status: string
   }
   summary: {
     employees: number
@@ -55,10 +75,15 @@ const props = defineProps<{
     advance_recovered: number
     advance_outstanding: number
   }
+  employeeOptions: EmployeeOption[]
   rows: SalaryRow[]
 }>()
 
 const month = ref(props.filters.month)
+const startDate = ref(props.filters.start_date)
+const endDate = ref(props.filters.end_date)
+const employeeId = ref(props.filters.employee_id || 'all')
+const status = ref(props.filters.status || 'all')
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: `/${props.company.slug}` },
@@ -77,7 +102,17 @@ const formatCurrency = (amount: number) => {
 const formatDate = (date: string) => formatDateTime(date, { mode: 'date' })
 
 const applyFilter = () => {
-  router.get(`/${props.company.slug}/payroll/reports/salary`, { month: month.value }, { preserveState: true })
+  router.get(
+    `/${props.company.slug}/payroll/reports/salary`,
+    {
+      month: month.value,
+      start_date: startDate.value,
+      end_date: endDate.value,
+      employee_id: employeeId.value === 'all' ? '' : employeeId.value,
+      status: status.value === 'all' ? '' : status.value,
+    },
+    { preserveState: true, preserveScroll: true }
+  )
 }
 
 const columns = [
@@ -103,6 +138,31 @@ const tableRows = computed(() => props.rows.map((row) => ({
   advance_outstanding: formatCurrency(row.advance_outstanding),
   _raw: row,
 })))
+
+const payslipRows = computed(() => props.rows.flatMap((row) =>
+  row.payslips.map((payslip) => ({
+    ...payslip,
+    employee_id: row.employee_id,
+    employee_name: row.employee_name,
+    employee_number: row.employee_number,
+  }))
+))
+
+const statusVariant = (value: string) => {
+  if (value === 'paid') return 'success'
+  if (value === 'approved') return 'secondary'
+  if (value === 'draft') return 'outline'
+  return 'secondary'
+}
+
+const openPayslips = (row: SalaryRow) => {
+  router.get(`/${props.company.slug}/payslips`, {
+    employee_id: row.employee_id,
+    start_date: props.filters.start_date,
+    end_date: props.filters.end_date,
+    status: status.value === 'all' ? '' : status.value,
+  })
+}
 </script>
 
 <template>
@@ -131,10 +191,46 @@ const tableRows = computed(() => props.rows.map((row) => ({
             <p class="text-sm text-muted-foreground">Report period</p>
             <p class="mt-1 font-medium">{{ formatDate(filters.start_date) }} - {{ formatDate(filters.end_date) }}</p>
           </div>
-          <div class="flex items-end gap-3">
+          <div class="grid gap-3 md:grid-cols-5">
             <div class="space-y-2">
               <Label for="month">Month</Label>
               <Input id="month" v-model="month" type="month" class="w-[180px]" />
+            </div>
+            <div class="space-y-2">
+              <Label for="start_date">Start</Label>
+              <Input id="start_date" v-model="startDate" type="date" />
+            </div>
+            <div class="space-y-2">
+              <Label for="end_date">End</Label>
+              <Input id="end_date" v-model="endDate" type="date" />
+            </div>
+            <div class="space-y-2">
+              <Label>Employee</Label>
+              <Select v-model="employeeId">
+                <SelectTrigger>
+                  <SelectValue placeholder="All employees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All employees</SelectItem>
+                  <SelectItem v-for="employee in employeeOptions" :key="employee.id" :value="employee.id">
+                    {{ employee.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-2">
+              <Label>Status</Label>
+              <Select v-model="status">
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button @click="applyFilter">
               <Calendar class="mr-2 h-4 w-4" />
@@ -190,6 +286,10 @@ const tableRows = computed(() => props.rows.map((row) => ({
             <FileText class="mr-2 h-4 w-4" />
             Payslips
           </Button>
+          <Button variant="outline" size="sm" @click="router.get(`/${company.slug}/salary-advances`)">
+            <HandCoins class="mr-2 h-4 w-4" />
+            Advances
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -200,9 +300,64 @@ const tableRows = computed(() => props.rows.map((row) => ({
               <p class="text-xs text-muted-foreground">
                 {{ row._raw.employee_number }}<span v-if="row._raw.position"> · {{ row._raw.position }}</span>
               </p>
+              <div class="mt-2 flex gap-2">
+                <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click.stop="router.get(`/${company.slug}/employees/${row.id}`)">
+                  Employee
+                </Button>
+                <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click.stop="openPayslips(row._raw)">
+                  Payslips
+                </Button>
+                <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click.stop="router.get(`/${company.slug}/salary-advances?employee_id=${row.id}`)">
+                  Advances
+                </Button>
+              </div>
             </div>
           </template>
         </DataTable>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Payslips Included</CardTitle>
+        <CardDescription>These are the payslips behind the salary totals for the selected filters.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div v-if="payslipRows.length === 0" class="py-6 text-sm text-muted-foreground">
+          No payslips matched these filters.
+        </div>
+        <div v-else class="space-y-2">
+          <div
+            v-for="payslip in payslipRows"
+            :key="payslip.id"
+            class="grid grid-cols-12 gap-3 rounded-md border p-3 text-sm"
+          >
+            <div class="col-span-3">
+              <Button variant="link" class="h-auto p-0 font-medium" @click="router.get(`/${company.slug}/payslips/${payslip.id}`)">
+                {{ payslip.payslip_number }}
+              </Button>
+              <p class="text-xs text-muted-foreground">{{ payslip.employee_name }} · {{ payslip.employee_number }}</p>
+            </div>
+            <div class="col-span-3">
+              <Button
+                v-if="payslip.period_id"
+                variant="link"
+                class="h-auto p-0"
+                @click="router.get(`/${company.slug}/payroll-periods/${payslip.period_id}`)"
+              >
+                {{ payslip.period_start ? formatDate(payslip.period_start) : 'Period' }} - {{ payslip.period_end ? formatDate(payslip.period_end) : '' }}
+              </Button>
+              <span v-else class="text-muted-foreground">No period</span>
+            </div>
+            <div class="col-span-2">
+              <Badge :variant="statusVariant(payslip.status)">
+                {{ payslip.status }}
+              </Badge>
+            </div>
+            <div class="col-span-2 text-right tabular-nums">{{ formatCurrency(payslip.deductions) }}</div>
+            <div class="col-span-2 text-right font-medium tabular-nums">{{ formatCurrency(payslip.net_pay) }}</div>
+          </div>
+        </div>
       </CardContent>
     </Card>
 

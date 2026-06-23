@@ -638,6 +638,7 @@ class DailyCloseController extends Controller
             'features' => $features,
             'fuelVendor' => $stationSettings?->fuel_vendor ?? 'parco',
             'fuelCardLabel' => $stationSettings?->fuel_card_label ?? 'Fuel Card',
+            'canFillTestData' => ! app()->environment('production'),
         ]);
     }
 
@@ -1270,6 +1271,7 @@ class DailyCloseController extends Controller
             'features' => $features,
             'fuelVendor' => $stationSettings?->fuel_vendor ?? 'parco',
             'fuelCardLabel' => $stationSettings?->fuel_card_label ?? 'Fuel Card',
+            'canFillTestData' => ! app()->environment('production'),
             'isAmendment' => false,
             'originalTransaction' => null,
         ];

@@ -7,9 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import MoneyText from '@/components/MoneyText.vue'
+import { formatDateTime } from '@/lib/datetime'
+import { ExternalLink } from 'lucide-vue-next'
 
 type CompanyRef = {
   id: string
@@ -26,6 +29,39 @@ type ReportAccount = {
   debit: number
   credit: number
   net: number
+  line_count: number
+  transaction_count: number
+}
+
+type PeriodBreakdown = {
+  period: string
+  income: number
+  expenses: number
+  profit: number
+}
+
+type SourceBreakdown = {
+  source: string
+  income: number
+  expenses: number
+  profit: number
+  transaction_count: number
+}
+
+type RecentLine = {
+  id: string
+  transaction_id: string
+  transaction_number: string
+  transaction_type: string
+  transaction_date: string
+  account_id: string
+  account_code: string
+  account_name: string
+  account_type: string
+  description: string | null
+  debit: number
+  credit: number
+  net: number
 }
 
 const props = defineProps<{
@@ -34,6 +70,9 @@ const props = defineProps<{
   report: {
     income: ReportAccount[]
     expenses: ReportAccount[]
+    period_breakdown: PeriodBreakdown[]
+    source_breakdown: SourceBreakdown[]
+    recent_lines: RecentLine[]
     totals: { income: number; expenses: number; profit: number }
   }
 }>()
@@ -65,8 +104,27 @@ const apply = () => {
   router.get(`/${props.company.slug}/reports/profit-loss`, { start: start.value, end: end.value }, { preserveScroll: true })
 }
 
+const openAccountDrilldown = (row: ReportAccount) => {
+  router.get(`/${props.company.slug}/journals`, {
+    account_id: row.id,
+    start: start.value,
+    end: end.value,
+    status: 'posted',
+  })
+}
+
+const openJournal = (id: string) => {
+  router.get(`/${props.company.slug}/journals/${id}`)
+}
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
+const formatSource = (value: string) => value.replace(/[._-]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+
 const incomeRows = computed(() => props.report.income)
 const expenseRows = computed(() => props.report.expenses)
+const periodRows = computed(() => props.report.period_breakdown ?? [])
+const sourceRows = computed(() => props.report.source_breakdown ?? [])
+const recentLines = computed(() => props.report.recent_lines ?? [])
 </script>
 
 <template>
@@ -121,7 +179,8 @@ const expenseRows = computed(() => props.report.expenses)
         <CardContent>
           <div class="grid grid-cols-12 gap-3 text-sm font-medium text-muted-foreground">
             <div class="col-span-3">{{ t('category') }}</div>
-            <div class="col-span-7">{{ t('description') }}</div>
+            <div class="col-span-5">{{ t('description') }}</div>
+            <div class="col-span-2 text-right">Entries</div>
             <div class="col-span-2 text-right">{{ t('amount') }}</div>
           </div>
           <Separator class="my-3" />
@@ -129,13 +188,20 @@ const expenseRows = computed(() => props.report.expenses)
             {{ t('noReportData') }}
           </div>
           <div v-else class="space-y-2">
-            <div v-for="row in incomeRows" :key="row.id" class="grid grid-cols-12 gap-3 text-sm">
+            <Button
+              v-for="row in incomeRows"
+              :key="row.id"
+              variant="ghost"
+              class="grid h-auto w-full grid-cols-12 gap-3 px-2 py-2 text-left text-sm"
+              @click="openAccountDrilldown(row)"
+            >
               <div class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</div>
-              <div class="col-span-7">{{ row.name }}</div>
+              <div class="col-span-5">{{ row.name }}</div>
+              <div class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</div>
               <div class="col-span-2 text-right tabular-nums">
                 <MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" />
               </div>
-            </div>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -147,7 +213,8 @@ const expenseRows = computed(() => props.report.expenses)
         <CardContent>
           <div class="grid grid-cols-12 gap-3 text-sm font-medium text-muted-foreground">
             <div class="col-span-3">{{ t('category') }}</div>
-            <div class="col-span-7">{{ t('description') }}</div>
+            <div class="col-span-5">{{ t('description') }}</div>
+            <div class="col-span-2 text-right">Entries</div>
             <div class="col-span-2 text-right">{{ t('amount') }}</div>
           </div>
           <Separator class="my-3" />
@@ -155,13 +222,95 @@ const expenseRows = computed(() => props.report.expenses)
             {{ t('noReportData') }}
           </div>
           <div v-else class="space-y-2">
-            <div v-for="row in expenseRows" :key="row.id" class="grid grid-cols-12 gap-3 text-sm">
+            <Button
+              v-for="row in expenseRows"
+              :key="row.id"
+              variant="ghost"
+              class="grid h-auto w-full grid-cols-12 gap-3 px-2 py-2 text-left text-sm"
+              @click="openAccountDrilldown(row)"
+            >
               <div class="col-span-3 font-mono text-muted-foreground">{{ row.code }}</div>
-              <div class="col-span-7">{{ row.name }}</div>
+              <div class="col-span-5">{{ row.name }}</div>
+              <div class="col-span-2 text-right text-muted-foreground">{{ row.transaction_count }} journals</div>
               <div class="col-span-2 text-right tabular-nums">
                 <MoneyText :amount="row.net" :currency="company.base_currency" :locale="moneyLocale" />
               </div>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div class="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>By Period</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="periodRows.length === 0" class="py-6 text-sm text-muted-foreground">{{ t('noReportData') }}</div>
+            <div v-else class="space-y-2">
+              <div v-for="row in periodRows" :key="row.period" class="grid grid-cols-4 gap-3 text-sm">
+                <div class="font-medium">{{ row.period }}</div>
+                <div class="text-right tabular-nums"><MoneyText :amount="row.income" :currency="company.base_currency" :locale="moneyLocale" /></div>
+                <div class="text-right tabular-nums"><MoneyText :amount="row.expenses" :currency="company.base_currency" :locale="moneyLocale" /></div>
+                <div class="text-right font-medium tabular-nums"><MoneyText :amount="row.profit" :currency="company.base_currency" :locale="moneyLocale" /></div>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>By Source</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="sourceRows.length === 0" class="py-6 text-sm text-muted-foreground">{{ t('noReportData') }}</div>
+            <div v-else class="space-y-2">
+              <div v-for="row in sourceRows" :key="row.source" class="grid grid-cols-12 gap-3 text-sm">
+                <div class="col-span-5">
+                  <div class="font-medium">{{ formatSource(row.source) }}</div>
+                  <div class="text-xs text-muted-foreground">{{ row.transaction_count }} journals</div>
+                </div>
+                <div class="col-span-3 text-right tabular-nums"><MoneyText :amount="row.income" :currency="company.base_currency" :locale="moneyLocale" /></div>
+                <div class="col-span-2 text-right tabular-nums"><MoneyText :amount="row.expenses" :currency="company.base_currency" :locale="moneyLocale" /></div>
+                <div class="col-span-2 text-right font-medium tabular-nums"><MoneyText :amount="row.profit" :currency="company.base_currency" :locale="moneyLocale" /></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Postings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="recentLines.length === 0" class="py-6 text-sm text-muted-foreground">{{ t('noReportData') }}</div>
+          <div v-else class="space-y-2">
+            <Button
+              v-for="line in recentLines"
+              :key="line.id"
+              variant="ghost"
+              class="grid h-auto w-full grid-cols-12 gap-3 px-2 py-2 text-left text-sm"
+              @click="openJournal(line.transaction_id)"
+            >
+              <div class="col-span-2 text-muted-foreground">{{ formatDate(line.transaction_date) }}</div>
+              <div class="col-span-3">
+                <div class="font-medium">{{ line.transaction_number }}</div>
+                <div class="text-xs text-muted-foreground">{{ formatSource(line.transaction_type) }}</div>
+              </div>
+              <div class="col-span-4">
+                <div>{{ line.account_code }} - {{ line.account_name }}</div>
+                <div v-if="line.description" class="truncate text-xs text-muted-foreground">{{ line.description }}</div>
+              </div>
+              <div class="col-span-2 text-right tabular-nums">
+                <MoneyText :amount="line.net" :currency="company.base_currency" :locale="moneyLocale" />
+              </div>
+              <div class="col-span-1 flex justify-end">
+                <Badge variant="outline">
+                  <ExternalLink class="h-3 w-3" />
+                </Badge>
+              </div>
+            </Button>
           </div>
         </CardContent>
       </Card>

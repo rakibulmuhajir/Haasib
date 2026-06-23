@@ -30,6 +30,20 @@ class JournalController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('account_id')) {
+            $query->whereHas('journalEntries', function ($entryQuery) use ($request) {
+                $entryQuery->where('account_id', $request->query('account_id'));
+            });
+        }
+
+        if ($request->filled('start')) {
+            $query->whereDate('transaction_date', '>=', $request->query('start'));
+        }
+
+        if ($request->filled('end')) {
+            $query->whereDate('transaction_date', '<=', $request->query('end'));
+        }
+
         if ($request->filled('search')) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -59,6 +73,9 @@ class JournalController extends Controller
                 'search' => $request->search ?? '',
                 'status' => $request->status ?? 'all',
                 'type' => $request->type ?? 'all',
+                'account_id' => $request->query('account_id', ''),
+                'start' => $request->query('start', ''),
+                'end' => $request->query('end', ''),
             ],
             'transactionTypes' => $transactionTypes,
         ]);

@@ -452,7 +452,7 @@ const submit = () => {
     </Card>
 
     <Dialog :open="dialogOpen" @update:open="(v) => (v ? (dialogOpen = true) : closeDialog())">
-      <DialogContent class="sm:max-w-xl">
+      <DialogContent class="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
             <TrendingUp class="h-5 w-5 text-sky-600" />
@@ -463,7 +463,8 @@ const submit = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submit">
+          <div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label for="item_id">Fuel item</Label>
@@ -663,7 +664,9 @@ const submit = () => {
             <p v-if="form.errors.notes" class="text-sm text-destructive">{{ form.errors.notes }}</p>
           </div>
 
-          <DialogFooter class="gap-2">
+          </div>
+
+          <DialogFooter class="mt-4 shrink-0 gap-2 border-t pt-4">
             <Button type="button" variant="outline" :disabled="form.processing" @click="closeDialog">
               Cancel
             </Button>

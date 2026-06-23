@@ -6,20 +6,22 @@ use App\Modules\FuelStation\Http\Controllers\CreditCustomerController;
 use App\Modules\FuelStation\Http\Controllers\CreditSaleController;
 use App\Modules\FuelStation\Http\Controllers\FuelReceiptController;
 use App\Modules\FuelStation\Http\Controllers\AttendantHandoverController;
+use App\Modules\FuelStation\Http\Controllers\ExpenseReportController;
 use App\Modules\FuelStation\Http\Controllers\FuelDashboardController;
 use App\Modules\FuelStation\Http\Controllers\FuelProductSetupController;
 use App\Modules\FuelStation\Http\Controllers\FuelSaleController;
 use App\Modules\FuelStation\Http\Controllers\FuelStationOnboardingController;
 use App\Modules\FuelStation\Http\Controllers\InvestorController;
+use App\Modules\FuelStation\Http\Controllers\ProductProfitabilityReportController;
 use App\Modules\FuelStation\Http\Controllers\VendorCardSettlementController;
 use App\Modules\FuelStation\Http\Controllers\PumpController;
 use App\Modules\FuelStation\Http\Controllers\PumpReadingController;
 use App\Modules\FuelStation\Http\Controllers\RateChangeController;
-use App\Modules\FuelStation\Http\Controllers\ShrinkageReportController;
+use App\Modules\FuelStation\Http\Controllers\StationPerformanceReportController;
 use App\Modules\FuelStation\Http\Controllers\StationSettingsController;
+use App\Modules\FuelStation\Http\Controllers\StockVarianceReportController;
 use App\Modules\FuelStation\Http\Controllers\TankReadingController;
 use App\Modules\FuelStation\Http\Controllers\DailyCloseController;
-use App\Modules\FuelStation\Http\Controllers\SalesReportController;
 use App\Modules\FuelStation\Http\Controllers\GuideController;
 use Illuminate\Support\Facades\Route;
 
@@ -136,10 +138,14 @@ Route::middleware(['auth', 'identify.company', 'require.module:fuel_station'])->
     Route::get('receipts/{receipt}', [FuelReceiptController::class, 'show'])->name('fuel.receipts.show');
 
     // Reports
-    Route::get('reports/sales', [SalesReportController::class, 'index'])->name('fuel.reports.sales');
-    Route::get('reports/sales/export', [SalesReportController::class, 'export'])->name('fuel.reports.sales.export');
-    Route::get('reports/shrinkage', [ShrinkageReportController::class, 'index'])->name('fuel.reports.shrinkage');
-    Route::get('reports/shrinkage/export', [ShrinkageReportController::class, 'export'])->name('fuel.reports.shrinkage.export');
+    Route::get('reports/performance', [StationPerformanceReportController::class, 'index'])->name('fuel.reports.performance');
+    Route::get('reports/product-profitability', [ProductProfitabilityReportController::class, 'index'])->name('fuel.reports.product-profitability');
+    Route::get('reports/expenses', [ExpenseReportController::class, 'index'])->name('fuel.reports.expenses');
+    Route::get('reports/stock-variance', [StockVarianceReportController::class, 'index'])->name('fuel.reports.stock-variance');
+    Route::get('reports/sales', [ProductProfitabilityReportController::class, 'legacyRedirect'])->name('fuel.reports.sales');
+    Route::get('reports/sales/export', [ProductProfitabilityReportController::class, 'legacyRedirect'])->name('fuel.reports.sales.export');
+    Route::get('reports/shrinkage', [StockVarianceReportController::class, 'legacyRedirect'])->name('fuel.reports.shrinkage');
+    Route::get('reports/shrinkage/export', [StockVarianceReportController::class, 'legacyRedirect'])->name('fuel.reports.shrinkage.export');
 
     // Credit Customers
     Route::get('credit-customers', [CreditCustomerController::class, 'index'])->name('fuel.credit-customers.index');

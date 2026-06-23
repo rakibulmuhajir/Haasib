@@ -60,8 +60,17 @@ class RateChangeService
                 $item->refresh();
             }
 
-            // Get previous rate for margin impact calculation
-            $previousRate = RateChange::getCurrentRate($company->id, $data['item_id']);
+            $existingRateChange = RateChange::where('company_id', $company->id)
+                ->where('item_id', $data['item_id'])
+                ->whereDate('effective_date', $data['effective_date'])
+                ->first();
+
+            // Get previous rate for margin impact calculation. Same-day edits must not compare against themselves.
+            $previousRate = RateChange::where('company_id', $company->id)
+                ->where('item_id', $data['item_id'])
+                ->whereDate('effective_date', '<', $data['effective_date'])
+                ->orderByDesc('effective_date')
+                ->first();
             $previousAvgCost = (float) ($item->avg_cost ?? 0);
 
             $snapshotNozzleReadings = $this->cleanSnapshotNozzleReadings($data['snapshot_nozzle_readings'] ?? []);
@@ -88,8 +97,7 @@ class RateChangeService
                 $revaluationAmount = round(($newPurchaseRate - $previousAvgCost) * $stockQuantity, 2);
             }
 
-            // Create the rate change record
-            $rateChange = RateChange::create([
+            $ratePayload = [
                 'company_id' => $company->id,
                 'item_id' => $data['item_id'],
                 'effective_date' => $data['effective_date'],
@@ -105,7 +113,15 @@ class RateChangeService
                 'snapshot_nozzle_readings' => $snapshotNozzleReadings ?: null,
                 'notes' => $data['notes'] ?? null,
                 'created_by_user_id' => auth()->id(),
-            ]);
+            ];
+
+            if ($existingRateChange) {
+                unset($ratePayload['company_id'], $ratePayload['item_id'], $ratePayload['effective_date'], $ratePayload['created_by_user_id']);
+                $existingRateChange->update($ratePayload);
+                $rateChange = $existingRateChange->fresh();
+            } else {
+                $rateChange = RateChange::create($ratePayload);
+            }
 
             $itemRatePayload = [
                 'cost_price' => $newPurchaseRate,
@@ -114,7 +130,7 @@ class RateChangeService
             ];
 
             // Only post GL entry when there is actual stock to revalue.
-            if ($stockQuantity > 0 && abs($revaluationAmount) > 0.01) {
+            if ($stockQuantity > 0 && abs($revaluationAmount) > 0.01 && ! $rateChange->journal_entry_id) {
                 // Post the revaluation GL entry
                 $transaction = $this->postRevaluationEntry(
                     $company,

@@ -81,12 +81,14 @@ export const fuelStationNav: ModuleNavConfig = {
             title: 'Reports',
             icon: BarChart3,
             children: [
+              { title: 'Station Performance', href: `/${slug}/fuel/reports/performance`, icon: BarChart3 },
+              { title: 'Product Profitability', href: `/${slug}/fuel/reports/product-profitability`, icon: Package },
+              { title: 'Expenses', href: `/${slug}/fuel/reports/expenses`, icon: ReceiptText },
               { title: 'Daily Close History', href: `/${slug}/fuel/daily-close/history`, icon: History },
-              { title: 'Daily Sales Report', href: `/${slug}/fuel/reports/sales`, icon: BarChart3 },
               { title: 'Profit Summary', href: `/${slug}/reports/profit-loss`, icon: BarChart3 },
               { title: 'Salary Report', href: `/${slug}/payroll/reports/salary`, icon: Banknote },
               { title: 'Stock Movements', href: `/${slug}/stock/movements`, icon: Warehouse },
-              { title: 'Shrinkage Report', href: `/${slug}/fuel/reports/shrinkage`, icon: TrendingUp },
+              { title: 'Stock Variance & Claims', href: `/${slug}/fuel/reports/stock-variance`, icon: TrendingUp },
             ],
           },
           {

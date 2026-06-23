@@ -21,6 +21,9 @@ class SalaryReportController extends Controller
         DB::select("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
         $month = (string) $request->query('month', now()->format('Y-m'));
+        $status = (string) $request->query('status', 'all');
+        $employeeId = (string) $request->query('employee_id', 'all');
+
         try {
             $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
         } catch (\Throwable) {
@@ -28,13 +31,32 @@ class SalaryReportController extends Controller
             $month = $start->format('Y-m');
         }
 
-        $end = $start->copy()->endOfMonth();
+        if ($request->filled('start_date')) {
+            try {
+                $start = Carbon::parse($request->query('start_date'))->startOfDay();
+            } catch (\Throwable) {
+                $start = now()->startOfMonth();
+            }
+        }
+
+        try {
+            $end = $request->filled('end_date')
+                ? Carbon::parse($request->query('end_date'))->endOfDay()
+                : $start->copy()->endOfMonth();
+        } catch (\Throwable) {
+            $end = $start->copy()->endOfMonth();
+        }
+
+        if ($end->lt($start)) {
+            $end = $start->copy()->endOfMonth();
+        }
 
         $periodConstraint = fn ($query) => $query
             ->whereDate('period_start', '>=', $start->toDateString())
             ->whereDate('period_end', '<=', $end->toDateString());
 
         $employees = Employee::where('company_id', $company->id)
+            ->when($employeeId !== 'all' && $employeeId !== '', fn ($query) => $query->where('id', $employeeId))
             ->where(function ($query) use ($periodConstraint) {
                 $query->where('is_active', true)
                     ->orWhereHas('payslips.payrollPeriod', $periodConstraint)
@@ -43,6 +65,7 @@ class SalaryReportController extends Controller
             ->with([
                 'payslips' => fn ($query) => $query
                     ->whereHas('payrollPeriod', $periodConstraint)
+                    ->when($status !== 'all' && $status !== '', fn ($statusQuery) => $statusQuery->where('status', $status))
                     ->with('payrollPeriod:id,period_start,period_end,payment_date'),
             ])
             ->orderBy('last_name')
@@ -81,8 +104,35 @@ class SalaryReportController extends Controller
                 'advance_outstanding' => (float) (clone $employeeAdvanceQuery)
                     ->whereIn('status', ['pending', 'partially_recovered'])
                     ->sum('amount_outstanding'),
+                'payslips' => $payslips
+                    ->sortByDesc('created_at')
+                    ->values()
+                    ->map(fn (Payslip $payslip) => [
+                        'id' => $payslip->id,
+                        'payslip_number' => $payslip->payslip_number,
+                        'status' => $payslip->status,
+                        'gross_pay' => (float) $payslip->gross_pay,
+                        'deductions' => (float) $payslip->total_deductions,
+                        'net_pay' => (float) $payslip->net_pay,
+                        'period_id' => $payslip->payroll_period_id,
+                        'period_start' => $payslip->payrollPeriod?->period_start?->toDateString(),
+                        'period_end' => $payslip->payrollPeriod?->period_end?->toDateString(),
+                    ])
+                    ->all(),
             ];
-        })->values();
+        })
+            ->filter(fn (array $row) => $status === 'all' || $row['payslip_count'] > 0 || $row['advance_given'] > 0 || $row['advance_recovered'] > 0)
+            ->values();
+
+        $employeeOptions = Employee::where('company_id', $company->id)
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get(['id', 'employee_number', 'first_name', 'last_name'])
+            ->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'label' => trim($employee->first_name . ' ' . $employee->last_name) . ' · ' . $employee->employee_number,
+            ])
+            ->values();
 
         return Inertia::render('Payroll/Reports/Salary', [
             'company' => [
@@ -95,6 +145,8 @@ class SalaryReportController extends Controller
                 'month' => $month,
                 'start_date' => $start->toDateString(),
                 'end_date' => $end->toDateString(),
+                'employee_id' => $employeeId ?: 'all',
+                'status' => $status ?: 'all',
             ],
             'summary' => [
                 'employees' => $rows->count(),
@@ -108,6 +160,7 @@ class SalaryReportController extends Controller
                 'advance_recovered' => (float) $rows->sum('advance_recovered'),
                 'advance_outstanding' => (float) $rows->sum('advance_outstanding'),
             ],
+            'employeeOptions' => $employeeOptions,
             'rows' => $rows,
         ]);
     }

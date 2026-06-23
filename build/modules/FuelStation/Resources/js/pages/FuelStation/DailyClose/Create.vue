@@ -249,6 +249,7 @@ const props = defineProps<{
   features: Features
   fuelVendor: string
   fuelCardLabel: string
+  canFillTestData?: boolean
   isAmendment?: boolean
   originalTransaction?: {
     id: string
@@ -1274,6 +1275,113 @@ const recalculateOtherSaleAmount = (index: number) => {
   sale.amount = sale.quantity * sale.unit_price
 }
 
+const testSeedForDate = computed(() => {
+  const digits = form.date.replace(/\D/g, '')
+  return Number(digits.slice(-4) || 1)
+})
+
+const fillDummyDailyCloseData = () => {
+  const seed = testSeedForDate.value
+
+  form.nozzle_readings.forEach((reading, index) => {
+    const liters = 80 + ((seed + index * 37) % 240)
+    const opening = Number(reading.opening_electronic || 0)
+    reading.closing_electronic = opening + liters
+    reading.liters_sold = liters
+
+    if (reading.opening_manual !== null) {
+      reading.closing_manual = Number(reading.opening_manual || 0) + liters + ((seed + index) % 3 === 0 ? 1 : 0)
+    }
+  })
+
+  form.tank_readings.forEach((tank, index) => {
+    const sold = litersSoldByTank.value[tank.tank_id] || 0
+    const expected = expectedTankClosingLiters(tank)
+    const variance = ((seed + index) % 5) - 2
+    tank.liters = Math.max(0, Math.round(expected + variance))
+    tank.stick_reading = Math.max(0, Number(tank.previous_stick || 0) + ((seed + index) % 4))
+  })
+
+  form.other_sales = []
+  if (props.lubricantItems.length > 0) {
+    const item = props.lubricantItems[seed % props.lubricantItems.length]
+    const quantity = 1 + (seed % 4)
+    form.other_sales.push({
+      item_id: item.id,
+      item_name: item.name,
+      quantity,
+      unit_price: Number(item.sale_price || 0),
+      amount: quantity * Number(item.sale_price || 0),
+    })
+  }
+
+  Object.keys(form.payment_receipts).forEach((channelCode, index) => {
+    const amount = Math.round(totalSales.value * (index === 0 ? 0.18 : 0.08))
+    form.payment_receipts[channelCode].entries = amount > 0
+      ? [{ reference: `TEST-${form.date}-${channelCode}`, amount, customer_name: 'Test customer', last_four: '1234' }]
+      : []
+  })
+
+  form.bank_deposits = []
+  if (props.bankAccounts.length > 0 && expectedClosingCash.value > 50000) {
+    form.bank_deposits.push({
+      bank_account_id: props.bankAccounts[0].id,
+      amount: Math.round(expectedClosingCash.value * 0.35),
+      reference: `TEST-DEP-${form.date}`,
+      purpose: 'Test cash deposit',
+    })
+  }
+
+  form.partner_withdrawals = []
+  if (props.partners.length > 0 && seed % 2 === 0) {
+    form.partner_withdrawals.push({
+      partner_id: props.partners[0].id,
+      partner_name: props.partners[0].name,
+      amount: 5000 + (seed % 5) * 1000,
+    })
+  }
+
+  form.employee_advances = []
+  if (props.employees.length > 0 && seed % 3 === 0) {
+    form.employee_advances.push({
+      employee_id: props.employees[0].id,
+      employee_name: props.employees[0].full_name,
+      amount: 2000 + (seed % 4) * 500,
+      reason: 'Test advance',
+    })
+  }
+
+  form.amanat_deposits = []
+  if (props.amanatHolders.length > 0 && seed % 4 === 0) {
+    const holder = props.amanatHolders[0]
+    form.amanat_deposits.push({
+      customer_id: holder.id,
+      customer_name: holder.name,
+      available_balance: holder.amanat_balance,
+      amount: 3000 + (seed % 4) * 1000,
+      reference: `TEST-AMANAT-${form.date}`,
+    })
+  }
+
+  form.expenses = []
+  if (props.expenseAccounts.length > 0) {
+    form.expenses.push({
+      account_id: props.expenseAccounts[0].id,
+      account_name: props.expenseAccounts[0].name,
+      description: 'Test station expense',
+      amount: 1000 + (seed % 6) * 250,
+    })
+  }
+
+  form.closing_cash = Math.max(0, Math.round(expectedClosingCash.value))
+  form.cash_variance = cashVariance.value
+  form.notes = `Auto-filled test daily close data for ${form.date}.`
+  tabsSaved.value = { sales: false, tanks: false, moneyIn: false, moneyOut: false }
+  activeTab.value = 'sales'
+  saveDraft()
+  toast.success('Test data filled', { description: 'Review the tabs, then save/post when ready.' })
+}
+
 const addPartnerDeposit = () => {
   form.partner_deposits.push({ partner_id: '', partner_name: '', amount: 0 })
 }
@@ -1610,6 +1718,13 @@ const completedWorkflowSteps = computed(() => {
     :icon="isAmendmentMode ? RotateCcw : Calculator"
     :breadcrumbs="breadcrumbs"
   >
+    <template v-if="canFillTestData" #actions>
+      <Button type="button" variant="outline" @click="fillDummyDailyCloseData">
+        <FileWarning class="mr-2 h-4 w-4" />
+        Fill test data
+      </Button>
+    </template>
+
     <!-- Draft Restore Dialog -->
     <Dialog :open="showDraftRestoreDialog" @update:open="showDraftRestoreDialog = $event">
       <DialogContent>

@@ -45,12 +45,14 @@ return [
         // Payment
         'payment.create',
         'payment.view',
+        'payment.update',
         'payment.void',
 
         // Credit notes
         'credit_note.create',
         'credit_note.view',
         'credit_note.update',
+        'credit_note.delete',
         'credit_note.apply',
         'credit_note.void',
 
@@ -217,6 +219,20 @@ return [
         'daily_close.view',
         'daily_close.amend',
         'daily_close.lock',
+
+        // Umrah
+        'umrah.agent.create',
+        'umrah.agent.view',
+        'umrah.agent.update',
+        'umrah.group.create',
+        'umrah.group.view',
+        'umrah.group.update',
+        'umrah.payment.create',
+        'umrah.vendor.create',
+        'umrah.vendor.view',
+        'umrah.vendor.update',
+        'umrah.settings.update',
+        'umrah.report.view',
     ],
 
     'accountant' => [
@@ -235,6 +251,7 @@ return [
         // Payment
         'payment.create',
         'payment.view',
+        'payment.update',
         'payment.void',
 
         // Credit notes
@@ -380,6 +397,20 @@ return [
         // Fuel Station - Daily Close (accountant can create/view only)
         'daily_close.create',
         'daily_close.view',
+
+        // Umrah
+        'umrah.agent.create',
+        'umrah.agent.view',
+        'umrah.agent.update',
+        'umrah.group.create',
+        'umrah.group.view',
+        'umrah.group.update',
+        'umrah.payment.create',
+        'umrah.vendor.create',
+        'umrah.vendor.view',
+        'umrah.vendor.update',
+        'umrah.settings.update',
+        'umrah.report.view',
     ],
 
     'member' => [
@@ -431,6 +462,12 @@ return [
 
         // Fuel Station - Daily Close (view only)
         'daily_close.view',
+
+        // Umrah (read only)
+        'umrah.agent.view',
+        'umrah.group.view',
+        'umrah.vendor.view',
+        'umrah.report.view',
     ],
 
 ];

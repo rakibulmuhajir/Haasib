@@ -60,6 +60,12 @@ class CompanyBootstrapService
                 ]);
             }
         }
+
+        if (in_array($industryCode, ['umrah', 'travel'], true)) {
+            $company->enableModule('umrah');
+            $company->disableModule('fuel_station');
+            $company->disableModule('inventory');
+        }
     }
 
     private function ensureBankAccount(Company $company, ?string $userId): void

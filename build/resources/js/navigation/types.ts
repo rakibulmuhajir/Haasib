@@ -6,6 +6,7 @@ export interface NavContext {
   slug: string | null
   mode: SidebarMode
   isFuelStationCompany: boolean
+  isUmrahCompany: boolean
   isInventoryEnabled: boolean
   isPayrollEnabled: boolean
   t: (key: string, mode?: string) => string

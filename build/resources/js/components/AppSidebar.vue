@@ -40,6 +40,14 @@ const isFuelStationCompany = computed(() => {
   const legacy = currentCompany.value?.industry ?? null
   return code === 'fuel_station' || legacy === 'fuel_station'
 })
+const isUmrahCompany = computed(() => {
+  const modules = currentCompany.value?.settings?.modules ?? {}
+  if (modules?.umrah === true) return true
+
+  const code = currentCompany.value?.industry_code ?? currentCompany.value?.industryCode ?? null
+  const legacy = currentCompany.value?.industry ?? null
+  return ['umrah', 'travel'].includes(code) || ['umrah', 'travel'].includes(legacy)
+})
 const isInventoryEnabled = computed(() => {
   const modules = currentCompany.value?.settings?.modules ?? {}
   return modules?.inventory !== false
@@ -69,6 +77,7 @@ const navGroups = computed<NavGroup[]>(() => {
     slug: slug ?? null,
     mode: 'owner',
     isFuelStationCompany: isFuelStationCompany.value,
+    isUmrahCompany: isUmrahCompany.value,
     isInventoryEnabled: isInventoryEnabled.value,
     isPayrollEnabled: isPayrollEnabled.value,
     t: tOwner,

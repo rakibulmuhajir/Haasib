@@ -13,12 +13,14 @@ class Permissions
 
     public const PAYMENT_CREATE = 'payment.create';
     public const PAYMENT_VIEW = 'payment.view';
+    public const PAYMENT_UPDATE = 'payment.update';
     public const PAYMENT_DELETE = 'payment.delete';
     public const PAYMENT_VOID = 'payment.void';
 
     public const CREDIT_NOTE_CREATE = 'credit_note.create';
     public const CREDIT_NOTE_VIEW = 'credit_note.view';
     public const CREDIT_NOTE_UPDATE = 'credit_note.update';
+    public const CREDIT_NOTE_DELETE = 'credit_note.delete';
     public const CREDIT_NOTE_APPLY = 'credit_note.apply';
     public const CREDIT_NOTE_VOID = 'credit_note.void';
 
@@ -216,6 +218,24 @@ class Permissions
     public const BANK_RULE_VIEW = 'bank_rule.view';
     public const BANK_RULE_UPDATE = 'bank_rule.update';
     public const BANK_RULE_DELETE = 'bank_rule.delete';
+
+    // Umrah - Agents
+    public const UMRAH_AGENT_CREATE = 'umrah.agent.create';
+    public const UMRAH_AGENT_VIEW = 'umrah.agent.view';
+    public const UMRAH_AGENT_UPDATE = 'umrah.agent.update';
+
+    // Umrah - Groups, passengers, and payments
+    public const UMRAH_GROUP_CREATE = 'umrah.group.create';
+    public const UMRAH_GROUP_VIEW = 'umrah.group.view';
+    public const UMRAH_GROUP_UPDATE = 'umrah.group.update';
+    public const UMRAH_PAYMENT_CREATE = 'umrah.payment.create';
+
+    // Umrah - Vendors, transport settings, and reports
+    public const UMRAH_VENDOR_CREATE = 'umrah.vendor.create';
+    public const UMRAH_VENDOR_VIEW = 'umrah.vendor.view';
+    public const UMRAH_VENDOR_UPDATE = 'umrah.vendor.update';
+    public const UMRAH_SETTINGS_UPDATE = 'umrah.settings.update';
+    public const UMRAH_REPORT_VIEW = 'umrah.report.view';
 
     public static function all(): array
     {

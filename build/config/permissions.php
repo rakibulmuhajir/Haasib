@@ -53,6 +53,15 @@ return [
             'accounts_invoice_send',      // send to customer
         ],
 
+        // Payments
+        'payment' => [
+            'payment.create',
+            'payment.view',
+            'payment.update',
+            'payment.delete',
+            'payment.void',
+        ],
+
         // Reports
         'report' => [
             'accounts_report_view',
@@ -72,6 +81,7 @@ return [
             'credit_note.create',
             'credit_note.view',
             'credit_note.update',
+            'credit_note.delete',
             'credit_note.apply',
             'credit_note.void',
         ],
@@ -161,6 +171,38 @@ return [
         // Fuel Sales
         'fuel_sale' => [
             'fuel_sale.create',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Umrah Module
+    |--------------------------------------------------------------------------
+    */
+    'umrah' => [
+        'agent' => [
+            'umrah.agent.create',
+            'umrah.agent.view',
+            'umrah.agent.update',
+        ],
+        'group' => [
+            'umrah.group.create',
+            'umrah.group.view',
+            'umrah.group.update',
+        ],
+        'payment' => [
+            'umrah.payment.create',
+        ],
+        'vendor' => [
+            'umrah.vendor.create',
+            'umrah.vendor.view',
+            'umrah.vendor.update',
+        ],
+        'settings' => [
+            'umrah.settings.update',
+        ],
+        'report' => [
+            'umrah.report.view',
         ],
     ],
 

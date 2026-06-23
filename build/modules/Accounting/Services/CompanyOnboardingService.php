@@ -87,6 +87,12 @@ class CompanyOnboardingService
         if ($industryCode === 'fuel_station') {
             $company->enableModule('fuel_station');
         }
+
+        if (in_array($industryCode, ['umrah', 'travel'], true)) {
+            $company->enableModule('umrah');
+            $company->disableModule('fuel_station');
+            $company->disableModule('inventory');
+        }
     }
 
     /**

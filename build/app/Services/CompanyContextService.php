@@ -171,6 +171,18 @@ class CompanyContextService
             return false;
         }
 
+        if (! str_starts_with($user->id, '00000000-0000-0000-0000-')) {
+            $isActiveMember = DB::table('auth.company_user')
+                ->where('company_id', $company->id)
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+
+            if (! $isActiveMember) {
+                return false;
+            }
+        }
+
         $previousTeamId = $this->permissionRegistrar->getPermissionsTeamId();
         try {
             $this->permissionRegistrar->setPermissionsTeamId($company->id);
@@ -214,9 +226,9 @@ class CompanyContextService
     {
         // Update PostgreSQL session variable
         if ($companyId) {
-            DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
             if ($baseCurrency) {
-                DB::select("SELECT set_config('app.company_base_currency', ?, true)", [$baseCurrency]);
+                DB::select("SELECT set_config('app.company_base_currency', ?, false)", [$baseCurrency]);
             }
         } else {
             $this->updateSystemContextImmediate(null);
@@ -232,9 +244,9 @@ class CompanyContextService
     private function updateSystemContextImmediate(?string $companyId, ?string $baseCurrency = null): void
     {
         if ($companyId) {
-            DB::select("SELECT set_config('app.current_company_id', ?, true)", [$companyId]);
+            DB::select("SELECT set_config('app.current_company_id', ?, false)", [$companyId]);
             if ($baseCurrency) {
-                DB::select("SELECT set_config('app.company_base_currency', ?, true)", [$baseCurrency]);
+                DB::select("SELECT set_config('app.company_base_currency', ?, false)", [$baseCurrency]);
             }
         } else {
             DB::statement("RESET app.current_company_id");

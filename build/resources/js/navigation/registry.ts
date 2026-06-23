@@ -6,10 +6,12 @@ import { accountingNav } from '../../../modules/Accounting/Resources/js/nav'
 import { inventoryNav } from '../../../modules/Inventory/Resources/js/nav'
 import { payrollNav } from '../../../modules/Payroll/Resources/js/nav'
 import { taxNav } from '../../../modules/Tax/Resources/js/nav'
+import { umrahNav } from '../../../modules/Umrah/Resources/js/nav'
 
 const moduleNavs: ModuleNavConfig[] = [
   coreNav,
   fuelStationNav,
+  umrahNav,
   accountingNav,
   inventoryNav,
   payrollNav,

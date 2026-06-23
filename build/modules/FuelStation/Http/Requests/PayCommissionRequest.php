@@ -9,7 +9,7 @@ class PayCommissionRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return $this->hasCompanyPermission(Permissions::PAYMENTS_CREATE)
+        return $this->hasCompanyPermission(Permissions::PAYMENT_CREATE)
             && $this->validateRlsContext();
     }
 

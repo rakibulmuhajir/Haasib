@@ -34,6 +34,8 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => 'retail', 'name' => 'Retail', 'sort_order' => 13],
             ['code' => 'wholesale', 'name' => 'Wholesale / Distribution', 'sort_order' => 14],
             ['code' => 'fuel_station', 'name' => 'Fuel Station / Petrol Pump', 'sort_order' => 15],
+            ['code' => 'umrah', 'name' => 'Umrah / Travel Visa Agency', 'sort_order' => 16],
+            ['code' => 'travel', 'name' => 'Travel Agency', 'sort_order' => 17],
         ];
 
         foreach ($industries as $industry) {
@@ -68,6 +70,8 @@ class IndustryCoaPackSeeder extends Seeder
         $this->seedRetail($industryIds['retail'], $now);
         $this->seedWholesale($industryIds['wholesale'], $now);
         $this->seedFuelStation($industryIds['fuel_station'], $now);
+        $this->seedUmrah($industryIds['umrah'], $now);
+        $this->seedUmrah($industryIds['travel'], $now);
     }
 
     private function seedAccountant(string $industryId, $now): void
@@ -681,6 +685,29 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '6300', 'name' => 'Fuel Shrinkage - Petrol', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Petrol evaporation/loss'],
             ['code' => '6301', 'name' => 'Fuel Shrinkage - Hi-Octane', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Hi-Octane evaporation/loss'],
             ['code' => '6302', 'name' => 'Fuel Shrinkage - Diesel', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'description' => 'Diesel shrinkage/loss'],
+        ];
+
+        $this->insertAccounts($industryId, $accounts, $now);
+    }
+
+    private function seedUmrah(string $industryId, $now): void
+    {
+        $accounts = [
+            ['code' => '1000', 'name' => 'Operating Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
+            ['code' => '1050', 'name' => 'Cash on Hand', 'type' => 'asset', 'subtype' => 'cash', 'normal_balance' => 'debit'],
+            ['code' => '1100', 'name' => 'Agent Receivables', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'ar_control'],
+            ['code' => '1160', 'name' => 'Advances to Visa Vendors', 'type' => 'asset', 'subtype' => 'other_current_asset', 'normal_balance' => 'debit'],
+            ['code' => '2100', 'name' => 'Visa Vendor Payables', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control'],
+            ['code' => '2200', 'name' => 'Agent Advances / Unearned Visa Revenue', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit'],
+            ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
+            ['code' => '4100', 'name' => 'Visa Service Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
+            ['code' => '4110', 'name' => 'Transport Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            ['code' => '5100', 'name' => 'Visa Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
+            ['code' => '5110', 'name' => 'Transport Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+            ['code' => '6100', 'name' => 'General & Administrative', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
+            ['code' => '6200', 'name' => 'Salaries', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6300', 'name' => 'Office Rent', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6400', 'name' => 'Communication & Courier', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
         ];
 
         $this->insertAccounts($industryId, $accounts, $now);

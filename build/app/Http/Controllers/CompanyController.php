@@ -73,7 +73,7 @@ class CompanyController extends Controller
         $data = $request->validated();
         $data['industry_code'] = strtolower($data['industry_code']);
         $data['base_currency'] = strtoupper($data['base_currency']);
-        $data['slug'] = $data['slug'] ?? Str::slug($data['name']);
+        $data['slug'] = $this->uniqueSlug(Str::slug($data['name']));
 
         $company = DB::transaction(function () use ($data) {
             $company = Company::create([
@@ -133,7 +133,11 @@ class CompanyController extends Controller
             ]);
         }
 
-        $redirect = redirect("/{$company->slug}")
+        $target = in_array($data['industry_code'], ['umrah', 'travel'], true)
+            ? route('umrah.dashboard', ['company' => $company->slug])
+            : "/{$company->slug}";
+
+        $redirect = redirect($target)
             ->with('success', 'Company created! You can start working right away.');
 
         if ($bootstrapFailed) {
@@ -186,7 +190,7 @@ class CompanyController extends Controller
         ]);
     }
 
-    public function show(Request $request): Response
+    public function show(Request $request): Response|RedirectResponse
     {
         $company = CompanyContext::getCompany();
 
@@ -195,10 +199,19 @@ class CompanyController extends Controller
         $isMember = DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
+            ->where('is_active', true)
             ->exists();
 
         if (! $isGodMode && ! $isMember) {
             abort(403, 'You are not a member of this company.');
+        }
+
+        $isUmrah = $company->isModuleEnabled('umrah')
+            || in_array(($company->industry_code ?? null), ['umrah', 'travel'], true)
+            || in_array(($company->industry ?? null), ['umrah', 'travel'], true);
+
+        if ($isUmrah) {
+            return redirect()->route('umrah.dashboard', ['company' => $company->slug]);
         }
 
         // Get user statistics
@@ -470,6 +483,7 @@ class CompanyController extends Controller
                 'profit_loss' => $profitLoss,
             ],
             'isFuelStation' => $isFuelStation,
+            'isUmrah' => $isUmrah,
             'fuelDashboard' => $fuelDashboard,
             'productDashboardDate' => $productDashboardDate,
             'fuelTanks' => $fuelTanks,
@@ -593,5 +607,19 @@ class CompanyController extends Controller
                 'rate' => (float) $defaultTaxRate->rate,
             ] : null,
         ]);
+    }
+
+    private function uniqueSlug(string $base): string
+    {
+        $base = $base !== '' ? $base : 'company';
+        $slug = $base;
+        $counter = 1;
+
+        while (Company::where('slug', $slug)->exists()) {
+            $slug = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $slug;
     }
 }

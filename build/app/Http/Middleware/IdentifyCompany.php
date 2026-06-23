@@ -19,13 +19,13 @@ class IdentifyCompany
         $user = $request->user();
 
         if ($user) {
-            DB::select("SELECT set_config('app.current_user_id', ?, true)", [$user->id]);
-            DB::select("SELECT set_config('app.is_super_admin', ?, true)", [
+            DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+            DB::select("SELECT set_config('app.is_super_admin', ?, false)", [
                 str_starts_with($user->id, '00000000-0000-0000-0000-') ? 'true' : 'false',
             ]);
         } else {
             DB::statement("RESET app.current_user_id");
-            DB::select("SELECT set_config('app.is_super_admin', 'false', true)");
+            DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
         }
 
         $slug = $request->route('company') ?? $request->header('X-Company-Slug');

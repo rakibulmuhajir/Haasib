@@ -75,9 +75,21 @@ class HandleInertiaRequests extends Middleware
         // If no current company (on global routes), use last accessed company for display
         if (! $currentCompany && $request->user() && session('last_company_slug')) {
             $currentCompany = \DB::table('auth.companies')
-                ->where('slug', session('last_company_slug'))
-                ->where('is_active', true)
-                ->select('id', 'name', 'slug', 'base_currency', 'industry', 'industry_code', 'settings', 'onboarding_completed')
+                ->join('auth.company_user as cu', 'cu.company_id', '=', 'auth.companies.id')
+                ->where('auth.companies.slug', session('last_company_slug'))
+                ->where('cu.user_id', $request->user()->id)
+                ->where('cu.is_active', true)
+                ->where('auth.companies.is_active', true)
+                ->select(
+                    'auth.companies.id',
+                    'auth.companies.name',
+                    'auth.companies.slug',
+                    'auth.companies.base_currency',
+                    'auth.companies.industry',
+                    'auth.companies.industry_code',
+                    'auth.companies.settings',
+                    'auth.companies.onboarding_completed'
+                )
                 ->first();
         }
 
@@ -87,6 +99,7 @@ class HandleInertiaRequests extends Middleware
             $currentCompanyRole = \DB::table('auth.company_user')
                 ->where('company_id', $currentCompany->id)
                 ->where('user_id', $request->user()->id)
+                ->where('is_active', true)
                 ->value('role');
         }
 

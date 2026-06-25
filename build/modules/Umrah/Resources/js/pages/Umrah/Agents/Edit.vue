@@ -13,7 +13,7 @@ import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   company: { slug: string }
-  nextAgentNumber: string
+  agent: any
   countries: Record<string, string>
   companyUsers: Array<{ id: string; name: string; email: string; role: string }>
 }>()
@@ -21,18 +21,19 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
   { title: 'Agents', href: `/${props.company.slug}/umrah/agents` },
-  { title: 'New Agent', href: `/${props.company.slug}/umrah/agents/create` },
+  { title: props.agent.name, href: `/${props.company.slug}/umrah/agents/${props.agent.id}` },
+  { title: 'Edit', href: `/${props.company.slug}/umrah/agents/${props.agent.id}/edit` },
 ]
 
 const form = useForm({
-  agent_number: props.nextAgentNumber,
-  user_id: 'none',
-  name: '',
-  phone: '',
-  email: '',
-  city: '',
-  country: 'Pakistan',
-  notes: '',
+  agent_number: props.agent.agent_number || '',
+  user_id: props.agent.user_id || 'none',
+  name: props.agent.name || '',
+  phone: props.agent.phone || '',
+  email: props.agent.email || '',
+  city: props.agent.city || '',
+  country: props.agent.country || 'Pakistan',
+  notes: props.agent.notes || '',
 })
 
 const submit = () => form
@@ -40,15 +41,15 @@ const submit = () => form
     ...data,
     user_id: data.user_id === 'none' ? null : data.user_id,
   }))
-  .post(`/${props.company.slug}/umrah/agents`, {
-    onSuccess: () => toast.success('Agent created successfully'),
-    onError: () => toast.error('Failed to create agent'),
+  .put(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
+    onSuccess: () => toast.success('Agent updated successfully'),
+    onError: () => toast.error('Failed to update agent'),
   })
 </script>
 
 <template>
-  <Head title="New Agent" />
-  <PageShell title="New Agent" description="Add the agent who sends passports or groups." :breadcrumbs="breadcrumbs" :icon="Users">
+  <Head :title="`Edit ${agent.name}`" />
+  <PageShell title="Edit Agent" description="Update agent details used for future groups." :breadcrumbs="breadcrumbs" :icon="Users">
     <Card class="mx-auto max-w-2xl">
       <CardHeader><CardTitle>Agent Details</CardTitle></CardHeader>
       <CardContent>
@@ -67,10 +68,12 @@ const submit = () => form
             <div class="space-y-2">
               <Label>Phone</Label>
               <Input v-model="form.phone" />
+              <p v-if="form.errors.phone" class="text-xs text-destructive">{{ form.errors.phone }}</p>
             </div>
             <div class="space-y-2">
               <Label>Email</Label>
               <Input v-model="form.email" type="email" />
+              <p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p>
             </div>
             <div class="space-y-2 md:col-span-2">
               <Label>Login user</Label>
@@ -89,6 +92,7 @@ const submit = () => form
             <div class="space-y-2 md:col-span-2">
               <Label>City</Label>
               <Input v-model="form.city" />
+              <p v-if="form.errors.city" class="text-xs text-destructive">{{ form.errors.city }}</p>
             </div>
             <div class="space-y-2 md:col-span-2">
               <Label>Country</Label>
@@ -103,11 +107,15 @@ const submit = () => form
             <div class="space-y-2 md:col-span-2">
               <Label>Notes</Label>
               <Textarea v-model="form.notes" />
+              <p v-if="form.errors.notes" class="text-xs text-destructive">{{ form.errors.notes }}</p>
             </div>
           </div>
           <div class="flex justify-end gap-2 border-t pt-4">
-            <Button type="button" variant="outline" @click="router.get(`/${company.slug}/umrah/agents`)">Cancel</Button>
-            <Button type="submit" :disabled="form.processing"><Save class="mr-2 h-4 w-4" />Save Agent</Button>
+            <Button type="button" variant="outline" @click="router.get(`/${company.slug}/umrah/agents/${agent.id}`)">Cancel</Button>
+            <Button type="submit" :disabled="form.processing">
+              <Save class="mr-2 h-4 w-4" />
+              Save Changes
+            </Button>
           </div>
         </form>
       </CardContent>

@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
-import { Plane, Plus, WalletCards } from 'lucide-vue-next'
+import { CheckCircle2, Plane, Plus, ScrollText, WalletCards } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
@@ -47,9 +48,54 @@ const paymentForm = useForm({
   notes: '',
 })
 
+const bulkForm = useForm({
+  visa_status: 'approved',
+})
+const singleStatusForm = useForm({
+  visa_status: '',
+})
+const selectedPassengerIds = ref<string[]>([])
+
 const remainingAfterPayment = computed(() => {
   return Math.max(Number(props.group.balance || 0) - Number(paymentForm.amount || 0), 0)
 })
+
+const passengers = computed(() => props.group.passengers || [])
+
+const actionableStatuses = computed(() => {
+  return Object.fromEntries(
+    Object.entries(props.passengerStatuses).filter(([value]) => ['approved', 'rejected', 'embassy'].includes(value)),
+  )
+})
+
+const allPassengersSelected = computed(() => {
+  return passengers.value.length > 0 && selectedPassengerIds.value.length === passengers.value.length
+})
+
+const somePassengersSelected = computed(() => {
+  return selectedPassengerIds.value.length > 0 && selectedPassengerIds.value.length < passengers.value.length
+})
+
+const isChecked = (checked: boolean | 'indeterminate') => checked === true
+
+const togglePassengerSelection = (passengerId: string, checked: boolean | 'indeterminate') => {
+  const shouldSelect = isChecked(checked)
+
+  if (shouldSelect && !selectedPassengerIds.value.includes(passengerId)) {
+    selectedPassengerIds.value = [...selectedPassengerIds.value, passengerId]
+    return
+  }
+
+  if (!shouldSelect) {
+    selectedPassengerIds.value = selectedPassengerIds.value.filter((id) => id !== passengerId)
+  }
+}
+
+const toggleAllPassengers = (checked: boolean | 'indeterminate') => {
+  selectedPassengerIds.value = isChecked(checked)
+    ? passengers.value.map((passenger: any) => passenger.id)
+    : []
+}
 
 const addPassenger = () => passengerForm.post(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers`, {
   preserveScroll: true,
@@ -60,6 +106,31 @@ const addPassenger = () => passengerForm.post(`/${props.company.slug}/umrah/grou
   },
   onError: () => toast.error('Failed to add passenger'),
 })
+
+const updatePassengerStatus = (passenger: any, status: string) => {
+  singleStatusForm.visa_status = status
+  singleStatusForm.put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${passenger.id}/status`, {
+    preserveScroll: true,
+    onSuccess: () => toast.success('Passenger visa status updated'),
+    onError: () => toast.error('Failed to update passenger status'),
+  })
+}
+
+const bulkUpdatePassengerStatus = () => {
+  bulkForm
+    .transform((data) => ({
+      ...data,
+      passenger_ids: [...selectedPassengerIds.value],
+    }))
+    .put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/status`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Selected passenger statuses updated')
+        selectedPassengerIds.value = []
+      },
+      onError: () => toast.error('Failed to update selected passengers'),
+    })
+}
 
 const addPayment = () => paymentForm
   .transform((data) => ({
@@ -83,6 +154,13 @@ const addPayment = () => paymentForm
 <template>
   <Head :title="group.group_number" />
   <PageShell :title="`${group.group_number} · ${group.name}`" :description="`${group.agent?.name || 'No agent'} · ${group.passenger_count} passengers`" :breadcrumbs="breadcrumbs" :icon="Plane">
+    <template #actions>
+      <Button variant="outline" @click="router.get(`/${company.slug}/umrah/vouchers/create?group_id=${group.id}`)">
+        <ScrollText class="mr-2 h-4 w-4" />
+        Create Voucher
+      </Button>
+    </template>
+
     <div class="grid gap-4 md:grid-cols-4">
       <Card><CardHeader><CardTitle>Receivable</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></CardContent></Card>
       <Card><CardHeader><CardTitle>Paid</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.total_paid" :currency="company.base_currency" /></CardContent></Card>
@@ -107,9 +185,15 @@ const addPayment = () => paymentForm
             <div><div class="text-sm text-muted-foreground">Madinah Hotel</div><div class="font-medium">{{ group.hotel_info?.madinah || 'Not set' }}</div></div>
             <div>
               <div class="text-sm text-muted-foreground">Transport</div>
-              <div class="font-medium">{{ group.transport_required ? `${group.transport_quantity} × ${group.transport_service?.name || group.vehicle_type?.name || 'vehicle'}` : 'Not required' }}</div>
-              <div v-if="group.transport_service?.driver_name || group.transport_service?.number_plate" class="text-xs text-muted-foreground">
-                {{ group.transport_service?.driver_name || 'No driver' }}<span v-if="group.transport_service?.number_plate"> · {{ group.transport_service.number_plate }}</span>
+              <div class="font-medium">{{ group.transport_required ? `${group.transport_quantity} × ${group.transport_service?.name || 'vehicle'}` : 'Not required' }}</div>
+              <div v-if="group.transport_required && (group.transport_pax_capacity || group.transport_service?.vehicle_type)" class="text-xs text-muted-foreground">
+                <span v-if="group.transport_service?.vehicle_type">{{ group.transport_service.vehicle_type }}</span>
+                <span v-if="group.transport_pax_capacity"> · {{ group.transport_pax_capacity }} pax each</span>
+              </div>
+              <div v-if="group.driver || group.transport_service?.driver_name || group.transport_service?.number_plate" class="text-xs text-muted-foreground">
+                {{ group.driver?.name || group.transport_service?.driver_name || 'No driver' }}
+                <span v-if="group.driver?.phone"> · {{ group.driver.phone }}</span>
+                <span v-if="group.transport_service?.number_plate"> · {{ group.transport_service.number_plate }}</span>
               </div>
             </div>
             <div><div class="text-sm text-muted-foreground">Visa Sale</div><div class="font-medium"><MoneyText :amount="group.visa_sale_amount" :currency="company.base_currency" /></div></div>
@@ -134,17 +218,52 @@ const addPayment = () => paymentForm
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Passengers</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Passengers</CardTitle>
+            <CardDescription>Update visa status one by one or select multiple passengers for a bulk change.</CardDescription>
+          </CardHeader>
           <CardContent class="space-y-3">
             <div v-if="!group.passengers?.length" class="text-sm text-muted-foreground">No passengers added yet.</div>
-            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_160px_140px_120px]">
+            <div v-else class="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
+              <div class="flex items-center gap-3">
+                <Checkbox :model-value="somePassengersSelected ? 'indeterminate' : allPassengersSelected" @update:model-value="toggleAllPassengers" />
+                <div class="text-sm text-muted-foreground">{{ selectedPassengerIds.length }} selected</div>
+              </div>
+              <div class="grid gap-2 sm:grid-cols-[180px_auto]">
+                <Select v-model="bulkForm.visa_status">
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="(label, value) in actionableStatuses" :key="value" :value="value">{{ label }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button type="button" :disabled="bulkForm.processing || selectedPassengerIds.length === 0" @click="bulkUpdatePassengerStatus">
+                  <CheckCircle2 class="mr-2 h-4 w-4" />
+                  Apply to Selected
+                </Button>
+              </div>
+            </div>
+            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_160px_140px_170px]">
+              <div class="flex items-start pt-1">
+                <Checkbox
+                  :model-value="selectedPassengerIds.includes(passenger.id)"
+                  @update:model-value="(checked) => togglePassengerSelection(passenger.id, checked)"
+                />
+              </div>
               <div>
                 <div class="font-medium">{{ passenger.full_name }}</div>
                 <div class="text-xs text-muted-foreground">{{ passenger.notes || 'No notes' }}</div>
               </div>
               <div>{{ passenger.passport_number || 'No passport' }}</div>
               <div>{{ passenger.nationality || 'Nationality not set' }}</div>
-              <Badge variant="secondary">{{ passengerStatuses[passenger.visa_status] || passenger.visa_status }}</Badge>
+              <div class="space-y-2">
+                <Badge variant="secondary">{{ passengerStatuses[passenger.visa_status] || passenger.visa_status }}</Badge>
+                <Select :model-value="passenger.visa_status" @update:model-value="(status) => updatePassengerStatus(passenger, String(status))">
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="(label, value) in actionableStatuses" :key="value" :value="value">{{ label }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>

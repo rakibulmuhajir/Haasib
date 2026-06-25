@@ -135,7 +135,7 @@ return new class extends Migration
         });
 
         DB::statement("ALTER TABLE umrah.passengers ADD CONSTRAINT passengers_visa_status_check
-            CHECK (visa_status IN ('pending', 'received', 'submitted', 'approved', 'rejected', 'delivered'))");
+            CHECK (visa_status IN ('pending', 'received', 'submitted', 'embassy', 'approved', 'rejected', 'delivered'))");
 
         Schema::create('umrah.group_payments', function (Blueprint $table) {
             $table->uuid('id')->primary()->default(DB::raw('public.gen_random_uuid()'));

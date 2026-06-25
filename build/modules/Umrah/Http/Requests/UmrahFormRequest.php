@@ -16,20 +16,25 @@ abstract class UmrahFormRequest extends BaseFormRequest
 
     abstract protected function permission(): string;
 
-    protected function uniqueForCompany(string $modelClass, string $column, string $message): Closure
+    protected function uniqueForCompany(string $modelClass, string $column, string $message, ?string $ignoreId = null): Closure
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
 
-        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $modelClass, $column, $message): void {
+        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $modelClass, $column, $message, $ignoreId): void {
             if ($value === null || $value === '') {
                 return;
             }
 
-            if ($modelClass::query()
+            $query = $modelClass::query()
                 ->where('company_id', $companyId)
                 ->where($column, $value)
-                ->whereNull('deleted_at')
-                ->exists()) {
+                ->whereNull('deleted_at');
+
+            if ($ignoreId !== null) {
+                $query->whereKeyNot($ignoreId);
+            }
+
+            if ($query->exists()) {
                 $fail($message);
             }
         };

@@ -12,6 +12,7 @@ use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaService;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Modules\Umrah\Models\Voucher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -40,6 +41,11 @@ class UmrahCoreService
         return $this->nextNumber($companyId, GroupPayment::query(), 'payment_number', 'UPM');
     }
 
+    public function nextVoucherNumber(string $companyId): string
+    {
+        return $this->nextNumber($companyId, Voucher::query(), 'voucher_number', 'UVR');
+    }
+
     public function createGroup(string $companyId, array $data): VisaGroup
     {
         return DB::transaction(function () use ($companyId, $data) {
@@ -50,9 +56,9 @@ class UmrahCoreService
                 'company_id' => $companyId,
                 'agent_id' => $data['agent_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
-                'vehicle_type_id' => $data['vehicle_type_id'] ?? null,
                 'visa_service_id' => $data['visa_service_id'] ?? null,
                 'transport_service_id' => $data['transport_service_id'] ?? null,
+                'driver_id' => $data['driver_id'] ?? null,
                 'group_number' => ($data['group_number'] ?? null) ?: $this->nextGroupNumber($companyId),
                 'name' => $data['name'],
                 'status' => $data['status'] ?? VisaGroup::STATUS_DRAFT,
@@ -69,6 +75,7 @@ class UmrahCoreService
                 ],
                 'transport_required' => (bool) ($data['transport_required'] ?? false),
                 'transport_quantity' => (int) ($data['transport_quantity'] ?? 0),
+                'transport_pax_capacity' => $data['transport_pax_capacity'] ?? null,
                 'passenger_count' => max((int) ($data['passenger_count'] ?? 0), count($data['passengers'] ?? [])),
                 'visa_sale_amount' => $financials['visa_sale_amount'],
                 'transport_amount' => $financials['transport_amount'],
@@ -82,6 +89,10 @@ class UmrahCoreService
                 'notes' => $data['notes'] ?? null,
             ]);
 
+            $agentCountry = Agent::where('company_id', $companyId)
+                ->whereKey($group->agent_id)
+                ->value('country') ?: 'Pakistan';
+
             foreach (($data['passengers'] ?? []) as $index => $passenger) {
                 if (! trim((string) ($passenger['full_name'] ?? ''))) {
                     continue;
@@ -92,7 +103,7 @@ class UmrahCoreService
                     'visa_group_id' => $group->id,
                     'full_name' => $passenger['full_name'],
                     'passport_number' => $passenger['passport_number'] ?? null,
-                    'nationality' => $passenger['nationality'] ?? null,
+                    'nationality' => ! empty($passenger['nationality']) ? $passenger['nationality'] : $agentCountry,
                     'visa_status' => $passenger['visa_status'] ?? Passenger::STATUS_PENDING,
                     'sort_order' => $index,
                 ]);
@@ -106,19 +117,23 @@ class UmrahCoreService
                 $this->recalculateVendor($group->vendor_id);
             }
 
-            return $group->fresh(['agent', 'vendor', 'vehicleType', 'visaService', 'transportService']);
+            return $group->fresh(['agent', 'vendor', 'visaService', 'transportService']);
         });
     }
 
     public function addPassenger(VisaGroup $group, array $data): Passenger
     {
         return DB::transaction(function () use ($group, $data) {
+            $nationality = ! empty($data['nationality'])
+                ? $data['nationality']
+                : ($group->agent()->value('country') ?: 'Pakistan');
+
             $passenger = Passenger::create([
                 'company_id' => $group->company_id,
                 'visa_group_id' => $group->id,
                 'full_name' => $data['full_name'],
                 'passport_number' => $data['passport_number'] ?? null,
-                'nationality' => $data['nationality'] ?? null,
+                'nationality' => $nationality,
                 'date_of_birth' => $data['date_of_birth'] ?? null,
                 'visa_status' => $data['visa_status'] ?? Passenger::STATUS_PENDING,
                 'notes' => $data['notes'] ?? null,
@@ -260,7 +275,8 @@ class UmrahCoreService
 
             if ($service) {
                 $data['transport_required'] = true;
-                $data['vehicle_type_id'] = empty($data['vehicle_type_id']) ? $service->vehicle_type_id : $data['vehicle_type_id'];
+                $data['driver_id'] = empty($data['driver_id']) ? $service->driver_id : $data['driver_id'];
+                $data['transport_pax_capacity'] = empty($data['transport_pax_capacity']) ? $service->pax_capacity : $data['transport_pax_capacity'];
                 $data['transport_amount'] = $this->defaultAmount($data, 'transport_amount', (float) $service->default_sale_amount);
                 $data['transport_cost_amount'] = $this->defaultAmount($data, 'transport_cost_amount', (float) $service->default_cost_amount);
             }

@@ -10,26 +10,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class VehicleType extends Model
+class Driver extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
-    protected $table = 'umrah.vehicle_types';
+    protected $table = 'umrah.drivers';
     protected $keyType = 'string';
     public $incrementing = false;
 
     protected $fillable = [
         'company_id',
         'name',
-        'seats',
+        'phone',
         'notes',
         'is_active',
     ];
 
     protected $casts = [
         'company_id' => 'string',
-        'seats' => 'integer',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -39,6 +38,11 @@ class VehicleType extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function transportServices(): HasMany
+    {
+        return $this->hasMany(TransportService::class);
     }
 
     public function groups(): HasMany

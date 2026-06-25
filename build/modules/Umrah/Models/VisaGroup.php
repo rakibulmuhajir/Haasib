@@ -41,9 +41,9 @@ class VisaGroup extends Model
         'company_id',
         'agent_id',
         'vendor_id',
-        'vehicle_type_id',
         'visa_service_id',
         'transport_service_id',
+        'driver_id',
         'group_number',
         'name',
         'status',
@@ -52,6 +52,7 @@ class VisaGroup extends Model
         'hotel_info',
         'transport_required',
         'transport_quantity',
+        'transport_pax_capacity',
         'passenger_count',
         'visa_sale_amount',
         'transport_amount',
@@ -71,14 +72,15 @@ class VisaGroup extends Model
         'company_id' => 'string',
         'agent_id' => 'string',
         'vendor_id' => 'string',
-        'vehicle_type_id' => 'string',
         'visa_service_id' => 'string',
         'transport_service_id' => 'string',
+        'driver_id' => 'string',
         'travel_date' => 'date',
         'flight_info' => 'array',
         'hotel_info' => 'array',
         'transport_required' => 'boolean',
         'transport_quantity' => 'integer',
+        'transport_pax_capacity' => 'integer',
         'passenger_count' => 'integer',
         'visa_sale_amount' => 'decimal:2',
         'transport_amount' => 'decimal:2',
@@ -103,27 +105,27 @@ class VisaGroup extends Model
 
     public function agent(): BelongsTo
     {
-        return $this->belongsTo(Agent::class);
+        return $this->belongsTo(Agent::class)->withTrashed();
     }
 
     public function vendor(): BelongsTo
     {
-        return $this->belongsTo(VisaVendor::class, 'vendor_id');
-    }
-
-    public function vehicleType(): BelongsTo
-    {
-        return $this->belongsTo(VehicleType::class);
+        return $this->belongsTo(VisaVendor::class, 'vendor_id')->withTrashed();
     }
 
     public function visaService(): BelongsTo
     {
-        return $this->belongsTo(VisaService::class);
+        return $this->belongsTo(VisaService::class)->withTrashed();
     }
 
     public function transportService(): BelongsTo
     {
-        return $this->belongsTo(TransportService::class);
+        return $this->belongsTo(TransportService::class)->withTrashed();
+    }
+
+    public function driver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class)->withTrashed();
     }
 
     public function passengers(): HasMany
@@ -134,6 +136,11 @@ class VisaGroup extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(GroupPayment::class);
+    }
+
+    public function vouchers(): HasMany
+    {
+        return $this->hasMany(Voucher::class, 'visa_group_id');
     }
 
     public function saleTransaction(): BelongsTo

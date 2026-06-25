@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bus,
   FileText,
+  ScrollText,
   LayoutDashboard,
   Plane,
   Settings,
@@ -24,6 +25,7 @@ export const umrahNav: ModuleNavConfig = {
         items: [
           { title: 'Dashboard', href: `/${slug}/umrah`, icon: LayoutDashboard },
           { title: 'Visa Groups', href: `/${slug}/umrah/groups`, icon: Plane },
+          { title: 'Vouchers', href: `/${slug}/umrah/vouchers`, icon: ScrollText },
           { title: 'Agents', href: `/${slug}/umrah/agents`, icon: Users },
           { title: 'Visa Vendors', href: `/${slug}/umrah/vendors`, icon: FileText },
           {
@@ -39,7 +41,7 @@ export const umrahNav: ModuleNavConfig = {
             children: [
               { title: 'Visa Services', href: `/${slug}/umrah/settings/visa-services`, icon: FileText },
               { title: 'Transport Services', href: `/${slug}/umrah/settings/transport-services`, icon: Bus },
-              { title: 'Vehicle Types', href: `/${slug}/umrah/settings/vehicle-types`, icon: Bus },
+              { title: 'Drivers', href: `/${slug}/umrah/settings/drivers`, icon: Users },
               { title: 'Bank Accounts', href: `/${slug}/banking/accounts`, icon: Settings },
               { title: 'Journal Entries', href: `/${slug}/journals`, icon: FileText },
             ],

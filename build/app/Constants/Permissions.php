@@ -223,18 +223,22 @@ class Permissions
     public const UMRAH_AGENT_CREATE = 'umrah.agent.create';
     public const UMRAH_AGENT_VIEW = 'umrah.agent.view';
     public const UMRAH_AGENT_UPDATE = 'umrah.agent.update';
+    public const UMRAH_AGENT_DELETE = 'umrah.agent.delete';
 
     // Umrah - Groups, passengers, and payments
     public const UMRAH_GROUP_CREATE = 'umrah.group.create';
     public const UMRAH_GROUP_VIEW = 'umrah.group.view';
     public const UMRAH_GROUP_UPDATE = 'umrah.group.update';
     public const UMRAH_PAYMENT_CREATE = 'umrah.payment.create';
+    public const UMRAH_VOUCHER_CREATE = 'umrah.voucher.create';
+    public const UMRAH_VOUCHER_VIEW = 'umrah.voucher.view';
 
     // Umrah - Vendors, transport settings, and reports
     public const UMRAH_VENDOR_CREATE = 'umrah.vendor.create';
     public const UMRAH_VENDOR_VIEW = 'umrah.vendor.view';
     public const UMRAH_VENDOR_UPDATE = 'umrah.vendor.update';
     public const UMRAH_SETTINGS_UPDATE = 'umrah.settings.update';
+    public const UMRAH_SETTINGS_DELETE = 'umrah.settings.delete';
     public const UMRAH_REPORT_VIEW = 'umrah.report.view';
 
     public static function all(): array

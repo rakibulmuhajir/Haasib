@@ -6,7 +6,7 @@ use App\Constants\Permissions;
 use App\Modules\Umrah\Models\Driver;
 use App\Modules\Umrah\Models\TransportService;
 
-class StoreTransportServiceRequest extends UmrahFormRequest
+class UpdateTransportServiceRequest extends UmrahFormRequest
 {
     protected function permission(): string
     {
@@ -20,7 +20,7 @@ class StoreTransportServiceRequest extends UmrahFormRequest
                 'required',
                 'string',
                 'max:150',
-                $this->uniqueForCompany(TransportService::class, 'name', 'This transport service already exists.'),
+                $this->uniqueForCompany(TransportService::class, 'name', 'This transport service already exists.', (string) $this->route('transportService')),
             ],
             'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
             'vehicle_type' => ['nullable', 'string', 'max:100'],

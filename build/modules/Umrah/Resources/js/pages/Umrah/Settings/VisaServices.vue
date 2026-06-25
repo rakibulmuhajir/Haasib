@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
@@ -9,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
-import { FileText, Save } from 'lucide-vue-next'
+import { FileText, Pencil, Save, Trash2, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
@@ -31,24 +33,77 @@ const form = useForm({
   notes: '',
 })
 
-const submit = () => form
-  .transform((data) => ({
-    ...data,
-    vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
-    retail_amount: Number(data.retail_amount || 0),
-    cost_amount: Number(data.cost_amount || 0),
-  }))
-  .post(`/${props.company.slug}/umrah/settings/visa-services`, {
+const removeForm = useForm({})
+const editingService = ref<any | null>(null)
+const serviceToRemove = ref<any | null>(null)
+const removeDialogOpen = ref(false)
+
+const resetForm = () => {
+  editingService.value = null
+  form.clearErrors()
+  form.name = ''
+  form.vendor_id = 'none'
+  form.retail_amount = '0'
+  form.cost_amount = '0'
+  form.notes = ''
+}
+
+const startEdit = (service: any) => {
+  editingService.value = service
+  form.clearErrors()
+  form.name = service.name || ''
+  form.vendor_id = service.vendor_id || 'none'
+  form.retail_amount = String(service.retail_amount ?? 0)
+  form.cost_amount = String(service.cost_amount ?? 0)
+  form.notes = service.notes || ''
+}
+
+const payload = (data: any) => ({
+  ...data,
+  vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
+  retail_amount: Number(data.retail_amount || 0),
+  cost_amount: Number(data.cost_amount || 0),
+})
+
+const submit = () => {
+  const options = {
     preserveScroll: true,
     onSuccess: () => {
-      toast.success('Visa service added successfully')
-      form.reset()
-      form.vendor_id = 'none'
-      form.retail_amount = '0'
-      form.cost_amount = '0'
+      toast.success(editingService.value ? 'Visa service updated successfully' : 'Visa service added successfully')
+      resetForm()
     },
-    onError: () => toast.error('Failed to add visa service'),
+    onError: () => toast.error(editingService.value ? 'Failed to update visa service' : 'Failed to add visa service'),
+  }
+
+  form.transform(payload)
+
+  if (editingService.value) {
+    form.put(`/${props.company.slug}/umrah/settings/visa-services/${editingService.value.id}`, options)
+    return
+  }
+
+  form.post(`/${props.company.slug}/umrah/settings/visa-services`, options)
+}
+
+const removeService = (service: any) => {
+  serviceToRemove.value = service
+  removeDialogOpen.value = true
+}
+
+const confirmRemoveService = () => {
+  if (!serviceToRemove.value) return
+
+  removeForm.delete(`/${props.company.slug}/umrah/settings/visa-services/${serviceToRemove.value.id}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Visa service removed successfully')
+      if (editingService.value?.id === serviceToRemove.value?.id) resetForm()
+      removeDialogOpen.value = false
+      serviceToRemove.value = null
+    },
+    onError: () => toast.error('Failed to remove visa service'),
   })
+}
 </script>
 
 <template>
@@ -56,7 +111,7 @@ const submit = () => form
   <PageShell title="Visa Services" description="Reusable visa packages with default retail and cost." :breadcrumbs="breadcrumbs" :icon="FileText">
     <div class="grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
       <Card>
-        <CardHeader><CardTitle>Add Visa Service</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{{ editingService ? 'Edit Visa Service' : 'Add Visa Service' }}</CardTitle></CardHeader>
         <CardContent>
           <form class="space-y-4" @submit.prevent="submit">
             <div class="space-y-2">
@@ -79,7 +134,10 @@ const submit = () => form
               <div class="space-y-2"><Label>Cost</Label><Input v-model="form.cost_amount" type="number" min="0" step="0.01" /></div>
             </div>
             <div class="space-y-2"><Label>Notes</Label><Textarea v-model="form.notes" /></div>
-            <Button type="submit" class="w-full" :disabled="form.processing"><Save class="mr-2 h-4 w-4" />Save Service</Button>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <Button v-if="editingService" type="button" variant="outline" @click="resetForm"><X class="mr-2 h-4 w-4" />Cancel</Button>
+              <Button type="submit" :class="editingService ? '' : 'sm:col-span-2'" :disabled="form.processing"><Save class="mr-2 h-4 w-4" />{{ editingService ? 'Save Changes' : 'Save Service' }}</Button>
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -88,16 +146,34 @@ const submit = () => form
         <CardHeader><CardTitle>Available Services</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <div v-if="!visaServices.length" class="text-sm text-muted-foreground">No visa services yet.</div>
-          <div v-for="service in visaServices" :key="service.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_130px_130px]">
+          <div v-for="service in visaServices" :key="service.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_130px_130px_auto]">
             <div>
               <div class="font-medium">{{ service.name }}</div>
               <div class="text-sm text-muted-foreground">{{ service.vendor?.name || 'No default vendor' }}</div>
             </div>
             <div><div class="text-xs text-muted-foreground">Retail</div><MoneyText :amount="service.retail_amount" :currency="company.base_currency" /></div>
             <div><div class="text-xs text-muted-foreground">Cost</div><MoneyText :amount="service.cost_amount" :currency="company.base_currency" /></div>
+            <div class="flex items-center justify-end gap-1">
+              <Button type="button" variant="ghost" size="icon" @click="startEdit(service)">
+                <Pencil class="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" :disabled="removeForm.processing" @click="removeService(service)">
+                <Trash2 class="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
+
+    <ConfirmDialog
+      v-model:open="removeDialogOpen"
+      variant="destructive"
+      title="Remove Visa Service"
+      :description="`Remove ${serviceToRemove?.name || 'this service'} from future groups? Existing groups keep their history.`"
+      confirm-text="Remove Service"
+      :loading="removeForm.processing"
+      @confirm="confirmRemoveService"
+    />
   </PageShell>
 </template>

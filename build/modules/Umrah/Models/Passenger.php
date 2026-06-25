@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Passenger extends Model
@@ -21,6 +22,7 @@ class Passenger extends Model
     public const STATUS_PENDING = 'pending';
     public const STATUS_RECEIVED = 'received';
     public const STATUS_SUBMITTED = 'submitted';
+    public const STATUS_EMBASSY = 'embassy';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_DELIVERED = 'delivered';
@@ -29,6 +31,7 @@ class Passenger extends Model
         self::STATUS_PENDING => 'Pending',
         self::STATUS_RECEIVED => 'Received',
         self::STATUS_SUBMITTED => 'Submitted',
+        self::STATUS_EMBASSY => 'Embassy',
         self::STATUS_APPROVED => 'Approved',
         self::STATUS_REJECTED => 'Rejected',
         self::STATUS_DELIVERED => 'Delivered',
@@ -64,5 +67,10 @@ class Passenger extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(VisaGroup::class, 'visa_group_id');
+    }
+
+    public function voucherPassengers(): HasMany
+    {
+        return $this->hasMany(VoucherPassenger::class);
     }
 }

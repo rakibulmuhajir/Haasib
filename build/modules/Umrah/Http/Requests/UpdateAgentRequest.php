@@ -9,11 +9,11 @@ use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-class StoreAgentRequest extends UmrahFormRequest
+class UpdateAgentRequest extends UmrahFormRequest
 {
     protected function permission(): string
     {
-        return Permissions::UMRAH_AGENT_CREATE;
+        return Permissions::UMRAH_AGENT_UPDATE;
     }
 
     public function rules(): array
@@ -23,7 +23,7 @@ class StoreAgentRequest extends UmrahFormRequest
                 'nullable',
                 'string',
                 'max:50',
-                $this->uniqueForCompany(Agent::class, 'agent_number', 'This agent number is already used.'),
+                $this->uniqueForCompany(Agent::class, 'agent_number', 'This agent number is already used.', (string) $this->route('agent')),
             ],
             'user_id' => ['nullable', 'uuid', $this->validCompanyUser(), $this->uniqueLinkedUser()],
             'name' => ['required', 'string', 'max:255'],
@@ -59,13 +59,14 @@ class StoreAgentRequest extends UmrahFormRequest
     private function uniqueLinkedUser(): Closure
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
+        $agentId = (string) $this->route('agent');
 
-        return function (string $attribute, mixed $value, Closure $fail) use ($companyId): void {
+        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $agentId): void {
             if ($value === null || $value === '') {
                 return;
             }
 
-            if (Agent::where('company_id', $companyId)->where('user_id', $value)->whereNull('deleted_at')->exists()) {
+            if (Agent::where('company_id', $companyId)->where('user_id', $value)->whereKeyNot($agentId)->whereNull('deleted_at')->exists()) {
                 $fail('Selected login user is already linked to another agent.');
             }
         };

@@ -3,7 +3,9 @@
 namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Umrah\Http\Requests\DestroyVisaServiceRequest;
 use App\Modules\Umrah\Http\Requests\StoreVisaServiceRequest;
+use App\Modules\Umrah\Http\Requests\UpdateVisaServiceRequest;
 use App\Modules\Umrah\Models\VisaService;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Services\CurrentCompany;
@@ -47,6 +49,34 @@ class VisaServiceController extends Controller
         ]);
 
         return back()->with('success', 'Visa service added successfully.');
+    }
+
+    public function update(UpdateVisaServiceRequest $request, string $companySlug, string $visaService): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = VisaService::where('company_id', $company->id)->findOrFail($visaService);
+        $data = $request->validated();
+
+        $record->update([
+            'vendor_id' => $data['vendor_id'] ?? null,
+            'name' => $data['name'],
+            'retail_amount' => round((float) ($data['retail_amount'] ?? 0), 2),
+            'cost_amount' => round((float) ($data['cost_amount'] ?? 0), 2),
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        return back()->with('success', 'Visa service updated successfully.');
+    }
+
+    public function destroy(DestroyVisaServiceRequest $request, string $companySlug, string $visaService): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = VisaService::where('company_id', $company->id)->findOrFail($visaService);
+
+        $record->update(['is_active' => false]);
+        $record->delete();
+
+        return back()->with('success', 'Visa service removed successfully.');
     }
 
     private function companyPayload($company): array

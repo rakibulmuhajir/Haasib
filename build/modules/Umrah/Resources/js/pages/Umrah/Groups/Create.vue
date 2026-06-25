@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,11 +18,12 @@ const props = defineProps<{
   nextGroupNumber: string
   agents: any[]
   vendors: any[]
-  vehicleTypes: any[]
   visaServices: any[]
   transportServices: any[]
+  drivers: any[]
   statuses: Record<string, string>
   passengerStatuses: Record<string, string>
+  countries: Record<string, string>
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -31,8 +31,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Visa Groups', href: `/${props.company.slug}/umrah/groups` },
   { title: 'New Group', href: `/${props.company.slug}/umrah/groups/create` },
 ]
-
-const transportEnabled = ref(false)
 
 const form = useForm({
   group_number: props.nextGroupNumber,
@@ -42,16 +40,11 @@ const form = useForm({
   visa_service_id: 'none',
   status: 'passports_received',
   travel_date: '',
-  flight_airline: '',
-  flight_number: '',
-  flight_notes: '',
-  hotel_makkah: '',
-  hotel_madinah: '',
-  hotel_notes: '',
   transport_required: false,
   transport_service_id: 'none',
-  vehicle_type_id: 'none',
+  driver_id: 'none',
   transport_quantity: '0',
+  transport_pax_capacity: '',
   passenger_count: '0',
   visa_sale_amount: '0',
   transport_amount: '0',
@@ -60,7 +53,7 @@ const form = useForm({
   transport_cost_amount: '0',
   notes: '',
   passengers: [
-    { full_name: '', passport_number: '', nationality: '', visa_status: 'received' },
+    { full_name: '', passport_number: '', nationality: 'Pakistan', visa_status: 'received' },
   ],
 })
 
@@ -68,6 +61,27 @@ const receivable = computed(() => {
   return Math.max(Number(form.visa_sale_amount || 0) + Number(form.transport_amount || 0) - Number(form.discount_amount || 0), 0)
 })
 const profit = computed(() => receivable.value - Number(form.visa_cost_amount || 0) - Number(form.transport_cost_amount || 0))
+const selectedTransport = computed(() => props.transportServices.find((item) => item.id === form.transport_service_id))
+const totalTransportCapacity = computed(() => Number(form.transport_quantity || 0) * Number(form.transport_pax_capacity || 0))
+const selectedAgent = computed(() => props.agents.find((item) => item.id === form.agent_id))
+const defaultNationality = computed(() => selectedAgent.value?.country || 'Pakistan')
+const hasTransport = computed(() => {
+  return form.transport_service_id !== 'none'
+    || form.driver_id !== 'none'
+    || Number(form.transport_quantity || 0) > 0
+    || Number(form.transport_pax_capacity || 0) > 0
+    || Number(form.transport_amount || 0) > 0
+    || Number(form.transport_cost_amount || 0) > 0
+})
+
+watch(() => form.agent_id, () => {
+  const nationality = defaultNationality.value
+  form.passengers.forEach((passenger) => {
+    if (!passenger.nationality || passenger.nationality === 'Pakistan') {
+      passenger.nationality = nationality
+    }
+  })
+})
 
 watch(() => form.visa_service_id, (id) => {
   if (!id || id === 'none') return
@@ -88,11 +102,11 @@ watch(() => form.transport_service_id, (id) => {
   const service = props.transportServices.find((item) => item.id === id)
   if (!service) return
 
-  transportEnabled.value = true
   form.transport_amount = String(Number(service.default_sale_amount || 0))
   form.transport_cost_amount = String(Number(service.default_cost_amount || 0))
-  if (service.vehicle_type_id) {
-    form.vehicle_type_id = service.vehicle_type_id
+  form.transport_pax_capacity = service.pax_capacity ? String(service.pax_capacity) : ''
+  if (service.driver_id) {
+    form.driver_id = service.driver_id
   }
   if (Number(form.transport_quantity || 0) <= 0) {
     form.transport_quantity = '1'
@@ -100,7 +114,7 @@ watch(() => form.transport_service_id, (id) => {
 })
 
 const addPassenger = () => {
-  form.passengers.push({ full_name: '', passport_number: '', nationality: '', visa_status: 'received' })
+  form.passengers.push({ full_name: '', passport_number: '', nationality: defaultNationality.value, visa_status: 'received' })
 }
 
 const removePassenger = (index: number) => {
@@ -114,9 +128,10 @@ const submit = () => {
       vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
       visa_service_id: data.visa_service_id === 'none' ? null : data.visa_service_id,
       transport_service_id: data.transport_service_id === 'none' ? null : data.transport_service_id,
-      vehicle_type_id: data.vehicle_type_id === 'none' ? null : data.vehicle_type_id,
-      transport_required: transportEnabled.value,
+      driver_id: data.driver_id === 'none' ? null : data.driver_id,
+      transport_required: hasTransport.value,
       transport_quantity: Number(data.transport_quantity || 0),
+      transport_pax_capacity: data.transport_pax_capacity ? Number(data.transport_pax_capacity) : null,
       passenger_count: Number(data.passenger_count || 0),
       visa_sale_amount: Number(data.visa_sale_amount || 0),
       transport_amount: Number(data.transport_amount || 0),
@@ -134,7 +149,7 @@ const submit = () => {
 
 <template>
   <Head title="New Visa Group" />
-  <PageShell title="New Visa Group" description="Create the group, financials, travel info, transport need, and starting passport list." :breadcrumbs="breadcrumbs" :icon="Plane">
+  <PageShell title="New Visa Group" description="Create the group, pricing, transport need, and starting passport list." :breadcrumbs="breadcrumbs" :icon="Plane">
     <form class="space-y-6" @submit.prevent="submit">
       <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">
@@ -195,16 +210,6 @@ const submit = () => {
                 <Label>Travel Date</Label>
                 <Input v-model="form.travel_date" type="date" />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Flight and Hotel Info</CardTitle></CardHeader>
-            <CardContent class="grid gap-4 md:grid-cols-2">
-              <div class="space-y-2"><Label>Airline</Label><Input v-model="form.flight_airline" /></div>
-              <div class="space-y-2"><Label>Flight #</Label><Input v-model="form.flight_number" /></div>
-              <div class="space-y-2"><Label>Makkah Hotel</Label><Input v-model="form.hotel_makkah" /></div>
-              <div class="space-y-2"><Label>Madinah Hotel</Label><Input v-model="form.hotel_madinah" /></div>
               <div class="space-y-2 md:col-span-2"><Label>Notes</Label><Textarea v-model="form.notes" /></div>
             </CardContent>
           </Card>
@@ -212,35 +217,44 @@ const submit = () => {
           <Card>
             <CardHeader><CardTitle>Transport</CardTitle></CardHeader>
             <CardContent class="grid gap-4 md:grid-cols-3">
-              <div class="flex items-center gap-2">
-                <Checkbox id="transport_required" v-model:checked="transportEnabled" />
-                <Label for="transport_required">Transport required</Label>
-              </div>
               <div class="space-y-2">
                 <Label>Transport Service</Label>
-                <Select v-model="form.transport_service_id" :disabled="!transportEnabled">
+                <Select v-model="form.transport_service_id">
                   <SelectTrigger><SelectValue placeholder="Select transport" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Not selected</SelectItem>
                     <SelectItem v-for="service in transportServices" :key="service.id" :value="service.id">
-                      {{ service.name }}
+                      {{ service.name }}<span v-if="service.pax_capacity"> · {{ service.pax_capacity }} pax</span>
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div class="space-y-2">
-                <Label>Quantity</Label>
-                <Input v-model="form.transport_quantity" type="number" min="0" :disabled="!transportEnabled" />
+                <Label>Vehicles</Label>
+                <Input v-model="form.transport_quantity" type="number" min="0" />
               </div>
               <div class="space-y-2">
-                <Label>Vehicle Type</Label>
-                <Select v-model="form.vehicle_type_id" :disabled="!transportEnabled">
-                  <SelectTrigger><SelectValue placeholder="Auto from transport" /></SelectTrigger>
+                <Label>Pax per Vehicle</Label>
+                <Input v-model="form.transport_pax_capacity" type="number" min="1" />
+              </div>
+              <div class="space-y-2">
+                <Label>Driver</Label>
+                <Select v-model="form.driver_id">
+                  <SelectTrigger><SelectValue placeholder="Select driver" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Not selected</SelectItem>
-                    <SelectItem v-for="vehicle in vehicleTypes" :key="vehicle.id" :value="vehicle.id">{{ vehicle.name }}</SelectItem>
+                    <SelectItem value="none">No driver assigned</SelectItem>
+                    <SelectItem v-for="driver in drivers" :key="driver.id" :value="driver.id">
+                      {{ driver.name }}<span v-if="driver.phone"> · {{ driver.phone }}</span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div v-if="selectedTransport" class="rounded-md border p-3 text-sm text-muted-foreground md:col-span-3">
+                {{ selectedTransport.vehicle_type || 'Vehicle' }}
+                <span v-if="selectedTransport.make || selectedTransport.model"> · {{ [selectedTransport.make, selectedTransport.model].filter(Boolean).join(' ') }}</span>
+                <span v-if="selectedTransport.number_plate"> · {{ selectedTransport.number_plate }}</span>
+                <span v-if="selectedTransport.driver?.name || selectedTransport.driver_name"> · Default driver: {{ selectedTransport.driver?.name || selectedTransport.driver_name }}</span>
+                <span v-if="totalTransportCapacity"> · Capacity: {{ totalTransportCapacity }} pax total</span>
               </div>
             </CardContent>
           </Card>
@@ -251,7 +265,12 @@ const submit = () => {
               <div v-for="(passenger, index) in form.passengers" :key="index" class="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_160px_130px_130px_40px]">
                 <Input v-model="passenger.full_name" placeholder="Full name" />
                 <Input v-model="passenger.passport_number" placeholder="Passport #" />
-                <Input v-model="passenger.nationality" placeholder="Nationality" />
+                <Select v-model="passenger.nationality">
+                  <SelectTrigger><SelectValue placeholder="Nationality" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="(label, value) in countries" :key="value" :value="value">{{ label }}</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select v-model="passenger.visa_status">
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>

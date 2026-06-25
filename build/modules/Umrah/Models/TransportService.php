@@ -21,8 +21,10 @@ class TransportService extends Model
 
     protected $fillable = [
         'company_id',
-        'vehicle_type_id',
+        'driver_id',
         'name',
+        'vehicle_type',
+        'pax_capacity',
         'make',
         'model',
         'color',
@@ -37,7 +39,8 @@ class TransportService extends Model
 
     protected $casts = [
         'company_id' => 'string',
-        'vehicle_type_id' => 'string',
+        'driver_id' => 'string',
+        'pax_capacity' => 'integer',
         'default_sale_amount' => 'decimal:2',
         'default_cost_amount' => 'decimal:2',
         'is_active' => 'boolean',
@@ -51,9 +54,9 @@ class TransportService extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public function vehicleType(): BelongsTo
+    public function driver(): BelongsTo
     {
-        return $this->belongsTo(VehicleType::class);
+        return $this->belongsTo(Driver::class)->withTrashed();
     }
 
     public function groups(): HasMany

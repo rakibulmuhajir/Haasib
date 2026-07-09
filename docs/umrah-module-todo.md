@@ -85,7 +85,7 @@
 ## Navigation
 
 - [ ] Umrah Dashboard
-- [ ] Agents
+- [*] Agents
 - [ ] Visa Groups
 - [ ] Vendors
 - [ ] Payments

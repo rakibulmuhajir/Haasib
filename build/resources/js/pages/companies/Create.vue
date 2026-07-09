@@ -27,16 +27,24 @@ interface Industry {
   description?: string | null
 }
 
+interface UserOption {
+  id: string
+  name: string
+  email: string
+}
+
 interface Props {
   currencies: Currency[]
   countries: Country[]
   industries: Industry[]
+  users: UserOption[]
 }
 
 const props = defineProps<Props>()
 
 const form = useForm({
   name: '',
+  owner_user_id: '',
   industry_code: '',
   country: '',
   base_currency: '',
@@ -107,6 +115,30 @@ const submit = () => {
 
         <CardContent>
           <form @submit.prevent="submit" class="space-y-6">
+            <!-- Company Name -->
+            <div class="space-y-2">
+              <Label for="owner" class="font-medium">
+                Owner <span class="text-red-500">*</span>
+              </Label>
+              <Select v-model="form.owner_user_id" required>
+                <SelectTrigger id="owner">
+                  <SelectValue placeholder="Select the user who will own this company..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="user in users"
+                    :key="user.id"
+                    :value="user.id"
+                  >
+                    {{ user.name }} · {{ user.email }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="form.errors.owner_user_id" class="text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.owner_user_id }}
+              </p>
+            </div>
+
             <!-- Company Name -->
             <div class="space-y-2">
               <Label for="name" class="font-medium">
@@ -210,7 +242,7 @@ const submit = () => {
 
             <!-- Submit Button -->
             <div class="pt-4">
-              <Button type="submit" :disabled="form.processing || !form.country || !form.industry_code || !form.base_currency" class="w-full" size="lg">
+              <Button type="submit" :disabled="form.processing || !form.owner_user_id || !form.country || !form.industry_code || !form.base_currency" class="w-full" size="lg">
                 <Loader2 v-if="form.processing" class="w-4 h-4 mr-2 animate-spin" />
                 Create Company
               </Button>

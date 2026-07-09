@@ -8,7 +8,6 @@ use App\Modules\Umrah\Models\Driver;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\VisaGroup;
-use App\Modules\Umrah\Models\VisaService;
 use App\Modules\Umrah\Models\VisaVendor;
 use Illuminate\Validation\Rule;
 
@@ -30,9 +29,9 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             ],
             'name' => ['required', 'string', 'max:255'],
             'agent_id' => ['required', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
-            'vendor_id' => ['nullable', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
-            'visa_service_id' => ['nullable', 'uuid', $this->existsForCompany(VisaService::class, 'Selected visa service was not found.')],
-            'transport_service_id' => ['nullable', 'uuid', $this->existsForCompany(TransportService::class, 'Selected transport service was not found.')],
+            'vendor_id' => ['required', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
+            'visa_service_id' => ['nullable', 'uuid'],
+            'transport_service_id' => ['required', 'uuid', $this->existsForCompany(TransportService::class, 'Selected transport service was not found.')],
             'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
             'status' => ['nullable', Rule::in(array_keys(VisaGroup::STATUSES))],
             'travel_date' => ['nullable', 'date'],
@@ -42,8 +41,8 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'hotel_makkah' => ['nullable', 'string', 'max:255'],
             'hotel_madinah' => ['nullable', 'string', 'max:255'],
             'hotel_notes' => ['nullable', 'string', 'max:500'],
-            'transport_required' => ['boolean'],
-            'transport_quantity' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'transport_required' => ['accepted'],
+            'transport_quantity' => ['required', 'integer', 'min:1', 'max:100'],
             'transport_pax_capacity' => ['nullable', 'integer', 'min:1', 'max:10000'],
             'passenger_count' => ['nullable', 'integer', 'min:0', 'max:500'],
             'visa_sale_amount' => ['nullable', 'numeric', 'min:0'],
@@ -56,6 +55,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'passengers.*.full_name' => ['nullable', 'string', 'max:255'],
             'passengers.*.passport_number' => ['nullable', 'string', 'max:100'],
             'passengers.*.nationality' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
+            'passengers.*.date_of_birth' => ['nullable', 'date'],
             'passengers.*.visa_status' => ['nullable', Rule::in(array_keys(Passenger::STATUSES))],
         ];
     }

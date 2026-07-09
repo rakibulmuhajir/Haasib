@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,10 @@ const props = defineProps<{
   passengerStatuses: Record<string, string>
   accounts: any[]
 }>()
+
+const page = usePage()
+const currentRole = computed(() => (page.props.auth as any)?.currentCompanyRole || null)
+const canViewAccounting = computed(() => ['super_admin', 'owner', 'accountant'].includes(String(currentRole.value)))
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -61,6 +65,44 @@ const remainingAfterPayment = computed(() => {
 })
 
 const passengers = computed(() => props.group.passengers || [])
+
+const normalizeDate = (value: string | null | undefined) => String(value || '').slice(0, 10)
+
+const calculateAge = (dateOfBirth: string | null | undefined) => {
+  const normalizedBirthDate = normalizeDate(dateOfBirth)
+
+  if (!normalizedBirthDate) {
+    return null
+  }
+
+  const birthDate = new Date(`${normalizedBirthDate}T00:00:00`)
+  const referenceDate = props.group.travel_date
+    ? new Date(`${normalizeDate(props.group.travel_date)}T00:00:00`)
+    : new Date()
+
+  if (Number.isNaN(birthDate.getTime()) || Number.isNaN(referenceDate.getTime())) {
+    return null
+  }
+
+  let age = referenceDate.getFullYear() - birthDate.getFullYear()
+  const monthDelta = referenceDate.getMonth() - birthDate.getMonth()
+
+  if (monthDelta < 0 || (monthDelta === 0 && referenceDate.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+
+  return Math.max(age, 0)
+}
+
+const passengerAgeText = (passenger: any) => {
+  const age = calculateAge(passenger.date_of_birth)
+
+  if (age === null) {
+    return 'DOB not set'
+  }
+
+  return `${normalizeDate(passenger.date_of_birth)} · Age ${age}`
+}
 
 const actionableStatuses = computed(() => {
   return Object.fromEntries(
@@ -165,7 +207,15 @@ const addPayment = () => paymentForm
       <Card><CardHeader><CardTitle>Receivable</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></CardContent></Card>
       <Card><CardHeader><CardTitle>Paid</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.total_paid" :currency="company.base_currency" /></CardContent></Card>
       <Card><CardHeader><CardTitle>Balance</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.balance" :currency="company.base_currency" /></CardContent></Card>
-      <Card><CardHeader><CardTitle>Profit</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.profit" :currency="company.base_currency" /></CardContent></Card>
+      <Card>
+        <CardHeader><CardTitle>Payment Status</CardTitle></CardHeader>
+        <CardContent>
+          <Badge :variant="Number(group.balance || 0) <= 0 ? 'default' : 'secondary'">
+            {{ Number(group.balance || 0) <= 0 ? 'Paid' : 'Unpaid' }}
+          </Badge>
+        </CardContent>
+      </Card>
+      <Card v-if="canViewAccounting"><CardHeader><CardTitle>Profit</CardTitle></CardHeader><CardContent class="text-2xl font-semibold"><MoneyText :amount="group.profit" :currency="company.base_currency" /></CardContent></Card>
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -198,16 +248,16 @@ const addPayment = () => paymentForm
             </div>
             <div><div class="text-sm text-muted-foreground">Visa Sale</div><div class="font-medium"><MoneyText :amount="group.visa_sale_amount" :currency="company.base_currency" /></div></div>
             <div><div class="text-sm text-muted-foreground">Transport Charge</div><div class="font-medium"><MoneyText :amount="group.transport_amount" :currency="company.base_currency" /></div></div>
-            <div><div class="text-sm text-muted-foreground">Visa Cost</div><div class="font-medium"><MoneyText :amount="group.visa_cost_amount" :currency="company.base_currency" /></div></div>
-            <div><div class="text-sm text-muted-foreground">Transport Cost</div><div class="font-medium"><MoneyText :amount="group.transport_cost_amount" :currency="company.base_currency" /></div></div>
-            <div>
+            <div v-if="canViewAccounting"><div class="text-sm text-muted-foreground">Visa Cost</div><div class="font-medium"><MoneyText :amount="group.visa_cost_amount" :currency="company.base_currency" /></div></div>
+            <div v-if="canViewAccounting"><div class="text-sm text-muted-foreground">Transport Cost</div><div class="font-medium"><MoneyText :amount="group.transport_cost_amount" :currency="company.base_currency" /></div></div>
+            <div v-if="canViewAccounting">
               <div class="text-sm text-muted-foreground">Sale Journal</div>
               <Button v-if="group.sale_transaction" variant="link" class="h-auto p-0" @click="router.get(`/${company.slug}/journals/${group.sale_transaction.id}`)">
                 {{ group.sale_transaction.transaction_number }}
               </Button>
               <div v-else class="font-medium">Not posted</div>
             </div>
-            <div>
+            <div v-if="canViewAccounting">
               <div class="text-sm text-muted-foreground">Cost Journal</div>
               <Button v-if="group.cost_transaction" variant="link" class="h-auto p-0" @click="router.get(`/${company.slug}/journals/${group.cost_transaction.id}`)">
                 {{ group.cost_transaction.transaction_number }}
@@ -242,7 +292,7 @@ const addPayment = () => paymentForm
                 </Button>
               </div>
             </div>
-            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_160px_140px_170px]">
+            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_160px_140px_140px_170px]">
               <div class="flex items-start pt-1">
                 <Checkbox
                   :model-value="selectedPassengerIds.includes(passenger.id)"
@@ -254,6 +304,7 @@ const addPayment = () => paymentForm
                 <div class="text-xs text-muted-foreground">{{ passenger.notes || 'No notes' }}</div>
               </div>
               <div>{{ passenger.passport_number || 'No passport' }}</div>
+              <div>{{ passengerAgeText(passenger) }}</div>
               <div>{{ passenger.nationality || 'Nationality not set' }}</div>
               <div class="space-y-2">
                 <Badge variant="secondary">{{ passengerStatuses[passenger.visa_status] || passenger.visa_status }}</Badge>
@@ -295,6 +346,7 @@ const addPayment = () => paymentForm
               <div class="space-y-2"><Label>Name</Label><Input v-model="passengerForm.full_name" required /></div>
               <div class="grid gap-3 md:grid-cols-2">
                 <div class="space-y-2"><Label>Passport #</Label><Input v-model="passengerForm.passport_number" /></div>
+                <div class="space-y-2"><Label>Date of Birth</Label><Input v-model="passengerForm.date_of_birth" type="date" /></div>
                 <div class="space-y-2"><Label>Nationality</Label><Input v-model="passengerForm.nationality" /></div>
               </div>
               <div class="space-y-2">

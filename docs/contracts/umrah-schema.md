@@ -14,7 +14,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Transport is an optional group requirement using client-managed transport services.
 - Transport service is the vehicle source of truth. Do not maintain a separate vehicle type setup screen.
 - Drivers are reusable transport staff records. A transport service can have a default driver, and group creation can override the driver for that trip.
-- Visa and transport services provide default retail/cost amounts. Group creation copies those values, and users may override copied prices/costs per group.
+- Visa and transport services provide default retail/cost amounts. Visa service adult amounts are copied into group creation by default in phase 1, while child and infant amounts are stored on the service template for passenger-level pricing. Users may override copied prices/costs per group.
 
 ## Guardrails
 
@@ -64,6 +64,12 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `vendor_type` varchar(30) default `government`.
   - `phone`, `email`, `city` nullable.
   - `notes` text nullable.
+  - `adult_retail_amount` numeric(15,2) default 0.
+  - `adult_cost_amount` numeric(15,2) default 0.
+  - `child_retail_amount` numeric(15,2) default 0.
+  - `child_cost_amount` numeric(15,2) default 0.
+  - `infant_retail_amount` numeric(15,2) default 0.
+  - `infant_cost_amount` numeric(15,2) default 0.
   - `total_cost` numeric(15,2) default 0.
   - `total_paid` numeric(15,2) default 0.
   - `balance` numeric(15,2) default 0.
@@ -72,23 +78,28 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Check:
   - `vendor_type` in `government`, `visa_provider`, `transport_provider`, `hotel`, `other`.
 - Model fillable:
-  - `company_id`, `vendor_number`, `name`, `vendor_type`, `phone`, `email`, `city`, `notes`, `total_cost`, `total_paid`, `balance`, `is_active`.
+  - `company_id`, `vendor_number`, `name`, `vendor_type`, `phone`, `email`, `city`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `infant_retail_amount`, `infant_cost_amount`, `total_cost`, `total_paid`, `balance`, `is_active`.
 
-### umrah.visa_services
-- Purpose: Reusable visa service templates with default retail and cost.
+### umrah.visa_services (legacy)
+- Purpose: Reusable visa service templates with default adult, child, and infant retail/cost amounts.
+- Status: Legacy/dormant. New group creation prices visas directly from the selected visa vendor.
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid FK.
   - `vendor_id` uuid nullable FK -> `umrah.visa_vendors.id`.
   - `name` varchar(150).
-  - `retail_amount` numeric(15,2) default 0.
-  - `cost_amount` numeric(15,2) default 0.
+  - `retail_amount` numeric(15,2) default 0. Adult retail amount.
+  - `cost_amount` numeric(15,2) default 0. Adult cost amount.
+  - `child_retail_amount` numeric(15,2) default 0.
+  - `child_cost_amount` numeric(15,2) default 0.
+  - `infant_retail_amount` numeric(15,2) default 0.
+  - `infant_cost_amount` numeric(15,2) default 0.
   - `notes` text nullable.
   - `is_active` boolean default true.
   - timestamps, soft deletes.
 - Unique (`company_id`, `name`).
 - Model fillable:
-  - `company_id`, `vendor_id`, `name`, `retail_amount`, `cost_amount`, `notes`, `is_active`.
+  - `company_id`, `vendor_id`, `name`, `retail_amount`, `cost_amount`, `child_retail_amount`, `child_cost_amount`, `infant_retail_amount`, `infant_cost_amount`, `notes`, `is_active`.
 
 ### umrah.transport_services
 - Purpose: Reusable transport options including vehicle, passenger capacity, and driver details.
@@ -135,8 +146,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `id` uuid PK.
   - `company_id` uuid FK.
   - `agent_id` uuid FK -> `umrah.agents.id`.
-  - `vendor_id` uuid nullable FK -> `umrah.visa_vendors.id`.
-  - `visa_service_id` uuid nullable FK -> `umrah.visa_services.id`.
+  - `vendor_id` uuid FK -> `umrah.visa_vendors.id`. Source of visa retail/cost defaults.
+  - `visa_service_id` uuid nullable FK -> `umrah.visa_services.id`. Legacy only.
   - `transport_service_id` uuid nullable FK -> `umrah.transport_services.id`.
   - `driver_id` uuid nullable FK -> `umrah.drivers.id`.
   - `group_number` varchar(50), unique per company.
@@ -258,7 +269,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `total_receivable = visa_sale_amount + transport_amount - discount_amount`.
   - `balance = total_receivable - total_paid`.
   - `profit = visa_sale_amount + transport_amount - discount_amount - visa_cost_amount - transport_cost_amount`.
-- Selecting a visa service copies its default retail/cost into group amounts; users may override before saving.
+- Selecting a visa vendor calculates visa retail/cost from passenger DOB using vendor adult/child/infant rates. Infant = under 2 years, child = 2 through 11 years, adult = 12+ years. Age is calculated against travel date when available, otherwise today's date.
 - Selecting a transport service copies its default sale/cost and passenger capacity into group fields; users may override before saving.
 - Selecting a transport service copies its default driver into the group if a driver is assigned to that service; users may override before saving.
 - Selecting an agent defaults new passenger nationality to the agent country. Allowed nationality options in phase 1 are Pakistan, Bangladesh, India, Turkiye, United Kingdom, and United States.

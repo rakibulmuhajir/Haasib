@@ -68,6 +68,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function isGodMode(): bool
+    {
+        return str_starts_with((string) $this->id, '00000000-0000-0000-0000-');
+    }
+
     public function hasCompanyPermission(string $permission): bool
     {
         return \App\Facades\CompanyContext::userHasPermission($this, $permission);

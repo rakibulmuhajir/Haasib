@@ -36,6 +36,8 @@ interface CompanyRow {
   role: string
   created_at: string
   user_count?: number
+  owner_name?: string | null
+  owner_email?: string | null
 }
 
 interface IndustryOption {
@@ -51,10 +53,18 @@ interface CountryOption {
   timezone: string
 }
 
+interface UserOption {
+  id: string
+  name: string
+  email: string
+}
+
 const props = defineProps<{
   companies: CompanyRow[]
   industries: IndustryOption[]
   countries: CountryOption[]
+  users: UserOption[]
+  canCreateCompanies: boolean
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -72,6 +82,7 @@ const companyToDelete = ref<CompanyRow | null>(null)
 
 const createForm = useForm({
   name: '',
+  owner_user_id: '',
   industry_code: '',
   country: '',
   base_currency: '',
@@ -143,14 +154,14 @@ function handleDelete() {
   search-placeholder="Search companies by name, slug, or role..."
 >
     <template #actions>
-      <Button @click="showCreateForm = !showCreateForm" size="sm">
+      <Button v-if="canCreateCompanies" @click="showCreateForm = !showCreateForm" size="sm">
         <Plus class="mr-2 h-4 w-4" />
         Create Company
       </Button>
     </template>
 
     <!-- Create Form Card -->
-    <Card v-if="showCreateForm" class="mb-6 border-zinc-200 bg-white">
+    <Card v-if="canCreateCompanies && showCreateForm" class="mb-6 border-zinc-200 bg-white">
       <CardHeader>
         <CardTitle>Create New Company</CardTitle>
         <CardDescription class="text-zinc-500">
@@ -159,6 +170,22 @@ function handleDelete() {
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-2 sm:col-span-2">
+            <Label for="owner">Owner</Label>
+            <Select v-model="createForm.owner_user_id">
+              <SelectTrigger id="owner" class="border-zinc-300">
+                <SelectValue placeholder="Select the user who will own this company" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="user in props.users" :key="user.id" :value="user.id">
+                  {{ user.name }} · {{ user.email }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="createForm.errors.owner_user_id" class="text-xs text-red-600">
+              {{ createForm.errors.owner_user_id }}
+            </p>
+          </div>
           <div class="space-y-2">
             <Label for="country">Country</Label>
             <Select
@@ -223,7 +250,7 @@ function handleDelete() {
           </Button>
           <Button
             @click="submitCreate"
-            :disabled="createForm.processing || !createForm.name || !createForm.country || !createForm.industry_code || !createForm.base_currency"
+            :disabled="createForm.processing || !createForm.name || !createForm.owner_user_id || !createForm.country || !createForm.industry_code || !createForm.base_currency"
           >
             <Loader2 v-if="createForm.processing" class="mr-2 h-4 w-4 animate-spin" />
             Create Company
@@ -237,10 +264,10 @@ function handleDelete() {
       v-if="filteredCompanies.length === 0"
       :icon="Building2"
       title="No companies found"
-      :description="searchQuery ? 'Try adjusting your search terms' : 'Get started by creating your first company'"
+      :description="searchQuery ? 'Try adjusting your search terms' : (canCreateCompanies ? 'Create a company and assign an owner to begin' : 'A super admin must create a company for you or invite you to one')"
     >
       <template #actions>
-        <Button v-if="!searchQuery" @click="showCreateForm = true" size="sm">
+        <Button v-if="canCreateCompanies && !searchQuery" @click="showCreateForm = true" size="sm">
           <Plus class="mr-2 h-4 w-4" />
           Create Company
         </Button>
@@ -271,6 +298,10 @@ function handleDelete() {
             <div class="flex items-center justify-between">
               <span class="text-zinc-500">Role</span>
               <Badge variant="outline" class="capitalize">{{ company.role }}</Badge>
+            </div>
+            <div v-if="company.owner_name || company.owner_email" class="flex items-center justify-between gap-3">
+              <span class="text-zinc-500">Owner</span>
+              <span class="truncate text-right font-medium text-zinc-900">{{ company.owner_name || company.owner_email }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="flex items-center gap-1.5 text-zinc-500">

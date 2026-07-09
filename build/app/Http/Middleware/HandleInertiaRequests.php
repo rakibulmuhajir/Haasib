@@ -60,47 +60,46 @@ class HandleInertiaRequests extends Middleware
             ];
         };
 
-        // Get user's companies
+        $isGodMode = $request->user()?->isGodMode() ?? false;
+
+        // Get user's companies. God-mode users can enter any active company without membership.
         $companies = $request->user()
-            ? \DB::table('auth.company_user as cu')
-                ->join('auth.companies as c', 'cu.company_id', '=', 'c.id')
-                ->where('cu.user_id', $request->user()->id)
-                ->where('cu.is_active', true)
-                ->where('c.is_active', true)
-                ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
-                ->orderBy('c.name')
-                ->get()
+            ? ($isGodMode
+                ? \DB::table('auth.companies as c')
+                    ->where('c.is_active', true)
+                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                    ->orderBy('c.name')
+                    ->get()
+                : \DB::table('auth.company_user as cu')
+                    ->join('auth.companies as c', 'cu.company_id', '=', 'c.id')
+                    ->where('cu.user_id', $request->user()->id)
+                    ->where('cu.is_active', true)
+                    ->where('c.is_active', true)
+                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                    ->orderBy('c.name')
+                    ->get())
             : collect();
 
         // If no current company (on global routes), use last accessed company for display
-        if (! $currentCompany && $request->user() && session('last_company_slug')) {
-            $currentCompany = \DB::table('auth.companies')
-                ->join('auth.company_user as cu', 'cu.company_id', '=', 'auth.companies.id')
-                ->where('auth.companies.slug', session('last_company_slug'))
-                ->where('cu.user_id', $request->user()->id)
-                ->where('cu.is_active', true)
-                ->where('auth.companies.is_active', true)
-                ->select(
-                    'auth.companies.id',
-                    'auth.companies.name',
-                    'auth.companies.slug',
-                    'auth.companies.base_currency',
-                    'auth.companies.industry',
-                    'auth.companies.industry_code',
-                    'auth.companies.settings',
-                    'auth.companies.onboarding_completed'
-                )
-                ->first();
+        if (! $currentCompany && $request->user()) {
+            $rememberedSlug = session('last_company_slug');
+            $currentCompany = $companies->firstWhere('slug', $rememberedSlug) ?: $companies->first();
+
+            if ($currentCompany && $currentCompany->slug !== $rememberedSlug) {
+                session(['last_company_slug' => $currentCompany->slug]);
+            }
         }
 
         // Current company role for the authenticated user (used for mode gating)
         $currentCompanyRole = null;
         if ($currentCompany && $request->user()) {
-            $currentCompanyRole = \DB::table('auth.company_user')
-                ->where('company_id', $currentCompany->id)
-                ->where('user_id', $request->user()->id)
-                ->where('is_active', true)
-                ->value('role');
+            $currentCompanyRole = $isGodMode
+                ? 'super_admin'
+                : \DB::table('auth.company_user')
+                    ->where('company_id', $currentCompany->id)
+                    ->where('user_id', $request->user()->id)
+                    ->where('is_active', true)
+                    ->value('role');
         }
 
         return [
@@ -112,6 +111,7 @@ class HandleInertiaRequests extends Middleware
                 'currentCompany' => $serializeCompany($currentCompany),
                 'currentCompanyRole' => $currentCompanyRole,
                 'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
+                'canCreateCompanies' => $isGodMode,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [

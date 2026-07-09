@@ -15,7 +15,6 @@ use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\VisaGroup;
-use App\Modules\Umrah\Models\VisaService;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
@@ -61,8 +60,7 @@ class VisaGroupController extends Controller
             'company' => $this->companyPayload($company),
             'nextGroupNumber' => $this->service->nextGroupNumber($company->id),
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'agent_number', 'country']),
-            'vendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'vendor_number']),
-            'visaServices' => VisaService::where('company_id', $company->id)->where('is_active', true)->with('vendor:id,name')->orderBy('name')->get(['id', 'vendor_id', 'name', 'retail_amount', 'cost_amount']),
+            'vendors' => VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'vendor_number', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'infant_retail_amount', 'infant_cost_amount']),
             'transportServices' => TransportService::where('company_id', $company->id)->where('is_active', true)->with('driver:id,name,phone')->orderBy('name')->get(['id', 'driver_id', 'name', 'vehicle_type', 'pax_capacity', 'make', 'model', 'color', 'number_plate', 'driver_name', 'driver_contact', 'default_sale_amount', 'default_cost_amount']),
             'drivers' => Driver::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'phone']),
             'statuses' => VisaGroup::STATUSES,

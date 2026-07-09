@@ -7,6 +7,7 @@ use App\Constants\Permissions;
 use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
+use App\Models\User;
 use App\Services\CompanyBootstrapService;
 use App\Services\CommandBus;
 use App\Services\CompanyRbacBootstrapper;
@@ -38,6 +39,8 @@ class CompanyController extends Controller
      */
     public function create(Request $request): Response
     {
+        abort_unless($request->user()?->isGodMode(), 403, 'Only super admins can create companies.');
+
         // Get available currencies
         $currencies = DB::table('public.currencies')
             ->where('is_active', true)
@@ -61,21 +64,28 @@ class CompanyController extends Controller
             ->values()
             ->all();
 
+        $users = User::query()
+            ->orderBy('name')
+            ->orderBy('email')
+            ->get(['id', 'name', 'email']);
+
         return Inertia::render('companies/Create', [
             'currencies' => $currencies,
             'countries' => $countries,
             'industries' => $industries,
+            'users' => $users,
         ]);
     }
 
     public function store(CompanyStoreRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $owner = User::findOrFail($data['owner_user_id']);
         $data['industry_code'] = strtolower($data['industry_code']);
         $data['base_currency'] = strtoupper($data['base_currency']);
         $data['slug'] = $this->uniqueSlug(Str::slug($data['name']));
 
-        $company = DB::transaction(function () use ($data) {
+        $company = DB::transaction(function () use ($data, $owner) {
             $company = Company::create([
                 'name' => $data['name'],
                 'industry_code' => $data['industry_code'] ?? null,
@@ -97,26 +107,22 @@ class CompanyController extends Controller
                 ['is_base' => true, 'enabled_at' => now()]
             );
 
-            if (Auth::check()) {
-                DB::table('auth.company_user')->updateOrInsert(
-                    [
-                        'company_id' => $company->id,
-                        'user_id' => Auth::id(),
-                    ],
-                    [
-                        'role' => 'owner',
-                        'invited_by_user_id' => Auth::id(),
-                        'joined_at' => now(),
-                        'is_active' => true,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]
-                );
+            DB::table('auth.company_user')->updateOrInsert(
+                [
+                    'company_id' => $company->id,
+                    'user_id' => $owner->id,
+                ],
+                [
+                    'role' => 'owner',
+                    'invited_by_user_id' => Auth::id(),
+                    'joined_at' => now(),
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
 
-                app(CompanyRbacBootstrapper::class)->bootstrap($company, Auth::user());
-            } else {
-                app(CompanyRbacBootstrapper::class)->bootstrap($company);
-            }
+            app(CompanyRbacBootstrapper::class)->bootstrap($company, $owner);
 
             return $company;
         });

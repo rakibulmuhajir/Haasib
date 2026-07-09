@@ -19,6 +19,7 @@ import { Building2, ChevronsUpDown, Check, Plus } from 'lucide-vue-next'
 const page = usePage()
 const currentCompany = computed(() => (page.props.auth as any)?.currentCompany || null)
 const companies = computed(() => (page.props.auth as any)?.companies || [])
+const canCreateCompanies = computed(() => Boolean((page.props.auth as any)?.canCreateCompanies))
 
 const switchCompany = (slug: string) => {
   router.post('/companies/switch', { slug }, {
@@ -78,8 +79,8 @@ const createCompany = () => {
             </div>
             <Check v-if="currentCompany?.id === company.id" class="size-4" />
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem @click="createCompany" class="gap-2 p-2">
+          <DropdownMenuSeparator v-if="canCreateCompanies" />
+          <DropdownMenuItem v-if="canCreateCompanies" @click="createCompany" class="gap-2 p-2">
             <div class="flex size-6 items-center justify-center rounded-md border border-dashed">
               <Plus class="size-4" />
             </div>

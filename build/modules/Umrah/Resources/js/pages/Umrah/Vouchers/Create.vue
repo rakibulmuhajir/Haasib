@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Badge } from '@/components/ui/badge'
@@ -40,7 +40,7 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'New Voucher', href: `/${props.company.slug}/umrah/vouchers/create` },
 ]
 
-const selectedPassengerIds = ref<string[]>([])
+const selectedPassengerIds = ref<string[]>(props.availablePassengers.map((passenger) => passenger.id))
 
 const form = useForm({
   voucher_number: props.nextVoucherNumber,
@@ -69,6 +69,13 @@ const journeyStartDate = computed(() => form.onward_departure_at ? form.onward_d
 const journeyEndDate = computed(() => form.return_arrival_at ? form.return_arrival_at.slice(0, 10) : undefined)
 const allSelected = computed(() => props.availablePassengers.length > 0 && selectedPassengerIds.value.length === props.availablePassengers.length)
 const someSelected = computed(() => selectedPassengerIds.value.length > 0 && selectedPassengerIds.value.length < props.availablePassengers.length)
+
+watch(
+  () => props.availablePassengers,
+  (passengers) => {
+    selectedPassengerIds.value = passengers.map((passenger) => passenger.id)
+  },
+)
 
 const changeGroup = (groupId: string) => {
   const params = groupId === 'none' ? {} : { group_id: groupId }

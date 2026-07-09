@@ -23,9 +23,13 @@ class CheckFirstTimeUser
         }
 
         $user = Auth::user();
+        DB::select("SELECT set_config('app.current_user_id', ?, false)", [$user->id]);
+        DB::select("SELECT set_config('app.is_super_admin', ?, false)", [
+            $user->isGodMode() ? 'true' : 'false',
+        ]);
 
         // Skip for god-mode users
-        if (str_starts_with($user->id, '00000000-0000-0000-0000-')) {
+        if ($user->isGodMode()) {
             return $next($request);
         }
 

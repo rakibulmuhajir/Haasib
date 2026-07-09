@@ -59,7 +59,7 @@ const applyFilters = () => router.get(`/${props.company.slug}/umrah/groups`, {
     <Card>
       <CardContent class="p-0">
         <div v-if="!groups.data.length" class="p-8 text-center text-sm text-muted-foreground">No visa groups yet.</div>
-        <div v-for="group in groups.data" :key="group.id" class="grid cursor-pointer gap-3 border-b p-4 last:border-b-0 md:grid-cols-[1fr_160px_160px_160px]" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
+        <div v-for="group in groups.data" :key="group.id" class="grid cursor-pointer gap-3 border-b p-4 last:border-b-0 md:grid-cols-[1fr_160px_160px_160px_110px]" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
           <div>
             <div class="font-medium">{{ group.group_number }} · {{ group.name }}</div>
             <div class="text-sm text-muted-foreground">{{ group.agent?.name || 'No agent' }} · {{ group.passenger_count }} passengers · {{ group.travel_date || 'No travel date' }}</div>
@@ -67,6 +67,11 @@ const applyFilters = () => router.get(`/${props.company.slug}/umrah/groups`, {
           <div><Badge variant="secondary">{{ statuses[group.status] || group.status }}</Badge></div>
           <div class="font-medium"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></div>
           <div class="font-medium text-right"><MoneyText :amount="group.balance" :currency="company.base_currency" /></div>
+          <div class="text-right">
+            <Badge :variant="Number(group.balance || 0) <= 0 ? 'default' : 'secondary'">
+              {{ Number(group.balance || 0) <= 0 ? 'Paid' : 'Unpaid' }}
+            </Badge>
+          </div>
         </div>
       </CardContent>
     </Card>

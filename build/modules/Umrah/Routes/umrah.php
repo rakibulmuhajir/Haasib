@@ -6,7 +6,6 @@ use App\Modules\Umrah\Http\Controllers\DriverController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
-use App\Modules\Umrah\Http\Controllers\VisaServiceController;
 use App\Modules\Umrah\Http\Controllers\VisaVendorController;
 use App\Modules\Umrah\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +18,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('agents', [AgentController::class, 'index'])->name('umrah.agents.index');
         Route::get('agents/create', [AgentController::class, 'create'])->name('umrah.agents.create');
         Route::post('agents', [AgentController::class, 'store'])->name('umrah.agents.store');
+        Route::post('agents/quick-store', [AgentController::class, 'quickStore'])->name('umrah.agents.quick-store');
         Route::get('agents/{agent}/edit', [AgentController::class, 'edit'])->whereUuid('agent')->name('umrah.agents.edit');
         Route::put('agents/{agent}', [AgentController::class, 'update'])->whereUuid('agent')->name('umrah.agents.update');
         Route::delete('agents/{agent}', [AgentController::class, 'destroy'])->whereUuid('agent')->name('umrah.agents.destroy');
@@ -26,6 +26,8 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
 
         Route::get('vendors', [VisaVendorController::class, 'index'])->name('umrah.vendors.index');
         Route::post('vendors', [VisaVendorController::class, 'store'])->name('umrah.vendors.store');
+        Route::post('vendors/quick-store', [VisaVendorController::class, 'quickStore'])->name('umrah.vendors.quick-store');
+        Route::put('vendors/{vendor}', [VisaVendorController::class, 'update'])->whereUuid('vendor')->name('umrah.vendors.update');
 
         Route::get('groups', [VisaGroupController::class, 'index'])->name('umrah.groups.index');
         Route::get('groups/create', [VisaGroupController::class, 'create'])->name('umrah.groups.create');
@@ -41,10 +43,6 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers', [VoucherController::class, 'store'])->name('umrah.vouchers.store');
         Route::get('vouchers/{voucher}', [VoucherController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.show');
 
-        Route::get('settings/visa-services', [VisaServiceController::class, 'index'])->name('umrah.visa-services.index');
-        Route::post('settings/visa-services', [VisaServiceController::class, 'store'])->name('umrah.visa-services.store');
-        Route::put('settings/visa-services/{visaService}', [VisaServiceController::class, 'update'])->whereUuid('visaService')->name('umrah.visa-services.update');
-        Route::delete('settings/visa-services/{visaService}', [VisaServiceController::class, 'destroy'])->whereUuid('visaService')->name('umrah.visa-services.destroy');
         Route::get('settings/drivers', [DriverController::class, 'index'])->name('umrah.drivers.index');
         Route::post('settings/drivers', [DriverController::class, 'store'])->name('umrah.drivers.store');
         Route::delete('settings/drivers/{driver}', [DriverController::class, 'destroy'])->whereUuid('driver')->name('umrah.drivers.destroy');

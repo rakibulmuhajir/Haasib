@@ -10,7 +10,6 @@ use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\VisaGroup;
-use App\Modules\Umrah\Models\VisaService;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Models\Voucher;
 use Illuminate\Support\Carbon;
@@ -104,6 +103,7 @@ class UmrahCoreService
                     'full_name' => $passenger['full_name'],
                     'passport_number' => $passenger['passport_number'] ?? null,
                     'nationality' => ! empty($passenger['nationality']) ? $passenger['nationality'] : $agentCountry,
+                    'date_of_birth' => $passenger['date_of_birth'] ?? null,
                     'visa_status' => $passenger['visa_status'] ?? Passenger::STATUS_PENDING,
                     'sort_order' => $index,
                 ]);
@@ -260,13 +260,13 @@ class UmrahCoreService
 
     private function applyServiceDefaults(string $companyId, array $data): array
     {
-        if (! empty($data['visa_service_id'])) {
-            $service = VisaService::where('company_id', $companyId)->find($data['visa_service_id']);
+        if (! empty($data['vendor_id'])) {
+            $vendor = VisaVendor::where('company_id', $companyId)->find($data['vendor_id']);
 
-            if ($service) {
-                $data['vendor_id'] = empty($data['vendor_id']) ? $service->vendor_id : $data['vendor_id'];
-                $data['visa_sale_amount'] = $this->defaultAmount($data, 'visa_sale_amount', (float) $service->retail_amount);
-                $data['visa_cost_amount'] = $this->defaultAmount($data, 'visa_cost_amount', (float) $service->cost_amount);
+            if ($vendor) {
+                $pricing = $this->calculateVisaPricingFromVendor($vendor, $data['passengers'] ?? [], $data['travel_date'] ?? null, (int) ($data['passenger_count'] ?? 0));
+                $data['visa_sale_amount'] = $pricing['sale'];
+                $data['visa_cost_amount'] = $pricing['cost'];
             }
         }
 
@@ -290,6 +290,56 @@ class UmrahCoreService
         return array_key_exists($key, $data) && $data[$key] !== null && $data[$key] !== ''
             ? $data[$key]
             : $default;
+    }
+
+    private function calculateVisaPricingFromVendor(VisaVendor $vendor, array $passengers, ?string $travelDate, int $passengerCount): array
+    {
+        $sale = 0.0;
+        $cost = 0.0;
+        $pricedPassengers = 0;
+
+        foreach ($passengers as $passenger) {
+            if (! trim((string) ($passenger['full_name'] ?? ''))) {
+                continue;
+            }
+
+            $band = $this->ageBand($passenger['date_of_birth'] ?? null, $travelDate);
+            $sale += (float) $vendor->getAttribute("{$band}_retail_amount");
+            $cost += (float) $vendor->getAttribute("{$band}_cost_amount");
+            $pricedPassengers++;
+        }
+
+        if ($pricedPassengers === 0) {
+            $pricedPassengers = max($passengerCount, 0);
+            $sale = (float) $vendor->adult_retail_amount * $pricedPassengers;
+            $cost = (float) $vendor->adult_cost_amount * $pricedPassengers;
+        }
+
+        return [
+            'sale' => round($sale, 2),
+            'cost' => round($cost, 2),
+        ];
+    }
+
+    private function ageBand(?string $dateOfBirth, ?string $travelDate): string
+    {
+        if (empty($dateOfBirth)) {
+            return 'adult';
+        }
+
+        $birthDate = Carbon::parse($dateOfBirth)->startOfDay();
+        $referenceDate = empty($travelDate) ? now()->startOfDay() : Carbon::parse($travelDate)->startOfDay();
+        $age = $birthDate->diffInYears($referenceDate);
+
+        if ($age < 2) {
+            return 'infant';
+        }
+
+        if ($age < 12) {
+            return 'child';
+        }
+
+        return 'adult';
     }
 
     private function nextNumber(string $companyId, $query, string $column, string $prefix): string

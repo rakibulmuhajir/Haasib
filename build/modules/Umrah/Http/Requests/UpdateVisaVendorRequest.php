@@ -6,11 +6,11 @@ use App\Constants\Permissions;
 use App\Modules\Umrah\Models\VisaVendor;
 use Illuminate\Validation\Rule;
 
-class StoreVisaVendorRequest extends UmrahFormRequest
+class UpdateVisaVendorRequest extends UmrahFormRequest
 {
     protected function permission(): string
     {
-        return Permissions::UMRAH_VENDOR_CREATE;
+        return Permissions::UMRAH_VENDOR_UPDATE;
     }
 
     public function rules(): array
@@ -20,7 +20,7 @@ class StoreVisaVendorRequest extends UmrahFormRequest
                 'nullable',
                 'string',
                 'max:50',
-                $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This vendor number is already used.'),
+                $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This vendor number is already used.', (string) $this->route('vendor')),
             ],
             'name' => ['required', 'string', 'max:255'],
             'vendor_type' => ['required', Rule::in(array_keys(VisaVendor::TYPES))],

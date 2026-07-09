@@ -170,22 +170,12 @@ class CommandController extends Controller
     }
 
     /**
-     * Any authenticated user can create a company (with limit)
+     * Only god-mode users can create companies.
      */
     private function authorizeCompanyCreate(mixed $user): true|JsonResponse
     {
-        // Only count active memberships on active companies
-        $companyCount = $user->companies()
-            ->wherePivot('is_active', true)
-            ->where('auth.companies.is_active', true)
-            ->count();
-
-        if ($companyCount >= self::MAX_COMPANIES_PER_USER) {
-            return $this->error(
-                'LIMIT_REACHED',
-                'Maximum of ' . self::MAX_COMPANIES_PER_USER . ' companies per user',
-                403
-            );
+        if (! method_exists($user, 'isGodMode') || ! $user->isGodMode()) {
+            return $this->error('FORBIDDEN', 'Only super admins can create companies', 403);
         }
 
         return true;

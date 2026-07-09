@@ -74,6 +74,29 @@ class AgentController extends Controller
             ->with('success', 'Agent created successfully.');
     }
 
+    public function quickStore(StoreAgentRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $data = $request->validated();
+
+        $agent = Agent::create([
+            'company_id' => $company->id,
+            'user_id' => $data['user_id'] ?? null,
+            'agent_number' => $data['agent_number'] ?: $this->service->nextAgentNumber($company->id),
+            'name' => $data['name'],
+            'phone' => $data['phone'] ?? null,
+            'email' => $data['email'] ?? null,
+            'city' => $data['city'] ?? null,
+            'country' => $data['country'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'is_active' => true,
+        ]);
+
+        return back()
+            ->with('success', "Agent {$agent->name} created successfully.")
+            ->with('created_agent_id', $agent->id);
+    }
+
     public function show(string $companySlug, string $agent): Response
     {
         $company = app(CurrentCompany::class)->get();

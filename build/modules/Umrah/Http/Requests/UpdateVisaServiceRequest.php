@@ -25,6 +25,10 @@ class UpdateVisaServiceRequest extends UmrahFormRequest
             'vendor_id' => ['nullable', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
             'retail_amount' => ['nullable', 'numeric', 'min:0'],
             'cost_amount' => ['nullable', 'numeric', 'min:0'],
+            'child_retail_amount' => ['nullable', 'numeric', 'min:0'],
+            'child_cost_amount' => ['nullable', 'numeric', 'min:0'],
+            'infant_retail_amount' => ['nullable', 'numeric', 'min:0'],
+            'infant_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ];
     }

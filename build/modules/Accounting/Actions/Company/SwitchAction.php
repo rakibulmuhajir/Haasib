@@ -34,7 +34,7 @@ class SwitchAction implements PaletteAction
             ->where('is_active', true)
             ->first();
 
-        if (!$membership) {
+        if (!$membership && ! Auth::user()?->isGodMode()) {
             throw new \Exception("You are not a member of {$company->name}");
         }
 

@@ -14,11 +14,11 @@ interface Props {
 const props = defineProps<Props>()
 
 const startGuidedSetup = () => {
-  router.visit('/companies/create?guided=true')
+  router.visit('/companies')
 }
 
 const setupManually = () => {
-  router.visit('/companies/create')
+  router.visit('/companies')
 }
 
 const features = [

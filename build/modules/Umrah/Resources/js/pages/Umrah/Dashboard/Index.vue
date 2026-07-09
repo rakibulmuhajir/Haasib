@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,10 @@ const props = defineProps<{
   recentGroups: any[]
 }>()
 
+const page = usePage()
+const currentRole = (page.props.auth as any)?.currentCompanyRole || null
+const canViewAccounting = ['super_admin', 'owner', 'accountant'].includes(String(currentRole))
+
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
 ]
@@ -24,7 +28,7 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
 
 <template>
   <Head title="Umrah Dashboard" />
-  <PageShell title="Umrah Dashboard" description="Visa groups, agent balances, passports, payments, and earnings." :breadcrumbs="breadcrumbs" :icon="Plane">
+  <PageShell title="Umrah Dashboard" description="Visa groups, passports, travel dates, payments, and balances." :breadcrumbs="breadcrumbs" :icon="Plane">
     <template #actions>
       <Button @click="router.get(`/${company.slug}/umrah/groups/create`)">
         <Plus class="mr-2 h-4 w-4" />
@@ -42,14 +46,14 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
         <CardContent class="text-2xl font-semibold">{{ summary.passports_in_process }}</CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Agent Balance</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Unpaid Balance</CardTitle></CardHeader>
         <CardContent class="text-2xl font-semibold"><MoneyText :amount="summary.agent_balance" :currency="company.base_currency" /></CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Month Revenue</CardTitle></CardHeader>
+        <CardHeader><CardTitle>To Collect This Month</CardTitle></CardHeader>
         <CardContent class="text-2xl font-semibold"><MoneyText :amount="summary.month_revenue" :currency="company.base_currency" /></CardContent>
       </Card>
-      <Card>
+      <Card v-if="canViewAccounting">
         <CardHeader><CardTitle>Month Profit</CardTitle></CardHeader>
         <CardContent class="text-2xl font-semibold"><MoneyText :amount="summary.month_profit" :currency="company.base_currency" /></CardContent>
       </Card>

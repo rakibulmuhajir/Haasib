@@ -10,7 +10,7 @@ class CompanyStoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->isGodMode() ?? false;
     }
 
     public function rules(): array
@@ -55,6 +55,11 @@ class CompanyStoreRequest extends FormRequest
             'language' => ['nullable', 'string', 'max:10'],
             'locale' => ['nullable', 'string', 'max:10'],
             'settings' => ['nullable', 'array'],
+            'owner_user_id' => [
+                'required',
+                'uuid',
+                Rule::exists('auth.users', 'id'),
+            ],
         ];
     }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PageShell from '@/components/PageShell.vue'
@@ -30,6 +30,10 @@ const form = useForm({
   vendor_id: 'none',
   retail_amount: '0',
   cost_amount: '0',
+  child_retail_amount: '0',
+  child_cost_amount: '0',
+  infant_retail_amount: '0',
+  infant_cost_amount: '0',
   notes: '',
 })
 
@@ -38,6 +42,10 @@ const editingService = ref<any | null>(null)
 const serviceToRemove = ref<any | null>(null)
 const removeDialogOpen = ref(false)
 
+const sameAmount = (first: string | number | null | undefined, second: string | number | null | undefined) => {
+  return Number(first || 0) === Number(second || 0)
+}
+
 const resetForm = () => {
   editingService.value = null
   form.clearErrors()
@@ -45,6 +53,10 @@ const resetForm = () => {
   form.vendor_id = 'none'
   form.retail_amount = '0'
   form.cost_amount = '0'
+  form.child_retail_amount = '0'
+  form.child_cost_amount = '0'
+  form.infant_retail_amount = '0'
+  form.infant_cost_amount = '0'
   form.notes = ''
 }
 
@@ -55,6 +67,10 @@ const startEdit = (service: any) => {
   form.vendor_id = service.vendor_id || 'none'
   form.retail_amount = String(service.retail_amount ?? 0)
   form.cost_amount = String(service.cost_amount ?? 0)
+  form.child_retail_amount = String(service.child_retail_amount ?? service.retail_amount ?? 0)
+  form.child_cost_amount = String(service.child_cost_amount ?? service.cost_amount ?? 0)
+  form.infant_retail_amount = String(service.infant_retail_amount ?? service.retail_amount ?? 0)
+  form.infant_cost_amount = String(service.infant_cost_amount ?? service.cost_amount ?? 0)
   form.notes = service.notes || ''
 }
 
@@ -63,6 +79,20 @@ const payload = (data: any) => ({
   vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
   retail_amount: Number(data.retail_amount || 0),
   cost_amount: Number(data.cost_amount || 0),
+  child_retail_amount: Number(data.child_retail_amount || data.retail_amount || 0),
+  child_cost_amount: Number(data.child_cost_amount || data.cost_amount || 0),
+  infant_retail_amount: Number(data.infant_retail_amount || data.retail_amount || 0),
+  infant_cost_amount: Number(data.infant_cost_amount || data.cost_amount || 0),
+})
+
+watch(() => form.retail_amount, (value, oldValue) => {
+  if (sameAmount(form.child_retail_amount, oldValue)) form.child_retail_amount = value
+  if (sameAmount(form.infant_retail_amount, oldValue)) form.infant_retail_amount = value
+})
+
+watch(() => form.cost_amount, (value, oldValue) => {
+  if (sameAmount(form.child_cost_amount, oldValue)) form.child_cost_amount = value
+  if (sameAmount(form.infant_cost_amount, oldValue)) form.infant_cost_amount = value
 })
 
 const submit = () => {
@@ -109,7 +139,7 @@ const confirmRemoveService = () => {
 <template>
   <Head title="Visa Services" />
   <PageShell title="Visa Services" description="Reusable visa packages with default retail and cost." :breadcrumbs="breadcrumbs" :icon="FileText">
-    <div class="grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
+    <div class="grid gap-6 lg:grid-cols-[520px_minmax(0,1fr)]">
       <Card>
         <CardHeader><CardTitle>{{ editingService ? 'Edit Visa Service' : 'Add Visa Service' }}</CardTitle></CardHeader>
         <CardContent>
@@ -129,9 +159,26 @@ const confirmRemoveService = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div class="space-y-2"><Label>Retail</Label><Input v-model="form.retail_amount" type="number" min="0" step="0.01" /></div>
-              <div class="space-y-2"><Label>Cost</Label><Input v-model="form.cost_amount" type="number" min="0" step="0.01" /></div>
+            <div class="space-y-3 rounded-md border p-3">
+              <div class="font-medium">Adult</div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-2"><Label>Adult Retail</Label><Input v-model="form.retail_amount" type="number" min="0" step="0.01" /></div>
+                <div class="space-y-2"><Label>Adult Cost</Label><Input v-model="form.cost_amount" type="number" min="0" step="0.01" /></div>
+              </div>
+            </div>
+            <div class="space-y-3 rounded-md border p-3">
+              <div class="font-medium">Child</div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-2"><Label>Child Retail</Label><Input v-model="form.child_retail_amount" type="number" min="0" step="0.01" /></div>
+                <div class="space-y-2"><Label>Child Cost</Label><Input v-model="form.child_cost_amount" type="number" min="0" step="0.01" /></div>
+              </div>
+            </div>
+            <div class="space-y-3 rounded-md border p-3">
+              <div class="font-medium">Infant</div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-2"><Label>Infant Retail</Label><Input v-model="form.infant_retail_amount" type="number" min="0" step="0.01" /></div>
+                <div class="space-y-2"><Label>Infant Cost</Label><Input v-model="form.infant_cost_amount" type="number" min="0" step="0.01" /></div>
+              </div>
             </div>
             <div class="space-y-2"><Label>Notes</Label><Textarea v-model="form.notes" /></div>
             <div class="grid gap-2 sm:grid-cols-2">
@@ -146,13 +193,26 @@ const confirmRemoveService = () => {
         <CardHeader><CardTitle>Available Services</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <div v-if="!visaServices.length" class="text-sm text-muted-foreground">No visa services yet.</div>
-          <div v-for="service in visaServices" :key="service.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_130px_130px_auto]">
+          <div v-for="service in visaServices" :key="service.id" class="grid gap-3 rounded-md border p-3 xl:grid-cols-[1fr_170px_170px_170px_auto]">
             <div>
               <div class="font-medium">{{ service.name }}</div>
               <div class="text-sm text-muted-foreground">{{ service.vendor?.name || 'No default vendor' }}</div>
             </div>
-            <div><div class="text-xs text-muted-foreground">Retail</div><MoneyText :amount="service.retail_amount" :currency="company.base_currency" /></div>
-            <div><div class="text-xs text-muted-foreground">Cost</div><MoneyText :amount="service.cost_amount" :currency="company.base_currency" /></div>
+            <div>
+              <div class="text-xs text-muted-foreground">Adult</div>
+              <div><MoneyText :amount="service.retail_amount" :currency="company.base_currency" /></div>
+              <div class="text-xs text-muted-foreground">Cost <MoneyText :amount="service.cost_amount" :currency="company.base_currency" /></div>
+            </div>
+            <div>
+              <div class="text-xs text-muted-foreground">Child</div>
+              <div><MoneyText :amount="service.child_retail_amount ?? service.retail_amount" :currency="company.base_currency" /></div>
+              <div class="text-xs text-muted-foreground">Cost <MoneyText :amount="service.child_cost_amount ?? service.cost_amount" :currency="company.base_currency" /></div>
+            </div>
+            <div>
+              <div class="text-xs text-muted-foreground">Infant</div>
+              <div><MoneyText :amount="service.infant_retail_amount ?? service.retail_amount" :currency="company.base_currency" /></div>
+              <div class="text-xs text-muted-foreground">Cost <MoneyText :amount="service.infant_cost_amount ?? service.cost_amount" :currency="company.base_currency" /></div>
+            </div>
             <div class="flex items-center justify-end gap-1">
               <Button type="button" variant="ghost" size="icon" @click="startEdit(service)">
                 <Pencil class="h-4 w-4" />

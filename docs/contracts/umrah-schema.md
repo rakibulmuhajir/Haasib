@@ -406,16 +406,23 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `company_id`, `voucher_id`, `visa_group_id`, `passenger_id`.
 
 ### umrah.group_payments
-- Purpose: Payments received from agents against visa groups.
+- Purpose: Independent money receipts from agents or payments sent to visa/transport and hotel vendors.
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid FK.
-  - `visa_group_id` uuid FK.
-  - `agent_id` uuid FK.
+  - `visa_group_id` uuid nullable legacy pointer. New records use allocations and leave this null.
+  - `agent_id` uuid nullable FK. Required for received payments and null for sent payments.
+  - `direction` varchar(20) default `received`. Values: `received`, `sent`.
+  - `visa_vendor_id` uuid nullable FK -> `umrah.visa_vendors.id`.
+  - `hotel_vendor_id` uuid nullable FK -> `umrah.hotel_vendors.id`.
   - `account_id` uuid nullable FK -> `acct.accounts.id`.
   - `payment_number` varchar(50), unique per company.
   - `payment_date` date.
-  - `amount` numeric(15,2).
+  - `amount` numeric(18,6), the amount in `currency`.
+  - `currency` char(3) FK -> `public.currencies.code`.
+  - `exchange_rate` numeric(18,8) nullable. Convention: 1 transaction currency = X base currency; null for base-currency records.
+  - `base_currency` char(3) FK -> `public.currencies.code`.
+  - `base_amount` numeric(15,2), immutable conversion snapshot used for balances and GL posting.
   - `method` varchar(30) default `cash`.
   - `reference` varchar(255) nullable.
   - `notes` text nullable.
@@ -423,8 +430,30 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - timestamps, soft deletes.
 - Check:
   - `method` in `cash`, `bank_transfer`, `card`, `wallet`, `other`.
+  - `direction` in `received`, `sent`.
+  - `received` requires an agent and no vendor IDs; `sent` requires no agent and exactly one vendor ID.
+  - Currency must be enabled for the company. A non-base currency requires an exchange rate greater than zero; base currency prohibits an exchange rate.
+- Business rules:
+  - Payments are independent from groups. Unallocated received payments are agent advances; unallocated sent payments are vendor advances.
+  - Group balances change only through `umrah.payment_allocations`.
+  - The original amount, currency, exchange rate, base currency, and base amount are retained as the historical conversion snapshot.
 - Model fillable:
-  - `company_id`, `visa_group_id`, `agent_id`, `account_id`, `payment_number`, `payment_date`, `amount`, `method`, `reference`, `notes`.
+  - `company_id`, `visa_group_id`, `agent_id`, `direction`, `visa_vendor_id`, `hotel_vendor_id`, `account_id`, `payment_number`, `payment_date`, `amount`, `currency`, `exchange_rate`, `base_currency`, `base_amount`, `method`, `reference`, `notes`.
+
+### umrah.payment_allocations
+- Purpose: Allocate independent agent or vendor payments to one or more visa groups.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid FK.
+  - `group_payment_id` uuid FK -> `umrah.group_payments.id`.
+  - `visa_group_id` uuid FK -> `umrah.visa_groups.id`.
+  - `base_amount` numeric(15,2).
+  - `transaction_id` uuid nullable FK -> `acct.transactions.id`; null for backfilled legacy allocations.
+  - timestamps.
+- Constraints: unique (`group_payment_id`, `visa_group_id`); `base_amount > 0`.
+- Business rule: allocation totals cannot exceed the payment `base_amount`.
+- RLS: company isolation plus super-admin override.
+- Model fillable: `company_id`, `group_payment_id`, `visa_group_id`, `base_amount`, `transaction_id`.
 
 ## Business Rules
 
@@ -476,4 +505,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Agent payment posts once per payment:
   - Dr Cash / Bank
   - Cr Agent Receivable
+- Vendor payment posts once per sent payment:
+  - Dr Vendor Payable
+  - Cr Cash / Bank
 - `sale_transaction_id`, `cost_transaction_id`, and `group_payments.transaction_id` are the idempotency links to GL.

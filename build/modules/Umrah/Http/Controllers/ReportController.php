@@ -44,8 +44,9 @@ class ReportController extends Controller
                 'profit' => (float) $groups->sum('profit'),
                 'agent_balance' => (float) Agent::where('company_id', $company->id)->sum('balance'),
                 'payments' => (float) GroupPayment::where('company_id', $company->id)
+                    ->where('direction', GroupPayment::DIRECTION_RECEIVED)
                     ->whereBetween('payment_date', [$start, $end])
-                    ->sum('amount'),
+                    ->sum('base_amount'),
             ],
             'groups' => $groups,
         ]);

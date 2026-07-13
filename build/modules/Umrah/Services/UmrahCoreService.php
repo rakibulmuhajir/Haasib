@@ -10,6 +10,7 @@ use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\GroupTransportItem;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
+use App\Modules\Umrah\Models\PaymentAllocation;
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
@@ -196,45 +197,93 @@ class UmrahCoreService
         });
     }
 
-    public function addPayment(VisaGroup $group, array $data): GroupPayment
+    public function addPayment(string $companyId, array $data): GroupPayment
     {
-        return DB::transaction(function () use ($group, $data) {
-            $group = $group->fresh();
-            $amount = round((float) $data['amount'], 2);
+        return DB::transaction(function () use ($companyId, $data) {
+            $group = ! empty($data['visa_group_id'])
+                ? VisaGroup::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['visa_group_id'])
+                : null;
+            $amount = round((float) $data['amount'], 6);
+            $company = $this->company($companyId);
+            $currency = strtoupper($data['currency']);
+            $exchangeRate = $currency === $company->base_currency ? null : (float) $data['exchange_rate'];
+            $baseAmount = round($amount * ($exchangeRate ?? 1), 2);
+            $direction = $data['direction'] ?? GroupPayment::DIRECTION_RECEIVED;
 
             if ($amount <= 0) {
                 throw ValidationException::withMessages(['amount' => 'Payment amount must be greater than zero.']);
             }
 
-            if ($amount > ((float) $group->balance + 0.01)) {
-                throw ValidationException::withMessages(['amount' => 'Payment cannot be more than the remaining group balance.']);
+            if ($group && $direction === GroupPayment::DIRECTION_RECEIVED && $group->agent_id !== $data['agent_id']) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this agent.']);
+            }
+
+            $vendor = null;
+            if ($direction === GroupPayment::DIRECTION_SENT) {
+                $vendor = ! empty($data['visa_vendor_id'])
+                    ? VisaVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['visa_vendor_id'])
+                    : HotelVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['hotel_vendor_id']);
             }
 
             $payment = GroupPayment::create([
-                'company_id' => $group->company_id,
-                'visa_group_id' => $group->id,
-                'agent_id' => $group->agent_id,
+                'company_id' => $companyId,
+                'visa_group_id' => null,
+                'agent_id' => $direction === GroupPayment::DIRECTION_RECEIVED ? $data['agent_id'] : null,
+                'direction' => $direction,
+                'visa_vendor_id' => $data['visa_vendor_id'] ?? null,
+                'hotel_vendor_id' => $data['hotel_vendor_id'] ?? null,
                 'account_id' => $data['account_id'] ?? null,
-                'payment_number' => $data['payment_number'] ?: $this->nextPaymentNumber($group->company_id),
+                'payment_number' => $data['payment_number'] ?: $this->nextPaymentNumber($companyId),
                 'payment_date' => $data['payment_date'],
                 'amount' => $amount,
+                'currency' => $currency,
+                'exchange_rate' => $exchangeRate,
+                'base_currency' => $company->base_currency,
+                'base_amount' => $baseAmount,
                 'method' => $data['method'],
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            $this->postAgentPayment($payment->fresh(['group']));
-            $this->recalculateGroup($group->fresh());
-            $this->recalculateAgent($group->agent_id);
+            if ($direction === GroupPayment::DIRECTION_RECEIVED) {
+                $this->postAgentPayment($payment);
+            } else {
+                $this->postVendorPayment($payment->fresh(['visaVendor', 'hotelVendor']));
+                $vendor->update([
+                    'total_paid' => round((float) $vendor->total_paid + $baseAmount, 2),
+                    'balance' => max(round((float) $vendor->balance - $baseAmount, 2), 0),
+                ]);
+            }
 
-            return $payment;
+            if ($group) {
+                $allocationAmount = $direction === GroupPayment::DIRECTION_RECEIVED
+                    ? min($baseAmount, (float) $group->balance)
+                    : $baseAmount;
+                if ($allocationAmount > 0) {
+                    $allocation = PaymentAllocation::create([
+                        'company_id' => $companyId,
+                        'group_payment_id' => $payment->id,
+                        'visa_group_id' => $group->id,
+                        'base_amount' => $allocationAmount,
+                    ]);
+                    $this->postPaymentAllocation($allocation->fresh(['payment', 'group']));
+                }
+                $this->recalculateGroup($group->fresh());
+            }
+            if ($payment->agent_id) {
+                $this->recalculateAgent($payment->agent_id);
+            }
+
+            return $payment->fresh(['allocations.group']);
         });
     }
 
     public function recalculateGroup(VisaGroup $group): VisaGroup
     {
         $passengerCount = $group->passengers()->count();
-        $paid = (float) $group->payments()->sum('amount');
+        $paid = (float) $group->paymentAllocations()
+            ->whereHas('payment', fn ($query) => $query->where('direction', GroupPayment::DIRECTION_RECEIVED))
+            ->sum('base_amount');
         $financials = $this->calculateGroupFinancials($group->toArray(), $paid);
 
         $group->update([
@@ -246,6 +295,44 @@ class UmrahCoreService
         ]);
 
         return $group->fresh();
+    }
+
+    public function allocatePayment(GroupPayment $payment, array $data): PaymentAllocation
+    {
+        return DB::transaction(function () use ($payment, $data) {
+            $payment = GroupPayment::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($payment->id);
+            $group = VisaGroup::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($data['visa_group_id']);
+            $amount = round((float) $data['base_amount'], 2);
+            $allocated = (float) $payment->allocations()->sum('base_amount');
+            $available = round((float) $payment->base_amount - $allocated, 2);
+
+            if ($payment->direction === GroupPayment::DIRECTION_RECEIVED && $group->agent_id !== $payment->agent_id) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this agent.']);
+            }
+            if ($amount > $available + 0.01) {
+                throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed the available payment credit.']);
+            }
+            if ($payment->direction === GroupPayment::DIRECTION_RECEIVED && $amount > (float) $group->balance + 0.01) {
+                throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed the remaining group balance.']);
+            }
+            if ($payment->allocations()->where('visa_group_id', $group->id)->exists()) {
+                throw ValidationException::withMessages(['visa_group_id' => 'This payment is already allocated to the selected group.']);
+            }
+
+            $allocation = PaymentAllocation::create([
+                'company_id' => $payment->company_id,
+                'group_payment_id' => $payment->id,
+                'visa_group_id' => $group->id,
+                'base_amount' => $amount,
+            ]);
+            $this->postPaymentAllocation($allocation->fresh(['payment', 'group']));
+            $this->recalculateGroup($group->fresh());
+            if ($payment->agent_id) {
+                $this->recalculateAgent($payment->agent_id);
+            }
+
+            return $allocation->fresh(['group']);
+        });
     }
 
     public function recalculateAgent(string $agentId): void
@@ -313,7 +400,9 @@ class UmrahCoreService
 
     public function applyVoucherHotelAccounting(Voucher $voucher, VisaGroup $group): void
     {
-        if ($voucher->status !== Voucher::STATUS_APPROVED || $voucher->hotel_sale_transaction_id || $voucher->hotel_cost_transaction_id) return;
+        if ($voucher->status !== Voucher::STATUS_APPROVED || $voucher->hotel_sale_transaction_id || $voucher->hotel_cost_transaction_id) {
+            return;
+        }
 
         $group->update([
             'hotel_amount' => round((float) $group->hotel_amount + (float) $voucher->hotel_sale_amount, 2),
@@ -327,7 +416,9 @@ class UmrahCoreService
             ->groupBy('hotel_vendor_id')
             ->each(function ($stays, string $vendorId) use ($group) {
                 $vendor = HotelVendor::where('company_id', $group->company_id)->find($vendorId);
-                if (! $vendor) return;
+                if (! $vendor) {
+                    return;
+                }
                 $addedCost = (float) $stays->sum(fn (array $stay) => (float) $stay['total_cost_amount']);
                 $vendor->update(['total_cost' => round((float) $vendor->total_cost + $addedCost, 2), 'balance' => round((float) $vendor->balance + $addedCost, 2)]);
             });
@@ -668,21 +759,21 @@ class UmrahCoreService
 
         $company = $this->company($payment->company_id);
         $depositAccountId = $payment->account_id ?: $this->accountId($company, 'bank_or_cash');
-        $arAccountId = $this->accountId($company, 'ar');
+        $advanceAccountId = $this->accountId($company, 'agent_advances');
 
         $transaction = $this->glPostingService->postBalancedTransaction([
             'company_id' => $payment->company_id,
             'transaction_number' => $this->transactionNumber('UPY', $payment->id),
             'transaction_type' => 'umrah_agent_payment',
             'date' => $payment->payment_date,
-            'currency' => $company->base_currency,
+            'currency' => $payment->currency,
             'base_currency' => $company->base_currency,
+            'exchange_rate' => $payment->exchange_rate,
             'description' => "Agent payment {$payment->payment_number}",
             'reference_type' => 'umrah.group_payments',
             'reference_id' => $payment->id,
             'metadata' => [
                 'agent_id' => $payment->agent_id,
-                'visa_group_id' => $payment->visa_group_id,
                 'payment_number' => $payment->payment_number,
                 'method' => $payment->method,
             ],
@@ -694,14 +785,79 @@ class UmrahCoreService
                 'description' => "Payment received {$payment->payment_number}",
             ],
             [
-                'account_id' => $arAccountId,
+                'account_id' => $advanceAccountId,
                 'type' => 'credit',
                 'amount' => (float) $payment->amount,
-                'description' => "Reduce agent receivable {$payment->payment_number}",
+                'description' => "Agent advance {$payment->payment_number}",
             ],
         ]);
 
         $payment->update(['transaction_id' => $transaction->id]);
+    }
+
+    private function postVendorPayment(GroupPayment $payment): void
+    {
+        if ($payment->transaction_id) {
+            return;
+        }
+
+        $company = $this->company($payment->company_id);
+        $cashAccountId = $payment->account_id ?: $this->accountId($company, 'bank_or_cash');
+        $payee = $payment->visaVendor?->name ?: $payment->hotelVendor?->name ?: 'Vendor';
+        $transaction = $this->glPostingService->postBalancedTransaction([
+            'company_id' => $payment->company_id,
+            'transaction_number' => $this->transactionNumber('UVP', $payment->id),
+            'transaction_type' => 'umrah_vendor_payment',
+            'date' => $payment->payment_date,
+            'currency' => $payment->currency,
+            'base_currency' => $company->base_currency,
+            'exchange_rate' => $payment->exchange_rate,
+            'description' => "Vendor payment {$payment->payment_number}: {$payee}",
+            'reference_type' => 'umrah.group_payments',
+            'reference_id' => $payment->id,
+            'metadata' => [
+                'visa_vendor_id' => $payment->visa_vendor_id,
+                'hotel_vendor_id' => $payment->hotel_vendor_id,
+                'payment_number' => $payment->payment_number,
+                'method' => $payment->method,
+            ],
+        ], [
+            ['account_id' => $this->accountId($company, 'vendor_advances'), 'type' => 'debit', 'amount' => (float) $payment->amount, 'description' => "Advance paid to {$payee}"],
+            ['account_id' => $cashAccountId, 'type' => 'credit', 'amount' => (float) $payment->amount, 'description' => "Payment sent {$payment->payment_number}"],
+        ]);
+
+        $payment->update(['transaction_id' => $transaction->id]);
+    }
+
+    private function postPaymentAllocation(PaymentAllocation $allocation): void
+    {
+        if ($allocation->transaction_id) {
+            return;
+        }
+
+        $payment = $allocation->payment;
+        $company = $this->company($allocation->company_id);
+        $received = $payment->direction === GroupPayment::DIRECTION_RECEIVED;
+        $transaction = $this->glPostingService->postBalancedTransaction([
+            'company_id' => $allocation->company_id,
+            'transaction_number' => $this->transactionNumber('UAL', $allocation->id),
+            'transaction_type' => 'umrah_payment_allocation',
+            'date' => $payment->payment_date,
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "Allocate {$payment->payment_number} to {$allocation->group->group_number}",
+            'reference_type' => 'umrah.payment_allocations',
+            'reference_id' => $allocation->id,
+            'metadata' => ['group_payment_id' => $payment->id, 'visa_group_id' => $allocation->visa_group_id],
+        ], $received ? [
+            ['account_id' => $this->accountId($company, 'agent_advances'), 'type' => 'debit', 'amount' => (float) $allocation->base_amount, 'description' => 'Apply agent advance'],
+            ['account_id' => $this->accountId($company, 'ar'), 'type' => 'credit', 'amount' => (float) $allocation->base_amount, 'description' => 'Reduce group receivable'],
+        ] : [
+            ['account_id' => $this->accountId($company, 'ap'), 'type' => 'debit', 'amount' => (float) $allocation->base_amount, 'description' => 'Reduce vendor payable'],
+            ['account_id' => $this->accountId($company, 'vendor_advances'), 'type' => 'credit', 'amount' => (float) $allocation->base_amount, 'description' => 'Apply vendor advance'],
+        ]);
+
+        $allocation->update(['transaction_id' => $transaction->id]);
     }
 
     /**
@@ -744,6 +900,10 @@ class UmrahCoreService
             'hotel_cost' => (clone $query)->where('code', '5120')->value('id') ?: (clone $query)->where('type', 'cogs')->orderBy('code')->value('id') ?: $company->expense_account_id,
             'bank_or_cash' => $company->bank_account_id
                 ?: (clone $query)->whereIn('subtype', ['bank', 'cash'])->orderByRaw("CASE WHEN subtype = 'bank' THEN 0 ELSE 1 END")->orderBy('code')->value('id'),
+            'agent_advances' => (clone $query)->where('code', '2200')->value('id')
+                ?: (clone $query)->where('code', '2270')->value('id'),
+            'vendor_advances' => (clone $query)->where('code', '1160')->value('id')
+                ?: (clone $query)->where('type', 'asset')->where('subtype', 'other_current_asset')->orderBy('code')->value('id'),
             default => null,
         };
 
@@ -763,6 +923,6 @@ class UmrahCoreService
 
     private function transactionNumber(string $prefix, string $id): string
     {
-        return $prefix . '-' . strtoupper(substr(str_replace('-', '', $id), -12));
+        return $prefix.'-'.strtoupper(substr(str_replace('-', '', $id), -12));
     }
 }

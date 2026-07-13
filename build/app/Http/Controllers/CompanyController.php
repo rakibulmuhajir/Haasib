@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -523,6 +524,13 @@ class CompanyController extends Controller
         }
         if (array_key_exists('logo_url', $validated)) {
             $directUpdates['logo_url'] = $validated['logo_url'];
+        }
+        if ($request->hasFile('logo')) {
+            $path = $request->file('logo')->store("company-logos/{$company->id}", 'public');
+            if (str_starts_with((string) $company->logo_url, '/storage/company-logos/')) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $company->logo_url));
+            }
+            $directUpdates['logo_url'] = Storage::url($path);
         }
         if (isset($validated['language'])) {
             $directUpdates['language'] = $validated['language'];

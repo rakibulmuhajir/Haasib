@@ -15,19 +15,31 @@ class VisaGroup extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.visa_groups';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PASSPORTS_RECEIVED = 'passports_received';
+
     public const STATUS_SUBMITTED = 'submitted';
+
     public const STATUS_VISA_APPROVED = 'visa_approved';
+
     public const STATUS_DELIVERED = 'delivered';
+
     public const STATUS_CLOSED = 'closed';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const TRANSPORT_STANDARD_BUS = 'standard_bus';
+
     public const TRANSPORT_SPECIALIZED = 'specialized';
+
     public const TRANSPORT_MODES = [
         self::TRANSPORT_STANDARD_BUS => 'Standard bus included with visa',
         self::TRANSPORT_SPECIALIZED => 'Specialized transport',
@@ -151,6 +163,11 @@ class VisaGroup extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(GroupPayment::class);
+    }
+
+    public function paymentAllocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class, 'visa_group_id');
     }
 
     public function vouchers(): HasMany

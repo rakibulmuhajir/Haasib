@@ -380,7 +380,13 @@ class VoucherController extends Controller
 
         $filename = preg_replace('/[^A-Za-z0-9_-]/', '-', $record->voucher_number ?: 'voucher').'.pdf';
 
-        return Pdf::loadView('umrah::vouchers.pdf', ['company' => $company, 'voucher' => $record])
+        $logoPath = null;
+        if (str_starts_with((string) $company->logo_url, '/storage/')) {
+            $candidate = storage_path('app/public/'.str_replace('/storage/', '', $company->logo_url));
+            $logoPath = is_file($candidate) ? $candidate : null;
+        }
+
+        return Pdf::loadView('umrah::vouchers.pdf', ['company' => $company, 'voucher' => $record, 'logoPath' => $logoPath])
             ->setPaper('letter', 'portrait')
             ->download($filename);
     }
@@ -393,6 +399,7 @@ class VoucherController extends Controller
             'slug' => $company->slug,
             'base_currency' => $company->base_currency,
             'logo_url' => $company->logo_url,
+            'helpline' => $company->settings['contact_phone'] ?? null,
         ];
     }
 

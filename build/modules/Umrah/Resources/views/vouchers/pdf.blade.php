@@ -29,9 +29,9 @@
 @if($voucher->status === 'draft')<div class="draft">DRAFT</div>@endif
 <table class="header">
     <tr>
-        <td style="width:40%"><div class="company">{{ $company->trade_name ?: $company->name }}</div><div>Voucher Date: {{ $voucher->created_at?->format('d/m/y') }}</div></td>
-        <td style="width:20%; text-align:center">@if($company->logo_url)<img class="logo" src="{{ $company->logo_url }}">@endif</td>
-        <td style="width:40%; text-align:right"><strong>{{ $voucher->agent?->name }}</strong><br>{{ $voucher->agent?->city }} {{ $voucher->agent?->country }}<br>{{ $voucher->agent?->phone }}</td>
+        <td style="width:30%"><div>Voucher Date: {{ $voucher->created_at?->format('d/m/y') }}</div></td>
+        <td style="width:40%; text-align:center">@if($logoPath)<img class="logo" src="{{ $logoPath }}">@elseif(str_starts_with((string) $company->logo_url, 'data:'))<img class="logo" src="{{ $company->logo_url }}">@endif<div class="company">{{ $company->trade_name ?: $company->name }}</div>@if(data_get($company->settings, 'contact_phone'))<div><strong>Helpline:</strong> {{ data_get($company->settings, 'contact_phone') }}</div>@endif</td>
+        <td style="width:30%; text-align:right"><strong>{{ $voucher->agent?->name }}</strong><br>{{ $voucher->agent?->city }} {{ $voucher->agent?->country }}<br>{{ $voucher->agent?->phone }}</td>
     </tr>
 </table>
 <div class="title">Travel Voucher</div>

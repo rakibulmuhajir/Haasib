@@ -66,7 +66,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
     - `ar_account_id`, `ap_account_id`, `income_account_id`, `expense_account_id`, `bank_account_id`, `retained_earnings_account_id`,
     - `sales_tax_payable_account_id`, `purchase_tax_receivable_account_id`,
     - `transit_loss_account_id`, `transit_gain_account_id`.
-  - `logo_url` string(500) nullable.  
+  - `logo_url` string(500) nullable. Stores either a legacy HTTPS logo URL or the public `/storage/company-logos/...` path produced by company settings image upload.
   - `created_by_user_id` uuid nullable FK → `auth.users.id`.  
   - `is_active` bool default true.  
   - `created_at`, `updated_at`.  
@@ -89,6 +89,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Validation/DTO expectations:  
   - Required: `name` (<=255), `base_currency` (exactly 3 uppercase chars).  
   - Optional: `industry`, `country`, `language` (<=10), `locale` (<=10), `settings` (json).  
+  - Company settings accepts `logo` as PNG/JPEG/WebP, maximum 2 MB, stores it on the public disk, and writes its public path to `logo_url`.
   - Slug: server-generated; do not accept from UI/clients.  
   - Uniqueness: `slug` unique; (`name`, `country`) pair unique.  
   - Keep payload key as `base_currency` (not `currency`).

@@ -37,8 +37,9 @@ class DashboardController extends Controller
                     ->whereBetween('created_at', [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()])
                     ->sum('profit'),
                 'payments_this_month' => (float) GroupPayment::where('company_id', $company->id)
+                    ->where('direction', GroupPayment::DIRECTION_RECEIVED)
                     ->whereBetween('payment_date', [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()])
-                    ->sum('amount'),
+                    ->sum('base_amount'),
             ],
             'upcomingGroups' => VisaGroup::where('company_id', $company->id)
                 ->with('agent:id,name')

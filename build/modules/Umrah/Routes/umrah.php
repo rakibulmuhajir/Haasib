@@ -3,7 +3,9 @@
 use App\Modules\Umrah\Http\Controllers\AgentController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
+use App\Modules\Umrah\Http\Controllers\ExpenseController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
+use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
@@ -32,6 +34,11 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::put('vendors/{vendor}', [VisaVendorController::class, 'update'])->whereUuid('vendor')->name('umrah.vendors.update');
 
         Route::get('groups', [VisaGroupController::class, 'index'])->name('umrah.groups.index');
+        Route::get('payments', [PaymentController::class, 'index'])->name('umrah.payments.index');
+        Route::get('payments/create', [PaymentController::class, 'create'])->name('umrah.payments.create');
+        Route::post('payments', [PaymentController::class, 'store'])->name('umrah.payments.store');
+        Route::post('payments/{payment}/allocations', [PaymentController::class, 'allocate'])->whereUuid('payment')->name('umrah.payments.allocations.store');
+        Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
         Route::get('groups/create', [VisaGroupController::class, 'create'])->name('umrah.groups.create');
         Route::post('groups/import-mutamers', [VisaGroupController::class, 'importMutamers'])->name('umrah.groups.import-mutamers');
         Route::post('groups', [VisaGroupController::class, 'store'])->name('umrah.groups.store');

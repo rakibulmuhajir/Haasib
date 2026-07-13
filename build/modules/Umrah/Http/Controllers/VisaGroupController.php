@@ -3,7 +3,7 @@
 namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Accounting\Models\Account;
+use App\Models\CompanyCurrency;
 use App\Modules\Umrah\Http\Requests\BulkUpdatePassengerStatusRequest;
 use App\Modules\Umrah\Http\Requests\ImportMutamersRequest;
 use App\Modules\Umrah\Http\Requests\StoreGroupPaymentRequest;
@@ -12,6 +12,7 @@ use App\Modules\Umrah\Http\Requests\StoreVisaGroupRequest;
 use App\Modules\Umrah\Http\Requests\UpdatePassengerStatusRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
+use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
@@ -113,6 +114,7 @@ class VisaGroupController extends Controller
     public function show(string $companySlug, string $group): Response
     {
         $company = app(CurrentCompany::class)->get();
+        $isMember = $this->isMember($company->id, request());
         $record = VisaGroup::where('company_id', $company->id)
             ->with([
                 'agent',
@@ -127,24 +129,36 @@ class VisaGroupController extends Controller
                 'saleTransaction:id,transaction_number',
                 'costTransaction:id,transaction_number',
                 'passengers' => fn ($query) => $query->orderBy('sort_order')->orderBy('created_at'),
-                'payments' => fn ($query) => $query
-                    ->with(['account:id,code,name', 'transaction:id,transaction_number'])
-                    ->orderByDesc('payment_date')
-                    ->orderByDesc('created_at'),
+                'paymentAllocations.payment' => fn ($query) => $query
+                    ->when($isMember, fn ($paymentQuery) => $paymentQuery->where('direction', GroupPayment::DIRECTION_RECEIVED))
+                    ->with(['account:id,code,name', 'transaction:id,transaction_number', 'visaVendor:id,name', 'hotelVendor:id,name']),
             ])
-            ->when($this->isMember($company->id, request()), fn ($q) => ($agentId = $this->memberAgentId($company->id, request())) ? $q->where('agent_id', $agentId) : $q->whereRaw('1 = 0'))
+            ->when($isMember, fn ($q) => ($agentId = $this->memberAgentId($company->id, request())) ? $q->where('agent_id', $agentId) : $q->whereRaw('1 = 0'))
             ->findOrFail($group);
+
+        $record->setRelation('payments', $record->paymentAllocations
+            ->filter->payment
+            ->sortByDesc(fn ($allocation) => $allocation->payment->payment_date?->format('Y-m-d').$allocation->payment->created_at?->toISOString())
+            ->map(function ($allocation) {
+                $payment = $allocation->payment;
+                $payment->setAttribute('allocated_base_amount', $allocation->base_amount);
+
+                return $payment;
+            })->values());
+        $record->unsetRelation('paymentAllocations');
 
         return Inertia::render('Umrah/Groups/Show', [
             'company' => $this->companyPayload($company),
             'group' => $record,
             'paymentMethods' => GroupPayment::METHODS,
+            'paymentDirections' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
+            'currencies' => CompanyCurrency::where('company_id', $company->id)
+                ->orderByDesc('is_base')
+                ->orderBy('currency_code')
+                ->get(['currency_code', 'is_base', 'exchange_rate']),
             'passengerStatuses' => Passenger::STATUSES,
-            'accounts' => Account::where('company_id', $company->id)
-                ->whereIn('subtype', ['bank', 'cash'])
-                ->where('is_active', true)
-                ->orderBy('code')
-                ->get(['id', 'code', 'name']),
+            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'balance']),
+            'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'balance']),
         ]);
     }
 
@@ -176,6 +190,8 @@ class VisaGroupController extends Controller
         $company = app(CurrentCompany::class)->get();
         $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
         $data = $request->validated();
+        $data['visa_group_id'] = $record->id;
+        $data['agent_id'] = $data['direction'] === GroupPayment::DIRECTION_RECEIVED ? $record->agent_id : null;
 
         $updated = Passenger::where('company_id', $company->id)
             ->where('visa_group_id', $record->id)
@@ -189,8 +205,15 @@ class VisaGroupController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
+        $data = $request->validated();
+        $data['visa_group_id'] = $record->id;
+        $data['agent_id'] = $data['direction'] === GroupPayment::DIRECTION_RECEIVED ? $record->agent_id : null;
 
-        $this->service->addPayment($record, $request->validated());
+        if ($data['direction'] === GroupPayment::DIRECTION_SENT) {
+            abort_if($this->isMember($company->id, $request), 403, 'Agent logins cannot record vendor payments.');
+        }
+
+        $this->service->addPayment($company->id, $data);
 
         return back()->with('success', 'Payment recorded successfully.');
     }
@@ -212,7 +235,10 @@ class VisaGroupController extends Controller
 
     private function memberAgentId(string $companyId, Request $request): ?string
     {
-        if (! $this->isMember($companyId, $request)) return null;
+        if (! $this->isMember($companyId, $request)) {
+            return null;
+        }
+
         return Agent::where('company_id', $companyId)->where('user_id', $request->user()?->id)->where('is_active', true)->value('id');
     }
 }

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import DateTimePicker from '@/components/DateTimePicker.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,9 +55,10 @@ const selectedPassengerIds = ref<string[]>(props.availablePassengers.map((passen
 const passengerServices = ref<Record<string, 'visa_transport' | 'transport_only'>>(Object.fromEntries(props.availablePassengers.map((passenger) => [passenger.id, passenger.service_type || 'visa_transport'])))
 const editingVoucher = computed(() => props.editingVoucher)
 const localDateTime = (value: unknown) => value ? String(value).slice(0, 16) : ''
+const localDate = (value: unknown) => value ? String(value).slice(0, 10) : ''
 const editableStays = props.editingVoucher?.hotel_stays?.map((stay: any) => ({
   source: stay.source === 'company' ? 'company' : 'self', hotel_id: stay.hotel_id || 'none', hotel_name: stay.hotel_name || '', city: stay.city || '',
-  room_type: stay.room_type || 'none', room_count: String(stay.room_count || 1), check_in_date: localDateTime(stay.check_in_date), check_out_date: localDateTime(stay.check_out_date), notes: stay.notes || '',
+  room_type: stay.room_type || 'none', room_count: String(stay.room_count || 1), check_in_date: localDate(stay.check_in_date), check_out_date: localDate(stay.check_out_date), notes: stay.notes || '',
 }))
 
 const form = useForm({
@@ -80,11 +82,13 @@ const form = useForm({
 })
 
 const hotelOnly = ref(form.service_bundle === 'hotel')
-const stayWindowStart = computed(() => hotelOnly.value ? undefined : form.onward_arrival_at || undefined)
-const stayWindowEnd = computed(() => hotelOnly.value ? undefined : form.return_departure_at || undefined)
+const stayWindowStart = computed(() => hotelOnly.value ? undefined : localDate(form.onward_arrival_at) || undefined)
+const stayWindowEnd = computed(() => hotelOnly.value ? undefined : localDate(form.return_departure_at) || undefined)
 const airlineOptions = computed(() => Object.entries(props.airlines).map(([value, label]) => ({ value, label })))
 const cityOptions = computed(() => Object.entries(props.airportCities).map(([value, label]) => ({ value, label })))
-const hotelOptions = computed(() => props.hotels.map((hotel) => ({ value: hotel.id, label: `${hotel.name} · ${hotel.city}` })))
+const hotelOptionsFor = (city: string) => props.hotels
+  .filter((hotel) => hotel.city === city)
+  .map((hotel) => ({ value: hotel.id, label: hotel.name }))
 const allSelected = computed(() => props.availablePassengers.length > 0 && selectedPassengerIds.value.length === props.availablePassengers.length)
 const someSelected = computed(() => selectedPassengerIds.value.length > 0 && selectedPassengerIds.value.length < props.availablePassengers.length)
 
@@ -132,7 +136,8 @@ const toggleAll = (checked: boolean | 'indeterminate') => {
 }
 
 const addHotelStay = () => {
-  form.hotel_stays.push({ source: 'self', hotel_id: 'none', hotel_name: '', city: '', room_type: 'double', room_count: '1', check_in_date: '', check_out_date: '', notes: '' })
+  const previousCheckout = form.hotel_stays.at(-1)?.check_out_date || ''
+  form.hotel_stays.push({ source: 'self', hotel_id: 'none', hotel_name: '', city: '', room_type: 'double', room_count: '1', check_in_date: previousCheckout, check_out_date: '', notes: '' })
 }
 
 const selectHotel = (index: number, hotelId: string) => {
@@ -145,8 +150,20 @@ const selectHotel = (index: number, hotelId: string) => {
   if (!hotel.room_rates.some((rate: any) => rate.room_type === stay.room_type)) stay.room_type = hotel.room_rates[0]?.room_type || 'none'
 }
 
+const setStayCity = (index: number, city: string) => {
+  const stay = form.hotel_stays[index]
+  stay.city = city
+  const hotel = selectedHotel(stay.hotel_id)
+  if (hotel && hotel.city !== city) {
+    stay.hotel_id = 'none'
+    stay.hotel_name = ''
+    stay.room_type = 'none'
+  }
+}
+
 const selectedHotel = (hotelId: string) => props.hotels.find((hotel) => hotel.id === hotelId)
-const bedsPerRoom: Record<string, number> = { double: 2, triple: 3, quad: 4, quint: 5 }
+const bedsPerRoom: Record<string, number> = { sharing: 1, double: 2, triple: 3, quad: 4, quint: 5 }
+const roomTypeLabels: Record<string, string> = { sharing: 'Sharing', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }
 const stayAmount = (stay: any, field: 'retail_amount' | 'cost_amount') => {
   if (stay.source !== 'company') return 0
   const rate = selectedHotel(stay.hotel_id)?.room_rates?.find((item: any) => item.room_type === stay.room_type)
@@ -168,11 +185,25 @@ const plusOneMinute = (value?: string) => {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16)
 }
 
+const plusOneDay = (value?: string) => {
+  if (!value) return undefined
+  const date = new Date(`${localDate(value)}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return localDate(value)
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString().slice(0, 10)
+}
+
 const stayCheckInMin = (index: number) => index > 0
-  ? plusOneMinute(form.hotel_stays[index - 1]?.check_out_date)
+  ? form.hotel_stays[index - 1]?.check_out_date || undefined
   : stayWindowStart.value
 
-const stayCheckOutMin = (index: number) => plusOneMinute(form.hotel_stays[index]?.check_in_date)
+const stayCheckOutMin = (index: number) => plusOneDay(form.hotel_stays[index]?.check_in_date)
+
+const setStayCheckout = (index: number, value: string | number) => {
+  const checkoutDate = String(value)
+  form.hotel_stays[index].check_out_date = checkoutDate
+  if (form.hotel_stays[index + 1]) form.hotel_stays[index + 1].check_in_date = checkoutDate
+}
 
 const removeHotelStay = (index: number) => {
   form.hotel_stays.splice(index, 1)
@@ -293,21 +324,21 @@ const submit = () => {
             </div>
             <div class="grid min-w-0 gap-3 rounded-md border p-3 md:grid-cols-2 2xl:grid-cols-[72px_90px_95px_100px_100px_minmax(160px,1fr)_minmax(160px,1fr)] 2xl:items-end">
               <div class="font-medium 2xl:pb-2">Onward</div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Airline</Label><SearchableSelect v-model="form.onward_airline" :options="airlineOptions" placeholder="Code" search-placeholder="Type airline or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Airline</Label><SearchableSelect v-model="form.onward_airline" :options="airlineOptions" open-on-focus placeholder="Code" search-placeholder="Type airline or code" /></div>
               <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Flight #</Label><Input v-model="form.onward_flight_number" maxlength="5" placeholder="PK741" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">From</Label><SearchableSelect v-model="form.onward_departure_city" :options="cityOptions" placeholder="City" search-placeholder="Type city or code" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">To</Label><SearchableSelect v-model="form.onward_arrival_city" :options="cityOptions" placeholder="City" search-placeholder="Type city or code" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Takeoff</Label><Input v-model="form.onward_departure_at" type="datetime-local" required /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Landing</Label><Input v-model="form.onward_arrival_at" type="datetime-local" :min="plusOneMinute(form.onward_departure_at)" required /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">From</Label><SearchableSelect v-model="form.onward_departure_city" :options="cityOptions" open-on-focus placeholder="City" search-placeholder="Type city or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">To</Label><SearchableSelect v-model="form.onward_arrival_city" :options="cityOptions" open-on-focus placeholder="City" search-placeholder="Type city or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Takeoff</Label><DateTimePicker v-model="form.onward_departure_at" required /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Landing</Label><DateTimePicker v-model="form.onward_arrival_at" :min="plusOneMinute(form.onward_departure_at)" required /></div>
             </div>
             <div class="grid min-w-0 gap-3 rounded-md border p-3 md:grid-cols-2 2xl:grid-cols-[72px_90px_95px_100px_100px_minmax(160px,1fr)_minmax(160px,1fr)] 2xl:items-end">
               <div class="font-medium 2xl:pb-2">Return</div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Airline</Label><SearchableSelect v-model="form.return_airline" :options="airlineOptions" placeholder="Code" search-placeholder="Type airline or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Airline</Label><SearchableSelect v-model="form.return_airline" :options="airlineOptions" open-on-focus placeholder="Code" search-placeholder="Type airline or code" /></div>
               <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Flight #</Label><Input v-model="form.return_flight_number" maxlength="5" placeholder="PK742" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">From</Label><SearchableSelect v-model="form.return_departure_city" :options="cityOptions" placeholder="City" search-placeholder="Type city or code" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">To</Label><SearchableSelect v-model="form.return_arrival_city" :options="cityOptions" placeholder="City" search-placeholder="Type city or code" /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Takeoff</Label><Input v-model="form.return_departure_at" type="datetime-local" :min="plusOneMinute(form.onward_arrival_at)" required /></div>
-              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Landing</Label><Input v-model="form.return_arrival_at" type="datetime-local" :min="plusOneMinute(form.return_departure_at)" required /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">From</Label><SearchableSelect v-model="form.return_departure_city" :options="cityOptions" open-on-focus placeholder="City" search-placeholder="Type city or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">To</Label><SearchableSelect v-model="form.return_arrival_city" :options="cityOptions" open-on-focus placeholder="City" search-placeholder="Type city or code" /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Takeoff</Label><DateTimePicker v-model="form.return_departure_at" :min="plusOneMinute(form.onward_arrival_at)" required /></div>
+              <div class="min-w-0 space-y-1"><Label class="2xl:hidden">Landing</Label><DateTimePicker v-model="form.return_arrival_at" :min="plusOneMinute(form.return_departure_at)" required /></div>
             </div>
             <div v-for="field in ['onward_airline', 'onward_flight_number', 'onward_departure_city', 'onward_arrival_city', 'onward_departure_at', 'onward_arrival_at', 'return_airline', 'return_flight_number', 'return_departure_city', 'return_arrival_city', 'return_departure_at', 'return_arrival_at']" :key="field">
               <p v-if="form.errors[field]" class="text-xs text-destructive">{{ form.errors[field] }}</p>
@@ -323,14 +354,14 @@ const submit = () => {
           <CardContent class="space-y-3">
             <div v-for="(stay, index) in form.hotel_stays" :key="index" class="grid min-w-0 gap-3 rounded-md border p-3 md:grid-cols-2 lg:grid-cols-12 lg:items-end">
               <div class="font-medium lg:col-span-1 lg:pb-2">{{ index + 1 }}</div>
+              <div class="min-w-0 space-y-1 lg:col-span-2"><Label>City</Label><Select :model-value="stay.city" @update:model-value="setStayCity(index, String($event))"><SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger><SelectContent><SelectItem value="Makkah">Makkah</SelectItem><SelectItem value="Madinah">Madinah</SelectItem></SelectContent></Select></div>
               <div class="min-w-0 space-y-1 lg:col-span-2"><Label>Source</Label><Select v-model="stay.source"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="company">Company</SelectItem><SelectItem value="self">Self</SelectItem></SelectContent></Select></div>
-              <div v-if="stay.source === 'company'" class="min-w-0 space-y-1 lg:col-span-3"><Label>Hotel</Label><SearchableSelect :model-value="stay.hotel_id" :options="hotelOptions" placeholder="Select hotel" search-placeholder="Type hotel or city" @update:model-value="selectHotel(index, String($event))" /></div>
+              <div v-if="stay.source === 'company'" class="min-w-0 space-y-1 lg:col-span-3"><Label>Hotel</Label><SearchableSelect :model-value="stay.hotel_id" :options="hotelOptionsFor(stay.city)" :show-value="false" open-on-focus placeholder="Select hotel" search-placeholder="Type hotel name" @update:model-value="selectHotel(index, String($event))" /></div>
               <div v-else class="min-w-0 space-y-1 lg:col-span-3"><Label>Hotel</Label><Input v-model="stay.hotel_name" required /></div>
-              <div class="min-w-0 space-y-1 lg:col-span-2"><Label>City</Label><Input v-model="stay.city" required /></div>
-              <div class="min-w-0 space-y-1 lg:col-span-2"><Label>Room</Label><Select v-model="stay.room_type"><SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem v-for="rate in (stay.source === 'company' ? selectedHotel(stay.hotel_id)?.room_rates || [] : [{room_type:'double'},{room_type:'triple'},{room_type:'quad'},{room_type:'quint'}])" :key="rate.room_type" :value="rate.room_type">{{ rate.room_type }} ({{ bedsPerRoom[rate.room_type] }} beds)</SelectItem></SelectContent></Select></div>
-              <div class="min-w-0 space-y-1 lg:col-span-1"><Label>Rooms</Label><Input v-model="stay.room_count" type="number" min="1" required /></div>
-              <div class="min-w-0 space-y-1 lg:col-start-2 lg:col-span-3"><Label>Check-in</Label><Input v-model="stay.check_in_date" type="datetime-local" :min="stayCheckInMin(index)" :max="stayWindowEnd" required /></div>
-              <div class="min-w-0 space-y-1 lg:col-span-3"><Label>Checkout</Label><Input v-model="stay.check_out_date" type="datetime-local" :min="stayCheckOutMin(index)" :max="stayWindowEnd" required /></div>
+              <div class="min-w-0 space-y-1 lg:col-span-2"><Label>Room</Label><Select v-model="stay.room_type"><SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem v-for="rate in (stay.source === 'company' ? selectedHotel(stay.hotel_id)?.room_rates || [] : [{room_type:'sharing'},{room_type:'double'},{room_type:'triple'},{room_type:'quad'},{room_type:'quint'}])" :key="rate.room_type" :value="rate.room_type">{{ roomTypeLabels[rate.room_type] || rate.room_type }}</SelectItem></SelectContent></Select></div>
+              <div class="min-w-0 space-y-1 lg:col-span-1"><Label>{{ stay.room_type === 'sharing' ? 'Beds' : 'Rooms' }}</Label><Input v-model="stay.room_count" type="number" min="1" required /></div>
+              <div class="min-w-0 space-y-1 lg:col-start-2 lg:col-span-3"><Label>Check-in</Label><Input v-model="stay.check_in_date" type="date" :min="stayCheckInMin(index)" :max="stayWindowEnd" required /></div>
+              <div class="min-w-0 space-y-1 lg:col-span-3"><Label>Checkout</Label><Input :model-value="stay.check_out_date" type="date" :min="stayCheckOutMin(index)" :max="stayWindowEnd" required @update:model-value="setStayCheckout(index, $event)" /></div>
               <div class="min-w-0 space-y-1 lg:col-span-5"><Label>Notes</Label><Input v-model="stay.notes" /></div>
               <div class="flex items-end lg:col-start-12 lg:row-start-1">
                 <Button type="button" variant="ghost" size="icon" :disabled="form.hotel_stays.length === 1" @click="removeHotelStay(index)">

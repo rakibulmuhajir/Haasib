@@ -48,7 +48,12 @@ const formatDateTime = (value: unknown) => {
 
   return date.toLocaleString()
 }
-const roomBeds = (stay: any) => Number(stay.beds_per_room || ({ double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>)[stay.room_type] || 0)
+const formatDate = (value: unknown) => {
+  if (!value) return ''
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString()
+}
+const roomBeds = (stay: any) => Number(stay.beds_per_room || ({ sharing: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>)[stay.room_type] || 0)
 
 const voucherHtml = () => {
   const passengerRows = (props.voucher.passengers || []).map((passenger: any, index: number) => `
@@ -67,8 +72,8 @@ const voucherHtml = () => {
       <td>${escapeHtml(stay.hotel_name)}</td>
       <td>${escapeHtml(stay.city || '')}</td>
       <td>${escapeHtml(`${stay.room_count || 1} ${stay.room_type || ''} (${roomBeds(stay)} beds each)`)}</td>
-      <td>${escapeHtml(formatDateTime(stay.check_in_date))}</td>
-      <td>${escapeHtml(formatDateTime(stay.check_out_date))}</td>
+      <td>${escapeHtml(formatDate(stay.check_in_date))}</td>
+      <td>${escapeHtml(formatDate(stay.check_out_date))}</td>
       <td>${escapeHtml(stay.notes || '')}</td>
     </tr>
   `).join('')
@@ -177,13 +182,7 @@ const printVoucher = () => {
 }
 
 const exportVoucher = () => {
-  const blob = new Blob([voucherHtml()], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${props.voucher.voucher_number || 'voucher'}.html`
-  link.click()
-  URL.revokeObjectURL(url)
+  window.location.assign(`/${props.company.slug}/umrah/vouchers/${props.voucher.id}/pdf`)
 }
 </script>
 
@@ -197,7 +196,7 @@ const exportVoucher = () => {
       </Button>
       <Button variant="outline" @click="exportVoucher">
         <Download class="mr-2 h-4 w-4" />
-        Export
+        Export PDF
       </Button>
       <Button v-if="voucher.status === 'draft' && canEdit" variant="outline" @click="router.get(`/${company.slug}/umrah/vouchers/${voucher.id}/edit`)">
         <Pencil class="mr-2 h-4 w-4" />
@@ -279,7 +278,7 @@ const exportVoucher = () => {
           <div v-for="(stay, index) in voucher.hotel_stays" :key="index" class="rounded-md border p-3">
             <div class="font-medium">{{ stay.hotel_name }}<span v-if="stay.city"> · {{ stay.city }}</span></div>
             <div class="text-sm">{{ stay.room_count || 1 }} × {{ stay.room_type }} · {{ roomBeds(stay) }} beds each · {{ stay.source === 'company' ? 'Company supplied' : 'Self arranged' }}</div>
-            <div class="text-sm text-muted-foreground"><DateTimeText :value="stay.check_in_date" mode="datetime" /> to <DateTimeText :value="stay.check_out_date" mode="datetime" /></div>
+            <div class="text-sm text-muted-foreground"><DateTimeText :value="stay.check_in_date" mode="date" /> to <DateTimeText :value="stay.check_out_date" mode="date" /></div>
             <div v-if="['visa_transport_hotel', 'transport_hotel', 'hotel'].includes(voucher.service_bundle) && stay.source === 'company'" class="text-sm text-muted-foreground">Charge <MoneyText :amount="stay.total_retail_amount" :currency="company.base_currency" /><span v-if="canViewAccounting"> · Cost <MoneyText :amount="stay.total_cost_amount" :currency="company.base_currency" /></span></div>
             <div v-else class="text-sm text-muted-foreground">Itinerary only · No hotel charge</div>
             <div v-if="stay.notes" class="text-sm text-muted-foreground">{{ stay.notes }}</div>

@@ -75,8 +75,8 @@ class StoreVoucherRequest extends UmrahFormRequest
             'hotel_stays.*.hotel_id' => ['nullable', 'required_if:hotel_stays.*.source,company', 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.')],
             'hotel_stays.*.room_type' => ['required', Rule::in(array_keys(HotelRoomRate::TYPES))],
             'hotel_stays.*.room_count' => ['required', 'integer', 'min:1', 'max:100'],
-            'hotel_stays.*.check_in_date' => ['required', 'date'],
-            'hotel_stays.*.check_out_date' => ['required', 'date'],
+            'hotel_stays.*.check_in_date' => ['required', 'date_format:Y-m-d'],
+            'hotel_stays.*.check_out_date' => ['required', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
         ];
@@ -143,24 +143,24 @@ class StoreVoucherRequest extends UmrahFormRequest
                 }
 
                 $hotelOnly = $this->input('service_bundle') === Voucher::SERVICE_HOTEL;
-                $stayWindowStart = $hotelOnly ? null : Carbon::parse($this->input('onward_arrival_at'));
-                $stayWindowEnd = $hotelOnly ? null : Carbon::parse($this->input('return_departure_at'));
+                $stayWindowStart = $hotelOnly ? null : Carbon::parse($this->input('onward_arrival_at'))->startOfDay();
+                $stayWindowEnd = $hotelOnly ? null : Carbon::parse($this->input('return_departure_at'))->startOfDay();
                 $previousCheckout = null;
 
                 foreach ($this->input('hotel_stays', []) as $index => $stay) {
-                    $checkIn = Carbon::parse($stay['check_in_date']);
-                    $checkOut = Carbon::parse($stay['check_out_date']);
+                    $checkIn = Carbon::parse($stay['check_in_date'])->startOfDay();
+                    $checkOut = Carbon::parse($stay['check_out_date'])->startOfDay();
 
                     if ($checkOut->lte($checkIn)) {
                         $validator->errors()->add("hotel_stays.{$index}.check_out_date", 'Checkout must be after check-in.');
                     }
 
                     if (! $hotelOnly && ($checkIn->lt($stayWindowStart) || $checkOut->gt($stayWindowEnd))) {
-                        $validator->errors()->add("hotel_stays.{$index}.check_in_date", 'Stay times must be after onward landing and before return takeoff.');
+                        $validator->errors()->add("hotel_stays.{$index}.check_in_date", 'Stay dates must be within the onward arrival and return departure dates.');
                     }
 
-                    if ($previousCheckout && $checkIn->lte($previousCheckout)) {
-                        $validator->errors()->add("hotel_stays.{$index}.check_in_date", 'This stay must start after the previous stay ends.');
+                    if ($previousCheckout && $checkIn->lt($previousCheckout)) {
+                        $validator->errors()->add("hotel_stays.{$index}.check_in_date", 'This stay cannot start before the previous stay ends.');
                     }
 
                     $previousCheckout = $checkOut;

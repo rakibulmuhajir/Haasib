@@ -17,6 +17,7 @@ use App\Modules\Umrah\Models\VoucherPassenger;
 use App\Modules\Umrah\Services\HotelStayPricingCalculator;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -352,6 +353,36 @@ class VoucherController extends Controller
             'airportCities' => Voucher::AIRPORT_CITIES,
             'agentCapabilities' => $this->voucherCapabilities($company->id, request()),
         ]);
+    }
+
+    public function pdf(Request $request, string $companySlug, string $voucher)
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = Voucher::where('company_id', $company->id)
+            ->with([
+                'agent:id,name,phone,email,city,country,logo_url',
+                'group' => fn ($query) => $query->with([
+                    'transportService:id,name,vehicle_type,number_plate,driver_name,driver_contact',
+                    'driver:id,name,phone',
+                    'transportItems' => fn ($items) => $items
+                        ->with(['service:id,name,vehicle_type,number_plate,driver_name,driver_contact', 'sector:id,name,origin,destination', 'driver:id,name,phone'])
+                        ->orderBy('scheduled_at'),
+                ]),
+                'passengers' => fn ($query) => $query->orderBy('sort_order')->orderBy('created_at'),
+                'createdBy:id,name',
+            ])
+            ->when($this->currentCompanyRole($company->id, $request) === 'member', function ($query) use ($company, $request) {
+                $agentId = $this->linkedAgentId($company->id, $request);
+
+                return $agentId ? $query->where('agent_id', $agentId) : $query->whereRaw('1 = 0');
+            })
+            ->findOrFail($voucher);
+
+        $filename = preg_replace('/[^A-Za-z0-9_-]/', '-', $record->voucher_number ?: 'voucher').'.pdf';
+
+        return Pdf::loadView('umrah::vouchers.pdf', ['company' => $company, 'voucher' => $record])
+            ->setPaper('letter', 'portrait')
+            ->download($filename);
     }
 
     private function companyPayload($company): array

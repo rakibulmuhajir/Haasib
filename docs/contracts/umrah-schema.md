@@ -143,8 +143,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `id` uuid PK.
   - `company_id` uuid FK.
   - `hotel_id` uuid FK -> `umrah.hotels.id`.
-  - `room_type` varchar(30). Values: `double` (2 beds), `triple` (3 beds), `quad` (4 beds), `quint` (5 beds). Hotels do not offer a single-bed room type.
-  - `retail_amount`, `cost_amount` numeric(15,2) default 0. Amount per bed per night; a stay total is rate x beds per room x room count x nights.
+  - `room_type` varchar(30). Values: `sharing` (priced per allocated bed), `double` (2 beds), `triple` (3 beds), `quad` (4 beds), `quint` (5 beds). Hotels do not offer a single-bed room type.
+  - `retail_amount`, `cost_amount` numeric(15,2) default 0. Amount per bed per night; a room stay total is rate x beds per room x room count x nights. For `sharing`, the voucher quantity is the allocated bed count and the total is rate x allocated beds x nights.
   - `is_active` boolean default true.
   - timestamps, soft deletes.
 - Unique (`company_id`, `hotel_id`, `room_type`).
@@ -372,7 +372,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `return_arrival_city` varchar(150) nullable for existing records, required when creating a voucher. Stores an airport IATA code from the module airport-city catalogue.
   - `return_departure_at` timestamp nullable. Required unless `service_bundle = hotel`.
   - `return_arrival_at` timestamp nullable. Required unless `service_bundle = hotel`.
-  - `hotel_stays` jsonb default `[]`. Required for every voucher because the voucher must show the passenger's complete journey and stays, even when hotel service was bought elsewhere. Each stay has hotel name, city, check-in datetime, checkout datetime, and notes. New vouchers start with three editable stays: Makkah, Madinah, Makkah.
+  - `hotel_stays` jsonb default `[]`. Required for every voucher because the voucher must show the passenger's complete journey and stays, even when hotel service was bought elsewhere. Each stay has hotel name, city, check-in date, checkout date, and notes. Hotel stays do not record check-in or checkout times. New vouchers start with three editable stays: Makkah, Madinah, Makkah.
+    - Selecting a stay checkout date sets the next stay check-in to the same date by default. Same-day hotel transfers are valid; a later stay cannot begin before the previous checkout date.
     - Company stay snapshot also stores `hotel_id`, `hotel_vendor_id`, `room_type`, `room_count`, `beds_per_room`, `night_count`, per-bed unit retail/cost and total retail/cost.
     - Self-arranged stay stores `source = self` and zero retail/cost while preserving itinerary information.
     - A Company stay uses the configured company hotel and is charged; a Self stay is itinerary-only and has zero retail/cost.

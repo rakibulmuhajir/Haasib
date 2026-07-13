@@ -11,9 +11,9 @@ class HotelRoomRate extends Model
 {
     use HasUuids, SoftDeletes;
 
-    public const TYPES = ['double' => 'Double', 'triple' => 'Triple', 'quad' => 'Quad', 'quint' => 'Quint'];
+    public const TYPES = ['sharing' => 'Sharing', 'double' => 'Double', 'triple' => 'Triple', 'quad' => 'Quad', 'quint' => 'Quint'];
 
-    public const BED_COUNTS = ['double' => 2, 'triple' => 3, 'quad' => 4, 'quint' => 5];
+    public const BED_COUNTS = ['sharing' => 1, 'double' => 2, 'triple' => 3, 'quad' => 4, 'quint' => 5];
 
     public static function bedsFor(string $roomType): int
     {

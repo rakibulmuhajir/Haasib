@@ -46,6 +46,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers', [VoucherController::class, 'store'])->name('umrah.vouchers.store');
         Route::get('vouchers/{voucher}/edit', [VoucherController::class, 'edit'])->whereUuid('voucher')->name('umrah.vouchers.edit');
         Route::put('vouchers/{voucher}', [VoucherController::class, 'update'])->whereUuid('voucher')->name('umrah.vouchers.update');
+        Route::get('vouchers/{voucher}/pdf', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.pdf');
         Route::get('vouchers/{voucher}', [VoucherController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.show');
         Route::post('vouchers/{voucher}/approve', [VoucherController::class, 'approve'])->whereUuid('voucher')->name('umrah.vouchers.approve');
 

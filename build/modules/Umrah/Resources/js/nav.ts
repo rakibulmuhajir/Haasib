@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bus,
   FileText,
+  Hotel,
   ScrollText,
   LayoutDashboard,
   Plane,
@@ -41,6 +42,7 @@ export const umrahNav: ModuleNavConfig = {
             children: [
               { title: 'Transport Services', href: `/${slug}/umrah/settings/transport-services`, icon: Bus },
               { title: 'Drivers', href: `/${slug}/umrah/settings/drivers`, icon: Users },
+              { title: 'Hotels', href: `/${slug}/umrah/settings/hotels`, icon: Hotel },
             ],
           },
         ],

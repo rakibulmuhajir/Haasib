@@ -25,8 +25,11 @@ class Agent extends Model
     ];
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.agents';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -38,7 +41,12 @@ class Agent extends Model
         'email',
         'city',
         'country',
+        'logo_url',
         'notes',
+        'can_create_voucher',
+        'can_approve_voucher',
+        'can_edit_voucher',
+        'voucher_cutoff_hours',
         'total_receivable',
         'total_paid',
         'balance',
@@ -51,6 +59,10 @@ class Agent extends Model
         'total_receivable' => 'decimal:2',
         'total_paid' => 'decimal:2',
         'balance' => 'decimal:2',
+        'can_create_voucher' => 'boolean',
+        'can_approve_voucher' => 'boolean',
+        'can_edit_voucher' => 'boolean',
+        'voucher_cutoff_hours' => 'integer',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

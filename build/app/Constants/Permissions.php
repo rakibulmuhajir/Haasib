@@ -232,6 +232,8 @@ class Permissions
     public const UMRAH_PAYMENT_CREATE = 'umrah.payment.create';
     public const UMRAH_VOUCHER_CREATE = 'umrah.voucher.create';
     public const UMRAH_VOUCHER_VIEW = 'umrah.voucher.view';
+    public const UMRAH_VOUCHER_APPROVE = 'umrah.voucher.approve';
+    public const UMRAH_VOUCHER_UPDATE = 'umrah.voucher.update';
 
     // Umrah - Vendors, transport settings, and reports
     public const UMRAH_VENDOR_CREATE = 'umrah.vendor.create';

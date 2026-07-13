@@ -31,8 +31,7 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             'adult_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'child_retail_amount' => ['nullable', 'numeric', 'min:0'],
             'child_cost_amount' => ['nullable', 'numeric', 'min:0'],
-            'infant_retail_amount' => ['nullable', 'numeric', 'min:0'],
-            'infant_cost_amount' => ['nullable', 'numeric', 'min:0'],
+            'included_bus_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ];
     }

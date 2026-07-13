@@ -28,6 +28,7 @@ Last Updated: 2024-01-28
 ## Currency Enablement
 - Base currency selected at company creation (must exist in `public.currencies`, active). Immutable after journal entries exist.
 - Enabling currencies: add to `auth.company_currencies` (must be active in `public.currencies`). No duplicates.
+- Each enabled secondary currency has a manual default rate using `1 secondary = X base`; base rate is always 1. These defaults do not modify posted transaction snapshots.
 - Disabling currency: blocked if base; blocked if accounts in that currency have non-zero balances or unpaid transactions.
 
 ## Account Currency Rules

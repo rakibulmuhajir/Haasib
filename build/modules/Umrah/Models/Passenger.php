@@ -26,6 +26,12 @@ class Passenger extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_DELIVERED = 'delivered';
+    public const SERVICE_VISA_TRANSPORT = 'visa_transport';
+    public const SERVICE_TRANSPORT_ONLY = 'transport_only';
+    public const SERVICE_TYPES = [
+        self::SERVICE_VISA_TRANSPORT => 'Visa included',
+        self::SERVICE_TRANSPORT_ONLY => 'Already has visa - transport only',
+    ];
 
     public const STATUSES = [
         self::STATUS_PENDING => 'Pending',
@@ -44,6 +50,9 @@ class Passenger extends Model
         'passport_number',
         'nationality',
         'date_of_birth',
+        'imported_age',
+        'service_type',
+        'transport_charge_amount',
         'visa_status',
         'notes',
         'sort_order',
@@ -53,6 +62,8 @@ class Passenger extends Model
         'company_id' => 'string',
         'visa_group_id' => 'string',
         'date_of_birth' => 'date',
+        'imported_age' => 'integer',
+        'transport_charge_amount' => 'decimal:2',
         'sort_order' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

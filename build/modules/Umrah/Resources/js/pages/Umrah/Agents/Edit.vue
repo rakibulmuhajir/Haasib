@@ -15,7 +15,7 @@ const props = defineProps<{
   company: { slug: string }
   agent: any
   countries: Record<string, string>
-  companyUsers: Array<{ id: string; name: string; email: string; role: string }>
+  canManageLogins: boolean
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -27,21 +27,18 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm({
   agent_number: props.agent.agent_number || '',
-  user_id: props.agent.user_id || 'none',
+  login_username: props.canManageLogins ? props.agent.user?.username || '' : '',
+  password: '',
   name: props.agent.name || '',
   phone: props.agent.phone || '',
   email: props.agent.email || '',
   city: props.agent.city || '',
   country: props.agent.country || 'Pakistan',
+  logo_url: props.agent.logo_url || '',
   notes: props.agent.notes || '',
 })
 
-const submit = () => form
-  .transform((data) => ({
-    ...data,
-    user_id: data.user_id === 'none' ? null : data.user_id,
-  }))
-  .put(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
+const submit = () => form.put(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
     onSuccess: () => toast.success('Agent updated successfully'),
     onError: () => toast.error('Failed to update agent'),
   })
@@ -76,19 +73,17 @@ const submit = () => form
               <p v-if="form.errors.email" class="text-xs text-destructive">{{ form.errors.email }}</p>
             </div>
             <div class="space-y-2 md:col-span-2">
-              <Label>Login user</Label>
-              <Select v-model="form.user_id">
-                <SelectTrigger><SelectValue placeholder="Optional login user" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No login access</SelectItem>
-                  <SelectItem v-for="user in companyUsers" :key="user.id" :value="user.id">
-                    {{ user.name }} · {{ user.email }} · {{ user.role }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p class="text-xs text-muted-foreground">Link a company member if this agent should create their own vouchers.</p>
-              <p v-if="form.errors.user_id" class="text-xs text-destructive">{{ form.errors.user_id }}</p>
+              <Label>Logo URL</Label>
+              <div class="flex items-center gap-3">
+                <img v-if="form.logo_url" :src="form.logo_url" alt="Agent logo preview" class="h-12 w-12 rounded-md border object-contain" />
+                <Input v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+              </div>
+              <p v-if="form.errors.logo_url" class="text-xs text-destructive">{{ form.errors.logo_url }}</p>
             </div>
+            <template v-if="canManageLogins">
+              <div class="space-y-2"><Label>Username</Label><Input v-model="form.login_username" autocomplete="off" /><p v-if="form.errors.login_username" class="text-xs text-destructive">{{ form.errors.login_username }}</p></div>
+              <div class="space-y-2"><Label>New Password</Label><Input v-model="form.password" type="password" autocomplete="new-password" placeholder="Leave blank to keep current password" /><p v-if="form.errors.password" class="text-xs text-destructive">{{ form.errors.password }}</p></div>
+            </template>
             <div class="space-y-2 md:col-span-2">
               <Label>City</Label>
               <Input v-model="form.city" />

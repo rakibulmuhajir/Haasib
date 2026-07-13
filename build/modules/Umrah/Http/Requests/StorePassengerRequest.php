@@ -21,6 +21,9 @@ class StorePassengerRequest extends UmrahFormRequest
             'passport_number' => ['nullable', 'string', 'max:100'],
             'nationality' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
             'date_of_birth' => ['nullable', 'date'],
+            'imported_age' => ['nullable', 'integer', 'min:0', 'max:130'],
+            'service_type' => ['nullable', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
+            'transport_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'visa_status' => ['nullable', Rule::in(array_keys(Passenger::STATUSES))],
             'notes' => ['nullable', 'string'],
         ];

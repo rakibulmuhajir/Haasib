@@ -2,10 +2,12 @@
 import { Head, Link, usePage, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import PageShell from '@/components/PageShell.vue'
+import CompanyCurrencies from '@/components/company/CompanyCurrencies.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -32,6 +34,9 @@ interface Company {
   industry_name?: string | null
   country?: string
   base_currency: string
+  logo_url?: string | null
+  language?: string | null
+  locale?: string | null
   is_active: boolean
   created_at: string
   current_user_role: string
@@ -42,6 +47,9 @@ interface Company {
     auto_create_fiscal_year?: boolean
     default_period_type?: string
     modules?: Record<string, boolean>
+    contact_email?: string | null
+    contact_phone?: string | null
+    website?: string | null
   }
 }
 
@@ -49,7 +57,20 @@ const page = usePage()
 const props = page.props as any
 
 const company = ref<Company>(props.company)
+const companyCurrencies = props.companyCurrencies || []
+const availableCurrencies = props.availableCurrencies || []
 const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
+
+const generalForm = useForm({
+  name: company.value.name,
+  logo_url: company.value.logo_url || '',
+  contact_email: company.value.settings?.contact_email || '',
+  contact_phone: company.value.settings?.contact_phone || '',
+  website: company.value.settings?.website || '',
+  language: company.value.language || 'en',
+  locale: company.value.locale || 'en_US',
+})
+const saveGeneralSettings = () => generalForm.patch(`/${company.value.slug}/settings`, { preserveScroll: true })
 
 // Fiscal year form
 const fiscalYearForm = useForm({
@@ -107,7 +128,7 @@ const settingsSections = [
     title: 'General',
     description: 'Company information, logo, and basic settings',
     icon: Building,
-    href: '#', // Will be implemented later
+    href: '#general-settings',
     color: 'text-blue-600',
   },
   {
@@ -181,15 +202,6 @@ const quickActions = [
     variant: 'outline' as const,
   },
 ]
-
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency === 'SAR' ? 'SAR' : 'USD',
-    minimumFractionDigits: 2,
-  }).format(amount)
-}
 
 const getRoleDisplayName = (role: string) => {
   const roleNames: Record<string, string> = {
@@ -269,6 +281,45 @@ const getRoleBadgeVariant = (role: string) => {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card id="general-settings" class="mt-8">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2"><Building class="h-5 w-5" />General</CardTitle>
+          <CardDescription>Company identity and contact details.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form class="space-y-4" @submit.prevent="saveGeneralSettings">
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="space-y-2"><Label>Company Name</Label><Input v-model="generalForm.name" :disabled="!company.can_manage_company" /><p v-if="generalForm.errors.name" class="text-xs text-destructive">{{ generalForm.errors.name }}</p></div>
+              <div class="space-y-2"><Label>Base Currency</Label><Input :model-value="company.base_currency" disabled /></div>
+              <div class="space-y-2 md:col-span-2">
+                <Label>Logo URL</Label>
+                <div class="flex items-center gap-3">
+                  <img v-if="generalForm.logo_url" :src="generalForm.logo_url" :alt="`${company.name} logo preview`" class="h-14 w-14 rounded-md border object-contain" />
+                  <Input v-model="generalForm.logo_url" type="url" placeholder="https://example.com/logo.png" :disabled="!company.can_manage_company" />
+                </div>
+                <p v-if="generalForm.errors.logo_url" class="text-xs text-destructive">{{ generalForm.errors.logo_url }}</p>
+              </div>
+              <div class="space-y-2"><Label>Contact Email</Label><Input v-model="generalForm.contact_email" type="email" :disabled="!company.can_manage_company" /><p v-if="generalForm.errors.contact_email" class="text-xs text-destructive">{{ generalForm.errors.contact_email }}</p></div>
+              <div class="space-y-2"><Label>Contact Phone</Label><Input v-model="generalForm.contact_phone" :disabled="!company.can_manage_company" /><p v-if="generalForm.errors.contact_phone" class="text-xs text-destructive">{{ generalForm.errors.contact_phone }}</p></div>
+              <div class="space-y-2 md:col-span-2"><Label>Website</Label><Input v-model="generalForm.website" type="url" :disabled="!company.can_manage_company" /><p v-if="generalForm.errors.website" class="text-xs text-destructive">{{ generalForm.errors.website }}</p></div>
+              <div class="space-y-2"><Label>Language</Label><Input v-model="generalForm.language" :disabled="!company.can_manage_company" /></div>
+              <div class="space-y-2"><Label>Locale</Label><Input v-model="generalForm.locale" :disabled="!company.can_manage_company" /></div>
+            </div>
+            <div v-if="company.can_manage_company" class="flex justify-end"><Button type="submit" :disabled="generalForm.processing">Save General Settings</Button></div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card class="mt-8">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2"><TrendingUp class="h-5 w-5" />Currencies</CardTitle>
+          <CardDescription>Manual rates use 1 secondary currency = X {{ company.base_currency }}.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CompanyCurrencies :company="company" :enabled="companyCurrencies" :available="availableCurrencies" :can-manage="company.can_manage_company" />
         </CardContent>
       </Card>
 

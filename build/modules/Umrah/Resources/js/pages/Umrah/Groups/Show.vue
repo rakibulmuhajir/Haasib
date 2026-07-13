@@ -38,6 +38,9 @@ const passengerForm = useForm({
   passport_number: '',
   nationality: '',
   date_of_birth: '',
+  imported_age: '',
+  service_type: 'visa_transport',
+  transport_charge_amount: '0',
   visa_status: 'received',
   notes: '',
 })
@@ -98,7 +101,9 @@ const passengerAgeText = (passenger: any) => {
   const age = calculateAge(passenger.date_of_birth)
 
   if (age === null) {
-    return 'DOB not set'
+    return passenger.imported_age !== null && passenger.imported_age !== undefined
+      ? `Age ${passenger.imported_age}`
+      : 'Age not set'
   }
 
   return `${normalizeDate(passenger.date_of_birth)} · Age ${age}`
@@ -139,15 +144,22 @@ const toggleAllPassengers = (checked: boolean | 'indeterminate') => {
     : []
 }
 
-const addPassenger = () => passengerForm.post(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers`, {
-  preserveScroll: true,
-  onSuccess: () => {
-    toast.success('Passenger added successfully')
-    passengerForm.reset()
-    passengerForm.visa_status = 'received'
-  },
-  onError: () => toast.error('Failed to add passenger'),
-})
+const addPassenger = () => passengerForm
+  .transform((data) => ({
+    ...data,
+    imported_age: data.imported_age === '' ? null : Number(data.imported_age),
+  }))
+  .post(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Passenger added successfully')
+      passengerForm.reset()
+      passengerForm.visa_status = 'received'
+      passengerForm.service_type = 'visa_transport'
+      passengerForm.transport_charge_amount = '0'
+    },
+    onError: () => toast.error('Failed to add passenger'),
+  })
 
 const updatePassengerStatus = (passenger: any, status: string) => {
   singleStatusForm.visa_status = status
@@ -235,7 +247,7 @@ const addPayment = () => paymentForm
             <div><div class="text-sm text-muted-foreground">Madinah Hotel</div><div class="font-medium">{{ group.hotel_info?.madinah || 'Not set' }}</div></div>
             <div>
               <div class="text-sm text-muted-foreground">Transport</div>
-              <div class="font-medium">{{ group.transport_required ? `${group.transport_quantity} × ${group.transport_service?.name || 'vehicle'}` : 'Not required' }}</div>
+              <div class="font-medium">{{ group.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus included' }}</div>
               <div v-if="group.transport_required && (group.transport_pax_capacity || group.transport_service?.vehicle_type)" class="text-xs text-muted-foreground">
                 <span v-if="group.transport_service?.vehicle_type">{{ group.transport_service.vehicle_type }}</span>
                 <span v-if="group.transport_pax_capacity"> · {{ group.transport_pax_capacity }} pax each</span>
@@ -248,8 +260,11 @@ const addPayment = () => paymentForm
             </div>
             <div><div class="text-sm text-muted-foreground">Visa Sale</div><div class="font-medium"><MoneyText :amount="group.visa_sale_amount" :currency="company.base_currency" /></div></div>
             <div><div class="text-sm text-muted-foreground">Transport Charge</div><div class="font-medium"><MoneyText :amount="group.transport_amount" :currency="company.base_currency" /></div></div>
+            <div><div class="text-sm text-muted-foreground">Hotel Charge</div><div class="font-medium"><MoneyText :amount="group.hotel_amount" :currency="company.base_currency" /></div></div>
             <div v-if="canViewAccounting"><div class="text-sm text-muted-foreground">Visa Cost</div><div class="font-medium"><MoneyText :amount="group.visa_cost_amount" :currency="company.base_currency" /></div></div>
+            <div v-if="canViewAccounting && Number(group.included_bus_cost_deduction || 0) > 0"><div class="text-sm text-muted-foreground">Included Bus Cost Deducted</div><div class="font-medium"><MoneyText :amount="group.included_bus_cost_deduction" :currency="company.base_currency" /></div></div>
             <div v-if="canViewAccounting"><div class="text-sm text-muted-foreground">Transport Cost</div><div class="font-medium"><MoneyText :amount="group.transport_cost_amount" :currency="company.base_currency" /></div></div>
+            <div v-if="canViewAccounting"><div class="text-sm text-muted-foreground">Hotel Cost</div><div class="font-medium"><MoneyText :amount="group.hotel_cost_amount" :currency="company.base_currency" /></div></div>
             <div v-if="canViewAccounting">
               <div class="text-sm text-muted-foreground">Sale Journal</div>
               <Button v-if="group.sale_transaction" variant="link" class="h-auto p-0" @click="router.get(`/${company.slug}/journals/${group.sale_transaction.id}`)">
@@ -263,6 +278,18 @@ const addPayment = () => paymentForm
                 {{ group.cost_transaction.transaction_number }}
               </Button>
               <div v-else class="font-medium">Not posted</div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card v-if="group.transport_mode === 'specialized'">
+          <CardHeader><CardTitle>Transport Schedule</CardTitle><CardDescription>Selected journey and sector fare snapshots.</CardDescription></CardHeader>
+          <CardContent class="space-y-3">
+            <div v-for="item in group.transport_items" :key="item.id" class="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_140px_120px_150px]">
+              <div><div class="font-medium">{{ item.description }}</div><div class="text-xs text-muted-foreground">{{ item.sector?.name || item.package?.name }} · {{ item.service?.name }}<span v-if="item.terminal === 'hajj'"> · Hajj Terminal</span></div></div>
+              <div><div class="text-xs text-muted-foreground">Schedule</div><div>{{ item.scheduled_at || 'Not scheduled' }}</div></div>
+              <div><div class="text-xs text-muted-foreground">Vehicles / Pax</div><div>{{ item.quantity }} / {{ item.passenger_count }}</div></div>
+              <div><div class="text-xs text-muted-foreground">Charge</div><MoneyText :amount="item.total_sale_amount" :currency="company.base_currency" /><div v-if="canViewAccounting" class="text-xs text-muted-foreground">Cost <MoneyText :amount="item.total_cost_amount" :currency="company.base_currency" /></div></div>
             </div>
           </CardContent>
         </Card>
@@ -292,7 +319,7 @@ const addPayment = () => paymentForm
                 </Button>
               </div>
             </div>
-            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_160px_140px_140px_170px]">
+            <div v-for="passenger in group.passengers" :key="passenger.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[32px_1fr_150px_120px_130px_190px_160px]">
               <div class="flex items-start pt-1">
                 <Checkbox
                   :model-value="selectedPassengerIds.includes(passenger.id)"
@@ -306,6 +333,7 @@ const addPayment = () => paymentForm
               <div>{{ passenger.passport_number || 'No passport' }}</div>
               <div>{{ passengerAgeText(passenger) }}</div>
               <div>{{ passenger.nationality || 'Nationality not set' }}</div>
+              <div><div>{{ passenger.service_type === 'transport_only' ? 'Transport only' : 'Visa included' }}</div><div v-if="passenger.service_type === 'transport_only'" class="text-xs text-muted-foreground"><MoneyText :amount="passenger.transport_charge_amount" :currency="company.base_currency" /></div></div>
               <div class="space-y-2">
                 <Badge variant="secondary">{{ passengerStatuses[passenger.visa_status] || passenger.visa_status }}</Badge>
                 <Select :model-value="passenger.visa_status" @update:model-value="(status) => updatePassengerStatus(passenger, String(status))">
@@ -346,7 +374,7 @@ const addPayment = () => paymentForm
               <div class="space-y-2"><Label>Name</Label><Input v-model="passengerForm.full_name" required /></div>
               <div class="grid gap-3 md:grid-cols-2">
                 <div class="space-y-2"><Label>Passport #</Label><Input v-model="passengerForm.passport_number" /></div>
-                <div class="space-y-2"><Label>Date of Birth</Label><Input v-model="passengerForm.date_of_birth" type="date" /></div>
+                <div class="space-y-2"><Label>Age</Label><Input v-model="passengerForm.imported_age" type="number" min="0" max="130" /></div>
                 <div class="space-y-2"><Label>Nationality</Label><Input v-model="passengerForm.nationality" /></div>
               </div>
               <div class="space-y-2">
@@ -358,6 +386,14 @@ const addPayment = () => paymentForm
                   </SelectContent>
                 </Select>
               </div>
+              <div class="space-y-2">
+                <Label>Service</Label>
+                <Select v-model="passengerForm.service_type">
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="visa_transport">Visa included</SelectItem><SelectItem value="transport_only">Already has visa - transport only</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div v-if="passengerForm.service_type === 'transport_only'" class="space-y-2"><Label>Transport Charge</Label><Input v-model="passengerForm.transport_charge_amount" type="number" min="0" step="0.01" /></div>
               <div class="space-y-2"><Label>Notes</Label><Textarea v-model="passengerForm.notes" /></div>
               <Button type="submit" class="w-full" :disabled="passengerForm.processing"><Plus class="mr-2 h-4 w-4" />Add Passenger</Button>
             </form>

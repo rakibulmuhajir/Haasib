@@ -63,4 +63,9 @@ class TransportService extends Model
     {
         return $this->hasMany(VisaGroup::class);
     }
+
+    public function fares(): HasMany
+    {
+        return $this->hasMany(TransportFare::class);
+    }
 }

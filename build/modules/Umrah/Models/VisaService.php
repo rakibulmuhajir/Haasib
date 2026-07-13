@@ -27,8 +27,6 @@ class VisaService extends Model
         'cost_amount',
         'child_retail_amount',
         'child_cost_amount',
-        'infant_retail_amount',
-        'infant_cost_amount',
         'notes',
         'is_active',
     ];
@@ -40,8 +38,6 @@ class VisaService extends Model
         'cost_amount' => 'decimal:2',
         'child_retail_amount' => 'decimal:2',
         'child_cost_amount' => 'decimal:2',
-        'infant_retail_amount' => 'decimal:2',
-        'infant_cost_amount' => 'decimal:2',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

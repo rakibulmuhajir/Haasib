@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
@@ -15,6 +15,7 @@ const props = defineProps<{
   vouchers: { data: any[] }
   filters: { search?: string }
   statuses: Record<string, string>
+  serviceBundles: Record<string, string>
 }>()
 
 const search = ref(props.filters.search || '')
@@ -25,7 +26,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const applySearch = () => router.get(`/${props.company.slug}/umrah/vouchers`, { search: search.value }, { preserveState: true })
-const isPast = (voucher: any) => computed(() => voucher.return_arrival_at && new Date(voucher.return_arrival_at) < new Date()).value
+const isPast = (voucher: any) => {
+  const end = voucher.service_bundle === 'hotel'
+    ? voucher.hotel_stays?.at(-1)?.check_out_date
+    : voucher.return_arrival_at
+  return Boolean(end && new Date(end) < new Date())
+}
+const serviceDate = (voucher: any) => voucher.service_bundle === 'hotel' ? voucher.hotel_stays?.[0]?.check_in_date : voucher.onward_departure_at
 </script>
 
 <template>
@@ -57,10 +64,11 @@ const isPast = (voucher: any) => computed(() => voucher.return_arrival_at && new
             <div class="text-sm text-muted-foreground">
               {{ voucher.group?.group_number || 'No group' }} · {{ voucher.group?.name || 'No group name' }} · {{ voucher.agent?.name || 'No agent' }}
             </div>
+            <Badge variant="outline" class="mt-2">{{ serviceBundles[voucher.service_bundle] || voucher.service_bundle }}</Badge>
           </div>
           <div class="text-sm">
             <div class="text-muted-foreground">Travel</div>
-            <DateTimeText :value="voucher.onward_departure_at" mode="date" />
+            <DateTimeText :value="serviceDate(voucher)" mode="date" />
           </div>
           <div class="text-sm">
             <div class="text-muted-foreground">Passengers</div>

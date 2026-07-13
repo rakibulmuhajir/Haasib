@@ -7,27 +7,50 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
-import { Plus, Plane, Save, Trash2 } from 'lucide-vue-next'
+import { Plus, Plane, Save, Trash2, Upload } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+
+type PassengerFormRow = {
+  full_name: string
+  passport_number: string
+  date_of_birth: string
+  imported_age: string
+  nationality: string
+  visa_status: string
+  service_type: string
+  transport_charge_amount: string
+}
+
+type TransportItemFormRow = {
+  transport_fare_id: string
+  driver_id: string
+  scheduled_at: string
+  terminal: string
+  quantity: string
+  passenger_count: string
+  notes: string
+}
 
 const props = defineProps<{
   company: { slug: string; base_currency: string }
   nextGroupNumber: string
   agents: any[]
   vendors: any[]
-  transportServices: any[]
-  drivers: any[]
+  transportFares: any[]
   statuses: Record<string, string>
   passengerStatuses: Record<string, string>
+  passengerServiceTypes: Record<string, string>
   countries: Record<string, string>
 }>()
 
 const page = usePage()
 const currentRole = computed(() => (page.props.auth as any)?.currentCompanyRole || null)
 const canViewAccounting = computed(() => ['super_admin', 'owner', 'accountant'].includes(String(currentRole.value)))
+const canManageSetup = computed(() => String(currentRole.value) !== 'member')
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -36,13 +59,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const form = useForm({
-  group_number: props.nextGroupNumber,
+  group_number: '',
   name: '',
-  agent_id: '',
+  agent_id: props.agents.length === 1 ? props.agents[0].id : '',
   vendor_id: 'none',
   status: 'passports_received',
   travel_date: '',
   transport_required: true,
+  transport_mode: 'standard_bus',
   transport_service_id: 'none',
   driver_id: 'none',
   transport_quantity: '1',
@@ -55,13 +79,17 @@ const form = useForm({
   transport_cost_amount: '0',
   notes: '',
   passengers: [
-    { full_name: '', passport_number: '', date_of_birth: '', nationality: 'Pakistan', visa_status: 'received' },
-  ],
+    { full_name: '', passport_number: '', date_of_birth: '', imported_age: '', nationality: 'Pakistan', visa_status: 'received', service_type: 'visa_transport', transport_charge_amount: '0' },
+  ] as PassengerFormRow[],
+  transport_items: [] as TransportItemFormRow[],
 })
 
 const quickAgentOpen = ref(false)
 const quickVendorOpen = ref(false)
-const passengerBulkText = ref('')
+const importForm = useForm<{ mutamers_file: File | null }>({
+  mutamers_file: null,
+})
+const appliedImportSignature = ref('')
 
 const agentForm = useForm({
   agent_number: '',
@@ -84,8 +112,7 @@ const vendorForm = useForm({
   adult_cost_amount: '0',
   child_retail_amount: '0',
   child_cost_amount: '0',
-  infant_retail_amount: '0',
-  infant_cost_amount: '0',
+  included_bus_cost_amount: '50',
   notes: '',
 })
 
@@ -93,30 +120,54 @@ const sameAmount = (first: string | number | null | undefined, second: string | 
 
 watch(() => vendorForm.adult_retail_amount, (value, oldValue) => {
   if (sameAmount(vendorForm.child_retail_amount, oldValue)) vendorForm.child_retail_amount = value
-  if (sameAmount(vendorForm.infant_retail_amount, oldValue)) vendorForm.infant_retail_amount = value
 })
 
 watch(() => vendorForm.adult_cost_amount, (value, oldValue) => {
   if (sameAmount(vendorForm.child_cost_amount, oldValue)) vendorForm.child_cost_amount = value
-  if (sameAmount(vendorForm.infant_cost_amount, oldValue)) vendorForm.infant_cost_amount = value
 })
 
 const receivable = computed(() => {
   return Math.max(Number(form.visa_sale_amount || 0) + Number(form.transport_amount || 0) - Number(form.discount_amount || 0), 0)
 })
 const profit = computed(() => receivable.value - Number(form.visa_cost_amount || 0) - Number(form.transport_cost_amount || 0))
-const selectedTransport = computed(() => props.transportServices.find((item) => item.id === form.transport_service_id))
-const totalTransportCapacity = computed(() => Number(form.transport_quantity || 0) * Number(form.transport_pax_capacity || 0))
 const selectedAgent = computed(() => props.agents.find((item) => item.id === form.agent_id))
 const selectedVendor = computed(() => props.vendors.find((item) => item.id === form.vendor_id))
 const defaultNationality = computed(() => selectedAgent.value?.country || 'Pakistan')
+const namedPassengers = computed(() => form.passengers.filter((passenger) => passenger.full_name.trim() !== ''))
+const visaPassengers = computed(() => namedPassengers.value.filter((passenger) => passenger.service_type !== 'transport_only'))
+const includedBusDeduction = computed(() => form.transport_mode === 'specialized'
+  ? Math.min(Number(calculateVisaPricing().cost || 0), visaPassengers.value.length * Number(selectedVendor.value?.included_bus_cost_amount || 0))
+  : 0)
+
+const fareFor = (fareId: string) => props.transportFares.find((fare) => fare.id === fareId)
+
+const transportFareTotals = computed(() => form.transport_items.reduce((totals, item) => {
+  const fare = fareFor(item.transport_fare_id)
+  if (!fare || form.transport_mode !== 'specialized') return totals
+
+  const quantity = Math.max(Number(item.quantity || 1), 1)
+  const pax = Math.max(Number(item.passenger_count || namedPassengers.value.length || 1), 1)
+  const factor = fare.charging_basis === 'per_passenger' ? pax : fare.charging_basis === 'flat_group' ? 1 : quantity
+  const hajj = item.terminal === 'hajj'
+
+  totals.sale += (Number(fare.sale_amount || 0) + (hajj ? Number(fare.hajj_terminal_sale_amount || 0) : 0)) * factor
+  totals.cost += (Number(fare.cost_amount || 0) + (hajj ? Number(fare.hajj_terminal_cost_amount || 0) : 0)) * factor
+  return totals
+}, { sale: 0, cost: 0 }))
+
+const transportOnlyCharges = computed(() => namedPassengers.value
+  .filter((passenger) => passenger.service_type === 'transport_only')
+  .reduce((total, passenger) => total + Number(passenger.transport_charge_amount || 0), 0))
 
 const normalizeDate = (value: string | null | undefined) => String(value || '').slice(0, 10)
 
-const ageBand = (dateOfBirth: string | null | undefined) => {
-  const normalizedBirthDate = normalizeDate(dateOfBirth)
+const ageBand = (passenger: { date_of_birth?: string | null; imported_age?: string | number | null }) => {
+  const importedAge = passenger.imported_age !== null && passenger.imported_age !== undefined && passenger.imported_age !== ''
+    ? Number(passenger.imported_age)
+    : null
+  const normalizedBirthDate = normalizeDate(passenger.date_of_birth)
 
-  if (!normalizedBirthDate) return 'adult'
+  if (!normalizedBirthDate) return importedAge !== null && importedAge < 12 ? 'child' : 'adult'
 
   const birthDate = new Date(`${normalizedBirthDate}T00:00:00`)
   const normalizedTravelDate = normalizeDate(form.travel_date)
@@ -124,15 +175,14 @@ const ageBand = (dateOfBirth: string | null | undefined) => {
 
   if (Number.isNaN(birthDate.getTime()) || Number.isNaN(referenceDate.getTime())) return 'adult'
 
-  let age = referenceDate.getFullYear() - birthDate.getFullYear()
+  let dobAge = referenceDate.getFullYear() - birthDate.getFullYear()
   const monthDelta = referenceDate.getMonth() - birthDate.getMonth()
 
   if (monthDelta < 0 || (monthDelta === 0 && referenceDate.getDate() < birthDate.getDate())) {
-    age -= 1
+    dobAge -= 1
   }
 
-  if (age < 2) return 'infant'
-  if (age < 12) return 'child'
+  if (dobAge < 12) return 'child'
   return 'adult'
 }
 
@@ -143,13 +193,12 @@ const calculateVisaPricing = () => {
     return { sale: 0, cost: 0 }
   }
 
-  const namedPassengers = form.passengers.filter((passenger) => passenger.full_name.trim() !== '')
-  const passengersForPricing = namedPassengers.length > 0
-    ? namedPassengers
-    : Array.from({ length: Math.max(Number(form.passenger_count || 0), 0) }, () => ({ date_of_birth: '' }))
+  const passengersForPricing = namedPassengers.value.length > 0
+    ? visaPassengers.value
+    : Array.from({ length: Math.max(Number(form.passenger_count || 0), 0) }, () => ({ date_of_birth: '', imported_age: '' }))
 
   return passengersForPricing.reduce((totals, passenger) => {
-    const band = ageBand(passenger.date_of_birth)
+    const band = ageBand(passenger)
     return {
       sale: totals.sale + Number(vendor[`${band}_retail_amount`] || 0),
       cost: totals.cost + Number(vendor[`${band}_cost_amount`] || 0),
@@ -160,7 +209,9 @@ const calculateVisaPricing = () => {
 const updateVisaPricing = () => {
   const pricing = calculateVisaPricing()
   form.visa_sale_amount = String(pricing.sale.toFixed(2))
-  form.visa_cost_amount = String(pricing.cost.toFixed(2))
+  form.visa_cost_amount = String((pricing.cost - includedBusDeduction.value).toFixed(2))
+  form.transport_amount = String((transportFareTotals.value.sale + transportOnlyCharges.value).toFixed(2))
+  form.transport_cost_amount = String(transportFareTotals.value.cost.toFixed(2))
 }
 
 watch(() => form.agent_id, () => {
@@ -174,52 +225,68 @@ watch(() => form.agent_id, () => {
 })
 
 watch(() => [form.vendor_id, form.travel_date, form.passenger_count, form.passengers], updateVisaPricing, { deep: true })
-
-watch(() => form.transport_service_id, (id) => {
-  if (!id || id === 'none') return
-
-  const service = props.transportServices.find((item) => item.id === id)
-  if (!service) return
-
-  form.transport_amount = String(Number(service.default_sale_amount || 0))
-  form.transport_cost_amount = String(Number(service.default_cost_amount || 0))
-  form.transport_pax_capacity = service.pax_capacity ? String(service.pax_capacity) : ''
-  if (service.driver_id) {
-    form.driver_id = service.driver_id
-  }
-  if (Number(form.transport_quantity || 0) <= 0) {
-    form.transport_quantity = '1'
-  }
-})
+watch(() => [form.transport_mode, form.transport_items], updateVisaPricing, { deep: true })
 
 const addPassenger = () => {
-  form.passengers.push({ full_name: '', passport_number: '', date_of_birth: '', nationality: defaultNationality.value, visa_status: 'received' })
+  form.passengers.push({ full_name: '', passport_number: '', date_of_birth: '', imported_age: '', nationality: defaultNationality.value, visa_status: 'received', service_type: 'visa_transport', transport_charge_amount: '0' })
 }
 
-const importPassengers = () => {
-  const rows = passengerBulkText.value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+const addTransportItem = () => {
+  form.transport_items.push({ transport_fare_id: '', driver_id: 'none', scheduled_at: '', terminal: 'standard', quantity: '1', passenger_count: String(namedPassengers.value.length || 1), notes: '' })
+}
 
+const removeTransportItem = (index: number) => form.transport_items.splice(index, 1)
+
+const appendImportedMutamers = (rows: any[]) => {
   if (form.passengers.length === 1 && !form.passengers[0].full_name.trim()) {
     form.passengers.splice(0, 1)
   }
 
-  rows.forEach((line) => {
-    const [name, passportNumber, dateOfBirth, nationality] = line.split(/[\t,]/).map((part) => part?.trim() || '')
-    if (!name) return
-
+  rows.forEach((row) => {
     form.passengers.push({
-      full_name: name,
-      passport_number: passportNumber || '',
-      date_of_birth: dateOfBirth || '',
-      nationality: nationality || defaultNationality.value,
-      visa_status: 'received',
+      full_name: String(row.full_name || ''),
+      passport_number: String(row.passport_number || ''),
+      date_of_birth: '',
+      imported_age: row.imported_age === null || row.imported_age === undefined ? '' : String(row.imported_age),
+      nationality: row.nationality || defaultNationality.value,
+      visa_status: row.visa_status || 'received',
+      service_type: row.service_type || 'visa_transport',
+      transport_charge_amount: String(row.transport_charge_amount || 0),
     })
   })
 
-  passengerBulkText.value = ''
+  form.passenger_count = String(form.passengers.filter((passenger) => passenger.full_name.trim() !== '').length)
+  updateVisaPricing()
+}
+
+const importedMutamersFlash = computed(() => ((page.props.flash as any)?.umrahImportedMutamers || []) as any[])
+
+watch(importedMutamersFlash, (rows) => {
+  if (!rows.length) return
+
+  const signature = JSON.stringify(rows)
+  if (signature === appliedImportSignature.value) return
+
+  appliedImportSignature.value = signature
+  appendImportedMutamers(rows)
+}, { immediate: true })
+
+const handleMutamersFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  importForm.mutamers_file = target.files?.[0] || null
+}
+
+const importMutamers = () => {
+  if (!importForm.mutamers_file) return
+
+  importForm.post(`/${props.company.slug}/umrah/groups/import-mutamers`, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      importForm.reset()
+    },
+    onError: () => toast.error('Failed to import mutamers'),
+  })
 }
 
 const removePassenger = (index: number) => {
@@ -251,8 +318,7 @@ const createVendor = () => {
       vendorForm.adult_cost_amount = '0'
       vendorForm.child_retail_amount = '0'
       vendorForm.child_cost_amount = '0'
-      vendorForm.infant_retail_amount = '0'
-      vendorForm.infant_cost_amount = '0'
+      vendorForm.included_bus_cost_amount = '50'
       quickVendorOpen.value = false
       router.reload({ only: ['vendors'] })
     },
@@ -269,6 +335,7 @@ const submit = () => {
       transport_service_id: data.transport_service_id === 'none' ? null : data.transport_service_id,
       driver_id: data.driver_id === 'none' ? null : data.driver_id,
       transport_required: true,
+      transport_mode: data.transport_mode,
       transport_quantity: Number(data.transport_quantity || 0),
       transport_pax_capacity: data.transport_pax_capacity ? Number(data.transport_pax_capacity) : null,
       passenger_count: Number(data.passenger_count || 0),
@@ -277,7 +344,22 @@ const submit = () => {
       discount_amount: Number(data.discount_amount || 0),
       visa_cost_amount: Number(data.visa_cost_amount || 0),
       transport_cost_amount: Number(data.transport_cost_amount || 0),
-      passengers: data.passengers.filter((p) => p.full_name.trim() !== ''),
+      passengers: data.passengers
+        .filter((p) => p.full_name.trim() !== '')
+        .map((passenger) => ({
+          ...passenger,
+          imported_age: passenger.imported_age === '' ? null : Number(passenger.imported_age),
+          transport_charge_amount: Number(passenger.transport_charge_amount || 0),
+        })),
+      transport_items: data.transport_mode === 'specialized'
+        ? data.transport_items.map((item) => ({
+          ...item,
+          driver_id: item.driver_id === 'none' ? null : item.driver_id,
+          quantity: Number(item.quantity || 1),
+          passenger_count: Number(item.passenger_count || 1),
+          scheduled_at: item.scheduled_at || null,
+        }))
+        : [],
     }))
     .post(`/${props.company.slug}/umrah/groups`, {
       onSuccess: () => toast.success('Visa group created successfully'),
@@ -297,17 +379,17 @@ const submit = () => {
             <CardContent class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <Label>Group #</Label>
-                <Input v-model="form.group_number" />
+                <Input v-model="form.group_number" :placeholder="`Auto: ${nextGroupNumber}`" />
               </div>
               <div class="space-y-2">
                 <Label>Group Name</Label>
-                <Input v-model="form.name" placeholder="Ramzan Group 1" required />
+                <Input v-model="form.name" placeholder="Auto: agent name, pax, date and time" />
                 <p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p>
               </div>
               <div class="space-y-2">
                 <div class="flex items-center justify-between gap-3">
                   <Label>Agent</Label>
-                  <Button type="button" variant="ghost" size="sm" @click="quickAgentOpen = !quickAgentOpen">
+                  <Button v-if="canManageSetup" type="button" variant="ghost" size="sm" @click="quickAgentOpen = !quickAgentOpen">
                     <Plus class="mr-2 h-4 w-4" />
                     New Agent
                   </Button>
@@ -320,7 +402,7 @@ const submit = () => {
                 </Select>
                 <p v-if="form.errors.agent_id" class="text-xs text-destructive">{{ form.errors.agent_id }}</p>
               </div>
-              <div v-if="quickAgentOpen" class="space-y-3 rounded-md border p-3 md:col-span-2">
+              <div v-if="quickAgentOpen && canManageSetup" class="space-y-3 rounded-md border p-3 md:col-span-2">
                 <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label>Agent Name</Label>
@@ -353,7 +435,7 @@ const submit = () => {
               <div class="space-y-2">
                 <div class="flex items-center justify-between gap-3">
                   <Label>Visa Vendor</Label>
-                  <Button type="button" variant="ghost" size="sm" @click="quickVendorOpen = !quickVendorOpen">
+                  <Button v-if="canManageSetup" type="button" variant="ghost" size="sm" @click="quickVendorOpen = !quickVendorOpen">
                     <Plus class="mr-2 h-4 w-4" />
                     New Vendor
                   </Button>
@@ -371,10 +453,9 @@ const submit = () => {
                 <div v-if="selectedVendor" class="rounded-md border p-3 text-xs text-muted-foreground">
                   Adult {{ Number(selectedVendor.adult_retail_amount || 0).toLocaleString() }} / {{ Number(selectedVendor.adult_cost_amount || 0).toLocaleString() }}
                   · Child {{ Number(selectedVendor.child_retail_amount || 0).toLocaleString() }} / {{ Number(selectedVendor.child_cost_amount || 0).toLocaleString() }}
-                  · Infant {{ Number(selectedVendor.infant_retail_amount || 0).toLocaleString() }} / {{ Number(selectedVendor.infant_cost_amount || 0).toLocaleString() }}
                 </div>
               </div>
-              <div v-if="quickVendorOpen" class="space-y-3 rounded-md border p-3 md:col-span-2">
+              <div v-if="quickVendorOpen && canManageSetup" class="space-y-3 rounded-md border p-3 md:col-span-2">
                 <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label>Vendor Name</Label>
@@ -407,7 +488,7 @@ const submit = () => {
                     <Input v-model="vendorForm.city" />
                   </div>
                 </div>
-                <div class="grid gap-3 md:grid-cols-3">
+                <div class="grid gap-3 md:grid-cols-2">
                   <div class="space-y-3 rounded-md border p-3">
                     <div class="font-medium">Adult</div>
                     <div class="space-y-2"><Label>Retail</Label><Input v-model="vendorForm.adult_retail_amount" type="number" min="0" step="0.01" /></div>
@@ -418,11 +499,10 @@ const submit = () => {
                     <div class="space-y-2"><Label>Retail</Label><Input v-model="vendorForm.child_retail_amount" type="number" min="0" step="0.01" /></div>
                     <div class="space-y-2"><Label>Cost</Label><Input v-model="vendorForm.child_cost_amount" type="number" min="0" step="0.01" /></div>
                   </div>
-                  <div class="space-y-3 rounded-md border p-3">
-                    <div class="font-medium">Infant</div>
-                    <div class="space-y-2"><Label>Retail</Label><Input v-model="vendorForm.infant_retail_amount" type="number" min="0" step="0.01" /></div>
-                    <div class="space-y-2"><Label>Cost</Label><Input v-model="vendorForm.infant_cost_amount" type="number" min="0" step="0.01" /></div>
-                  </div>
+                </div>
+                <div class="space-y-2">
+                  <Label>Included Standard Bus Cost per Passenger</Label>
+                  <Input v-model="vendorForm.included_bus_cost_amount" type="number" min="0" step="0.01" />
                 </div>
                 <div class="flex justify-end gap-2">
                   <Button type="button" variant="outline" :disabled="vendorForm.processing" @click="quickVendorOpen = false">Cancel</Button>
@@ -447,48 +527,62 @@ const submit = () => {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Transport Required</CardTitle></CardHeader>
-            <CardContent class="grid gap-4 md:grid-cols-3">
-              <div class="space-y-2">
-                <Label>Transport Service</Label>
-                <Select v-model="form.transport_service_id">
-                  <SelectTrigger><SelectValue placeholder="Select transport" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Not selected</SelectItem>
-                    <SelectItem v-for="service in transportServices" :key="service.id" :value="service.id">
-                      {{ service.name }}<span v-if="service.pax_capacity"> · {{ service.pax_capacity }} pax</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="form.errors.transport_service_id" class="text-xs text-destructive">{{ form.errors.transport_service_id }}</p>
+            <CardHeader><CardTitle>Transport</CardTitle></CardHeader>
+            <CardContent class="space-y-4">
+              <RadioGroup v-model="form.transport_mode" class="grid gap-3 md:grid-cols-2">
+                <Label for="transport-standard" class="flex cursor-pointer items-start gap-3 rounded-md border p-4">
+                  <RadioGroupItem id="transport-standard" value="standard_bus" />
+                  <span><span class="block font-medium">Standard bus</span><span class="mt-1 block text-xs text-muted-foreground">Complete journey included with the visa cost.</span></span>
+                </Label>
+                <Label for="transport-specialized" class="flex cursor-pointer items-start gap-3 rounded-md border p-4">
+                  <RadioGroupItem id="transport-specialized" value="specialized" />
+                  <span><span class="block font-medium">Specialized transport</span><span class="mt-1 block text-xs text-muted-foreground">Choose complete-journey or sector fares by vehicle.</span></span>
+                </Label>
+              </RadioGroup>
+
+              <div v-if="form.transport_mode === 'standard_bus'" class="rounded-md border p-3 text-sm">
+                <div class="font-medium">Mandatory bus transport included</div>
+                <div class="mt-1 text-muted-foreground">The vendor's included bus cost remains inside the visa cost. No separate transport charge is added.</div>
               </div>
-              <div class="space-y-2">
-                <Label>Vehicles</Label>
-                <Input v-model="form.transport_quantity" type="number" min="1" />
-                <p v-if="form.errors.transport_quantity" class="text-xs text-destructive">{{ form.errors.transport_quantity }}</p>
-              </div>
-              <div class="space-y-2">
-                <Label>Pax per Vehicle</Label>
-                <Input v-model="form.transport_pax_capacity" type="number" min="1" />
-              </div>
-              <div class="space-y-2">
-                <Label>Driver</Label>
-                <Select v-model="form.driver_id">
-                  <SelectTrigger><SelectValue placeholder="Select driver" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No driver assigned</SelectItem>
-                    <SelectItem v-for="driver in drivers" :key="driver.id" :value="driver.id">
-                      {{ driver.name }}<span v-if="driver.phone"> · {{ driver.phone }}</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="selectedTransport" class="rounded-md border p-3 text-sm text-muted-foreground md:col-span-3">
-                {{ selectedTransport.vehicle_type || 'Vehicle' }}
-                <span v-if="selectedTransport.make || selectedTransport.model"> · {{ [selectedTransport.make, selectedTransport.model].filter(Boolean).join(' ') }}</span>
-                <span v-if="selectedTransport.number_plate"> · {{ selectedTransport.number_plate }}</span>
-                <span v-if="selectedTransport.driver?.name || selectedTransport.driver_name"> · Default driver: {{ selectedTransport.driver?.name || selectedTransport.driver_name }}</span>
-                <span v-if="totalTransportCapacity"> · Capacity: {{ totalTransportCapacity }} pax total</span>
+
+              <div v-else class="space-y-3">
+                <div v-if="!transportFares.length" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No specialized fares are configured. Add vehicle sector or complete-journey fares in Transport Services first.
+                </div>
+                <div v-for="(item, index) in form.transport_items" :key="index" class="grid gap-3 rounded-md border p-3 lg:grid-cols-[minmax(220px,1fr)_130px_130px_160px_170px_40px]">
+                  <div class="space-y-1">
+                    <Label class="text-xs text-muted-foreground">Journey Fare</Label>
+                    <Select v-model="item.transport_fare_id">
+                      <SelectTrigger><SelectValue placeholder="Select sector or journey" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="fare in transportFares" :key="fare.id" :value="fare.id">
+                          {{ fare.name }} · {{ fare.service?.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Vehicles</Label><Input v-model="item.quantity" type="number" min="1" /></div>
+                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Passengers</Label><Input v-model="item.passenger_count" type="number" min="1" /></div>
+                  <div class="space-y-1">
+                    <Label class="text-xs text-muted-foreground">Terminal</Label>
+                    <Select v-model="item.terminal">
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="standard">Standard terminal</SelectItem><SelectItem value="hajj">Hajj Terminal</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Schedule</Label><Input v-model="item.scheduled_at" type="datetime-local" /></div>
+                  <div class="flex items-end"><Button type="button" variant="ghost" size="icon" @click="removeTransportItem(index)"><Trash2 class="h-4 w-4" /></Button></div>
+                  <div v-if="fareFor(item.transport_fare_id)" class="text-xs text-muted-foreground lg:col-span-6">
+                    {{ fareFor(item.transport_fare_id)?.sector?.name || fareFor(item.transport_fare_id)?.package?.name }} · {{ fareFor(item.transport_fare_id)?.service?.vehicle_type || 'Vehicle' }} · {{ fareFor(item.transport_fare_id)?.charging_basis?.replaceAll('_', ' ') }}
+                    <span v-if="item.terminal === 'hajj'"> · Hajj Terminal surcharge applied</span>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" :disabled="!transportFares.length" @click="addTransportItem"><Plus class="mr-2 h-4 w-4" />Add Journey or Sector</Button>
+                <p v-if="form.errors.transport_items" class="text-xs text-destructive">{{ form.errors.transport_items }}</p>
+                <div class="rounded-md border p-3 text-sm">
+                  <div class="flex justify-between"><span>Included bus cost removed from visa cost</span><MoneyText :amount="includedBusDeduction" :currency="company.base_currency" /></div>
+                  <div class="mt-1 text-xs text-muted-foreground">The selected specialized fare cost is added below as transport cost.</div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -497,21 +591,19 @@ const submit = () => {
             <CardHeader><CardTitle>Passengers</CardTitle></CardHeader>
             <CardContent class="space-y-3">
               <div class="rounded-md border p-3">
-                <div class="space-y-2">
-                  <Label>Paste Passenger List</Label>
-                  <Textarea
-                    v-model="passengerBulkText"
-                    placeholder="One passenger per line. Use: Full name, Passport #, Date of birth, Nationality"
-                  />
-                </div>
-                <div class="mt-3 flex justify-end">
-                  <Button type="button" variant="outline" :disabled="!passengerBulkText.trim()" @click="importPassengers">
-                    <Plus class="mr-2 h-4 w-4" />
-                    Add Pasted Passengers
+                <div class="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <div class="space-y-2">
+                    <Label>Go VT Mutamers Sheet</Label>
+                    <Input type="file" accept=".xlsx" @change="handleMutamersFileChange" />
+                    <p v-if="importForm.errors.mutamers_file" class="text-xs text-destructive">{{ importForm.errors.mutamers_file }}</p>
+                  </div>
+                  <Button type="button" variant="outline" :disabled="!importForm.mutamers_file || importForm.processing" @click="importMutamers">
+                    <Upload class="mr-2 h-4 w-4" />
+                    Import
                   </Button>
                 </div>
               </div>
-              <div v-for="(passenger, index) in form.passengers" :key="index" class="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_150px_150px_130px_130px_40px]">
+              <div v-for="(passenger, index) in form.passengers" :key="index" class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_220px_130px_40px]">
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Full Name</Label>
                   <Input v-model="passenger.full_name" placeholder="Full name" />
@@ -521,8 +613,8 @@ const submit = () => {
                   <Input v-model="passenger.passport_number" placeholder="Passport #" />
                 </div>
                 <div class="space-y-1">
-                  <Label class="text-xs text-muted-foreground">Date of Birth</Label>
-                  <Input v-model="passenger.date_of_birth" type="date" />
+                  <Label class="text-xs text-muted-foreground">Age</Label>
+                  <Input v-model="passenger.imported_age" type="number" min="0" max="130" />
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Nationality</Label>
@@ -534,13 +626,15 @@ const submit = () => {
                   </Select>
                 </div>
                 <div class="space-y-1">
-                  <Label class="text-xs text-muted-foreground">Visa Status</Label>
-                  <Select v-model="passenger.visa_status">
+                  <Label class="text-xs text-muted-foreground">Service</Label>
+                  <Select v-model="passenger.service_type">
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="(label, value) in passengerStatuses" :key="value" :value="value">{{ label }}</SelectItem>
-                    </SelectContent>
+                    <SelectContent><SelectItem v-for="(label, value) in passengerServiceTypes" :key="value" :value="value">{{ label }}</SelectItem></SelectContent>
                   </Select>
+                </div>
+                <div class="space-y-1">
+                  <Label class="text-xs text-muted-foreground">Transport Charge</Label>
+                  <Input v-model="passenger.transport_charge_amount" type="number" min="0" step="0.01" :disabled="passenger.service_type !== 'transport_only'" />
                 </div>
                 <div class="flex items-end">
                   <Button type="button" variant="ghost" size="icon" @click="removePassenger(index)"><Trash2 class="h-4 w-4" /></Button>
@@ -555,11 +649,11 @@ const submit = () => {
           <Card>
             <CardHeader><CardTitle>Amounts</CardTitle></CardHeader>
             <CardContent class="space-y-4">
-              <div class="space-y-2"><Label>Visa Sale</Label><Input v-model="form.visa_sale_amount" type="number" min="0" step="0.01" /></div>
-              <div class="space-y-2"><Label>Transport Charge</Label><Input v-model="form.transport_amount" type="number" min="0" step="0.01" /></div>
+              <div class="space-y-2"><Label>Visa Sale</Label><Input v-model="form.visa_sale_amount" type="number" disabled /></div>
+              <div class="space-y-2"><Label>Transport Charge</Label><Input v-model="form.transport_amount" type="number" disabled /></div>
               <div class="space-y-2"><Label>Discount</Label><Input v-model="form.discount_amount" type="number" min="0" step="0.01" /></div>
-              <div v-if="canViewAccounting" class="space-y-2"><Label>Visa Cost</Label><Input v-model="form.visa_cost_amount" type="number" min="0" step="0.01" /></div>
-              <div v-if="canViewAccounting" class="space-y-2"><Label>Transport Cost</Label><Input v-model="form.transport_cost_amount" type="number" min="0" step="0.01" /></div>
+              <div v-if="canViewAccounting" class="space-y-2"><Label>Visa Cost</Label><Input v-model="form.visa_cost_amount" type="number" disabled /></div>
+              <div v-if="canViewAccounting" class="space-y-2"><Label>Transport Cost</Label><Input v-model="form.transport_cost_amount" type="number" disabled /></div>
               <div class="rounded-md border p-3">
                 <div class="flex justify-between text-sm"><span>Receivable</span><MoneyText :amount="receivable" :currency="company.base_currency" /></div>
                 <div v-if="canViewAccounting" class="mt-2 flex justify-between font-semibold"><span>Profit</span><MoneyText :amount="profit" :currency="company.base_currency" /></div>

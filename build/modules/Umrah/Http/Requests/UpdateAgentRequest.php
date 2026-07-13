@@ -3,14 +3,28 @@
 namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
+use App\Models\User;
 use App\Modules\Umrah\Models\Agent;
-use App\Services\CompanyContextService;
-use Closure;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UpdateAgentRequest extends UmrahFormRequest
 {
+    public function authorize(): bool
+    {
+        $changesLogin = $this->filled('login_username') || $this->filled('password');
+
+        return parent::authorize()
+            && (! $changesLogin || $this->hasCompanyPermission(Permissions::COMPANY_MANAGE_USERS));
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('login_username')) {
+            $this->merge(['login_username' => Str::lower((string) $this->input('login_username'))]);
+        }
+    }
+
     protected function permission(): string
     {
         return Permissions::UMRAH_AGENT_UPDATE;
@@ -25,50 +39,23 @@ class UpdateAgentRequest extends UmrahFormRequest
                 'max:50',
                 $this->uniqueForCompany(Agent::class, 'agent_number', 'This agent number is already used.', (string) $this->route('agent')),
             ],
-            'user_id' => ['nullable', 'uuid', $this->validCompanyUser(), $this->uniqueLinkedUser()],
+            'login_username' => [
+                'nullable',
+                'required_with:password',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/^[A-Za-z0-9_]+$/',
+                Rule::unique(User::class, 'username')->ignore(Agent::withTrashed()->find($this->route('agent'))?->user_id),
+            ],
+            'password' => ['nullable', 'string', 'min:8'],
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
+            'logo_url' => ['nullable', 'url:http,https', 'max:500'],
             'notes' => ['nullable', 'string'],
         ];
-    }
-
-    private function validCompanyUser(): Closure
-    {
-        $companyId = app(CompanyContextService::class)->getCompanyId();
-
-        return function (string $attribute, mixed $value, Closure $fail) use ($companyId): void {
-            if ($value === null || $value === '') {
-                return;
-            }
-
-            $exists = DB::table('auth.company_user')
-                ->where('company_id', $companyId)
-                ->where('user_id', $value)
-                ->where('is_active', true)
-                ->exists();
-
-            if (! $exists) {
-                $fail('Selected login user is not an active member of this company.');
-            }
-        };
-    }
-
-    private function uniqueLinkedUser(): Closure
-    {
-        $companyId = app(CompanyContextService::class)->getCompanyId();
-        $agentId = (string) $this->route('agent');
-
-        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $agentId): void {
-            if ($value === null || $value === '') {
-                return;
-            }
-
-            if (Agent::where('company_id', $companyId)->where('user_id', $value)->whereKeyNot($agentId)->whereNull('deleted_at')->exists()) {
-                $fail('Selected login user is already linked to another agent.');
-            }
-        };
     }
 }

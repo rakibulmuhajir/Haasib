@@ -112,8 +112,7 @@ class VisaVendorController extends Controller
             'adult_cost_amount' => $adultCost,
             'child_retail_amount' => $this->money($data['child_retail_amount'] ?? $adultRetail),
             'child_cost_amount' => $this->money($data['child_cost_amount'] ?? $adultCost),
-            'infant_retail_amount' => $this->money($data['infant_retail_amount'] ?? $adultRetail),
-            'infant_cost_amount' => $this->money($data['infant_cost_amount'] ?? $adultCost),
+            'included_bus_cost_amount' => $this->money($data['included_bus_cost_amount'] ?? 50),
         ];
     }
 

@@ -2,26 +2,27 @@
 
 namespace App\Http\Controllers;
 
-use App\Facades\CompanyContext;
 use App\Constants\Permissions;
+use App\Facades\CompanyContext;
+use App\Http\Requests\Company\UpdateCompanySettingsRequest;
 use App\Http\Requests\CompanyStoreRequest;
 use App\Models\Company;
 use App\Models\CompanyCurrency;
 use App\Models\User;
-use App\Services\CompanyBootstrapService;
-use App\Services\CommandBus;
-use App\Services\CompanyRbacBootstrapper;
 use App\Modules\Accounting\Services\DashboardService;
 use App\Modules\FuelStation\Services\FuelDashboardService;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Services\CommandBus;
+use App\Services\CompanyBootstrapService;
+use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -104,7 +105,7 @@ class CompanyController extends Controller
 
             CompanyCurrency::updateOrCreate(
                 ['company_id' => $company->id, 'currency_code' => $data['base_currency']],
-                ['is_base' => true, 'enabled_at' => now()]
+                ['is_base' => true, 'exchange_rate' => 1, 'enabled_at' => now()]
             );
 
             DB::table('auth.company_user')->updateOrInsert(
@@ -185,6 +186,9 @@ class CompanyController extends Controller
                 'industry_name' => $industryName,
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
+                'logo_url' => $company->logo_url,
+                'language' => $company->language,
+                'locale' => $company->locale,
                 'is_active' => $company->is_active,
                 'created_at' => optional($company->created_at)->toISOString(),
                 'settings' => $settings,
@@ -192,6 +196,8 @@ class CompanyController extends Controller
                 'can_manage_company' => $user?->hasCompanyPermission(Permissions::COMPANY_UPDATE) ?? false,
                 'can_manage_users' => $user?->hasCompanyPermission(Permissions::COMPANY_MANAGE_USERS) ?? false,
             ],
+            'companyCurrencies' => CompanyCurrency::where('company_id', $company->id)->orderByDesc('is_base')->orderBy('currency_code')->get(),
+            'availableCurrencies' => DB::table('public.currencies')->where('is_active', true)->orderBy('code')->get(['code', 'name', 'symbol']),
             'currentUserRole' => $currentUserRole,
         ]);
     }
@@ -505,34 +511,18 @@ class CompanyController extends Controller
     /**
      * Update company settings (partial update for editable fields).
      */
-    public function updateSettings(Request $request): RedirectResponse
+    public function updateSettings(UpdateCompanySettingsRequest $request): RedirectResponse
     {
         $company = CompanyContext::getCompany();
-
-        // Check if user is owner or admin
-        $currentUserRole = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', Auth::id())
-            ->value('role');
-
-        if (! in_array($currentUserRole, ['owner', 'admin'])) {
-            abort(403, 'Only company owners and admins can update settings.');
-        }
-
-        // Validate the request - only allow specific fields to be updated
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'language' => 'sometimes|string|max:10',
-            'locale' => 'sometimes|string|max:10',
-            'fiscal_year_start_month' => 'sometimes|integer|min:1|max:12',
-            'auto_create_fiscal_year' => 'sometimes|boolean',
-            'default_period_type' => 'sometimes|string|in:monthly,quarterly,yearly',
-        ]);
+        $validated = $request->validated();
 
         // Update allowed direct fields
         $directUpdates = [];
         if (isset($validated['name'])) {
             $directUpdates['name'] = $validated['name'];
+        }
+        if (array_key_exists('logo_url', $validated)) {
+            $directUpdates['logo_url'] = $validated['logo_url'];
         }
         if (isset($validated['language'])) {
             $directUpdates['language'] = $validated['language'];
@@ -549,6 +539,13 @@ class CompanyController extends Controller
         // Handle other fiscal year settings in settings JSON
         $settings = $company->settings ?? [];
         $settingsUpdated = false;
+
+        foreach (['contact_email', 'contact_phone', 'website'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $settings[$field] = $validated[$field];
+                $settingsUpdated = true;
+            }
+        }
 
         if (isset($validated['auto_create_fiscal_year'])) {
             $settings['auto_create_fiscal_year'] = $validated['auto_create_fiscal_year'];

@@ -17,13 +17,30 @@ class Voucher extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     public const STATUS_DRAFT = 'draft';
-    public const STATUS_ISSUED = 'issued';
-    public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const SERVICE_VISA_TRANSPORT = 'visa_transport';
+
+    public const SERVICE_VISA_TRANSPORT_HOTEL = 'visa_transport_hotel';
+
+    public const SERVICE_TRANSPORT = 'transport';
+
+    public const SERVICE_TRANSPORT_HOTEL = 'transport_hotel';
+
+    public const SERVICE_HOTEL = 'hotel';
+
+    public const SERVICE_BUNDLES = [
+        self::SERVICE_VISA_TRANSPORT => 'Visa + Transport',
+        self::SERVICE_VISA_TRANSPORT_HOTEL => 'Visa + Transport + Hotel',
+        self::SERVICE_TRANSPORT => 'Transport Only',
+        self::SERVICE_TRANSPORT_HOTEL => 'Transport + Hotel',
+        self::SERVICE_HOTEL => 'Hotel Only',
+    ];
 
     public const STATUSES = [
         self::STATUS_DRAFT => 'Draft',
-        self::STATUS_ISSUED => 'Issued',
-        self::STATUS_CANCELLED => 'Cancelled',
+        self::STATUS_APPROVED => 'Approved',
     ];
 
     public const AIRLINES = [
@@ -105,8 +122,11 @@ class Voucher extends Model
     ];
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.vouchers';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -115,6 +135,7 @@ class Voucher extends Model
         'agent_id',
         'voucher_number',
         'title',
+        'service_bundle',
         'status',
         'onward_airline',
         'onward_flight_number',
@@ -129,8 +150,12 @@ class Voucher extends Model
         'return_departure_at',
         'return_arrival_at',
         'hotel_stays',
+        'hotel_sale_amount',
+        'hotel_cost_amount',
         'notes',
         'created_by_user_id',
+        'hotel_sale_transaction_id',
+        'hotel_cost_transaction_id',
     ];
 
     protected $casts = [
@@ -138,11 +163,15 @@ class Voucher extends Model
         'visa_group_id' => 'string',
         'agent_id' => 'string',
         'created_by_user_id' => 'string',
+        'hotel_sale_transaction_id' => 'string',
+        'hotel_cost_transaction_id' => 'string',
         'onward_departure_at' => 'datetime',
         'onward_arrival_at' => 'datetime',
         'return_departure_at' => 'datetime',
         'return_arrival_at' => 'datetime',
         'hotel_stays' => 'array',
+        'hotel_sale_amount' => 'decimal:2',
+        'hotel_cost_amount' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -151,6 +180,16 @@ class Voucher extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function includesHotel(): bool
+    {
+        return self::bundleIncludesHotel($this->service_bundle);
+    }
+
+    public static function bundleIncludesHotel(string $bundle): bool
+    {
+        return in_array($bundle, [self::SERVICE_VISA_TRANSPORT_HOTEL, self::SERVICE_TRANSPORT_HOTEL, self::SERVICE_HOTEL], true);
     }
 
     public function group(): BelongsTo

@@ -50,6 +50,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - Password: min 8, confirmation required; strong password pattern used in admin flows.  
   - System role: `super_admin|admin|user|guest` (default `user`).  
   - is_active: boolean.
+  - Umrah agent credentials are created or changed directly from the agent create/edit form using username and password. Passwords are accepted only for the request and stored through the model's `hashed` cast; plaintext credentials are never persisted for later display.
 
 ### auth.companies
 - Columns:  
@@ -129,6 +130,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `company_id` uuid FK → `auth.companies.id` (CASCADE).
   - `currency_code` char(3) not null (must exist and be active in `public.currencies`; no FK).
   - `is_base` boolean not null default false (exactly one per company; matches `auth.companies.base_currency`).
+  - `exchange_rate` numeric(18,8) not null. Base currency is `1.00000000`; secondary currency convention is `1 secondary = X base`.
   - `enabled_at` timestamp not null default now().
   - `created_at`, `updated_at`.
 - Constraints/Indexes:
@@ -137,11 +139,12 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - check currency exists in `public.currencies` and `is_active = true`.
 - RLS: company isolation policy (company_id match or super_admin).
 - Laravel model (canonical):
-  - `$connection = 'pgsql'; $table = 'auth.company_currencies'; $fillable = ['company_id','currency_code','is_base','enabled_at']; $casts = ['is_base'=>'boolean','enabled_at'=>'datetime'];`
+  - `$connection = 'pgsql'; $table = 'auth.company_currencies'; $fillable = ['company_id','currency_code','is_base','exchange_rate','enabled_at']; $casts = ['is_base'=>'boolean','exchange_rate'=>'decimal:8','enabled_at'=>'datetime'];`
 - Business rules:
   - One base currency per company; base cannot be disabled.
   - Cannot disable if accounts/transactions exist in that currency with balances open.
   - On company create, insert base currency row with `is_base = true`.
+  - Secondary rates are editable defaults only. Posted documents and journals retain immutable rate snapshots.
 
 ## Usage Patterns
 - Models should use `protected $connection = 'pgsql'` and table names with schema (`auth.users`, `auth.companies`, `auth.company_user`).

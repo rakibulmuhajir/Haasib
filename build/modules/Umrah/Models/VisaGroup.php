@@ -26,6 +26,12 @@ class VisaGroup extends Model
     public const STATUS_DELIVERED = 'delivered';
     public const STATUS_CLOSED = 'closed';
     public const STATUS_CANCELLED = 'cancelled';
+    public const TRANSPORT_STANDARD_BUS = 'standard_bus';
+    public const TRANSPORT_SPECIALIZED = 'specialized';
+    public const TRANSPORT_MODES = [
+        self::TRANSPORT_STANDARD_BUS => 'Standard bus included with visa',
+        self::TRANSPORT_SPECIALIZED => 'Specialized transport',
+    ];
 
     public const STATUSES = [
         self::STATUS_DRAFT => 'Draft',
@@ -51,14 +57,19 @@ class VisaGroup extends Model
         'flight_info',
         'hotel_info',
         'transport_required',
+        'transport_mode',
+        'included_bus_cost_per_passenger',
+        'included_bus_cost_deduction',
         'transport_quantity',
         'transport_pax_capacity',
         'passenger_count',
         'visa_sale_amount',
         'transport_amount',
+        'hotel_amount',
         'discount_amount',
         'visa_cost_amount',
         'transport_cost_amount',
+        'hotel_cost_amount',
         'total_receivable',
         'total_paid',
         'balance',
@@ -79,14 +90,18 @@ class VisaGroup extends Model
         'flight_info' => 'array',
         'hotel_info' => 'array',
         'transport_required' => 'boolean',
+        'included_bus_cost_per_passenger' => 'decimal:2',
+        'included_bus_cost_deduction' => 'decimal:2',
         'transport_quantity' => 'integer',
         'transport_pax_capacity' => 'integer',
         'passenger_count' => 'integer',
         'visa_sale_amount' => 'decimal:2',
         'transport_amount' => 'decimal:2',
+        'hotel_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'visa_cost_amount' => 'decimal:2',
         'transport_cost_amount' => 'decimal:2',
+        'hotel_cost_amount' => 'decimal:2',
         'total_receivable' => 'decimal:2',
         'total_paid' => 'decimal:2',
         'balance' => 'decimal:2',
@@ -141,6 +156,11 @@ class VisaGroup extends Model
     public function vouchers(): HasMany
     {
         return $this->hasMany(Voucher::class, 'visa_group_id');
+    }
+
+    public function transportItems(): HasMany
+    {
+        return $this->hasMany(GroupTransportItem::class, 'visa_group_id');
     }
 
     public function saleTransaction(): BelongsTo

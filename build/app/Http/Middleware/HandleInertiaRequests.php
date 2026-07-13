@@ -53,6 +53,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $data['name'] ?? null,
                 'slug' => $data['slug'] ?? null,
                 'base_currency' => $data['base_currency'] ?? null,
+                'logo_url' => $data['logo_url'] ?? null,
                 'industry' => $data['industry'] ?? null,
                 'industry_code' => $data['industry_code'] ?? null,
                 'settings' => $data['settings'] ?? null,
@@ -67,7 +68,7 @@ class HandleInertiaRequests extends Middleware
             ? ($isGodMode
                 ? \DB::table('auth.companies as c')
                     ->where('c.is_active', true)
-                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
                     ->orderBy('c.name')
                     ->get()
                 : \DB::table('auth.company_user as cu')
@@ -75,7 +76,7 @@ class HandleInertiaRequests extends Middleware
                     ->where('cu.user_id', $request->user()->id)
                     ->where('cu.is_active', true)
                     ->where('c.is_active', true)
-                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
+                    ->select('c.id', 'c.name', 'c.slug', 'c.base_currency', 'c.logo_url', 'c.industry', 'c.industry_code', 'c.settings', 'c.onboarding_completed')
                     ->orderBy('c.name')
                     ->get())
             : collect();
@@ -119,6 +120,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'tank' => fn () => $request->session()->get('tank'),
                 'item' => fn () => $request->session()->get('item'),
+                'umrahImportedMutamers' => fn () => $request->session()->get('umrah_imported_mutamers'),
             ],
         ];
     }

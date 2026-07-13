@@ -21,11 +21,13 @@ class CompanyCurrency extends Model
         'company_id',
         'currency_code',
         'is_base',
+        'exchange_rate',
         'enabled_at',
     ];
 
     protected $casts = [
         'is_base' => 'boolean',
+        'exchange_rate' => 'decimal:8',
         'enabled_at' => 'datetime',
     ];
 }

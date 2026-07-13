@@ -4,6 +4,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,7 +16,7 @@ const props = defineProps<{
   company: { slug: string }
   nextAgentNumber: string
   countries: Record<string, string>
-  companyUsers: Array<{ id: string; name: string; email: string; role: string }>
+  canManageLogins: boolean
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -26,21 +27,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm({
   agent_number: props.nextAgentNumber,
-  user_id: 'none',
   name: '',
   phone: '',
   email: '',
   city: '',
   country: 'Pakistan',
+  logo_url: '',
   notes: '',
+  login_username: '',
+  password: '',
+  can_create_voucher: true,
+  can_approve_voucher: false,
+  can_edit_voucher: false,
+  voucher_cutoff_hours: '6',
 })
 
-const submit = () => form
-  .transform((data) => ({
-    ...data,
-    user_id: data.user_id === 'none' ? null : data.user_id,
-  }))
-  .post(`/${props.company.slug}/umrah/agents`, {
+const submit = () => form.post(`/${props.company.slug}/umrah/agents`, {
     onSuccess: () => toast.success('Agent created successfully'),
     onError: () => toast.error('Failed to create agent'),
   })
@@ -73,18 +75,23 @@ const submit = () => form
               <Input v-model="form.email" type="email" />
             </div>
             <div class="space-y-2 md:col-span-2">
-              <Label>Login user</Label>
-              <Select v-model="form.user_id">
-                <SelectTrigger><SelectValue placeholder="Optional login user" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No login access</SelectItem>
-                  <SelectItem v-for="user in companyUsers" :key="user.id" :value="user.id">
-                    {{ user.name }} · {{ user.email }} · {{ user.role }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p class="text-xs text-muted-foreground">Link a company member if this agent should create their own vouchers.</p>
-              <p v-if="form.errors.user_id" class="text-xs text-destructive">{{ form.errors.user_id }}</p>
+              <Label>Logo URL</Label>
+              <div class="flex items-center gap-3">
+                <img v-if="form.logo_url" :src="form.logo_url" alt="Agent logo preview" class="h-12 w-12 rounded-md border object-contain" />
+                <Input v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+              </div>
+              <p v-if="form.errors.logo_url" class="text-xs text-destructive">{{ form.errors.logo_url }}</p>
+            </div>
+            <template v-if="canManageLogins">
+              <div class="space-y-2"><Label>Username</Label><Input v-model="form.login_username" autocomplete="off" /><p v-if="form.errors.login_username" class="text-xs text-destructive">{{ form.errors.login_username }}</p></div>
+              <div class="space-y-2"><Label>Password</Label><Input v-model="form.password" type="password" autocomplete="new-password" /><p v-if="form.errors.password" class="text-xs text-destructive">{{ form.errors.password }}</p></div>
+            </template>
+            <div class="space-y-3 rounded-md border p-3 md:col-span-2">
+              <div class="font-medium">Voucher Access</div>
+              <Label class="flex cursor-pointer items-center gap-2"><Checkbox v-model="form.can_create_voucher" />Create vouchers</Label>
+              <Label class="flex cursor-pointer items-center gap-2"><Checkbox v-model="form.can_approve_voucher" />Approve vouchers</Label>
+              <Label class="flex cursor-pointer items-center gap-2"><Checkbox v-model="form.can_edit_voucher" />Edit draft vouchers and schedules</Label>
+              <div class="space-y-2"><Label>Creation and change cutoff</Label><Select v-model="form.voucher_cutoff_hours"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem v-for="hours in [2, 6, 12, 18, 24, 48]" :key="hours" :value="String(hours)">{{ hours }} hours before flight</SelectItem></SelectContent></Select></div>
             </div>
             <div class="space-y-2 md:col-span-2">
               <Label>City</Label>

@@ -62,7 +62,11 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'passengers.*.service_type' => ['nullable', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
             'passengers.*.transport_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'passengers.*.visa_status' => ['nullable', Rule::in(array_keys(Passenger::STATUSES))],
-            'transport_items' => ['nullable', 'array', 'required_if:transport_mode,specialized', 'min:1'],
+            'transport_items' => [
+                'nullable',
+                'array',
+                Rule::when($this->input('transport_mode') === VisaGroup::TRANSPORT_SPECIALIZED, ['required', 'min:1']),
+            ],
             'transport_items.*.transport_fare_id' => ['required', 'uuid', 'distinct', $this->existsForCompany(TransportFare::class, 'Selected transport fare was not found.')],
             'transport_items.*.driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
             'transport_items.*.scheduled_at' => ['nullable', 'date'],

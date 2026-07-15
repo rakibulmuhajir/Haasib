@@ -49,6 +49,9 @@ class VisaGroupController extends Controller
             ->when($search !== '', fn ($q) => $q->where(fn ($inner) => $inner
                 ->where('name', 'ilike', "%{$search}%")
                 ->orWhere('group_number', 'ilike', "%{$search}%")
+                ->orWhereHas('passengers', fn ($passenger) => $passenger->where(fn ($match) => $match
+                    ->where('full_name', 'ilike', "%{$search}%")
+                    ->orWhere('passport_number', 'ilike', "%{$search}%")))
                 ->orWhereHas('agent', fn ($agent) => $agent->where('name', 'ilike', "%{$search}%"))))
             ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->orderByDesc('created_at')

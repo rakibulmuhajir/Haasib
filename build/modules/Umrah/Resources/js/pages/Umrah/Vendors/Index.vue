@@ -3,19 +3,22 @@ import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import RecordPagination from '@/components/RecordPagination.vue'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Pencil, Save, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   company: { slug: string; base_currency: string }
-  vendors: { data: any[] }
+  vendors: { data: any[]; total: number; current_page: number; last_page: number; from: number | null; to: number | null; prev_page_url: string | null; next_page_url: string | null }
   vendorTypes: Record<string, string>
   nextVendorNumber: string
 }>()
@@ -120,7 +123,7 @@ const submit = () => {
   <Head title="Visa Vendors" />
   <PageShell title="Visa Vendors" description="Government or visa service providers used for visa cost tracking." :breadcrumbs="breadcrumbs" :icon="FileText">
     <div class="grid gap-6 lg:grid-cols-[520px_minmax(0,1fr)]">
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle>{{ editingVendor ? 'Edit Vendor' : 'Add Vendor' }}</CardTitle></CardHeader>
         <CardContent>
           <form class="space-y-4" @submit.prevent="submit">
@@ -175,36 +178,36 @@ const submit = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle>Vendor List</CardTitle></CardHeader>
-        <CardContent class="space-y-3">
-          <div v-if="!vendors.data.length" class="text-sm text-muted-foreground">No visa vendors yet.</div>
-          <div v-for="vendor in vendors.data" :key="vendor.id" class="grid gap-3 rounded-md border p-3 xl:grid-cols-[1fr_150px_150px_80px]">
-            <div>
-              <div class="font-medium">{{ vendor.name }}</div>
-              <div class="text-sm text-muted-foreground">{{ vendor.vendor_number }} · {{ vendorTypes[vendor.vendor_type] || vendor.vendor_type }}</div>
-            </div>
-            <div>
-              <div class="text-xs text-muted-foreground">Adult</div>
-              <div><MoneyText :amount="vendor.adult_retail_amount" :currency="company.base_currency" /></div>
-              <div class="text-xs text-muted-foreground">Cost <MoneyText :amount="vendor.adult_cost_amount" :currency="company.base_currency" /></div>
-            </div>
-            <div>
-              <div class="text-xs text-muted-foreground">Child</div>
-              <div><MoneyText :amount="vendor.child_retail_amount" :currency="company.base_currency" /></div>
-              <div class="text-xs text-muted-foreground">Cost <MoneyText :amount="vendor.child_cost_amount" :currency="company.base_currency" /></div>
-            </div>
-            <div class="flex items-center justify-end gap-1">
-              <Button type="button" variant="ghost" size="icon" @click="startEdit(vendor)">
-                <Pencil class="h-4 w-4" />
-              </Button>
-            </div>
-            <div class="text-right xl:col-span-4">
-              <div class="text-xs text-muted-foreground">Included bus cost: <MoneyText :amount="vendor.included_bus_cost_amount" :currency="company.base_currency" /> per visa passenger</div>
-              <div class="font-semibold"><MoneyText :amount="vendor.balance" :currency="company.base_currency" /></div>
-              <div class="text-xs text-muted-foreground">payable</div>
-            </div>
-          </div>
+        <CardContent class="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Vendor #</TableHead><TableHead>Vendor</TableHead><TableHead>Type</TableHead>
+                <TableHead class="text-right">Adult Retail</TableHead><TableHead class="text-right">Adult Cost</TableHead>
+                <TableHead class="text-right">Child Retail</TableHead><TableHead class="text-right">Child Cost</TableHead>
+                <TableHead class="text-right">Bus Included</TableHead><TableHead class="text-right">Payable</TableHead>
+                <TableHead class="w-16 text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableEmpty v-if="!vendors.data.length" :colspan="10">No visa vendors yet.</TableEmpty>
+              <TableRow v-for="vendor in vendors.data" :key="vendor.id">
+                <TableCell class="font-medium">{{ vendor.vendor_number }}</TableCell>
+                <TableCell>{{ vendor.name }}</TableCell>
+                <TableCell><Badge variant="outline">{{ vendorTypes[vendor.vendor_type] || vendor.vendor_type }}</Badge></TableCell>
+                <TableCell class="text-right"><MoneyText :amount="vendor.adult_retail_amount" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right"><MoneyText :amount="vendor.adult_cost_amount" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right"><MoneyText :amount="vendor.child_retail_amount" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right"><MoneyText :amount="vendor.child_cost_amount" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right"><MoneyText :amount="vendor.included_bus_cost_amount" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right font-semibold"><MoneyText :amount="vendor.balance" :currency="company.base_currency" /></TableCell>
+                <TableCell class="text-right"><Button type="button" variant="ghost" size="icon" @click="startEdit(vendor)"><Pencil class="h-4 w-4" /><span class="sr-only">Edit {{ vendor.name }}</span></Button></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+          <RecordPagination :current-page="vendors.current_page" :last-page="vendors.last_page" :from="vendors.from" :to="vendors.to" :total="vendors.total" :previous-url="vendors.prev_page_url" :next-url="vendors.next_page_url" />
         </CardContent>
       </Card>
     </div>

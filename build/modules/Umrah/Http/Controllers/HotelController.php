@@ -26,6 +26,7 @@ class HotelController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_SETTINGS_UPDATE), 403);
         $search = trim((string) $request->input('search', ''));
+        $tab = $request->input('tab') === 'vendors' ? 'vendors' : 'hotels';
 
         return Inertia::render('Umrah/Settings/Hotels', [
             'company' => ['id' => $company->id, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
@@ -39,7 +40,17 @@ class HotelController extends Controller
                 ->orderBy('name')
                 ->paginate(20)
                 ->withQueryString(),
-            'filters' => ['search' => $search],
+            'hotelVendors' => HotelVendor::where('company_id', $company->id)
+                ->withCount(['hotels' => fn ($query) => $query->where('is_active', true)])
+                ->when($search !== '', fn ($query) => $query->where(fn ($vendor) => $vendor
+                    ->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('vendor_number', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%")
+                    ->orWhere('city', 'ilike', "%{$search}%")))
+                ->orderBy('name')
+                ->paginate(20, ['*'], 'vendor_page')
+                ->withQueryString(),
+            'filters' => ['search' => $search, 'tab' => $tab],
             'roomTypes' => HotelRoomRate::TYPES,
         ]);
     }

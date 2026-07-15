@@ -51,6 +51,14 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
             'visa_group_id' => ['nullable', 'uuid', $this->existsForCompany(VisaGroup::class, 'Selected group was not found.')],
             'visa_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
             'hotel_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(HotelVendor::class, 'Selected hotel vendor was not found.')],
+            'allocations' => ['sometimes', 'array', 'max:100'],
+            'allocations.*.visa_group_id' => [
+                'required',
+                'uuid',
+                'distinct',
+                $this->existsForCompany(VisaGroup::class, 'Selected group was not found.'),
+            ],
+            'allocations.*.base_amount' => ['required', 'numeric', 'min:0.01'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'currency' => [
                 'required',

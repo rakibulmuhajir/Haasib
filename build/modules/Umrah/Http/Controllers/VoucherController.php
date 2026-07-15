@@ -47,7 +47,10 @@ class VoucherController extends Controller
                 ->orWhereHas('agent', fn ($agent) => $agent->where('name', 'ilike', "%{$search}%"))
                 ->orWhereHas('group', fn ($group) => $group
                     ->where('group_number', 'ilike', "%{$search}%")
-                    ->orWhere('name', 'ilike', "%{$search}%"))))
+                    ->orWhere('name', 'ilike', "%{$search}%"))
+                ->orWhereHas('passengers', fn ($passenger) => $passenger->where(fn ($match) => $match
+                    ->where('full_name', 'ilike', "%{$search}%")
+                    ->orWhere('passport_number', 'ilike', "%{$search}%")))))
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();

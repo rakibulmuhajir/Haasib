@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { Bus, Map, Package, Pencil, Plus, Save, Trash2, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
@@ -194,7 +195,7 @@ const removeCatalogRecord = (path: string, successMessage: string) => catalogRem
   <Head title="Transport Services" />
   <PageShell title="Transport Services" description="Vehicles, sector fares, complete journeys, and terminal charges." :breadcrumbs="breadcrumbs" :icon="Bus">
     <div class="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle>{{ editingService ? 'Edit Transport Service' : 'Add Transport Service' }}</CardTitle></CardHeader>
         <CardContent>
           <form class="space-y-4" @submit.prevent="submit">
@@ -234,38 +235,32 @@ const removeCatalogRecord = (path: string, successMessage: string) => catalogRem
         </CardContent>
       </Card>
 
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle>Available Transport</CardTitle></CardHeader>
-        <CardContent class="space-y-3">
-          <div v-if="!transportServices.length" class="text-sm text-muted-foreground">No transport services yet.</div>
-          <div v-for="service in transportServices" :key="service.id" class="grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_auto]">
-            <div>
-              <div class="font-medium">{{ service.name }}</div>
-              <div class="text-sm text-muted-foreground">
-                {{ service.vehicle_type || 'No type' }}
-                <span v-if="service.pax_capacity"> · {{ service.pax_capacity }} pax</span>
-                <span v-if="service.make || service.model"> · {{ [service.make, service.model].filter(Boolean).join(' ') }}</span>
-                <span v-if="service.number_plate"> · {{ service.number_plate }}</span>
-              </div>
-              <div class="text-sm text-muted-foreground">
-                {{ service.driver?.name || service.driver_name || 'No driver' }}<span v-if="service.driver?.phone || service.driver_contact"> · {{ service.driver?.phone || service.driver_contact }}</span>
-              </div>
-            </div>
-            <div class="flex items-center justify-end gap-1">
-              <Button type="button" variant="ghost" size="icon" @click="startEdit(service)">
-                <Pencil class="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" :disabled="removeForm.processing" @click="removeService(service)">
-                <Trash2 class="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+        <CardContent class="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Vehicle Type</TableHead><TableHead>Make</TableHead><TableHead>Model</TableHead><TableHead class="text-center">Capacity</TableHead><TableHead>Plate</TableHead><TableHead>Driver</TableHead><TableHead>Contact</TableHead><TableHead class="w-24 text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableBody>
+              <TableEmpty v-if="!transportServices.length" :colspan="9">No transport services yet.</TableEmpty>
+              <TableRow v-for="service in transportServices" :key="service.id">
+                <TableCell class="font-medium">{{ service.name }}</TableCell>
+                <TableCell>{{ service.vehicle_type || '-' }}</TableCell>
+                <TableCell>{{ service.make || '-' }}</TableCell>
+                <TableCell>{{ service.model || '-' }}</TableCell>
+                <TableCell class="text-center">{{ service.pax_capacity || '-' }}</TableCell>
+                <TableCell>{{ service.number_plate || '-' }}</TableCell>
+                <TableCell>{{ service.driver?.name || service.driver_name || '-' }}</TableCell>
+                <TableCell>{{ service.driver?.phone || service.driver_contact || '-' }}</TableCell>
+                <TableCell><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" @click="startEdit(service)"><Pencil class="h-4 w-4" /><span class="sr-only">Edit {{ service.name }}</span></Button><Button type="button" variant="ghost" size="icon" :disabled="removeForm.processing" @click="removeService(service)"><Trash2 class="h-4 w-4" /><span class="sr-only">Remove {{ service.name }}</span></Button></div></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
 
     <div class="mt-6 grid gap-6 xl:grid-cols-2">
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle class="flex items-center gap-2"><Map class="h-4 w-4" />Transport Sectors</CardTitle></CardHeader>
         <CardContent class="space-y-4">
           <form class="grid gap-3 sm:grid-cols-2" @submit.prevent="submitSector">
@@ -275,16 +270,14 @@ const removeCatalogRecord = (path: string, successMessage: string) => catalogRem
             <div class="space-y-2"><Label>Destination</Label><Input v-model="sectorForm.destination" placeholder="Makkah Hotel" required /></div>
             <Button type="submit" class="sm:col-span-2" :disabled="sectorForm.processing"><Plus class="mr-2 h-4 w-4" />Add Sector</Button>
           </form>
-          <div class="divide-y rounded-md border">
-            <div v-for="sector in sectors" :key="sector.id" class="flex items-center justify-between gap-3 p-3">
-              <div><div class="font-medium">{{ sector.name }}</div><div class="text-xs text-muted-foreground">{{ sector.code }} · {{ sector.origin }} → {{ sector.destination }}</div></div>
-              <Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-sectors/${sector.id}`, 'Transport sector removed successfully')"><Trash2 class="h-4 w-4" /></Button>
-            </div>
-          </div>
+          <Table>
+            <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Sector</TableHead><TableHead>Origin</TableHead><TableHead>Destination</TableHead><TableHead class="w-16 text-right">Action</TableHead></TableRow></TableHeader>
+            <TableBody><TableEmpty v-if="!sectors.length" :colspan="5">No transport sectors yet.</TableEmpty><TableRow v-for="sector in sectors" :key="sector.id"><TableCell class="font-medium">{{ sector.code }}</TableCell><TableCell>{{ sector.name }}</TableCell><TableCell>{{ sector.origin }}</TableCell><TableCell>{{ sector.destination }}</TableCell><TableCell class="text-right"><Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-sectors/${sector.id}`, 'Transport sector removed successfully')"><Trash2 class="h-4 w-4" /><span class="sr-only">Remove {{ sector.name }}</span></Button></TableCell></TableRow></TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card class="min-w-0">
         <CardHeader><CardTitle class="flex items-center gap-2"><Package class="h-4 w-4" />Journey Packages</CardTitle></CardHeader>
         <CardContent class="space-y-4">
           <form class="space-y-3" @submit.prevent="submitPackage">
@@ -301,17 +294,15 @@ const removeCatalogRecord = (path: string, successMessage: string) => catalogRem
             <div class="space-y-2"><Label>Notes</Label><Textarea v-model="packageForm.notes" /></div>
             <Button type="submit" class="w-full" :disabled="packageForm.processing || !packageForm.sector_ids.length"><Plus class="mr-2 h-4 w-4" />Add Journey Package</Button>
           </form>
-          <div class="divide-y rounded-md border">
-            <div v-for="journey in packages" :key="journey.id" class="flex items-start justify-between gap-3 p-3">
-              <div><div class="font-medium">{{ journey.name }}</div><div class="mt-1 text-xs text-muted-foreground">{{ journey.sectors.map((sector) => sector.code).join(' → ') }}</div></div>
-              <Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-packages/${journey.id}`, 'Journey package removed successfully')"><Trash2 class="h-4 w-4" /></Button>
-            </div>
-          </div>
+          <Table>
+            <TableHeader><TableRow><TableHead>Journey</TableHead><TableHead>Included Sectors</TableHead><TableHead class="w-16 text-right">Action</TableHead></TableRow></TableHeader>
+            <TableBody><TableEmpty v-if="!packages.length" :colspan="3">No journey packages yet.</TableEmpty><TableRow v-for="journey in packages" :key="journey.id"><TableCell class="font-medium">{{ journey.name }}</TableCell><TableCell class="text-muted-foreground">{{ journey.sectors.map((sector) => sector.code).join(' → ') }}</TableCell><TableCell class="text-right"><Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-packages/${journey.id}`, 'Journey package removed successfully')"><Trash2 class="h-4 w-4" /><span class="sr-only">Remove {{ journey.name }}</span></Button></TableCell></TableRow></TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
 
-    <Card class="mt-6">
+    <Card class="mt-6 min-w-0">
       <CardHeader><CardTitle>Sector and Journey Fares</CardTitle></CardHeader>
       <CardContent class="space-y-5">
         <form class="grid gap-3 md:grid-cols-2 xl:grid-cols-4" @submit.prevent="submitFare">
@@ -338,16 +329,10 @@ const removeCatalogRecord = (path: string, successMessage: string) => catalogRem
           <Button type="submit" class="md:col-span-2 xl:col-span-4" :disabled="fareForm.processing || !fareForm.transport_service_id || !fareForm.fare_target"><Save class="mr-2 h-4 w-4" />Save Fare</Button>
         </form>
 
-        <div class="space-y-2">
-          <div v-if="!fares.length" class="text-sm text-muted-foreground">No sector or journey fares yet.</div>
-          <div v-for="fare in fares" :key="fare.id" class="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_170px_170px_100px_auto] md:items-center">
-            <div><div class="font-medium">{{ fare.name }}</div><div class="text-xs text-muted-foreground">{{ fare.service?.name }} · {{ fare.sector?.name || fare.package?.name }} · {{ chargingBases[fare.charging_basis] }}</div></div>
-            <div><div class="text-xs text-muted-foreground">Retail</div><MoneyText :amount="fare.sale_amount" :currency="company.base_currency" /></div>
-            <div><div class="text-xs text-muted-foreground">Cost</div><MoneyText :amount="fare.cost_amount" :currency="company.base_currency" /></div>
-            <div><div class="text-xs text-muted-foreground">Hajj extra</div><MoneyText :amount="fare.hajj_terminal_sale_amount" :currency="company.base_currency" /></div>
-            <Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-fares/${fare.id}`, 'Transport fare removed successfully')"><Trash2 class="h-4 w-4" /></Button>
-          </div>
-        </div>
+        <Table>
+          <TableHeader><TableRow><TableHead>Fare</TableHead><TableHead>Vehicle</TableHead><TableHead>Coverage</TableHead><TableHead>Basis</TableHead><TableHead class="text-right">Retail</TableHead><TableHead class="text-right">Cost</TableHead><TableHead class="text-right">Hajj Extra</TableHead><TableHead class="w-16 text-right">Action</TableHead></TableRow></TableHeader>
+          <TableBody><TableEmpty v-if="!fares.length" :colspan="8">No sector or journey fares yet.</TableEmpty><TableRow v-for="fare in fares" :key="fare.id"><TableCell class="font-medium">{{ fare.name }}</TableCell><TableCell>{{ fare.service?.name || '-' }}</TableCell><TableCell>{{ fare.sector?.name || fare.package?.name || '-' }}</TableCell><TableCell>{{ chargingBases[fare.charging_basis] }}</TableCell><TableCell class="text-right"><MoneyText :amount="fare.sale_amount" :currency="company.base_currency" /></TableCell><TableCell class="text-right"><MoneyText :amount="fare.cost_amount" :currency="company.base_currency" /></TableCell><TableCell class="text-right"><MoneyText :amount="fare.hajj_terminal_sale_amount" :currency="company.base_currency" /></TableCell><TableCell class="text-right"><Button type="button" variant="ghost" size="icon" :disabled="catalogRemoveForm.processing" @click="removeCatalogRecord(`transport-fares/${fare.id}`, 'Transport fare removed successfully')"><Trash2 class="h-4 w-4" /><span class="sr-only">Remove {{ fare.name }}</span></Button></TableCell></TableRow></TableBody>
+        </Table>
       </CardContent>
     </Card>
 

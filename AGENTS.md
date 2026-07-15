@@ -472,8 +472,8 @@ For Inertia actions specifically:
 ## 🚀 DEVELOPMENT SERVER
 
 ```bash
-# Backend (3-10x faster than php artisan serve)
-php artisan octane:start --server=frankenphp --port=9001 --watch
+# Backend
+php artisan serve --host=127.0.0.1 --port=9001
 
 # Frontend
 npm run dev

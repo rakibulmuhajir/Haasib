@@ -255,20 +255,18 @@ class UmrahCoreService
                 ]);
             }
 
-            if ($group) {
-                $allocationAmount = $direction === GroupPayment::DIRECTION_RECEIVED
-                    ? min($baseAmount, (float) $group->balance)
-                    : $baseAmount;
+            $requestedAllocations = $data['allocations'] ?? [];
+            if ($group && $requestedAllocations === []) {
+                $allocationAmount = min($baseAmount, $this->allocationOutstanding($payment, $group));
                 if ($allocationAmount > 0) {
-                    $allocation = PaymentAllocation::create([
-                        'company_id' => $companyId,
-                        'group_payment_id' => $payment->id,
+                    $requestedAllocations[] = [
                         'visa_group_id' => $group->id,
                         'base_amount' => $allocationAmount,
-                    ]);
-                    $this->postPaymentAllocation($allocation->fresh(['payment', 'group']));
+                    ];
                 }
-                $this->recalculateGroup($group->fresh());
+            }
+            foreach ($requestedAllocations as $allocation) {
+                $this->allocatePayment($payment, $allocation);
             }
             if ($payment->agent_id) {
                 $this->recalculateAgent($payment->agent_id);
@@ -309,11 +307,12 @@ class UmrahCoreService
             if ($payment->direction === GroupPayment::DIRECTION_RECEIVED && $group->agent_id !== $payment->agent_id) {
                 throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this agent.']);
             }
+            $outstanding = $this->allocationOutstanding($payment, $group);
             if ($amount > $available + 0.01) {
                 throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed the available payment credit.']);
             }
-            if ($payment->direction === GroupPayment::DIRECTION_RECEIVED && $amount > (float) $group->balance + 0.01) {
-                throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed the remaining group balance.']);
+            if ($amount > $outstanding + 0.01) {
+                throw ValidationException::withMessages(['base_amount' => 'Allocation cannot exceed this party\'s outstanding amount for the group.']);
             }
             if ($payment->allocations()->where('visa_group_id', $group->id)->exists()) {
                 throw ValidationException::withMessages(['visa_group_id' => 'This payment is already allocated to the selected group.']);
@@ -370,6 +369,121 @@ class UmrahCoreService
             'total_cost' => (float) $totalCost,
             'balance' => (float) $totalCost - (float) $vendor->total_paid,
         ]);
+    }
+
+    /**
+     * @return array<int, array{id:string,party_key:string,group_number:string,name:string,outstanding_amount:float}>
+     */
+    public function paymentAllocationOptions(string $companyId): array
+    {
+        $groups = VisaGroup::where('company_id', $companyId)
+            ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
+            ->with(['vouchers' => fn ($query) => $query
+                ->where('status', Voucher::STATUS_APPROVED)])
+            ->orderBy('created_at')
+            ->get(['id', 'agent_id', 'vendor_id', 'group_number', 'name', 'balance', 'visa_cost_amount']);
+
+        $sentAllocations = PaymentAllocation::where('company_id', $companyId)
+            ->whereHas('payment', fn ($query) => $query->where('direction', GroupPayment::DIRECTION_SENT))
+            ->with('payment:id,direction,visa_vendor_id,hotel_vendor_id')
+            ->get()
+            ->groupBy(fn (PaymentAllocation $allocation) => $this->paymentPartyKey($allocation->payment).'|'.$allocation->visa_group_id)
+            ->map(fn ($allocations) => (float) $allocations->sum('base_amount'));
+
+        $options = collect();
+        foreach ($groups as $group) {
+            if ($group->agent_id && (float) $group->balance > 0.01) {
+                $options->push($this->allocationOption($group, 'agent:'.$group->agent_id, (float) $group->balance));
+            }
+
+            if ($group->vendor_id) {
+                $partyKey = 'visa:'.$group->vendor_id;
+                $outstanding = max(round((float) $group->visa_cost_amount - (float) ($sentAllocations[$partyKey.'|'.$group->id] ?? 0), 2), 0);
+                if ($outstanding > 0.01) {
+                    $options->push($this->allocationOption($group, $partyKey, $outstanding));
+                }
+            }
+
+            $hotelCosts = collect($group->vouchers)
+                ->flatMap(fn (Voucher $voucher) => $voucher->hotel_stays ?? [])
+                ->filter(fn (array $stay) => ! empty($stay['hotel_vendor_id']) && (float) ($stay['total_cost_amount'] ?? 0) > 0)
+                ->groupBy('hotel_vendor_id')
+                ->map(fn ($stays) => (float) $stays->sum(fn (array $stay) => (float) $stay['total_cost_amount']));
+
+            foreach ($hotelCosts as $vendorId => $cost) {
+                $partyKey = 'hotel:'.$vendorId;
+                $outstanding = max(round($cost - (float) ($sentAllocations[$partyKey.'|'.$group->id] ?? 0), 2), 0);
+                if ($outstanding > 0.01) {
+                    $options->push($this->allocationOption($group, $partyKey, $outstanding));
+                }
+            }
+        }
+
+        return $options->values()->all();
+    }
+
+    private function allocationOutstanding(GroupPayment $payment, VisaGroup $group): float
+    {
+        if ($group->status === VisaGroup::STATUS_CANCELLED) {
+            throw ValidationException::withMessages(['visa_group_id' => 'Payments cannot be allocated to a cancelled group.']);
+        }
+
+        if ($payment->direction === GroupPayment::DIRECTION_RECEIVED) {
+            if ($group->agent_id !== $payment->agent_id) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this agent.']);
+            }
+
+            return max((float) $group->balance, 0);
+        }
+
+        if ($payment->visa_vendor_id) {
+            if ($group->vendor_id !== $payment->visa_vendor_id) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this visa vendor.']);
+            }
+            $payable = (float) $group->visa_cost_amount;
+        } else {
+            $payable = Voucher::where('company_id', $payment->company_id)
+                ->where('visa_group_id', $group->id)
+                ->where('status', Voucher::STATUS_APPROVED)
+                ->get(['hotel_stays'])
+                ->sum(fn (Voucher $voucher) => collect($voucher->hotel_stays)
+                    ->where('hotel_vendor_id', $payment->hotel_vendor_id)
+                    ->sum(fn (array $stay) => (float) ($stay['total_cost_amount'] ?? 0)));
+            if ($payable <= 0) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group has no approved hotel cost for this vendor.']);
+            }
+        }
+
+        $allocated = PaymentAllocation::where('company_id', $payment->company_id)
+            ->where('visa_group_id', $group->id)
+            ->whereHas('payment', fn ($query) => $query
+                ->where('direction', GroupPayment::DIRECTION_SENT)
+                ->when($payment->visa_vendor_id, fn ($party) => $party->where('visa_vendor_id', $payment->visa_vendor_id))
+                ->when($payment->hotel_vendor_id, fn ($party) => $party->where('hotel_vendor_id', $payment->hotel_vendor_id)))
+            ->sum('base_amount');
+
+        return max(round($payable - (float) $allocated, 2), 0);
+    }
+
+    private function paymentPartyKey(GroupPayment $payment): string
+    {
+        if ($payment->agent_id) {
+            return 'agent:'.$payment->agent_id;
+        }
+
+        return $payment->visa_vendor_id ? 'visa:'.$payment->visa_vendor_id : 'hotel:'.$payment->hotel_vendor_id;
+    }
+
+    /** @return array{id:string,party_key:string,group_number:string,name:string,outstanding_amount:float} */
+    private function allocationOption(VisaGroup $group, string $partyKey, float $outstanding): array
+    {
+        return [
+            'id' => $group->id,
+            'party_key' => $partyKey,
+            'group_number' => $group->group_number,
+            'name' => $group->name,
+            'outstanding_amount' => round($outstanding, 2),
+        ];
     }
 
     private function calculateGroupFinancials(array $data, float $paid): array

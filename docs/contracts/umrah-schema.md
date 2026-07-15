@@ -435,6 +435,10 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - Currency must be enabled for the company. A non-base currency requires an exchange rate greater than zero; base currency prohibits an exchange rate.
 - Business rules:
   - Payments are independent from groups. Unallocated received payments are agent advances; unallocated sent payments are vendor advances.
+  - A payment may be allocated to one or more groups while it is recorded or later from the payment register. Any remainder stays as that party's advance.
+  - Received payments may only be allocated to groups owned by the selected agent and cannot exceed each group's receivable balance.
+  - Visa vendor payments may only be allocated to groups using that visa vendor and cannot exceed the group's outstanding visa cost for that vendor.
+  - Hotel vendor payments may only be allocated to groups with approved Company-supplied stays from that hotel vendor and cannot exceed the outstanding cost of those stays.
   - Group balances change only through `umrah.payment_allocations`.
   - The original amount, currency, exchange rate, base currency, and base amount are retained as the historical conversion snapshot.
 - Model fillable:
@@ -451,7 +455,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `transaction_id` uuid nullable FK -> `acct.transactions.id`; null for backfilled legacy allocations.
   - timestamps.
 - Constraints: unique (`group_payment_id`, `visa_group_id`); `base_amount > 0`.
-- Business rule: allocation totals cannot exceed the payment `base_amount`.
+- Business rules: allocation totals cannot exceed the payment `base_amount`; every allocation must belong to the payment's selected agent or vendor and cannot exceed that party's outstanding amount for the group.
 - RLS: company isolation plus super-admin override.
 - Model fillable: `company_id`, `group_payment_id`, `visa_group_id`, `base_amount`, `transaction_id`.
 
@@ -465,6 +469,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Standard bus transport is mandatory and included in the visa vendor cost. The vendor's `included_bus_cost_amount` defaults to SAR 50 per visa passenger and covers the complete standard journey.
 - When `transport_mode = standard_bus`, `included_bus_cost_deduction = 0` and no separate bus transport cost or sale is added.
 - When `transport_mode = specialized`, `included_bus_cost_deduction = min(base visa cost, included bus cost per passenger x visa passenger count)`. Adjusted visa cost equals base visa cost minus this deduction. Selected specialized fare costs are then recorded in `transport_cost_amount`.
+- Standard bus groups do not require transport fare items. Specialized transport groups require at least one active sector or complete-journey fare item.
 - `transport_amount` equals group transport item retail totals plus passenger-specific `transport_charge_amount` values for `transport_only` passengers.
 - Group transport fare snapshots calculate by charging basis: per vehicle uses quantity, per passenger uses passenger count, and flat group uses one unit. Hajj Terminal surcharge uses the same basis and is added when terminal is `hajj`.
 - All passengers count toward transport capacity. Only `visa_transport` passengers count toward visa vendor retail and cost.

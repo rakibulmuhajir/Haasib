@@ -4,16 +4,18 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import RecordPagination from '@/components/RecordPagination.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { Pencil, Plus, Search, Trash2, Users } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   company: { slug: string; base_currency: string }
-  agents: { data: any[]; total: number }
+  agents: { data: any[]; total: number; current_page: number; last_page: number; from: number | null; to: number | null; prev_page_url: string | null; next_page_url: string | null }
   filters: { search?: string }
 }>()
 
@@ -65,27 +67,43 @@ const confirmRemoveAgent = () => {
 
     <Card>
       <CardContent class="p-0">
-        <div v-if="!agents.data.length" class="p-8 text-center text-sm text-muted-foreground">No agents yet.</div>
-        <div v-for="agent in agents.data" :key="agent.id" class="flex cursor-pointer items-center justify-between gap-4 border-b p-4 last:border-b-0" @click="router.get(`/${company.slug}/umrah/agents/${agent.id}`)">
-          <div>
-            <div class="font-medium">{{ agent.name }}</div>
-            <div class="text-sm text-muted-foreground">{{ agent.agent_number }} · {{ agent.phone || 'No phone' }} · {{ agent.city || 'No city' }} · {{ agent.country || 'No country' }}</div>
-          </div>
-          <div class="flex items-center gap-3">
-            <div class="text-right">
-              <div class="font-semibold"><MoneyText :amount="agent.balance" :currency="company.base_currency" /></div>
-              <div class="text-xs text-muted-foreground">balance</div>
-            </div>
-            <div class="flex items-center gap-1" @click.stop>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Agent #</TableHead>
+              <TableHead>Agent</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>City</TableHead>
+              <TableHead>Country</TableHead>
+              <TableHead class="text-right">Balance</TableHead>
+              <TableHead class="w-24 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableEmpty v-if="!agents.data.length" :colspan="7">No agents yet.</TableEmpty>
+            <TableRow v-for="agent in agents.data" :key="agent.id" class="cursor-pointer" @click="router.get(`/${company.slug}/umrah/agents/${agent.id}`)">
+              <TableCell class="font-medium">{{ agent.agent_number }}</TableCell>
+              <TableCell>{{ agent.name }}</TableCell>
+              <TableCell>{{ agent.phone || '-' }}</TableCell>
+              <TableCell>{{ agent.city || '-' }}</TableCell>
+              <TableCell>{{ agent.country || '-' }}</TableCell>
+              <TableCell class="text-right font-semibold"><MoneyText :amount="agent.balance" :currency="company.base_currency" /></TableCell>
+              <TableCell>
+                <div class="flex items-center justify-end gap-1" @click.stop>
               <Button type="button" variant="ghost" size="icon" @click="router.get(`/${company.slug}/umrah/agents/${agent.id}/edit`)">
                 <Pencil class="h-4 w-4" />
+                <span class="sr-only">Edit {{ agent.name }}</span>
               </Button>
               <Button type="button" variant="ghost" size="icon" :disabled="removeForm.processing" @click="removeAgent(agent)">
                 <Trash2 class="h-4 w-4" />
+                <span class="sr-only">Remove {{ agent.name }}</span>
               </Button>
             </div>
-          </div>
-        </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <RecordPagination :current-page="agents.current_page" :last-page="agents.last_page" :from="agents.from" :to="agents.to" :total="agents.total" :previous-url="agents.prev_page_url" :next-url="agents.next_page_url" />
       </CardContent>
     </Card>
 

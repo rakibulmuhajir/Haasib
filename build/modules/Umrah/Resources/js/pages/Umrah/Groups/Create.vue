@@ -15,6 +15,7 @@ import { Plus, Plane, Save, Trash2, Upload } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 type PassengerFormRow = {
+  row_id: string
   full_name: string
   passport_number: string
   date_of_birth: string
@@ -34,6 +35,21 @@ type TransportItemFormRow = {
   passenger_count: string
   notes: string
 }
+
+let passengerRowSequence = 0
+const nextPassengerRowId = () => `passenger-${++passengerRowSequence}`
+
+const emptyPassenger = (nationality = 'Pakistan'): PassengerFormRow => ({
+  row_id: nextPassengerRowId(),
+  full_name: '',
+  passport_number: '',
+  date_of_birth: '',
+  imported_age: '',
+  nationality,
+  visa_status: 'received',
+  service_type: 'visa_transport',
+  transport_charge_amount: '0',
+})
 
 const props = defineProps<{
   company: { slug: string; base_currency: string }
@@ -78,9 +94,7 @@ const form = useForm({
   visa_cost_amount: '0',
   transport_cost_amount: '0',
   notes: '',
-  passengers: [
-    { full_name: '', passport_number: '', date_of_birth: '', imported_age: '', nationality: 'Pakistan', visa_status: 'received', service_type: 'visa_transport', transport_charge_amount: '0' },
-  ] as PassengerFormRow[],
+  passengers: [emptyPassenger()] as PassengerFormRow[],
   transport_items: [] as TransportItemFormRow[],
 })
 
@@ -228,7 +242,7 @@ watch(() => [form.vendor_id, form.travel_date, form.passenger_count, form.passen
 watch(() => [form.transport_mode, form.transport_items], updateVisaPricing, { deep: true })
 
 const addPassenger = () => {
-  form.passengers.push({ full_name: '', passport_number: '', date_of_birth: '', imported_age: '', nationality: defaultNationality.value, visa_status: 'received', service_type: 'visa_transport', transport_charge_amount: '0' })
+  form.passengers.push(emptyPassenger(defaultNationality.value))
 }
 
 const addTransportItem = () => {
@@ -244,6 +258,7 @@ const appendImportedMutamers = (rows: any[]) => {
 
   rows.forEach((row) => {
     form.passengers.push({
+      row_id: nextPassengerRowId(),
       full_name: String(row.full_name || ''),
       passport_number: String(row.passport_number || ''),
       date_of_birth: '',
@@ -260,6 +275,14 @@ const appendImportedMutamers = (rows: any[]) => {
 }
 
 const importedMutamersFlash = computed(() => ((page.props.flash as any)?.umrahImportedMutamers || []) as any[])
+const groupFormErrors = computed(() => Object.entries(form.errors) as Array<[string, string]>)
+
+const nestedError = (path: string) => form.errors[path as keyof typeof form.errors]
+
+const showFormErrors = (errors: Record<string, string>) => {
+  const firstError = Object.values(errors)[0]
+  toast.error(firstError || 'Please review the highlighted group details.')
+}
 
 watch(importedMutamersFlash, (rows) => {
   if (!rows.length) return
@@ -290,7 +313,11 @@ const importMutamers = () => {
 }
 
 const removePassenger = (index: number) => {
-  form.passengers.splice(index, 1)
+  form.passengers = form.passengers.filter((_, passengerIndex) => passengerIndex !== index)
+  form.passenger_count = String(form.passengers.filter((passenger) => passenger.full_name.trim() !== '').length)
+
+  const passengerErrors = Object.keys(form.errors).filter((field) => field === 'passengers' || field.startsWith('passengers.'))
+  if (passengerErrors.length) form.clearErrors(...passengerErrors)
 }
 
 const createAgent = () => {
@@ -347,8 +374,13 @@ const submit = () => {
       passengers: data.passengers
         .filter((p) => p.full_name.trim() !== '')
         .map((passenger) => ({
-          ...passenger,
+          full_name: passenger.full_name,
+          passport_number: passenger.passport_number,
+          date_of_birth: passenger.date_of_birth,
           imported_age: passenger.imported_age === '' ? null : Number(passenger.imported_age),
+          nationality: passenger.nationality,
+          visa_status: passenger.visa_status,
+          service_type: passenger.service_type,
           transport_charge_amount: Number(passenger.transport_charge_amount || 0),
         })),
       transport_items: data.transport_mode === 'specialized'
@@ -363,7 +395,7 @@ const submit = () => {
     }))
     .post(`/${props.company.slug}/umrah/groups`, {
       onSuccess: () => toast.success('Visa group created successfully'),
-      onError: () => toast.error('Failed to create visa group'),
+      onError: showFormErrors,
     })
 }
 </script>
@@ -372,6 +404,12 @@ const submit = () => {
   <Head title="New Visa Group" />
   <PageShell title="New Visa Group" description="Create the group, pricing, transport need, and starting passport list." :breadcrumbs="breadcrumbs" :icon="Plane">
     <form class="space-y-6" @submit.prevent="submit">
+      <div v-if="groupFormErrors.length" class="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive" role="alert">
+        <p class="font-medium">Please correct the following details:</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li v-for="([field, error]) in groupFormErrors" :key="field">{{ error }}</li>
+        </ul>
+      </div>
       <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">
           <Card>
@@ -380,6 +418,7 @@ const submit = () => {
               <div class="space-y-2">
                 <Label>Group #</Label>
                 <Input v-model="form.group_number" :placeholder="`Auto: ${nextGroupNumber}`" />
+                <p v-if="form.errors.group_number" class="text-xs text-destructive">{{ form.errors.group_number }}</p>
               </div>
               <div class="space-y-2">
                 <Label>Group Name</Label>
@@ -517,10 +556,12 @@ const submit = () => {
                     <SelectItem v-for="(label, value) in statuses" :key="value" :value="value">{{ label }}</SelectItem>
                   </SelectContent>
                 </Select>
+                <p v-if="form.errors.status" class="text-xs text-destructive">{{ form.errors.status }}</p>
               </div>
               <div class="space-y-2">
                 <Label>Travel Date</Label>
                 <Input v-model="form.travel_date" type="date" />
+                <p v-if="form.errors.travel_date" class="text-xs text-destructive">{{ form.errors.travel_date }}</p>
               </div>
               <div class="space-y-2 md:col-span-2"><Label>Notes</Label><Textarea v-model="form.notes" /></div>
             </CardContent>
@@ -560,17 +601,28 @@ const submit = () => {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <p v-if="nestedError(`transport_items.${index}.transport_fare_id`)" class="text-xs text-destructive">{{ nestedError(`transport_items.${index}.transport_fare_id`) }}</p>
                   </div>
-                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Vehicles</Label><Input v-model="item.quantity" type="number" min="1" /></div>
-                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Passengers</Label><Input v-model="item.passenger_count" type="number" min="1" /></div>
+                  <div class="space-y-1">
+                    <Label class="text-xs text-muted-foreground">Vehicles</Label><Input v-model="item.quantity" type="number" min="1" />
+                    <p v-if="nestedError(`transport_items.${index}.quantity`)" class="text-xs text-destructive">{{ nestedError(`transport_items.${index}.quantity`) }}</p>
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs text-muted-foreground">Passengers</Label><Input v-model="item.passenger_count" type="number" min="1" />
+                    <p v-if="nestedError(`transport_items.${index}.passenger_count`)" class="text-xs text-destructive">{{ nestedError(`transport_items.${index}.passenger_count`) }}</p>
+                  </div>
                   <div class="space-y-1">
                     <Label class="text-xs text-muted-foreground">Terminal</Label>
                     <Select v-model="item.terminal">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="standard">Standard terminal</SelectItem><SelectItem value="hajj">Hajj Terminal</SelectItem></SelectContent>
                     </Select>
+                    <p v-if="nestedError(`transport_items.${index}.terminal`)" class="text-xs text-destructive">{{ nestedError(`transport_items.${index}.terminal`) }}</p>
                   </div>
-                  <div class="space-y-1"><Label class="text-xs text-muted-foreground">Schedule</Label><Input v-model="item.scheduled_at" type="datetime-local" /></div>
+                  <div class="space-y-1">
+                    <Label class="text-xs text-muted-foreground">Schedule</Label><Input v-model="item.scheduled_at" type="datetime-local" />
+                    <p v-if="nestedError(`transport_items.${index}.scheduled_at`)" class="text-xs text-destructive">{{ nestedError(`transport_items.${index}.scheduled_at`) }}</p>
+                  </div>
                   <div class="flex items-end"><Button type="button" variant="ghost" size="icon" @click="removeTransportItem(index)"><Trash2 class="h-4 w-4" /></Button></div>
                   <div v-if="fareFor(item.transport_fare_id)" class="text-xs text-muted-foreground lg:col-span-6">
                     {{ fareFor(item.transport_fare_id)?.sector?.name || fareFor(item.transport_fare_id)?.package?.name }} · {{ fareFor(item.transport_fare_id)?.service?.vehicle_type || 'Vehicle' }} · {{ fareFor(item.transport_fare_id)?.charging_basis?.replaceAll('_', ' ') }}
@@ -603,18 +655,21 @@ const submit = () => {
                   </Button>
                 </div>
               </div>
-              <div v-for="(passenger, index) in form.passengers" :key="index" class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_220px_130px_40px]">
+              <div v-for="(passenger, index) in form.passengers" :key="passenger.row_id" data-passenger-row class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_220px_130px_40px]">
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Full Name</Label>
                   <Input v-model="passenger.full_name" placeholder="Full name" />
+                  <p v-if="nestedError(`passengers.${index}.full_name`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.full_name`) }}</p>
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Passport #</Label>
                   <Input v-model="passenger.passport_number" placeholder="Passport #" />
+                  <p v-if="nestedError(`passengers.${index}.passport_number`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.passport_number`) }}</p>
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Age</Label>
                   <Input v-model="passenger.imported_age" type="number" min="0" max="130" />
+                  <p v-if="nestedError(`passengers.${index}.imported_age`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.imported_age`) }}</p>
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Nationality</Label>
@@ -624,6 +679,7 @@ const submit = () => {
                       <SelectItem v-for="(label, value) in countries" :key="value" :value="value">{{ label }}</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p v-if="nestedError(`passengers.${index}.nationality`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.nationality`) }}</p>
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Service</Label>
@@ -631,13 +687,15 @@ const submit = () => {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem v-for="(label, value) in passengerServiceTypes" :key="value" :value="value">{{ label }}</SelectItem></SelectContent>
                   </Select>
+                  <p v-if="nestedError(`passengers.${index}.service_type`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.service_type`) }}</p>
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs text-muted-foreground">Transport Charge</Label>
                   <Input v-model="passenger.transport_charge_amount" type="number" min="0" step="0.01" :disabled="passenger.service_type !== 'transport_only'" />
+                  <p v-if="nestedError(`passengers.${index}.transport_charge_amount`)" class="text-xs text-destructive">{{ nestedError(`passengers.${index}.transport_charge_amount`) }}</p>
                 </div>
                 <div class="flex items-end">
-                  <Button type="button" variant="ghost" size="icon" @click="removePassenger(index)"><Trash2 class="h-4 w-4" /></Button>
+                  <Button type="button" variant="ghost" size="icon" :aria-label="`Delete ${passenger.full_name || `passenger ${index + 1}`}`" title="Delete passenger" @click.stop="removePassenger(index)"><Trash2 class="h-4 w-4" /></Button>
                 </div>
               </div>
               <Button type="button" variant="outline" @click="addPassenger"><Plus class="mr-2 h-4 w-4" />Add Passenger</Button>

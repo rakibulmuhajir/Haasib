@@ -9,7 +9,6 @@ use App\Modules\Umrah\Http\Requests\StorePaymentAllocationRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\HotelVendor;
-use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
@@ -59,6 +58,10 @@ class PaymentController extends Controller
 
         $summaryQuery = clone $query;
         $payments = $query->orderByDesc('payment_date')->orderByDesc('created_at')->paginate(25)->withQueryString();
+        $allocationGroups = collect($this->service->paymentAllocationOptions($company->id))
+            ->when($isMember, fn ($options) => $agentId
+                ? $options->where('party_key', 'agent:'.$agentId)
+                : collect());
 
         return Inertia::render('Umrah/Payments/Index', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
@@ -69,9 +72,7 @@ class PaymentController extends Controller
             ],
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
             'filters' => $request->only(['search', 'direction']),
-            'groups' => VisaGroup::where('company_id', $company->id)->where('balance', '>', 0)
-                ->when($isMember, fn ($groupQuery) => $agentId ? $groupQuery->where('agent_id', $agentId) : $groupQuery->whereRaw('1 = 0'))
-                ->orderByDesc('created_at')->get(['id', 'agent_id', 'group_number', 'name', 'balance']),
+            'allocationGroups' => $allocationGroups->values(),
         ]);
     }
 
@@ -80,6 +81,10 @@ class PaymentController extends Controller
         $company = app(CurrentCompany::class)->get();
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $memberAgentId !== false;
+        $allocationGroups = collect($this->service->paymentAllocationOptions($company->id))
+            ->when($isMember, fn ($options) => $memberAgentId
+                ? $options->where('party_key', 'agent:'.$memberAgentId)
+                : collect());
 
         return Inertia::render('Umrah/Payments/Create', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
@@ -90,6 +95,7 @@ class PaymentController extends Controller
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'currencies' => CompanyCurrency::where('company_id', $company->id)->orderByDesc('is_base')->orderBy('currency_code')->get(['currency_code', 'is_base', 'exchange_rate']),
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
+            'allocationGroups' => $allocationGroups->values(),
         ]);
     }
 

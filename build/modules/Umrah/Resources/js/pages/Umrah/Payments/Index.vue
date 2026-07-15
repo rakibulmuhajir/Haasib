@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import MoneyText from '@/components/MoneyText.vue';
+import DateTimeText from '@/components/DateTimeText.vue';
 import PageShell from '@/components/PageShell.vue';
+import RecordPagination from '@/components/RecordPagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Select,
     SelectContent,
@@ -29,7 +32,7 @@ import {
     Search,
     WalletCards,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
@@ -37,12 +40,12 @@ const props = defineProps<{
     summary: { received: number; sent: number };
     directions: Record<string, string>;
     filters: { search?: string; direction?: string };
-    groups: Array<{
+    allocationGroups: Array<{
         id: string;
-        agent_id: string;
+        party_key: string;
         group_number: string;
         name: string;
-        balance: number;
+        outstanding_amount: number;
     }>;
 }>();
 
@@ -66,9 +69,6 @@ const applyFilters = () =>
         { preserveState: true, replace: true },
     );
 
-const openPage = (url?: string | null) => {
-    if (url) router.get(url);
-};
 const availableAmount = (payment: any) =>
     Math.max(
         Number(payment.base_amount) -
@@ -79,12 +79,26 @@ const availableAmount = (payment: any) =>
             ),
         0,
     );
-const allocationGroups = computed(() =>
-    selectedPayment.value?.direction === 'received'
-        ? props.groups.filter(
-              (group) => group.agent_id === selectedPayment.value.agent_id,
-          )
-        : props.groups,
+const selectedPartyKey = computed(() => {
+    const payment = selectedPayment.value;
+    if (!payment) return '';
+    if (payment.agent_id) return `agent:${payment.agent_id}`;
+    if (payment.visa_vendor_id) return `visa:${payment.visa_vendor_id}`;
+    return payment.hotel_vendor_id ? `hotel:${payment.hotel_vendor_id}` : '';
+});
+const availableAllocationGroups = computed(() =>
+    props.allocationGroups.filter(
+        (group) =>
+            group.party_key === selectedPartyKey.value &&
+            !(selectedPayment.value?.allocations || []).some(
+                (allocation: any) => allocation.visa_group_id === group.id,
+            ),
+    ),
+);
+const selectedAllocationGroup = computed(() =>
+    availableAllocationGroups.value.find(
+        (group) => group.id === allocationForm.visa_group_id,
+    ),
 );
 const openAllocation = (payment: any) => {
     selectedPayment.value = payment;
@@ -93,6 +107,23 @@ const openAllocation = (payment: any) => {
     allocationForm.base_amount = String(availableAmount(payment));
     allocationOpen.value = true;
 };
+watch(
+    () => allocationForm.visa_group_id,
+    (groupId) => {
+        if (groupId === 'none' || !selectedPayment.value) return;
+        const group = availableAllocationGroups.value.find(
+            (option) => option.id === groupId,
+        );
+        if (group) {
+            allocationForm.base_amount = String(
+                Math.min(
+                    availableAmount(selectedPayment.value),
+                    Number(group.outstanding_amount),
+                ),
+            );
+        }
+    },
+);
 const submitAllocation = () => {
     if (!selectedPayment.value) return;
     allocationForm
@@ -188,36 +219,33 @@ const submitAllocation = () => {
             <Button variant="outline" @click="applyFilters">Apply</Button>
         </div>
 
-        <div
-            v-if="!payments.data.length"
-            class="py-12 text-center text-sm text-muted-foreground"
-        >
-            No payments found.
-        </div>
-        <div v-else class="space-y-2">
-            <div
-                v-for="payment in payments.data"
-                :key="payment.id"
-                class="grid gap-3 border-b py-4 md:grid-cols-[150px_1fr_180px_180px] md:items-center"
-            >
-                <div>
-                    <div class="font-medium">{{ payment.payment_number }}</div>
-                    <div class="text-xs text-muted-foreground">
-                        {{ payment.payment_date }}
-                    </div>
-                </div>
-                <div>
-                    <div class="font-medium">
-                        {{
-                            payment.visa_vendor?.name ||
-                            payment.hotel_vendor?.name ||
-                            payment.agent?.name
-                        }}
-                    </div>
-                    <div
-                        v-if="payment.allocations?.length"
-                        class="flex flex-wrap gap-2"
-                    >
+        <Card>
+          <CardContent class="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Party</TableHead>
+                  <TableHead>Allocation</TableHead>
+                  <TableHead>Direction</TableHead>
+                  <TableHead>Account #</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead class="text-right">Amount</TableHead>
+                  <TableHead class="text-right">Available</TableHead>
+                  <TableHead class="w-24 text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableEmpty v-if="!payments.data.length" :colspan="10">No payments found.</TableEmpty>
+                <TableRow v-for="payment in payments.data" :key="payment.id">
+                  <TableCell class="font-medium">{{ payment.payment_number }}</TableCell>
+                  <TableCell><DateTimeText :value="payment.payment_date" mode="date" /></TableCell>
+                  <TableCell>
+                    {{ payment.visa_vendor?.name || payment.hotel_vendor?.name || payment.agent?.name || '-' }}
+                  </TableCell>
+                  <TableCell>
+                    <div v-if="payment.allocations?.length" class="flex max-w-56 flex-wrap gap-x-2 gap-y-1">
                         <Button
                             v-for="allocation in payment.allocations"
                             :key="allocation.id"
@@ -234,11 +262,8 @@ const submitAllocation = () => {
                     <div v-else class="text-sm text-amber-700">
                         Unallocated advance
                     </div>
-                    <div class="text-xs text-muted-foreground">
-                        {{ payment.reference || 'No reference' }}
-                    </div>
-                </div>
-                <div>
+                  </TableCell>
+                  <TableCell>
                     <Badge
                         :variant="
                             payment.direction === 'sent'
@@ -249,15 +274,14 @@ const submitAllocation = () => {
                             directions[payment.direction] || payment.direction
                         }}</Badge
                     >
-                    <div class="mt-1 text-xs text-muted-foreground">
-                        {{
-                            payment.account
-                                ? `${payment.account.code} · ${payment.account.name}`
-                                : 'Default account'
-                        }}
-                    </div>
-                </div>
-                <div class="text-right">
+                  </TableCell>
+                  <TableCell>
+                    {{ payment.account?.code || '-' }}
+                  </TableCell>
+                  <TableCell>
+                    {{ payment.account?.name || 'Default account' }}
+                  </TableCell>
+                  <TableCell class="text-right">
                     <div
                         class="font-semibold"
                         :class="
@@ -271,56 +295,25 @@ const submitAllocation = () => {
                             :currency="payment.currency"
                         />
                     </div>
-                    <div
-                        v-if="payment.currency !== payment.base_currency"
-                        class="text-xs text-muted-foreground"
-                    >
-                        Rate {{ payment.exchange_rate }} ·
-                        <MoneyText
-                            :amount="payment.base_amount"
-                            :currency="payment.base_currency"
-                        />
-                    </div>
-                    <div class="text-xs text-muted-foreground">
-                        Available
-                        <MoneyText
-                            :amount="availableAmount(payment)"
-                            :currency="payment.base_currency"
-                        />
-                    </div>
+                  </TableCell>
+                  <TableCell class="text-right font-medium">
+                    <MoneyText :amount="availableAmount(payment)" :currency="payment.base_currency" />
+                  </TableCell>
+                  <TableCell class="text-right">
                     <Button
                         v-if="availableAmount(payment) > 0.01"
                         variant="outline"
                         size="sm"
-                        class="mt-2"
                         @click="openAllocation(payment)"
                         >Allocate</Button
                     >
-                </div>
-            </div>
-        </div>
-
-        <div
-            v-if="payments.last_page > 1"
-            class="flex items-center justify-between"
-        >
-            <Button
-                variant="outline"
-                :disabled="!payments.prev_page_url"
-                @click="openPage(payments.prev_page_url)"
-                >Previous</Button
-            >
-            <span class="text-sm text-muted-foreground"
-                >Page {{ payments.current_page }} of
-                {{ payments.last_page }}</span
-            >
-            <Button
-                variant="outline"
-                :disabled="!payments.next_page_url"
-                @click="openPage(payments.next_page_url)"
-                >Next</Button
-            >
-        </div>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            <RecordPagination :current-page="payments.current_page" :last-page="payments.last_page" :from="payments.from" :to="payments.to" :total="payments.total" :previous-url="payments.prev_page_url" :next-url="payments.next_page_url" />
+          </CardContent>
+        </Card>
 
         <Dialog v-model:open="allocationOpen">
             <DialogContent>
@@ -339,7 +332,7 @@ const submitAllocation = () => {
                                     >Select group</SelectItem
                                 >
                                 <SelectItem
-                                    v-for="group in allocationGroups"
+                                    v-for="group in availableAllocationGroups"
                                     :key="group.id"
                                     :value="group.id"
                                 >
@@ -360,6 +353,7 @@ const submitAllocation = () => {
                             v-model="allocationForm.base_amount"
                             type="number"
                             min="0.01"
+                            :max="selectedAllocationGroup?.outstanding_amount"
                             step="0.01"
                             required
                         />
@@ -373,6 +367,13 @@ const submitAllocation = () => {
                                 "
                                 :currency="company.base_currency"
                             />
+                            <template v-if="selectedAllocationGroup">
+                                · Group outstanding
+                                <MoneyText
+                                    :amount="selectedAllocationGroup.outstanding_amount"
+                                    :currency="company.base_currency"
+                                />
+                            </template>
                         </p>
                         <p
                             v-if="allocationForm.errors.base_amount"

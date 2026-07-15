@@ -4,9 +4,11 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { BarChart3 } from 'lucide-vue-next'
 
@@ -48,18 +50,22 @@ const applyFilters = () => router.get(`/${props.company.slug}/umrah/reports/earn
 
     <Card>
       <CardHeader><CardTitle>Groups</CardTitle></CardHeader>
-      <CardContent class="space-y-3">
-        <div v-if="!groups.length" class="text-sm text-muted-foreground">No groups in this period.</div>
-        <div v-for="group in groups" :key="group.id" class="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_140px_140px_140px_140px]">
-          <div>
-            <div class="font-medium">{{ group.group_number }} · {{ group.name }}</div>
-            <div class="text-sm text-muted-foreground">{{ group.agent?.name || 'No agent' }} · {{ group.status }}</div>
-          </div>
-          <div><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></div>
-          <div><MoneyText :amount="Number(group.visa_cost_amount || 0) + Number(group.transport_cost_amount || 0)" :currency="company.base_currency" /></div>
-          <div><MoneyText :amount="group.profit" :currency="company.base_currency" /></div>
-          <div class="text-right"><MoneyText :amount="group.balance" :currency="company.base_currency" /></div>
-        </div>
+      <CardContent class="p-0">
+        <Table>
+          <TableHeader><TableRow><TableHead>Group</TableHead><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead class="text-right">Revenue</TableHead><TableHead class="text-right">Cost</TableHead><TableHead class="text-right">Profit</TableHead><TableHead class="text-right">Balance</TableHead></TableRow></TableHeader>
+          <TableBody>
+            <TableEmpty v-if="!groups.length" :colspan="7">No groups in this period.</TableEmpty>
+            <TableRow v-for="group in groups" :key="group.id" class="cursor-pointer" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
+              <TableCell class="font-medium">{{ group.group_number }}</TableCell>
+              <TableCell>{{ group.agent?.name || '-' }}</TableCell>
+              <TableCell><Badge variant="secondary" class="capitalize">{{ String(group.status).replaceAll('_', ' ') }}</Badge></TableCell>
+              <TableCell class="text-right"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></TableCell>
+              <TableCell class="text-right"><MoneyText :amount="Number(group.visa_cost_amount || 0) + Number(group.transport_cost_amount || 0)" :currency="company.base_currency" /></TableCell>
+              <TableCell class="text-right font-medium"><MoneyText :amount="group.profit" :currency="company.base_currency" /></TableCell>
+              <TableCell class="text-right"><MoneyText :amount="group.balance" :currency="company.base_currency" /></TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   </PageShell>

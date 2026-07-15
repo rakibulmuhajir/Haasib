@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import MoneyText from '@/components/MoneyText.vue';
+import DateTimeText from '@/components/DateTimeText.vue';
 import PageShell from '@/components/PageShell.vue';
+import RecordPagination from '@/components/RecordPagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Select,
     SelectContent,
@@ -38,9 +41,6 @@ const applyFilters = () =>
         },
         { preserveState: true, replace: true },
     );
-const openPage = (url?: string | null) => {
-    if (url) router.get(url);
-};
 </script>
 
 <template>
@@ -105,19 +105,24 @@ const openPage = (url?: string | null) => {
             >
             <Button variant="outline" @click="applyFilters">Apply</Button>
         </div>
-        <div
-            v-if="!expenses.data.length"
-            class="py-12 text-center text-sm text-muted-foreground"
-        >
-            No expenses found.
-        </div>
-        <div v-else class="space-y-2">
-            <div
-                v-for="expense in expenses.data"
-                :key="expense.id"
-                class="grid gap-3 border-b py-4 md:grid-cols-[150px_1fr_170px_180px] md:items-center"
-            >
-                <div>
+        <Card>
+          <CardContent class="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Expense #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Supplier Ref.</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead class="text-right">Total</TableHead>
+                  <TableHead class="text-right">Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableEmpty v-if="!expenses.data.length" :colspan="7">No expenses found.</TableEmpty>
+                <TableRow v-for="expense in expenses.data" :key="expense.id">
+                  <TableCell>
                     <Button
                         variant="link"
                         class="h-auto p-0 font-medium"
@@ -126,72 +131,24 @@ const openPage = (url?: string | null) => {
                         "
                         >{{ expense.bill_number }}</Button
                     >
-                    <div class="text-xs text-muted-foreground">
-                        {{ expense.bill_date }}
-                    </div>
-                </div>
-                <div>
-                    <div class="font-medium">
-                        {{ expense.vendor?.name || 'No vendor' }}
-                    </div>
-                    <div class="text-xs text-muted-foreground">
-                        {{
-                            expense.vendor_invoice_number ||
-                            'No supplier reference'
-                        }}
-                    </div>
-                </div>
-                <div>
-                    <Badge variant="secondary">{{ expense.status }}</Badge>
-                    <div
-                        v-if="Number(expense.balance) > 0"
-                        class="mt-1 text-xs text-muted-foreground"
-                    >
-                        Balance
-                        <MoneyText
-                            :amount="expense.balance"
-                            :currency="expense.currency"
-                        />
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="font-semibold">
-                        <MoneyText
-                            :amount="expense.total_amount"
-                            :currency="expense.currency"
-                        />
-                    </div>
-                    <div
-                        v-if="expense.currency !== expense.base_currency"
-                        class="text-xs text-muted-foreground"
-                    >
-                        Rate {{ expense.exchange_rate }} ·
-                        <MoneyText
-                            :amount="expense.base_amount"
-                            :currency="expense.base_currency"
-                        />
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div
-            v-if="expenses.last_page > 1"
-            class="flex items-center justify-between"
-        >
-            <Button
-                variant="outline"
-                :disabled="!expenses.prev_page_url"
-                @click="openPage(expenses.prev_page_url)"
-                >Previous</Button
-            ><span class="text-sm text-muted-foreground"
-                >Page {{ expenses.current_page }} of
-                {{ expenses.last_page }}</span
-            ><Button
-                variant="outline"
-                :disabled="!expenses.next_page_url"
-                @click="openPage(expenses.next_page_url)"
-                >Next</Button
-            >
-        </div>
+                  </TableCell>
+                  <TableCell><DateTimeText :value="expense.bill_date" mode="date" /></TableCell>
+                  <TableCell>
+                    {{ expense.vendor?.name || '-' }}
+                  </TableCell>
+                  <TableCell>{{ expense.vendor_invoice_number || '-' }}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" class="capitalize">{{ String(expense.status).replaceAll('_', ' ') }}</Badge>
+                  </TableCell>
+                  <TableCell class="text-right">
+                    <MoneyText :amount="expense.total_amount" :currency="expense.currency" />
+                  </TableCell>
+                  <TableCell class="text-right font-medium"><MoneyText :amount="expense.balance" :currency="expense.currency" /></TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            <RecordPagination :current-page="expenses.current_page" :last-page="expenses.last_page" :from="expenses.from" :to="expenses.to" :total="expenses.total" :previous-url="expenses.prev_page_url" :next-url="expenses.next_page_url" />
+          </CardContent>
+        </Card>
     </PageShell>
 </template>

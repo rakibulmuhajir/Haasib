@@ -10,7 +10,16 @@ class CompanyStoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->isGodMode() ?? false;
+        return $this->user() !== null;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $user = $this->user();
+
+        if ($user && ! $user->isGodMode()) {
+            $this->merge(['owner_user_id' => $user->id]);
+        }
     }
 
     public function rules(): array

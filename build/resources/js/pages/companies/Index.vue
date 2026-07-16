@@ -65,6 +65,7 @@ const props = defineProps<{
   countries: CountryOption[]
   users: UserOption[]
   canCreateCompanies: boolean
+  canAssignOwner: boolean
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -170,7 +171,7 @@ function handleDelete() {
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-2 sm:col-span-2">
+          <div v-if="canAssignOwner" class="space-y-2 sm:col-span-2">
             <Label for="owner">Owner</Label>
             <Select v-model="createForm.owner_user_id">
               <SelectTrigger id="owner" class="border-zinc-300">
@@ -250,7 +251,7 @@ function handleDelete() {
           </Button>
           <Button
             @click="submitCreate"
-            :disabled="createForm.processing || !createForm.name || !createForm.owner_user_id || !createForm.country || !createForm.industry_code || !createForm.base_currency"
+            :disabled="createForm.processing || !createForm.name || (canAssignOwner && !createForm.owner_user_id) || !createForm.country || !createForm.industry_code || !createForm.base_currency"
           >
             <Loader2 v-if="createForm.processing" class="mr-2 h-4 w-4 animate-spin" />
             Create Company
@@ -264,7 +265,7 @@ function handleDelete() {
       v-if="filteredCompanies.length === 0"
       :icon="Building2"
       title="No companies found"
-      :description="searchQuery ? 'Try adjusting your search terms' : (canCreateCompanies ? 'Create a company and assign an owner to begin' : 'A super admin must create a company for you or invite you to one')"
+      :description="searchQuery ? 'Try adjusting your search terms' : 'Create your first company to begin'"
     >
       <template #actions>
         <Button v-if="canCreateCompanies && !searchQuery" @click="showCreateForm = true" size="sm">

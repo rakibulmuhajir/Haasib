@@ -112,7 +112,7 @@ class HandleInertiaRequests extends Middleware
                 'currentCompany' => $serializeCompany($currentCompany),
                 'currentCompanyRole' => $currentCompanyRole,
                 'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
-                'canCreateCompanies' => $isGodMode,
+                'canCreateCompanies' => $request->user() !== null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [

@@ -42,17 +42,17 @@ class CommandController extends Controller
         $commandBus = app(CommandBus::class);
 
         // Validate action format
-        if (!$action || !preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
+        if (! $action || ! preg_match('/^[a-z]+\.[a-z-]+$/', $action)) {
             return $this->error('BAD_REQUEST', 'Invalid or missing X-Action header', 400);
         }
 
         // Check command exists
-        if (!$commandBus->has($action)) {
+        if (! $commandBus->has($action)) {
             return $this->unknownCommandError($action, $commandBus->registered());
         }
 
         // Authentication required for all commands
-        if (!$user) {
+        if (! $user) {
             return $this->error('UNAUTHORIZED', 'Authentication required', 401);
         }
 
@@ -75,7 +75,7 @@ class CommandController extends Controller
         $idemKey = $request->header('X-Idempotency-Key');
         $isQuery = $this->isQueryAction($action);
 
-        if ($idemKey && !$isQuery) {
+        if ($idemKey && ! $isQuery) {
             $previous = $this->checkIdempotency($idemKey);
             if ($previous) {
                 return response()->json([
@@ -94,7 +94,7 @@ class CommandController extends Controller
             $result = $commandBus->dispatch($action, $params, $user, $skipPermission);
 
             // Store idempotency record for mutations
-            if ($idemKey && !$isQuery) {
+            if ($idemKey && ! $isQuery) {
                 $this->storeIdempotency($idemKey, $result);
             }
 
@@ -132,10 +132,10 @@ class CommandController extends Controller
      */
     private function validateCompanyContext(string $action, ?Company $company): true|JsonResponse
     {
-        $requiresContext = !in_array($action, self::GLOBAL_COMMANDS, true)
-                        && !in_array($action, self::COMPANY_TARGET_COMMANDS, true);
+        $requiresContext = ! in_array($action, self::GLOBAL_COMMANDS, true)
+                        && ! in_array($action, self::COMPANY_TARGET_COMMANDS, true);
 
-        if ($requiresContext && !$company) {
+        if ($requiresContext && ! $company) {
             return $this->error(
                 'BAD_REQUEST',
                 'Company context required. Set X-Company-Slug header or switch to a company.',
@@ -170,14 +170,10 @@ class CommandController extends Controller
     }
 
     /**
-     * Only god-mode users can create companies.
+     * Company creation is available to every authenticated user.
      */
     private function authorizeCompanyCreate(mixed $user): true|JsonResponse
     {
-        if (! method_exists($user, 'isGodMode') || ! $user->isGodMode()) {
-            return $this->error('FORBIDDEN', 'Only super admins can create companies', 403);
-        }
-
         return true;
     }
 
@@ -188,17 +184,17 @@ class CommandController extends Controller
     {
         $slug = $params['slug'] ?? null;
 
-        if (!$slug) {
+        if (! $slug) {
             return $this->error('BAD_REQUEST', 'Company slug required', 400);
         }
 
         $company = Company::where('slug', $slug)->first();
 
-        if (!$company) {
+        if (! $company) {
             return $this->error('NOT_FOUND', 'Company not found', 404);
         }
 
-        if (!$this->userHasRoleInCompany($user, $company, 'owner')) {
+        if (! $this->userHasRoleInCompany($user, $company, 'owner')) {
             return $this->error('FORBIDDEN', 'Owner role required to delete company', 403);
         }
 
@@ -212,19 +208,19 @@ class CommandController extends Controller
     {
         $slug = $params['slug'] ?? null;
 
-        if (!$slug) {
+        if (! $slug) {
             return $this->error('BAD_REQUEST', 'Company slug required', 400);
         }
 
         $company = Company::where('slug', $slug)->first();
 
-        if (!$company) {
+        if (! $company) {
             return $this->error('NOT_FOUND', 'Company not found', 404);
         }
 
         $hasAccess = $user->companies()->where('companies.id', $company->id)->exists();
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return $this->error('FORBIDDEN', 'You do not have access to this company', 403);
         }
 
@@ -241,6 +237,7 @@ class CommandController extends Controller
 
         try {
             $registrar->setPermissionsTeamId($company->id);
+
             return $user->hasRole($role);
         } finally {
             $registrar->setPermissionsTeamId($previousTeam);
@@ -323,15 +320,15 @@ class CommandController extends Controller
     private function unknownCommandError(string $action, array $registered): JsonResponse
     {
         $similar = collect($registered)
-            ->filter(fn($cmd) => levenshtein($action, $cmd) <= 3)
+            ->filter(fn ($cmd) => levenshtein($action, $cmd) <= 3)
             ->take(3)
             ->values()
             ->all();
 
         $message = "Unknown command: {$action}";
 
-        if (!empty($similar)) {
-            $message .= '. Did you mean: ' . implode(', ', $similar) . '?';
+        if (! empty($similar)) {
+            $message .= '. Did you mean: '.implode(', ', $similar).'?';
         }
 
         return $this->error('NOT_FOUND', $message, 404);

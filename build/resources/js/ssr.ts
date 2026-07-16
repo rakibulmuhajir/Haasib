@@ -3,7 +3,7 @@ import createServer from '@inertiajs/vue3/server';
 import { createSSRApp, DefineComponent, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Haasib';
 
 const localPages = import.meta.glob<DefineComponent>('./pages/**/*.vue');
 const modulePages = import.meta.glob<DefineComponent>('../../modules/**/Resources/js/pages/**/*.vue');
@@ -81,7 +81,7 @@ createServer(
         createInertiaApp({
             page,
             render: renderToString,
-            title: (title) => (title ? `${title} - ${appName}` : appName),
+            title: (title) => (title && title !== appName ? `${title} - ${appName}` : appName),
             resolve: resolvePage,
             setup: ({ App, props, plugin }) =>
                 createSSRApp({ render: () => h(App, props) }).use(plugin),

@@ -7,7 +7,7 @@ import { initializeTheme } from './composables/useAppearance'
 import { useFlashMessages } from './composables/useFlashMessages'
 import CommandPalette from './components/palette/CommandPalette.vue'
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel'
+const appName = import.meta.env.VITE_APP_NAME || 'Haasib'
 
 const localPages = import.meta.glob<DefineComponent>('./pages/**/*.vue')
 const modulePages = import.meta.glob<DefineComponent>('../../modules/**/Resources/js/pages/**/*.vue')
@@ -92,7 +92,7 @@ const resolvePage = async (name: string) => {
 }
 
 createInertiaApp({
-  title: (title) => (title ? `${title} - ${appName}` : appName),
+  title: (title) => (title && title !== appName ? `${title} - ${appName}` : appName),
   resolve: resolvePage,
   setup({ el, App, props, plugin }) {
     // Root component that wraps the app and adds the command palette

@@ -38,6 +38,7 @@ interface Props {
   countries: Country[]
   industries: Industry[]
   users: UserOption[]
+  canAssignOwner: boolean
 }
 
 const props = defineProps<Props>()
@@ -115,8 +116,7 @@ const submit = () => {
 
         <CardContent>
           <form @submit.prevent="submit" class="space-y-6">
-            <!-- Company Name -->
-            <div class="space-y-2">
+            <div v-if="canAssignOwner" class="space-y-2">
               <Label for="owner" class="font-medium">
                 Owner <span class="text-red-500">*</span>
               </Label>
@@ -242,7 +242,7 @@ const submit = () => {
 
             <!-- Submit Button -->
             <div class="pt-4">
-              <Button type="submit" :disabled="form.processing || !form.owner_user_id || !form.country || !form.industry_code || !form.base_currency" class="w-full" size="lg">
+              <Button type="submit" :disabled="form.processing || (canAssignOwner && !form.owner_user_id) || !form.country || !form.industry_code || !form.base_currency" class="w-full" size="lg">
                 <Loader2 v-if="form.processing" class="w-4 h-4 mr-2 animate-spin" />
                 Create Company
               </Button>

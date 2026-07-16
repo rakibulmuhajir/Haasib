@@ -82,7 +82,8 @@ class CompaniesPageController extends Controller
             'users' => $isGodMode
                 ? DB::table('auth.users')->orderBy('name')->orderBy('email')->get(['id', 'name', 'email'])
                 : [],
-            'canCreateCompanies' => $isGodMode,
+            'canCreateCompanies' => true,
+            'canAssignOwner' => $isGodMode,
         ]);
     }
 

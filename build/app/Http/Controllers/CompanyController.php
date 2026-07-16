@@ -41,7 +41,7 @@ class CompanyController extends Controller
      */
     public function create(Request $request): Response
     {
-        abort_unless($request->user()?->isGodMode(), 403, 'Only super admins can create companies.');
+        $canAssignOwner = $request->user()?->isGodMode() ?? false;
 
         // Get available currencies
         $currencies = DB::table('public.currencies')
@@ -66,16 +66,19 @@ class CompanyController extends Controller
             ->values()
             ->all();
 
-        $users = User::query()
-            ->orderBy('name')
-            ->orderBy('email')
-            ->get(['id', 'name', 'email']);
+        $users = $canAssignOwner
+            ? User::query()
+                ->orderBy('name')
+                ->orderBy('email')
+                ->get(['id', 'name', 'email'])
+            : collect();
 
         return Inertia::render('companies/Create', [
             'currencies' => $currencies,
             'countries' => $countries,
             'industries' => $industries,
             'users' => $users,
+            'canAssignOwner' => $canAssignOwner,
         ]);
     }
 

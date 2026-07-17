@@ -39,6 +39,8 @@ Single source of truth for the shared auth schema. Read this before touching mig
   - `$fillable = ['name', 'username', 'email', 'password', 'system_role', 'is_active', 'settings'];`  
   - `$hidden = ['password', 'remember_token'];`  
   - `$casts = ['email_verified_at' => 'datetime', 'settings' => 'array', 'is_active' => 'boolean', 'password' => 'hashed'];`
+
+Authentication does not require email verification. `email_verified_at` is retained as nullable legacy metadata and must not gate login, dashboard access, company access, or profile updates.
 - Relationships:  
   - belongsToMany Company via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  
   - hasMany User (as createdUsers) via `created_by_user_id`.  

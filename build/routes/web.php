@@ -52,7 +52,7 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth'])
     ->name('dashboard');
 
 // Welcome page for first-time users

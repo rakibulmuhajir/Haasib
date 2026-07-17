@@ -7,8 +7,8 @@ test('guests are redirected to the login page', function () {
     $response->assertRedirect(route('login'));
 });
 
-test('authenticated users without a company are redirected to welcome', function () {
-    $user = User::factory()->create();
+test('unverified users can continue to the application', function () {
+    $user = User::factory()->unverified()->create();
     $this->actingAs($user);
 
     $response = $this->get(route('dashboard'));

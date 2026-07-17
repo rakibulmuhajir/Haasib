@@ -37,7 +37,6 @@ class CheckFirstTimeUser
         // the user creates or joins a company.
         if ($request->routeIs(
             'logout',
-            'verification.*',
             'password.*',
             'two-factor.*',
             'profile.*',

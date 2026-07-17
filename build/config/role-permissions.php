@@ -10,7 +10,7 @@ use App\Constants\Permissions;
 | Defines which permissions each role gets.
 | This matrix is applied PER COMPANY when roles are synced.
 |
-| Roles: owner, accountant, viewer
+| Roles: owner, admin, accountant, viewer, member, agent
 |
 | Run: php artisan app:sync-role-permissions
 |
@@ -228,11 +228,14 @@ return [
         'umrah.group.create',
         'umrah.group.view',
         'umrah.group.update',
+        'umrah.payment.view',
         'umrah.payment.create',
+        'umrah.payment.reverse',
         'umrah.voucher.create',
         'umrah.voucher.view',
         'umrah.voucher.approve',
         'umrah.voucher.update',
+        'umrah.voucher.cancel',
         'umrah.vendor.create',
         'umrah.vendor.view',
         'umrah.vendor.update',
@@ -405,23 +408,19 @@ return [
         'daily_close.view',
 
         // Umrah
-        'umrah.agent.create',
         'umrah.agent.view',
-        'umrah.agent.update',
-        'umrah.agent.delete',
         'umrah.group.create',
         'umrah.group.view',
         'umrah.group.update',
+        'umrah.payment.view',
         'umrah.payment.create',
+        'umrah.payment.reverse',
         'umrah.voucher.create',
         'umrah.voucher.view',
         'umrah.voucher.approve',
         'umrah.voucher.update',
-        'umrah.vendor.create',
+        'umrah.voucher.cancel',
         'umrah.vendor.view',
-        'umrah.vendor.update',
-        'umrah.settings.update',
-        'umrah.settings.delete',
         'umrah.report.view',
     ],
 
@@ -475,16 +474,19 @@ return [
         // Fuel Station - Daily Close (view only)
         'daily_close.view',
 
-        // Umrah (read only)
-        'umrah.agent.view',
+    ],
+
+    'agent' => [
+        // Umrah agent self-service only. Runtime ownership checks further scope records.
         'umrah.group.create',
         'umrah.group.view',
+        'umrah.group.update',
+        'umrah.payment.view',
         'umrah.voucher.create',
         'umrah.voucher.view',
         'umrah.voucher.approve',
         'umrah.voucher.update',
-        'umrah.vendor.view',
-        'umrah.report.view',
+        'umrah.report.own.view',
     ],
 
 ];

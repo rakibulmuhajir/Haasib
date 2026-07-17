@@ -23,10 +23,12 @@
         .muted { color: #4b5563; }
         .notes { min-height: 34px; padding: 5px; }
         .draft { color: rgba(22, 163, 74, .18); font-size: 64px; font-weight: bold; left: 185px; position: fixed; top: 325px; transform: rotate(-35deg); }
+        .cancelled { color: rgba(185, 28, 28, .18); font-size: 54px; font-weight: bold; left: 130px; position: fixed; top: 325px; transform: rotate(-35deg); }
     </style>
 </head>
 <body>
 @if($voucher->status === 'draft')<div class="draft">DRAFT</div>@endif
+@if($voucher->status === 'cancelled')<div class="cancelled">CANCELLED</div>@endif
 <table class="header">
     <tr>
         <td style="width:30%"><div>Voucher Date: {{ $voucher->created_at?->format('d/m/y') }}</div></td>
@@ -36,8 +38,9 @@
 </table>
 <div class="title">Travel Voucher</div>
 <table class="grid compact" style="margin-top:4px">
-    <tr><td><strong>Group:</strong> {{ $voucher->group?->group_number }} - {{ $voucher->group?->name }}</td><td><strong>Voucher:</strong> {{ $voucher->voucher_number }}</td><td><strong>PAX:</strong> {{ $voucher->passengers->count() }}</td><td><strong>Status:</strong> {{ strtoupper($voucher->status) }}</td></tr>
+    <tr><td><strong>Group:</strong> {{ $voucher->group?->group_number }} - {{ $voucher->group?->name }}</td><td><strong>Voucher:</strong> {{ $voucher->voucher_number }} (v{{ $voucher->version_number }})</td><td><strong>PAX:</strong> {{ $voucher->passengers->count() }}</td><td><strong>Status:</strong> {{ strtoupper($voucher->status) }}</td></tr>
 </table>
+@if($voucher->cancellation_reason)<div class="meta"><strong>Cancellation reason:</strong> {{ $voucher->cancellation_reason }}</div>@endif
 
 <div class="section">Mutamers</div>
 <table class="grid compact">

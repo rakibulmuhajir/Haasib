@@ -3,20 +3,44 @@
 namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
-use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\Voucher;
+use App\Modules\Umrah\Services\TravelAccessService;
 use App\Services\CompanyContextService;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ApproveVoucherRequest extends UmrahFormRequest
 {
     public function authorize(): bool
     {
-        if (! parent::authorize()) return false;
+        if (! parent::authorize()) {
+            return false;
+        }
         $companyId = app(CompanyContextService::class)->getCompanyId();
-        $role = DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $this->user()?->id)->where('is_active', true)->value('role');
-        if ($role !== 'member') return true;
-        return Agent::where('company_id', $companyId)->where('user_id', $this->user()?->id)->where('can_approve_voucher', true)->where('is_active', true)->exists();
+        $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+        if (! $voucher) {
+            return false;
+        }
+        $access = app(TravelAccessService::class);
+        if (! $access->isAgentMember($companyId, $this->user())) {
+            return true;
+        }
+        $agent = $access->linkedAgent($companyId, $this->user());
+
+        return $agent && $agent->can_approve_voucher && $voucher->agent_id === $agent->id && ! $access->voucherHasStarted($voucher);
     }
-    protected function permission(): string { return Permissions::UMRAH_VOUCHER_APPROVE; }
-    public function rules(): array { return []; }
+
+    protected function permission(): string
+    {
+        return Permissions::UMRAH_VOUCHER_APPROVE;
+    }
+
+    public function rules(): array
+    {
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+        $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+        $access = app(TravelAccessService::class);
+        $requiresReason = $voucher && ! $access->isAgentMember($companyId, $this->user()) && $access->voucherHasStarted($voucher);
+
+        return ['override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000']];
+    }
 }

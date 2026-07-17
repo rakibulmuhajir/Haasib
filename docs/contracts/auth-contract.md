@@ -7,7 +7,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Currency fields use uppercase ISO 4217 codes, length 3 (`base_currency` only; do not introduce `currency`/`baseCurrency` variants).
 - Slugs are derived from `name` via `Str::slug` with `-N` suffix for uniqueness; never require a slug input from the UI.
 - System role: prefer `super_admin`, `admin`, `user`, `guest` for platform-level permissions. Legacy values (`superadmin`, `system_owner`, `company_owner`, etc.) exist; new code must standardize on `super_admin` and avoid introducing new variants.
-- Company membership role enum is fixed: `owner`, `admin`, `accountant`, `viewer`, `member`.
+- Company membership role enum is fixed: `owner`, `admin`, `accountant`, `viewer`, `member`, `agent`.
 - Row Level Security is enabled; APIs must set `app.current_user_id` and `app.is_super_admin` session settings where required.
 - Currency: `base_currency` is a `char(3)` code (ISO 4217). No FK; validate against `public.currencies` (see currencies contract). `base_currency` is immutable once transactions exist.
 - Reserved columns: `exchange_rate_id` was previously reserved—do not use. All currency work follows the multi-currency contracts (codes only, no FK IDs).
@@ -98,7 +98,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Columns:  
   - `company_id` uuid FK → `auth.companies.id` (on delete cascade).  
   - `user_id` uuid FK → `auth.users.id` (on delete cascade).  
-  - `role` enum constrained to `owner|admin|accountant|viewer|member`, default `member`.  
+  - `role` enum constrained to `owner|admin|accountant|viewer|member|agent`, default `member`. The `agent` role is reserved for linked Travel agent logins and must not receive generic company-data permissions.
   - `invited_by_user_id` uuid nullable FK → `auth.users.id` (on delete set null).  
   - `joined_at` timestamp nullable; `left_at` timestamp nullable.  
   - `is_active` bool default true.  

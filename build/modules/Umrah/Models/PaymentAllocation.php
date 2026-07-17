@@ -19,9 +19,16 @@ class PaymentAllocation extends Model
 
     public $incrementing = false;
 
-    protected $fillable = ['company_id', 'group_payment_id', 'visa_group_id', 'base_amount', 'transaction_id'];
+    protected $fillable = [
+        'company_id', 'group_payment_id', 'visa_group_id', 'base_amount', 'transaction_id',
+        'reversed_at', 'reversed_by_user_id', 'reversal_reason', 'reversal_transaction_id',
+    ];
 
-    protected $casts = ['company_id' => 'string', 'group_payment_id' => 'string', 'visa_group_id' => 'string', 'base_amount' => 'decimal:2', 'transaction_id' => 'string'];
+    protected $casts = [
+        'company_id' => 'string', 'group_payment_id' => 'string', 'visa_group_id' => 'string',
+        'base_amount' => 'decimal:2', 'transaction_id' => 'string', 'reversed_at' => 'datetime',
+        'reversed_by_user_id' => 'string', 'reversal_transaction_id' => 'string',
+    ];
 
     public function payment(): BelongsTo
     {
@@ -36,5 +43,10 @@ class PaymentAllocation extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class);
+    }
+
+    public function reversalTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'reversal_transaction_id');
     }
 }

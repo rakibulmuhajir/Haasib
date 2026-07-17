@@ -3,8 +3,8 @@
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Services\TransportPricingCalculator;
 
-test('specialized transport removes the included bus cost from visa cost', function () {
-    $result = app(TransportPricingCalculator::class)->replaceIncludedBusCost(1200, 50, 4, true);
+test('included transport is removed from the visa supplier cost', function () {
+    $result = app(TransportPricingCalculator::class)->separateIncludedBusCost(1200, 50, 4);
 
     expect($result)->toBe([
         'deduction' => 200.0,
@@ -12,12 +12,12 @@ test('specialized transport removes the included bus cost from visa cost', funct
     ]);
 });
 
-test('standard bus leaves the vendor visa cost unchanged', function () {
-    $result = app(TransportPricingCalculator::class)->replaceIncludedBusCost(1200, 50, 4, false);
+test('mandatory transport deduction never exceeds the visa cost', function () {
+    $result = app(TransportPricingCalculator::class)->separateIncludedBusCost(120, 50, 4);
 
     expect($result)->toBe([
-        'deduction' => 0.0,
-        'adjusted_visa_cost' => 1200.0,
+        'deduction' => 120.0,
+        'adjusted_visa_cost' => 0.0,
     ]);
 });
 

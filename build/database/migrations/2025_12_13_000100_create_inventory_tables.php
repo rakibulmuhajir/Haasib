@@ -21,32 +21,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create the inv schema (and keep fresh installs reliable in multi-schema PostgreSQL).
-        // Laravel's migrate:fresh can leave behind tables in non-default schemas; if that happens,
-        // the safest reset is dropping the affected schemas with CASCADE, then recreating them.
-        $hasInvTables = (bool) (DB::selectOne("
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'inv'
-            ) AS exists
-        ")?->exists ?? false);
-
-        $hasFuelTables = (bool) (DB::selectOne("
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'fuel'
-            ) AS exists
-        ")?->exists ?? false);
-
-        if ($hasInvTables || $hasFuelTables) {
-            // If fuel tables exist, they may hold FKs into inv.* (e.g. fuel.pumps → inv.warehouses).
-            // Dropping schemas CASCADE ensures all dependent constraints are removed cleanly.
-            DB::statement('DROP SCHEMA IF EXISTS fuel CASCADE');
-            DB::statement('DROP SCHEMA IF EXISTS inv CASCADE');
-        }
-
+        // Test schema cleanup belongs in the test harness. A forward migration must never
+        // delete an existing inventory or fuel schema to recover from stale test state.
         DB::statement('CREATE SCHEMA IF NOT EXISTS inv');
 
         // ─────────────────────────────────────────────────────────────────────

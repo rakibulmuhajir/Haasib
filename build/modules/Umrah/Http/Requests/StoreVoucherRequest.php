@@ -25,7 +25,7 @@ class StoreVoucherRequest extends UmrahFormRequest
         }
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $role = DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $this->user()?->id)->where('is_active', true)->value('role');
-        if ($role !== 'member') {
+        if ($role !== 'agent') {
             return true;
         }
 
@@ -51,7 +51,7 @@ class StoreVoucherRequest extends UmrahFormRequest
             'visa_group_id' => ['required', 'uuid', $this->existsForCompany(VisaGroup::class, 'Selected group was not found.')],
             'title' => ['required', 'string', 'max:255'],
             'service_bundle' => ['required', Rule::in(array_keys(Voucher::SERVICE_BUNDLES))],
-            'status' => ['nullable', Rule::in(array_keys(Voucher::STATUSES))],
+            'status' => ['nullable', Rule::in([Voucher::STATUS_DRAFT, Voucher::STATUS_APPROVED])],
             'passenger_ids' => ['required', 'array', 'min:1'],
             'passenger_ids.*' => ['required', 'uuid'],
             'passenger_services' => ['required', 'array'],
@@ -99,7 +99,7 @@ class StoreVoucherRequest extends UmrahFormRequest
                     ->where('is_active', true)
                     ->value('role');
 
-                if ($role === 'member') {
+                if ($role === 'agent') {
                     $agent = Agent::where('company_id', $companyId)
                         ->where('user_id', $this->user()?->id)
                         ->where('is_active', true)

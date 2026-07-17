@@ -4,7 +4,9 @@ namespace App\Modules\Umrah\Services;
 
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\GroupTransportItem;
@@ -15,14 +17,17 @@ use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Models\Voucher;
+use App\Modules\Umrah\Models\VoucherPassenger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class UmrahCoreService
 {
     public function __construct(
         private GlPostingService $glPostingService,
+        private PostingService $postingService,
         private TransportPricingCalculator $transportPricing,
     ) {}
 
@@ -69,7 +74,7 @@ class UmrahCoreService
                 'company_id' => $companyId,
                 'agent_id' => $data['agent_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
-                'visa_service_id' => $data['visa_service_id'] ?? null,
+                'mandatory_transport_vendor_id' => $data['mandatory_transport_vendor_id'] ?? null,
                 'transport_service_id' => $primaryTransport['transport_service_id'] ?? ($data['transport_service_id'] ?? null),
                 'driver_id' => $primaryTransport['driver_id'] ?? ($data['driver_id'] ?? null),
                 'group_number' => ($data['group_number'] ?? null) ?: $this->nextGroupNumber($companyId),
@@ -90,6 +95,7 @@ class UmrahCoreService
                 'transport_mode' => $data['transport_mode'] ?? VisaGroup::TRANSPORT_STANDARD_BUS,
                 'included_bus_cost_per_passenger' => $data['included_bus_cost_per_passenger'] ?? 50,
                 'included_bus_cost_deduction' => $data['included_bus_cost_deduction'] ?? 0,
+                'mandatory_transport_cost_amount' => $data['mandatory_transport_cost_amount'] ?? 0,
                 'transport_quantity' => $primaryTransport['quantity'] ?? (int) ($data['transport_quantity'] ?? 1),
                 'transport_pax_capacity' => $primaryTransport['pax_capacity'] ?? ($data['transport_pax_capacity'] ?? null),
                 'passenger_count' => $passengerCount,
@@ -142,17 +148,19 @@ class UmrahCoreService
             $this->postGroupSale($group->fresh());
             $this->postGroupCost($group->fresh());
             $this->recalculateAgent($group->agent_id);
-            if ($group->vendor_id) {
-                $this->recalculateVendor($group->vendor_id);
-            }
+            $this->recalculateGroupVendors($group->fresh());
 
-            return $group->fresh(['agent', 'vendor', 'visaService', 'transportService', 'transportItems']);
+            return $group->fresh(['agent', 'vendor', 'mandatoryTransportVendor', 'visaService', 'transportService', 'transportItems.transportVendor']);
         });
     }
 
     public function addPassenger(VisaGroup $group, array $data): Passenger
     {
         return DB::transaction(function () use ($group, $data) {
+            $before = $group->only([
+                'visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable',
+                'visa_cost_amount', 'transport_cost_amount',
+            ]);
             $nationality = ! empty($data['nationality'])
                 ? $data['nationality']
                 : ($group->agent()->value('country') ?: 'Pakistan');
@@ -178,22 +186,81 @@ class UmrahCoreService
                 $vendor = VisaVendor::where('company_id', $group->company_id)->find($group->vendor_id);
                 if ($vendor) {
                     $pricing = $this->calculateVisaPricingFromVendor($vendor, [$passenger->toArray()], optional($group->travel_date)->toDateString(), 1);
-                    $costDeduction = $group->transport_mode === VisaGroup::TRANSPORT_SPECIALIZED
-                        ? min($pricing['cost'], (float) $group->included_bus_cost_per_passenger)
-                        : 0;
+                    $costDeduction = min($pricing['cost'], (float) $group->included_bus_cost_per_passenger);
+                    $mandatoryTransportCost = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS ? $costDeduction : 0;
 
                     $group->update([
                         'visa_sale_amount' => round((float) $group->visa_sale_amount + $pricing['sale'], 2),
                         'visa_cost_amount' => round((float) $group->visa_cost_amount + $pricing['cost'] - $costDeduction, 2),
                         'included_bus_cost_deduction' => round((float) $group->included_bus_cost_deduction + $costDeduction, 2),
+                        'mandatory_transport_cost_amount' => round((float) $group->mandatory_transport_cost_amount + $mandatoryTransportCost, 2),
+                        'transport_cost_amount' => round((float) $group->transport_cost_amount + $mandatoryTransportCost, 2),
                     ]);
                 }
             }
 
             $this->recalculateGroup($group->fresh());
+            $this->postGroupFinancialAdjustment($group->fresh(), $before, $data['override_reason'] ?? 'Passenger added');
             $this->recalculateAgent($group->agent_id);
+            $this->recalculateGroupVendors($group->fresh());
 
             return $passenger;
+        });
+    }
+
+    public function updatePassenger(VisaGroup $group, Passenger $passenger, array $data): Passenger
+    {
+        return DB::transaction(function () use ($group, $passenger, $data) {
+            $group = VisaGroup::where('company_id', $group->company_id)->lockForUpdate()->findOrFail($group->id);
+            $passenger = Passenger::where('company_id', $group->company_id)->where('visa_group_id', $group->id)->lockForUpdate()->findOrFail($passenger->id);
+            $before = $group->only(['visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'visa_cost_amount', 'transport_cost_amount']);
+            $old = $this->passengerFinancialContribution($group, $passenger->toArray());
+            $passenger->update(collect($data)->except('override_reason')->all());
+            $new = $this->passengerFinancialContribution($group, $passenger->fresh()->toArray());
+
+            $group->update([
+                'visa_sale_amount' => max(round((float) $group->visa_sale_amount - $old['visa_sale'] + $new['visa_sale'], 2), 0),
+                'visa_cost_amount' => max(round((float) $group->visa_cost_amount - $old['visa_cost'] + $new['visa_cost'], 2), 0),
+                'included_bus_cost_deduction' => max(round((float) $group->included_bus_cost_deduction - $old['bus_deduction'] + $new['bus_deduction'], 2), 0),
+                'transport_amount' => max(round((float) $group->transport_amount - $old['transport_sale'] + $new['transport_sale'], 2), 0),
+                'mandatory_transport_cost_amount' => max(round((float) $group->mandatory_transport_cost_amount - $old['mandatory_transport_cost'] + $new['mandatory_transport_cost'], 2), 0),
+                'transport_cost_amount' => max(round((float) $group->transport_cost_amount - $old['mandatory_transport_cost'] + $new['mandatory_transport_cost'], 2), 0),
+            ]);
+            $this->recalculateGroup($group->fresh());
+            $this->postGroupFinancialAdjustment($group->fresh(), $before, $data['override_reason'] ?? 'Passenger corrected');
+            $this->recalculateAgent($group->agent_id);
+            $this->recalculateGroupVendors($group->fresh());
+
+            return $passenger->fresh();
+        });
+    }
+
+    public function removePassenger(VisaGroup $group, Passenger $passenger, string $reason): void
+    {
+        DB::transaction(function () use ($group, $passenger, $reason) {
+            $group = VisaGroup::where('company_id', $group->company_id)->lockForUpdate()->findOrFail($group->id);
+            $passenger = Passenger::where('company_id', $group->company_id)->where('visa_group_id', $group->id)->lockForUpdate()->findOrFail($passenger->id);
+            if (Voucher::where('company_id', $group->company_id)->where('visa_group_id', $group->id)
+                ->where('status', Voucher::STATUS_APPROVED)->whereNull('superseded_at')
+                ->whereHas('passengers', fn ($query) => $query->whereKey($passenger->id))->exists()) {
+                throw ValidationException::withMessages(['passenger' => 'Cancel or amend the approved voucher before removing this passenger.']);
+            }
+            $before = $group->only(['visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'visa_cost_amount', 'transport_cost_amount']);
+            $amounts = $this->passengerFinancialContribution($group, $passenger->toArray());
+            VoucherPassenger::where('company_id', $group->company_id)->where('passenger_id', $passenger->id)->delete();
+            $passenger->delete();
+            $group->update([
+                'visa_sale_amount' => max(round((float) $group->visa_sale_amount - $amounts['visa_sale'], 2), 0),
+                'visa_cost_amount' => max(round((float) $group->visa_cost_amount - $amounts['visa_cost'], 2), 0),
+                'included_bus_cost_deduction' => max(round((float) $group->included_bus_cost_deduction - $amounts['bus_deduction'], 2), 0),
+                'transport_amount' => max(round((float) $group->transport_amount - $amounts['transport_sale'], 2), 0),
+                'mandatory_transport_cost_amount' => max(round((float) $group->mandatory_transport_cost_amount - $amounts['mandatory_transport_cost'], 2), 0),
+                'transport_cost_amount' => max(round((float) $group->transport_cost_amount - $amounts['mandatory_transport_cost'], 2), 0),
+            ]);
+            $this->recalculateGroup($group->fresh());
+            $this->postGroupFinancialAdjustment($group->fresh(), $before, $reason);
+            $this->recalculateAgent($group->agent_id);
+            $this->recalculateGroupVendors($group->fresh());
         });
     }
 
@@ -222,7 +289,9 @@ class UmrahCoreService
             if ($direction === GroupPayment::DIRECTION_SENT) {
                 $vendor = ! empty($data['visa_vendor_id'])
                     ? VisaVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['visa_vendor_id'])
-                    : HotelVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['hotel_vendor_id']);
+                    : (! empty($data['transport_vendor_id'])
+                        ? VisaVendor::where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->lockForUpdate()->findOrFail($data['transport_vendor_id'])
+                        : HotelVendor::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['hotel_vendor_id']));
             }
 
             $payment = GroupPayment::create([
@@ -231,6 +300,7 @@ class UmrahCoreService
                 'agent_id' => $direction === GroupPayment::DIRECTION_RECEIVED ? $data['agent_id'] : null,
                 'direction' => $direction,
                 'visa_vendor_id' => $data['visa_vendor_id'] ?? null,
+                'transport_vendor_id' => $data['transport_vendor_id'] ?? null,
                 'hotel_vendor_id' => $data['hotel_vendor_id'] ?? null,
                 'account_id' => $data['account_id'] ?? null,
                 'payment_number' => $data['payment_number'] ?: $this->nextPaymentNumber($companyId),
@@ -248,7 +318,7 @@ class UmrahCoreService
             if ($direction === GroupPayment::DIRECTION_RECEIVED) {
                 $this->postAgentPayment($payment);
             } else {
-                $this->postVendorPayment($payment->fresh(['visaVendor', 'hotelVendor']));
+                $this->postVendorPayment($payment->fresh(['visaVendor', 'transportVendor', 'hotelVendor']));
                 $vendor->update([
                     'total_paid' => round((float) $vendor->total_paid + $baseAmount, 2),
                     'balance' => max(round((float) $vendor->balance - $baseAmount, 2), 0),
@@ -285,7 +355,7 @@ class UmrahCoreService
         $financials = $this->calculateGroupFinancials($group->toArray(), $paid);
 
         $group->update([
-            'passenger_count' => max($passengerCount, (int) $group->passenger_count),
+            'passenger_count' => $passengerCount,
             'total_receivable' => $financials['total_receivable'],
             'total_paid' => $paid,
             'balance' => $financials['balance'],
@@ -299,6 +369,9 @@ class UmrahCoreService
     {
         return DB::transaction(function () use ($payment, $data) {
             $payment = GroupPayment::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($payment->id);
+            if ($payment->status !== GroupPayment::STATUS_POSTED) {
+                throw ValidationException::withMessages(['payment' => 'A reversed payment cannot be allocated.']);
+            }
             $group = VisaGroup::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($data['visa_group_id']);
             $amount = round((float) $data['base_amount'], 2);
             $allocated = (float) $payment->allocations()->sum('base_amount');
@@ -359,16 +432,37 @@ class UmrahCoreService
             return;
         }
 
-        $totalCost = VisaGroup::where('company_id', $vendor->company_id)
+        $visaCost = VisaGroup::where('company_id', $vendor->company_id)
             ->where('vendor_id', $vendor->id)
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
-            ->selectRaw('SUM(visa_cost_amount) as total_cost')
-            ->value('total_cost');
+            ->sum('visa_cost_amount');
+        $mandatoryTransportCost = VisaGroup::where('company_id', $vendor->company_id)
+            ->where('mandatory_transport_vendor_id', $vendor->id)
+            ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
+            ->sum('mandatory_transport_cost_amount');
+        $specializedTransportCost = GroupTransportItem::where('company_id', $vendor->company_id)
+            ->where('transport_vendor_id', $vendor->id)
+            ->whereHas('group', fn ($query) => $query->where('status', '!=', VisaGroup::STATUS_CANCELLED))
+            ->sum('total_cost_amount');
+        $totalCost = round((float) $visaCost + (float) $mandatoryTransportCost + (float) $specializedTransportCost, 2);
 
         $vendor->update([
-            'total_cost' => (float) $totalCost,
-            'balance' => (float) $totalCost - (float) $vendor->total_paid,
+            'total_cost' => $totalCost,
+            'total_paid' => (float) GroupPayment::where('company_id', $vendor->company_id)
+                ->where(fn ($query) => $query->where('visa_vendor_id', $vendor->id)->orWhere('transport_vendor_id', $vendor->id))
+                ->where('direction', GroupPayment::DIRECTION_SENT)
+                ->where('status', GroupPayment::STATUS_POSTED)->sum('base_amount'),
         ]);
+        $vendor->update(['balance' => round((float) $vendor->total_cost - (float) $vendor->total_paid, 2)]);
+    }
+
+    private function recalculateGroupVendors(VisaGroup $group): void
+    {
+        collect([
+            $group->vendor_id,
+            $group->mandatory_transport_vendor_id,
+            ...$group->transportItems()->pluck('transport_vendor_id')->all(),
+        ])->filter()->unique()->each(fn (string $vendorId) => $this->recalculateVendor($vendorId));
     }
 
     /**
@@ -378,14 +472,17 @@ class UmrahCoreService
     {
         $groups = VisaGroup::where('company_id', $companyId)
             ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
-            ->with(['vouchers' => fn ($query) => $query
-                ->where('status', Voucher::STATUS_APPROVED)])
+            ->with(['transportItems:id,visa_group_id,transport_vendor_id,total_cost_amount', 'vouchers' => fn ($query) => $query
+                ->where('status', Voucher::STATUS_APPROVED)
+                ->whereNull('superseded_at')
+                ->whereNull('billing_voucher_id')])
             ->orderBy('created_at')
-            ->get(['id', 'agent_id', 'vendor_id', 'group_number', 'name', 'balance', 'visa_cost_amount']);
+            ->get(['id', 'agent_id', 'vendor_id', 'mandatory_transport_vendor_id', 'group_number', 'name', 'balance', 'visa_cost_amount', 'mandatory_transport_cost_amount']);
 
         $sentAllocations = PaymentAllocation::where('company_id', $companyId)
+            ->whereNull('reversed_at')
             ->whereHas('payment', fn ($query) => $query->where('direction', GroupPayment::DIRECTION_SENT))
-            ->with('payment:id,direction,visa_vendor_id,hotel_vendor_id')
+            ->with('payment:id,direction,visa_vendor_id,transport_vendor_id,hotel_vendor_id')
             ->get()
             ->groupBy(fn (PaymentAllocation $allocation) => $this->paymentPartyKey($allocation->payment).'|'.$allocation->visa_group_id)
             ->map(fn ($allocations) => (float) $allocations->sum('base_amount'));
@@ -399,6 +496,24 @@ class UmrahCoreService
             if ($group->vendor_id) {
                 $partyKey = 'visa:'.$group->vendor_id;
                 $outstanding = max(round((float) $group->visa_cost_amount - (float) ($sentAllocations[$partyKey.'|'.$group->id] ?? 0), 2), 0);
+                if ($outstanding > 0.01) {
+                    $options->push($this->allocationOption($group, $partyKey, $outstanding));
+                }
+            }
+
+            $transportCosts = $group->transportItems
+                ->whereNotNull('transport_vendor_id')
+                ->groupBy('transport_vendor_id')
+                ->map(fn ($items) => (float) $items->sum('total_cost_amount'));
+            if ($group->mandatory_transport_vendor_id && (float) $group->mandatory_transport_cost_amount > 0) {
+                $transportCosts[$group->mandatory_transport_vendor_id] = round(
+                    (float) ($transportCosts[$group->mandatory_transport_vendor_id] ?? 0) + (float) $group->mandatory_transport_cost_amount,
+                    2,
+                );
+            }
+            foreach ($transportCosts as $vendorId => $cost) {
+                $partyKey = 'transport:'.$vendorId;
+                $outstanding = max(round($cost - (float) ($sentAllocations[$partyKey.'|'.$group->id] ?? 0), 2), 0);
                 if ($outstanding > 0.01) {
                     $options->push($this->allocationOption($group, $partyKey, $outstanding));
                 }
@@ -422,6 +537,96 @@ class UmrahCoreService
         return $options->values()->all();
     }
 
+    public function vendorStatement(VisaVendor $vendor, ?string $dateFrom = null, ?string $dateTo = null): array
+    {
+        $events = collect();
+        $groups = VisaGroup::where('company_id', $vendor->company_id)
+            ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
+            ->where(fn ($query) => $query
+                ->where('vendor_id', $vendor->id)
+                ->orWhere('mandatory_transport_vendor_id', $vendor->id))
+            ->get(['id', 'group_number', 'name', 'travel_date', 'created_at', 'vendor_id', 'mandatory_transport_vendor_id', 'visa_cost_amount', 'mandatory_transport_cost_amount']);
+
+        foreach ($groups as $group) {
+            $date = $group->travel_date?->toDateString() ?? $group->created_at->toDateString();
+            if ($group->vendor_id === $vendor->id && (float) $group->visa_cost_amount > 0) {
+                $events->push($this->vendorStatementCostRow($date, $group, 'Visa cost', (float) $group->visa_cost_amount));
+            }
+            if ($group->mandatory_transport_vendor_id === $vendor->id && (float) $group->mandatory_transport_cost_amount > 0) {
+                $events->push($this->vendorStatementCostRow($date, $group, 'Mandatory transport', (float) $group->mandatory_transport_cost_amount));
+            }
+        }
+
+        GroupTransportItem::where('company_id', $vendor->company_id)
+            ->where('transport_vendor_id', $vendor->id)
+            ->whereHas('group', fn ($query) => $query->where('status', '!=', VisaGroup::STATUS_CANCELLED))
+            ->with('group:id,group_number,name,travel_date,created_at')
+            ->get(['id', 'visa_group_id', 'description', 'total_cost_amount', 'created_at'])
+            ->each(function (GroupTransportItem $item) use ($events) {
+                if ((float) $item->total_cost_amount <= 0 || ! $item->group) {
+                    return;
+                }
+                $date = $item->group->travel_date?->toDateString() ?? $item->created_at->toDateString();
+                $events->push($this->vendorStatementCostRow($date, $item->group, 'Transport: '.$item->description, (float) $item->total_cost_amount));
+            });
+
+        GroupPayment::where('company_id', $vendor->company_id)
+            ->where('direction', GroupPayment::DIRECTION_SENT)
+            ->where('status', GroupPayment::STATUS_POSTED)
+            ->where(fn ($query) => $query->where('visa_vendor_id', $vendor->id)->orWhere('transport_vendor_id', $vendor->id))
+            ->with('allocations:id,group_payment_id,base_amount')
+            ->get()
+            ->each(function (GroupPayment $payment) use ($events) {
+                $allocated = round((float) $payment->allocations->sum('base_amount'), 2);
+                $events->push([
+                    'date' => $payment->payment_date->toDateString(),
+                    'type' => 'payment',
+                    'reference' => $payment->payment_number,
+                    'description' => $payment->reference ?: 'Payment sent',
+                    'charge' => 0.0,
+                    'payment' => (float) $payment->base_amount,
+                    'allocated' => $allocated,
+                    'advance' => max(round((float) $payment->base_amount - $allocated, 2), 0),
+                ]);
+            });
+
+        $events = $events->sortBy(fn (array $row) => $row['date'].'|'.($row['type'] === 'cost' ? '0' : '1').'|'.$row['reference'])->values();
+        $opening = $dateFrom
+            ? round((float) $events->filter(fn (array $row) => $row['date'] < $dateFrom)->sum(fn (array $row) => $row['charge'] - $row['payment']), 2)
+            : 0.0;
+        $rows = $events
+            ->when($dateFrom, fn ($collection) => $collection->where('date', '>=', $dateFrom))
+            ->when($dateTo, fn ($collection) => $collection->where('date', '<=', $dateTo));
+        $running = $opening;
+        $rows = $rows->map(function (array $row) use (&$running) {
+            $running = round($running + $row['charge'] - $row['payment'], 2);
+
+            return [...$row, 'balance' => $running];
+        })->values();
+
+        return [
+            'opening_balance' => $opening,
+            'charges' => round((float) $rows->sum('charge'), 2),
+            'payments' => round((float) $rows->sum('payment'), 2),
+            'closing_balance' => $running,
+            'rows' => $rows->all(),
+        ];
+    }
+
+    private function vendorStatementCostRow(string $date, VisaGroup $group, string $description, float $amount): array
+    {
+        return [
+            'date' => $date,
+            'type' => 'cost',
+            'reference' => $group->group_number,
+            'description' => $description.' - '.$group->name,
+            'charge' => round($amount, 2),
+            'payment' => 0.0,
+            'allocated' => 0.0,
+            'advance' => 0.0,
+        ];
+    }
+
     private function allocationOutstanding(GroupPayment $payment, VisaGroup $group): float
     {
         if ($group->status === VisaGroup::STATUS_CANCELLED) {
@@ -441,10 +646,23 @@ class UmrahCoreService
                 throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this visa vendor.']);
             }
             $payable = (float) $group->visa_cost_amount;
+        } elseif ($payment->transport_vendor_id) {
+            $payable = (float) GroupTransportItem::where('company_id', $payment->company_id)
+                ->where('visa_group_id', $group->id)
+                ->where('transport_vendor_id', $payment->transport_vendor_id)
+                ->sum('total_cost_amount');
+            if ($group->mandatory_transport_vendor_id === $payment->transport_vendor_id) {
+                $payable += (float) $group->mandatory_transport_cost_amount;
+            }
+            if ($payable <= 0) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group has no transport cost for this vendor.']);
+            }
         } else {
             $payable = Voucher::where('company_id', $payment->company_id)
                 ->where('visa_group_id', $group->id)
                 ->where('status', Voucher::STATUS_APPROVED)
+                ->whereNull('superseded_at')
+                ->whereNull('billing_voucher_id')
                 ->get(['hotel_stays'])
                 ->sum(fn (Voucher $voucher) => collect($voucher->hotel_stays)
                     ->where('hotel_vendor_id', $payment->hotel_vendor_id)
@@ -455,10 +673,12 @@ class UmrahCoreService
         }
 
         $allocated = PaymentAllocation::where('company_id', $payment->company_id)
+            ->whereNull('reversed_at')
             ->where('visa_group_id', $group->id)
             ->whereHas('payment', fn ($query) => $query
                 ->where('direction', GroupPayment::DIRECTION_SENT)
                 ->when($payment->visa_vendor_id, fn ($party) => $party->where('visa_vendor_id', $payment->visa_vendor_id))
+                ->when($payment->transport_vendor_id, fn ($party) => $party->where('transport_vendor_id', $payment->transport_vendor_id))
                 ->when($payment->hotel_vendor_id, fn ($party) => $party->where('hotel_vendor_id', $payment->hotel_vendor_id)))
             ->sum('base_amount');
 
@@ -471,7 +691,13 @@ class UmrahCoreService
             return 'agent:'.$payment->agent_id;
         }
 
-        return $payment->visa_vendor_id ? 'visa:'.$payment->visa_vendor_id : 'hotel:'.$payment->hotel_vendor_id;
+        if ($payment->visa_vendor_id) {
+            return 'visa:'.$payment->visa_vendor_id;
+        }
+
+        return $payment->transport_vendor_id
+            ? 'transport:'.$payment->transport_vendor_id
+            : 'hotel:'.$payment->hotel_vendor_id;
     }
 
     /** @return array{id:string,party_key:string,group_number:string,name:string,outstanding_amount:float} */
@@ -514,7 +740,7 @@ class UmrahCoreService
 
     public function applyVoucherHotelAccounting(Voucher $voucher, VisaGroup $group): void
     {
-        if ($voucher->status !== Voucher::STATUS_APPROVED || $voucher->hotel_sale_transaction_id || $voucher->hotel_cost_transaction_id) {
+        if ($voucher->status !== Voucher::STATUS_APPROVED || $voucher->billing_voucher_id || $voucher->hotel_sale_transaction_id || $voucher->hotel_cost_transaction_id) {
             return;
         }
 
@@ -564,6 +790,95 @@ class UmrahCoreService
         }
     }
 
+    public function reverseVoucherHotelAccounting(Voucher $voucher, string $reason): void
+    {
+        if ($voucher->billing_voucher_id) {
+            return;
+        }
+
+        $group = VisaGroup::where('company_id', $voucher->company_id)->lockForUpdate()->findOrFail($voucher->visa_group_id);
+        foreach ([$voucher->hotel_sale_transaction_id, $voucher->hotel_cost_transaction_id] as $transactionId) {
+            $transaction = $transactionId ? Transaction::where('company_id', $voucher->company_id)->find($transactionId) : null;
+            if ($transaction) {
+                $this->postingService->reverseTransaction($transaction, $reason, Carbon::today());
+            }
+        }
+        $group->update([
+            'hotel_amount' => max(round((float) $group->hotel_amount - (float) $voucher->hotel_sale_amount, 2), 0),
+            'hotel_cost_amount' => max(round((float) $group->hotel_cost_amount - (float) $voucher->hotel_cost_amount, 2), 0),
+        ]);
+        $this->recalculateGroup($group->fresh());
+        $this->recalculateAgent($group->agent_id);
+        collect($voucher->hotel_stays)->pluck('hotel_vendor_id')->filter()->unique()
+            ->each(fn (string $vendorId) => $this->recalculateHotelVendor($vendorId));
+    }
+
+    public function reversePayment(GroupPayment $payment, string $reason, ?string $userId): GroupPayment
+    {
+        return DB::transaction(function () use ($payment, $reason, $userId) {
+            $payment = GroupPayment::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($payment->id);
+            if ($payment->status !== GroupPayment::STATUS_POSTED) {
+                throw ValidationException::withMessages(['payment' => 'This payment has already been reversed.']);
+            }
+            $groupIds = [];
+            foreach ($payment->allAllocations()->whereNull('reversed_at')->lockForUpdate()->get() as $allocation) {
+                $transaction = $allocation->transaction_id ? Transaction::find($allocation->transaction_id) : null;
+                $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
+                $allocation->update(['reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
+                $groupIds[] = $allocation->visa_group_id;
+            }
+            $transaction = $payment->transaction_id ? Transaction::find($payment->transaction_id) : null;
+            $reversal = $transaction ? $this->postingService->reverseTransaction($transaction, $reason, Carbon::today()) : null;
+            $payment->update(['status' => GroupPayment::STATUS_REVERSED, 'reversed_at' => now(), 'reversed_by_user_id' => $userId, 'reversal_reason' => $reason, 'reversal_transaction_id' => $reversal?->id]);
+            VisaGroup::where('company_id', $payment->company_id)->whereIn('id', array_unique($groupIds))->get()
+                ->each(fn (VisaGroup $group) => $this->recalculateGroup($group));
+            if ($payment->agent_id) {
+                $this->recalculateAgent($payment->agent_id);
+            }
+            if ($payment->visa_vendor_id) {
+                $this->recalculateVendor($payment->visa_vendor_id);
+            }
+            if ($payment->transport_vendor_id) {
+                $this->recalculateVendor($payment->transport_vendor_id);
+            }
+            if ($payment->hotel_vendor_id) {
+                $this->recalculateHotelVendor($payment->hotel_vendor_id);
+            }
+
+            return $payment->fresh();
+        });
+    }
+
+    public function recalculateHotelVendor(string $vendorId): void
+    {
+        $vendor = HotelVendor::find($vendorId);
+        if (! $vendor) {
+            return;
+        }
+        $cost = Voucher::where('company_id', $vendor->company_id)->where('status', Voucher::STATUS_APPROVED)
+            ->whereNull('superseded_at')->whereNull('billing_voucher_id')->get(['hotel_stays'])
+            ->sum(fn (Voucher $voucher) => collect($voucher->hotel_stays)->where('hotel_vendor_id', $vendor->id)->sum('total_cost_amount'));
+        $paid = GroupPayment::where('company_id', $vendor->company_id)->where('hotel_vendor_id', $vendor->id)
+            ->where('direction', GroupPayment::DIRECTION_SENT)->where('status', GroupPayment::STATUS_POSTED)->sum('base_amount');
+        $vendor->update(['total_cost' => round((float) $cost, 2), 'total_paid' => round((float) $paid, 2), 'balance' => round((float) $cost - (float) $paid, 2)]);
+    }
+
+    private function passengerFinancialContribution(VisaGroup $group, array $passenger): array
+    {
+        if (($passenger['service_type'] ?? Passenger::SERVICE_VISA_TRANSPORT) === Passenger::SERVICE_TRANSPORT_ONLY) {
+            return ['visa_sale' => 0.0, 'visa_cost' => 0.0, 'bus_deduction' => 0.0, 'mandatory_transport_cost' => 0.0, 'transport_sale' => round((float) ($passenger['transport_charge_amount'] ?? 0), 2)];
+        }
+        $vendor = $group->vendor_id ? VisaVendor::where('company_id', $group->company_id)->find($group->vendor_id) : null;
+        if (! $vendor) {
+            return ['visa_sale' => 0.0, 'visa_cost' => 0.0, 'bus_deduction' => 0.0, 'mandatory_transport_cost' => 0.0, 'transport_sale' => 0.0];
+        }
+        $pricing = $this->calculateVisaPricingFromVendor($vendor, [$passenger], optional($group->travel_date)->toDateString(), 1);
+        $deduction = min($pricing['cost'], (float) $group->included_bus_cost_per_passenger);
+        $mandatoryTransportCost = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS ? $deduction : 0.0;
+
+        return ['visa_sale' => $pricing['sale'], 'visa_cost' => round($pricing['cost'] - $deduction, 2), 'bus_deduction' => $deduction, 'mandatory_transport_cost' => $mandatoryTransportCost, 'transport_sale' => 0.0];
+    }
+
     private function applyServiceDefaults(string $companyId, array $data): array
     {
         $data['transport_required'] = true;
@@ -572,6 +887,7 @@ class UmrahCoreService
         $data['transport_amount'] = $this->transportOnlyPassengerCharges($data['passengers'] ?? []);
         $data['transport_cost_amount'] = 0;
         $data['included_bus_cost_deduction'] = 0;
+        $data['mandatory_transport_cost_amount'] = 0;
 
         if (! empty($data['vendor_id'])) {
             $vendor = VisaVendor::where('company_id', $companyId)->find($data['vendor_id']);
@@ -582,15 +898,24 @@ class UmrahCoreService
                 $data['visa_cost_amount'] = $pricing['cost'];
                 $data['included_bus_cost_per_passenger'] = (float) $vendor->included_bus_cost_amount;
 
-                if ($data['transport_mode'] === VisaGroup::TRANSPORT_SPECIALIZED) {
-                    $replacement = $this->transportPricing->replaceIncludedBusCost(
-                        $pricing['cost'],
-                        (float) $vendor->included_bus_cost_amount,
-                        $pricing['passenger_count'],
-                        true,
-                    );
-                    $data['included_bus_cost_deduction'] = $replacement['deduction'];
-                    $data['visa_cost_amount'] = $replacement['adjusted_visa_cost'];
+                $replacement = $this->transportPricing->separateIncludedBusCost(
+                    $pricing['cost'],
+                    (float) $vendor->included_bus_cost_amount,
+                    $pricing['passenger_count'],
+                );
+                $data['included_bus_cost_deduction'] = $replacement['deduction'];
+                $data['visa_cost_amount'] = $replacement['adjusted_visa_cost'];
+
+                if ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
+                    $transportVendor = VisaVendor::where('company_id', $companyId)
+                        ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                        ->where('is_active', true)
+                        ->find($data['mandatory_transport_vendor_id'] ?? null);
+                    if (! $transportVendor) {
+                        throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select the provider responsible for mandatory bus transport.']);
+                    }
+                    $data['mandatory_transport_cost_amount'] = $replacement['deduction'];
+                    $data['transport_cost_amount'] = $replacement['deduction'];
                 }
             }
         }
@@ -622,10 +947,10 @@ class UmrahCoreService
         foreach ($items as $item) {
             $fare = TransportFare::where('company_id', $companyId)
                 ->where('is_active', true)
-                ->with(['service', 'sector', 'package'])
+                ->with(['transportVendor', 'service', 'sector', 'package'])
                 ->find($item['transport_fare_id']);
 
-            if (! $fare || ! $fare->service) {
+            if (! $fare || ! $fare->service || ! $fare->transportVendor || $fare->transportVendor->vendor_type !== VisaVendor::TYPE_TRANSPORT_PROVIDER) {
                 throw ValidationException::withMessages(['transport_items' => 'A selected transport fare is no longer available.']);
             }
 
@@ -636,6 +961,7 @@ class UmrahCoreService
 
             $resolved[] = [
                 'transport_fare_id' => $fare->id,
+                'transport_vendor_id' => $fare->transport_vendor_id,
                 'transport_service_id' => $fare->transport_service_id,
                 'transport_sector_id' => $fare->transport_sector_id,
                 'transport_package_id' => $fare->transport_package_id,
@@ -856,9 +1182,18 @@ class UmrahCoreService
             'metadata' => [
                 'agent_id' => $group->agent_id,
                 'vendor_id' => $group->vendor_id,
+                'mandatory_transport_vendor_id' => $group->mandatory_transport_vendor_id,
                 'group_number' => $group->group_number,
                 'visa_cost_amount' => $visaCost,
                 'transport_cost_amount' => $transportCost,
+                'mandatory_transport_cost_amount' => (float) $group->mandatory_transport_cost_amount,
+                'transport_supplier_costs' => $group->transportItems()
+                    ->whereNotNull('transport_vendor_id')
+                    ->selectRaw('transport_vendor_id, SUM(total_cost_amount) AS total_cost')
+                    ->groupBy('transport_vendor_id')
+                    ->pluck('total_cost', 'transport_vendor_id')
+                    ->map(fn ($amount) => (float) $amount)
+                    ->all(),
             ],
         ], $entries);
 
@@ -917,7 +1252,7 @@ class UmrahCoreService
 
         $company = $this->company($payment->company_id);
         $cashAccountId = $payment->account_id ?: $this->accountId($company, 'bank_or_cash');
-        $payee = $payment->visaVendor?->name ?: $payment->hotelVendor?->name ?: 'Vendor';
+        $payee = $payment->visaVendor?->name ?: $payment->transportVendor?->name ?: $payment->hotelVendor?->name ?: 'Vendor';
         $transaction = $this->glPostingService->postBalancedTransaction([
             'company_id' => $payment->company_id,
             'transaction_number' => $this->transactionNumber('UVP', $payment->id),
@@ -931,6 +1266,7 @@ class UmrahCoreService
             'reference_id' => $payment->id,
             'metadata' => [
                 'visa_vendor_id' => $payment->visa_vendor_id,
+                'transport_vendor_id' => $payment->transport_vendor_id,
                 'hotel_vendor_id' => $payment->hotel_vendor_id,
                 'payment_number' => $payment->payment_number,
                 'method' => $payment->method,
@@ -988,6 +1324,76 @@ class UmrahCoreService
         $netTransport = max(round($transport - $remainingDiscount, 2), 0);
 
         return [$netVisa, $netTransport];
+    }
+
+    private function postGroupFinancialAdjustment(VisaGroup $group, array $before, string $reason): void
+    {
+        $company = $this->company($group->company_id);
+        [$oldVisaRevenue, $oldTransportRevenue] = $this->netRevenueFromValues($before);
+        [$newVisaRevenue, $newTransportRevenue] = $this->netRevenueAmounts($group);
+        $saleDeltas = [
+            ['account_id' => $this->accountId($company, 'ar'), 'delta' => (float) $group->total_receivable - (float) $before['total_receivable'], 'positive_type' => 'debit', 'description' => "Receivable adjustment for {$group->group_number}"],
+            ['account_id' => $this->accountId($company, 'visa_revenue'), 'delta' => $newVisaRevenue - $oldVisaRevenue, 'positive_type' => 'credit', 'description' => "Visa revenue adjustment for {$group->group_number}"],
+            ['account_id' => $this->accountId($company, 'transport_revenue'), 'delta' => $newTransportRevenue - $oldTransportRevenue, 'positive_type' => 'credit', 'description' => "Transport revenue adjustment for {$group->group_number}"],
+        ];
+        $this->postAdjustmentTransaction($group, 'UGA', 'umrah_group_sale_adjustment', $reason, $saleDeltas);
+
+        $costDeltas = [
+            ['account_id' => $this->accountId($company, 'visa_cost'), 'delta' => (float) $group->visa_cost_amount - (float) $before['visa_cost_amount'], 'positive_type' => 'debit', 'description' => "Visa cost adjustment for {$group->group_number}"],
+            ['account_id' => $this->accountId($company, 'transport_cost'), 'delta' => (float) $group->transport_cost_amount - (float) $before['transport_cost_amount'], 'positive_type' => 'debit', 'description' => "Transport cost adjustment for {$group->group_number}"],
+            ['account_id' => $this->accountId($company, 'ap'), 'delta' => ((float) $group->visa_cost_amount + (float) $group->transport_cost_amount) - ((float) $before['visa_cost_amount'] + (float) $before['transport_cost_amount']), 'positive_type' => 'credit', 'description' => "Payable adjustment for {$group->group_number}"],
+        ];
+        $this->postAdjustmentTransaction($group, 'UGC', 'umrah_group_cost_adjustment', $reason, $costDeltas);
+    }
+
+    private function postAdjustmentTransaction(VisaGroup $group, string $prefix, string $type, string $reason, array $deltas): void
+    {
+        $entries = collect($deltas)
+            ->filter(fn (array $line) => abs(round((float) $line['delta'], 2)) >= 0.01)
+            ->map(function (array $line) {
+                $positive = (float) $line['delta'] > 0;
+                $type = $positive
+                    ? $line['positive_type']
+                    : ($line['positive_type'] === 'debit' ? 'credit' : 'debit');
+
+                return [
+                    'account_id' => $line['account_id'],
+                    'type' => $type,
+                    'amount' => abs(round((float) $line['delta'], 2)),
+                    'description' => $line['description'],
+                ];
+            })
+            ->values()
+            ->all();
+
+        if ($entries === []) {
+            return;
+        }
+
+        $company = $this->company($group->company_id);
+        $this->glPostingService->postBalancedTransaction([
+            'company_id' => $group->company_id,
+            'transaction_number' => $this->transactionNumber($prefix, (string) Str::uuid()),
+            'transaction_type' => $type,
+            'date' => Carbon::today(),
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "{$reason}: {$group->group_number}",
+            'reference_type' => 'umrah.visa_groups',
+            'reference_id' => $group->id,
+            'metadata' => ['group_number' => $group->group_number, 'reason' => $reason],
+        ], $entries);
+    }
+
+    private function netRevenueFromValues(array $values): array
+    {
+        $visa = (float) ($values['visa_sale_amount'] ?? 0);
+        $transport = (float) ($values['transport_amount'] ?? 0);
+        $discount = (float) ($values['discount_amount'] ?? 0);
+        $netVisa = max(round($visa - min($discount, $visa), 2), 0);
+        $remainingDiscount = max(round($discount - $visa, 2), 0);
+
+        return [$netVisa, max(round($transport - $remainingDiscount, 2), 0)];
     }
 
     private function accountId(Company $company, string $role): string

@@ -11,10 +11,38 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { Download, Pencil, Plane, Printer, ScrollText } from 'lucide-vue-next';
-import { computed } from 'vue';
+import {
+    ArrowRightLeft,
+    Download,
+    FilePenLine,
+    Pencil,
+    Plane,
+    Printer,
+    Scissors,
+    ScrollText,
+    Trash2,
+    XCircle,
+} from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -35,7 +63,19 @@ const props = defineProps<{
         can_approve: boolean;
         can_edit: boolean;
         cutoff_hours: number | null;
+        has_started?: boolean;
+        requires_override_reason?: boolean;
+        can_cancel?: boolean;
+        can_amend?: boolean;
+        can_delete?: boolean;
     };
+    changeLogs: any[];
+    moveTargets: Array<{
+        id: string;
+        voucher_number: string;
+        title: string;
+        passengers_count: number;
+    }>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -46,7 +86,20 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: `/${props.company.slug}/umrah/vouchers/${props.voucher.id}`,
     },
 ];
-const approveForm = useForm({});
+const approveForm = useForm({ override_reason: '' });
+const moveOpen = ref(false);
+const separateOpen = ref(false);
+const workflowOpen = ref<'amend' | 'cancel' | 'delete' | null>(null);
+const workflowForm = useForm({ reason: '' });
+const moveForm = useForm({
+    passenger_ids: [] as string[],
+    target_voucher_id: '',
+    override_reason: '',
+});
+const separateForm = useForm({
+    passenger_ids: [] as string[],
+    override_reason: '',
+});
 const page = usePage();
 const canViewAccounting = computed(() =>
     ['super_admin', 'owner', 'accountant'].includes(
@@ -55,6 +108,12 @@ const canViewAccounting = computed(() =>
 );
 const canApprove = computed(() => props.agentCapabilities.can_approve);
 const canEdit = computed(() => props.agentCapabilities.can_edit);
+const canReassignPassengers = computed(
+    () =>
+        props.voucher.status === 'draft' &&
+        canEdit.value &&
+        (props.voucher.passengers?.length || 0) > 1,
+);
 const includesTransport = computed(() =>
     [
         'visa_transport',
@@ -72,6 +131,63 @@ const approve = () =>
             onError: () => toast.error('Failed to approve voucher'),
         },
     );
+
+const togglePassenger = (
+    selected: string[],
+    passengerId: string,
+    checked: boolean | 'indeterminate',
+) => {
+    const next = new Set(selected);
+    if (checked === true) next.add(passengerId);
+    else next.delete(passengerId);
+    return [...next];
+};
+
+const submitMove = () => {
+    moveForm.post(
+        `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/passengers/move`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                moveOpen.value = false;
+                moveForm.reset();
+                toast.success('Passengers moved successfully');
+            },
+            onError: () => toast.error('Failed to move passengers'),
+        },
+    );
+};
+
+const submitSeparation = () => {
+    separateForm.post(
+        `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/passengers/separate`,
+        {
+            onSuccess: () => {
+                separateOpen.value = false;
+                separateForm.reset();
+                toast.success('Individual vouchers created');
+            },
+            onError: () => toast.error('Failed to separate vouchers'),
+        },
+    );
+};
+
+const submitWorkflow = () => {
+    if (!workflowOpen.value) return;
+    const action = workflowOpen.value;
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            workflowOpen.value = null;
+            workflowForm.reset();
+            toast.success(action === 'cancel' ? 'Voucher cancelled' : action === 'delete' ? 'Draft voucher deleted' : 'Draft amendment created');
+        },
+        onError: () => toast.error(`Failed to ${action} voucher`),
+    };
+    const url = `/${props.company.slug}/umrah/vouchers/${props.voucher.id}`;
+    if (action === 'delete') workflowForm.delete(url, options);
+    else workflowForm.post(`${url}/${action}`, options);
+};
 
 const escapeHtml = (value: unknown) =>
     String(value ?? '')
@@ -294,9 +410,38 @@ const exportVoucher = () => {
                 <Pencil class="mr-2 h-4 w-4" />
                 Edit
             </Button>
+            <Button v-if="agentCapabilities.can_amend" variant="outline" @click="workflowOpen = 'amend'">
+                <FilePenLine class="mr-2 h-4 w-4" />Amend
+            </Button>
+            <Button v-if="agentCapabilities.can_delete" variant="outline" @click="workflowOpen = 'delete'">
+                <Trash2 class="mr-2 h-4 w-4" />Delete Draft
+            </Button>
+            <Button v-if="agentCapabilities.can_cancel" variant="destructive" @click="workflowOpen = 'cancel'">
+                <XCircle class="mr-2 h-4 w-4" />Cancel Voucher
+            </Button>
+            <Button
+                v-if="canReassignPassengers && moveTargets.length"
+                variant="outline"
+                @click="moveOpen = true"
+            >
+                <ArrowRightLeft class="mr-2 h-4 w-4" />
+                Move Passengers
+            </Button>
+            <Button
+                v-if="canReassignPassengers"
+                variant="outline"
+                @click="separateOpen = true"
+            >
+                <Scissors class="mr-2 h-4 w-4" />
+                Separate Vouchers
+            </Button>
             <Button
                 v-if="voucher.status === 'draft' && canApprove"
-                :disabled="approveForm.processing"
+                :disabled="
+                    approveForm.processing ||
+                    (agentCapabilities.requires_override_reason &&
+                        approveForm.override_reason.trim().length < 5)
+                "
                 @click="approve"
                 >Approve Voucher</Button
             >
@@ -324,6 +469,42 @@ const exportVoucher = () => {
             <div v-if="company.helpline" class="text-sm text-muted-foreground">
                 Helpline: {{ company.helpline }}
             </div>
+        </div>
+
+        <div
+            v-if="voucher.source_voucher"
+            class="mb-4 rounded-md border px-4 py-3 text-sm"
+        >
+            Separated from voucher
+            <span class="font-medium">
+                {{ voucher.source_voucher.voucher_number }}
+            </span>
+        </div>
+
+        <div v-if="voucher.amended_voucher || voucher.superseded_by_voucher || voucher.cancelled_at" class="mb-4 rounded-md border px-4 py-3 text-sm">
+            <span v-if="voucher.amended_voucher">Version {{ voucher.version_number }} amends {{ voucher.amended_voucher.voucher_number }}.</span>
+            <span v-if="voucher.superseded_by_voucher"> Superseded by {{ voucher.superseded_by_voucher.voucher_number }}.</span>
+            <span v-if="voucher.cancelled_at"> Cancelled: {{ voucher.cancellation_reason }}</span>
+        </div>
+
+        <div
+            v-if="
+                voucher.status === 'draft' &&
+                canApprove &&
+                agentCapabilities.requires_override_reason
+            "
+            class="mb-4 ml-auto max-w-xl space-y-2"
+        >
+            <label class="text-sm font-medium"
+                >Reason for approving after travel started</label
+            >
+            <Textarea v-model="approveForm.override_reason" required />
+            <p
+                v-if="approveForm.errors.override_reason"
+                class="text-xs text-destructive"
+            >
+                {{ approveForm.errors.override_reason }}
+            </p>
         </div>
 
         <div class="grid gap-4 md:grid-cols-4">
@@ -359,6 +540,52 @@ const exportVoucher = () => {
                 }}</CardContent></Card
             >
         </div>
+
+        <Card v-if="changeLogs.length" class="mt-6">
+            <CardHeader
+                ><CardTitle>Change History</CardTitle
+                ><CardDescription
+                    >Company overrides and voucher changes.</CardDescription
+                ></CardHeader
+            >
+            <CardContent class="divide-y p-0">
+                <div
+                    v-for="log in changeLogs"
+                    :key="log.id"
+                    class="grid gap-1 px-6 py-3 md:grid-cols-[180px_160px_1fr]"
+                >
+                    <DateTimeText :value="log.created_at" />
+                    <div class="font-medium">
+                        {{ log.user?.name || 'System' }}
+                    </div>
+                    <div>
+                        <span class="capitalize">{{
+                            String(log.action).replaceAll('_', ' ')
+                        }}</span
+                        ><span v-if="log.reason" class="text-muted-foreground">
+                            · {{ log.reason }}</span
+                        >
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+
+        <Dialog :open="workflowOpen !== null" @update:open="(open) => { if (!open) workflowOpen = null; }">
+            <DialogContent>
+                <DialogHeader><DialogTitle>{{ workflowOpen === 'cancel' ? 'Cancel Voucher' : workflowOpen === 'delete' ? 'Delete Draft Voucher' : 'Create Voucher Amendment' }}</DialogTitle></DialogHeader>
+                <div class="space-y-2">
+                    <Label for="workflow-reason">Reason {{ workflowOpen === 'cancel' ? '' : '(optional before travel)' }}</Label>
+                    <Textarea id="workflow-reason" v-model="workflowForm.reason" />
+                    <p v-if="workflowForm.errors.reason" class="text-sm text-destructive">{{ workflowForm.errors.reason }}</p>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" @click="workflowOpen = null">Keep Voucher</Button>
+                    <Button :variant="workflowOpen === 'cancel' || workflowOpen === 'delete' ? 'destructive' : 'default'" :disabled="workflowForm.processing || (workflowOpen === 'cancel' && workflowForm.reason.trim().length < 5)" @click="submitWorkflow">
+                        {{ workflowOpen === 'cancel' ? 'Cancel Voucher' : workflowOpen === 'delete' ? 'Delete Draft' : 'Create Amendment' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <div class="grid gap-6 lg:grid-cols-2">
             <Card v-if="voucher.service_bundle !== 'hotel'">
@@ -490,9 +717,7 @@ const exportVoucher = () => {
                             "
                             class="text-sm text-muted-foreground"
                         >
-                            {{
-                                item.driver?.name || item.service?.driver_name
-                            }}
+                            {{ item.driver?.name || item.service?.driver_name }}
                             ·
                             {{
                                 item.driver?.phone ||
@@ -554,7 +779,8 @@ const exportVoucher = () => {
                                     'transport_hotel',
                                     'hotel',
                                 ].includes(voucher.service_bundle) &&
-                                stay.source === 'company'
+                                stay.source === 'company' &&
+                                !voucher.billing_voucher_id
                             "
                             class="text-sm text-muted-foreground"
                         >
@@ -570,7 +796,13 @@ const exportVoucher = () => {
                             /></span>
                         </div>
                         <div v-else class="text-sm text-muted-foreground">
-                            Itinerary only · No hotel charge
+                            <template v-if="voucher.billing_voucher">
+                                Hotel billing retained on
+                                {{ voucher.billing_voucher.voucher_number }}
+                            </template>
+                            <template v-else>
+                                Itinerary only · No hotel charge
+                            </template>
                         </div>
                         <div
                             v-if="stay.notes"
@@ -617,5 +849,192 @@ const exportVoucher = () => {
                 </div>
             </CardContent>
         </Card>
+
+        <Dialog v-model:open="moveOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move Passengers</DialogTitle>
+                </DialogHeader>
+                <form class="space-y-5" @submit.prevent="submitMove">
+                    <div class="space-y-2">
+                        <Label>Destination voucher</Label>
+                        <Select v-model="moveForm.target_voucher_id">
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select voucher" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="target in moveTargets"
+                                    :key="target.id"
+                                    :value="target.id"
+                                >
+                                    {{ target.voucher_number }} ·
+                                    {{ target.title }} ·
+                                    {{ target.passengers_count }} pax
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p
+                            v-if="moveForm.errors.target_voucher_id"
+                            class="text-xs text-destructive"
+                        >
+                            {{ moveForm.errors.target_voucher_id }}
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label>Passengers</Label>
+                        <label
+                            v-for="passenger in voucher.passengers"
+                            :key="passenger.id"
+                            class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                        >
+                            <Checkbox
+                                :model-value="
+                                    moveForm.passenger_ids.includes(
+                                        passenger.id,
+                                    )
+                                "
+                                @update:model-value="
+                                    moveForm.passenger_ids = togglePassenger(
+                                        moveForm.passenger_ids,
+                                        passenger.id,
+                                        $event,
+                                    )
+                                "
+                            />
+                            <span class="min-w-0">
+                                <span class="block truncate font-medium">{{
+                                    passenger.full_name
+                                }}</span>
+                                <span
+                                    class="block truncate text-xs text-muted-foreground"
+                                    >{{
+                                        passenger.passport_number ||
+                                        'No passport'
+                                    }}</span
+                                >
+                            </span>
+                        </label>
+                        <p
+                            v-if="moveForm.errors.passenger_ids"
+                            class="text-xs text-destructive"
+                        >
+                            {{ moveForm.errors.passenger_ids }}
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="agentCapabilities.requires_override_reason"
+                        class="space-y-2"
+                    >
+                        <Label>Reason for post-travel change</Label>
+                        <Textarea v-model="moveForm.override_reason" required />
+                        <p
+                            v-if="moveForm.errors.override_reason"
+                            class="text-xs text-destructive"
+                        >
+                            {{ moveForm.errors.override_reason }}
+                        </p>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="submit"
+                            :disabled="
+                                moveForm.processing ||
+                                !moveForm.target_voucher_id ||
+                                !moveForm.passenger_ids.length
+                            "
+                        >
+                            <ArrowRightLeft class="mr-2 h-4 w-4" />
+                            Move
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="separateOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Separate Vouchers</DialogTitle>
+                </DialogHeader>
+                <form class="space-y-5" @submit.prevent="submitSeparation">
+                    <div class="space-y-2">
+                        <Label>Individual voucher passengers</Label>
+                        <label
+                            v-for="passenger in voucher.passengers"
+                            :key="passenger.id"
+                            class="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2"
+                        >
+                            <Checkbox
+                                :model-value="
+                                    separateForm.passenger_ids.includes(
+                                        passenger.id,
+                                    )
+                                "
+                                @update:model-value="
+                                    separateForm.passenger_ids =
+                                        togglePassenger(
+                                            separateForm.passenger_ids,
+                                            passenger.id,
+                                            $event,
+                                        )
+                                "
+                            />
+                            <span class="min-w-0">
+                                <span class="block truncate font-medium">{{
+                                    passenger.full_name
+                                }}</span>
+                                <span
+                                    class="block truncate text-xs text-muted-foreground"
+                                    >{{
+                                        passenger.passport_number ||
+                                        'No passport'
+                                    }}</span
+                                >
+                            </span>
+                        </label>
+                        <p
+                            v-if="separateForm.errors.passenger_ids"
+                            class="text-xs text-destructive"
+                        >
+                            {{ separateForm.errors.passenger_ids }}
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="agentCapabilities.requires_override_reason"
+                        class="space-y-2"
+                    >
+                        <Label>Reason for post-travel change</Label>
+                        <Textarea
+                            v-model="separateForm.override_reason"
+                            required
+                        />
+                        <p
+                            v-if="separateForm.errors.override_reason"
+                            class="text-xs text-destructive"
+                        >
+                            {{ separateForm.errors.override_reason }}
+                        </p>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="submit"
+                            :disabled="
+                                separateForm.processing ||
+                                !separateForm.passenger_ids.length
+                            "
+                        >
+                            <Scissors class="mr-2 h-4 w-4" />
+                            Create Individual Vouchers
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </PageShell>
 </template>

@@ -6,11 +6,9 @@ use App\Modules\Umrah\Models\TransportFare;
 
 class TransportPricingCalculator
 {
-    public function replaceIncludedBusCost(float $baseVisaCost, float $includedBusCost, int $visaPassengerCount, bool $specialized): array
+    public function separateIncludedBusCost(float $baseVisaCost, float $includedBusCost, int $visaPassengerCount): array
     {
-        $deduction = $specialized
-            ? min(round($baseVisaCost, 2), round($includedBusCost * max($visaPassengerCount, 0), 2))
-            : 0.0;
+        $deduction = min(round($baseVisaCost, 2), round($includedBusCost * max($visaPassengerCount, 0), 2));
 
         return [
             'deduction' => $deduction,

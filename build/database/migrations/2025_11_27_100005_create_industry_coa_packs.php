@@ -12,6 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        DB::statement('CREATE SCHEMA IF NOT EXISTS acct');
+
         // Industry definitions table
         Schema::create('acct.industry_coa_packs', function (Blueprint $table) {
             $table->uuid('id')->primary()->default(DB::raw('public.gen_random_uuid()'));

@@ -99,6 +99,7 @@ php artisan migrate --force
 log "Synchronizing permissions"
 php artisan app:sync-permissions
 php artisan app:sync-role-permissions
+php artisan app:sync-company-user-roles
 
 log "Building production caches"
 php artisan optimize

@@ -191,7 +191,16 @@ return [
             'umrah.group.update',
         ],
         'payment' => [
+            'umrah.payment.view',
             'umrah.payment.create',
+            'umrah.payment.reverse',
+        ],
+        'voucher' => [
+            'umrah.voucher.create',
+            'umrah.voucher.view',
+            'umrah.voucher.approve',
+            'umrah.voucher.update',
+            'umrah.voucher.cancel',
         ],
         'vendor' => [
             'umrah.vendor.create',
@@ -203,6 +212,7 @@ return [
         ],
         'report' => [
             'umrah.report.view',
+            'umrah.report.own.view',
         ],
     ],
 

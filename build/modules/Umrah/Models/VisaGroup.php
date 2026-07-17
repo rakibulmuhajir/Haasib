@@ -59,6 +59,7 @@ class VisaGroup extends Model
         'company_id',
         'agent_id',
         'vendor_id',
+        'mandatory_transport_vendor_id',
         'visa_service_id',
         'transport_service_id',
         'driver_id',
@@ -72,6 +73,7 @@ class VisaGroup extends Model
         'transport_mode',
         'included_bus_cost_per_passenger',
         'included_bus_cost_deduction',
+        'mandatory_transport_cost_amount',
         'transport_quantity',
         'transport_pax_capacity',
         'passenger_count',
@@ -95,6 +97,7 @@ class VisaGroup extends Model
         'company_id' => 'string',
         'agent_id' => 'string',
         'vendor_id' => 'string',
+        'mandatory_transport_vendor_id' => 'string',
         'visa_service_id' => 'string',
         'transport_service_id' => 'string',
         'driver_id' => 'string',
@@ -104,6 +107,7 @@ class VisaGroup extends Model
         'transport_required' => 'boolean',
         'included_bus_cost_per_passenger' => 'decimal:2',
         'included_bus_cost_deduction' => 'decimal:2',
+        'mandatory_transport_cost_amount' => 'decimal:2',
         'transport_quantity' => 'integer',
         'transport_pax_capacity' => 'integer',
         'passenger_count' => 'integer',
@@ -140,6 +144,11 @@ class VisaGroup extends Model
         return $this->belongsTo(VisaVendor::class, 'vendor_id')->withTrashed();
     }
 
+    public function mandatoryTransportVendor(): BelongsTo
+    {
+        return $this->belongsTo(VisaVendor::class, 'mandatory_transport_vendor_id')->withTrashed();
+    }
+
     public function visaService(): BelongsTo
     {
         return $this->belongsTo(VisaService::class)->withTrashed();
@@ -167,7 +176,7 @@ class VisaGroup extends Model
 
     public function paymentAllocations(): HasMany
     {
-        return $this->hasMany(PaymentAllocation::class, 'visa_group_id');
+        return $this->hasMany(PaymentAllocation::class, 'visa_group_id')->whereNull('reversed_at');
     }
 
     public function vouchers(): HasMany

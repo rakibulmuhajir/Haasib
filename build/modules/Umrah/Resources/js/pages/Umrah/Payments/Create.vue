@@ -21,8 +21,14 @@ import { toast } from 'vue-sonner';
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
     agents: Array<{ id: string; name: string }>;
-    visaVendors: Array<{ id: string; name: string }>;
-    hotelVendors: Array<{ id: string; name: string }>;
+    visaVendors: Array<{ id: string; name: string; is_active: boolean }>;
+    transportVendors: Array<{
+        id: string;
+        name: string;
+        is_company_owned: boolean;
+        is_active: boolean;
+    }>;
+    hotelVendors: Array<{ id: string; name: string; is_active: boolean }>;
     currencies: Array<{
         currency_code: string;
         is_base: boolean;
@@ -150,6 +156,10 @@ const submit = () =>
                 data.direction === 'sent' && data.payee.startsWith('visa:')
                     ? data.payee.slice(5)
                     : null,
+            transport_vendor_id:
+                data.direction === 'sent' && data.payee.startsWith('transport:')
+                    ? data.payee.slice(10)
+                    : null,
             hotel_vendor_id:
                 data.direction === 'sent' && data.payee.startsWith('hotel:')
                     ? data.payee.slice(6)
@@ -258,14 +268,23 @@ const submit = () =>
                                     :key="`visa-${vendor.id}`"
                                     :value="`visa:${vendor.id}`"
                                 >
-                                    {{ vendor.name }} · Visa / transport
+                                    {{ vendor.name }} · Visa{{ vendor.is_active ? '' : ' · Inactive' }}
+                                </SelectItem>
+                                <SelectItem
+                                    v-for="vendor in transportVendors"
+                                    :key="`transport-${vendor.id}`"
+                                    :value="`transport:${vendor.id}`"
+                                >
+                                    {{ vendor.name }} · Transport<span
+                                    v-if="vendor.is_company_owned"
+                                    > · Company-owned</span>{{ vendor.is_active ? '' : ' · Inactive' }}
                                 </SelectItem>
                                 <SelectItem
                                     v-for="vendor in hotelVendors"
                                     :key="`hotel-${vendor.id}`"
                                     :value="`hotel:${vendor.id}`"
                                 >
-                                    {{ vendor.name }} · Hotel
+                                    {{ vendor.name }} · Hotel{{ vendor.is_active ? '' : ' · Inactive' }}
                                 </SelectItem>
                             </SelectContent>
                         </Select>

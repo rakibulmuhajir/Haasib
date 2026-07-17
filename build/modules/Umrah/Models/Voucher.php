@@ -20,6 +20,8 @@ class Voucher extends Model
 
     public const STATUS_APPROVED = 'approved';
 
+    public const STATUS_CANCELLED = 'cancelled';
+
     public const SERVICE_VISA_TRANSPORT = 'visa_transport';
 
     public const SERVICE_VISA_TRANSPORT_HOTEL = 'visa_transport_hotel';
@@ -41,6 +43,7 @@ class Voucher extends Model
     public const STATUSES = [
         self::STATUS_DRAFT => 'Draft',
         self::STATUS_APPROVED => 'Approved',
+        self::STATUS_CANCELLED => 'Cancelled',
     ];
 
     public const AIRLINES = [
@@ -133,6 +136,11 @@ class Voucher extends Model
         'company_id',
         'visa_group_id',
         'agent_id',
+        'source_voucher_id',
+        'billing_voucher_id',
+        'amends_voucher_id',
+        'superseded_by_voucher_id',
+        'version_number',
         'voucher_number',
         'title',
         'service_bundle',
@@ -154,6 +162,10 @@ class Voucher extends Model
         'hotel_cost_amount',
         'notes',
         'created_by_user_id',
+        'cancelled_at',
+        'cancelled_by_user_id',
+        'cancellation_reason',
+        'superseded_at',
         'hotel_sale_transaction_id',
         'hotel_cost_transaction_id',
     ];
@@ -162,7 +174,15 @@ class Voucher extends Model
         'company_id' => 'string',
         'visa_group_id' => 'string',
         'agent_id' => 'string',
+        'source_voucher_id' => 'string',
+        'billing_voucher_id' => 'string',
+        'amends_voucher_id' => 'string',
+        'superseded_by_voucher_id' => 'string',
+        'version_number' => 'integer',
         'created_by_user_id' => 'string',
+        'cancelled_at' => 'datetime',
+        'cancelled_by_user_id' => 'string',
+        'superseded_at' => 'datetime',
         'hotel_sale_transaction_id' => 'string',
         'hotel_cost_transaction_id' => 'string',
         'onward_departure_at' => 'datetime',
@@ -192,6 +212,20 @@ class Voucher extends Model
         return in_array($bundle, [self::SERVICE_VISA_TRANSPORT_HOTEL, self::SERVICE_TRANSPORT_HOTEL, self::SERVICE_HOTEL], true);
     }
 
+    public function separatedBillingPlan(bool $archiveSource, int $separationIndex): array
+    {
+        $becomesBillingOwner = $archiveSource
+            && $this->billing_voucher_id === null
+            && $separationIndex === 0;
+
+        return [
+            'billing_voucher_id' => $becomesBillingOwner
+                ? null
+                : ($this->billing_voucher_id ?: $this->id),
+            'retain_hotel_amounts' => $becomesBillingOwner,
+        ];
+    }
+
     public function group(): BelongsTo
     {
         return $this->belongsTo(VisaGroup::class, 'visa_group_id')->withTrashed();
@@ -200,6 +234,31 @@ class Voucher extends Model
     public function agent(): BelongsTo
     {
         return $this->belongsTo(Agent::class)->withTrashed();
+    }
+
+    public function sourceVoucher(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_voucher_id')->withTrashed();
+    }
+
+    public function billingVoucher(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'billing_voucher_id')->withTrashed();
+    }
+
+    public function amendedVoucher(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'amends_voucher_id')->withTrashed();
+    }
+
+    public function supersededByVoucher(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'superseded_by_voucher_id')->withTrashed();
+    }
+
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(self::class, 'amends_voucher_id');
     }
 
     public function createdBy(): BelongsTo
@@ -212,10 +271,24 @@ class Voucher extends Model
         return $this->hasMany(VoucherPassenger::class);
     }
 
+    public function allVoucherPassengers(): HasMany
+    {
+        return $this->hasMany(VoucherPassenger::class)->withTrashed();
+    }
+
     public function passengers(): BelongsToMany
     {
         return $this->belongsToMany(Passenger::class, 'umrah.voucher_passengers')
+            ->wherePivotNull('deleted_at')
             ->withPivot(['company_id', 'visa_group_id'])
+            ->withTimestamps();
+    }
+
+    public function allPassengers(): BelongsToMany
+    {
+        return $this->belongsToMany(Passenger::class, 'umrah.voucher_passengers')
+            ->withTrashed()
+            ->withPivot(['company_id', 'visa_group_id', 'deleted_at'])
             ->withTimestamps();
     }
 }

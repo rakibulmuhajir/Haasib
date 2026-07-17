@@ -6,10 +6,11 @@ use App\Constants\Permissions;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Driver;
 use App\Modules\Umrah\Models\Passenger;
-use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\TransportFare;
+use App\Modules\Umrah\Models\TransportService;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
 class StoreVisaGroupRequest extends UmrahFormRequest
@@ -21,6 +22,8 @@ class StoreVisaGroupRequest extends UmrahFormRequest
 
     public function rules(): array
     {
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+
         return [
             'group_number' => [
                 'nullable',
@@ -30,8 +33,13 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             ],
             'name' => ['nullable', 'string', 'max:255'],
             'agent_id' => ['required', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
-            'vendor_id' => ['required', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
-            'visa_service_id' => ['nullable', 'uuid'],
+            'vendor_id' => ['required', 'uuid', Rule::exists('umrah.visa_vendors', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'mandatory_transport_vendor_id' => [
+                Rule::requiredIf($this->input('transport_mode') === VisaGroup::TRANSPORT_STANDARD_BUS),
+                'nullable',
+                'uuid',
+                Rule::exists('umrah.visa_vendors', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at')),
+            ],
             'transport_service_id' => ['nullable', 'uuid', $this->existsForCompany(TransportService::class, 'Selected transport service was not found.')],
             'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
             'status' => ['nullable', Rule::in(array_keys(VisaGroup::STATUSES))],

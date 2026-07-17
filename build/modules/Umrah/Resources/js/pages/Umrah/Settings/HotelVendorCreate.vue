@@ -12,24 +12,33 @@ import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   company: { slug: string }
-  nextVendorNumber: string
+  nextVendorNumber: string | null
+  editingVendor?: any | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
   { title: 'Hotels', href: `/${props.company.slug}/umrah/settings/hotels` },
-  { title: 'Add Vendor', href: `/${props.company.slug}/umrah/settings/hotel-vendors/create` },
+  { title: props.editingVendor ? 'Edit Vendor' : 'Add Vendor', href: props.editingVendor ? `/${props.company.slug}/umrah/settings/hotel-vendors/${props.editingVendor.id}/edit` : `/${props.company.slug}/umrah/settings/hotel-vendors/create` },
 ]
-const form = useForm({ vendor_number: props.nextVendorNumber, name: '', phone: '', email: '', city: '', logo_url: '', notes: '' })
-const submit = () => form.post(`/${props.company.slug}/umrah/settings/hotel-vendors`, {
-  onSuccess: () => toast.success('Hotel vendor added successfully'),
-  onError: () => toast.error('Failed to add hotel vendor'),
+const form = useForm({
+  vendor_number: props.editingVendor?.vendor_number || props.nextVendorNumber || '', name: props.editingVendor?.name || '',
+  phone: props.editingVendor?.phone || '', email: props.editingVendor?.email || '', city: props.editingVendor?.city || '',
+  logo_url: props.editingVendor?.logo_url || '', notes: props.editingVendor?.notes || '',
 })
+const submit = () => {
+  const options = {
+    onSuccess: () => toast.success(props.editingVendor ? 'Hotel vendor updated successfully' : 'Hotel vendor added successfully'),
+    onError: () => toast.error(props.editingVendor ? 'Failed to update hotel vendor' : 'Failed to add hotel vendor'),
+  }
+  if (props.editingVendor) form.put(`/${props.company.slug}/umrah/settings/hotel-vendors/${props.editingVendor.id}`, options)
+  else form.post(`/${props.company.slug}/umrah/settings/hotel-vendors`, options)
+}
 </script>
 
 <template>
-  <Head title="Add Hotel Vendor" />
-  <PageShell title="Add Hotel Vendor" description="Add the supplier used for hotel costs and payables." :breadcrumbs="breadcrumbs" :icon="Store">
+  <Head :title="editingVendor ? 'Edit Hotel Vendor' : 'Add Hotel Vendor'" />
+  <PageShell :title="editingVendor ? 'Edit Hotel Vendor' : 'Add Hotel Vendor'" description="Manage the supplier used for hotel costs and payables." :breadcrumbs="breadcrumbs" :icon="Store">
     <Card class="mx-auto max-w-2xl">
       <CardHeader><CardTitle>Vendor Details</CardTitle></CardHeader>
       <CardContent>
@@ -52,7 +61,7 @@ const submit = () => form.post(`/${props.company.slug}/umrah/settings/hotel-vend
           </div>
           <div class="flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" @click="router.get(`/${company.slug}/umrah/settings/hotels`)">Cancel</Button>
-            <Button type="submit" :disabled="form.processing"><Save class="mr-2 h-4 w-4" />Save Vendor</Button>
+            <Button type="submit" :disabled="form.processing"><Save class="mr-2 h-4 w-4" />{{ editingVendor ? 'Save Changes' : 'Save Vendor' }}</Button>
           </div>
         </form>
       </CardContent>

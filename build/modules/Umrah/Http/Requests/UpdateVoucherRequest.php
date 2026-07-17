@@ -7,9 +7,9 @@ use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\Hotel;
 use App\Modules\Umrah\Models\HotelRoomRate;
 use App\Modules\Umrah\Models\Voucher;
+use App\Modules\Umrah\Services\TravelAccessService;
 use App\Services\CompanyContextService;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -26,17 +26,27 @@ class UpdateVoucherRequest extends UmrahFormRequest
             return false;
         }
         $companyId = app(CompanyContextService::class)->getCompanyId();
-        $role = DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $this->user()?->id)->where('is_active', true)->value('role');
-        if ($role !== 'member') {
+        $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+        if (! $voucher || $voucher->status !== Voucher::STATUS_DRAFT) {
+            return false;
+        }
+        $access = app(TravelAccessService::class);
+        if (! $access->isAgentMember($companyId, $this->user())) {
             return true;
         }
 
-        return Agent::where('company_id', $companyId)->where('user_id', $this->user()?->id)->where('can_edit_voucher', true)->where('is_active', true)->exists();
+        return $access->agentCanEditVoucher($companyId, $this->user(), $voucher);
     }
 
     public function rules(): array
     {
         $requiresFlights = $this->input('service_bundle') !== Voucher::SERVICE_HOTEL;
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+        $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+        $access = app(TravelAccessService::class);
+        $requiresReason = $voucher
+            && ! $access->isAgentMember($companyId, $this->user())
+            && $access->voucherHasStarted($voucher);
 
         return [
             'title' => ['required', 'string', 'max:255'],
@@ -64,6 +74,7 @@ class UpdateVoucherRequest extends UmrahFormRequest
             'hotel_stays.*.check_out_date' => ['required', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
+            'override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000'],
         ];
     }
 

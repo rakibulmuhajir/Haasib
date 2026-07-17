@@ -50,6 +50,7 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
             'agent_id' => ['nullable', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
             'visa_group_id' => ['nullable', 'uuid', $this->existsForCompany(VisaGroup::class, 'Selected group was not found.')],
             'visa_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(VisaVendor::class, 'Selected vendor was not found.')],
+            'transport_vendor_id' => ['nullable', 'uuid', Rule::exists('umrah.visa_vendors', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->whereNull('deleted_at'))],
             'hotel_vendor_id' => ['nullable', 'uuid', $this->existsForCompany(HotelVendor::class, 'Selected hotel vendor was not found.')],
             'allocations' => ['sometimes', 'array', 'max:100'],
             'allocations.*.visa_group_id' => [
@@ -103,6 +104,7 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
     {
         return [function (Validator $validator): void {
             $visaVendor = $this->filled('visa_vendor_id');
+            $transportVendor = $this->filled('transport_vendor_id');
             $hotelVendor = $this->filled('hotel_vendor_id');
             if ($this->input('direction') === GroupPayment::DIRECTION_RECEIVED && ! $this->filled('agent_id')) {
                 $validator->errors()->add('agent_id', 'Select the agent who made the payment.');
@@ -110,10 +112,10 @@ class StoreGroupPaymentRequest extends UmrahFormRequest
             if ($this->input('direction') === GroupPayment::DIRECTION_SENT && $this->filled('agent_id')) {
                 $validator->errors()->add('agent_id', 'Sent payments cannot have an agent payer.');
             }
-            if ($this->input('direction') === GroupPayment::DIRECTION_SENT && ($visaVendor === $hotelVendor)) {
+            if ($this->input('direction') === GroupPayment::DIRECTION_SENT && collect([$visaVendor, $transportVendor, $hotelVendor])->filter()->count() !== 1) {
                 $validator->errors()->add('vendor_id', 'Select one vendor for a sent payment.');
             }
-            if ($this->input('direction') === GroupPayment::DIRECTION_RECEIVED && ($visaVendor || $hotelVendor)) {
+            if ($this->input('direction') === GroupPayment::DIRECTION_RECEIVED && ($visaVendor || $transportVendor || $hotelVendor)) {
                 $validator->errors()->add('vendor_id', 'Received payments cannot have a vendor payee.');
             }
         }];

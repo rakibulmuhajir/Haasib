@@ -28,6 +28,7 @@ class AgentController extends Controller
     public function index(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_VIEW), 403);
         $search = trim((string) $request->input('search', ''));
 
         $agents = Agent::where('company_id', $company->id)
@@ -43,12 +44,14 @@ class AgentController extends Controller
             'company' => $this->companyPayload($company),
             'agents' => $agents,
             'filters' => ['search' => $search],
+            'canManageAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE),
         ]);
     }
 
     public function create(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_CREATE), 403);
 
         return Inertia::render('Umrah/Agents/Create', [
             'company' => $this->companyPayload($company),
@@ -76,6 +79,7 @@ class AgentController extends Controller
                 'city' => $data['city'] ?? null, 'country' => $data['country'] ?? null, 'notes' => $data['notes'] ?? null,
                 'logo_url' => $data['logo_url'] ?? null,
                 'can_create_voucher' => (bool) ($data['can_create_voucher'] ?? true), 'can_approve_voucher' => (bool) ($data['can_approve_voucher'] ?? false),
+                'can_edit_group' => (bool) ($data['can_edit_group'] ?? false),
                 'can_edit_voucher' => (bool) ($data['can_edit_voucher'] ?? false), 'voucher_cutoff_hours' => (int) ($data['voucher_cutoff_hours'] ?? 6), 'is_active' => true,
             ]);
         });
@@ -108,9 +112,10 @@ class AgentController extends Controller
             ->with('created_agent_id', $agent->id);
     }
 
-    public function show(string $companySlug, string $agent): Response
+    public function show(Request $request, string $companySlug, string $agent): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_VIEW), 403);
         $record = Agent::where('company_id', $company->id)->with('user:id,username')->findOrFail($agent);
 
         $record->load(['groups' => fn ($query) => $query->orderByDesc('created_at')->limit(20)]);
@@ -118,12 +123,14 @@ class AgentController extends Controller
         return Inertia::render('Umrah/Agents/Show', [
             'company' => $this->companyPayload($company),
             'agent' => $record,
+            'canManageAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE),
         ]);
     }
 
     public function edit(Request $request, string $companySlug, string $agent): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_UPDATE), 403);
         $record = Agent::where('company_id', $company->id)->with('user:id,username')->findOrFail($agent);
 
         return Inertia::render('Umrah/Agents/Edit', [
@@ -213,11 +220,11 @@ class AgentController extends Controller
             'password' => $password,
         ]);
         DB::table(Tables::COMPANY_USER)->insert([
-            'company_id' => $companyId, 'user_id' => $user->id, 'role' => 'member',
+            'company_id' => $companyId, 'user_id' => $user->id, 'role' => 'agent',
             'invited_by_user_id' => $request->user()?->id, 'joined_at' => now(), 'is_active' => true,
             'created_at' => now(), 'updated_at' => now(),
         ]);
-        CompanyContext::assignRole($user, 'member');
+        CompanyContext::assignRole($user, 'agent');
 
         return $user;
     }

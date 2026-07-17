@@ -10,6 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::statement('CREATE SCHEMA IF NOT EXISTS public');
+        DB::statement('CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public');
 
         Schema::create('currencies', function (Blueprint $table) {
             $table->char('code', 3)->primary();

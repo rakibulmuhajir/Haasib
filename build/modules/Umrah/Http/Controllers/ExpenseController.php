@@ -19,7 +19,7 @@ class ExpenseController extends Controller
             ->where('company_id', $company->id)
             ->where('user_id', $request->user()?->id)
             ->where('is_active', true)
-            ->value('role') === 'member';
+            ->value('role') === 'agent';
         abort_if($isMember, 403, 'Agent logins cannot view company expenses.');
 
         $query = Bill::where('company_id', $company->id)

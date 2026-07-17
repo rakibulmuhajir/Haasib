@@ -6,11 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\CompanyCurrency;
 use App\Modules\Umrah\Http\Requests\BulkUpdatePassengerStatusRequest;
 use App\Modules\Umrah\Http\Requests\ImportMutamersRequest;
+use App\Modules\Umrah\Http\Requests\RemovePassengerRequest;
 use App\Modules\Umrah\Http\Requests\StoreGroupPaymentRequest;
 use App\Modules\Umrah\Http\Requests\StorePassengerRequest;
 use App\Modules\Umrah\Http\Requests\StoreVisaGroupRequest;
+use App\Modules\Umrah\Http\Requests\UpdatePassengerRequest;
 use App\Modules\Umrah\Http\Requests\UpdatePassengerStatusRequest;
+use App\Modules\Umrah\Http\Requests\UpdateVisaGroupRequest;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\ChangeLog;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
@@ -19,6 +23,8 @@ use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\MutamerSheetImportService;
 use App\Modules\Umrah\Services\TransportCatalogService;
+use App\Modules\Umrah\Services\TravelAccessService;
+use App\Modules\Umrah\Services\TravelChangeLogger;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
@@ -33,11 +39,14 @@ class VisaGroupController extends Controller
         private UmrahCoreService $service,
         private MutamerSheetImportService $mutamerImporter,
         private TransportCatalogService $transportCatalog,
+        private TravelAccessService $access,
+        private TravelChangeLogger $changeLogger,
     ) {}
 
     public function index(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_VIEW), 403);
         $this->transportCatalog->ensureDefaultSectors($company->id);
         $search = trim((string) $request->input('search', ''));
         $status = (string) $request->input('status', '');
@@ -69,10 +78,12 @@ class VisaGroupController extends Controller
     public function create(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_CREATE), 403);
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $this->isMember($company->id, $request);
-        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'vendor_number', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
-        $transportFares = TransportFare::where('company_id', $company->id)->where('is_active', true)->with(['service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get();
+        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'vendor_number', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
+        $transportVendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']);
+        $transportFares = TransportFare::where('company_id', $company->id)->where('is_active', true)->with(['transportVendor:id,name,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get();
         if ($isMember) {
             $vendors->each->makeHidden(['adult_cost_amount', 'child_cost_amount', 'included_bus_cost_amount']);
             $transportFares->each->makeHidden(['cost_amount', 'hajj_terminal_cost_amount']);
@@ -83,6 +94,7 @@ class VisaGroupController extends Controller
             'nextGroupNumber' => $this->service->nextGroupNumber($company->id),
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)->when($isMember, fn ($q) => $memberAgentId ? $q->whereKey($memberAgentId) : $q->whereRaw('1 = 0'))->orderBy('name')->get(['id', 'name', 'agent_number', 'country']),
             'vendors' => $vendors,
+            'transportVendors' => $transportVendors,
             'transportFares' => $transportFares,
             'statuses' => VisaGroup::STATUSES,
             'passengerStatuses' => Passenger::STATUSES,
@@ -117,11 +129,13 @@ class VisaGroupController extends Controller
     public function show(string $companySlug, string $group): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless(request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_VIEW), 403);
         $isMember = $this->isMember($company->id, request());
         $record = VisaGroup::where('company_id', $company->id)
             ->with([
                 'agent',
                 'vendor',
+                'mandatoryTransportVendor',
                 'visaService',
                 'transportService',
                 'driver',
@@ -129,12 +143,13 @@ class VisaGroupController extends Controller
                 'transportItems.sector',
                 'transportItems.package.sectors',
                 'transportItems.driver',
+                'transportItems.transportVendor',
                 'saleTransaction:id,transaction_number',
                 'costTransaction:id,transaction_number',
                 'passengers' => fn ($query) => $query->orderBy('sort_order')->orderBy('created_at'),
                 'paymentAllocations.payment' => fn ($query) => $query
                     ->when($isMember, fn ($paymentQuery) => $paymentQuery->where('direction', GroupPayment::DIRECTION_RECEIVED))
-                    ->with(['account:id,code,name', 'transaction:id,transaction_number', 'visaVendor:id,name', 'hotelVendor:id,name']),
+                    ->with(['account:id,code,name', 'transaction:id,transaction_number', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name']),
             ])
             ->when($isMember, fn ($q) => ($agentId = $this->memberAgentId($company->id, request())) ? $q->where('agent_id', $agentId) : $q->whereRaw('1 = 0'))
             ->findOrFail($group);
@@ -150,6 +165,26 @@ class VisaGroupController extends Controller
             })->values());
         $record->unsetRelation('paymentAllocations');
 
+        if ($isMember) {
+            $record->makeHidden(['visa_cost_amount', 'transport_cost_amount', 'hotel_cost_amount', 'profit', 'sale_transaction_id', 'cost_transaction_id']);
+            $record->vendor?->makeHidden(['adult_cost_amount', 'child_cost_amount', 'included_bus_cost_amount', 'total_cost', 'total_paid', 'balance']);
+            $record->transportItems->each->makeHidden(['unit_cost_amount', 'surcharge_cost_amount', 'total_cost_amount']);
+        }
+
+        $canModify = $isMember
+            ? $this->access->agentCanEditGroup($company->id, request()->user(), $record)
+            : (bool) request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_UPDATE);
+        $hasStarted = $this->access->groupHasStarted($record);
+        $changeLogs = $isMember ? collect() : ChangeLog::where('company_id', $company->id)
+            ->where(function ($query) use ($record) {
+                $query->where(fn ($entity) => $entity->where('entity_type', 'visa_group')->where('entity_id', $record->id))
+                    ->orWhere(fn ($entity) => $entity->where('entity_type', 'passenger')->whereIn('entity_id', $record->passengers->pluck('id')));
+            })
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
         return Inertia::render('Umrah/Groups/Show', [
             'company' => $this->companyPayload($company),
             'group' => $record,
@@ -160,17 +195,83 @@ class VisaGroupController extends Controller
                 ->orderBy('currency_code')
                 ->get(['currency_code', 'is_base', 'exchange_rate']),
             'passengerStatuses' => Passenger::STATUSES,
-            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'balance']),
+            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'balance']),
+            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'balance', 'is_company_owned']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'balance']),
+            'groupCapabilities' => [
+                'can_modify' => $canModify,
+                'has_started' => $hasStarted,
+                'requires_override_reason' => ! $isMember && $canModify && $hasStarted,
+                'can_record_payment' => ! $isMember && (bool) request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_PAYMENT_CREATE),
+            ],
+            'changeLogs' => $changeLogs,
         ]);
+    }
+
+    public function edit(Request $request, string $companySlug, string $group): Response
+    {
+        $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_UPDATE), 403);
+        $record = $this->access->scopeAgentRecords(
+            VisaGroup::where('company_id', $company->id),
+            $company->id,
+            $request->user(),
+        )->findOrFail($group);
+
+        if ($this->access->isAgentMember($company->id, $request->user())) {
+            abort_unless($this->access->agentCanEditGroup($company->id, $request->user(), $record), 403, 'This group cannot be modified by your agent login.');
+        }
+
+        return Inertia::render('Umrah/Groups/Edit', [
+            'company' => $this->companyPayload($company),
+            'group' => $record,
+            'statuses' => VisaGroup::STATUSES,
+            'requiresOverrideReason' => ! $this->access->isAgentMember($company->id, $request->user()) && $this->access->groupHasStarted($record),
+        ]);
+    }
+
+    public function update(UpdateVisaGroupRequest $request, string $companySlug, string $group): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = $this->access->scopeAgentRecords(
+            VisaGroup::where('company_id', $company->id),
+            $company->id,
+            $request->user(),
+        )->findOrFail($group);
+        $data = $request->validated();
+        $hadStarted = $this->access->groupHasStarted($record);
+        $changes = [
+            'name' => $data['name'],
+            'status' => $data['status'],
+            'travel_date' => $data['travel_date'] ?? null,
+            'flight_info' => ['airline' => $data['flight_airline'] ?? null, 'number' => $data['flight_number'] ?? null, 'notes' => $data['flight_notes'] ?? null],
+            'hotel_info' => ['makkah' => $data['hotel_makkah'] ?? null, 'madinah' => $data['hotel_madinah'] ?? null, 'notes' => $data['hotel_notes'] ?? null],
+            'notes' => $data['notes'] ?? null,
+        ];
+        $oldValues = $record->only(array_keys($changes));
+
+        DB::transaction(function () use ($request, $record, $changes, $oldValues, $data, $hadStarted) {
+            $record->update($changes);
+            $this->changeLogger->log($request, $record, 'visa_group', 'updated', $oldValues, $changes, $data['override_reason'] ?? null, [
+                'after_travel_start' => $hadStarted,
+            ]);
+        });
+
+        return redirect()->route('umrah.groups.show', ['company' => $company->slug, 'group' => $record->id])
+            ->with('success', 'Visa group updated successfully.');
     }
 
     public function addPassenger(StorePassengerRequest $request, string $companySlug, string $group): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
         $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
-
-        $this->service->addPassenger($record, $request->validated());
+        $data = $request->validated();
+        $before = $record->only(['passenger_count', 'visa_sale_amount', 'visa_cost_amount', 'transport_amount', 'total_receivable', 'balance', 'profit']);
+        $passenger = $this->service->addPassenger($record, $data);
+        $after = $record->fresh()->only(array_keys($before));
+        $this->changeLogger->log($request, $passenger, 'passenger', 'created', [], $passenger->only([
+            'full_name', 'passport_number', 'nationality', 'date_of_birth', 'imported_age', 'service_type', 'transport_charge_amount', 'visa_status',
+        ]), $data['override_reason'] ?? null, ['group_id' => $record->id, 'group_financials_before' => $before, 'group_financials_after' => $after]);
 
         return back()->with('success', 'Passenger added successfully.');
     }
@@ -183,9 +284,37 @@ class VisaGroupController extends Controller
             ->where('visa_group_id', $record->id)
             ->findOrFail($passenger);
 
-        $member->update(['visa_status' => $request->validated('visa_status')]);
+        $old = ['visa_status' => $member->visa_status];
+        $data = $request->validated();
+        $member->update(['visa_status' => $data['visa_status']]);
+        $this->changeLogger->log($request, $member, 'passenger', 'status_updated', $old, ['visa_status' => $data['visa_status']], $data['override_reason'] ?? null, ['group_id' => $record->id]);
 
         return back()->with('success', 'Passenger visa status updated successfully.');
+    }
+
+    public function updatePassenger(UpdatePassengerRequest $request, string $companySlug, string $group, string $passenger): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
+        $member = Passenger::where('company_id', $company->id)->where('visa_group_id', $record->id)->findOrFail($passenger);
+        $old = $member->only(['full_name', 'passport_number', 'nationality', 'date_of_birth', 'imported_age', 'service_type', 'transport_charge_amount', 'visa_status', 'notes']);
+        $updated = $this->service->updatePassenger($record, $member, $request->validated());
+        $this->changeLogger->log($request, $updated, 'passenger', 'corrected', $old, $updated->only(array_keys($old)), $request->validated('override_reason'), ['group_id' => $record->id]);
+
+        return back()->with('success', 'Passenger corrected successfully.');
+    }
+
+    public function removePassenger(RemovePassengerRequest $request, string $companySlug, string $group, string $passenger): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
+        $member = Passenger::where('company_id', $company->id)->where('visa_group_id', $record->id)->findOrFail($passenger);
+        $old = $member->only(['full_name', 'passport_number', 'service_type', 'transport_charge_amount']);
+        $reason = $request->validated('reason') ?: 'Passenger removed before travel';
+        $this->service->removePassenger($record, $member, $reason);
+        $this->changeLogger->log($request, $member, 'passenger', 'removed', $old, ['removed' => true], $reason, ['group_id' => $record->id]);
+
+        return back()->with('success', 'Passenger removed and group totals recalculated.');
     }
 
     public function bulkUpdatePassengerStatus(BulkUpdatePassengerStatusRequest $request, string $companySlug, string $group): RedirectResponse
@@ -193,13 +322,18 @@ class VisaGroupController extends Controller
         $company = app(CurrentCompany::class)->get();
         $record = VisaGroup::where('company_id', $company->id)->findOrFail($group);
         $data = $request->validated();
-        $data['visa_group_id'] = $record->id;
-        $data['agent_id'] = $data['direction'] === GroupPayment::DIRECTION_RECEIVED ? $record->agent_id : null;
-
-        $updated = Passenger::where('company_id', $company->id)
+        $passengers = Passenger::where('company_id', $company->id)
             ->where('visa_group_id', $record->id)
             ->whereIn('id', $data['passenger_ids'])
-            ->update(['visa_status' => $data['visa_status']]);
+            ->get();
+        $updated = $passengers->count();
+        DB::transaction(function () use ($request, $record, $data, $passengers) {
+            foreach ($passengers as $passenger) {
+                $old = ['visa_status' => $passenger->visa_status];
+                $passenger->update(['visa_status' => $data['visa_status']]);
+                $this->changeLogger->log($request, $passenger, 'passenger', 'status_updated', $old, ['visa_status' => $data['visa_status']], $data['override_reason'] ?? null, ['group_id' => $record->id, 'bulk' => true]);
+            }
+        });
 
         return back()->with('success', "{$updated} passenger visa status updated successfully.");
     }
@@ -233,7 +367,7 @@ class VisaGroupController extends Controller
 
     private function isMember(string $companyId, Request $request): bool
     {
-        return DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $request->user()?->id)->where('is_active', true)->value('role') === 'member';
+        return DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $request->user()?->id)->where('is_active', true)->value('role') === 'agent';
     }
 
     private function memberAgentId(string $companyId, Request $request): ?string

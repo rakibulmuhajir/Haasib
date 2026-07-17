@@ -18,17 +18,18 @@ const props = defineProps<{
   company: { slug: string; base_currency: string }
   vendors: any[]
   roomTypes: Record<string, string>
+  editingHotel?: any | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
   { title: 'Hotels', href: `/${props.company.slug}/umrah/settings/hotels` },
-  { title: 'Add Hotel', href: `/${props.company.slug}/umrah/settings/hotels/create` },
+  { title: props.editingHotel ? 'Edit Hotel' : 'Add Hotel', href: props.editingHotel ? `/${props.company.slug}/umrah/settings/hotels/${props.editingHotel.id}/edit` : `/${props.company.slug}/umrah/settings/hotels/create` },
 ]
 const vendorOptions = computed(() => props.vendors.map((vendor) => ({ value: vendor.id, label: vendor.name })))
 const form = useForm({
-  hotel_vendor_id: '', name: '', city: '', notes: '',
-  room_rates: [] as Array<{ room_type: string; retail_amount: string; cost_amount: string }>,
+  hotel_vendor_id: props.editingHotel?.hotel_vendor_id || '', name: props.editingHotel?.name || '', city: props.editingHotel?.city || '', notes: props.editingHotel?.notes || '',
+  room_rates: (props.editingHotel?.room_rates || []).filter((rate: any) => rate.is_active).map((rate: any) => ({ room_type: rate.room_type, retail_amount: String(rate.retail_amount), cost_amount: String(rate.cost_amount) })) as Array<{ room_type: string; retail_amount: string; cost_amount: string }>,
 })
 const toggleRoomType = (roomType: string, checked: boolean | 'indeterminate') => {
   form.room_rates = checked === true
@@ -40,18 +41,23 @@ const setRoomRate = (roomType: string, field: 'retail_amount' | 'cost_amount', v
   const rate = roomRate(roomType)
   if (rate) rate[field] = String(value)
 }
-const submit = () => form.transform((data) => ({
-  ...data,
-  room_rates: data.room_rates.map((rate) => ({ ...rate, retail_amount: Number(rate.retail_amount || 0), cost_amount: Number(rate.cost_amount || 0) })),
-})).post(`/${props.company.slug}/umrah/settings/hotels`, {
-  onSuccess: () => toast.success('Hotel added successfully'),
-  onError: () => toast.error('Failed to add hotel'),
-})
+const submit = () => {
+  form.transform((data) => ({
+    ...data,
+    room_rates: data.room_rates.map((rate) => ({ ...rate, retail_amount: Number(rate.retail_amount || 0), cost_amount: Number(rate.cost_amount || 0) })),
+  }))
+  const options = {
+    onSuccess: () => toast.success(props.editingHotel ? 'Hotel updated successfully' : 'Hotel added successfully'),
+    onError: () => toast.error(props.editingHotel ? 'Failed to update hotel' : 'Failed to add hotel'),
+  }
+  if (props.editingHotel) form.put(`/${props.company.slug}/umrah/settings/hotels/${props.editingHotel.id}`, options)
+  else form.post(`/${props.company.slug}/umrah/settings/hotels`, options)
+}
 </script>
 
 <template>
-  <Head title="Add Hotel" />
-  <PageShell title="Add Hotel" description="Set the vendor and per-bed nightly rates for available room types." :breadcrumbs="breadcrumbs" :icon="Building2">
+  <Head :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" />
+  <PageShell :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" description="Set the vendor and per-bed nightly rates for available room types." :breadcrumbs="breadcrumbs" :icon="Building2">
     <Card class="mx-auto max-w-4xl">
       <CardHeader><CardTitle>Hotel Details</CardTitle></CardHeader>
       <CardContent>
@@ -77,7 +83,7 @@ const submit = () => form.transform((data) => ({
           <div class="space-y-2"><Label>Notes</Label><Textarea v-model="form.notes" /><p v-if="form.errors.notes" class="text-xs text-destructive">{{ form.errors.notes }}</p></div>
           <div class="flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" @click="router.get(`/${company.slug}/umrah/settings/hotels`)">Cancel</Button>
-            <Button type="submit" :disabled="form.processing || !form.room_rates.length"><Save class="mr-2 h-4 w-4" />Save Hotel</Button>
+            <Button type="submit" :disabled="form.processing || !form.room_rates.length"><Save class="mr-2 h-4 w-4" />{{ editingHotel ? 'Save Changes' : 'Save Hotel' }}</Button>
           </div>
         </form>
       </CardContent>

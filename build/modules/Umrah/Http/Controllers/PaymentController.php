@@ -2,8 +2,10 @@
 
 namespace App\Modules\Umrah\Http\Controllers;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyCurrency;
+use App\Modules\Umrah\Http\Requests\ReversePaymentRequest;
 use App\Modules\Umrah\Http\Requests\StoreGroupPaymentRequest;
 use App\Modules\Umrah\Http\Requests\StorePaymentAllocationRequest;
 use App\Modules\Umrah\Models\Agent;
@@ -12,6 +14,7 @@ use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +28,12 @@ class PaymentController extends Controller
     public function index(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
         $isMember = DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', $request->user()?->id)
             ->where('is_active', true)
-            ->value('role') === 'member';
+            ->value('role') === 'agent';
         $agentId = $isMember
             ? Agent::where('company_id', $company->id)->where('user_id', $request->user()?->id)->where('is_active', true)->value('id')
             : null;
@@ -39,6 +43,7 @@ class PaymentController extends Controller
                 'allocations.group:id,group_number,name',
                 'agent:id,name',
                 'visaVendor:id,name',
+                'transportVendor:id,name',
                 'hotelVendor:id,name',
                 'account:id,code,name',
                 'transaction:id,transaction_number',
@@ -67,18 +72,20 @@ class PaymentController extends Controller
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'payments' => $payments,
             'summary' => [
-                'received' => (float) (clone $summaryQuery)->where('direction', GroupPayment::DIRECTION_RECEIVED)->sum('base_amount'),
-                'sent' => $isMember ? 0 : (float) (clone $summaryQuery)->where('direction', GroupPayment::DIRECTION_SENT)->sum('base_amount'),
+                'received' => (float) (clone $summaryQuery)->where('status', GroupPayment::STATUS_POSTED)->where('direction', GroupPayment::DIRECTION_RECEIVED)->sum('base_amount'),
+                'sent' => $isMember ? 0 : (float) (clone $summaryQuery)->where('status', GroupPayment::STATUS_POSTED)->where('direction', GroupPayment::DIRECTION_SENT)->sum('base_amount'),
             ],
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
             'filters' => $request->only(['search', 'direction']),
             'allocationGroups' => $allocationGroups->values(),
+            'canRecordPayments' => ! $isMember && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_CREATE),
         ]);
     }
 
     public function create(Request $request): Response
     {
         $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_CREATE), 403);
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $memberAgentId !== false;
         $allocationGroups = collect($this->service->paymentAllocationOptions($company->id))
@@ -91,8 +98,9 @@ class PaymentController extends Controller
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)
                 ->when($isMember, fn ($query) => $memberAgentId ? $query->whereKey($memberAgentId) : $query->whereRaw('1 = 0'))
                 ->orderBy('name')->get(['id', 'name']),
-            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_active']),
+            'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned', 'is_active']),
+            'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->orderBy('name')->get(['id', 'name', 'is_active']),
             'currencies' => CompanyCurrency::where('company_id', $company->id)->orderByDesc('is_base')->orderBy('currency_code')->get(['currency_code', 'is_base', 'exchange_rate']),
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
             'allocationGroups' => $allocationGroups->values(),
@@ -126,9 +134,54 @@ class PaymentController extends Controller
         return back()->with('success', 'Payment allocated successfully.');
     }
 
+    public function show(Request $request, string $companySlug, string $payment): Response
+    {
+        $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
+        $record = $this->paymentForUser($company->id, $request, $payment)
+            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number']);
+
+        return Inertia::render('Umrah/Payments/Show', [
+            'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'payment' => $record,
+            'canReverse' => $record->status === GroupPayment::STATUS_POSTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_REVERSE),
+        ]);
+    }
+
+    public function reverse(ReversePaymentRequest $request, string $companySlug, string $payment): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = GroupPayment::where('company_id', $company->id)->findOrFail($payment);
+        $this->service->reversePayment($record, $request->validated('reason'), $request->user()?->id);
+
+        return back()->with('success', 'Payment and its allocations reversed successfully.');
+    }
+
+    public function pdf(Request $request, string $companySlug, string $payment)
+    {
+        $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
+        $record = $this->paymentForUser($company->id, $request, $payment)
+            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'allAllocations.group:id,group_number,name']);
+
+        return Pdf::loadView('umrah::payments.receipt', ['company' => $company, 'payment' => $record])
+            ->setPaper('a4')->download($record->payment_number.'.pdf');
+    }
+
+    private function paymentForUser(string $companyId, Request $request, string $payment): GroupPayment
+    {
+        $agentId = $this->memberAgentId($companyId, $request);
+
+        return GroupPayment::where('company_id', $companyId)
+            ->when($agentId !== false, fn ($query) => $agentId
+                ? $query->where('agent_id', $agentId)->where('direction', GroupPayment::DIRECTION_RECEIVED)
+                : $query->whereRaw('1 = 0'))
+            ->findOrFail($payment);
+    }
+
     private function memberAgentId(string $companyId, Request $request): string|false|null
     {
-        $isMember = DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $request->user()?->id)->where('is_active', true)->value('role') === 'member';
+        $isMember = DB::table('auth.company_user')->where('company_id', $companyId)->where('user_id', $request->user()?->id)->where('is_active', true)->value('role') === 'agent';
         if (! $isMember) {
             return false;
         }

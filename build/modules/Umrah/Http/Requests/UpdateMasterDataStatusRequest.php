@@ -4,7 +4,7 @@ namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
 
-class DestroyDriverRequest extends UmrahFormRequest
+class UpdateMasterDataStatusRequest extends UmrahFormRequest
 {
     protected function permission(): string
     {
@@ -13,6 +13,6 @@ class DestroyDriverRequest extends UmrahFormRequest
 
     public function rules(): array
     {
-        return [];
+        return ['is_active' => ['required', 'boolean']];
     }
 }

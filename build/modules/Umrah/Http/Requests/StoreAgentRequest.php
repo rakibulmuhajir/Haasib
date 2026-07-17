@@ -41,6 +41,7 @@ class StoreAgentRequest extends UmrahFormRequest
             'password' => ['nullable', 'required_with:login_username', 'string', 'min:8'],
             'can_create_voucher' => ['nullable', 'boolean'],
             'can_approve_voucher' => ['nullable', 'boolean'],
+            'can_edit_group' => ['nullable', 'boolean'],
             'can_edit_voucher' => ['nullable', 'boolean'],
             'voucher_cutoff_hours' => ['nullable', Rule::in([2, 6, 12, 18, 24, 48])],
             'name' => ['required', 'string', 'max:255'],

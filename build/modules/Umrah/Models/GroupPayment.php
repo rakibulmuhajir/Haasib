@@ -29,6 +29,10 @@ class GroupPayment extends Model
 
     public const DIRECTIONS = [self::DIRECTION_RECEIVED => 'Received', self::DIRECTION_SENT => 'Sent'];
 
+    public const STATUS_POSTED = 'posted';
+
+    public const STATUS_REVERSED = 'reversed';
+
     public const METHOD_CASH = 'cash';
 
     public const METHOD_BANK_TRANSFER = 'bank_transfer';
@@ -53,6 +57,7 @@ class GroupPayment extends Model
         'agent_id',
         'direction',
         'visa_vendor_id',
+        'transport_vendor_id',
         'hotel_vendor_id',
         'account_id',
         'payment_number',
@@ -66,6 +71,11 @@ class GroupPayment extends Model
         'reference',
         'notes',
         'transaction_id',
+        'status',
+        'reversed_at',
+        'reversed_by_user_id',
+        'reversal_reason',
+        'reversal_transaction_id',
     ];
 
     protected $casts = [
@@ -73,6 +83,7 @@ class GroupPayment extends Model
         'visa_group_id' => 'string',
         'agent_id' => 'string',
         'visa_vendor_id' => 'string',
+        'transport_vendor_id' => 'string',
         'hotel_vendor_id' => 'string',
         'account_id' => 'string',
         'payment_date' => 'date',
@@ -80,6 +91,9 @@ class GroupPayment extends Model
         'exchange_rate' => 'decimal:8',
         'base_amount' => 'decimal:2',
         'transaction_id' => 'string',
+        'reversed_at' => 'datetime',
+        'reversed_by_user_id' => 'string',
+        'reversal_transaction_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -110,6 +124,11 @@ class GroupPayment extends Model
         return $this->belongsTo(VisaVendor::class);
     }
 
+    public function transportVendor(): BelongsTo
+    {
+        return $this->belongsTo(VisaVendor::class, 'transport_vendor_id');
+    }
+
     public function hotelVendor(): BelongsTo
     {
         return $this->belongsTo(HotelVendor::class);
@@ -120,7 +139,17 @@ class GroupPayment extends Model
         return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class);
     }
 
+    public function reversalTransaction(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class, 'reversal_transaction_id');
+    }
+
     public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class, 'group_payment_id')->whereNull('reversed_at');
+    }
+
+    public function allAllocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class, 'group_payment_id');
     }

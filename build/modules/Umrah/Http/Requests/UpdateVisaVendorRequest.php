@@ -24,6 +24,7 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             ],
             'name' => ['required', 'string', 'max:255'],
             'vendor_type' => ['required', Rule::in(array_keys(VisaVendor::TYPES))],
+            'is_company_owned' => ['sometimes', 'boolean'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],

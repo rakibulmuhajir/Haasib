@@ -34,7 +34,7 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => 'retail', 'name' => 'Retail', 'sort_order' => 13],
             ['code' => 'wholesale', 'name' => 'Wholesale / Distribution', 'sort_order' => 14],
             ['code' => 'fuel_station', 'name' => 'Fuel Station / Petrol Pump', 'sort_order' => 15],
-            ['code' => 'umrah', 'name' => 'Umrah / Travel Visa Agency', 'sort_order' => 16],
+            ['code' => 'umrah', 'name' => 'Umrah / Travel Visa Agency', 'sort_order' => 16, 'is_active' => false],
             ['code' => 'travel', 'name' => 'Travel Agency', 'sort_order' => 17],
         ];
 
@@ -42,7 +42,7 @@ class IndustryCoaPackSeeder extends Seeder
             DB::table('acct.industry_coa_packs')->updateOrInsert(
                 ['code' => $industry['code']],
                 array_merge($industry, [
-                    'is_active' => true,
+                    'is_active' => $industry['is_active'] ?? true,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])
@@ -719,7 +719,7 @@ class IndustryCoaPackSeeder extends Seeder
             DB::table('acct.industry_coa_templates')->updateOrInsert(
                 [
                     'industry_pack_id' => $industryId,
-                    'code' => $account['code']
+                    'code' => $account['code'],
                 ],
                 array_merge([
                     'is_contra' => false,

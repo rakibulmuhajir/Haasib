@@ -58,4 +58,24 @@ abstract class UmrahFormRequest extends BaseFormRequest
             }
         };
     }
+
+    protected function activeForCompany(string $modelClass, string $message): Closure
+    {
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+
+        return function (string $attribute, mixed $value, Closure $fail) use ($companyId, $modelClass, $message): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            if (! $modelClass::query()
+                ->where('company_id', $companyId)
+                ->whereKey($value)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->exists()) {
+                $fail($message);
+            }
+        };
+    }
 }

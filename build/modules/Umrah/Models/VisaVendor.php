@@ -15,14 +15,21 @@ class VisaVendor extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $connection = 'pgsql';
+
     protected $table = 'umrah.visa_vendors';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     public const TYPE_GOVERNMENT = 'government';
+
     public const TYPE_VISA_PROVIDER = 'visa_provider';
+
     public const TYPE_TRANSPORT_PROVIDER = 'transport_provider';
+
     public const TYPE_HOTEL = 'hotel';
+
     public const TYPE_OTHER = 'other';
 
     public const TYPES = [
@@ -38,6 +45,7 @@ class VisaVendor extends Model
         'vendor_number',
         'name',
         'vendor_type',
+        'is_company_owned',
         'phone',
         'email',
         'city',
@@ -55,6 +63,7 @@ class VisaVendor extends Model
 
     protected $casts = [
         'company_id' => 'string',
+        'is_company_owned' => 'boolean',
         'adult_retail_amount' => 'decimal:2',
         'adult_cost_amount' => 'decimal:2',
         'child_retail_amount' => 'decimal:2',

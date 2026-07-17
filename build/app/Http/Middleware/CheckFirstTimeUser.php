@@ -33,8 +33,20 @@ class CheckFirstTimeUser
             return $next($request);
         }
 
-        // Skip if already on welcome, company creation, or onboarding pages
-        if ($request->is('welcome') ||
+        // Personal account and invitation actions must remain available before
+        // the user creates or joins a company.
+        if ($request->routeIs(
+            'logout',
+            'verification.*',
+            'password.*',
+            'two-factor.*',
+            'profile.*',
+            'user-password.*',
+            'appearance.*',
+            'invitation.*',
+            'invitations.*',
+        ) ||
+            $request->is('welcome') ||
             $request->is('companies') ||
             $request->is('companies/create') ||
             $request->is('*/onboarding') ||

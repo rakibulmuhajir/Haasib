@@ -48,7 +48,32 @@ export const umrahNav: ModuleNavConfig = {
                         href: `/${slug}/umrah/payments`,
                         icon: WalletCards,
                     },
-                    ...(context.currentCompanyRole === 'member'
+                    {
+                        title: 'Reports',
+                        icon: BarChart3,
+                        children:
+                            context.currentCompanyRole === 'agent'
+                                ? [
+                                      { title: 'My Statement', href: `/${slug}/umrah/reports/agent-statement`, icon: FileText },
+                                      { title: 'Passenger Status', href: `/${slug}/umrah/reports/passenger-status`, icon: Users },
+                                      { title: 'Departure Manifest', href: `/${slug}/umrah/reports/departure-manifest`, icon: Plane },
+                                      { title: 'Hotel Rooming', href: `/${slug}/umrah/reports/hotel-rooming`, icon: Hotel },
+                                      { title: 'Voucher Control', href: `/${slug}/umrah/reports/voucher-control`, icon: ScrollText },
+                                  ]
+                                : [
+                                      { title: 'Group Profitability', href: `/${slug}/umrah/reports/group-profitability`, icon: BarChart3 },
+                                      { title: 'Agent Statement', href: `/${slug}/umrah/reports/agent-statement`, icon: FileText },
+                                      { title: 'Receivable Aging', href: `/${slug}/umrah/reports/receivable-aging`, icon: WalletCards },
+                                      { title: 'Vendor Payables', href: `/${slug}/umrah/reports/vendor-aging`, icon: ReceiptText },
+                                      { title: 'Advances', href: `/${slug}/umrah/reports/advances`, icon: BadgeDollarSign },
+                                      { title: 'Passenger Status', href: `/${slug}/umrah/reports/passenger-status`, icon: Users },
+                                      { title: 'Departure Manifest', href: `/${slug}/umrah/reports/departure-manifest`, icon: Plane },
+                                      { title: 'Hotel Rooming', href: `/${slug}/umrah/reports/hotel-rooming`, icon: Hotel },
+                                      { title: 'Transport Dispatch', href: `/${slug}/umrah/reports/transport-dispatch`, icon: Bus },
+                                      { title: 'Voucher Control', href: `/${slug}/umrah/reports/voucher-control`, icon: ScrollText },
+                                  ],
+                    },
+                    ...(context.currentCompanyRole === 'agent'
                         ? []
                         : [
                               {
@@ -62,57 +87,52 @@ export const umrahNav: ModuleNavConfig = {
                                   icon: BadgeDollarSign,
                               },
                           ]),
-                    {
-                        title: 'Agents',
-                        href: `/${slug}/umrah/agents`,
-                        icon: Users,
-                    },
-                    {
-                        title: 'Visa Vendors',
-                        href: `/${slug}/umrah/vendors`,
-                        icon: FileText,
-                    },
-                    {
-                        title: 'Reports',
-                        icon: BarChart3,
-                        children: [
-                            {
-                                title: 'Earnings',
-                                href: `/${slug}/umrah/reports/earnings`,
-                                icon: BarChart3,
-                            },
-                        ],
-                    },
-                    {
-                        title: 'Settings',
-                        icon: Settings,
-                        children: [
-                            ...(context.currentCompanyRole === 'member'
-                                ? []
-                                : [
-                                      {
-                                          title: 'Company & Currencies',
-                                          href: `/${slug}/settings`,
-                                          icon: Building2,
-                                      },
-                                  ]),
-                            {
-                                title: 'Transport Services',
-                                href: `/${slug}/umrah/settings/transport-services`,
-                                icon: Bus,
-                            },
-                            {
-                                title: 'Drivers',
-                                href: `/${slug}/umrah/settings/drivers`,
-                                icon: Users,
-                            },
-                            {
-                                title: 'Hotels',
-                                href: `/${slug}/umrah/settings/hotels`,
-                                icon: Hotel,
-                            },
-                        ],
-                    },
+                    ...(context.currentCompanyRole === 'agent'
+                        ? []
+                        : [
+                              {
+                                  title: 'Agents',
+                                  href: `/${slug}/umrah/agents`,
+                                  icon: Users,
+                              },
+                              {
+                                  title: 'Visa & Transport Vendors',
+                                  href: `/${slug}/umrah/vendors`,
+                                  icon: FileText,
+                              },
+                              ...(['owner', 'admin', 'super_admin'].includes(
+                                  String(context.currentCompanyRole),
+                              )
+                                  ? [
+                                        {
+                                            title: 'Settings',
+                                            icon: Settings,
+                                            children: [
+                                                {
+                                                    title: 'Company & Currencies',
+                                                    href: `/${slug}/settings`,
+                                                    icon: Building2,
+                                                },
+                                                {
+                                                    title: 'Transport Services',
+                                                    href: `/${slug}/umrah/settings/transport-services`,
+                                                    icon: Bus,
+                                                },
+                                                {
+                                                    title: 'Drivers',
+                                                    href: `/${slug}/umrah/settings/drivers`,
+                                                    icon: Users,
+                                                },
+                                                {
+                                                    title: 'Hotels',
+                                                    href: `/${slug}/umrah/settings/hotels`,
+                                                    icon: Hotel,
+                                                },
+                                            ],
+                                        },
+                                    ]
+                                  : []),
+                          ]),
                 ],
             },
         ];

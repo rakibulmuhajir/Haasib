@@ -4,15 +4,15 @@ namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
 
-class DestroyVisaServiceRequest extends UmrahFormRequest
+class UpdateVisaVendorStatusRequest extends UmrahFormRequest
 {
     protected function permission(): string
     {
-        return Permissions::UMRAH_SETTINGS_DELETE;
+        return Permissions::UMRAH_VENDOR_UPDATE;
     }
 
     public function rules(): array
     {
-        return [];
+        return ['is_active' => ['required', 'boolean']];
     }
 }

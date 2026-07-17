@@ -22,7 +22,7 @@ class UpdateTransportServiceRequest extends UmrahFormRequest
                 'max:150',
                 $this->uniqueForCompany(TransportService::class, 'name', 'This transport service already exists.', (string) $this->route('transportService')),
             ],
-            'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],
+            'driver_id' => ['nullable', 'uuid', $this->activeForCompany(Driver::class, 'Select an active driver.')],
             'vehicle_type' => ['nullable', 'string', 'max:100'],
             'pax_capacity' => ['nullable', 'integer', 'min:1', 'max:100'],
             'make' => ['nullable', 'string', 'max:100'],

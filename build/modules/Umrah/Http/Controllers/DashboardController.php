@@ -34,13 +34,13 @@ class DashboardController extends Controller
         return Inertia::render('Umrah/Dashboard/Index', [
             'company' => $this->companyPayload($company),
             'summary' => [
-                'active_groups' => (clone $groups)->whereNotIn('status', [VisaGroup::STATUS_CLOSED])->count(),
+                'active_groups' => (clone $groups)->count(),
                 'passports_in_process' => Passenger::where('company_id', $company->id)
                     ->when($isMember, fn ($query) => $agentId ? $query->whereHas('group', fn ($group) => $group->where('agent_id', $agentId)) : $query->whereRaw('1 = 0'))
                     ->whereNotIn('visa_status', [Passenger::STATUS_DELIVERED, Passenger::STATUS_REJECTED])
                     ->count(),
                 'agent_balance' => (float) Agent::where('company_id', $company->id)->when($isMember, fn ($query) => $agentId ? $query->whereKey($agentId) : $query->whereRaw('1 = 0'))->sum('balance'),
-                'month_revenue' => (float) (clone $groups)
+                'month_charges' => (float) (clone $groups)
                     ->whereBetween('created_at', [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()])
                     ->sum('total_receivable'),
                 'month_profit' => $isMember ? 0 : (float) (clone $groups)
@@ -56,17 +56,28 @@ class DashboardController extends Controller
             'upcomingGroups' => VisaGroup::where('company_id', $company->id)
                 ->when($isMember, fn ($query) => $agentId ? $query->where('agent_id', $agentId) : $query->whereRaw('1 = 0'))
                 ->with('agent:id,name')
+                ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                 ->whereNotNull('travel_date')
                 ->whereDate('travel_date', '>=', $today)
                 ->orderBy('travel_date')
                 ->limit(8)
-                ->get(),
+                ->get(['id', 'agent_id', 'group_number', 'name', 'travel_date', 'passenger_count', 'balance']),
             'recentGroups' => VisaGroup::where('company_id', $company->id)
                 ->when($isMember, fn ($query) => $agentId ? $query->where('agent_id', $agentId) : $query->whereRaw('1 = 0'))
                 ->with('agent:id,name')
+                ->where('status', '!=', VisaGroup::STATUS_CANCELLED)
                 ->orderByDesc('created_at')
                 ->limit(8)
-                ->get(),
+                ->get(['id', 'agent_id', 'group_number', 'name', 'travel_date', 'passenger_count', 'balance', 'created_at']),
+            'isAgent' => $isMember,
+            'capabilities' => [
+                'canCreateGroup' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_GROUP_CREATE),
+                'canCreateVoucher' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_CREATE),
+                'canViewAccounting' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_GROUP_ACCOUNTING_VIEW),
+                'canViewAgents' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_AGENT_VIEW),
+                'canViewVendors' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_VENDOR_VIEW),
+                'canViewReports' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REPORT_VIEW),
+            ],
         ]);
     }
 

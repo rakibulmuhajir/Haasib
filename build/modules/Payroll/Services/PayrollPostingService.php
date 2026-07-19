@@ -3,6 +3,7 @@
 namespace App\Modules\Payroll\Services;
 
 use App\Models\Company;
+use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
@@ -14,12 +15,11 @@ use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Modules\Payroll\Models\SalaryAdvanceRecovery;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PayrollPostingService
 {
-    public function __construct(private readonly GlPostingService $postingService)
-    {
-    }
+    public function __construct(private readonly GlPostingService $postingService) {}
 
     public function prepareAutomaticAdvanceDeductions(Payslip $payslip): void
     {
@@ -67,7 +67,9 @@ class PayrollPostingService
                 break;
             }
 
-            $amount = min((float) $advance->amount_outstanding, $remaining);
+            $rate = (float) ($payslip->exchange_rate ?: 1);
+            $outstandingInPayslipCurrency = round((float) $advance->amount_outstanding / $rate, 2);
+            $amount = min($outstandingInPayslipCurrency, $remaining);
             if ($amount <= 0) {
                 continue;
             }
@@ -76,7 +78,7 @@ class PayrollPostingService
                 'line_type' => 'deduction',
                 'deduction_type_id' => $deductionType->id,
                 'salary_advance_id' => $advance->id,
-                'description' => 'Salary advance recovery - ' . $advance->advance_date->format('Y-m-d'),
+                'description' => 'Salary advance recovery - '.$advance->advance_date->format('Y-m-d'),
                 'quantity' => 1,
                 'rate' => $amount,
                 'amount' => round($amount, 2),
@@ -106,7 +108,7 @@ class PayrollPostingService
             $this->setRlsContext($companyId);
 
             $amount = round((float) $data['amount'], 2);
-            $paymentAccountId = $this->resolvePaymentAccount($companyId, $data['bank_account_id'] ?? null);
+            $paymentAccountId = $this->resolveBasePaymentAccount($companyId, $data['bank_account_id'] ?? null, $baseCurrency);
             $advanceAccountId = $this->findAssetAccount($companyId, ['Employee Advances'], ['1150'], '1150', 'Employee Advances', 'other_current_asset');
 
             $advance = SalaryAdvance::create([
@@ -130,7 +132,7 @@ class PayrollPostingService
 
             $this->postingService->postBalancedTransaction([
                 'company_id' => $companyId,
-                'transaction_number' => 'ADV-' . strtoupper(substr($advance->id, 0, 8)),
+                'transaction_number' => 'ADV-'.strtoupper(substr($advance->id, 0, 8)),
                 'transaction_type' => 'salary_advance',
                 'date' => $advance->advance_date,
                 'currency' => $baseCurrency,
@@ -195,7 +197,7 @@ class PayrollPostingService
             ->selectRaw("MAX((substring(payslip_number from '[0-9]+$'))::integer) as max_number")
             ->value('max_number');
 
-        return 'PS' . str_pad((string) (((int) $lastNumber) + 1), 6, '0', STR_PAD_LEFT);
+        return 'PS'.str_pad((string) (((int) $lastNumber) + 1), 6, '0', STR_PAD_LEFT);
     }
 
     public function generatePayslipsForPeriod(PayrollPeriod $period, string $baseCurrency): int
@@ -228,6 +230,8 @@ class PayrollPostingService
                         'employee_id' => $employee->id,
                         'payslip_number' => $this->nextPayslipNumber($period->company_id),
                         'currency' => $employee->currency ?: $baseCurrency,
+                        'exchange_rate' => $this->resolveExchangeRate($period->company_id, $employee->currency ?: $baseCurrency, $baseCurrency),
+                        'base_currency' => $baseCurrency,
                         'notes' => 'Generated from employee salary.',
                     ]);
 
@@ -261,6 +265,8 @@ class PayrollPostingService
                 'lines.earningType',
                 'lines.deductionType',
             ]);
+
+            $this->validateCurrencySnapshot($payslip);
 
             if ($payslip->gl_transaction_id) {
                 $payslip->update([
@@ -323,7 +329,7 @@ class PayrollPostingService
                         'salary_advance_id' => $line->salary_advance_id,
                         'payslip_id' => $payslip->id,
                         'recovery_date' => $payslip->payrollPeriod->payment_date,
-                        'amount' => $amount,
+                        'amount' => round($amount * (float) ($payslip->exchange_rate ?: 1), 2),
                         'recovery_type' => 'payroll_deduction',
                         'recorded_by_user_id' => $userId,
                     ]);
@@ -363,8 +369,9 @@ class PayrollPostingService
                 'transaction_type' => 'payroll_accrual',
                 'date' => $payslip->payrollPeriod->period_end,
                 'currency' => $payslip->currency,
-                'base_currency' => Company::whereKey($payslip->company_id)->value('base_currency') ?? $payslip->currency,
-                'description' => 'Payroll accrual - ' . $payslip->payslip_number,
+                'base_currency' => $payslip->base_currency,
+                'exchange_rate' => $payslip->exchange_rate,
+                'description' => 'Payroll accrual - '.$payslip->payslip_number,
                 'reference_type' => 'pay.payslips',
                 'reference_id' => $payslip->id,
                 'metadata' => [
@@ -389,7 +396,7 @@ class PayrollPostingService
         return DB::transaction(function () use ($payslip, $data, $userId) {
             $payslip->refresh()->load(['payrollPeriod']);
 
-            if (!$payslip->gl_transaction_id) {
+            if (! $payslip->gl_transaction_id) {
                 $this->approve($payslip, $userId);
                 $payslip->refresh()->load(['payrollPeriod']);
             }
@@ -417,8 +424,9 @@ class PayrollPostingService
                     'transaction_type' => 'payroll_payment',
                     'date' => $payslip->payrollPeriod->payment_date,
                     'currency' => $payslip->currency,
-                    'base_currency' => Company::whereKey($payslip->company_id)->value('base_currency') ?? $payslip->currency,
-                    'description' => 'Payroll payment - ' . $payslip->payslip_number,
+                    'base_currency' => $payslip->base_currency,
+                    'exchange_rate' => $payslip->exchange_rate,
+                    'description' => 'Payroll payment - '.$payslip->payslip_number,
                     'reference_type' => 'pay.payslips',
                     'reference_id' => $payslip->id,
                     'metadata' => [
@@ -452,6 +460,36 @@ class PayrollPostingService
 
             return $transaction;
         });
+    }
+
+    public function resolveExchangeRate(string $companyId, string $currency, string $baseCurrency): ?float
+    {
+        if ($currency === $baseCurrency) {
+            return null;
+        }
+
+        $rate = CompanyCurrency::query()
+            ->where('company_id', $companyId)
+            ->where('currency_code', $currency)
+            ->value('exchange_rate');
+
+        if (! $rate || (float) $rate <= 0) {
+            throw ValidationException::withMessages([
+                'currency' => "Enable {$currency} with an exchange rate in Company & Currencies before creating payroll.",
+            ]);
+        }
+
+        return (float) $rate;
+    }
+
+    private function validateCurrencySnapshot(Payslip $payslip): void
+    {
+        if ($payslip->currency === $payslip->base_currency && $payslip->exchange_rate !== null) {
+            throw ValidationException::withMessages(['exchange_rate' => 'Base-currency payslips cannot have an exchange rate.']);
+        }
+        if ($payslip->currency !== $payslip->base_currency && (float) $payslip->exchange_rate <= 0) {
+            throw ValidationException::withMessages(['exchange_rate' => 'A positive exchange rate is required before approving this payslip.']);
+        }
     }
 
     private function ensureSalaryAdvanceDeductionType(string $companyId): DeductionType
@@ -528,9 +566,10 @@ class PayrollPostingService
         $combined = [];
 
         foreach ($entries as $entry) {
-            $key = $entry['account_id'] . ':' . $entry['type'] . ':' . $entry['description'];
-            if (!isset($combined[$key])) {
+            $key = $entry['account_id'].':'.$entry['type'].':'.$entry['description'];
+            if (! isset($combined[$key])) {
                 $combined[$key] = $entry;
+
                 continue;
             }
 
@@ -542,7 +581,7 @@ class PayrollPostingService
 
     private function validAccountId(?string $accountId, string $companyId): ?string
     {
-        if (!$accountId) {
+        if (! $accountId) {
             return null;
         }
 
@@ -574,6 +613,35 @@ class PayrollPostingService
             ->value('id');
 
         return $existing ?? $this->ensureAccount($companyId, '1010', 'Payroll Bank Account', 'asset', 'bank', 'debit');
+    }
+
+    private function resolveBasePaymentAccount(string $companyId, ?string $paymentAccountId, string $baseCurrency): string
+    {
+        $query = fn () => Account::where('company_id', $companyId)
+            ->whereIn('subtype', ['bank', 'cash'])
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->where(fn ($accountQuery) => $accountQuery
+                ->whereNull('currency')
+                ->orWhere('currency', $baseCurrency));
+
+        $selected = $paymentAccountId
+            ? $query()->whereKey($paymentAccountId)->value('id')
+            : null;
+        if ($selected) {
+            return $selected;
+        }
+
+        $companyDefault = Company::whereKey($companyId)->value('bank_account_id');
+        $default = $companyDefault
+            ? $query()->whereKey($companyDefault)->value('id')
+            : null;
+        if ($default) {
+            return $default;
+        }
+
+        return $query()->orderBy('code')->value('id')
+            ?? $this->ensureAccount($companyId, '1010', 'Payroll Bank Account', 'asset', 'bank', 'debit');
     }
 
     private function findExpenseAccount(string $companyId, array $names, array $codes): string
@@ -652,7 +720,7 @@ class PayrollPostingService
         foreach ($names as $name) {
             $account = Account::where('company_id', $companyId)
                 ->where('type', $type)
-                ->where('name', 'ilike', '%' . $name . '%')
+                ->where('name', 'ilike', '%'.$name.'%')
                 ->where('is_active', true)
                 ->whereNull('deleted_at')
                 ->orderBy('code')
@@ -679,7 +747,7 @@ class PayrollPostingService
             && $existing->subtype === $subtype
             && $this->nameMatches($existing->name, [$name])
         ) {
-            if (!$existing->is_active) {
+            if (! $existing->is_active) {
                 $existing->update(['is_active' => true]);
             }
 

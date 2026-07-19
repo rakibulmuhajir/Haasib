@@ -541,6 +541,7 @@ class VoucherController extends Controller
             'airlines' => Voucher::AIRLINES,
             'airportCities' => Voucher::AIRPORT_CITIES,
             'agentCapabilities' => $capabilities,
+            'canViewAccounting' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VOUCHER_ACCOUNTING_VIEW),
             'moveTargets' => $moveTargets,
             'changeLogs' => $this->access->isAgentMember($company->id, request()->user()) ? [] : ChangeLog::where('company_id', $company->id)
                 ->where('entity_type', 'voucher')

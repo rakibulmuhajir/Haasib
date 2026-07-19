@@ -75,7 +75,6 @@ interface SummaryRef {
 
 interface CurrencyOption {
   currency_code: string
-  is_base: boolean
 }
 
 interface BillRef {
@@ -149,7 +148,7 @@ const addressSaving = ref(false)
 const currencyOptions = computed(() =>
   props.currencies.map((c) => ({
     value: c.currency_code,
-    label: c.is_base ? `${c.currency_code} (Base)` : c.currency_code,
+    label: c.currency_code === props.company.base_currency ? `${c.currency_code} (Base)` : c.currency_code,
   }))
 )
 

@@ -25,6 +25,7 @@ class CompanyStoreRequest extends FormRequest
     public function rules(): array
     {
         $countryCodes = array_keys(config('countries', []));
+        $industryCodes = collect(config('company-industries', []))->pluck('code')->all();
 
         return [
             'name' => [
@@ -43,7 +44,12 @@ class CompanyStoreRequest extends FormRequest
                 },
             ],
             'industry' => ['nullable', 'string', 'max:255'],
-            'industry_code' => ['required', 'string', 'exists:acct.industry_coa_packs,code'],
+            'industry_code' => [
+                'required',
+                'string',
+                Rule::in($industryCodes),
+                Rule::exists('acct.industry_coa_packs', 'code')->where('is_active', true),
+            ],
             'country' => ['required', 'string', 'size:2', Rule::in($countryCodes)],
             'country_id' => ['nullable', 'uuid'],
             'base_currency' => [
@@ -78,6 +84,8 @@ class CompanyStoreRequest extends FormRequest
             'country.required' => 'Please select your country.',
             'country.in' => 'Please select a valid country from the list.',
             'industry_code.required' => 'Please select your industry.',
+            'industry_code.in' => 'Please select Petrol Pump, Travel, or Other.',
+            'industry_code.exists' => 'The selected industry is not available. Please refresh and try again.',
         ];
     }
 }

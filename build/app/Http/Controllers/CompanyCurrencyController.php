@@ -9,7 +9,6 @@ use App\Models\CompanyCurrency;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class CompanyCurrencyController extends Controller
 {
@@ -19,7 +18,6 @@ class CompanyCurrencyController extends Controller
         CompanyCurrency::create([
             'company_id' => $company->id,
             'currency_code' => $request->validated('currency_code'),
-            'is_base' => false,
             'exchange_rate' => $request->validated('exchange_rate'),
             'enabled_at' => now(),
         ]);
@@ -31,9 +29,6 @@ class CompanyCurrencyController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $record = CompanyCurrency::where('company_id', $company->id)->findOrFail($currency);
-        if ($record->is_base) {
-            throw ValidationException::withMessages(['exchange_rate' => 'The base currency rate is always 1.']);
-        }
         $record->update(['exchange_rate' => $request->validated('exchange_rate')]);
 
         return back()->with('success', 'Exchange rate updated successfully.');
@@ -43,9 +38,6 @@ class CompanyCurrencyController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $record = CompanyCurrency::where('company_id', $company->id)->findOrFail($currency);
-        if ($record->is_base) {
-            throw ValidationException::withMessages(['currency_code' => 'The base currency cannot be disabled.']);
-        }
         $inUse = DB::table('acct.accounts')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists()
             || DB::table('acct.transactions')->where('company_id', $company->id)->where('currency', $record->currency_code)->exists();
         if ($inUse) {

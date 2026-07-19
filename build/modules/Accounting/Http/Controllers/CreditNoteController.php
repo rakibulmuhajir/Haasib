@@ -9,8 +9,8 @@ use App\Modules\Accounting\Http\Requests\UpdateCreditNoteRequest;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -78,10 +78,7 @@ class CreditNoteController extends Controller
             ->orderBy('invoice_number')
             ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/credit-notes/Create', [
             'company' => [
@@ -182,10 +179,7 @@ class CreditNoteController extends Controller
             ->orderBy('invoice_number')
             ->get(['id', 'customer_id', 'invoice_number', 'total_amount', 'currency']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/credit-notes/Edit', [
             'company' => [

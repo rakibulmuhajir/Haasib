@@ -54,23 +54,83 @@ export const umrahNav: ModuleNavConfig = {
                         children:
                             context.currentCompanyRole === 'agent'
                                 ? [
-                                      { title: 'My Statement', href: `/${slug}/umrah/reports/agent-statement`, icon: FileText },
-                                      { title: 'Passenger Status', href: `/${slug}/umrah/reports/passenger-status`, icon: Users },
-                                      { title: 'Departure Manifest', href: `/${slug}/umrah/reports/departure-manifest`, icon: Plane },
-                                      { title: 'Hotel Rooming', href: `/${slug}/umrah/reports/hotel-rooming`, icon: Hotel },
-                                      { title: 'Voucher Control', href: `/${slug}/umrah/reports/voucher-control`, icon: ScrollText },
+                                      {
+                                          title: 'My Statement',
+                                          href: `/${slug}/umrah/reports/agent-statement`,
+                                          icon: FileText,
+                                      },
+                                      {
+                                          title: 'Passenger Status',
+                                          href: `/${slug}/umrah/reports/passenger-status`,
+                                          icon: Users,
+                                      },
+                                      {
+                                          title: 'Departure Manifest',
+                                          href: `/${slug}/umrah/reports/departure-manifest`,
+                                          icon: Plane,
+                                      },
+                                      {
+                                          title: 'Hotel Rooming',
+                                          href: `/${slug}/umrah/reports/hotel-rooming`,
+                                          icon: Hotel,
+                                      },
+                                      {
+                                          title: 'Voucher Control',
+                                          href: `/${slug}/umrah/reports/voucher-control`,
+                                          icon: ScrollText,
+                                      },
                                   ]
                                 : [
-                                      { title: 'Group Profitability', href: `/${slug}/umrah/reports/group-profitability`, icon: BarChart3 },
-                                      { title: 'Agent Statement', href: `/${slug}/umrah/reports/agent-statement`, icon: FileText },
-                                      { title: 'Receivable Aging', href: `/${slug}/umrah/reports/receivable-aging`, icon: WalletCards },
-                                      { title: 'Vendor Payables', href: `/${slug}/umrah/reports/vendor-aging`, icon: ReceiptText },
-                                      { title: 'Advances', href: `/${slug}/umrah/reports/advances`, icon: BadgeDollarSign },
-                                      { title: 'Passenger Status', href: `/${slug}/umrah/reports/passenger-status`, icon: Users },
-                                      { title: 'Departure Manifest', href: `/${slug}/umrah/reports/departure-manifest`, icon: Plane },
-                                      { title: 'Hotel Rooming', href: `/${slug}/umrah/reports/hotel-rooming`, icon: Hotel },
-                                      { title: 'Transport Dispatch', href: `/${slug}/umrah/reports/transport-dispatch`, icon: Bus },
-                                      { title: 'Voucher Control', href: `/${slug}/umrah/reports/voucher-control`, icon: ScrollText },
+                                      {
+                                          title: 'Group Profitability',
+                                          href: `/${slug}/umrah/reports/group-profitability`,
+                                          icon: BarChart3,
+                                      },
+                                      {
+                                          title: 'Agent Statement',
+                                          href: `/${slug}/umrah/reports/agent-statement`,
+                                          icon: FileText,
+                                      },
+                                      {
+                                          title: 'Receivable Aging',
+                                          href: `/${slug}/umrah/reports/receivable-aging`,
+                                          icon: WalletCards,
+                                      },
+                                      {
+                                          title: 'Vendor Payables',
+                                          href: `/${slug}/umrah/reports/vendor-aging`,
+                                          icon: ReceiptText,
+                                      },
+                                      {
+                                          title: 'Advances',
+                                          href: `/${slug}/umrah/reports/advances`,
+                                          icon: BadgeDollarSign,
+                                      },
+                                      {
+                                          title: 'Passenger Status',
+                                          href: `/${slug}/umrah/reports/passenger-status`,
+                                          icon: Users,
+                                      },
+                                      {
+                                          title: 'Departure Manifest',
+                                          href: `/${slug}/umrah/reports/departure-manifest`,
+                                          icon: Plane,
+                                      },
+                                      {
+                                          title: 'Hotel Rooming',
+                                          href: `/${slug}/umrah/reports/hotel-rooming`,
+                                          icon: Hotel,
+                                      },
+                                      {
+                                          title: 'Transport Dispatch',
+                                          href: `/${slug}/umrah/reports/transport-dispatch`,
+                                          icon: Bus,
+                                      },
+                                      {
+                                          title: 'Voucher Control',
+                                          href: `/${slug}/umrah/reports/voucher-control`,
+                                          icon: ScrollText,
+                                      },
                                   ],
                     },
                     ...(context.currentCompanyRole === 'agent'
@@ -81,11 +141,15 @@ export const umrahNav: ModuleNavConfig = {
                                   href: `/${slug}/umrah/expenses`,
                                   icon: ReceiptText,
                               },
-                              {
-                                  title: 'Salaries',
-                                  href: `/${slug}/payroll`,
-                                  icon: BadgeDollarSign,
-                              },
+                              ...(context.isPayrollEnabled
+                                  ? [
+                                        {
+                                            title: 'Salaries',
+                                            href: `/${slug}/payroll`,
+                                            icon: BadgeDollarSign,
+                                        },
+                                    ]
+                                  : []),
                           ]),
                     ...(context.currentCompanyRole === 'agent'
                         ? []

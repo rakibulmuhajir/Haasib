@@ -15,8 +15,11 @@ class Payslip extends Model
     use HasFactory, HasUuids;
 
     protected $connection = 'pgsql';
+
     protected $table = 'pay.payslips';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -25,11 +28,18 @@ class Payslip extends Model
         'employee_id',
         'payslip_number',
         'currency',
+        'exchange_rate',
+        'base_currency',
         'gross_pay',
         'total_earnings',
         'total_deductions',
         'employer_costs',
         'net_pay',
+        'base_gross_pay',
+        'base_total_earnings',
+        'base_total_deductions',
+        'base_employer_costs',
+        'base_net_pay',
         'status',
         'approved_at',
         'approved_by_user_id',
@@ -45,11 +55,17 @@ class Payslip extends Model
         'company_id' => 'string',
         'payroll_period_id' => 'string',
         'employee_id' => 'string',
-        'gross_pay' => 'decimal:2',
-        'total_earnings' => 'decimal:2',
-        'total_deductions' => 'decimal:2',
-        'employer_costs' => 'decimal:2',
-        'net_pay' => 'decimal:2',
+        'exchange_rate' => 'decimal:8',
+        'gross_pay' => 'decimal:6',
+        'total_earnings' => 'decimal:6',
+        'total_deductions' => 'decimal:6',
+        'employer_costs' => 'decimal:6',
+        'net_pay' => 'decimal:6',
+        'base_gross_pay' => 'decimal:2',
+        'base_total_earnings' => 'decimal:2',
+        'base_total_deductions' => 'decimal:2',
+        'base_employer_costs' => 'decimal:2',
+        'base_net_pay' => 'decimal:2',
         'approved_at' => 'datetime',
         'approved_by_user_id' => 'string',
         'paid_at' => 'datetime',

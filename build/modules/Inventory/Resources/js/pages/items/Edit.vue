@@ -27,7 +27,6 @@ interface Category {
 
 interface Currency {
   currency_code: string
-  is_base: boolean
 }
 
 interface TaxRate {
@@ -266,7 +265,7 @@ const submit = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="cur in currencies" :key="cur.currency_code" :value="cur.currency_code">
-                    {{ cur.currency_code }} {{ cur.is_base ? '(Base)' : '' }}
+                    {{ cur.currency_code }} {{ cur.currency_code === company.base_currency ? '(Base)' : '' }}
                   </SelectItem>
                 </SelectContent>
               </Select>

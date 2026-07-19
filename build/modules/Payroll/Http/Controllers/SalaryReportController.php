@@ -3,6 +3,7 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\CompanyCurrency;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
@@ -72,7 +73,13 @@ class SalaryReportController extends Controller
             ->orderBy('first_name')
             ->get();
 
-        $rows = $employees->map(function (Employee $employee) use ($company, $start, $end) {
+        $currencyRates = CompanyCurrency::query()
+            ->where('company_id', $company->id)
+            ->pluck('exchange_rate', 'currency_code')
+            ->map(fn ($rate) => (float) $rate)
+            ->put($company->base_currency, 1.0);
+
+        $rows = $employees->map(function (Employee $employee) use ($company, $currencyRates, $start, $end) {
             $payslips = $employee->payslips;
             $employeeAdvanceQuery = SalaryAdvance::where('company_id', $company->id)
                 ->where('employee_id', $employee->id);
@@ -87,16 +94,16 @@ class SalaryReportController extends Controller
             return [
                 'employee_id' => $employee->id,
                 'employee_number' => $employee->employee_number,
-                'employee_name' => trim($employee->first_name . ' ' . $employee->last_name),
+                'employee_name' => trim($employee->first_name.' '.$employee->last_name),
                 'position' => $employee->position,
-                'base_salary' => (float) $employee->base_salary,
+                'base_salary' => round((float) $employee->base_salary * (float) ($currencyRates[$employee->currency] ?? 0), 2),
                 'payslip_count' => $payslips->count(),
-                'gross_pay' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->gross_pay),
-                'deductions' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->total_deductions),
-                'net_pay' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->net_pay),
-                'paid' => (float) $payslips->where('status', 'paid')->sum(fn (Payslip $payslip) => (float) $payslip->net_pay),
-                'unpaid' => (float) $payslips->where('status', 'approved')->sum(fn (Payslip $payslip) => (float) $payslip->net_pay),
-                'draft' => (float) $payslips->where('status', 'draft')->sum(fn (Payslip $payslip) => (float) $payslip->net_pay),
+                'gross_pay' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->base_gross_pay),
+                'deductions' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->base_total_deductions),
+                'net_pay' => (float) $payslips->sum(fn (Payslip $payslip) => (float) $payslip->base_net_pay),
+                'paid' => (float) $payslips->where('status', 'paid')->sum(fn (Payslip $payslip) => (float) $payslip->base_net_pay),
+                'unpaid' => (float) $payslips->where('status', 'approved')->sum(fn (Payslip $payslip) => (float) $payslip->base_net_pay),
+                'draft' => (float) $payslips->where('status', 'draft')->sum(fn (Payslip $payslip) => (float) $payslip->base_net_pay),
                 'advance_given' => (float) (clone $employeeAdvanceQuery)
                     ->whereBetween('advance_date', [$start->toDateString(), $end->toDateString()])
                     ->sum('amount'),
@@ -111,9 +118,9 @@ class SalaryReportController extends Controller
                         'id' => $payslip->id,
                         'payslip_number' => $payslip->payslip_number,
                         'status' => $payslip->status,
-                        'gross_pay' => (float) $payslip->gross_pay,
-                        'deductions' => (float) $payslip->total_deductions,
-                        'net_pay' => (float) $payslip->net_pay,
+                        'gross_pay' => (float) $payslip->base_gross_pay,
+                        'deductions' => (float) $payslip->base_total_deductions,
+                        'net_pay' => (float) $payslip->base_net_pay,
                         'period_id' => $payslip->payroll_period_id,
                         'period_start' => $payslip->payrollPeriod?->period_start?->toDateString(),
                         'period_end' => $payslip->payrollPeriod?->period_end?->toDateString(),
@@ -130,7 +137,7 @@ class SalaryReportController extends Controller
             ->get(['id', 'employee_number', 'first_name', 'last_name'])
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
-                'label' => trim($employee->first_name . ' ' . $employee->last_name) . ' · ' . $employee->employee_number,
+                'label' => trim($employee->first_name.' '.$employee->last_name).' · '.$employee->employee_number,
             ])
             ->values();
 

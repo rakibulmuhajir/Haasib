@@ -8,21 +8,19 @@ import RecordPagination from '@/components/RecordPagination.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
-import { LoaderCircle, Plane, Plus, Search, X } from 'lucide-vue-next'
+import { Calculator, LoaderCircle, Plane, Plus, Search, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   company: { slug: string; base_currency: string }
   groups: { data: any[]; total: number; current_page: number; last_page: number; from: number | null; to: number | null; prev_page_url: string | null; next_page_url: string | null }
-  statuses: Record<string, string>
-  filters: { search?: string; status?: string }
+  filters: { search?: string }
+  canViewAccounting: boolean
 }>()
 
 const search = ref(props.filters.search || '')
-const status = ref(props.filters.status || 'all')
 const searching = ref(false)
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -34,7 +32,6 @@ const applyFilters = () => {
   search.value = search.value.trim()
   router.get(`/${props.company.slug}/umrah/groups`, {
   search: search.value,
-  status: status.value === 'all' ? '' : status.value,
   }, {
     preserveState: true,
     onStart: () => { searching.value = true },
@@ -44,7 +41,6 @@ const applyFilters = () => {
 
 const clearFilters = () => {
   search.value = ''
-  status.value = 'all'
   applyFilters()
 }
 </script>
@@ -59,7 +55,7 @@ const clearFilters = () => {
       </Button>
     </template>
 
-    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_240px_auto]">
+    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
       <div class="relative">
         <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input v-model="search" class="pl-10" placeholder="Group number, name, passenger, or passport" @keyup.enter="applyFilters" />
@@ -68,14 +64,7 @@ const clearFilters = () => {
         <LoaderCircle v-if="searching" class="mr-2 h-4 w-4 animate-spin" />
         <Search v-else class="mr-2 h-4 w-4" />Search
       </Button>
-      <Select v-model="status" @update:modelValue="applyFilters">
-        <SelectTrigger><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          <SelectItem v-for="(label, value) in statuses" :key="value" :value="value">{{ label }}</SelectItem>
-        </SelectContent>
-      </Select>
-      <Button v-if="search || status !== 'all'" variant="ghost" :disabled="searching" @click="clearFilters">
+      <Button v-if="search" variant="ghost" :disabled="searching" @click="clearFilters">
         <X class="mr-2 h-4 w-4" />Clear
       </Button>
     </div>
@@ -89,26 +78,30 @@ const clearFilters = () => {
               <TableHead>Agent</TableHead>
               <TableHead>Travel</TableHead>
               <TableHead class="text-center">Pax</TableHead>
-              <TableHead>Status</TableHead>
               <TableHead class="text-right">Receivable</TableHead>
               <TableHead class="text-right">Balance</TableHead>
               <TableHead class="text-right">Payment</TableHead>
+              <TableHead v-if="canViewAccounting" class="w-12"><span class="sr-only">Accounting</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableEmpty v-if="!groups.data.length" :colspan="8">
-              {{ search || status !== 'all' ? 'No visa groups match your search.' : 'No visa groups yet.' }}
+            <TableEmpty v-if="!groups.data.length" :colspan="canViewAccounting ? 8 : 7">
+              {{ search ? 'No visa groups match your search.' : 'No visa groups yet.' }}
             </TableEmpty>
             <TableRow v-for="group in groups.data" :key="group.id" class="cursor-pointer" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
               <TableCell class="font-medium">{{ group.group_number }}</TableCell>
               <TableCell>{{ group.agent?.name || '-' }}</TableCell>
               <TableCell><DateTimeText :value="group.travel_date" mode="date" /></TableCell>
               <TableCell class="text-center">{{ group.passenger_count }}</TableCell>
-              <TableCell><Badge variant="secondary">{{ statuses[group.status] || group.status }}</Badge></TableCell>
               <TableCell class="text-right font-medium"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></TableCell>
               <TableCell class="text-right font-medium"><MoneyText :amount="group.balance" :currency="company.base_currency" /></TableCell>
               <TableCell class="text-right">
                 <Badge :variant="Number(group.balance || 0) <= 0 ? 'default' : 'secondary'">{{ Number(group.balance || 0) <= 0 ? 'Paid' : 'Unpaid' }}</Badge>
+              </TableCell>
+              <TableCell v-if="canViewAccounting" class="text-right">
+                <Button type="button" variant="ghost" size="icon" title="Open group accounting" @click.stop="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)">
+                  <Calculator class="h-4 w-4" />
+                </Button>
               </TableCell>
             </TableRow>
           </TableBody>

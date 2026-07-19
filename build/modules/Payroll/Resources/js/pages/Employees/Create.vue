@@ -1,316 +1,432 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
-import { toast } from 'vue-sonner'
-import PageShell from '@/components/PageShell.vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { BreadcrumbItem } from '@/types'
-import { AlertCircle, Save, ArrowLeft } from 'lucide-vue-next'
+import PageShell from '@/components/PageShell.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import type { BreadcrumbItem } from '@/types';
+import { Head, useForm } from '@inertiajs/vue3';
+import { AlertCircle, ArrowLeft, Save } from 'lucide-vue-next';
+import { computed } from 'vue';
+import { toast } from 'vue-sonner';
 
-const NO_MANAGER = '__no_manager__'
+const NO_MANAGER = '__no_manager__';
 
 interface CompanyRef {
-  id: string
-  name: string
-  slug: string
-  base_currency: string
+    id: string;
+    name: string;
+    slug: string;
+    base_currency: string;
 }
 
 interface Manager {
-  id: string
-  first_name: string
-  last_name: string
-  employee_number: string
+    id: string;
+    first_name: string;
+    last_name: string;
+    employee_number: string;
+}
+
+interface CurrencyOption {
+    currency_code: string;
 }
 
 const props = defineProps<{
-  company: CompanyRef
-  managers: Manager[]
-}>()
+    company: CompanyRef;
+    managers: Manager[];
+    currencies: CurrencyOption[];
+}>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Dashboard', href: `/${props.company.slug}` },
-  { title: 'Employees', href: `/${props.company.slug}/employees` },
-  { title: 'Create', href: `/${props.company.slug}/employees/create` },
-]
+    { title: 'Dashboard', href: `/${props.company.slug}` },
+    { title: 'Employees', href: `/${props.company.slug}/employees` },
+    { title: 'Create', href: `/${props.company.slug}/employees/create` },
+];
 
 const form = useForm({
-  first_name: '',
-  last_name: '',
-  email: '',
-  phone: '',
-  hire_date: new Date().toISOString().split('T')[0],
-  employment_type: 'full_time',
-  employment_status: 'active',
-  department: '',
-  position: '',
-  manager_id: NO_MANAGER,
-  pay_frequency: 'monthly',
-  base_salary: 0,
-  currency: props.company.base_currency || 'USD',
-  notes: '',
-})
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    hire_date: new Date().toISOString().split('T')[0],
+    employment_type: 'full_time',
+    employment_status: 'active',
+    department: '',
+    position: '',
+    manager_id: NO_MANAGER,
+    pay_frequency: 'monthly',
+    base_salary: 0,
+    currency: props.company.base_currency || 'USD',
+    notes: '',
+});
 
-const errorMessages = computed(() => Object.values(form.errors).filter(Boolean))
+const errorMessages = computed(() =>
+    Object.values(form.errors).filter(Boolean),
+);
 
 const submit = () => {
-  form
-    .transform((data) => ({
-      ...data,
-      manager_id: data.manager_id === NO_MANAGER ? null : data.manager_id,
-    }))
-    .post(`/${props.company.slug}/employees`, {
-      preserveScroll: true,
-      onError: () => {
-        toast.error('Employee was not saved. Check the highlighted fields.')
-      },
-    })
-}
+    form.transform((data) => ({
+        ...data,
+        manager_id: data.manager_id === NO_MANAGER ? null : data.manager_id,
+    })).post(`/${props.company.slug}/employees`, {
+        preserveScroll: true,
+        onError: () => {
+            toast.error(
+                'Employee was not saved. Check the highlighted fields.',
+            );
+        },
+    });
+};
 </script>
 
 <template>
-  <Head title="Add Employee" />
+    <Head title="Add Employee" />
 
-  <PageShell
-    title="Add Employee"
-    :breadcrumbs="breadcrumbs"
-  >
-    <template #actions>
-      <Button variant="outline" @click="$inertia.get(`/${company.slug}/employees`)">
-        <ArrowLeft class="mr-2 h-4 w-4" />
-        Back
-      </Button>
-    </template>
+    <PageShell title="Add Employee" :breadcrumbs="breadcrumbs">
+        <template #actions>
+            <Button
+                variant="outline"
+                @click="$inertia.get(`/${company.slug}/employees`)"
+            >
+                <ArrowLeft class="mr-2 h-4 w-4" />
+                Back
+            </Button>
+        </template>
 
-    <form @submit.prevent="submit" class="space-y-6 max-w-4xl">
-      <Alert v-if="errorMessages.length > 0" variant="destructive">
-        <AlertCircle class="h-4 w-4" />
-        <AlertTitle>Employee was not saved</AlertTitle>
-        <AlertDescription>
-          <ul class="list-disc pl-4">
-            <li v-for="message in errorMessages" :key="message">{{ message }}</li>
-          </ul>
-        </AlertDescription>
-      </Alert>
+        <form @submit.prevent="submit" class="max-w-4xl space-y-6">
+            <Alert v-if="errorMessages.length > 0" variant="destructive">
+                <AlertCircle class="h-4 w-4" />
+                <AlertTitle>Employee was not saved</AlertTitle>
+                <AlertDescription>
+                    <ul class="list-disc pl-4">
+                        <li v-for="message in errorMessages" :key="message">
+                            {{ message }}
+                        </li>
+                    </ul>
+                </AlertDescription>
+            </Alert>
 
-      <!-- Personal Information -->
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Basic employee details</CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label for="first_name">First Name *</Label>
-              <Input
-                id="first_name"
-                v-model="form.first_name"
-                :class="{ 'border-destructive': form.errors.first_name }"
-              />
-              <p v-if="form.errors.first_name" class="text-sm text-destructive">{{ form.errors.first_name }}</p>
+            <!-- Personal Information -->
+            <Card>
+                <CardHeader>
+                    <CardTitle>Personal Information</CardTitle>
+                    <CardDescription>Basic employee details</CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="space-y-2">
+                            <Label for="first_name">First Name *</Label>
+                            <Input
+                                id="first_name"
+                                v-model="form.first_name"
+                                :class="{
+                                    'border-destructive':
+                                        form.errors.first_name,
+                                }"
+                            />
+                            <p
+                                v-if="form.errors.first_name"
+                                class="text-sm text-destructive"
+                            >
+                                {{ form.errors.first_name }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="last_name">Last Name *</Label>
+                            <Input
+                                id="last_name"
+                                v-model="form.last_name"
+                                :class="{
+                                    'border-destructive': form.errors.last_name,
+                                }"
+                            />
+                            <p
+                                v-if="form.errors.last_name"
+                                class="text-sm text-destructive"
+                            >
+                                {{ form.errors.last_name }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p class="text-sm text-muted-foreground">
+                        Employee ID will be generated automatically after
+                        saving.
+                    </p>
+
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="space-y-2">
+                            <Label for="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                v-model="form.email"
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="phone">Phone</Label>
+                            <Input id="phone" v-model="form.phone" />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Employment Details -->
+            <Card>
+                <CardHeader>
+                    <CardTitle>Employment Details</CardTitle>
+                    <CardDescription
+                        >Job and employment information</CardDescription
+                    >
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <Label for="hire_date">Hire Date *</Label>
+                            <Input
+                                id="hire_date"
+                                type="date"
+                                v-model="form.hire_date"
+                                :class="{
+                                    'border-destructive': form.errors.hire_date,
+                                }"
+                            />
+                            <p
+                                v-if="form.errors.hire_date"
+                                class="text-sm text-destructive"
+                            >
+                                {{ form.errors.hire_date }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="employment_type"
+                                >Employment Type *</Label
+                            >
+                            <Select v-model="form.employment_type">
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="full_time"
+                                        >Full Time</SelectItem
+                                    >
+                                    <SelectItem value="part_time"
+                                        >Part Time</SelectItem
+                                    >
+                                    <SelectItem value="contract"
+                                        >Contract</SelectItem
+                                    >
+                                    <SelectItem value="intern"
+                                        >Intern</SelectItem
+                                    >
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="employment_status">Status *</Label>
+                            <Select v-model="form.employment_status">
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active"
+                                        >Active</SelectItem
+                                    >
+                                    <SelectItem value="on_leave"
+                                        >On Leave</SelectItem
+                                    >
+                                    <SelectItem value="suspended"
+                                        >Suspended</SelectItem
+                                    >
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <Label for="department">Department</Label>
+                            <Input
+                                id="department"
+                                v-model="form.department"
+                                placeholder="Engineering"
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="position">Position</Label>
+                            <Input
+                                id="position"
+                                v-model="form.position"
+                                placeholder="Software Engineer"
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="manager">Manager</Label>
+                            <Select v-model="form.manager_id">
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select manager" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem :value="NO_MANAGER"
+                                        >No manager</SelectItem
+                                    >
+                                    <SelectItem
+                                        v-for="mgr in managers"
+                                        :key="mgr.id"
+                                        :value="mgr.id"
+                                    >
+                                        {{ mgr.first_name }}
+                                        {{ mgr.last_name }} ({{
+                                            mgr.employee_number
+                                        }})
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Compensation -->
+            <Card>
+                <CardHeader>
+                    <CardTitle>Compensation</CardTitle>
+                    <CardDescription
+                        >Salary and payment details</CardDescription
+                    >
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <Label for="pay_frequency">Pay Frequency *</Label>
+                            <Select v-model="form.pay_frequency">
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="weekly"
+                                        >Weekly</SelectItem
+                                    >
+                                    <SelectItem value="biweekly"
+                                        >Bi-weekly</SelectItem
+                                    >
+                                    <SelectItem value="semimonthly"
+                                        >Semi-monthly</SelectItem
+                                    >
+                                    <SelectItem value="monthly"
+                                        >Monthly</SelectItem
+                                    >
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="base_salary">Base Salary *</Label>
+                            <Input
+                                id="base_salary"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                v-model="form.base_salary"
+                                :class="{
+                                    'border-destructive':
+                                        form.errors.base_salary,
+                                }"
+                            />
+                            <p
+                                v-if="form.errors.base_salary"
+                                class="text-sm text-destructive"
+                            >
+                                {{ form.errors.base_salary }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="currency">Currency *</Label>
+                            <Select v-model="form.currency">
+                                <SelectTrigger
+                                    :class="{
+                                        'border-destructive':
+                                            form.errors.currency,
+                                    }"
+                                >
+                                    <SelectValue
+                                        placeholder="Select currency"
+                                    />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="currency in currencies"
+                                        :key="currency.currency_code"
+                                        :value="currency.currency_code"
+                                    >
+                                        {{ currency.currency_code }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p
+                                v-if="form.errors.currency"
+                                class="text-sm text-destructive"
+                            >
+                                {{ form.errors.currency }}
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Notes -->
+            <Card>
+                <CardHeader>
+                    <CardTitle>Additional Notes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Textarea
+                        v-model="form.notes"
+                        placeholder="Any additional notes..."
+                        rows="3"
+                    />
+                </CardContent>
+            </Card>
+
+            <!-- Actions -->
+            <div class="flex justify-end gap-4">
+                <Button
+                    variant="outline"
+                    type="button"
+                    @click="$inertia.get(`/${company.slug}/employees`)"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    type="button"
+                    :disabled="form.processing"
+                    @click="submit"
+                >
+                    <Save class="mr-2 h-4 w-4" />
+                    {{ form.processing ? 'Saving...' : 'Save Employee' }}
+                </Button>
             </div>
-
-            <div class="space-y-2">
-              <Label for="last_name">Last Name *</Label>
-              <Input
-                id="last_name"
-                v-model="form.last_name"
-                :class="{ 'border-destructive': form.errors.last_name }"
-              />
-              <p v-if="form.errors.last_name" class="text-sm text-destructive">{{ form.errors.last_name }}</p>
-            </div>
-          </div>
-
-          <p class="text-sm text-muted-foreground">Employee ID will be generated automatically after saving.</p>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label for="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                v-model="form.email"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <Label for="phone">Phone</Label>
-              <Input
-                id="phone"
-                v-model="form.phone"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Employment Details -->
-      <Card>
-        <CardHeader>
-          <CardTitle>Employment Details</CardTitle>
-          <CardDescription>Job and employment information</CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="space-y-2">
-              <Label for="hire_date">Hire Date *</Label>
-              <Input
-                id="hire_date"
-                type="date"
-                v-model="form.hire_date"
-                :class="{ 'border-destructive': form.errors.hire_date }"
-              />
-              <p v-if="form.errors.hire_date" class="text-sm text-destructive">{{ form.errors.hire_date }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="employment_type">Employment Type *</Label>
-              <Select v-model="form.employment_type">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="full_time">Full Time</SelectItem>
-                  <SelectItem value="part_time">Part Time</SelectItem>
-                  <SelectItem value="contract">Contract</SelectItem>
-                  <SelectItem value="intern">Intern</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="employment_status">Status *</Label>
-              <Select v-model="form.employment_status">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="on_leave">On Leave</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="space-y-2">
-              <Label for="department">Department</Label>
-              <Input
-                id="department"
-                v-model="form.department"
-                placeholder="Engineering"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <Label for="position">Position</Label>
-              <Input
-                id="position"
-                v-model="form.position"
-                placeholder="Software Engineer"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <Label for="manager">Manager</Label>
-              <Select v-model="form.manager_id">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select manager" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem :value="NO_MANAGER">No manager</SelectItem>
-                  <SelectItem v-for="mgr in managers" :key="mgr.id" :value="mgr.id">
-                    {{ mgr.first_name }} {{ mgr.last_name }} ({{ mgr.employee_number }})
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Compensation -->
-      <Card>
-        <CardHeader>
-          <CardTitle>Compensation</CardTitle>
-          <CardDescription>Salary and payment details</CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="space-y-2">
-              <Label for="pay_frequency">Pay Frequency *</Label>
-              <Select v-model="form.pay_frequency">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                  <SelectItem value="semimonthly">Semi-monthly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="base_salary">Base Salary *</Label>
-              <Input
-                id="base_salary"
-                type="number"
-                step="0.01"
-                min="0"
-                v-model="form.base_salary"
-                :class="{ 'border-destructive': form.errors.base_salary }"
-              />
-              <p v-if="form.errors.base_salary" class="text-sm text-destructive">{{ form.errors.base_salary }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="currency">Currency *</Label>
-              <Input
-                id="currency"
-                v-model="form.currency"
-                maxlength="3"
-                :class="{ 'border-destructive': form.errors.currency }"
-              />
-              <p v-if="form.errors.currency" class="text-sm text-destructive">{{ form.errors.currency }}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Notes -->
-      <Card>
-        <CardHeader>
-          <CardTitle>Additional Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            v-model="form.notes"
-            placeholder="Any additional notes..."
-            rows="3"
-          />
-        </CardContent>
-      </Card>
-
-      <!-- Actions -->
-      <div class="flex justify-end gap-4">
-        <Button variant="outline" type="button" @click="$inertia.get(`/${company.slug}/employees`)">
-          Cancel
-        </Button>
-        <Button type="button" :disabled="form.processing" @click="submit">
-          <Save class="mr-2 h-4 w-4" />
-          {{ form.processing ? 'Saving...' : 'Save Employee' }}
-        </Button>
-      </div>
-    </form>
-  </PageShell>
+        </form>
+    </PageShell>
 </template>

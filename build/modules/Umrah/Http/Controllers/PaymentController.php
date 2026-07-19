@@ -4,7 +4,6 @@ namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
-use App\Models\CompanyCurrency;
 use App\Modules\Umrah\Http\Requests\ReversePaymentRequest;
 use App\Modules\Umrah\Http\Requests\StoreGroupPaymentRequest;
 use App\Modules\Umrah\Http\Requests\StorePaymentAllocationRequest;
@@ -13,6 +12,7 @@ use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
+use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -101,7 +101,7 @@ class PaymentController extends Controller
             'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_active']),
             'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned', 'is_active']),
             'hotelVendors' => $isMember ? [] : HotelVendor::where('company_id', $company->id)->where(fn ($query) => $query->where('is_active', true)->orWhere('balance', '>', 0))->orderBy('name')->get(['id', 'name', 'is_active']),
-            'currencies' => CompanyCurrency::where('company_id', $company->id)->orderByDesc('is_base')->orderBy('currency_code')->get(['currency_code', 'is_base', 'exchange_rate']),
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
             'directions' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
             'allocationGroups' => $allocationGroups->values(),
         ]);

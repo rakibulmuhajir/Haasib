@@ -4,11 +4,20 @@ namespace App\Modules\Payroll\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Models\CompanyCurrency;
+use App\Modules\Payroll\Models\Employee;
 use App\Services\CurrentCompany;
+use Closure;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StorePayslipRequest extends BaseFormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['currency' => strtoupper((string) $this->input('currency'))]);
+    }
+
     public function authorize(): bool
     {
         return $this->hasCompanyPermission(Permissions::PAYSLIP_CREATE)
@@ -22,7 +31,27 @@ class StorePayslipRequest extends BaseFormRequest
         return [
             'payroll_period_id' => "required|uuid|exists:pay.payroll_periods,id,company_id,{$company->id}",
             'employee_id' => "required|uuid|exists:pay.employees,id,company_id,{$company->id}",
-            'currency' => 'required|string|size:3|uppercase',
+            'currency' => [
+                'required',
+                'string',
+                'size:3',
+                function (string $attribute, mixed $value, Closure $fail) use ($company): void {
+                    if ($value === $company->base_currency) {
+                        return;
+                    }
+                    if (! CompanyCurrency::query()->where('company_id', $company->id)->where('currency_code', $value)->exists()) {
+                        $fail('The selected currency is not enabled for this company.');
+                    }
+                },
+            ],
+            'exchange_rate' => [
+                'nullable',
+                'numeric',
+                'min:0.00000001',
+                'decimal:0,8',
+                Rule::requiredIf(fn () => $this->input('currency') && $this->input('currency') !== $company->base_currency),
+                Rule::prohibitedIf(fn () => $this->input('currency') === $company->base_currency && $this->filled('exchange_rate')),
+            ],
             'notes' => 'nullable|string',
             'lines' => 'array',
             'lines.*.line_type' => 'required|in:earning,deduction,employer',
@@ -39,5 +68,22 @@ class StorePayslipRequest extends BaseFormRequest
             'lines.*.amount' => 'required|numeric|min:0',
             'lines.*.sort_order' => 'integer|min:0',
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->hasAny(['employee_id', 'currency'])) {
+                return;
+            }
+            $company = app(CurrentCompany::class)->get();
+            $employeeCurrency = Employee::query()
+                ->where('company_id', $company->id)
+                ->whereKey($this->input('employee_id'))
+                ->value('currency');
+            if ($employeeCurrency !== $this->input('currency')) {
+                $validator->errors()->add('currency', 'Payslip currency must match the employee salary currency.');
+            }
+        }];
     }
 }

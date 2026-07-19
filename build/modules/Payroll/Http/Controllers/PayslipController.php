@@ -13,6 +13,7 @@ use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Services\PayrollPostingService;
+use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,6 +67,7 @@ class PayslipController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'payslips' => $payslips,
             'filters' => $request->only(['search', 'status', 'period_id', 'employee_id', 'start_date', 'end_date']),
@@ -113,6 +115,7 @@ class PayslipController extends Controller
             'employees' => $employees,
             'earningTypes' => $earningTypes,
             'deductionTypes' => $deductionTypes,
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
         ]);
     }
 
@@ -131,6 +134,8 @@ class PayslipController extends Controller
                     'employee_id' => $validated['employee_id'],
                     'payslip_number' => $payrollPostingService->nextPayslipNumber($company->id),
                     'currency' => $validated['currency'],
+                    'exchange_rate' => $validated['currency'] === $company->base_currency ? null : $validated['exchange_rate'],
+                    'base_currency' => $company->base_currency,
                     'notes' => $validated['notes'] ?? null,
                 ]);
 
@@ -179,6 +184,7 @@ class PayslipController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'payslip' => $payslip,
         ]);

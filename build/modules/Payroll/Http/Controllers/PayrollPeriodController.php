@@ -3,12 +3,12 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Payroll\Http\Requests\StorePayrollPeriodRequest;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Modules\Payroll\Http\Requests\StorePayrollPeriodRequest;
-use App\Modules\Payroll\Models\PayrollPeriod;
 
 class PayrollPeriodController extends Controller
 {
@@ -70,11 +70,16 @@ class PayrollPeriodController extends Controller
             }])
             ->findOrFail($periodId);
 
+        $period->setAttribute('total_gross', round((float) $period->payslips->sum('base_gross_pay'), 2));
+        $period->setAttribute('total_net', round((float) $period->payslips->sum('base_net_pay'), 2));
+        $period->setAttribute('currency', $company->base_currency);
+
         return Inertia::render('Payroll/Periods/Show', [
             'company' => [
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'period' => $period,
         ]);

@@ -4,6 +4,7 @@ namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
 class UpdateVisaVendorRequest extends UmrahFormRequest
@@ -15,6 +16,8 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
 
     public function rules(): array
     {
+        $companyId = app(CompanyContextService::class)->getCompanyId();
+
         return [
             'vendor_number' => [
                 'nullable',
@@ -25,6 +28,15 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             'name' => ['required', 'string', 'max:255'],
             'vendor_type' => ['required', Rule::in(array_keys(VisaVendor::TYPES))],
             'is_company_owned' => ['sometimes', 'boolean'],
+            'is_default' => ['sometimes', 'boolean'],
+            'provides_mandatory_transport' => ['sometimes', 'boolean'],
+            'mandatory_transport_vendor_id' => [
+                Rule::requiredIf($this->input('vendor_type') !== VisaVendor::TYPE_TRANSPORT_PROVIDER && ! $this->boolean('provides_mandatory_transport')),
+                'nullable',
+                'uuid',
+                Rule::notIn([(string) $this->route('vendor')]),
+                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at')),
+            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],

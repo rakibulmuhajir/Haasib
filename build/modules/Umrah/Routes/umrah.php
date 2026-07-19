@@ -4,12 +4,14 @@ use App\Modules\Umrah\Http\Controllers\AgentController;
 use App\Modules\Umrah\Http\Controllers\DashboardController;
 use App\Modules\Umrah\Http\Controllers\DriverController;
 use App\Modules\Umrah\Http\Controllers\ExpenseController;
+use App\Modules\Umrah\Http\Controllers\GroupAccountingController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
 use App\Modules\Umrah\Http\Controllers\VisaVendorController;
+use App\Modules\Umrah\Http\Controllers\VoucherAccountingController;
 use App\Modules\Umrah\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,9 +47,14 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('payments/{payment}/allocations', [PaymentController::class, 'allocate'])->whereUuid('payment')->name('umrah.payments.allocations.store');
         Route::get('payments/{payment}', [PaymentController::class, 'show'])->whereUuid('payment')->name('umrah.payments.show');
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
+        Route::get('expenses/create', [ExpenseController::class, 'create'])->name('umrah.expenses.create');
+        Route::post('expenses', [ExpenseController::class, 'store'])->name('umrah.expenses.store');
+        Route::post('expenses/{expense}/reverse', [ExpenseController::class, 'reverse'])->whereUuid('expense')->name('umrah.expenses.reverse');
         Route::get('groups/create', [VisaGroupController::class, 'create'])->name('umrah.groups.create');
         Route::post('groups/import-mutamers', [VisaGroupController::class, 'importMutamers'])->name('umrah.groups.import-mutamers');
         Route::post('groups', [VisaGroupController::class, 'store'])->name('umrah.groups.store');
+        Route::get('groups/{group}/accounting', [GroupAccountingController::class, 'show'])->whereUuid('group')->name('umrah.groups.accounting.show');
+        Route::put('groups/{group}/accounting', [GroupAccountingController::class, 'update'])->whereUuid('group')->name('umrah.groups.accounting.update');
         Route::get('groups/{group}/edit', [VisaGroupController::class, 'edit'])->whereUuid('group')->name('umrah.groups.edit');
         Route::put('groups/{group}', [VisaGroupController::class, 'update'])->whereUuid('group')->name('umrah.groups.update');
         Route::get('groups/{group}', [VisaGroupController::class, 'show'])->whereUuid('group')->name('umrah.groups.show');
@@ -68,6 +75,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('vouchers/{voucher}/cancel', [VoucherController::class, 'cancel'])->whereUuid('voucher')->name('umrah.vouchers.cancel');
         Route::post('vouchers/{voucher}/passengers/move', [VoucherController::class, 'movePassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.move');
         Route::post('vouchers/{voucher}/passengers/separate', [VoucherController::class, 'separatePassengers'])->whereUuid('voucher')->name('umrah.vouchers.passengers.separate');
+        Route::get('vouchers/{voucher}/accounting', [VoucherAccountingController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.accounting.show');
         Route::get('vouchers/{voucher}/pdf', [VoucherController::class, 'pdf'])->whereUuid('voucher')->name('umrah.vouchers.pdf');
         Route::get('vouchers/{voucher}', [VoucherController::class, 'show'])->whereUuid('voucher')->name('umrah.vouchers.show');
         Route::post('vouchers/{voucher}/approve', [VoucherController::class, 'approve'])->whereUuid('voucher')->name('umrah.vouchers.approve');

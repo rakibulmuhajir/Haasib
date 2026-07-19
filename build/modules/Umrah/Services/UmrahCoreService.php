@@ -61,6 +61,41 @@ class UmrahCoreService
         return $this->nextNumber($companyId, HotelVendor::query(), 'vendor_number', 'HVN');
     }
 
+    public function resolveGroupVendors(string $companyId, array $data, bool $forceDefaults): array
+    {
+        $vendorQuery = VisaVendor::where('company_id', $companyId)
+            ->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+            ->where('is_active', true);
+        $vendor = ! $forceDefaults && ! empty($data['vendor_id'])
+            ? (clone $vendorQuery)->find($data['vendor_id'])
+            : (clone $vendorQuery)->where('is_default', true)->first();
+
+        if (! $vendor) {
+            throw ValidationException::withMessages(['vendor_id' => 'Set an active default visa vendor before creating a group.']);
+        }
+
+        $data['vendor_id'] = $vendor->id;
+        if (($data['transport_mode'] ?? VisaGroup::TRANSPORT_STANDARD_BUS) !== VisaGroup::TRANSPORT_STANDARD_BUS) {
+            $data['mandatory_transport_vendor_id'] = null;
+
+            return $data;
+        }
+
+        $providerId = ! $forceDefaults && ! empty($data['mandatory_transport_vendor_id'])
+            ? $data['mandatory_transport_vendor_id']
+            : $vendor->resolvedMandatoryTransportVendorId();
+        $provider = VisaVendor::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))
+            ->find($providerId);
+        if (! $provider) {
+            throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Configure the mandatory transport provider for the selected visa vendor.']);
+        }
+        $data['mandatory_transport_vendor_id'] = $provider->id;
+
+        return $data;
+    }
+
     public function createGroup(string $companyId, array $data): VisaGroup
     {
         return DB::transaction(function () use ($companyId, $data) {
@@ -79,7 +114,7 @@ class UmrahCoreService
                 'driver_id' => $primaryTransport['driver_id'] ?? ($data['driver_id'] ?? null),
                 'group_number' => ($data['group_number'] ?? null) ?: $this->nextGroupNumber($companyId),
                 'name' => trim((string) ($data['name'] ?? '')) ?: $this->defaultGroupName($companyId, $data['agent_id'], $passengerCount),
-                'status' => $data['status'] ?? VisaGroup::STATUS_DRAFT,
+                'status' => VisaGroup::STATUS_VISA_APPROVED,
                 'travel_date' => $data['travel_date'] ?? null,
                 'flight_info' => [
                     'airline' => $data['flight_airline'] ?? null,
@@ -908,11 +943,11 @@ class UmrahCoreService
 
                 if ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
                     $transportVendor = VisaVendor::where('company_id', $companyId)
-                        ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
                         ->where('is_active', true)
+                        ->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))
                         ->find($data['mandatory_transport_vendor_id'] ?? null);
                     if (! $transportVendor) {
-                        throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select the provider responsible for mandatory bus transport.']);
+                        throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Configure the provider responsible for mandatory bus transport.']);
                     }
                     $data['mandatory_transport_cost_amount'] = $replacement['deduction'];
                     $data['transport_cost_amount'] = $replacement['deduction'];
@@ -1326,7 +1361,7 @@ class UmrahCoreService
         return [$netVisa, $netTransport];
     }
 
-    private function postGroupFinancialAdjustment(VisaGroup $group, array $before, string $reason): void
+    public function postGroupFinancialAdjustment(VisaGroup $group, array $before, string $reason): void
     {
         $company = $this->company($group->company_id);
         [$oldVisaRevenue, $oldTransportRevenue] = $this->netRevenueFromValues($before);

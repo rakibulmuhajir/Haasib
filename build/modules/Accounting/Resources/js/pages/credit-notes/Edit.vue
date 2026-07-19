@@ -52,7 +52,6 @@ interface CreditNote {
 
 interface CurrencyRef {
   currency_code: string
-  is_base: boolean
 }
 
 const props = defineProps<{
@@ -296,7 +295,7 @@ const isEditable = computed(() => {
                   :key="currency.currency_code"
                   :value="currency.currency_code"
                 >
-                  {{ currency.currency_code }}{{ currency.is_base ? ' (Base)' : '' }}
+                  {{ currency.currency_code }}{{ currency.currency_code === company.base_currency ? ' (Base)' : '' }}
                 </SelectItem>
               </SelectContent>
             </Select>

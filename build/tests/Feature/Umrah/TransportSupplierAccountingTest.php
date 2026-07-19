@@ -89,3 +89,54 @@ test('mandatory and specialized transport costs belong to their transport provid
         ->and($statement['payments'])->toBe(80.0)
         ->and($statement['closing_balance'])->toBe(520.0);
 });
+
+test('group vendors resolve from the company default and its transport mapping', function () {
+    $user = User::factory()->create();
+    $company = Company::create([
+        'name' => 'Vendor Defaults Test',
+        'slug' => 'vendor-defaults-test',
+        'owner_id' => $user->id,
+        'base_currency' => 'SAR',
+    ]);
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    $transportVendor = VisaVendor::create([
+        'company_id' => $company->id,
+        'vendor_number' => 'TRN-DEFAULT',
+        'name' => 'Default Transport',
+        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+    ]);
+    $visaVendor = VisaVendor::create([
+        'company_id' => $company->id,
+        'vendor_number' => 'VIS-DEFAULT',
+        'name' => 'Default Visa',
+        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'is_default' => true,
+        'mandatory_transport_vendor_id' => $transportVendor->id,
+    ]);
+
+    $resolved = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
+        'vendor_id' => '11111111-1111-1111-1111-111111111111',
+        'mandatory_transport_vendor_id' => '22222222-2222-2222-2222-222222222222',
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+    ], true);
+
+    expect($resolved['vendor_id'])->toBe($visaVendor->id)
+        ->and($resolved['mandatory_transport_vendor_id'])->toBe($transportVendor->id);
+
+    $visaVendor->update(['is_default' => false]);
+    $combinedVendor = VisaVendor::create([
+        'company_id' => $company->id,
+        'vendor_number' => 'VIS-COMBINED',
+        'name' => 'Visa and Transport',
+        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'is_default' => true,
+        'provides_mandatory_transport' => true,
+    ]);
+    $combined = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+    ], true);
+
+    expect($combined['vendor_id'])->toBe($combinedVendor->id)
+        ->and($combined['mandatory_transport_vendor_id'])->toBe($combinedVendor->id);
+});

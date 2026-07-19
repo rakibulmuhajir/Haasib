@@ -13,6 +13,7 @@ class UpdateModulesAction implements PaletteAction
     {
         return [
             'inventory' => ['required', 'boolean'],
+            'payroll' => ['required', 'boolean'],
         ];
     }
 
@@ -29,6 +30,7 @@ class UpdateModulesAction implements PaletteAction
         }
 
         $inventoryEnabled = (bool) $params['inventory'];
+        $payrollEnabled = (bool) $params['payroll'];
 
         if (! $inventoryEnabled && $company->isModuleEnabled('fuel_station')) {
             throw ValidationException::withMessages([
@@ -42,15 +44,21 @@ class UpdateModulesAction implements PaletteAction
             $company->disableModule('inventory');
         }
 
+        if ($payrollEnabled) {
+            $company->enableModule('payroll');
+        } else {
+            $company->disableModule('payroll');
+        }
+
         return [
-            'message' => $inventoryEnabled ? 'Inventory enabled.' : 'Inventory disabled.',
+            'message' => 'Module settings updated.',
             'data' => [
                 'modules' => [
                     'inventory' => $inventoryEnabled,
+                    'payroll' => $payrollEnabled,
                 ],
             ],
             'redirect' => "/{$company->slug}/settings",
         ];
     }
 }
-

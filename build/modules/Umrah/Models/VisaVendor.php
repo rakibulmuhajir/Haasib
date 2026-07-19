@@ -46,6 +46,9 @@ class VisaVendor extends Model
         'name',
         'vendor_type',
         'is_company_owned',
+        'is_default',
+        'provides_mandatory_transport',
+        'mandatory_transport_vendor_id',
         'phone',
         'email',
         'city',
@@ -64,6 +67,9 @@ class VisaVendor extends Model
     protected $casts = [
         'company_id' => 'string',
         'is_company_owned' => 'boolean',
+        'is_default' => 'boolean',
+        'provides_mandatory_transport' => 'boolean',
+        'mandatory_transport_vendor_id' => 'string',
         'adult_retail_amount' => 'decimal:2',
         'adult_cost_amount' => 'decimal:2',
         'child_retail_amount' => 'decimal:2',
@@ -86,5 +92,15 @@ class VisaVendor extends Model
     public function groups(): HasMany
     {
         return $this->hasMany(VisaGroup::class, 'vendor_id');
+    }
+
+    public function mandatoryTransportVendor(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'mandatory_transport_vendor_id');
+    }
+
+    public function resolvedMandatoryTransportVendorId(): ?string
+    {
+        return $this->provides_mandatory_transport ? $this->id : $this->mandatory_transport_vendor_id;
     }
 }

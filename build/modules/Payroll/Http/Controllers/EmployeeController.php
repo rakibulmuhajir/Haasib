@@ -3,17 +3,18 @@
 namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Services\CurrentCompany;
-use Illuminate\Http\RedirectResponse;
-use Inertia\Inertia;
-use Inertia\Response;
 use App\Modules\Payroll\Http\Requests\StoreEmployeeRequest;
 use App\Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
 use App\Modules\Payroll\Models\Employee;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Payroll\Models\SalaryAdvance;
 use App\Modules\Payroll\Models\SalaryAdvanceRecovery;
+use App\Services\CompanyCurrencyOptions;
+use App\Services\CurrentCompany;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class EmployeeController extends Controller
 {
@@ -27,7 +28,7 @@ class EmployeeController extends Controller
             ->selectRaw("MAX((substring(employee_number from '[0-9]+$'))::integer) as max_number")
             ->value('max_number');
 
-        return 'EMP-' . str_pad((string) (((int) $lastNumber) + 1), 5, '0', STR_PAD_LEFT);
+        return 'EMP-'.str_pad((string) (((int) $lastNumber) + 1), 5, '0', STR_PAD_LEFT);
     }
 
     private function setPayrollContext(string $companyId): void
@@ -84,6 +85,7 @@ class EmployeeController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'managers' => $managers,
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
         ]);
     }
 
@@ -175,12 +177,13 @@ class EmployeeController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'employee' => $employee,
             'statement' => [
                 'summary' => [
-                    'salary_due' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'approved')->sum('net_pay'),
-                    'salary_paid' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'paid')->sum('net_pay'),
+                    'salary_due' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'approved')->sum('base_net_pay'),
+                    'salary_paid' => (float) Payslip::where('company_id', $company->id)->where('employee_id', $employee->id)->where('status', 'paid')->sum('base_net_pay'),
                     'advance_given' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->sum('amount'),
                     'advance_recovered' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->sum('amount_recovered'),
                     'advance_outstanding' => (float) SalaryAdvance::where('company_id', $company->id)->where('employee_id', $employee->id)->whereIn('status', ['pending', 'partially_recovered'])->sum('amount_outstanding'),
@@ -215,6 +218,7 @@ class EmployeeController extends Controller
             ],
             'employee' => $employee,
             'managers' => $managers,
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
         ]);
     }
 

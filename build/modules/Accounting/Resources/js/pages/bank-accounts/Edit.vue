@@ -28,7 +28,6 @@ interface BankOption {
 
 interface CurrencyOption {
   currency_code: string
-  is_base: boolean
 }
 
 interface GlAccountOption {
@@ -196,7 +195,7 @@ const handleCancel = () => {
                     :value="curr.currency_code"
                   >
                     {{ curr.currency_code }}
-                    <span v-if="curr.is_base" class="text-muted-foreground"> (Base)</span>
+                    <span v-if="curr.currency_code === company.base_currency" class="text-muted-foreground"> (Base)</span>
                   </SelectItem>
                 </SelectContent>
               </Select>

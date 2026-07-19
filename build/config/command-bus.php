@@ -8,6 +8,9 @@ return [
     'company.delete' => \App\Modules\Accounting\Actions\Company\DeleteAction::class,
     'company.modules.update' => \App\Actions\Company\UpdateModulesAction::class,
 
+    // Payroll
+    'payroll.salary-advance.create' => \App\Modules\Payroll\Actions\CreateSalaryAdvanceAction::class,
+
     'user.invite' => \App\Modules\Accounting\Actions\User\InviteAction::class,
     'user.list' => \App\Modules\Accounting\Actions\User\IndexAction::class,
     'user.assign-role' => \App\Modules\Accounting\Actions\User\AssignRoleAction::class,

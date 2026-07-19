@@ -49,11 +49,7 @@ class CompanyController extends Controller
             ->orderBy('code')
             ->get(['code', 'name', 'symbol']);
 
-        $industries = DB::table('acct.industry_coa_packs')
-            ->where('is_active', true)
-            ->where('code', '!=', 'umrah')
-            ->orderBy('sort_order')
-            ->get(['code', 'name', 'description']);
+        $industries = config('company-industries', []);
 
         // Get countries with currency/timezone mappings
         $countries = collect(config('countries', []))
@@ -107,11 +103,6 @@ class CompanyController extends Controller
                 'created_by_user_id' => Auth::id(),
                 'is_active' => true,
             ]);
-
-            CompanyCurrency::updateOrCreate(
-                ['company_id' => $company->id, 'currency_code' => $data['base_currency']],
-                ['is_base' => true, 'exchange_rate' => 1, 'enabled_at' => now()]
-            );
 
             DB::table('auth.company_user')->updateOrInsert(
                 [
@@ -201,7 +192,7 @@ class CompanyController extends Controller
                 'can_manage_company' => $user?->hasCompanyPermission(Permissions::COMPANY_UPDATE) ?? false,
                 'can_manage_users' => $user?->hasCompanyPermission(Permissions::COMPANY_MANAGE_USERS) ?? false,
             ],
-            'companyCurrencies' => CompanyCurrency::where('company_id', $company->id)->orderByDesc('is_base')->orderBy('currency_code')->get(),
+            'companyCurrencies' => CompanyCurrency::where('company_id', $company->id)->orderBy('currency_code')->get(),
             'availableCurrencies' => DB::table('public.currencies')->where('is_active', true)->orderBy('code')->get(['code', 'name', 'symbol']),
             'currentUserRole' => $currentUserRole,
         ]);

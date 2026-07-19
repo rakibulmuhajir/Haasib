@@ -29,9 +29,10 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowRightLeft,
+    Calculator,
     Download,
     FilePenLine,
     Pencil,
@@ -76,6 +77,7 @@ const props = defineProps<{
         title: string;
         passengers_count: number;
     }>;
+    canViewAccounting: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -100,12 +102,7 @@ const separateForm = useForm({
     passenger_ids: [] as string[],
     override_reason: '',
 });
-const page = usePage();
-const canViewAccounting = computed(() =>
-    ['super_admin', 'owner', 'accountant'].includes(
-        String((page.props.auth as any)?.currentCompanyRole || ''),
-    ),
-);
+const canViewAccounting = computed(() => props.canViewAccounting);
 const canApprove = computed(() => props.agentCapabilities.can_approve);
 const canEdit = computed(() => props.agentCapabilities.can_edit);
 const canReassignPassengers = computed(
@@ -390,6 +387,13 @@ const exportVoucher = () => {
         :icon="ScrollText"
     >
         <template #actions>
+            <Button
+                v-if="canViewAccounting"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/vouchers/${voucher.id}/accounting`)"
+            >
+                <Calculator class="mr-2 h-4 w-4" />Accounting
+            </Button>
             <Button variant="outline" @click="printVoucher">
                 <Printer class="mr-2 h-4 w-4" />
                 Print

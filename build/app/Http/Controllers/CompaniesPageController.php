@@ -59,11 +59,7 @@ class CompaniesPageController extends Controller
                 ->orderBy('c.name')
                 ->get();
 
-        $industries = DB::table('acct.industry_coa_packs')
-            ->where('is_active', true)
-            ->where('code', '!=', 'umrah')
-            ->orderBy('sort_order')
-            ->get(['code', 'name', 'description']);
+        $industries = config('company-industries', []);
 
         $countries = collect(config('countries', []))
             ->map(fn ($country) => [

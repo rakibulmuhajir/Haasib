@@ -11,6 +11,7 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Row Level Security is enabled; APIs must set `app.current_user_id` and `app.is_super_admin` session settings where required.
 - Currency: `base_currency` is a `char(3)` code (ISO 4217). No FK; validate against `public.currencies` (see currencies contract). `base_currency` is immutable once transactions exist.
 - Reserved columns: `exchange_rate_id` was previously reserved—do not use. All currency work follows the multi-currency contracts (codes only, no FK IDs).
+- Company creation exposes only production-ready industries: `fuel_station` (Petrol Pump), `travel` (Travel), and `other` (Other). Other industry COA packs remain inactive legacy/reference data and cannot be selected for new companies or onboarding.
 
 ## Tables
 
@@ -59,6 +60,7 @@ Authentication does not require email verification. `email_verified_at` is retai
   - `id` uuid PK.  
   - `name` string(255) not null.  
   - `industry` string nullable.  
+  - `industry_code` string nullable. New values are restricted to `fuel_station`, `travel`, or `other`.
   - `slug` string unique not null (auto-generated).  
   - `country` string nullable; `country_id` uuid nullable.  
   - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
@@ -127,26 +129,26 @@ Authentication does not require email verification. `email_verified_at` is retai
   - `role` in enum above.  
   - `is_active` boolean; `joined_at` optional timestamp on join; set `left_at` when deactivating membership.
 
-### auth.company_currencies (company currency enablement)
+### auth.company_currencies (secondary currency enablement)
 - Columns:
   - `id` uuid PK.
   - `company_id` uuid FK → `auth.companies.id` (CASCADE).
   - `currency_code` char(3) not null (must exist and be active in `public.currencies`; no FK).
-  - `is_base` boolean not null default false (exactly one per company; matches `auth.companies.base_currency`).
-  - `exchange_rate` numeric(18,8) not null. Base currency is `1.00000000`; secondary currency convention is `1 secondary = X base`.
+  - `exchange_rate` numeric(18,8) not null. Convention: `1 secondary = X base`.
   - `enabled_at` timestamp not null default now().
   - `created_at`, `updated_at`.
 - Constraints/Indexes:
   - unique (`company_id`, `currency_code`).
-  - partial unique (`company_id`) where `is_base = true`.
   - check currency exists in `public.currencies` and `is_active = true`.
+  - check `exchange_rate > 0`.
 - RLS: company isolation policy (company_id match or super_admin).
 - Laravel model (canonical):
-  - `$connection = 'pgsql'; $table = 'auth.company_currencies'; $fillable = ['company_id','currency_code','is_base','exchange_rate','enabled_at']; $casts = ['is_base'=>'boolean','exchange_rate'=>'decimal:8','enabled_at'=>'datetime'];`
+  - `$connection = 'pgsql'; $table = 'auth.company_currencies'; $fillable = ['company_id','currency_code','exchange_rate','enabled_at']; $casts = ['exchange_rate'=>'decimal:8','enabled_at'=>'datetime'];`
 - Business rules:
-  - One base currency per company; base cannot be disabled.
+  - The base currency exists only in `auth.companies.base_currency`; this table stores secondary currencies only.
+  - A row cannot use the company's base currency code.
   - Cannot disable if accounts/transactions exist in that currency with balances open.
-  - On company create, insert base currency row with `is_base = true`.
+  - Company creation does not insert a row in this table.
   - Secondary rates are editable defaults only. Posted documents and journals retain immutable rate snapshots.
 
 ## Usage Patterns

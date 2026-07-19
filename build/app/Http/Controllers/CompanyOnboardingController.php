@@ -12,12 +12,10 @@ use App\Http\Requests\Onboarding\StorePaymentTermsRequest;
 use App\Http\Requests\Onboarding\StoreTaxSettingsRequest;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\IndustryCoaPack;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
 use App\Modules\Accounting\Services\DefaultAccountProvisioner;
 use App\Modules\FuelStation\Services\FuelStationModuleInstaller;
 use App\Modules\FuelStation\Services\FuelStationOnboardingService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,9 +29,7 @@ class CompanyOnboardingController extends Controller
         private CompanyOnboardingService $onboardingService,
         private FuelStationModuleInstaller $fuelStationInstaller,
         private FuelStationOnboardingService $fuelStationOnboarding,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Show onboarding wizard start page.
@@ -59,9 +55,7 @@ class CompanyOnboardingController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        $industries = IndustryCoaPack::active()
-            ->orderBy('sort_order')
-            ->get(['code', 'name', 'description']);
+        $industries = config('company-industries', []);
 
         $timezones = [
             'Asia/Karachi' => 'Pakistan Standard Time (PKT)',
@@ -419,7 +413,7 @@ class CompanyOnboardingController extends Controller
                 'accounts_created' => $accountsCreated,
                 'periods_created' => $periodsCreated,
                 'bank_accounts_created' => $bankAccountsCreated,
-                'defaults_configured' => !empty($company->ar_account_id),
+                'defaults_configured' => ! empty($company->ar_account_id),
                 'tax_configured' => $company->tax_registered ?? false,
             ],
         ]);

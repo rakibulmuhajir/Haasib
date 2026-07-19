@@ -27,9 +27,10 @@ Last Updated: 2024-01-28
 
 ## Currency Enablement
 - Base currency selected at company creation (must exist in `public.currencies`, active). Immutable after journal entries exist.
-- Enabling currencies: add to `auth.company_currencies` (must be active in `public.currencies`). No duplicates.
-- Each enabled secondary currency has a manual default rate using `1 secondary = X base`; base rate is always 1. These defaults do not modify posted transaction snapshots.
-- Disabling currency: blocked if base; blocked if accounts in that currency have non-zero balances or unpaid transactions.
+- The base currency is stored only on `auth.companies.base_currency`; it has an implicit rate of 1 and no `auth.company_currencies` row.
+- Enabling a secondary currency adds it to `auth.company_currencies` with a positive manual default rate using `1 secondary = X base`. The base currency cannot be added. No duplicates.
+- Secondary rate defaults do not modify posted transaction snapshots.
+- Disabling a secondary currency is blocked if accounts in that currency have non-zero balances or unpaid transactions.
 
 ## Account Currency Rules
 Foreign currency allowed: Bank, AR, AP, Credit Card, Other Current Asset, Other Asset, Other Current Liability, Other Liability.  
@@ -93,6 +94,5 @@ fx = payment_base - invoice_base
 - `INVALID_RATE`: must be >0, <=8 dp.  
 - `CURRENCY_MISMATCH`: payment currency must match invoice or base.  
 - `IMMUTABLE_CURRENCY`: entity has transactions.  
-- `CANNOT_DISABLE_BASE`: base currency cannot be disabled.  
 - `CURRENCY_IN_USE`: currency has balances/open transactions.  
 - `INVALID_ACCOUNT_TYPE`: this account type must use base currency.

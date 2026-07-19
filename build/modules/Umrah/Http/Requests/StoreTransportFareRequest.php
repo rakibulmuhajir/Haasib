@@ -24,7 +24,7 @@ class StoreTransportFareRequest extends UmrahFormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'transport_vendor_id' => ['required', 'uuid', Rule::exists('umrah.visa_vendors', 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'transport_vendor_id' => ['required', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
             'transport_service_id' => ['required', 'uuid', $this->activeForCompany(TransportService::class, 'Select an active vehicle.')],
             'transport_sector_id' => ['nullable', 'uuid', 'required_without:transport_package_id', 'prohibited_with:transport_package_id', $this->activeForCompany(TransportSector::class, 'Select an active sector.')],
             'transport_package_id' => ['nullable', 'uuid', 'required_without:transport_sector_id', 'prohibited_with:transport_sector_id', $this->activeForCompany(TransportPackage::class, 'Select an active journey package.')],

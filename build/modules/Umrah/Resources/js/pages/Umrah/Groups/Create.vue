@@ -2,6 +2,7 @@
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,8 +64,13 @@ const props = defineProps<{
     agents: any[];
     vendors: any[];
     transportVendors: any[];
+    defaultVendorId: string | null;
+    agentVisaPricing: {
+        adult_retail_amount: number;
+        child_retail_amount: number;
+    } | null;
+    isAgent: boolean;
     transportFares: any[];
-    statuses: Record<string, string>;
     passengerStatuses: Record<string, string>;
     passengerServiceTypes: Record<string, string>;
     countries: Record<string, string>;
@@ -77,7 +83,7 @@ const currentRole = computed(
 const canViewAccounting = computed(() =>
     ['super_admin', 'owner', 'accountant'].includes(String(currentRole.value)),
 );
-const canManageSetup = computed(() => String(currentRole.value) !== 'agent');
+const canManageSetup = computed(() => !props.isAgent && String(currentRole.value) !== 'agent');
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -89,9 +95,8 @@ const form = useForm({
     group_number: '',
     name: '',
     agent_id: props.agents.length === 1 ? props.agents[0].id : '',
-    vendor_id: 'none',
+    vendor_id: props.defaultVendorId || 'none',
     mandatory_transport_vendor_id: 'none',
-    status: 'passports_received',
     travel_date: '',
     transport_required: true,
     transport_mode: 'standard_bus',
@@ -131,6 +136,9 @@ const vendorForm = useForm({
     vendor_number: '',
     name: '',
     vendor_type: 'visa_provider',
+    is_default: false,
+    provides_mandatory_transport: false,
+    mandatory_transport_vendor_id: 'none',
     phone: '',
     email: '',
     city: '',
@@ -182,6 +190,17 @@ const selectedAgent = computed(() =>
 );
 const selectedVendor = computed(() =>
     props.vendors.find((item) => item.id === form.vendor_id),
+);
+const pricingVendor = computed(() => selectedVendor.value || props.agentVisaPricing);
+watch(
+    selectedVendor,
+    (vendor) => {
+        if (!vendor || props.isAgent) return;
+        form.mandatory_transport_vendor_id = vendor.provides_mandatory_transport
+            ? vendor.id
+            : vendor.mandatory_transport_vendor_id || 'none';
+    },
+    { immediate: true },
 );
 const defaultNationality = computed(
     () => selectedAgent.value?.country || 'Pakistan',
@@ -295,7 +314,7 @@ const ageBand = (passenger: {
 };
 
 const calculateVisaPricing = () => {
-    const vendor = selectedVendor.value;
+    const vendor = pricingVendor.value;
 
     if (!vendor) {
         return { sale: 0, cost: 0 };
@@ -496,12 +515,23 @@ const createAgent = () => {
 };
 
 const createVendor = () => {
-    vendorForm.post(`/${props.company.slug}/umrah/vendors/quick-store`, {
+    vendorForm
+        .transform((data) => ({
+            ...data,
+            mandatory_transport_vendor_id:
+                data.provides_mandatory_transport || data.mandatory_transport_vendor_id === 'none'
+                    ? null
+                    : data.mandatory_transport_vendor_id,
+        }))
+        .post(`/${props.company.slug}/umrah/vendors/quick-store`, {
         preserveScroll: true,
         onSuccess: () => {
             toast.success('Visa vendor created successfully');
             vendorForm.reset();
             vendorForm.vendor_type = 'visa_provider';
+            vendorForm.is_default = false;
+            vendorForm.provides_mandatory_transport = false;
+            vendorForm.mandatory_transport_vendor_id = 'none';
             vendorForm.adult_retail_amount = '0';
             vendorForm.adult_cost_amount = '0';
             vendorForm.child_retail_amount = '0';
@@ -511,7 +541,7 @@ const createVendor = () => {
             router.reload({ only: ['vendors'] });
         },
         onError: () => toast.error('Failed to create visa vendor'),
-    });
+        });
 };
 
 const submit = () => {
@@ -645,7 +675,12 @@ const submit = () => {
                                         New Agent
                                     </Button>
                                 </div>
-                                <Select v-model="form.agent_id">
+                                <Input
+                                    v-if="isAgent"
+                                    :model-value="selectedAgent ? `${selectedAgent.name} · ${selectedAgent.agent_number}` : 'Linked agent unavailable'"
+                                    readonly
+                                />
+                                <Select v-else v-model="form.agent_id">
                                     <SelectTrigger
                                         ><SelectValue
                                             placeholder="Select agent"
@@ -735,7 +770,7 @@ const submit = () => {
                                     >
                                 </div>
                             </div>
-                            <div class="space-y-2">
+                            <div v-if="canManageSetup" class="space-y-2">
                                 <div
                                     class="flex items-center justify-between gap-3"
                                 >
@@ -932,7 +967,7 @@ const submit = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="space-y-2">
+                                <div v-if="canManageSetup" class="space-y-2">
                                     <Label
                                         >Included Standard Bus Cost per
                                         Passenger</Label
@@ -945,6 +980,27 @@ const submit = () => {
                                         min="0"
                                         step="0.01"
                                     />
+                                </div>
+                                <div class="space-y-3 rounded-md border p-3">
+                                    <Label class="flex items-center gap-3">
+                                        <Checkbox v-model="vendorForm.is_default" />
+                                        <span>Default visa vendor</span>
+                                    </Label>
+                                    <Label class="flex items-center gap-3">
+                                        <Checkbox v-model="vendorForm.provides_mandatory_transport" />
+                                        <span>Also provides mandatory bus transport</span>
+                                    </Label>
+                                    <div v-if="!vendorForm.provides_mandatory_transport" class="space-y-2">
+                                        <Label>Mandatory transport provider</Label>
+                                        <Select v-model="vendorForm.mandatory_transport_vendor_id">
+                                            <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Select provider</SelectItem>
+                                                <SelectItem v-for="vendor in transportVendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p v-if="vendorForm.errors.mandatory_transport_vendor_id" class="text-xs text-destructive">{{ vendorForm.errors.mandatory_transport_vendor_id }}</p>
+                                    </div>
                                 </div>
                                 <div class="flex justify-end gap-2">
                                     <Button
@@ -964,28 +1020,6 @@ const submit = () => {
                                         >Save Vendor</Button
                                     >
                                 </div>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Status</Label>
-                                <Select v-model="form.status">
-                                    <SelectTrigger
-                                        ><SelectValue
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="(label, value) in statuses"
-                                            :key="value"
-                                            :value="value"
-                                            >{{ label }}</SelectItem
-                                        >
-                                    </SelectContent>
-                                </Select>
-                                <p
-                                    v-if="form.errors.status"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ form.errors.status }}
-                                </p>
                             </div>
                             <div class="space-y-2">
                                 <Label>Travel Date</Label>
@@ -1052,17 +1086,14 @@ const submit = () => {
                             </RadioGroup>
 
                             <div
-                                v-if="form.transport_mode === 'standard_bus'"
+                                v-if="form.transport_mode === 'standard_bus' && canManageSetup"
                                 class="space-y-3 rounded-md border p-3 text-sm"
                             >
                                 <div class="font-medium">
                                     Mandatory bus transport included
                                 </div>
                                 <div class="mt-1 text-muted-foreground">
-                                    The included amount is removed from the visa
-                                    vendor payable and assigned to the provider
-                                    below. Company-owned providers remain
-                                    payable.
+                                    The included amount is removed from the visa vendor payable and assigned to the provider below. Company-owned providers remain payable.
                                 </div>
                                 <div class="space-y-2">
                                     <Label>Mandatory transport provider</Label>
@@ -1081,6 +1112,13 @@ const submit = () => {
                                             >
                                                 {{ vendor.name }}<span v-if="vendor.is_company_owned"> · Company-owned</span>
                                             </SelectItem>
+                                            <SelectItem
+                                                v-for="vendor in vendors.filter((item) => item.provides_mandatory_transport)"
+                                                :key="vendor.id"
+                                                :value="vendor.id"
+                                            >
+                                                {{ vendor.name }} · Provides transport
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p
@@ -1090,7 +1128,7 @@ const submit = () => {
                                         {{ form.errors.mandatory_transport_vendor_id }}
                                     </p>
                                 </div>
-                                <div class="flex justify-between border-t pt-3">
+                                <div v-if="canViewAccounting" class="flex justify-between border-t pt-3">
                                     <span>Provider payable</span>
                                     <MoneyText
                                         :amount="includedBusDeduction"
@@ -1134,8 +1172,12 @@ const submit = () => {
                                                     :value="fare.id"
                                                 >
                                                     {{ fare.name }} ·
-                                                    {{ fare.service?.name }} ·
-                                                    {{ fare.transport_vendor?.name }}
+                                                    {{ fare.service?.name }}
+                                                    <template v-if="!isAgent && fare.transport_vendor?.name">
+                                                        · {{ fare.transport_vendor.name }}
+                                                    </template>
+                                                    · {{ company.base_currency }}
+                                                    {{ Number(fare.sale_amount || 0).toLocaleString() }}
                                                 </SelectItem>
                                             </SelectContent>
                                         </Select>
@@ -1578,6 +1620,16 @@ const submit = () => {
                     <Card>
                         <CardHeader><CardTitle>Amounts</CardTitle></CardHeader>
                         <CardContent class="space-y-4">
+                            <div v-if="isAgent && agentVisaPricing" class="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">
+                                <div>
+                                    <div class="text-muted-foreground">Adult visa rate</div>
+                                    <MoneyText :amount="agentVisaPricing.adult_retail_amount" :currency="company.base_currency" />
+                                </div>
+                                <div>
+                                    <div class="text-muted-foreground">Child visa rate</div>
+                                    <MoneyText :amount="agentVisaPricing.child_retail_amount" :currency="company.base_currency" />
+                                </div>
+                            </div>
                             <div class="space-y-2">
                                 <Label>Visa Sale</Label
                                 ><Input
@@ -1594,7 +1646,7 @@ const submit = () => {
                                     disabled
                                 />
                             </div>
-                            <div class="space-y-2">
+                            <div v-if="!isAgent" class="space-y-2">
                                 <Label>Discount</Label
                                 ><Input
                                     v-model="form.discount_amount"

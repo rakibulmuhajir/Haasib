@@ -4,6 +4,7 @@ namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Modules\Umrah\Models\VisaGroup;
+use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
@@ -43,8 +44,9 @@ class UpdateVisaGroupRequest extends UmrahFormRequest
             && $access->groupHasStarted($group);
 
         return [
+            'vendor_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'mandatory_transport_vendor_id' => ['sometimes', 'nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true)))],
             'name' => ['required', 'string', 'max:255'],
-            'status' => ['required', Rule::in(array_keys(VisaGroup::STATUSES))],
             'travel_date' => ['nullable', 'date'],
             'flight_airline' => ['nullable', 'string', 'max:255'],
             'flight_number' => ['nullable', 'string', 'max:100'],

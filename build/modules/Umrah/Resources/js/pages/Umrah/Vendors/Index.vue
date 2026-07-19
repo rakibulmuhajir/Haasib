@@ -44,6 +44,7 @@ const props = defineProps<{
         next_page_url: string | null;
     };
     vendorTypes: Record<string, string>;
+    transportVendors: Array<{ id: string; name: string }>;
     nextVendorNumber: string;
     canManageVendors: boolean;
 }>();
@@ -58,6 +59,9 @@ const form = useForm({
     name: '',
     vendor_type: 'government',
     is_company_owned: false,
+    is_default: false,
+    provides_mandatory_transport: false,
+    mandatory_transport_vendor_id: 'none',
     phone: '',
     email: '',
     city: '',
@@ -108,6 +112,9 @@ const resetForm = () => {
     form.name = '';
     form.vendor_type = 'government';
     form.is_company_owned = false;
+    form.is_default = false;
+    form.provides_mandatory_transport = false;
+    form.mandatory_transport_vendor_id = 'none';
     form.phone = '';
     form.email = '';
     form.city = '';
@@ -126,6 +133,9 @@ const startEdit = (vendor: any) => {
     form.name = vendor.name || '';
     form.vendor_type = vendor.vendor_type || 'government';
     form.is_company_owned = Boolean(vendor.is_company_owned);
+    form.is_default = Boolean(vendor.is_default);
+    form.provides_mandatory_transport = Boolean(vendor.provides_mandatory_transport);
+    form.mandatory_transport_vendor_id = vendor.mandatory_transport_vendor_id || 'none';
     form.phone = vendor.phone || '';
     form.email = vendor.email || '';
     form.city = vendor.city || '';
@@ -147,6 +157,15 @@ const payload = (data: any) => ({
     ...data,
     is_company_owned:
         data.vendor_type === 'transport_provider' && data.is_company_owned,
+    is_default: data.vendor_type !== 'transport_provider' && data.is_default,
+    provides_mandatory_transport:
+        data.vendor_type !== 'transport_provider' && data.provides_mandatory_transport,
+    mandatory_transport_vendor_id:
+        data.vendor_type !== 'transport_provider' &&
+        !data.provides_mandatory_transport &&
+        data.mandatory_transport_vendor_id !== 'none'
+            ? data.mandatory_transport_vendor_id
+            : null,
     adult_retail_amount: Number(data.adult_retail_amount || 0),
     adult_cost_amount: Number(data.adult_cost_amount || 0),
     child_retail_amount: Number(
@@ -248,6 +267,30 @@ const submit = () => {
                             <Checkbox v-model="form.is_company_owned" />
                             <span>Company-owned transport provider</span>
                         </Label>
+                        <div
+                            v-if="form.vendor_type !== 'transport_provider'"
+                            class="space-y-3 rounded-md border p-3"
+                        >
+                            <Label class="flex items-center gap-3">
+                                <Checkbox v-model="form.is_default" />
+                                <span>Default visa vendor for new groups</span>
+                            </Label>
+                            <Label class="flex items-center gap-3">
+                                <Checkbox v-model="form.provides_mandatory_transport" />
+                                <span>Also provides mandatory bus transport</span>
+                            </Label>
+                            <div v-if="!form.provides_mandatory_transport" class="space-y-2">
+                                <Label>Mandatory transport provider</Label>
+                                <Select v-model="form.mandatory_transport_vendor_id">
+                                    <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Select provider</SelectItem>
+                                        <SelectItem v-for="vendor in transportVendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="form.errors.mandatory_transport_vendor_id" class="text-xs text-destructive">{{ form.errors.mandatory_transport_vendor_id }}</p>
+                            </div>
+                        </div>
                         <div class="grid gap-3 md:grid-cols-2">
                             <div class="space-y-2">
                                 <Label>Phone</Label
@@ -404,7 +447,13 @@ const submit = () => {
                                 <TableCell class="font-medium">{{
                                     vendor.vendor_number
                                 }}</TableCell>
-                                <TableCell>{{ vendor.name }}</TableCell>
+                                <TableCell>
+                                    <div>{{ vendor.name }}</div>
+                                    <div class="mt-1 flex gap-1">
+                                        <Badge v-if="vendor.is_default" variant="secondary">Default</Badge>
+                                        <Badge v-if="vendor.provides_mandatory_transport" variant="outline">Visa + transport</Badge>
+                                    </div>
+                                </TableCell>
                                 <TableCell
                                     ><Badge variant="outline">{{
                                         vendorTypes[vendor.vendor_type] ||

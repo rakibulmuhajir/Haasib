@@ -4,10 +4,17 @@ namespace App\Modules\Payroll\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Http\Requests\BaseFormRequest;
+use App\Models\CompanyCurrency;
 use App\Services\CurrentCompany;
+use Closure;
 
 class StoreEmployeeRequest extends BaseFormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['currency' => strtoupper((string) $this->input('currency'))]);
+    }
+
     public function authorize(): bool
     {
         return $this->hasCompanyPermission(Permissions::EMPLOYEE_CREATE)
@@ -48,7 +55,17 @@ class StoreEmployeeRequest extends BaseFormRequest
             'pay_frequency' => 'required|in:weekly,biweekly,semimonthly,monthly',
             'base_salary' => 'required|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',
-            'currency' => 'required|string|size:3|uppercase',
+            'currency' => [
+                'required',
+                'string',
+                'size:3',
+                'uppercase',
+                function (string $attribute, mixed $value, Closure $fail) use ($company): void {
+                    if ($value !== $company->base_currency && ! CompanyCurrency::query()->where('company_id', $company->id)->where('currency_code', $value)->exists()) {
+                        $fail('The selected currency is not enabled for this company.');
+                    }
+                },
+            ],
             'bank_account_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:100',
             'bank_name' => 'nullable|string|max:255',

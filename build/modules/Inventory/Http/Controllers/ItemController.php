@@ -4,7 +4,6 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
-use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Inventory\Http\Requests\StoreItemRequest;
@@ -14,6 +13,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Services\ProductCatalogService;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,6 +67,7 @@ class ItemController extends Controller
 
         $items->through(function (Item $item) use ($stockTotals) {
             $stock = $stockTotals->get($item->id);
+
             return array_merge($item->toArray(), [
                 'total_quantity' => (float) ($stock->total_quantity ?? 0),
                 'total_available' => (float) ($stock->total_available ?? 0),
@@ -107,10 +108,7 @@ class ItemController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $taxRates = TaxRate::where('company_id', $company->id)
             ->where('is_active', true)
@@ -234,10 +232,7 @@ class ItemController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $taxRates = TaxRate::where('company_id', $company->id)
             ->where('is_active', true)

@@ -6,13 +6,13 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreCustomerRequest;
 use App\Modules\Accounting\Http\Requests\UpdateCustomerRequest;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Payment;
-use App\Modules\Accounting\Models\Account;
-use App\Models\CompanyCurrency;
 use App\Services\CommandBus;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -259,7 +259,7 @@ class CustomerController extends Controller
             ->where('customer_id', $customer->id)
             ->whereNotNull('paid_at')
             ->where('status', 'paid')
-            ->selectRaw("AVG(EXTRACT(EPOCH FROM (paid_at - invoice_date)) / 86400) as avg_days")
+            ->selectRaw('AVG(EXTRACT(EPOCH FROM (paid_at - invoice_date)) / 86400) as avg_days')
             ->value('avg_days');
 
         // AR Aging for this specific customer
@@ -268,11 +268,11 @@ class CustomerController extends Controller
             ->where('customer_id', $customer->id)
             ->where('balance', '>', 0)
             ->whereNotIn('status', ['paid', 'void', 'cancelled'])
-            ->selectRaw("COALESCE(SUM(CASE WHEN due_date >= ? THEN balance ELSE 0 END), 0) AS current", [$now])
-            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30", [$now, now()->subDays(30)->toDateString()])
-            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60", [now()->subDays(30)->toDateString(), now()->subDays(60)->toDateString()])
-            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90", [now()->subDays(60)->toDateString(), now()->subDays(90)->toDateString()])
-            ->selectRaw("COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus", [now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date >= ? THEN balance ELSE 0 END), 0) AS current', [$now])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_1_30', [$now, now()->subDays(30)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_31_60', [now()->subDays(30)->toDateString(), now()->subDays(60)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? AND due_date >= ? THEN balance ELSE 0 END), 0) AS bucket_61_90', [now()->subDays(60)->toDateString(), now()->subDays(90)->toDateString()])
+            ->selectRaw('COALESCE(SUM(CASE WHEN due_date < ? THEN balance ELSE 0 END), 0) AS bucket_90_plus', [now()->subDays(90)->toDateString()])
             ->first();
 
         $invoices = Invoice::where('company_id', $company->id)
@@ -307,10 +307,7 @@ class CustomerController extends Controller
             ]);
 
         // Currencies for editing
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/customers/Show', [
             'company' => [
@@ -355,10 +352,7 @@ class CustomerController extends Controller
         $customer = Customer::where('company_id', $company->id)
             ->findOrFail($customerId);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $arAccounts = Account::where('company_id', $company->id)
             ->where('subtype', 'accounts_receivable')
@@ -464,7 +458,7 @@ class CustomerController extends Controller
             ->get(['id', 'name', 'email', 'phone', 'customer_number']);
 
         // Sort by the order they appear in recent invoices
-        $sorted = $recentCustomerIds->map(fn($id) => $customers->firstWhere('id', $id))
+        $sorted = $recentCustomerIds->map(fn ($id) => $customers->firstWhere('id', $id))
             ->filter()
             ->values();
 

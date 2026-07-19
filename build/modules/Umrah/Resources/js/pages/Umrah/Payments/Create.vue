@@ -31,7 +31,6 @@ const props = defineProps<{
     hotelVendors: Array<{ id: string; name: string; is_active: boolean }>;
     currencies: Array<{
         currency_code: string;
-        is_base: boolean;
         exchange_rate: string | number;
     }>;
     directions: Record<string, string>;

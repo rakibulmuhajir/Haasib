@@ -7,7 +7,6 @@ use App\Constants\Tables;
 use App\Contracts\PaletteAction;
 use App\Facades\CompanyContext;
 use App\Models\Company;
-use App\Models\CompanyCurrency;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -48,13 +47,6 @@ class CreateAction implements PaletteAction
                 'locale' => $params['locale'] ?? 'en_US',
                 'created_by_user_id' => Auth::id(),
                 'is_active' => true,
-            ]);
-
-            CompanyCurrency::create([
-                'company_id' => $company->id,
-                'currency_code' => $params['currency'],
-                'is_base' => true,
-                'enabled_at' => now(),
             ]);
 
             DB::table(Tables::COMPANY_USER)->insert([

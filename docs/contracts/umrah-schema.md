@@ -10,6 +10,11 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Umrah is a separate module from Fuel Station.
 - Companies with industry `umrah` or `travel` should see Umrah-specific features, not petrol pump workflows.
 - `Visa Group` is the operational single source of truth.
+- Group accounting is posted as soon as the approved visa group is recorded. Visa revenue/cost, mandatory or specialized transport revenue/cost, supplier assignments, and the group discount belong to the group and must not wait for voucher creation.
+- Group status is internal only and is not selectable, filterable, or displayed in the user interface. New groups are stored as `visa_approved`; `cancelled` remains an internal exclusion state for financial integrity.
+- When a linked agent login creates a group, `agent_id` is fixed from that login on the server and rendered as read-only context. Client-supplied attempts to select another agent are ignored.
+- Agent group creation receives only the active default visa vendor's adult/child retail rates. Supplier identity, supplier costs, mandatory transport provider, and provider payable are not included in the agent payload. The server resolves suppliers and recalculates all charges; agent-created groups cannot submit a group discount.
+- Voucher accounting is the later travel-stage source for Company-booked hotel revenue/cost. A voucher may display its parent group's posted visa and transport amounts, but it must never repost or duplicate them.
 - Flight and hotel are informational in phase 1.
 - Transport is mandatory for visa groups. The standard bus amount included in a visa rate is always deducted from the visa vendor payable. Standard-bus groups assign that amount to the selected mandatory transport provider; specialized transport replaces it with the selected fare suppliers' snapshotted costs.
 - Transport service is the vehicle source of truth. Do not maintain a separate vehicle type setup screen.
@@ -71,6 +76,9 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `name` varchar(255).
   - `vendor_type` varchar(30) default `government`.
   - `is_company_owned` boolean default false. Transport providers owned by the company remain payable parties and follow the same allocation rules as external providers.
+  - `is_default` boolean default false. Exactly one active non-transport vendor may be the company default for new visa groups.
+  - `provides_mandatory_transport` boolean default false. For a visa vendor, the vendor itself receives the mandatory transport payable.
+  - `mandatory_transport_vendor_id` uuid nullable self FK -> `umrah.visa_vendors.id`. Required for a visa vendor when `provides_mandatory_transport` is false and must reference an active transport provider.
   - `phone`, `email`, `city` nullable.
   - `logo_url` varchar(500) nullable.
   - `notes` text nullable.
@@ -87,7 +95,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Check:
   - `vendor_type` in `government`, `visa_provider`, `transport_provider`, `hotel`, `other`.
 - Model fillable:
-  - `company_id`, `vendor_number`, `name`, `vendor_type`, `is_company_owned`, `phone`, `email`, `city`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `included_bus_cost_amount`, `total_cost`, `total_paid`, `balance`, `is_active`.
+  - `company_id`, `vendor_number`, `name`, `vendor_type`, `is_company_owned`, `is_default`, `provides_mandatory_transport`, `mandatory_transport_vendor_id`, `phone`, `email`, `city`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `included_bus_cost_amount`, `total_cost`, `total_paid`, `balance`, `is_active`.
 
 ### umrah.visa_services (legacy)
 - Purpose: Historical visa service templates retained only for existing group references.
@@ -337,6 +345,11 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `status` in `draft`, `passports_received`, `submitted`, `visa_approved`, `delivered`, `closed`, `cancelled`.
 - Model fillable:
   - all business columns above.
+- Accounting interface:
+  - Company owners, admins, and accountants use a separate group accounting screen; agent users have no access.
+  - Passenger data is aggregate-only: total pax, adults (12+), children (2-11), infants (under 2), visa passengers, and transport-only passengers. Names and passport numbers are never included in the page payload.
+  - Visa and mandatory transport vendors may be reassigned, and visa/transport sale totals and discount may be adjusted with a required reason and balanced ledger adjustment.
+  - Hotel sale/cost, mandatory transport deduction, paid amount, balance, and derived costs are visible but remain controlled by their source workflows.
 
 ### umrah.passengers
 - Purpose: Passports/passengers inside a visa group.
@@ -401,6 +414,10 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `status` in `draft`, `approved`, `cancelled`.
   - `service_bundle` in `visa_transport`, `visa_transport_hotel`, `transport`, `transport_hotel`, `hotel`.
 - Business rules:
+  - Accounting follows two stages. Group-owned visa and transport amounts are posted when the group is recorded; voucher-owned Company hotel amounts remain pending while the voucher is draft and post only on voucher approval.
+  - The voucher accounting view separates `Inherited from group` from `Added by voucher`. Inherited values are read-only context and do not create voucher journals.
+  - Cancelled or superseded vouchers retain their accounting history. Cancellation reverses only accounting owned by that voucher; it never reverses parent group visa or transport entries.
+  - Group accounting consolidates its own posted visa/transport amounts with hotel amounts from current approved billing-owner vouchers. Voucher rollups contain counts and totals only and do not expose passenger names or passport numbers.
   - Hotel Only vouchers do not require or display flight or transport information. Their scheduling deadline is measured from the first hotel check-in.
   - For non-hotel-only vouchers, each selected passenger defaults to `visa_transport`; selecting Transport only updates the passenger service and group financials.
   - Passengers may be moved between two draft vouchers only when both vouchers belong to the same company, visa group, and agent. At least one passenger must remain on the source voucher.
@@ -492,6 +509,43 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Business rules: allocation totals cannot exceed the payment `base_amount`; every allocation must belong to the payment's selected agent or vendor and cannot exceed that party's outstanding amount for the group.
 - RLS: company isolation plus super-admin override.
 - Model fillable: `company_id`, `group_payment_id`, `visa_group_id`, `base_amount`, `transaction_id`.
+
+### umrah.expenses
+- Purpose: Travel-owned operating expenses that were paid immediately. Unpaid supplier obligations continue to use Accounting Bills.
+- Columns:
+  - `id` uuid PK.
+  - `company_id` uuid FK -> `auth.companies.id`.
+  - `expense_number` varchar(50), unique per company.
+  - `expense_date` date.
+  - `expense_account_id` uuid FK -> `acct.accounts.id`; must be an active expense, other-expense, or cost-of-goods-sold account for the company.
+  - `payment_account_id` uuid FK -> `acct.accounts.id`; must be an active cash, bank, or credit-card account for the company.
+  - `payee` varchar(255) nullable.
+  - `description` text.
+  - `reference` varchar(255) nullable.
+  - `amount` numeric(18,6), the amount in `currency`.
+  - `currency` char(3) FK -> `public.currencies.code`.
+  - `exchange_rate` numeric(18,8) nullable. Convention: 1 transaction currency = X base currency; null for base-currency records.
+  - `base_currency` char(3) FK -> `public.currencies.code`.
+  - `base_amount` numeric(15,2), immutable conversion snapshot.
+  - `transaction_id` uuid nullable FK -> `acct.transactions.id`.
+  - `status` varchar(20) default `posted`. Values: `posted`, `reversed`.
+  - `reversed_at` timestamp nullable.
+  - `reversed_by_user_id` uuid nullable FK -> `auth.users.id`.
+  - `reversal_reason` text nullable.
+  - `reversal_transaction_id` uuid nullable FK -> `acct.transactions.id`.
+  - `created_by_user_id` uuid nullable FK -> `auth.users.id`.
+  - timestamps, soft deletes.
+- Constraints:
+  - `amount > 0` and `base_amount > 0`.
+  - Base-currency records prohibit an exchange rate and use `base_amount = round(amount, 2)`.
+  - Foreign-currency records require a positive exchange rate and use `base_amount = round(amount * exchange_rate, 2)`.
+- Business rules:
+  - Posting creates one balanced journal: Dr selected expense account, Cr selected payment account.
+  - Currency, rate, converted amount, accounts, date, payee, description, and reference are immutable after posting. Corrections require a reasoned reversal.
+  - The selected currency must be the company base currency or an enabled secondary currency. The payment account currency must be the transaction currency or the company base currency.
+  - Agent logins cannot view, create, or reverse company expenses.
+- RLS: company isolation plus super-admin override.
+- Model fillable: `company_id`, `expense_number`, `expense_date`, `expense_account_id`, `payment_account_id`, `payee`, `description`, `reference`, `amount`, `currency`, `exchange_rate`, `base_currency`, `base_amount`, `transaction_id`, `status`, `reversed_at`, `reversed_by_user_id`, `reversal_reason`, `reversal_transaction_id`, `created_by_user_id`.
 
 ### umrah.change_logs
 - Purpose: Immutable audit history for Travel changes, including company overrides after service has started.

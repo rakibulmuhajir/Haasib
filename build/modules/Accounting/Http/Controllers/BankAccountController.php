@@ -5,13 +5,13 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Constants\Permissions;
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
-use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Http\Requests\StoreBankAccountRequest;
 use App\Modules\Accounting\Http\Requests\UpdateBankAccountRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bank;
 use App\Modules\Accounting\Models\BankAccount;
 use App\Modules\Accounting\Services\CompanyBankAccountSyncService;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -75,10 +75,7 @@ class BankAccountController extends Controller
 
         $banks = Bank::active()->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $glAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash'])
@@ -170,10 +167,7 @@ class BankAccountController extends Controller
 
         $banks = Bank::active()->orderBy('name')->get(['id', 'name', 'swift_code', 'country_code']);
 
-        $currencies = CompanyCurrency::where('company_id', $companyModel->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($companyModel);
 
         $glAccounts = Account::where('company_id', $companyModel->id)
             ->whereIn('subtype', ['bank', 'cash'])

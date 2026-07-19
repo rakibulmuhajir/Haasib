@@ -351,15 +351,27 @@ class Permissions
 
     public const UMRAH_GROUP_UPDATE = 'umrah.group.update';
 
+    public const UMRAH_GROUP_ACCOUNTING_VIEW = 'umrah.group-accounting.view';
+
+    public const UMRAH_GROUP_ACCOUNTING_UPDATE = 'umrah.group-accounting.update';
+
     public const UMRAH_PAYMENT_VIEW = 'umrah.payment.view';
 
     public const UMRAH_PAYMENT_CREATE = 'umrah.payment.create';
 
     public const UMRAH_PAYMENT_REVERSE = 'umrah.payment.reverse';
 
+    public const UMRAH_EXPENSE_VIEW = 'umrah.expense.view';
+
+    public const UMRAH_EXPENSE_CREATE = 'umrah.expense.create';
+
+    public const UMRAH_EXPENSE_REVERSE = 'umrah.expense.reverse';
+
     public const UMRAH_VOUCHER_CREATE = 'umrah.voucher.create';
 
     public const UMRAH_VOUCHER_VIEW = 'umrah.voucher.view';
+
+    public const UMRAH_VOUCHER_ACCOUNTING_VIEW = 'umrah.voucher-accounting.view';
 
     public const UMRAH_VOUCHER_APPROVE = 'umrah.voucher.approve';
 

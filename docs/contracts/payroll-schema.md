@@ -288,11 +288,18 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - `employee_id` uuid not null FK → `pay.employees.id` (RESTRICT/CASCADE).
   - `payslip_number` varchar(50) not null.
   - `currency` char(3) not null FK → `public.currencies.code`.
-  - `gross_pay` numeric(15,2) not null default 0.
-  - `total_earnings` numeric(15,2) not null default 0.
-  - `total_deductions` numeric(15,2) not null default 0.
-  - `employer_costs` numeric(15,2) not null default 0.
-  - `net_pay` numeric(15,2) not null default 0.
+  - `exchange_rate` numeric(18,8) nullable. Convention: 1 payslip currency = X company base currency; null when the payslip uses base currency.
+  - `base_currency` char(3) not null FK → `public.currencies.code`, copied from the company.
+  - `gross_pay` numeric(18,6) not null default 0.
+  - `total_earnings` numeric(18,6) not null default 0.
+  - `total_deductions` numeric(18,6) not null default 0.
+  - `employer_costs` numeric(18,6) not null default 0.
+  - `net_pay` numeric(18,6) not null default 0.
+  - `base_gross_pay` numeric(15,2) not null default 0.
+  - `base_total_earnings` numeric(15,2) not null default 0.
+  - `base_total_deductions` numeric(15,2) not null default 0.
+  - `base_employer_costs` numeric(15,2) not null default 0.
+  - `base_net_pay` numeric(15,2) not null default 0.
   - `status` varchar(20) not null default 'draft'. Enum: draft, approved, paid, cancelled.
   - `approved_at` timestamp nullable.
   - `approved_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
@@ -311,12 +318,17 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'pay.payslips'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','payment_gl_transaction_id','notes'];`
-  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','gross_pay'=>'decimal:2','total_earnings'=>'decimal:2','total_deductions'=>'decimal:2','employer_costs'=>'decimal:2','net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','payment_gl_transaction_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','exchange_rate','base_currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','base_gross_pay','base_total_earnings','base_total_deductions','base_employer_costs','base_net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','payment_gl_transaction_id','notes'];`
+  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','exchange_rate'=>'decimal:8','gross_pay'=>'decimal:6','total_earnings'=>'decimal:6','total_deductions'=>'decimal:6','employer_costs'=>'decimal:6','net_pay'=>'decimal:6','base_gross_pay'=>'decimal:2','base_total_earnings'=>'decimal:2','base_total_deductions'=>'decimal:2','base_employer_costs'=>'decimal:2','base_net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','payment_gl_transaction_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo PayrollPeriod; belongsTo Employee; hasMany PayslipLine; belongsTo GlTransaction; belongsTo PaymentGlTransaction.
 - Business rules:
   - net_pay = total_earnings - total_deductions.
-  - Totals updated by trigger on payslip_lines.
+  - Currency must equal the employee currency and must be the company base currency or an enabled secondary currency.
+  - Foreign-currency drafts require a positive exchange rate. Base-currency drafts prohibit an exchange rate.
+  - The configured company rate is copied as a convenience default; changing that configured rate never changes an existing payslip.
+  - Base totals equal each transaction total multiplied by the payslip exchange-rate snapshot and rounded to 2 decimals.
+  - Totals and base totals are updated by the trigger on `payslip_lines`.
+  - Currency, base currency, exchange rate, and converted totals become immutable when approved. Approval and payment journals both use the stored rate.
   - Cannot modify after approved.
 
 ### pay.payslip_lines
@@ -374,6 +386,8 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - `$connection = 'pgsql'; $table = 'pay.salary_advances'; $keyType = 'string'; public $incrementing = false;`
 - Business rules:
   - Daily close cash advances debit Employee Advances and reduce Cash on Hand through daily close cash movement.
+  - Companies that do not use Fuel Station Daily Close may record an advance directly from Payroll; the same posting debits Employee Advances and credits the selected base-currency cash or bank account.
+  - Advance amount has no salary-based maximum. The UI warns when the amount exceeds the employee's monthly base salary, but must not block submission.
   - Payroll recovery credits Employee Advances when the payslip is approved.
 
 ### pay.salary_advance_recoveries

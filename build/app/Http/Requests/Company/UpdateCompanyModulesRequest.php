@@ -17,7 +17,7 @@ class UpdateCompanyModulesRequest extends BaseFormRequest
     {
         return [
             'inventory' => ['required', 'boolean'],
+            'payroll' => ['required', 'boolean'],
         ];
     }
 }
-

@@ -28,7 +28,6 @@ interface InvoiceRef {
 
 interface CurrencyRef {
   currency_code: string
-  is_base: boolean
 }
 
 const props = defineProps<{
@@ -229,7 +228,7 @@ const submit = () => {
                   :key="curr.currency_code"
                   :value="curr.currency_code"
                 >
-                  {{ curr.currency_code }}{{ curr.is_base ? ' (Base)' : '' }}
+                  {{ curr.currency_code }}{{ curr.currency_code === company.base_currency ? ' (Base)' : '' }}
                 </SelectItem>
                 <SelectItem v-if="currencies.length === 0" value="USD">USD</SelectItem>
               </SelectContent>

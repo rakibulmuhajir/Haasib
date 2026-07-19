@@ -33,6 +33,7 @@ import {
     ScrollText,
     Trash2,
     WalletCards,
+    Calculator,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -44,7 +45,6 @@ const props = defineProps<{
     paymentDirections: Record<string, string>;
     currencies: Array<{
         currency_code: string;
-        is_base: boolean;
         exchange_rate: string | number;
     }>;
     passengerStatuses: Record<string, string>;
@@ -56,6 +56,7 @@ const props = defineProps<{
         has_started: boolean;
         requires_override_reason: boolean;
         can_record_payment: boolean;
+        can_view_accounting: boolean;
     };
     changeLogs: any[];
 }>();
@@ -414,6 +415,14 @@ const addPayment = () =>
     >
         <template #actions>
             <Button
+                v-if="groupCapabilities.can_view_accounting"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)"
+            >
+                <Calculator class="mr-2 h-4 w-4" />
+                Accounting
+            </Button>
+            <Button
                 v-if="groupCapabilities.can_modify"
                 variant="outline"
                 @click="
@@ -493,14 +502,6 @@ const addPayment = () =>
                         >
                     </CardHeader>
                     <CardContent class="grid gap-4 md:grid-cols-3">
-                        <div>
-                            <div class="text-sm text-muted-foreground">
-                                Status
-                            </div>
-                            <Badge variant="secondary">{{
-                                group.status
-                            }}</Badge>
-                        </div>
                         <div>
                             <div class="text-sm text-muted-foreground">
                                 Travel Date

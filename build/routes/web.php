@@ -371,78 +371,80 @@ Route::middleware(['auth'])->group(function () {
         // Payroll & HR Module
         // ─────────────────────────────────────────────────────────────────
 
-        Route::get('/{company}/payroll', [PayrollDashboardController::class, 'index'])->name('payroll.index');
-        Route::post('/{company}/payroll/run-monthly', [PayrollDashboardController::class, 'runMonthly'])->name('payroll.run-monthly');
-        Route::get('/{company}/payroll/reports/salary', [SalaryReportController::class, 'index'])->name('payroll.reports.salary');
+        Route::middleware(['require.module:payroll'])->group(function () {
+            Route::get('/{company}/payroll', [PayrollDashboardController::class, 'index'])->name('payroll.index');
+            Route::post('/{company}/payroll/run-monthly', [PayrollDashboardController::class, 'runMonthly'])->name('payroll.run-monthly');
+            Route::get('/{company}/payroll/reports/salary', [SalaryReportController::class, 'index'])->name('payroll.reports.salary');
 
-        // Employees
-        Route::get('/{company}/employees', [EmployeeController::class, 'index'])->name('employees.index');
-        Route::get('/{company}/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
-        Route::post('/{company}/employees', [EmployeeController::class, 'store'])->name('employees.store');
-        Route::get('/{company}/employees/{employee}', [EmployeeController::class, 'show'])->whereUuid('employee')->name('employees.show');
-        Route::get('/{company}/employees/{employee}/edit', [EmployeeController::class, 'edit'])->whereUuid('employee')->name('employees.edit');
-        Route::put('/{company}/employees/{employee}', [EmployeeController::class, 'update'])->whereUuid('employee')->name('employees.update');
-        Route::delete('/{company}/employees/{employee}', [EmployeeController::class, 'destroy'])->whereUuid('employee')->name('employees.destroy');
+            // Employees
+            Route::get('/{company}/employees', [EmployeeController::class, 'index'])->name('employees.index');
+            Route::get('/{company}/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
+            Route::post('/{company}/employees', [EmployeeController::class, 'store'])->name('employees.store');
+            Route::get('/{company}/employees/{employee}', [EmployeeController::class, 'show'])->whereUuid('employee')->name('employees.show');
+            Route::get('/{company}/employees/{employee}/edit', [EmployeeController::class, 'edit'])->whereUuid('employee')->name('employees.edit');
+            Route::put('/{company}/employees/{employee}', [EmployeeController::class, 'update'])->whereUuid('employee')->name('employees.update');
+            Route::delete('/{company}/employees/{employee}', [EmployeeController::class, 'destroy'])->whereUuid('employee')->name('employees.destroy');
 
-        // Earning Types
-        Route::get('/{company}/earning-types', [EarningTypeController::class, 'index'])->name('earning-types.index');
-        Route::get('/{company}/earning-types/create', [EarningTypeController::class, 'create'])->name('earning-types.create');
-        Route::post('/{company}/earning-types', [EarningTypeController::class, 'store'])->name('earning-types.store');
-        Route::get('/{company}/earning-types/{earning_type}/edit', [EarningTypeController::class, 'edit'])->whereUuid('earning_type')->name('earning-types.edit');
-        Route::put('/{company}/earning-types/{earning_type}', [EarningTypeController::class, 'update'])->whereUuid('earning_type')->name('earning-types.update');
-        Route::delete('/{company}/earning-types/{earning_type}', [EarningTypeController::class, 'destroy'])->whereUuid('earning_type')->name('earning-types.destroy');
+            // Earning Types
+            Route::get('/{company}/earning-types', [EarningTypeController::class, 'index'])->name('earning-types.index');
+            Route::get('/{company}/earning-types/create', [EarningTypeController::class, 'create'])->name('earning-types.create');
+            Route::post('/{company}/earning-types', [EarningTypeController::class, 'store'])->name('earning-types.store');
+            Route::get('/{company}/earning-types/{earning_type}/edit', [EarningTypeController::class, 'edit'])->whereUuid('earning_type')->name('earning-types.edit');
+            Route::put('/{company}/earning-types/{earning_type}', [EarningTypeController::class, 'update'])->whereUuid('earning_type')->name('earning-types.update');
+            Route::delete('/{company}/earning-types/{earning_type}', [EarningTypeController::class, 'destroy'])->whereUuid('earning_type')->name('earning-types.destroy');
 
-        // Deduction Types
-        Route::get('/{company}/deduction-types', [DeductionTypeController::class, 'index'])->name('deduction-types.index');
-        Route::get('/{company}/deduction-types/create', [DeductionTypeController::class, 'create'])->name('deduction-types.create');
-        Route::post('/{company}/deduction-types', [DeductionTypeController::class, 'store'])->name('deduction-types.store');
-        Route::get('/{company}/deduction-types/{deduction_type}/edit', [DeductionTypeController::class, 'edit'])->whereUuid('deduction_type')->name('deduction-types.edit');
-        Route::put('/{company}/deduction-types/{deduction_type}', [DeductionTypeController::class, 'update'])->whereUuid('deduction_type')->name('deduction-types.update');
-        Route::delete('/{company}/deduction-types/{deduction_type}', [DeductionTypeController::class, 'destroy'])->whereUuid('deduction_type')->name('deduction-types.destroy');
+            // Deduction Types
+            Route::get('/{company}/deduction-types', [DeductionTypeController::class, 'index'])->name('deduction-types.index');
+            Route::get('/{company}/deduction-types/create', [DeductionTypeController::class, 'create'])->name('deduction-types.create');
+            Route::post('/{company}/deduction-types', [DeductionTypeController::class, 'store'])->name('deduction-types.store');
+            Route::get('/{company}/deduction-types/{deduction_type}/edit', [DeductionTypeController::class, 'edit'])->whereUuid('deduction_type')->name('deduction-types.edit');
+            Route::put('/{company}/deduction-types/{deduction_type}', [DeductionTypeController::class, 'update'])->whereUuid('deduction_type')->name('deduction-types.update');
+            Route::delete('/{company}/deduction-types/{deduction_type}', [DeductionTypeController::class, 'destroy'])->whereUuid('deduction_type')->name('deduction-types.destroy');
 
-        // Leave Types
-        Route::get('/{company}/leave-types', [LeaveTypeController::class, 'index'])->name('leave-types.index');
-        Route::get('/{company}/leave-types/create', [LeaveTypeController::class, 'create'])->name('leave-types.create');
-        Route::post('/{company}/leave-types', [LeaveTypeController::class, 'store'])->name('leave-types.store');
-        Route::get('/{company}/leave-types/{leave_type}/edit', [LeaveTypeController::class, 'edit'])->whereUuid('leave_type')->name('leave-types.edit');
-        Route::put('/{company}/leave-types/{leave_type}', [LeaveTypeController::class, 'update'])->whereUuid('leave_type')->name('leave-types.update');
-        Route::delete('/{company}/leave-types/{leave_type}', [LeaveTypeController::class, 'destroy'])->whereUuid('leave_type')->name('leave-types.destroy');
+            // Leave Types
+            Route::get('/{company}/leave-types', [LeaveTypeController::class, 'index'])->name('leave-types.index');
+            Route::get('/{company}/leave-types/create', [LeaveTypeController::class, 'create'])->name('leave-types.create');
+            Route::post('/{company}/leave-types', [LeaveTypeController::class, 'store'])->name('leave-types.store');
+            Route::get('/{company}/leave-types/{leave_type}/edit', [LeaveTypeController::class, 'edit'])->whereUuid('leave_type')->name('leave-types.edit');
+            Route::put('/{company}/leave-types/{leave_type}', [LeaveTypeController::class, 'update'])->whereUuid('leave_type')->name('leave-types.update');
+            Route::delete('/{company}/leave-types/{leave_type}', [LeaveTypeController::class, 'destroy'])->whereUuid('leave_type')->name('leave-types.destroy');
 
-        // Leave Requests
-        Route::get('/{company}/leave-requests', [LeaveRequestController::class, 'index'])->name('leave-requests.index');
-        Route::get('/{company}/leave-requests/create', [LeaveRequestController::class, 'create'])->name('leave-requests.create');
-        Route::post('/{company}/leave-requests', [LeaveRequestController::class, 'store'])->name('leave-requests.store');
-        Route::get('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'show'])->whereUuid('leave_request')->name('leave-requests.show');
-        Route::get('/{company}/leave-requests/{leave_request}/edit', [LeaveRequestController::class, 'edit'])->whereUuid('leave_request')->name('leave-requests.edit');
-        Route::put('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'update'])->whereUuid('leave_request')->name('leave-requests.update');
-        Route::post('/{company}/leave-requests/{leave_request}/approve', [LeaveRequestController::class, 'approve'])->whereUuid('leave_request')->name('leave-requests.approve');
-        Route::post('/{company}/leave-requests/{leave_request}/reject', [LeaveRequestController::class, 'reject'])->whereUuid('leave_request')->name('leave-requests.reject');
-        Route::delete('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'destroy'])->whereUuid('leave_request')->name('leave-requests.destroy');
+            // Leave Requests
+            Route::get('/{company}/leave-requests', [LeaveRequestController::class, 'index'])->name('leave-requests.index');
+            Route::get('/{company}/leave-requests/create', [LeaveRequestController::class, 'create'])->name('leave-requests.create');
+            Route::post('/{company}/leave-requests', [LeaveRequestController::class, 'store'])->name('leave-requests.store');
+            Route::get('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'show'])->whereUuid('leave_request')->name('leave-requests.show');
+            Route::get('/{company}/leave-requests/{leave_request}/edit', [LeaveRequestController::class, 'edit'])->whereUuid('leave_request')->name('leave-requests.edit');
+            Route::put('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'update'])->whereUuid('leave_request')->name('leave-requests.update');
+            Route::post('/{company}/leave-requests/{leave_request}/approve', [LeaveRequestController::class, 'approve'])->whereUuid('leave_request')->name('leave-requests.approve');
+            Route::post('/{company}/leave-requests/{leave_request}/reject', [LeaveRequestController::class, 'reject'])->whereUuid('leave_request')->name('leave-requests.reject');
+            Route::delete('/{company}/leave-requests/{leave_request}', [LeaveRequestController::class, 'destroy'])->whereUuid('leave_request')->name('leave-requests.destroy');
 
-        // Payroll Periods
-        Route::get('/{company}/payroll-periods', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index');
-        Route::get('/{company}/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create');
-        Route::post('/{company}/payroll-periods', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store');
-        Route::get('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'show'])->whereUuid('payroll_period')->name('payroll-periods.show');
-        Route::post('/{company}/payroll-periods/{payroll_period}/generate-payslips', [PayslipController::class, 'generateForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.generate-payslips');
-        Route::post('/{company}/payroll-periods/{payroll_period}/approve-payslips', [PayslipController::class, 'approveForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.approve-payslips');
-        Route::post('/{company}/payroll-periods/{payroll_period}/pay-payslips', [PayslipController::class, 'payForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.pay-payslips');
-        Route::post('/{company}/payroll-periods/{payroll_period}/close', [PayrollPeriodController::class, 'close'])->whereUuid('payroll_period')->name('payroll-periods.close');
-        Route::delete('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'destroy'])->whereUuid('payroll_period')->name('payroll-periods.destroy');
+            // Payroll Periods
+            Route::get('/{company}/payroll-periods', [PayrollPeriodController::class, 'index'])->name('payroll-periods.index');
+            Route::get('/{company}/payroll-periods/create', [PayrollPeriodController::class, 'create'])->name('payroll-periods.create');
+            Route::post('/{company}/payroll-periods', [PayrollPeriodController::class, 'store'])->name('payroll-periods.store');
+            Route::get('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'show'])->whereUuid('payroll_period')->name('payroll-periods.show');
+            Route::post('/{company}/payroll-periods/{payroll_period}/generate-payslips', [PayslipController::class, 'generateForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.generate-payslips');
+            Route::post('/{company}/payroll-periods/{payroll_period}/approve-payslips', [PayslipController::class, 'approveForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.approve-payslips');
+            Route::post('/{company}/payroll-periods/{payroll_period}/pay-payslips', [PayslipController::class, 'payForPeriod'])->whereUuid('payroll_period')->name('payroll-periods.pay-payslips');
+            Route::post('/{company}/payroll-periods/{payroll_period}/close', [PayrollPeriodController::class, 'close'])->whereUuid('payroll_period')->name('payroll-periods.close');
+            Route::delete('/{company}/payroll-periods/{payroll_period}', [PayrollPeriodController::class, 'destroy'])->whereUuid('payroll_period')->name('payroll-periods.destroy');
 
-        // Payslips
-        Route::get('/{company}/payslips', [PayslipController::class, 'index'])->name('payslips.index');
-        Route::get('/{company}/payslips/create', [PayslipController::class, 'create'])->name('payslips.create');
-        Route::post('/{company}/payslips', [PayslipController::class, 'store'])->name('payslips.store');
-        Route::get('/{company}/payslips/{payslip}', [PayslipController::class, 'show'])->whereUuid('payslip')->name('payslips.show');
-        Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
-        Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
-        Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
-        Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
+            // Payslips
+            Route::get('/{company}/payslips', [PayslipController::class, 'index'])->name('payslips.index');
+            Route::get('/{company}/payslips/create', [PayslipController::class, 'create'])->name('payslips.create');
+            Route::post('/{company}/payslips', [PayslipController::class, 'store'])->name('payslips.store');
+            Route::get('/{company}/payslips/{payslip}', [PayslipController::class, 'show'])->whereUuid('payslip')->name('payslips.show');
+            Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
+            Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
+            Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
+            Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
 
-        // Salary Advances
-        Route::get('/{company}/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
-        Route::post('/{company}/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
+            // Salary Advances
+            Route::get('/{company}/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+            Route::post('/{company}/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
+        });
 
         // ─────────────────────────────────────────────────────────────────
         // Partners (Business Partners / Shareholders)

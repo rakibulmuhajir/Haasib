@@ -3,13 +3,13 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Http\Requests\StoreVendorRequest;
 use App\Modules\Accounting\Http\Requests\UpdateVendorRequest;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -33,7 +33,7 @@ class VendorController extends Controller
             });
         }
 
-        if (!($request->boolean('include_inactive') ?? false)) {
+        if (! ($request->boolean('include_inactive') ?? false)) {
             $query->where('is_active', true);
         }
 
@@ -97,6 +97,7 @@ class VendorController extends Controller
             'id' => $vendor,
             'company_id' => $company->id,
         ], $request->user());
+
         return back()->with('success', 'Vendor updated');
     }
 
@@ -136,10 +137,7 @@ class VendorController extends Controller
             ->take(25)
             ->get(['id', 'payment_number', 'payment_date', 'amount', 'currency', 'payment_method', 'reference_number']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         return Inertia::render('accounting/vendors/Show', [
             'company' => [
@@ -195,6 +193,7 @@ class VendorController extends Controller
             'id' => $vendorId,
             'company_id' => $company->id,
         ], $request->user());
+
         return back()->with('success', 'Vendor deleted');
     }
 
@@ -248,7 +247,7 @@ class VendorController extends Controller
             ->get(['id', 'name', 'email', 'phone', 'vendor_number', 'vendor_type']);
 
         // Sort by the order they appear in recent bills
-        $sorted = $recentVendorIds->map(fn($id) => $vendors->firstWhere('id', $id))
+        $sorted = $recentVendorIds->map(fn ($id) => $vendors->firstWhere('id', $id))
             ->filter()
             ->values();
 
@@ -265,7 +264,7 @@ class VendorController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
-            'vendor_type' => 'nullable|in:' . implode(',', array_keys(Vendor::TYPES)),
+            'vendor_type' => 'nullable|in:'.implode(',', array_keys(Vendor::TYPES)),
         ]);
 
         $result = app(CommandBus::class)->dispatch('vendor.create', [

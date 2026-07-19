@@ -17,25 +17,26 @@ class IndustryCoaPackSeeder extends Seeder
     {
         $now = now();
 
-        // Define all 14 industries
+        // Retain legacy packs for existing companies, but expose only ready modules plus Other.
         $industries = [
-            ['code' => 'accountant', 'name' => 'Accountant / CPA Firm', 'sort_order' => 1],
-            ['code' => 'architect', 'name' => 'Architect / Design Firm', 'sort_order' => 2],
-            ['code' => 'consultant', 'name' => 'Consultant / Agency', 'sort_order' => 3],
-            ['code' => 'farming', 'name' => 'Farming / Agriculture', 'sort_order' => 4],
-            ['code' => 'financial_advisor', 'name' => 'Financial Advisors / Stock Brokers', 'sort_order' => 5],
-            ['code' => 'healthcare', 'name' => 'Healthcare / General', 'sort_order' => 6],
-            ['code' => 'insurance', 'name' => 'Insurance Agency', 'sort_order' => 7],
-            ['code' => 'law_firm', 'name' => 'Law Firm', 'sort_order' => 8],
-            ['code' => 'manufacturing', 'name' => 'Manufacturing', 'sort_order' => 9],
-            ['code' => 'nonprofit', 'name' => 'Non-Profit', 'sort_order' => 10],
-            ['code' => 'real_estate', 'name' => 'Real Estate (Agency + Developer)', 'sort_order' => 11],
-            ['code' => 'restaurant', 'name' => 'Restaurant', 'sort_order' => 12],
-            ['code' => 'retail', 'name' => 'Retail', 'sort_order' => 13],
-            ['code' => 'wholesale', 'name' => 'Wholesale / Distribution', 'sort_order' => 14],
-            ['code' => 'fuel_station', 'name' => 'Fuel Station / Petrol Pump', 'sort_order' => 15],
+            ['code' => 'accountant', 'name' => 'Accountant / CPA Firm', 'sort_order' => 10, 'is_active' => false],
+            ['code' => 'architect', 'name' => 'Architect / Design Firm', 'sort_order' => 20, 'is_active' => false],
+            ['code' => 'consultant', 'name' => 'Consultant / Agency', 'sort_order' => 30, 'is_active' => false],
+            ['code' => 'farming', 'name' => 'Farming / Agriculture', 'sort_order' => 40, 'is_active' => false],
+            ['code' => 'financial_advisor', 'name' => 'Financial Advisors / Stock Brokers', 'sort_order' => 50, 'is_active' => false],
+            ['code' => 'healthcare', 'name' => 'Healthcare / General', 'sort_order' => 60, 'is_active' => false],
+            ['code' => 'insurance', 'name' => 'Insurance Agency', 'sort_order' => 70, 'is_active' => false],
+            ['code' => 'law_firm', 'name' => 'Law Firm', 'sort_order' => 80, 'is_active' => false],
+            ['code' => 'manufacturing', 'name' => 'Manufacturing', 'sort_order' => 90, 'is_active' => false],
+            ['code' => 'nonprofit', 'name' => 'Non-Profit', 'sort_order' => 100, 'is_active' => false],
+            ['code' => 'real_estate', 'name' => 'Real Estate (Agency + Developer)', 'sort_order' => 110, 'is_active' => false],
+            ['code' => 'restaurant', 'name' => 'Restaurant', 'sort_order' => 120, 'is_active' => false],
+            ['code' => 'retail', 'name' => 'Retail', 'sort_order' => 130, 'is_active' => false],
+            ['code' => 'wholesale', 'name' => 'Wholesale / Distribution', 'sort_order' => 140, 'is_active' => false],
+            ['code' => 'fuel_station', 'name' => 'Petrol Pump', 'sort_order' => 1],
             ['code' => 'umrah', 'name' => 'Umrah / Travel Visa Agency', 'sort_order' => 16, 'is_active' => false],
-            ['code' => 'travel', 'name' => 'Travel Agency', 'sort_order' => 17],
+            ['code' => 'travel', 'name' => 'Travel', 'sort_order' => 2],
+            ['code' => 'other', 'name' => 'Other', 'description' => 'General accounting without an industry-specific module.', 'sort_order' => 3],
         ];
 
         foreach ($industries as $industry) {
@@ -72,6 +73,28 @@ class IndustryCoaPackSeeder extends Seeder
         $this->seedFuelStation($industryIds['fuel_station'], $now);
         $this->seedUmrah($industryIds['umrah'], $now);
         $this->seedUmrah($industryIds['travel'], $now);
+        $this->seedOther($industryIds['other'], $now);
+    }
+
+    private function seedOther(string $industryId, $now): void
+    {
+        $accounts = [
+            ['code' => '1000', 'name' => 'Operating Bank', 'type' => 'asset', 'subtype' => 'bank', 'normal_balance' => 'debit'],
+            ['code' => '1050', 'name' => 'Cash on Hand', 'type' => 'asset', 'subtype' => 'cash', 'normal_balance' => 'debit'],
+            ['code' => '1100', 'name' => 'Accounts Receivable', 'type' => 'asset', 'subtype' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'ar_control'],
+            ['code' => '1500', 'name' => 'Equipment', 'type' => 'asset', 'subtype' => 'fixed_asset', 'normal_balance' => 'debit'],
+            ['code' => '2100', 'name' => 'Accounts Payable', 'type' => 'liability', 'subtype' => 'accounts_payable', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'ap_control'],
+            ['code' => '2200', 'name' => 'Accrued Expenses', 'type' => 'liability', 'subtype' => 'other_current_liability', 'normal_balance' => 'credit'],
+            ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
+            ['code' => '4000', 'name' => 'Sales Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
+            ['code' => '5000', 'name' => 'Cost of Sales', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+            ['code' => '6000', 'name' => 'General Expenses', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
+            ['code' => '6100', 'name' => 'Salaries and Wages', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6200', 'name' => 'Rent and Utilities', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6900', 'name' => 'Other Expenses', 'type' => 'other_expense', 'subtype' => 'other_expense', 'normal_balance' => 'debit'],
+        ];
+
+        $this->insertAccounts($industryId, $accounts, $now);
     }
 
     private function seedAccountant(string $industryId, $now): void

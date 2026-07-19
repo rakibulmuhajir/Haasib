@@ -19,7 +19,6 @@ interface CompanyRef {
 
 interface CurrencyOption {
   currency_code: string
-  is_base: boolean
 }
 
 interface AccountOption {
@@ -72,7 +71,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const currencyOptions = computed(() =>
-  props.currencies.length ? props.currencies : [{ currency_code: props.company.base_currency, is_base: true }]
+  props.currencies.length ? props.currencies : [{ currency_code: props.company.base_currency }]
 )
 
 const form = useForm({
@@ -171,7 +170,7 @@ const handleSubmit = () => {
                 :key="c.currency_code"
                 :value="c.currency_code"
               >
-                {{ c.currency_code }} <span v-if="c.is_base">· Base</span>
+                {{ c.currency_code }} <span v-if="c.currency_code === company.base_currency">· Base</span>
               </SelectItem>
             </SelectContent>
           </Select>

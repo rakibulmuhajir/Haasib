@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Facades\CompanyContext;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -45,8 +46,14 @@ class HandleInertiaRequests extends Middleware
                 return null;
             }
 
-            // Support both Eloquent models and stdClass from query builder.
-            $data = is_array($company) ? $company : (array) $company;
+            // Support both Eloquent models and stdClass rows from the query builder.
+            $data = $company instanceof Model
+                ? $company->toArray()
+                : (is_array($company) ? $company : get_object_vars($company));
+            $settings = $data['settings'] ?? null;
+            if (is_string($settings)) {
+                $settings = json_decode($settings, true);
+            }
 
             return [
                 'id' => $data['id'] ?? null,
@@ -56,7 +63,7 @@ class HandleInertiaRequests extends Middleware
                 'logo_url' => $data['logo_url'] ?? null,
                 'industry' => $data['industry'] ?? null,
                 'industry_code' => $data['industry_code'] ?? null,
-                'settings' => $data['settings'] ?? null,
+                'settings' => is_array($settings) ? $settings : null,
                 'onboarding_completed' => $data['onboarding_completed'] ?? null,
             ];
         };

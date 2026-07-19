@@ -4,16 +4,16 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Http\Requests\DuplicateInvoiceRequest;
+use App\Modules\Accounting\Http\Requests\SendInvoiceRequest;
 use App\Modules\Accounting\Http\Requests\StoreInvoiceRequest;
 use App\Modules\Accounting\Http\Requests\UpdateInvoiceRequest;
-use App\Modules\Accounting\Http\Requests\SendInvoiceRequest;
-use App\Modules\Accounting\Http\Requests\DuplicateInvoiceRequest;
 use App\Modules\Accounting\Http\Requests\VoidInvoiceRequest;
-use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Account;
-use App\Models\CompanyCurrency;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Services\CommandBus;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -90,10 +90,7 @@ class InvoiceController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $revenueAccounts = Account::where('company_id', $company->id)
             ->where('type', 'revenue')
@@ -188,10 +185,7 @@ class InvoiceController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $revenueAccounts = Account::where('company_id', $company->id)
             ->where('type', 'revenue')

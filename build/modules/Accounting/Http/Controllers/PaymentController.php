@@ -6,12 +6,12 @@ use App\Facades\CompanyContext;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StorePaymentRequest;
 use App\Modules\Accounting\Http\Requests\UpdatePaymentRequest;
-use App\Modules\Accounting\Models\Payment;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Models\Account;
-use App\Models\CompanyCurrency;
+use App\Modules\Accounting\Models\Payment;
 use App\Services\CommandBus;
+use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -81,10 +81,7 @@ class PaymentController extends Controller
             ->orderBy('invoice_number')
             ->get(['id', 'customer_id', 'invoice_number', 'balance', 'currency']);
 
-        $currencies = CompanyCurrency::where('company_id', $company->id)
-            ->orderByDesc('is_base')
-            ->orderBy('currency_code')
-            ->get(['currency_code', 'is_base']);
+        $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
         $depositAccounts = Account::where('company_id', $company->id)
             ->whereIn('subtype', ['bank', 'cash'])

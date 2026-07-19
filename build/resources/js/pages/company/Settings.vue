@@ -111,6 +111,7 @@ const fiscalYearForm = useForm({
 
 const moduleSettingsForm = useForm({
     inventory: company.value.settings?.modules?.inventory !== false,
+    payroll: company.value.settings?.modules?.payroll === true,
 });
 
 const months = [
@@ -148,16 +149,8 @@ const saveFiscalYearSettings = () => {
 
 const saveModuleSettings = () => {
     moduleSettingsForm.patch(`/${company.value.slug}/settings/modules`, {
-        preserveScroll: true,
         onSuccess: () => {
-            const modules = {
-                ...(company.value.settings?.modules ?? {}),
-                inventory: moduleSettingsForm.inventory,
-            };
-            company.value = {
-                ...company.value,
-                settings: { ...(company.value.settings ?? {}), modules },
-            };
+            window.location.reload();
         },
     });
 };
@@ -572,6 +565,44 @@ const getRoleBadgeVariant = (role: string) => {
                         class="mt-2 text-sm text-destructive"
                     >
                         {{ moduleSettingsForm.errors.inventory }}
+                    </div>
+                    <div
+                        class="mt-6 flex items-center justify-between gap-6 border-t pt-6"
+                    >
+                        <div>
+                            <div class="font-medium">Payroll</div>
+                            <div class="text-sm text-muted-foreground">
+                                Employees, payroll periods, payslips, salary
+                                payments, and advances.
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <Switch
+                                id="payroll-module"
+                                v-model:checked="moduleSettingsForm.payroll"
+                                :disabled="
+                                    !company.can_manage_company ||
+                                    moduleSettingsForm.processing
+                                "
+                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                :disabled="
+                                    !company.can_manage_company ||
+                                    moduleSettingsForm.processing
+                                "
+                                @click="saveModuleSettings"
+                            >
+                                Save
+                            </Button>
+                        </div>
+                    </div>
+                    <div
+                        v-if="moduleSettingsForm.errors.payroll"
+                        class="mt-2 text-sm text-destructive"
+                    >
+                        {{ moduleSettingsForm.errors.payroll }}
                     </div>
                 </CardContent>
             </Card>

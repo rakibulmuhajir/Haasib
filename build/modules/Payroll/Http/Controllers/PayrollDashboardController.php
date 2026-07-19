@@ -49,7 +49,7 @@ class PayrollDashboardController extends Controller
             ->map(fn (Payslip $payslip) => [
                 'id' => $payslip->id,
                 'payslip_number' => $payslip->payslip_number,
-                'employee_name' => trim($payslip->employee->first_name . ' ' . $payslip->employee->last_name),
+                'employee_name' => trim($payslip->employee->first_name.' '.$payslip->employee->last_name),
                 'period' => [
                     'start' => $payslip->payrollPeriod?->period_start,
                     'end' => $payslip->payrollPeriod?->period_end,
@@ -67,7 +67,7 @@ class PayrollDashboardController extends Controller
             ->get(['id', 'first_name', 'last_name', 'employee_number'])
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
-                'name' => trim($employee->first_name . ' ' . $employee->last_name),
+                'name' => trim($employee->first_name.' '.$employee->last_name),
                 'employee_number' => $employee->employee_number,
                 'outstanding_advances' => (float) $employee->outstanding_advances,
             ]);
@@ -90,9 +90,9 @@ class PayrollDashboardController extends Controller
                 'active_employees' => Employee::where('company_id', $company->id)->where('is_active', true)->where('employment_status', 'active')->count(),
                 'draft_payslips' => (clone $payslipBase)->where('status', 'draft')->count(),
                 'approved_unpaid_count' => (clone $payslipBase)->where('status', 'approved')->count(),
-                'approved_unpaid_amount' => (float) (clone $payslipBase)->where('status', 'approved')->sum('net_pay'),
-                'paid_this_month' => (float) (clone $payslipBase)->where('status', 'paid')->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('net_pay'),
-                'salary_expense_this_month' => (float) (clone $payslipBase)->whereIn('status', ['approved', 'paid'])->whereMonth('approved_at', now()->month)->whereYear('approved_at', now()->year)->sum('gross_pay'),
+                'approved_unpaid_amount' => (float) (clone $payslipBase)->where('status', 'approved')->sum('base_net_pay'),
+                'paid_this_month' => (float) (clone $payslipBase)->where('status', 'paid')->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('base_net_pay'),
+                'salary_expense_this_month' => (float) (clone $payslipBase)->whereIn('status', ['approved', 'paid'])->whereMonth('approved_at', now()->month)->whereYear('approved_at', now()->year)->sum('base_gross_pay'),
                 'outstanding_advances' => (float) (clone $advanceBase)->whereIn('status', ['pending', 'partially_recovered'])->sum('amount_outstanding'),
                 'recovered_this_month' => (float) DB::table('pay.salary_advance_recoveries')
                     ->where('company_id', $company->id)
@@ -127,7 +127,7 @@ class PayrollDashboardController extends Controller
                 ]
             );
 
-            if (!in_array($period->status, ['open', 'processing'], true)) {
+            if (! in_array($period->status, ['open', 'processing'], true)) {
                 return back()->with('error', 'This month payroll is already closed.');
             }
 

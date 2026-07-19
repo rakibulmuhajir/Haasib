@@ -3,7 +3,6 @@
 namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\CompanyCurrency;
 use App\Modules\Umrah\Http\Requests\BulkUpdatePassengerStatusRequest;
 use App\Modules\Umrah\Http\Requests\ImportMutamersRequest;
 use App\Modules\Umrah\Http\Requests\RemovePassengerRequest;
@@ -26,6 +25,7 @@ use App\Modules\Umrah\Services\TransportCatalogService;
 use App\Modules\Umrah\Services\TravelAccessService;
 use App\Modules\Umrah\Services\TravelChangeLogger;
 use App\Modules\Umrah\Services\UmrahCoreService;
+use App\Services\CompanyCurrencyOptions;
 use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,7 +49,6 @@ class VisaGroupController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_VIEW), 403);
         $this->transportCatalog->ensureDefaultSectors($company->id);
         $search = trim((string) $request->input('search', ''));
-        $status = (string) $request->input('status', '');
         $memberAgentId = $this->memberAgentId($company->id, $request);
 
         $groups = VisaGroup::where('company_id', $company->id)
@@ -62,16 +61,16 @@ class VisaGroupController extends Controller
                     ->where('full_name', 'ilike', "%{$search}%")
                     ->orWhere('passport_number', 'ilike', "%{$search}%")))
                 ->orWhereHas('agent', fn ($agent) => $agent->where('name', 'ilike', "%{$search}%"))))
-            ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->orderByDesc('created_at')
             ->paginate(20)
+            ->through(fn (VisaGroup $group) => $group->makeHidden('status'))
             ->withQueryString();
 
         return Inertia::render('Umrah/Groups/Index', [
             'company' => $this->companyPayload($company),
             'groups' => $groups,
-            'statuses' => VisaGroup::STATUSES,
-            'filters' => ['search' => $search, 'status' => $status],
+            'filters' => ['search' => $search],
+            'canViewAccounting' => (bool) $request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_ACCOUNTING_VIEW),
         ]);
     }
 
@@ -81,12 +80,17 @@ class VisaGroupController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_CREATE), 403);
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $this->isMember($company->id, $request);
-        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'vendor_number', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
+        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'vendor_number', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
+        $defaultVendor = $vendors->firstWhere('is_default', true);
         $transportVendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']);
         $transportFares = TransportFare::where('company_id', $company->id)->where('is_active', true)->with(['transportVendor:id,name,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get();
         if ($isMember) {
-            $vendors->each->makeHidden(['adult_cost_amount', 'child_cost_amount', 'included_bus_cost_amount']);
-            $transportFares->each->makeHidden(['cost_amount', 'hajj_terminal_cost_amount']);
+            $vendors = collect();
+            $transportVendors = collect();
+            $transportFares->each(function (TransportFare $fare) {
+                $fare->makeHidden(['transport_vendor_id', 'cost_amount', 'hajj_terminal_cost_amount']);
+                $fare->unsetRelation('transportVendor');
+            });
         }
 
         return Inertia::render('Umrah/Groups/Create', [
@@ -95,8 +99,13 @@ class VisaGroupController extends Controller
             'agents' => Agent::where('company_id', $company->id)->where('is_active', true)->when($isMember, fn ($q) => $memberAgentId ? $q->whereKey($memberAgentId) : $q->whereRaw('1 = 0'))->orderBy('name')->get(['id', 'name', 'agent_number', 'country']),
             'vendors' => $vendors,
             'transportVendors' => $transportVendors,
+            'defaultVendorId' => $isMember ? null : $defaultVendor?->id,
+            'agentVisaPricing' => $isMember && $defaultVendor ? [
+                'adult_retail_amount' => (float) $defaultVendor->adult_retail_amount,
+                'child_retail_amount' => (float) $defaultVendor->child_retail_amount,
+            ] : null,
+            'isAgent' => $isMember,
             'transportFares' => $transportFares,
-            'statuses' => VisaGroup::STATUSES,
             'passengerStatuses' => Passenger::STATUSES,
             'passengerServiceTypes' => Passenger::SERVICE_TYPES,
             'countries' => Agent::COUNTRIES,
@@ -107,9 +116,12 @@ class VisaGroupController extends Controller
     {
         $company = app(CurrentCompany::class)->get();
         $data = $request->validated();
-        if ($this->isMember($company->id, $request)) {
+        $isAgent = $this->isMember($company->id, $request);
+        if ($isAgent) {
             $data['agent_id'] = $this->memberAgentId($company->id, $request) ?? abort(403, 'Agent login is not linked.');
+            $data['discount_amount'] = 0;
         }
+        $data = $this->service->resolveGroupVendors($company->id, $data, $isAgent);
         $group = $this->service->createGroup($company->id, $data);
 
         return redirect()->route('umrah.groups.show', ['company' => $company->slug, 'group' => $group->id])
@@ -170,6 +182,7 @@ class VisaGroupController extends Controller
             $record->vendor?->makeHidden(['adult_cost_amount', 'child_cost_amount', 'included_bus_cost_amount', 'total_cost', 'total_paid', 'balance']);
             $record->transportItems->each->makeHidden(['unit_cost_amount', 'surcharge_cost_amount', 'total_cost_amount']);
         }
+        $record->makeHidden('status');
 
         $canModify = $isMember
             ? $this->access->agentCanEditGroup($company->id, request()->user(), $record)
@@ -190,10 +203,7 @@ class VisaGroupController extends Controller
             'group' => $record,
             'paymentMethods' => GroupPayment::METHODS,
             'paymentDirections' => $isMember ? [GroupPayment::DIRECTION_RECEIVED => GroupPayment::DIRECTIONS[GroupPayment::DIRECTION_RECEIVED]] : GroupPayment::DIRECTIONS,
-            'currencies' => CompanyCurrency::where('company_id', $company->id)
-                ->orderByDesc('is_base')
-                ->orderBy('currency_code')
-                ->get(['currency_code', 'is_base', 'exchange_rate']),
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
             'passengerStatuses' => Passenger::STATUSES,
             'visaVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'balance']),
             'transportVendors' => $isMember ? [] : VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'balance', 'is_company_owned']),
@@ -203,6 +213,7 @@ class VisaGroupController extends Controller
                 'has_started' => $hasStarted,
                 'requires_override_reason' => ! $isMember && $canModify && $hasStarted,
                 'can_record_payment' => ! $isMember && (bool) request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_PAYMENT_CREATE),
+                'can_view_accounting' => (bool) request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_ACCOUNTING_VIEW),
             ],
             'changeLogs' => $changeLogs,
         ]);
@@ -221,12 +232,16 @@ class VisaGroupController extends Controller
         if ($this->access->isAgentMember($company->id, $request->user())) {
             abort_unless($this->access->agentCanEditGroup($company->id, $request->user(), $record), 403, 'This group cannot be modified by your agent login.');
         }
+        $canManageVendors = ! $this->access->isAgentMember($company->id, $request->user());
+        $record->makeHidden('status');
 
         return Inertia::render('Umrah/Groups/Edit', [
             'company' => $this->companyPayload($company),
             'group' => $record,
-            'statuses' => VisaGroup::STATUSES,
             'requiresOverrideReason' => ! $this->access->isAgentMember($company->id, $request->user()) && $this->access->groupHasStarted($record),
+            'canManageVendors' => $canManageVendors,
+            'vendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id']) : [],
+            'transportVendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']) : [],
         ]);
     }
 
@@ -239,16 +254,26 @@ class VisaGroupController extends Controller
             $request->user(),
         )->findOrFail($group);
         $data = $request->validated();
+        $isAgent = $this->access->isAgentMember($company->id, $request->user());
         $hadStarted = $this->access->groupHasStarted($record);
         $changes = [
             'name' => $data['name'],
-            'status' => $data['status'],
             'travel_date' => $data['travel_date'] ?? null,
             'flight_info' => ['airline' => $data['flight_airline'] ?? null, 'number' => $data['flight_number'] ?? null, 'notes' => $data['flight_notes'] ?? null],
             'hotel_info' => ['makkah' => $data['hotel_makkah'] ?? null, 'madinah' => $data['hotel_madinah'] ?? null, 'notes' => $data['hotel_notes'] ?? null],
             'notes' => $data['notes'] ?? null,
         ];
+        if (! $isAgent) {
+            $vendorData = $this->service->resolveGroupVendors($company->id, [
+                'vendor_id' => $data['vendor_id'] ?? $record->vendor_id,
+                'mandatory_transport_vendor_id' => $data['mandatory_transport_vendor_id'] ?? null,
+                'transport_mode' => $record->transport_mode,
+            ], false);
+            $changes['vendor_id'] = $vendorData['vendor_id'];
+            $changes['mandatory_transport_vendor_id'] = $vendorData['mandatory_transport_vendor_id'];
+        }
         $oldValues = $record->only(array_keys($changes));
+        $oldVendorIds = array_filter([$record->vendor_id, $record->mandatory_transport_vendor_id]);
 
         DB::transaction(function () use ($request, $record, $changes, $oldValues, $data, $hadStarted) {
             $record->update($changes);
@@ -256,6 +281,11 @@ class VisaGroupController extends Controller
                 'after_travel_start' => $hadStarted,
             ]);
         });
+        foreach (array_unique([...$oldVendorIds, $record->fresh()->vendor_id, $record->fresh()->mandatory_transport_vendor_id]) as $vendorId) {
+            if ($vendorId) {
+                $this->service->recalculateVendor($vendorId);
+            }
+        }
 
         return redirect()->route('umrah.groups.show', ['company' => $company->slug, 'group' => $record->id])
             ->with('success', 'Visa group updated successfully.');

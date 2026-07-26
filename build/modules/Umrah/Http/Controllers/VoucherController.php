@@ -165,11 +165,13 @@ class VoucherController extends Controller
 
         $voucher = DB::transaction(function () use ($company, $data, $group, $request) {
             $hasFlights = $data['service_bundle'] !== Voucher::SERVICE_HOTEL;
-            [$hotelStays, $hotelSale, $hotelCost] = $this->resolveHotelStays(
-                $company->id,
-                $data['hotel_stays'],
-                Voucher::bundleIncludesHotel($data['service_bundle']),
-            );
+            [$hotelStays, $hotelSale, $hotelCost] = ($data['status'] ?? Voucher::STATUS_DRAFT) === Voucher::STATUS_DRAFT
+                ? [$this->draftHotelStays($data['hotel_stays']), 0.0, 0.0]
+                : $this->resolveHotelStays(
+                    $company->id,
+                    $data['hotel_stays'],
+                    Voucher::bundleIncludesHotel($data['service_bundle']),
+                );
             $voucher = Voucher::create([
                 'company_id' => $company->id,
                 'visa_group_id' => $group->id,
@@ -233,6 +235,16 @@ class VoucherController extends Controller
         if ($record->status !== Voucher::STATUS_APPROVED) {
             $data = $request->validated();
             DB::transaction(function () use ($request, $record, $data) {
+                [$hotelStays, $hotelSale, $hotelCost] = $this->resolveHotelStays(
+                    $record->company_id,
+                    $record->hotel_stays,
+                    Voucher::bundleIncludesHotel($record->service_bundle),
+                );
+                $record->update([
+                    'hotel_stays' => $hotelStays,
+                    'hotel_sale_amount' => $hotelSale,
+                    'hotel_cost_amount' => $hotelCost,
+                ]);
                 $this->workflow->approve($record);
                 $this->changeLogger->log($request, $record, 'voucher', 'approved', ['status' => Voucher::STATUS_DRAFT], ['status' => Voucher::STATUS_APPROVED], $data['override_reason'] ?? null, [
                     'after_travel_start' => $this->access->voucherHasStarted($record),
@@ -289,11 +301,11 @@ class VoucherController extends Controller
         $data = $request->validated();
         $hadStarted = $this->access->voucherHasStarted($record);
         $hasFlights = $data['service_bundle'] !== Voucher::SERVICE_HOTEL;
-        [$hotelStays, $hotelSale, $hotelCost] = $this->resolveHotelStays(
-            $company->id,
-            $data['hotel_stays'],
-            Voucher::bundleIncludesHotel($data['service_bundle']),
-        );
+        [$hotelStays, $hotelSale, $hotelCost] = [
+            $this->draftHotelStays($data['hotel_stays']),
+            0.0,
+            0.0,
+        ];
         if ($record->status === Voucher::STATUS_APPROVED
             && (abs($hotelSale - (float) $record->hotel_sale_amount) > 0.01 || abs($hotelCost - (float) $record->hotel_cost_amount) > 0.01)) {
             return back()->with('error', 'An approved voucher cannot change billed hotel amounts. Create a financial amendment instead.');
@@ -465,6 +477,21 @@ class VoucherController extends Controller
         }
 
         return [$resolved, round($sale, 2), round($cost, 2)];
+    }
+
+    private function draftHotelStays(array $stays): array
+    {
+        return collect($stays)->map(function (array $stay): array {
+            return [
+                ...$stay,
+                'hotel_vendor_id' => null,
+                'unit_retail_amount' => 0,
+                'unit_cost_amount' => 0,
+                'total_retail_amount' => 0,
+                'total_cost_amount' => 0,
+                'night_count' => 0,
+            ];
+        })->values()->all();
     }
 
     public function show(string $companySlug, string $voucher): Response

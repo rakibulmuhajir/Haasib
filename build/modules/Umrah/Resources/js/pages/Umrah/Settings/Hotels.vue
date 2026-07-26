@@ -41,7 +41,6 @@ const updateStatus = (type: 'hotels' | 'hotel-vendors', record: any) => {
   statusForm.is_active = !record.is_active
   statusForm.patch(`/${props.company.slug}/umrah/settings/${type}/${record.id}/status`, {
     preserveScroll: true,
-    onSuccess: () => toast.success(`${record.name} ${record.is_active ? 'deactivated' : 'reactivated'} successfully`),
     onError: () => toast.error(statusForm.errors.hotel || statusForm.errors.vendor || 'Status could not be changed'),
   })
 }

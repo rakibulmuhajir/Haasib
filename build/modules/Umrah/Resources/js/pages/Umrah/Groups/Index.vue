@@ -22,6 +22,12 @@ const props = defineProps<{
 
 const search = ref(props.filters.search || '')
 const searching = ref(false)
+const paymentLabel = (status: string) => ({
+  paid: 'Paid',
+  partially_paid: 'Partially paid',
+  unpaid: 'Unpaid',
+}[status] || 'Unpaid')
+const paymentVariant = (status: string) => status === 'paid' ? 'default' : 'secondary'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -96,7 +102,7 @@ const clearFilters = () => {
               <TableCell class="text-right font-medium"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></TableCell>
               <TableCell class="text-right font-medium"><MoneyText :amount="group.balance" :currency="company.base_currency" /></TableCell>
               <TableCell class="text-right">
-                <Badge :variant="Number(group.balance || 0) <= 0 ? 'default' : 'secondary'">{{ Number(group.balance || 0) <= 0 ? 'Paid' : 'Unpaid' }}</Badge>
+                <Badge :variant="paymentVariant(group.payment_status)">{{ paymentLabel(group.payment_status) }}</Badge>
               </TableCell>
               <TableCell v-if="canViewAccounting" class="text-right">
                 <Button type="button" variant="ghost" size="icon" title="Open group accounting" @click.stop="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)">

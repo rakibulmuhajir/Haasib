@@ -5,7 +5,7 @@ import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,7 +26,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 const reversePayment = () => form.post(`/${props.company.slug}/umrah/payments/${props.payment.id}/reverse`, {
     preserveScroll: true,
-    onSuccess: () => { reverseOpen.value = false; form.reset(); toast.success('Payment reversed'); },
+    onSuccess: () => { reverseOpen.value = false; form.reset(); },
     onError: () => toast.error('Failed to reverse payment'),
 });
 const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umrah/payments/${props.payment.id}/pdf`);
@@ -73,7 +73,7 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
 
         <Card v-if="payment.reversed_at"><CardHeader><CardTitle>Reversal</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.reversed_at" /> · {{ payment.reversal_reason }}</CardContent></Card>
 
-        <Dialog v-model:open="reverseOpen"><DialogContent><DialogHeader><DialogTitle>Reverse Payment</DialogTitle></DialogHeader>
+        <Dialog v-model:open="reverseOpen"><DialogContent><DialogHeader><DialogTitle>Reverse Payment</DialogTitle><DialogDescription>This creates an opposite accounting entry. The original payment remains in the audit trail.</DialogDescription></DialogHeader>
             <div class="space-y-2"><Label for="reason">Reason</Label><Textarea id="reason" v-model="form.reason" required /><p v-if="form.errors.reason" class="text-sm text-destructive">{{ form.errors.reason }}</p></div>
             <DialogFooter><Button variant="outline" @click="reverseOpen = false">Keep Payment</Button><Button variant="destructive" :disabled="form.processing || form.reason.trim().length < 5" @click="reversePayment">Reverse Payment</Button></DialogFooter>
         </DialogContent></Dialog>

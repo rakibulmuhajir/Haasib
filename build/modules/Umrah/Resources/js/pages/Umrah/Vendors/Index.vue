@@ -27,8 +27,16 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Eye, FileText, Pencil, Power, RotateCcw, Save, X } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import {
+    Eye,
+    FileText,
+    Pencil,
+    Power,
+    RotateCcw,
+    Save,
+    X,
+} from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -51,7 +59,10 @@ const props = defineProps<{
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
-    { title: 'Visa & Transport Vendors', href: `/${props.company.slug}/umrah/vendors` },
+    {
+        title: 'Visa & Transport Vendors',
+        href: `/${props.company.slug}/umrah/vendors`,
+    },
 ];
 
 const form = useForm({
@@ -72,16 +83,32 @@ const form = useForm({
     included_bus_cost_amount: '50',
     notes: '',
 });
+const hasRequiredVisaRates = computed(
+    () =>
+        form.vendor_type === 'transport_provider' ||
+        [
+            form.adult_retail_amount,
+            form.adult_cost_amount,
+            form.child_retail_amount,
+            form.child_cost_amount,
+        ].every((amount) => Number(amount) > 0),
+);
 
 const editingVendor = ref<any | null>(null);
 const statusForm = useForm({ is_active: false });
 const updateStatus = (vendor: any) => {
     statusForm.is_active = !vendor.is_active;
-    statusForm.patch(`/${props.company.slug}/umrah/vendors/${vendor.id}/status`, {
-        preserveScroll: true,
-        onSuccess: () => toast.success(vendor.is_active ? 'Vendor deactivated successfully' : 'Vendor reactivated successfully'),
-        onError: () => toast.error(statusForm.errors.vendor || 'Vendor status could not be changed'),
-    });
+    statusForm.patch(
+        `/${props.company.slug}/umrah/vendors/${vendor.id}/status`,
+        {
+            preserveScroll: true,
+            onError: () =>
+                toast.error(
+                    statusForm.errors.vendor ||
+                        'Vendor status could not be changed',
+                ),
+        },
+    );
 };
 
 const sameAmount = (
@@ -134,8 +161,11 @@ const startEdit = (vendor: any) => {
     form.vendor_type = vendor.vendor_type || 'government';
     form.is_company_owned = Boolean(vendor.is_company_owned);
     form.is_default = Boolean(vendor.is_default);
-    form.provides_mandatory_transport = Boolean(vendor.provides_mandatory_transport);
-    form.mandatory_transport_vendor_id = vendor.mandatory_transport_vendor_id || 'none';
+    form.provides_mandatory_transport = Boolean(
+        vendor.provides_mandatory_transport,
+    );
+    form.mandatory_transport_vendor_id =
+        vendor.mandatory_transport_vendor_id || 'none';
     form.phone = vendor.phone || '';
     form.email = vendor.email || '';
     form.city = vendor.city || '';
@@ -159,7 +189,8 @@ const payload = (data: any) => ({
         data.vendor_type === 'transport_provider' && data.is_company_owned,
     is_default: data.vendor_type !== 'transport_provider' && data.is_default,
     provides_mandatory_transport:
-        data.vendor_type !== 'transport_provider' && data.provides_mandatory_transport,
+        data.vendor_type !== 'transport_provider' &&
+        data.provides_mandatory_transport,
     mandatory_transport_vendor_id:
         data.vendor_type !== 'transport_provider' &&
         !data.provides_mandatory_transport &&
@@ -181,11 +212,6 @@ const submit = () => {
     const options = {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success(
-                editingVendor.value
-                    ? 'Visa vendor updated successfully'
-                    : 'Visa vendor created successfully',
-            );
             resetForm();
         },
         onError: () =>
@@ -276,19 +302,49 @@ const submit = () => {
                                 <span>Default visa vendor for new groups</span>
                             </Label>
                             <Label class="flex items-center gap-3">
-                                <Checkbox v-model="form.provides_mandatory_transport" />
-                                <span>Also provides mandatory bus transport</span>
+                                <Checkbox
+                                    v-model="form.provides_mandatory_transport"
+                                />
+                                <span
+                                    >Also provides mandatory bus transport</span
+                                >
                             </Label>
-                            <div v-if="!form.provides_mandatory_transport" class="space-y-2">
+                            <div
+                                v-if="!form.provides_mandatory_transport"
+                                class="space-y-2"
+                            >
                                 <Label>Mandatory transport provider</Label>
-                                <Select v-model="form.mandatory_transport_vendor_id">
-                                    <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                                <Select
+                                    v-model="form.mandatory_transport_vendor_id"
+                                >
+                                    <SelectTrigger
+                                        ><SelectValue
+                                            placeholder="Select provider"
+                                    /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">Select provider</SelectItem>
-                                        <SelectItem v-for="vendor in transportVendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}</SelectItem>
+                                        <SelectItem value="none"
+                                            >Select provider</SelectItem
+                                        >
+                                        <SelectItem
+                                            v-for="vendor in transportVendors"
+                                            :key="vendor.id"
+                                            :value="vendor.id"
+                                            >{{ vendor.name }}</SelectItem
+                                        >
                                     </SelectContent>
                                 </Select>
-                                <p v-if="form.errors.mandatory_transport_vendor_id" class="text-xs text-destructive">{{ form.errors.mandatory_transport_vendor_id }}</p>
+                                <p
+                                    v-if="
+                                        form.errors
+                                            .mandatory_transport_vendor_id
+                                    "
+                                    class="text-xs text-destructive"
+                                >
+                                    {{
+                                        form.errors
+                                            .mandatory_transport_vendor_id
+                                    }}
+                                </p>
                             </div>
                         </div>
                         <div class="grid gap-3 md:grid-cols-2">
@@ -315,18 +371,30 @@ const submit = () => {
                                     ><Input
                                         v-model="form.adult_retail_amount"
                                         type="number"
-                                        min="0"
+                                        min="0.01"
                                         step="0.01"
                                     />
+                                    <p
+                                        v-if="form.errors.adult_retail_amount"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ form.errors.adult_retail_amount }}
+                                    </p>
                                 </div>
                                 <div class="space-y-2">
                                     <Label>Cost</Label
                                     ><Input
                                         v-model="form.adult_cost_amount"
                                         type="number"
-                                        min="0"
+                                        min="0.01"
                                         step="0.01"
                                     />
+                                    <p
+                                        v-if="form.errors.adult_cost_amount"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ form.errors.adult_cost_amount }}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -341,18 +409,30 @@ const submit = () => {
                                     ><Input
                                         v-model="form.child_retail_amount"
                                         type="number"
-                                        min="0"
+                                        min="0.01"
                                         step="0.01"
                                     />
+                                    <p
+                                        v-if="form.errors.child_retail_amount"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ form.errors.child_retail_amount }}
+                                    </p>
                                 </div>
                                 <div class="space-y-2">
                                     <Label>Cost</Label
                                     ><Input
                                         v-model="form.child_cost_amount"
                                         type="number"
-                                        min="0"
+                                        min="0.01"
                                         step="0.01"
                                     />
+                                    <p
+                                        v-if="form.errors.child_cost_amount"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ form.errors.child_cost_amount }}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -390,7 +470,9 @@ const submit = () => {
                             <Button
                                 type="submit"
                                 :class="editingVendor ? '' : 'sm:col-span-2'"
-                                :disabled="form.processing"
+                                :disabled="
+                                    form.processing || !hasRequiredVisaRates
+                                "
                                 ><Save class="mr-2 h-4 w-4" />{{
                                     editingVendor
                                         ? 'Save Changes'
@@ -427,8 +509,7 @@ const submit = () => {
                                     >Payable</TableHead
                                 >
                                 <TableHead>Status</TableHead>
-                                <TableHead
-                                    class="w-24 text-right"
+                                <TableHead class="w-24 text-right"
                                     >Action</TableHead
                                 >
                             </TableRow>
@@ -450,8 +531,18 @@ const submit = () => {
                                 <TableCell>
                                     <div>{{ vendor.name }}</div>
                                     <div class="mt-1 flex gap-1">
-                                        <Badge v-if="vendor.is_default" variant="secondary">Default</Badge>
-                                        <Badge v-if="vendor.provides_mandatory_transport" variant="outline">Visa + transport</Badge>
+                                        <Badge
+                                            v-if="vendor.is_default"
+                                            variant="secondary"
+                                            >Default</Badge
+                                        >
+                                        <Badge
+                                            v-if="
+                                                vendor.provides_mandatory_transport
+                                            "
+                                            variant="outline"
+                                            >Visa + transport</Badge
+                                        >
                                     </div>
                                 </TableCell>
                                 <TableCell
@@ -492,17 +583,34 @@ const submit = () => {
                                         :amount="vendor.balance"
                                         :currency="company.base_currency"
                                 /></TableCell>
-                                <TableCell><Badge :variant="vendor.is_active ? 'default' : 'secondary'">{{ vendor.is_active ? 'Active' : 'Inactive' }}</Badge></TableCell>
                                 <TableCell
-                                    class="text-right"
+                                    ><Badge
+                                        :variant="
+                                            vendor.is_active
+                                                ? 'default'
+                                                : 'secondary'
+                                        "
+                                        >{{
+                                            vendor.is_active
+                                                ? 'Active'
+                                                : 'Inactive'
+                                        }}</Badge
+                                    ></TableCell
+                                >
+                                <TableCell class="text-right"
                                     ><Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        @click="router.get(`/${company.slug}/umrah/vendors/${vendor.id}`)"
+                                        @click="
+                                            router.get(
+                                                `/${company.slug}/umrah/vendors/${vendor.id}`,
+                                            )
+                                        "
                                         ><Eye class="h-4 w-4" /><span
                                             class="sr-only"
-                                            >View {{ vendor.name }} statement</span
+                                            >View
+                                            {{ vendor.name }} statement</span
                                         ></Button
                                     ><Button
                                         v-if="canManageVendors"
@@ -519,12 +627,19 @@ const submit = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        :title="vendor.is_active ? 'Deactivate vendor' : 'Reactivate vendor'"
+                                        :title="
+                                            vendor.is_active
+                                                ? 'Deactivate vendor'
+                                                : 'Reactivate vendor'
+                                        "
                                         :disabled="statusForm.processing"
                                         @click="updateStatus(vendor)"
-                                        ><Power v-if="vendor.is_active" class="h-4 w-4" /><RotateCcw v-else class="h-4 w-4" /></Button
-                                    ></TableCell
-                                >
+                                        ><Power
+                                            v-if="vendor.is_active"
+                                            class="h-4 w-4" /><RotateCcw
+                                            v-else
+                                            class="h-4 w-4" /></Button
+                                ></TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>

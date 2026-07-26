@@ -17,6 +17,7 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
     public function rules(): array
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
+        $requiresVisaRates = $this->input('vendor_type') !== VisaVendor::TYPE_TRANSPORT_PROVIDER;
 
         return [
             'vendor_number' => [
@@ -40,12 +41,29 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
-            'adult_retail_amount' => ['nullable', 'numeric', 'min:0'],
-            'adult_cost_amount' => ['nullable', 'numeric', 'min:0'],
-            'child_retail_amount' => ['nullable', 'numeric', 'min:0'],
-            'child_cost_amount' => ['nullable', 'numeric', 'min:0'],
+            'adult_retail_amount' => $this->visaRateRules($requiresVisaRates),
+            'adult_cost_amount' => $this->visaRateRules($requiresVisaRates),
+            'child_retail_amount' => $this->visaRateRules($requiresVisaRates),
+            'child_cost_amount' => $this->visaRateRules($requiresVisaRates),
             'included_bus_cost_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
+        ];
+    }
+
+    private function visaRateRules(bool $required): array
+    {
+        return $required
+            ? ['required', 'numeric', 'gt:0']
+            : ['nullable', 'numeric', 'min:0'];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'adult_retail_amount' => 'adult retail rate',
+            'adult_cost_amount' => 'adult cost rate',
+            'child_retail_amount' => 'child retail rate',
+            'child_cost_amount' => 'child cost rate',
         ];
     }
 }

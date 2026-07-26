@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Services\CommandBus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,6 +97,17 @@ class CompaniesPageController extends Controller
         // Update session to remember this as the last accessed company
         session(['last_company_slug' => $data['slug']]);
 
-        return redirect()->back()->with('success', $result['message'] ?? 'Switched company.');
+        $company = Company::where('slug', $data['slug'])->firstOrFail();
+        $target = match (true) {
+            $company->isModuleEnabled('umrah')
+                || in_array($company->industry_code, ['umrah', 'travel'], true)
+                => route('umrah.dashboard', ['company' => $company->slug]),
+            $company->isModuleEnabled('fuel_station')
+                || $company->industry_code === 'fuel_station'
+                => route('fuel.dashboard', ['company' => $company->slug]),
+            default => "/{$company->slug}",
+        };
+
+        return redirect($target)->with('success', $result['message'] ?? 'Switched company.');
     }
 }

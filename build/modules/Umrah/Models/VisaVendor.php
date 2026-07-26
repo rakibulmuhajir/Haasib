@@ -4,6 +4,7 @@ namespace App\Modules\Umrah\Models;
 
 use App\Models\Company;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -87,6 +88,15 @@ class VisaVendor extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function scopeWithCompleteVisaRates(Builder $query): Builder
+    {
+        return $query
+            ->where('adult_retail_amount', '>', 0)
+            ->where('adult_cost_amount', '>', 0)
+            ->where('child_retail_amount', '>', 0)
+            ->where('child_cost_amount', '>', 0);
     }
 
     public function groups(): HasMany

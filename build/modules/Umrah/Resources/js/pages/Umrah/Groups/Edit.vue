@@ -78,7 +78,6 @@ const submit = () =>
                     : data.mandatory_transport_vendor_id,
         }))
         .put(`/${props.company.slug}/umrah/groups/${props.group.id}`, {
-            onSuccess: () => toast.success('Visa group updated successfully'),
             onError: () => toast.error('Failed to update visa group'),
         });
 </script>

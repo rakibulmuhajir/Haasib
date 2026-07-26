@@ -39,7 +39,6 @@ const form = useForm({
 })
 
 const submit = () => form.put(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
-    onSuccess: () => toast.success('Agent updated successfully'),
     onError: () => toast.error('Failed to update agent'),
   })
 </script>

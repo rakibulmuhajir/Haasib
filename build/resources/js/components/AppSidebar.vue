@@ -30,8 +30,20 @@ withDefaults(defineProps<Props>(), {
 
 const page = usePage();
 const authProps = computed(() => (page.props.auth as any) || {});
-const currentCompany = computed(() => authProps.value.currentCompany || null);
 const userCompanies = computed(() => authProps.value.companies || []);
+const companyFromUrl = computed(() => {
+    const match = page.url.match(/^\/([^/]+)/);
+    const possibleSlug = match ? match[1] : null;
+
+    return possibleSlug
+        ? userCompanies.value.find(
+              (company: any) => company.slug === possibleSlug,
+          ) || null
+        : null;
+});
+const currentCompany = computed(
+    () => companyFromUrl.value || authProps.value.currentCompany || null,
+);
 const isFuelStationCompany = computed(() => {
     const modules = currentCompany.value?.settings?.modules ?? {};
     if (modules?.fuel_station === true) return true;
@@ -65,24 +77,12 @@ const isPayrollEnabled = computed(() => {
     const modules = currentCompany.value?.settings?.modules ?? {};
     return modules?.payroll === true;
 });
-const slugFromUrl = computed(() => {
-    const match = page.url.match(/^\/([^/]+)/);
-    const possibleSlug = match ? match[1] : null;
-    if (!possibleSlug) return null;
-
-    return (
-        userCompanies.value.find(
-            (company: any) => company.slug === possibleSlug,
-        )?.slug || null
-    );
-});
-
 const modeKey = computed(() => 'owner');
 
 const { t } = useLexicon();
 
 const navGroups = computed<NavGroup[]>(() => {
-    const slug = currentCompany.value?.slug || slugFromUrl.value;
+    const slug = currentCompany.value?.slug;
 
     const tOwner = (key: string) => t(key, 'owner');
 

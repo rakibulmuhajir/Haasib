@@ -40,7 +40,6 @@ class UpdateVoucherRequest extends UmrahFormRequest
 
     public function rules(): array
     {
-        $requiresFlights = $this->input('service_bundle') !== Voucher::SERVICE_HOTEL;
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
         $access = app(TravelAccessService::class);
@@ -51,27 +50,27 @@ class UpdateVoucherRequest extends UmrahFormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'service_bundle' => ['required', Rule::in(array_keys(Voucher::SERVICE_BUNDLES))],
-            'onward_airline' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRLINES))],
+            'onward_airline' => ['nullable', Rule::in(array_keys(Voucher::AIRLINES))],
             'onward_flight_number' => ['nullable', 'string', 'max:5', 'regex:/^[A-Za-z0-9]+$/'],
-            'onward_departure_city' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
-            'onward_arrival_city' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
-            'onward_departure_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date'],
-            'onward_arrival_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date', 'after:onward_departure_at'],
-            'return_airline' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRLINES))],
+            'onward_departure_city' => ['nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
+            'onward_arrival_city' => ['nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
+            'onward_departure_at' => ['nullable', 'date'],
+            'onward_arrival_at' => ['nullable', 'date', 'after:onward_departure_at'],
+            'return_airline' => ['nullable', Rule::in(array_keys(Voucher::AIRLINES))],
             'return_flight_number' => ['nullable', 'string', 'max:5', 'regex:/^[A-Za-z0-9]+$/'],
-            'return_departure_city' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
-            'return_arrival_city' => [Rule::requiredIf($requiresFlights), 'nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
-            'return_departure_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date', 'after:onward_arrival_at'],
-            'return_arrival_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date', 'after:return_departure_at'],
+            'return_departure_city' => ['nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
+            'return_arrival_city' => ['nullable', Rule::in(array_keys(Voucher::AIRPORT_CITIES))],
+            'return_departure_at' => ['nullable', 'date', 'after:onward_arrival_at'],
+            'return_arrival_at' => ['nullable', 'date', 'after:return_departure_at'],
             'hotel_stays' => ['required', 'array', 'min:1'],
-            'hotel_stays.*.hotel_name' => ['required', 'string', 'max:255'],
-            'hotel_stays.*.city' => ['required', 'string', 'max:100'],
-            'hotel_stays.*.source' => ['required', Rule::in(['company', 'self'])],
-            'hotel_stays.*.hotel_id' => ['nullable', 'required_if:hotel_stays.*.source,company', 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.')],
-            'hotel_stays.*.room_type' => ['required', Rule::in(array_keys(HotelRoomRate::TYPES))],
-            'hotel_stays.*.room_count' => ['required', 'integer', 'min:1', 'max:100'],
-            'hotel_stays.*.check_in_date' => ['required', 'date_format:Y-m-d'],
-            'hotel_stays.*.check_out_date' => ['required', 'date_format:Y-m-d'],
+            'hotel_stays.*.hotel_name' => ['nullable', 'string', 'max:255'],
+            'hotel_stays.*.city' => ['nullable', 'string', 'max:100'],
+            'hotel_stays.*.source' => ['nullable', Rule::in(['company', 'self'])],
+            'hotel_stays.*.hotel_id' => ['nullable', 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.')],
+            'hotel_stays.*.room_type' => ['nullable', Rule::in(array_keys(HotelRoomRate::TYPES))],
+            'hotel_stays.*.room_count' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'hotel_stays.*.check_in_date' => ['nullable', 'date_format:Y-m-d'],
+            'hotel_stays.*.check_out_date' => ['nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
             'override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000'],
@@ -82,6 +81,9 @@ class UpdateVoucherRequest extends UmrahFormRequest
     {
         return [function (Validator $validator): void {
             if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+            if (! $this->hasCompleteItinerary()) {
                 return;
             }
             $previousCheckout = null;
@@ -110,5 +112,28 @@ class UpdateVoucherRequest extends UmrahFormRequest
                 $validator->errors()->add($deadlineField, "Schedule changes must be saved at least {$agent->voucher_cutoff_hours} hours before service starts.");
             }
         }];
+    }
+
+    private function hasCompleteItinerary(): bool
+    {
+        if ($this->input('service_bundle') !== Voucher::SERVICE_HOTEL) {
+            foreach (['onward_airline', 'onward_departure_city', 'onward_arrival_city', 'onward_departure_at', 'onward_arrival_at', 'return_airline', 'return_departure_city', 'return_arrival_city', 'return_departure_at', 'return_arrival_at'] as $field) {
+                if (blank($this->input($field))) {
+                    return false;
+                }
+            }
+        }
+
+        $stays = $this->input('hotel_stays', []);
+
+        return $stays !== [] && collect($stays)->every(function (array $stay): bool {
+            foreach (['hotel_name', 'city', 'source', 'room_type', 'room_count', 'check_in_date', 'check_out_date'] as $field) {
+                if (blank($stay[$field] ?? null)) {
+                    return false;
+                }
+            }
+
+            return ($stay['source'] ?? null) !== 'company' || filled($stay['hotel_id'] ?? null);
+        });
     }
 }

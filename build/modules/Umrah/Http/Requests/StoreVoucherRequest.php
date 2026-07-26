@@ -39,7 +39,14 @@ class StoreVoucherRequest extends UmrahFormRequest
 
     public function rules(): array
     {
-        $requiresFlights = $this->input('service_bundle') !== Voucher::SERVICE_HOTEL;
+        $isDraft = $this->input('status', Voucher::STATUS_DRAFT) === Voucher::STATUS_DRAFT;
+        $requiresFlights = ! $isDraft && $this->input('service_bundle') !== Voucher::SERVICE_HOTEL;
+        $requiresCompleteStay = ! $isDraft;
+        $hotelIdRules = ['nullable'];
+        if ($requiresCompleteStay) {
+            $hotelIdRules[] = 'required_if:hotel_stays.*.source,company';
+        }
+        array_push($hotelIdRules, 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.'));
 
         return [
             'voucher_number' => [
@@ -69,14 +76,14 @@ class StoreVoucherRequest extends UmrahFormRequest
             'return_departure_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date', 'after:onward_arrival_at'],
             'return_arrival_at' => [Rule::requiredIf($requiresFlights), 'nullable', 'date', 'after:return_departure_at'],
             'hotel_stays' => ['required', 'array', 'min:1'],
-            'hotel_stays.*.hotel_name' => ['required', 'string', 'max:255'],
-            'hotel_stays.*.city' => ['required', 'string', 'max:100'],
-            'hotel_stays.*.source' => ['required', Rule::in(['company', 'self'])],
-            'hotel_stays.*.hotel_id' => ['nullable', 'required_if:hotel_stays.*.source,company', 'uuid', $this->existsForCompany(Hotel::class, 'Selected hotel was not found.')],
-            'hotel_stays.*.room_type' => ['required', Rule::in(array_keys(HotelRoomRate::TYPES))],
-            'hotel_stays.*.room_count' => ['required', 'integer', 'min:1', 'max:100'],
-            'hotel_stays.*.check_in_date' => ['required', 'date_format:Y-m-d'],
-            'hotel_stays.*.check_out_date' => ['required', 'date_format:Y-m-d'],
+            'hotel_stays.*.hotel_name' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'string', 'max:255'],
+            'hotel_stays.*.city' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'string', 'max:100'],
+            'hotel_stays.*.source' => [Rule::requiredIf($requiresCompleteStay), 'nullable', Rule::in(['company', 'self'])],
+            'hotel_stays.*.hotel_id' => $hotelIdRules,
+            'hotel_stays.*.room_type' => [Rule::requiredIf($requiresCompleteStay), 'nullable', Rule::in(array_keys(HotelRoomRate::TYPES))],
+            'hotel_stays.*.room_count' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'integer', 'min:1', 'max:100'],
+            'hotel_stays.*.check_in_date' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'date_format:Y-m-d'],
+            'hotel_stays.*.check_out_date' => [Rule::requiredIf($requiresCompleteStay), 'nullable', 'date_format:Y-m-d'],
             'hotel_stays.*.notes' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
         ];
@@ -90,6 +97,7 @@ class StoreVoucherRequest extends UmrahFormRequest
                     return;
                 }
 
+                $hasCompleteItinerary = $this->hasCompleteItinerary();
                 $companyId = app(CompanyContextService::class)->getCompanyId();
                 $groupId = (string) $this->input('visa_group_id');
                 $passengerIds = array_values(array_unique($this->input('passenger_ids', [])));
@@ -115,12 +123,14 @@ class StoreVoucherRequest extends UmrahFormRequest
                         $validator->errors()->add('visa_group_id', 'Selected group is not assigned to your agent login.');
                     }
 
-                    $deadlineField = $this->input('service_bundle') === Voucher::SERVICE_HOTEL ? 'hotel_stays.0.check_in_date' : 'onward_departure_at';
-                    $deadlineValue = $this->input('service_bundle') === Voucher::SERVICE_HOTEL
-                        ? $this->input('hotel_stays.0.check_in_date')
-                        : $this->input('onward_departure_at');
-                    if ($agent && Carbon::parse($deadlineValue)->lt(now()->addHours($agent->voucher_cutoff_hours))) {
-                        $validator->errors()->add($deadlineField, "Voucher must be created at least {$agent->voucher_cutoff_hours} hours before service starts.");
+                    if ($hasCompleteItinerary) {
+                        $deadlineField = $this->input('service_bundle') === Voucher::SERVICE_HOTEL ? 'hotel_stays.0.check_in_date' : 'onward_departure_at';
+                        $deadlineValue = $this->input('service_bundle') === Voucher::SERVICE_HOTEL
+                            ? $this->input('hotel_stays.0.check_in_date')
+                            : $this->input('onward_departure_at');
+                        if ($agent && Carbon::parse($deadlineValue)->lt(now()->addHours($agent->voucher_cutoff_hours))) {
+                            $validator->errors()->add($deadlineField, "Voucher must be created at least {$agent->voucher_cutoff_hours} hours before service starts.");
+                        }
                     }
                 }
 
@@ -140,6 +150,10 @@ class StoreVoucherRequest extends UmrahFormRequest
 
                 if ($alreadyAssigned) {
                     $validator->errors()->add('passenger_ids', 'One or more selected passengers already have a voucher.');
+                }
+
+                if (! $hasCompleteItinerary) {
+                    return;
                 }
 
                 $hotelOnly = $this->input('service_bundle') === Voucher::SERVICE_HOTEL;
@@ -167,5 +181,31 @@ class StoreVoucherRequest extends UmrahFormRequest
                 }
             },
         ];
+    }
+
+    private function hasCompleteItinerary(): bool
+    {
+        if ($this->input('service_bundle') !== Voucher::SERVICE_HOTEL) {
+            foreach (['onward_airline', 'onward_departure_city', 'onward_arrival_city', 'onward_departure_at', 'onward_arrival_at', 'return_airline', 'return_departure_city', 'return_arrival_city', 'return_departure_at', 'return_arrival_at'] as $field) {
+                if (blank($this->input($field))) {
+                    return false;
+                }
+            }
+        }
+
+        $stays = $this->input('hotel_stays', []);
+        if ($stays === []) {
+            return false;
+        }
+
+        return collect($stays)->every(function (array $stay): bool {
+            foreach (['hotel_name', 'city', 'source', 'room_type', 'room_count', 'check_in_date', 'check_out_date'] as $field) {
+                if (blank($stay[$field] ?? null)) {
+                    return false;
+                }
+            }
+
+            return ($stay['source'] ?? null) !== 'company' || filled($stay['hotel_id'] ?? null);
+        });
     }
 }

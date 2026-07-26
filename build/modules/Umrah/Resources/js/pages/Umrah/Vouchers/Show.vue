@@ -124,8 +124,12 @@ const approve = () =>
         `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/approve`,
         {
             preserveScroll: true,
-            onSuccess: () => toast.success('Voucher approved successfully'),
-            onError: () => toast.error('Failed to approve voucher'),
+            onError: () =>
+                toast.error(
+                    approveForm.errors.voucher ||
+                        approveForm.errors.override_reason ||
+                        'Failed to approve voucher',
+                ),
         },
     );
 
@@ -148,7 +152,6 @@ const submitMove = () => {
             onSuccess: () => {
                 moveOpen.value = false;
                 moveForm.reset();
-                toast.success('Passengers moved successfully');
             },
             onError: () => toast.error('Failed to move passengers'),
         },
@@ -162,7 +165,6 @@ const submitSeparation = () => {
             onSuccess: () => {
                 separateOpen.value = false;
                 separateForm.reset();
-                toast.success('Individual vouchers created');
             },
             onError: () => toast.error('Failed to separate vouchers'),
         },
@@ -177,7 +179,6 @@ const submitWorkflow = () => {
         onSuccess: () => {
             workflowOpen.value = null;
             workflowForm.reset();
-            toast.success(action === 'cancel' ? 'Voucher cancelled' : action === 'delete' ? 'Draft voucher deleted' : 'Draft amendment created');
         },
         onError: () => toast.error(`Failed to ${action} voucher`),
     };
@@ -390,7 +391,11 @@ const exportVoucher = () => {
             <Button
                 v-if="canViewAccounting"
                 variant="outline"
-                @click="router.get(`/${company.slug}/umrah/vouchers/${voucher.id}/accounting`)"
+                @click="
+                    router.get(
+                        `/${company.slug}/umrah/vouchers/${voucher.id}/accounting`,
+                    )
+                "
             >
                 <Calculator class="mr-2 h-4 w-4" />Accounting
             </Button>
@@ -414,13 +419,25 @@ const exportVoucher = () => {
                 <Pencil class="mr-2 h-4 w-4" />
                 Edit
             </Button>
-            <Button v-if="agentCapabilities.can_amend" variant="outline" @click="workflowOpen = 'amend'">
+            <Button
+                v-if="agentCapabilities.can_amend"
+                variant="outline"
+                @click="workflowOpen = 'amend'"
+            >
                 <FilePenLine class="mr-2 h-4 w-4" />Amend
             </Button>
-            <Button v-if="agentCapabilities.can_delete" variant="outline" @click="workflowOpen = 'delete'">
+            <Button
+                v-if="agentCapabilities.can_delete"
+                variant="outline"
+                @click="workflowOpen = 'delete'"
+            >
                 <Trash2 class="mr-2 h-4 w-4" />Delete Draft
             </Button>
-            <Button v-if="agentCapabilities.can_cancel" variant="destructive" @click="workflowOpen = 'cancel'">
+            <Button
+                v-if="agentCapabilities.can_cancel"
+                variant="destructive"
+                @click="workflowOpen = 'cancel'"
+            >
                 <XCircle class="mr-2 h-4 w-4" />Cancel Voucher
             </Button>
             <Button
@@ -485,10 +502,25 @@ const exportVoucher = () => {
             </span>
         </div>
 
-        <div v-if="voucher.amended_voucher || voucher.superseded_by_voucher || voucher.cancelled_at" class="mb-4 rounded-md border px-4 py-3 text-sm">
-            <span v-if="voucher.amended_voucher">Version {{ voucher.version_number }} amends {{ voucher.amended_voucher.voucher_number }}.</span>
-            <span v-if="voucher.superseded_by_voucher"> Superseded by {{ voucher.superseded_by_voucher.voucher_number }}.</span>
-            <span v-if="voucher.cancelled_at"> Cancelled: {{ voucher.cancellation_reason }}</span>
+        <div
+            v-if="
+                voucher.amended_voucher ||
+                voucher.superseded_by_voucher ||
+                voucher.cancelled_at
+            "
+            class="mb-4 rounded-md border px-4 py-3 text-sm"
+        >
+            <span v-if="voucher.amended_voucher"
+                >Version {{ voucher.version_number }} amends
+                {{ voucher.amended_voucher.voucher_number }}.</span
+            >
+            <span v-if="voucher.superseded_by_voucher">
+                Superseded by
+                {{ voucher.superseded_by_voucher.voucher_number }}.</span
+            >
+            <span v-if="voucher.cancelled_at">
+                Cancelled: {{ voucher.cancellation_reason }}</span
+            >
         </div>
 
         <div
@@ -574,18 +606,69 @@ const exportVoucher = () => {
             </CardContent>
         </Card>
 
-        <Dialog :open="workflowOpen !== null" @update:open="(open) => { if (!open) workflowOpen = null; }">
+        <Dialog
+            :open="workflowOpen !== null"
+            @update:open="
+                (open) => {
+                    if (!open) workflowOpen = null;
+                }
+            "
+        >
             <DialogContent>
-                <DialogHeader><DialogTitle>{{ workflowOpen === 'cancel' ? 'Cancel Voucher' : workflowOpen === 'delete' ? 'Delete Draft Voucher' : 'Create Voucher Amendment' }}</DialogTitle></DialogHeader>
+                <DialogHeader
+                    ><DialogTitle>{{
+                        workflowOpen === 'cancel'
+                            ? 'Cancel Voucher'
+                            : workflowOpen === 'delete'
+                              ? 'Delete Draft Voucher'
+                              : 'Create Voucher Amendment'
+                    }}</DialogTitle></DialogHeader
+                >
                 <div class="space-y-2">
-                    <Label for="workflow-reason">Reason {{ workflowOpen === 'cancel' ? '' : '(optional before travel)' }}</Label>
-                    <Textarea id="workflow-reason" v-model="workflowForm.reason" />
-                    <p v-if="workflowForm.errors.reason" class="text-sm text-destructive">{{ workflowForm.errors.reason }}</p>
+                    <Label for="workflow-reason"
+                        >Reason
+                        {{
+                            workflowOpen === 'cancel'
+                                ? ''
+                                : '(optional before travel)'
+                        }}</Label
+                    >
+                    <Textarea
+                        id="workflow-reason"
+                        v-model="workflowForm.reason"
+                    />
+                    <p
+                        v-if="workflowForm.errors.reason"
+                        class="text-sm text-destructive"
+                    >
+                        {{ workflowForm.errors.reason }}
+                    </p>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" @click="workflowOpen = null">Keep Voucher</Button>
-                    <Button :variant="workflowOpen === 'cancel' || workflowOpen === 'delete' ? 'destructive' : 'default'" :disabled="workflowForm.processing || (workflowOpen === 'cancel' && workflowForm.reason.trim().length < 5)" @click="submitWorkflow">
-                        {{ workflowOpen === 'cancel' ? 'Cancel Voucher' : workflowOpen === 'delete' ? 'Delete Draft' : 'Create Amendment' }}
+                    <Button variant="outline" @click="workflowOpen = null"
+                        >Keep Voucher</Button
+                    >
+                    <Button
+                        :variant="
+                            workflowOpen === 'cancel' ||
+                            workflowOpen === 'delete'
+                                ? 'destructive'
+                                : 'default'
+                        "
+                        :disabled="
+                            workflowForm.processing ||
+                            (workflowOpen === 'cancel' &&
+                                workflowForm.reason.trim().length < 5)
+                        "
+                        @click="submitWorkflow"
+                    >
+                        {{
+                            workflowOpen === 'cancel'
+                                ? 'Cancel Voucher'
+                                : workflowOpen === 'delete'
+                                  ? 'Delete Draft'
+                                  : 'Create Amendment'
+                        }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

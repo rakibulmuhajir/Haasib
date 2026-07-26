@@ -47,7 +47,6 @@ const submit = () => {
     room_rates: data.room_rates.map((rate) => ({ ...rate, retail_amount: Number(rate.retail_amount || 0), cost_amount: Number(rate.cost_amount || 0) })),
   }))
   const options = {
-    onSuccess: () => toast.success(props.editingHotel ? 'Hotel updated successfully' : 'Hotel added successfully'),
     onError: () => toast.error(props.editingHotel ? 'Failed to update hotel' : 'Failed to add hotel'),
   }
   if (props.editingHotel) form.put(`/${props.company.slug}/umrah/settings/hotels/${props.editingHotel.id}`, options)

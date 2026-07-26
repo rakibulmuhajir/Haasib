@@ -94,6 +94,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - timestamps, soft deletes.
 - Check:
   - `vendor_type` in `government`, `visa_provider`, `transport_provider`, `hotel`, `other`.
+  - Active non-transport vendors require positive adult and child retail and cost rates before they can be created or updated.
 - Model fillable:
   - `company_id`, `vendor_number`, `name`, `vendor_type`, `is_company_owned`, `is_default`, `provides_mandatory_transport`, `mandatory_transport_vendor_id`, `phone`, `email`, `city`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `included_bus_cost_amount`, `total_cost`, `total_paid`, `balance`, `is_active`.
 

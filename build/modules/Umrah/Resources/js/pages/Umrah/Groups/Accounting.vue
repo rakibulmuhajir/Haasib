@@ -83,6 +83,15 @@ const totalCost = computed(() =>
 );
 const profit = computed(() => receivable.value - totalCost.value);
 const balance = computed(() => Math.max(receivable.value - Number(props.group.total_paid || 0), 0));
+const paymentStatus = computed(() => {
+    if (Number(props.group.total_paid || 0) <= 0) {
+        return { label: 'Unpaid', variant: 'secondary' as const };
+    }
+
+    return balance.value <= 0
+        ? { label: 'Paid', variant: 'default' as const }
+        : { label: 'Partially paid', variant: 'secondary' as const };
+});
 const accountingStates: Record<string, string> = {
     pending: 'Pending approval', posted: 'Posted', shared: 'Shared billing', reversed: 'Reversed',
     superseded: 'Superseded', no_charge: 'No charge', unposted: 'Needs review',
@@ -104,7 +113,6 @@ const submit = () => {
             preserveScroll: true,
             onSuccess: () => {
                 form.reason = '';
-                toast.success('Group accounting updated successfully');
             },
             onError: () => toast.error('Group accounting could not be updated'),
         });
@@ -224,7 +232,7 @@ const submit = () => {
                         <div class="flex justify-between border-t pt-3 font-medium"><span>Total receivable</span><MoneyText :amount="receivable" :currency="company.base_currency" /></div>
                         <div class="flex justify-between"><span>Received</span><MoneyText :amount="group.total_paid" :currency="company.base_currency" /></div>
                         <div class="flex justify-between border-t pt-3 text-base font-semibold"><span>Balance</span><MoneyText :amount="balance" :currency="company.base_currency" /></div>
-                        <Badge :variant="balance <= 0 ? 'default' : 'secondary'">{{ balance <= 0 ? 'Paid' : 'Unpaid' }}</Badge>
+                        <Badge :variant="paymentStatus.variant">{{ paymentStatus.label }}</Badge>
                     </CardContent>
                 </Card>
 

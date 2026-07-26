@@ -149,6 +149,14 @@ const vendorForm = useForm({
     included_bus_cost_amount: '50',
     notes: '',
 });
+const hasRequiredVendorRates = computed(() =>
+    [
+        vendorForm.adult_retail_amount,
+        vendorForm.adult_cost_amount,
+        vendorForm.child_retail_amount,
+        vendorForm.child_cost_amount,
+    ].every((amount) => Number(amount) > 0),
+);
 
 const sameAmount = (
     first: string | number | null | undefined,
@@ -504,7 +512,6 @@ const createAgent = () => {
     agentForm.post(`/${props.company.slug}/umrah/agents/quick-store`, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success('Agent created successfully');
             agentForm.reset();
             agentForm.country = 'Pakistan';
             quickAgentOpen.value = false;
@@ -526,7 +533,6 @@ const createVendor = () => {
         .post(`/${props.company.slug}/umrah/vendors/quick-store`, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success('Visa vendor created successfully');
             vendorForm.reset();
             vendorForm.vendor_type = 'visa_provider';
             vendorForm.is_default = false;
@@ -599,7 +605,6 @@ const submit = () => {
                   }))
                 : [],
     })).post(`/${props.company.slug}/umrah/groups`, {
-        onSuccess: () => toast.success('Visa group created successfully'),
         onError: showFormErrors,
     });
 };
@@ -923,9 +928,15 @@ const submit = () => {
                                                     vendorForm.adult_retail_amount
                                                 "
                                                 type="number"
-                                                min="0"
+                                                min="0.01"
                                                 step="0.01"
                                             />
+                                            <p
+                                                v-if="vendorForm.errors.adult_retail_amount"
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{ vendorForm.errors.adult_retail_amount }}
+                                            </p>
                                         </div>
                                         <div class="space-y-2">
                                             <Label>Cost</Label
@@ -934,9 +945,15 @@ const submit = () => {
                                                     vendorForm.adult_cost_amount
                                                 "
                                                 type="number"
-                                                min="0"
+                                                min="0.01"
                                                 step="0.01"
                                             />
+                                            <p
+                                                v-if="vendorForm.errors.adult_cost_amount"
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{ vendorForm.errors.adult_cost_amount }}
+                                            </p>
                                         </div>
                                     </div>
                                     <div
@@ -950,9 +967,15 @@ const submit = () => {
                                                     vendorForm.child_retail_amount
                                                 "
                                                 type="number"
-                                                min="0"
+                                                min="0.01"
                                                 step="0.01"
                                             />
+                                            <p
+                                                v-if="vendorForm.errors.child_retail_amount"
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{ vendorForm.errors.child_retail_amount }}
+                                            </p>
                                         </div>
                                         <div class="space-y-2">
                                             <Label>Cost</Label
@@ -961,9 +984,15 @@ const submit = () => {
                                                     vendorForm.child_cost_amount
                                                 "
                                                 type="number"
-                                                min="0"
+                                                min="0.01"
                                                 step="0.01"
                                             />
+                                            <p
+                                                v-if="vendorForm.errors.child_cost_amount"
+                                                class="text-xs text-destructive"
+                                            >
+                                                {{ vendorForm.errors.child_cost_amount }}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -1014,7 +1043,8 @@ const submit = () => {
                                         type="button"
                                         :disabled="
                                             vendorForm.processing ||
-                                            !vendorForm.name
+                                            !vendorForm.name ||
+                                            !hasRequiredVendorRates
                                         "
                                         @click="createVendor"
                                         >Save Vendor</Button

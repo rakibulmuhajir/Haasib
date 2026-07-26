@@ -33,7 +33,15 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             ],
             'name' => ['nullable', 'string', 'max:255'],
             'agent_id' => ['required', 'uuid', $this->existsForCompany(Agent::class, 'Selected agent was not found.')],
-            'vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at'))],
+            'vendor_id' => ['nullable', 'uuid', Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                ->where('is_active', true)
+                ->where('adult_retail_amount', '>', 0)
+                ->where('adult_cost_amount', '>', 0)
+                ->where('child_retail_amount', '>', 0)
+                ->where('child_cost_amount', '>', 0)
+                ->whereNull('deleted_at'))],
             'mandatory_transport_vendor_id' => [
                 'nullable',
                 'uuid',

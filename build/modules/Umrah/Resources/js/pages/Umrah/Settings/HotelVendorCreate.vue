@@ -28,7 +28,6 @@ const form = useForm({
 })
 const submit = () => {
   const options = {
-    onSuccess: () => toast.success(props.editingVendor ? 'Hotel vendor updated successfully' : 'Hotel vendor added successfully'),
     onError: () => toast.error(props.editingVendor ? 'Failed to update hotel vendor' : 'Failed to add hotel vendor'),
   }
   if (props.editingVendor) form.put(`/${props.company.slug}/umrah/settings/hotel-vendors/${props.editingVendor.id}`, options)

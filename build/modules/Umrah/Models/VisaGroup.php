@@ -22,6 +22,8 @@ class VisaGroup extends Model
 
     public $incrementing = false;
 
+    protected $appends = ['payment_status'];
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_PASSPORTS_RECEIVED = 'passports_received';
@@ -177,6 +179,15 @@ class VisaGroup extends Model
     public function paymentAllocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class, 'visa_group_id')->whereNull('reversed_at');
+    }
+
+    public function getPaymentStatusAttribute(): string
+    {
+        if ((float) $this->total_paid <= 0) {
+            return 'unpaid';
+        }
+
+        return (float) $this->balance <= 0 ? 'paid' : 'partially_paid';
     }
 
     public function vouchers(): HasMany

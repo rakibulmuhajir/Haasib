@@ -51,7 +51,6 @@ const form = useForm({
 
 const submit = () =>
     form.post(`/${props.company.slug}/umrah/agents`, {
-        onSuccess: () => toast.success('Agent created successfully'),
         onError: () => toast.error('Failed to create agent'),
     });
 </script>

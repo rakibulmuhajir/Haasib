@@ -46,7 +46,6 @@ const removeDialogOpen = ref(false);
 
 const confirmRemoveAgent = () => {
     removeForm.delete(`/${props.company.slug}/umrah/agents/${props.agent.id}`, {
-        onSuccess: () => toast.success('Agent removed successfully'),
         onError: () => toast.error('Failed to remove agent'),
     });
 };
@@ -60,8 +59,6 @@ const saveAccess = () =>
             `/${props.company.slug}/umrah/agents/${props.agent.id}/voucher-access`,
             {
                 preserveScroll: true,
-                onSuccess: () =>
-                    toast.success('Agent access updated successfully'),
                 onError: () =>
                     toast.error('Failed to update agent voucher access'),
             },

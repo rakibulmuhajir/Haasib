@@ -444,12 +444,6 @@ const submit = () => {
     }));
 
     const options = {
-        onSuccess: () =>
-            toast.success(
-                editingVoucher.value
-                    ? 'Voucher updated successfully'
-                    : 'Voucher created successfully',
-            ),
         onError: () =>
             toast.error(
                 editingVoucher.value

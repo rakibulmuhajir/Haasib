@@ -152,6 +152,15 @@ const canRecordPayment = computed(() =>
 );
 
 const passengers = computed(() => props.group.passengers || []);
+const paymentStatus = computed(() => {
+    if (Number(props.group.total_paid || 0) <= 0) {
+        return { label: 'Unpaid', variant: 'secondary' as const };
+    }
+
+    return Number(props.group.balance || 0) <= 0
+        ? { label: 'Paid', variant: 'default' as const }
+        : { label: 'Partially paid', variant: 'secondary' as const };
+});
 
 watch(
     () => paymentForm.currency,
@@ -274,7 +283,6 @@ const addPassenger = () =>
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    toast.success('Passenger added successfully');
                     passengerForm.reset();
                     passengerForm.visa_status = 'received';
                     passengerForm.service_type = 'visa_transport';
@@ -298,7 +306,6 @@ const updatePassengerStatus = (passenger: any, status: string) => {
         `/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${passenger.id}/status`,
         {
             preserveScroll: true,
-            onSuccess: () => toast.success('Passenger visa status updated'),
             onError: () => toast.error('Failed to update passenger status'),
         },
     );
@@ -321,7 +328,7 @@ const openPassenger = (passenger: any) => {
 const updatePassenger = () => {
     if (!editingPassenger.value) return;
     editPassengerForm.transform((data) => ({ ...data, imported_age: data.imported_age === '' ? null : Number(data.imported_age), transport_charge_amount: Number(data.transport_charge_amount || 0) }))
-        .put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${editingPassenger.value.id}`, { preserveScroll: true, onSuccess: () => { passengerOpen.value = false; toast.success('Passenger corrected'); }, onError: () => toast.error('Failed to correct passenger') });
+        .put(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${editingPassenger.value.id}`, { preserveScroll: true, onSuccess: () => { passengerOpen.value = false; }, onError: () => toast.error('Failed to correct passenger') });
 };
 const removePassenger = (passenger: any) => {
     removePassengerTarget.value = passenger;
@@ -330,7 +337,7 @@ const removePassenger = (passenger: any) => {
 };
 const confirmRemovePassenger = () => {
     if (!removePassengerTarget.value) return;
-    removeForm.delete(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${removePassengerTarget.value.id}`, { preserveScroll: true, onSuccess: () => { removePassengerTarget.value = null; toast.success('Passenger removed'); }, onError: () => toast.error('Passenger could not be removed') });
+    removeForm.delete(`/${props.company.slug}/umrah/groups/${props.group.id}/passengers/${removePassengerTarget.value.id}`, { preserveScroll: true, onSuccess: () => { removePassengerTarget.value = null; }, onError: () => toast.error('Passenger could not be removed') });
 };
 
 const bulkUpdatePassengerStatus = () => {
@@ -352,7 +359,6 @@ const bulkUpdatePassengerStatus = () => {
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    toast.success('Selected passenger statuses updated');
                     selectedPassengerIds.value = [];
                 },
                 onError: () =>
@@ -393,7 +399,6 @@ const addPayment = () =>
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    toast.success('Payment recorded successfully');
                     paymentForm.reset('amount');
                     paymentForm.payee = 'none';
                     paymentForm.payment_date = new Date()
@@ -470,16 +475,8 @@ const addPayment = () =>
             <Card>
                 <CardHeader><CardTitle>Payment Status</CardTitle></CardHeader>
                 <CardContent>
-                    <Badge
-                        :variant="
-                            Number(group.balance || 0) <= 0
-                                ? 'default'
-                                : 'secondary'
-                        "
-                    >
-                        {{
-                            Number(group.balance || 0) <= 0 ? 'Paid' : 'Unpaid'
-                        }}
+                    <Badge :variant="paymentStatus.variant">
+                        {{ paymentStatus.label }}
                     </Badge>
                 </CardContent>
             </Card>

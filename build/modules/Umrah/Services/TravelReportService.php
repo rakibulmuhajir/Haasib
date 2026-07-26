@@ -218,7 +218,7 @@ class TravelReportService
             ];
         })->filter(fn ($row) => $row['balance'] > 0)
             ->when($filters['payment_status'] ?? null, fn (Collection $rows, string $status) => $rows->filter(fn ($row) => match ($status) {
-                'paid' => $row['balance'] <= 0, 'partially_paid' => $row['allocated'] > 0 && $row['balance'] > 0, 'unpaid' => $row['allocated'] <= 0,
+                'paid' => $row['allocated'] > 0 && $row['balance'] <= 0, 'partially_paid' => $row['allocated'] > 0 && $row['balance'] > 0, 'unpaid' => $row['allocated'] <= 0,
             }))->sortByDesc('age')->values();
 
         return [
@@ -560,12 +560,13 @@ class TravelReportService
             && ! $group->transportItems->contains('transport_vendor_id', $filters['transport_vendor_id'])) {
             return false;
         }
-        $balance = round((float) $group->total_receivable - $this->receivedAllocationsForGroup($group), 2);
+        $allocated = $this->receivedAllocationsForGroup($group);
+        $balance = round((float) $group->total_receivable - $allocated, 2);
 
         return match ($filters['payment_status'] ?? null) {
-            'paid' => $balance <= 0,
-            'partially_paid' => $balance > 0 && $balance < (float) $group->total_receivable,
-            'unpaid' => $balance >= (float) $group->total_receivable,
+            'paid' => $allocated > 0 && $balance <= 0,
+            'partially_paid' => $allocated > 0 && $balance > 0,
+            'unpaid' => $allocated <= 0,
             default => true,
         };
     }

@@ -66,7 +66,6 @@ const confirmRemoveAgent = () => {
         {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Agent removed successfully');
                 removeDialogOpen.value = false;
                 agentToRemove.value = null;
             },

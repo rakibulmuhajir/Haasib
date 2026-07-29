@@ -504,7 +504,11 @@ const addPayment = () =>
                                 Travel Date
                             </div>
                             <div class="font-medium">
-                                {{ group.travel_date || 'Not set' }}
+                                <DateTimeText
+                                    :value="group.travel_date"
+                                    mode="date"
+                                    fallback="Not set"
+                                />
                             </div>
                         </div>
                         <div>

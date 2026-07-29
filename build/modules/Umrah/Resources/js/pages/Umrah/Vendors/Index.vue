@@ -76,6 +76,7 @@ const form = useForm({
     phone: '',
     email: '',
     city: '',
+    logo_url: '',
     adult_retail_amount: '0',
     adult_cost_amount: '0',
     child_retail_amount: '0',
@@ -92,6 +93,12 @@ const hasRequiredVisaRates = computed(
             form.child_retail_amount,
             form.child_cost_amount,
         ].every((amount) => Number(amount) > 0),
+);
+const requiresTransportProvider = computed(
+    () =>
+        form.vendor_type !== 'transport_provider' &&
+        !form.provides_mandatory_transport &&
+        Number(form.included_bus_cost_amount || 0) > 0,
 );
 
 const editingVendor = ref<any | null>(null);
@@ -145,6 +152,7 @@ const resetForm = () => {
     form.phone = '';
     form.email = '';
     form.city = '';
+    form.logo_url = '';
     form.adult_retail_amount = '0';
     form.adult_cost_amount = '0';
     form.child_retail_amount = '0';
@@ -169,6 +177,7 @@ const startEdit = (vendor: any) => {
     form.phone = vendor.phone || '';
     form.email = vendor.email || '';
     form.city = vendor.city || '';
+    form.logo_url = vendor.logo_url || '';
     form.adult_retail_amount = String(vendor.adult_retail_amount ?? 0);
     form.adult_cost_amount = String(vendor.adult_cost_amount ?? 0);
     form.child_retail_amount = String(
@@ -310,7 +319,7 @@ const submit = () => {
                                 >
                             </Label>
                             <div
-                                v-if="!form.provides_mandatory_transport"
+                                v-if="requiresTransportProvider"
                                 class="space-y-2"
                             >
                                 <Label>Mandatory transport provider</Label>
@@ -359,6 +368,28 @@ const submit = () => {
                         <div class="space-y-2">
                             <Label>Email</Label
                             ><Input v-model="form.email" type="email" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label>Logo URL</Label>
+                            <div class="flex items-center gap-3">
+                                <img
+                                    v-if="form.logo_url"
+                                    :src="form.logo_url"
+                                    alt="Vendor logo preview"
+                                    class="h-12 w-12 rounded-md border object-contain"
+                                />
+                                <Input
+                                    v-model="form.logo_url"
+                                    type="url"
+                                    placeholder="https://example.com/logo.png"
+                                />
+                            </div>
+                            <p
+                                v-if="form.errors.logo_url"
+                                class="text-xs text-destructive"
+                            >
+                                {{ form.errors.logo_url }}
+                            </p>
                         </div>
                         <div
                             v-if="form.vendor_type !== 'transport_provider'"
@@ -450,9 +481,9 @@ const submit = () => {
                                 step="0.01"
                             />
                             <p class="text-xs text-muted-foreground">
-                                Usually SAR 50 and already included in the visa
-                                cost. It is always deducted from the visa vendor
-                                and assigned to the selected transport provider.
+                                Set to zero when no standard-bus amount is
+                                included. A transport provider is required only
+                                when this amount is greater than zero.
                             </p>
                         </div>
                         <div class="space-y-2">

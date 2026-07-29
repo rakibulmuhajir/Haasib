@@ -481,17 +481,30 @@ class VoucherController extends Controller
 
     private function draftHotelStays(array $stays): array
     {
-        return collect($stays)->map(function (array $stay): array {
-            return [
-                ...$stay,
-                'hotel_vendor_id' => null,
-                'unit_retail_amount' => 0,
-                'unit_cost_amount' => 0,
-                'total_retail_amount' => 0,
-                'total_cost_amount' => 0,
-                'night_count' => 0,
-            ];
-        })->values()->all();
+        return collect($stays)
+            ->filter(fn (array $stay): bool => $this->isMeaningfulHotelStay($stay))
+            ->map(function (array $stay): array {
+                return [
+                    ...$stay,
+                    'hotel_vendor_id' => null,
+                    'unit_retail_amount' => 0,
+                    'unit_cost_amount' => 0,
+                    'total_retail_amount' => 0,
+                    'total_cost_amount' => 0,
+                    'night_count' => 0,
+                ];
+            })->values()->all();
+    }
+
+    private function isMeaningfulHotelStay(array $stay): bool
+    {
+        return collect([
+            $stay['hotel_id'] ?? null,
+            $stay['hotel_name'] ?? null,
+            $stay['check_in_date'] ?? null,
+            $stay['check_out_date'] ?? null,
+            $stay['notes'] ?? null,
+        ])->contains(fn (mixed $value): bool => filled($value));
     }
 
     public function show(string $companySlug, string $voucher): Response
@@ -502,8 +515,10 @@ class VoucherController extends Controller
             ->with([
                 'agent:id,name,phone,email,city,country,logo_url',
                 'group' => fn ($query) => $query
-                    ->select(['id', 'group_number', 'name', 'travel_date', 'passenger_count', 'transport_mode', 'transport_service_id', 'driver_id', 'transport_pax_capacity'])
+                    ->select(['id', 'group_number', 'name', 'travel_date', 'passenger_count', 'transport_mode', 'transport_service_id', 'driver_id', 'transport_pax_capacity', 'vendor_id', 'mandatory_transport_vendor_id'])
                     ->with([
+                        'vendor:id,name,phone,city,logo_url',
+                        'mandatoryTransportVendor:id,name,phone,city,logo_url',
                         'transportService:id,name,vehicle_type,number_plate,driver_name,driver_contact',
                         'driver:id,name,phone',
                         'transportItems' => fn ($items) => $items
@@ -529,6 +544,10 @@ class VoucherController extends Controller
         if ($record->status !== Voucher::STATUS_DRAFT) {
             $record->setRelation('passengers', $record->allPassengers()->orderBy('sort_order')->orderBy('created_at')->get());
         }
+        $record->hotel_stays = collect($record->hotel_stays ?? [])
+            ->filter(fn (array $stay): bool => $this->isMeaningfulHotelStay($stay))
+            ->values()
+            ->all();
 
         if ($this->currentCompanyRole($company->id, request()) === 'agent') {
             $record->hotel_stays = collect($record->hotel_stays)->map(function (array $stay) {
@@ -588,6 +607,8 @@ class VoucherController extends Controller
             ->with([
                 'agent:id,name,phone,email,city,country,logo_url',
                 'group' => fn ($query) => $query->with([
+                    'vendor:id,name,phone,city,logo_url',
+                    'mandatoryTransportVendor:id,name,phone,city,logo_url',
                     'transportService:id,name,vehicle_type,number_plate,driver_name,driver_contact',
                     'driver:id,name,phone',
                     'transportItems' => fn ($items) => $items
@@ -607,6 +628,10 @@ class VoucherController extends Controller
         if ($record->status !== Voucher::STATUS_DRAFT) {
             $record->setRelation('passengers', $record->allPassengers()->orderBy('sort_order')->orderBy('created_at')->get());
         }
+        $record->hotel_stays = collect($record->hotel_stays ?? [])
+            ->filter(fn (array $stay): bool => $this->isMeaningfulHotelStay($stay))
+            ->values()
+            ->all();
 
         $filename = preg_replace('/[^A-Za-z0-9_-]/', '-', $record->voucher_number ?: 'voucher').'.pdf';
 

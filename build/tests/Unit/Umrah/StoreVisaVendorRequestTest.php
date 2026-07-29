@@ -17,12 +17,15 @@ function visaVendorRateValidator(array $data): Illuminate\Contracts\Validation\V
     $allRules = $request->rules();
     $rules = array_intersect_key($allRules, array_flip([
         'vendor_type',
+        'provides_mandatory_transport',
+        'mandatory_transport_vendor_id',
         'adult_retail_amount',
         'adult_cost_amount',
         'child_retail_amount',
         'child_cost_amount',
+        'included_bus_cost_amount',
     ]));
-    $factory = new Factory(new Translator(new ArrayLoader(), 'en'));
+    $factory = new Factory(new Translator(new ArrayLoader, 'en'));
 
     return $factory->make($data, $rules);
 }
@@ -65,4 +68,35 @@ it('does not require visa rates for a transport-only vendor', function () {
     ]);
 
     expect($validator->passes())->toBeTrue();
+});
+
+it('does not require a transport provider when included bus cost is zero', function () {
+    $validator = visaVendorRateValidator([
+        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'provides_mandatory_transport' => false,
+        'mandatory_transport_vendor_id' => null,
+        'adult_retail_amount' => 500,
+        'adult_cost_amount' => 400,
+        'child_retail_amount' => 300,
+        'child_cost_amount' => 250,
+        'included_bus_cost_amount' => 0,
+    ]);
+
+    expect($validator->passes())->toBeTrue();
+});
+
+it('requires a transport provider when included bus cost is positive', function () {
+    $validator = visaVendorRateValidator([
+        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'provides_mandatory_transport' => false,
+        'mandatory_transport_vendor_id' => null,
+        'adult_retail_amount' => 500,
+        'adult_cost_amount' => 400,
+        'child_retail_amount' => 300,
+        'child_cost_amount' => 250,
+        'included_bus_cost_amount' => 50,
+    ]);
+
+    expect($validator->fails())->toBeTrue()
+        ->and($validator->errors()->has('mandatory_transport_vendor_id'))->toBeTrue();
 });

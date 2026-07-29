@@ -80,6 +80,11 @@ class UmrahCoreService
 
             return $data;
         }
+        if ((float) $vendor->included_bus_cost_amount <= 0) {
+            $data['mandatory_transport_vendor_id'] = null;
+
+            return $data;
+        }
 
         $providerId = ! $forceDefaults && ! empty($data['mandatory_transport_vendor_id'])
             ? $data['mandatory_transport_vendor_id']
@@ -942,6 +947,11 @@ class UmrahCoreService
                 $data['visa_cost_amount'] = $replacement['adjusted_visa_cost'];
 
                 if ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
+                    if ($replacement['deduction'] <= 0) {
+                        $data['mandatory_transport_vendor_id'] = null;
+
+                        return $data;
+                    }
                     $transportVendor = VisaVendor::where('company_id', $companyId)
                         ->where('is_active', true)
                         ->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))

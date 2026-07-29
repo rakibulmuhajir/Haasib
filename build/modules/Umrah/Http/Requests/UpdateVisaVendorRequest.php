@@ -18,6 +18,9 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
         $requiresVisaRates = $this->input('vendor_type') !== VisaVendor::TYPE_TRANSPORT_PROVIDER;
+        $requiresTransportProvider = $requiresVisaRates
+            && ! $this->boolean('provides_mandatory_transport')
+            && (float) $this->input('included_bus_cost_amount', 0) > 0;
 
         return [
             'vendor_number' => [
@@ -32,7 +35,7 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             'is_default' => ['sometimes', 'boolean'],
             'provides_mandatory_transport' => ['sometimes', 'boolean'],
             'mandatory_transport_vendor_id' => [
-                Rule::requiredIf($this->input('vendor_type') !== VisaVendor::TYPE_TRANSPORT_PROVIDER && ! $this->boolean('provides_mandatory_transport')),
+                Rule::requiredIf($requiresTransportProvider),
                 'nullable',
                 'uuid',
                 Rule::notIn([(string) $this->route('vendor')]),
@@ -41,6 +44,7 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
+            'logo_url' => ['nullable', 'url:http,https', 'max:500'],
             'adult_retail_amount' => $this->visaRateRules($requiresVisaRates),
             'adult_cost_amount' => $this->visaRateRules($requiresVisaRates),
             'child_retail_amount' => $this->visaRateRules($requiresVisaRates),

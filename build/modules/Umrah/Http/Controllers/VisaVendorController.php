@@ -197,6 +197,7 @@ class VisaVendorController extends Controller
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
             'city' => $data['city'] ?? null,
+            'logo_url' => $data['logo_url'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...$this->pricingPayload($data),
             'is_active' => $record?->is_active ?? true,

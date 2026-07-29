@@ -3,8 +3,8 @@
 namespace App\Modules\Umrah\Models;
 
 use App\Models\Company;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -53,6 +53,7 @@ class VisaVendor extends Model
         'phone',
         'email',
         'city',
+        'logo_url',
         'notes',
         'adult_retail_amount',
         'adult_cost_amount',

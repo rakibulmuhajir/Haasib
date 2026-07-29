@@ -140,3 +140,22 @@ test('group vendors resolve from the company default and its transport mapping',
     expect($combined['vendor_id'])->toBe($combinedVendor->id)
         ->and($combined['mandatory_transport_vendor_id'])->toBe($combinedVendor->id);
 });
+
+test('zero included bus cost does not require a transport provider', function () {
+    $company = transportSupplierCompany('transport-zero-bus-cost');
+    $visaVendor = VisaVendor::create([
+        'company_id' => $company->id,
+        'vendor_number' => 'VIS-ZERO-BUS',
+        'name' => 'Visa Without Included Bus',
+        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
+        'is_default' => true,
+        'included_bus_cost_amount' => 0,
+    ]);
+
+    $resolved = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+    ], true);
+
+    expect($resolved['vendor_id'])->toBe($visaVendor->id)
+        ->and($resolved['mandatory_transport_vendor_id'])->toBeNull();
+});

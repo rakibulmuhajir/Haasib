@@ -123,7 +123,7 @@ class TravelAccessService
         $startsAt = $this->voucherTravelStartsAt($voucher);
 
         return $agent !== null
-            && $startsAt !== null
-            && $startsAt->greaterThanOrEqualTo(now()->addHours($agent->voucher_cutoff_hours));
+            && ($startsAt === null
+                || $startsAt->greaterThanOrEqualTo(now()->addHours($agent->voucher_cutoff_hours)));
     }
 }

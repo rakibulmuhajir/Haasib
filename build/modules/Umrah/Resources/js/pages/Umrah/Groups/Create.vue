@@ -84,6 +84,13 @@ const canViewAccounting = computed(() =>
     ['super_admin', 'owner', 'accountant'].includes(String(currentRole.value)),
 );
 const canManageSetup = computed(() => !props.isAgent && String(currentRole.value) !== 'agent');
+const hasDefaultVisaVendor = computed(
+    () =>
+        props.isAgent
+            ? Boolean(props.agentVisaPricing)
+            : Boolean(props.defaultVendorId) &&
+              props.vendors.some((vendor) => vendor.id === props.defaultVendorId),
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -619,6 +626,20 @@ const submit = () => {
         :icon="Plane"
     >
         <form class="space-y-6" @submit.prevent="submit">
+            <div
+                v-if="!hasDefaultVisaVendor"
+                class="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+                role="alert"
+            >
+                <p class="font-medium">Visa pricing setup is required.</p>
+                <p class="mt-1 text-muted-foreground">
+                    {{
+                        canManageSetup
+                            ? 'Create a default visa vendor with active rates before saving this group.'
+                            : 'A company owner must configure a default visa vendor before agents can create groups.'
+                    }}
+                </p>
+            </div>
             <div
                 v-if="groupFormErrors.length"
                 class="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
@@ -1734,7 +1755,7 @@ const submit = () => {
                         <Button
                             type="submit"
                             class="flex-1"
-                            :disabled="form.processing"
+                            :disabled="form.processing || !hasDefaultVisaVendor"
                             ><Save class="mr-2 h-4 w-4" />Save Group</Button
                         >
                     </div>

@@ -89,6 +89,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 const approveForm = useForm({ override_reason: '' });
+const approvalError = ref('');
 const moveOpen = ref(false);
 const separateOpen = ref(false);
 const workflowOpen = ref<'amend' | 'cancel' | 'delete' | null>(null);
@@ -119,19 +120,26 @@ const includesTransport = computed(() =>
         'transport_hotel',
     ].includes(props.voucher.service_bundle),
 );
-const approve = () =>
+const approve = () => {
+    approvalError.value = '';
     approveForm.post(
         `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/approve`,
         {
             preserveScroll: true,
-            onError: () =>
-                toast.error(
-                    approveForm.errors.voucher ||
-                        approveForm.errors.override_reason ||
+            onSuccess: () => {
+                approvalError.value = '';
+            },
+            onError: (errors) => {
+                approvalError.value = String(
+                    errors.voucher ||
+                        errors.override_reason ||
                         'Failed to approve voucher',
-                ),
+                );
+                toast.error(approvalError.value);
+            },
         },
     );
+};
 
 const togglePassenger = (
     selected: string[],
@@ -224,7 +232,7 @@ const roomBeds = (stay: any) =>
             0,
     );
 
-const voucherHtml = () => {
+const legacyVoucherHtml = () => {
     const passengerRows = (props.voucher.passengers || [])
         .map(
             (passenger: any, index: number) => `
@@ -357,19 +365,168 @@ const voucherHtml = () => {
 </html>`;
 };
 
-const printVoucher = () => {
-    const printWindow = window.open(
-        '',
-        '_blank',
-        'noopener,noreferrer,width=900,height=700',
+const voucherHtml = () => {
+    const agent = props.voucher.agent;
+    const transportPartner =
+        props.voucher.group?.mandatory_transport_vendor || null;
+    const partner = transportPartner || props.voucher.group?.vendor || null;
+    const partnerRole = transportPartner
+        ? 'Transport Partner'
+        : 'Visa Partner';
+    const familyHead = props.voucher.passengers?.[0];
+    const totalNights = (props.voucher.hotel_stays || []).reduce(
+        (total: number, stay: any) => total + Number(stay.night_count || 0),
+        0,
     );
-    if (!printWindow) return;
+    const logo = (party: any, alt: string) =>
+        party?.logo_url
+            ? `<img class="party-logo" src="${escapeHtml(party.logo_url)}" alt="${escapeHtml(alt)}">`
+            : '';
+    const passengerRows = (props.voucher.passengers || [])
+        .map(
+            (passenger: any, index: number) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td class="primary">${escapeHtml(passenger.full_name)}</td>
+                    <td>${escapeHtml(passenger.passport_number || '-')}</td>
+                    <td>${escapeHtml(passenger.nationality || '-')}</td>
+                    <td>${escapeHtml(passenger.date_of_birth || (passenger.imported_age !== null ? `Age ${passenger.imported_age}` : '-'))}</td>
+                    <td>${escapeHtml(passenger.visa_status || '-')}</td>
+                </tr>`,
+        )
+        .join('');
+    const hotelRows = (props.voucher.hotel_stays || [])
+        .map(
+            (stay: any) => `
+                <tr>
+                    <td>${escapeHtml(stay.city || '-')}</td>
+                    <td class="primary">${escapeHtml(stay.hotel_name)}</td>
+                    <td>${escapeHtml(`${stay.room_count || 1} ${stay.room_type || ''}`)}</td>
+                    <td>${escapeHtml(formatDate(stay.check_in_date))}</td>
+                    <td>${escapeHtml(formatDate(stay.check_out_date))}</td>
+                    <td>${escapeHtml(stay.night_count || 0)}</td>
+                </tr>`,
+        )
+        .join('');
+    const transportRows = (props.voucher.group?.transport_items || [])
+        .map(
+            (item: any) => `
+                <tr>
+                    <td>${escapeHtml(formatDateTime(item.scheduled_at) || '-')}</td>
+                    <td>${escapeHtml(item.service?.name || item.service?.vehicle_type || '-')}</td>
+                    <td class="primary">${escapeHtml(item.sector?.name || item.description || 'Transport')}</td>
+                    <td>${escapeHtml(item.driver?.name || item.service?.driver_name || '-')}</td>
+                    <td>${escapeHtml(item.driver?.phone || item.service?.driver_contact || '-')}</td>
+                </tr>`,
+        )
+        .join('');
+    const flights =
+        props.voucher.service_bundle === 'hotel'
+            ? ''
+            : `
+                <div class="section-title">Flight Schedule</div>
+                <table>
+                    <thead><tr><th>Journey</th><th>Flight</th><th>Sector</th><th>Departure</th><th>Arrival</th></tr></thead>
+                    <tbody>
+                        <tr><td class="primary">Departure</td><td>${escapeHtml(props.voucher.onward_airline)} ${escapeHtml(props.voucher.onward_flight_number || '')}</td><td>${escapeHtml(props.voucher.onward_departure_city)} - ${escapeHtml(props.voucher.onward_arrival_city)}</td><td>${escapeHtml(formatDateTime(props.voucher.onward_departure_at))}</td><td>${escapeHtml(formatDateTime(props.voucher.onward_arrival_at))}</td></tr>
+                        <tr><td class="primary">Return</td><td>${escapeHtml(props.voucher.return_airline)} ${escapeHtml(props.voucher.return_flight_number || '')}</td><td>${escapeHtml(props.voucher.return_departure_city)} - ${escapeHtml(props.voucher.return_arrival_city)}</td><td>${escapeHtml(formatDateTime(props.voucher.return_departure_at))}</td><td>${escapeHtml(formatDateTime(props.voucher.return_arrival_at))}</td></tr>
+                    </tbody>
+                </table>`;
+    const transport = includesTransport.value
+        ? `
+                <div class="section-title">Transport / Services</div>
+                <table>
+                    <thead><tr><th>Schedule</th><th>Vehicle</th><th>Sector</th><th>Driver</th><th>Contact</th></tr></thead>
+                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
+                </table>`
+        : '';
 
-    printWindow.document.open();
-    printWindow.document.write(voucherHtml());
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    return `<!doctype html>
+<html><head><meta charset="utf-8">
+<title>${escapeHtml(props.voucher.voucher_number)} - Voucher</title>
+<style>
+@page { margin: 10mm; size: A4; }
+* { box-sizing: border-box; }
+body { color: #111; font-family: Arial, sans-serif; font-size: 9px; line-height: 1.25; margin: 0; }
+table { border-collapse: collapse; width: 100%; }
+.masthead { margin-bottom: 5px; table-layout: fixed; }
+.masthead td { border: 0; padding: 0 5px; text-align: center; vertical-align: top; width: 33.333%; }
+.masthead td:first-child { padding-left: 0; text-align: left; }
+.masthead td:last-child { padding-right: 0; text-align: right; }
+.party-logo { display: block; height: 40px; margin-bottom: 3px; max-width: 135px; object-fit: contain; }
+.masthead td:nth-child(2) .party-logo { margin-left: auto; margin-right: auto; }
+.masthead td:last-child .party-logo { margin-left: auto; }
+.party-name { font-size: 10px; font-weight: 700; }
+.main-name { color: #173d85; font-size: 15px; font-weight: 700; }
+.secondary { color: #555; font-size: 8px; }
+.document-title { border-bottom: 2px solid #111; border-top: 1px solid #111; font-size: 16px; font-weight: 700; letter-spacing: .4px; margin: 4px 0; padding: 3px; text-align: center; text-transform: uppercase; }
+.identity { margin-bottom: 4px; }
+.identity td { padding: 3px 5px; }
+.focus { font-size: 11px; font-weight: 700; }
+.label { color: #555; display: block; font-size: 7px; text-transform: uppercase; }
+.section-title { background: #e5e5e5; border: 1px solid #333; font-size: 10px; font-weight: 700; margin-top: 5px; padding: 2px 4px; text-align: center; text-transform: uppercase; }
+th, td { border: 1px solid #555; font-size: 8px; padding: 3px 4px; text-align: left; vertical-align: top; }
+th { background: #f2f2f2; font-weight: 700; }
+.primary { font-weight: 700; }
+.footer-note { border-top: 1px solid #555; font-size: 8px; margin-top: 6px; padding-top: 4px; }
+</style></head><body>
+<table class="masthead"><tr>
+    <td>${logo(agent, 'Agent logo')}<div class="party-name">${escapeHtml(agent?.name || 'Agent')}</div><div class="secondary">${escapeHtml([agent?.city, agent?.country].filter(Boolean).join(', '))}</div><div class="secondary">${escapeHtml(agent?.phone || '')}</div></td>
+    <td>${logo(props.company, 'Company logo')}<div class="main-name">${escapeHtml(props.company.name)}</div>${props.company.helpline ? `<div class="secondary">Helpline: ${escapeHtml(props.company.helpline)}</div>` : ''}</td>
+    <td>${logo(partner, `${partnerRole} logo`)}<div class="party-name">${escapeHtml(partner?.name || partnerRole)}</div><div class="secondary">${escapeHtml(partnerRole)}</div><div class="secondary">${escapeHtml([partner?.city, partner?.phone].filter(Boolean).join(' | '))}</div></td>
+</tr></table>
+<div class="document-title">${escapeHtml(props.voucher.title || 'Travel Voucher')}</div>
+<table class="identity"><tr>
+    <td><span class="label">Family Head</span><span class="focus">${escapeHtml(familyHead?.full_name || 'Not assigned')}</span></td>
+    <td><span class="label">Voucher No.</span><span class="focus">${escapeHtml(props.voucher.voucher_number)}</span></td>
+    <td><span class="label">Group</span>${escapeHtml(props.voucher.group?.group_number)} - ${escapeHtml(props.voucher.group?.name)}</td>
+    <td><span class="label">PAX / Nights</span><span class="focus">${(props.voucher.passengers || []).length} / ${totalNights}</span></td>
+    <td><span class="label">Status / Service</span>${escapeHtml(props.statuses[props.voucher.status] || props.voucher.status)} | ${escapeHtml(props.serviceBundles[props.voucher.service_bundle] || props.voucher.service_bundle)}</td>
+</tr></table>
+<div class="section-title">Mutamers / Passengers</div>
+<table><thead><tr><th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB / Age</th><th>Visa Status</th></tr></thead><tbody>${passengerRows || '<tr><td colspan="6">No passengers assigned.</td></tr>'}</tbody></table>
+<div class="section-title">Accommodation</div>
+<table><thead><tr><th>City</th><th>Hotel</th><th>Room</th><th>Check-in</th><th>Checkout</th><th>Nights</th></tr></thead><tbody>${hotelRows || '<tr><td colspan="6">No hotel stays added.</td></tr>'}</tbody></table>
+${transport}
+${flights}
+${props.voucher.notes ? `<div class="footer-note"><strong>Special instructions:</strong> ${escapeHtml(props.voucher.notes)}</div>` : ''}
+</body></html>`;
+};
+
+void legacyVoucherHtml;
+
+const printVoucher = () => {
+    const printFrame = document.createElement('iframe');
+    printFrame.setAttribute('aria-hidden', 'true');
+    printFrame.style.position = 'fixed';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.style.visibility = 'hidden';
+
+    printFrame.addEventListener(
+        'load',
+        () => {
+            const printWindow = printFrame.contentWindow;
+            if (!printWindow) {
+                printFrame.remove();
+                toast.error('Unable to open the voucher print view.');
+                return;
+            }
+
+            printWindow.addEventListener(
+                'afterprint',
+                () => printFrame.remove(),
+                { once: true },
+            );
+            printWindow.focus();
+            printWindow.print();
+        },
+        { once: true },
+    );
+
+    printFrame.srcdoc = voucherHtml();
+    document.body.appendChild(printFrame);
 };
 
 const exportVoucher = () => {
@@ -464,7 +621,11 @@ const exportVoucher = () => {
                         approveForm.override_reason.trim().length < 5)
                 "
                 @click="approve"
-                >Approve Voucher</Button
+                >{{
+                    approveForm.processing
+                        ? 'Approving...'
+                        : 'Approve Voucher'
+                }}</Button
             >
             <Button
                 variant="outline"
@@ -478,6 +639,14 @@ const exportVoucher = () => {
                 Open Group
             </Button>
         </template>
+
+        <div
+            v-if="approvalError"
+            class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+        >
+            {{ approvalError }}
+        </div>
 
         <div class="mb-6 flex flex-col items-center text-center">
             <img

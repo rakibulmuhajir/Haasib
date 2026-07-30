@@ -18,7 +18,7 @@ class InviteAction implements PaletteAction
     {
         return [
             'email' => 'required|email',
-            'role' => 'nullable|string',
+            'role' => 'nullable|string|in:manager,accountant,operations',
             'name' => 'nullable|string|max:255',
         ];
     }
@@ -32,7 +32,7 @@ class InviteAction implements PaletteAction
     {
         $company = CompanyContext::requireCompany();
 
-        $role = $params['role'] ?? 'member';
+        $role = $params['role'] ?? 'operations';
 
         return DB::transaction(function () use ($params, $company, $role) {
             $user = User::where('email', $params['email'])->first();

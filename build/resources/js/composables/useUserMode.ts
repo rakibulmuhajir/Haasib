@@ -64,7 +64,7 @@ export function useUserMode() {
     const auth = (page.props.auth as any) || {}
     const role = auth.currentCompanyRole as string | null | undefined
 
-    if (['owner', 'admin', 'accountant'].includes(String(role))) return true
+    if (['owner', 'manager', 'accountant'].includes(String(role))) return true
 
     const userId = auth.user?.id as string | undefined
     if (userId?.startsWith('00000000-0000-0000-0000-')) return true

@@ -32,6 +32,7 @@ import {
   Shield,
   ArrowLeft,
   Settings,
+  Trash2,
 } from 'lucide-vue-next'
 
 const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
@@ -54,6 +55,7 @@ interface UserRow {
 const props = defineProps<{
   company: CompanyRef
   users: UserRow[]
+  currentUserRole: string
 }>()
 
 const searchQuery = ref('')
@@ -83,10 +85,9 @@ const filteredUsers = computed(() => {
 const getRoleBadgeVariant = (role: string) => {
   const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     owner: 'default',
-    admin: 'default',
+    manager: 'default',
     accountant: 'secondary',
-    viewer: 'outline',
-    member: 'outline',
+    operations: 'outline',
   }
   return variants[role.toLowerCase()] || 'outline'
 }
@@ -98,10 +99,19 @@ const roleForm = useForm({
 
 const inviteForm = useForm({
   email: '',
-  role: 'member',
+  role: 'operations',
 })
 
-const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
+const availableRoles = ['manager', 'accountant', 'operations']
+const roleLabels: Record<string, string> = {
+  owner: 'Owner',
+  manager: 'Manager',
+  accountant: 'Accountant',
+  operations: 'Operations Clerk',
+  agent: 'Agent',
+}
+const canManageUsers = computed(() => ['owner', 'manager'].includes(props.currentUserRole))
+const canManageUser = (user: UserRow) => canManageUsers.value && user.role !== 'owner'
 
 const openRoleDialog = (user: UserRow) => {
   selectedUser.value = user
@@ -126,6 +136,11 @@ const handleInvite = () => {
       inviteDialogOpen.value = false
     },
   })
+}
+
+const handleRemove = (user: UserRow) => {
+  if (!canManageUser(user) || !window.confirm(`Remove ${user.name || user.email} from ${props.company.name}?`)) return
+  router.delete(`/${props.company.slug}/users/${user.id}`, { preserveScroll: true })
 }
 
 const tableColumns = [
@@ -177,7 +192,7 @@ const tableColumns = [
     </template>
 
     <template #actions>
-      <Button size="sm" @click="inviteDialogOpen = true">
+      <Button v-if="canManageUsers" size="sm" @click="inviteDialogOpen = true">
         <UserPlus class="mr-2 h-4 w-4" />
         Invite User
       </Button>
@@ -220,7 +235,7 @@ const tableColumns = [
       <template #cell-role="{ row }">
         <Badge :variant="getRoleBadgeVariant(row.role)" class="capitalize">
           <Shield class="mr-1 h-3 w-3" />
-          {{ row.role }}
+          {{ roleLabels[row.role] || row.role }}
         </Badge>
       </template>
 
@@ -240,7 +255,7 @@ const tableColumns = [
 
       <template #cell-actions="{ row }">
         <div class="flex justify-end gap-2">
-          <DropdownMenu>
+          <DropdownMenu v-if="canManageUser(row)">
             <DropdownMenuTrigger as-child>
               <Button size="sm" variant="ghost">
                 <Settings class="h-4 w-4" />
@@ -250,6 +265,10 @@ const tableColumns = [
               <DropdownMenuItem @click="openRoleDialog(row)">
                 <Shield class="mr-2 h-4 w-4" />
                 Change Role
+              </DropdownMenuItem>
+              <DropdownMenuItem class="text-destructive" @click="handleRemove(row)">
+                <Trash2 class="mr-2 h-4 w-4" />
+                Remove User
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -274,7 +293,7 @@ const tableColumns = [
               </Badge>
             </div>
           </div>
-          <Button size="sm" variant="ghost" @click="openRoleDialog(row)">
+          <Button v-if="canManageUser(row)" size="sm" variant="ghost" @click="openRoleDialog(row)">
             <Settings class="h-4 w-4" />
           </Button>
         </div>
@@ -359,7 +378,7 @@ const tableColumns = [
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between">
-                  <span class="capitalize">{{ inviteForm.role }}</span>
+                  <span>{{ roleLabels[inviteForm.role] }}</span>
                   <span class="ml-2">▼</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -370,7 +389,7 @@ const tableColumns = [
                   @click="inviteForm.role = role"
                   class="capitalize"
                 >
-                  {{ role }}
+                  {{ roleLabels[role] }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

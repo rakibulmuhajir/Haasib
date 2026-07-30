@@ -10,7 +10,7 @@ use App\Constants\Permissions;
 | Defines which permissions each role gets.
 | This matrix is applied PER COMPANY when roles are synced.
 |
-| Roles: owner, admin, accountant, viewer, member, agent
+| Roles: owner, manager, accountant, operations, agent
 |
 | Run: php artisan app:sync-role-permissions
 |
@@ -23,11 +23,12 @@ return [
         ...Permissions::all(),
     ],
 
-    'admin' => [
+    'manager' => [
         // Company
         'company.invite-user',
         'company.manage-users',
         'company.manage-roles',
+        'company.delete-user',
 
         // Customer
         'customer.create',
@@ -436,56 +437,15 @@ return [
         'umrah.report.view',
     ],
 
-    'member' => [
-        // Customer (read only)
-        'customer.view',
-
-        // Invoice (read only)
-        'invoice.view',
-
-        // Payment (read only)
-        'payment.view',
-
-        // AP/GL read-only
-        'account.view',
-        'journal.view',
-        'bill.view',
-        'vendor.view',
-        'vendor_credit.view',
-
-        // Tax Management (read only)
-        'tax.view',
-
-        // Inventory (read only)
-        'item.view',
-        'item_category.view',
-        'warehouse.view',
-        'stock.view',
-
-        // Payroll (read only)
-        'employee.view',
-        'payroll.settings.view',
-        'leave_request.view',
-        'payroll_run.view',
-        'payslip.view',
-
-        // Banking (read only)
-        'bank_account.view',
-        'bank_transaction.view',
-        'bank_feed.view',
-        'bank_reconciliation.view',
-        'bank_rule.view',
-
-        // Fuel Station (read only)
-        'pump.view',
-        'tank_reading.view',
-        'pump_reading.view',
-        'investor.view',
-        'handover.view',
-
-        // Fuel Station - Daily Close (view only)
-        'daily_close.view',
-
+    'operations' => [
+        // Operational entry only. Deliberately excludes accounts, payments,
+        // expenses, reports, profitability, and all *-accounting permissions.
+        'umrah.group.create',
+        'umrah.group.view',
+        'umrah.group.update',
+        'umrah.voucher.create',
+        'umrah.voucher.view',
+        'umrah.voucher.update',
     ],
 
     'agent' => [

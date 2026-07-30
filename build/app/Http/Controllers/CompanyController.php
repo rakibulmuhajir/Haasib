@@ -229,7 +229,7 @@ class CompanyController extends Controller
                 COUNT(*) as total_users,
                 SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_users,
                 SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as admins
-            ', ['admin'])
+            ', ['manager'])
             ->first();
 
         // Get all users with details

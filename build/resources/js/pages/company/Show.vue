@@ -698,7 +698,7 @@ const submitProducts = () => {
   })
 }
 
-const canManage = computed(() => ['owner', 'admin'].includes(props.currentUserRole))
+const canManage = computed(() => ['owner', 'manager'].includes(props.currentUserRole))
 const isFuelStationCompany = computed(() => props.isFuelStation === true)
 const pageTitle = computed(() => isFuelStationCompany.value ? 'Products You Sell' : props.company.name)
 const pageIcon = computed(() => isFuelStationCompany.value ? Package : Building2)
@@ -742,7 +742,7 @@ const resetProductDate = () => {
   })
 }
 
-const availableRoles = ['owner', 'admin', 'accountant', 'viewer', 'member']
+const availableRoles = ['manager', 'accountant', 'operations']
 
 const languageOptions = [
   { value: 'en', label: 'English' },
@@ -780,7 +780,7 @@ const monthOptions = [
 const getRoleBadgeVariant = (role: string) => {
   const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     owner: 'default',
-    admin: 'default',
+    manager: 'default',
     accountant: 'secondary',
     viewer: 'outline',
     member: 'outline',
@@ -1594,7 +1594,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           <CardHeader>
             <CardTitle class="text-zinc-900">Company Settings</CardTitle>
             <CardDescription class="text-zinc-500">
-              {{ canManage ? 'Click on the pencil icon to edit a setting' : 'Contact an owner or admin to make changes' }}
+              {{ canManage ? 'Click on the pencil icon to edit a setting' : 'Contact an owner or manager to make changes' }}
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">

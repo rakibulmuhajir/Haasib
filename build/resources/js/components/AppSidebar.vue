@@ -75,7 +75,7 @@ const isInventoryEnabled = computed(() => {
 });
 const isPayrollEnabled = computed(() => {
     const modules = currentCompany.value?.settings?.modules ?? {};
-    return modules?.payroll === true;
+    return modules?.payroll !== false;
 });
 const modeKey = computed(() => 'owner');
 

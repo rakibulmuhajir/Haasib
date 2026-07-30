@@ -77,6 +77,6 @@ class StoreFuelProductSetupRequest extends BaseFormRequest
             ->where('is_active', true)
             ->value('role');
 
-        return in_array($role, ['owner', 'admin'], true);
+        return in_array($role, ['owner', 'manager'], true);
     }
 }

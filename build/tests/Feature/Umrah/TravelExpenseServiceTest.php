@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 test('travel expenses are available to company accounting roles but not agents', function () {
-    expect(config('role-permissions.admin'))->toContain('umrah.expense.view', 'umrah.expense.create', 'umrah.expense.reverse')
+    expect(config('role-permissions.manager'))->toContain('umrah.expense.view', 'umrah.expense.create', 'umrah.expense.reverse')
         ->and(config('role-permissions.accountant'))->toContain('umrah.expense.view', 'umrah.expense.create', 'umrah.expense.reverse')
         ->and(config('role-permissions.agent'))->not->toContain('umrah.expense.view', 'umrah.expense.create', 'umrah.expense.reverse');
 });

@@ -111,7 +111,7 @@ const fiscalYearForm = useForm({
 
 const moduleSettingsForm = useForm({
     inventory: company.value.settings?.modules?.inventory !== false,
-    payroll: company.value.settings?.modules?.payroll === true,
+    payroll: company.value.settings?.modules?.payroll !== false,
 });
 
 const months = [
@@ -239,7 +239,7 @@ const quickActions = [
 const getRoleDisplayName = (role: string) => {
     const roleNames: Record<string, string> = {
         owner: 'Owner',
-        admin: 'Administrator',
+        manager: 'Manager',
         accountant: 'Accountant',
         member: 'Member',
     };
@@ -252,7 +252,7 @@ const getRoleBadgeVariant = (role: string) => {
         'default' | 'secondary' | 'destructive' | 'outline'
     > = {
         owner: 'default',
-        admin: 'secondary',
+        manager: 'secondary',
         accountant: 'outline',
         member: 'secondary',
     };

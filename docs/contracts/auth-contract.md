@@ -7,7 +7,10 @@ Single source of truth for the shared auth schema. Read this before touching mig
 - Currency fields use uppercase ISO 4217 codes, length 3 (`base_currency` only; do not introduce `currency`/`baseCurrency` variants).
 - Slugs are derived from `name` via `Str::slug` with `-N` suffix for uniqueness; never require a slug input from the UI.
 - System role: prefer `super_admin`, `admin`, `user`, `guest` for platform-level permissions. Legacy values (`superadmin`, `system_owner`, `company_owner`, etc.) exist; new code must standardize on `super_admin` and avoid introducing new variants.
-- Company membership role enum is fixed: `owner`, `admin`, `accountant`, `viewer`, `member`, `agent`.
+- Company membership role enum is fixed: `owner`, `manager`, `accountant`, `operations`, `agent`.
+  `manager` is the company administrator role. `operations` is displayed as
+  "Operations Clerk" and is intentionally denied accounting, price, cost, and
+  profitability data. `agent` remains reserved for linked external Travel agents.
 - Row Level Security is enabled; APIs must set `app.current_user_id` and `app.is_super_admin` session settings where required.
 - Currency: `base_currency` is a `char(3)` code (ISO 4217). No FK; validate against `public.currencies` (see currencies contract). `base_currency` is immutable once transactions exist.
 - Reserved columns: `exchange_rate_id` was previously reserved—do not use. All currency work follows the multi-currency contracts (codes only, no FK IDs).
@@ -102,18 +105,18 @@ Authentication does not require email verification. `email_verified_at` is retai
 - Columns:  
   - `company_id` uuid FK → `auth.companies.id` (on delete cascade).  
   - `user_id` uuid FK → `auth.users.id` (on delete cascade).  
-  - `role` enum constrained to `owner|admin|accountant|viewer|member|agent`, default `member`. The `agent` role is reserved for linked Travel agent logins and must not receive generic company-data permissions.
+  - `role` enum constrained to `owner|manager|accountant|operations|agent`, default `operations`. The `agent` role is reserved for linked Travel agent logins and must not receive generic company-data permissions.
   - `invited_by_user_id` uuid nullable FK → `auth.users.id` (on delete set null).  
   - `joined_at` timestamp nullable; `left_at` timestamp nullable.  
   - `is_active` bool default true.  
   - `created_at`, `updated_at`.
-- Defaults quick ref: `role: 'member'`, `is_active: true`.
+- Defaults quick ref: `role: 'operations'`, `is_active: true`.
 - FK behavior:  
   - `company_id` → `auth.companies.id` (ON DELETE CASCADE, ON UPDATE CASCADE).  
   - `user_id` → `auth.users.id` (ON DELETE CASCADE, ON UPDATE CASCADE).  
   - `invited_by_user_id` → `auth.users.id` (ON DELETE SET NULL, ON UPDATE CASCADE).
 - Keys/Indexes: PK (`company_id`, `user_id`); indexes on (`user_id`, `role`), (`company_id`, `role`), `invited_by_user_id`, `is_active`, (`company_id`, `user_id`, `is_active`); role check constraint exists.
-- RLS: enabled. Policies allow select for self; insert/update/delete for company owners/admins or super admins; first-owner bootstrap allowed.
+- RLS: enabled. Policies allow select for self; insert/update/delete for company owners/managers or super admins; first-owner bootstrap allowed.
 - Laravel model (canonical):  
   - `$connection = 'pgsql';`  
   - `$table = 'auth.company_user';`  

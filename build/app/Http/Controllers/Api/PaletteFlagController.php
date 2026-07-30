@@ -293,7 +293,8 @@ class PaletteFlagController extends Controller
             ['value' => 'individual', 'label' => 'Individual', 'icon' => '👤'],
             ['value' => 'government', 'label' => 'Government', 'icon' => '🏛️'],
             ['value' => 'non_profit', 'label' => 'Non-Profit', 'icon' => '🤝'],
-            ['value' => 'admin', 'label' => 'Admin', 'icon' => '👑'],
+            ['value' => 'manager', 'label' => 'Manager', 'icon' => '👑'],
+            ['value' => 'operations', 'label' => 'Operations Clerk', 'icon' => '🧭'],
             ['value' => 'manager', 'label' => 'Manager', 'icon' => '🎯'],
             ['value' => 'employee', 'label' => 'Employee', 'icon' => '💼'],
         ];

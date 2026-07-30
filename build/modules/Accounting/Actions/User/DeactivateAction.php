@@ -8,6 +8,7 @@ use App\Constants\Tables;
 use App\Models\User;
 use App\Facades\CompanyContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class DeactivateAction implements PaletteAction
 {
@@ -28,6 +29,19 @@ class DeactivateAction implements PaletteAction
         $company = CompanyContext::requireCompany();
 
         $user = User::where('email', $params['email'])->firstOrFail();
+        $membership = DB::table(Tables::COMPANY_USER)
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->first();
+        if (! $membership) {
+            throw new \Exception("User {$params['email']} is not a member of {$company->name}");
+        }
+        if ($membership->role === 'owner') {
+            throw new \Exception('The owner cannot be deactivated.');
+        }
+        if ($user->id === Auth::id()) {
+            throw new \Exception('You cannot deactivate yourself.');
+        }
 
         DB::table(Tables::COMPANY_USER)
             ->where('company_id', $company->id)

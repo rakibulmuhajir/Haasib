@@ -181,13 +181,13 @@ class InvitationController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        // Check if user is owner or admin
+        // Check if user is owner or manager
         $currentUserRole = DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
             ->value('role');
 
-        if (! in_array($currentUserRole, ['owner', 'admin'])) {
+        if (! in_array($currentUserRole, ['owner', 'manager'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only owners and admins can revoke invitations.',

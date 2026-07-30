@@ -52,7 +52,7 @@ export const umrahNav: ModuleNavConfig = {
                         title: 'Reports',
                         icon: BarChart3,
                         children:
-                            context.currentCompanyRole === 'agent'
+                            ['agent', 'operations'].includes(String(context.currentCompanyRole))
                                 ? [
                                       {
                                           title: 'My Statement',
@@ -133,7 +133,7 @@ export const umrahNav: ModuleNavConfig = {
                                       },
                                   ],
                     },
-                    ...(context.currentCompanyRole === 'agent'
+                    ...(['agent', 'operations'].includes(String(context.currentCompanyRole))
                         ? []
                         : [
                               {
@@ -151,7 +151,7 @@ export const umrahNav: ModuleNavConfig = {
                                     ]
                                   : []),
                           ]),
-                    ...(context.currentCompanyRole === 'agent'
+                    ...(['agent', 'operations'].includes(String(context.currentCompanyRole))
                         ? []
                         : [
                               {
@@ -164,7 +164,7 @@ export const umrahNav: ModuleNavConfig = {
                                   href: `/${slug}/umrah/vendors`,
                                   icon: FileText,
                               },
-                              ...(['owner', 'admin', 'super_admin'].includes(
+                              ...(['owner', 'manager', 'super_admin'].includes(
                                   String(context.currentCompanyRole),
                               )
                                   ? [

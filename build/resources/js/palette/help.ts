@@ -256,7 +256,7 @@ function getEntityExamples(entityName: string): string[] {
     user: [
       '  user list',
       '  user invite john@example.com',
-      '  user invite jane@example.com --role=admin',
+      '  user invite jane@example.com --role=manager',
       '  user assign-role john@example.com --role=accountant',
       '  user deactivate john@example.com',
     ],
@@ -299,11 +299,11 @@ function getVerbExamples(entityName: string, verbName: string): string[] {
     ],
     'user.invite': [
       '  user invite john@example.com',
-      '  user invite jane@example.com --role=admin',
+      '  user invite jane@example.com --role=manager',
       '  u invite test@test.com --name="John Doe"',
     ],
     'user.assign-role': [
-      '  user assign-role john@example.com --role=admin',
+      '  user assign-role john@example.com --role=manager',
       '  user assign --email=jane@example.com --role=accountant',
     ],
     'user.deactivate': [

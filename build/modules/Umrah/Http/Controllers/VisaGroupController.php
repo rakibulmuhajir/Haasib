@@ -80,15 +80,28 @@ class VisaGroupController extends Controller
         abort_unless($request->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_CREATE), 403);
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $this->isMember($company->id, $request);
+        $hidesFinancials = $this->access->hidesFinancialData($company->id, $request->user());
         $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'vendor_number', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
         $defaultVendor = $vendors->firstWhere('is_default', true);
         $transportVendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']);
         $transportFares = TransportFare::where('company_id', $company->id)->where('is_active', true)->with(['transportVendor:id,name,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get();
-        if ($isMember) {
-            $vendors = collect();
+        if ($hidesFinancials) {
+            $vendors->each->makeHidden([
+                'adult_retail_amount',
+                'adult_cost_amount',
+                'child_retail_amount',
+                'child_cost_amount',
+                'included_bus_cost_amount',
+            ]);
             $transportVendors = collect();
             $transportFares->each(function (TransportFare $fare) {
-                $fare->makeHidden(['transport_vendor_id', 'cost_amount', 'hajj_terminal_cost_amount']);
+                $fare->makeHidden([
+                    'transport_vendor_id',
+                    'sale_amount',
+                    'cost_amount',
+                    'hajj_terminal_sale_amount',
+                    'hajj_terminal_cost_amount',
+                ]);
                 $fare->unsetRelation('transportVendor');
             });
         }
@@ -104,7 +117,8 @@ class VisaGroupController extends Controller
                 'adult_retail_amount' => (float) $defaultVendor->adult_retail_amount,
                 'child_retail_amount' => (float) $defaultVendor->child_retail_amount,
             ] : null,
-            'isAgent' => $isMember,
+            // The existing restricted form mode hides all price/cost controls.
+            'isAgent' => $hidesFinancials,
             'transportFares' => $transportFares,
             'passengerStatuses' => Passenger::STATUSES,
             'passengerServiceTypes' => Passenger::SERVICE_TYPES,
@@ -143,6 +157,7 @@ class VisaGroupController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless(request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_VIEW), 403);
         $isMember = $this->isMember($company->id, request());
+        $hidesFinancials = $this->access->hidesFinancialData($company->id, request()->user());
         $record = VisaGroup::where('company_id', $company->id)
             ->with([
                 'agent',
@@ -177,10 +192,39 @@ class VisaGroupController extends Controller
             })->values());
         $record->unsetRelation('paymentAllocations');
 
-        if ($isMember) {
-            $record->makeHidden(['visa_cost_amount', 'transport_cost_amount', 'hotel_cost_amount', 'profit', 'sale_transaction_id', 'cost_transaction_id']);
-            $record->vendor?->makeHidden(['adult_cost_amount', 'child_cost_amount', 'included_bus_cost_amount', 'total_cost', 'total_paid', 'balance']);
-            $record->transportItems->each->makeHidden(['unit_cost_amount', 'surcharge_cost_amount', 'total_cost_amount']);
+        if ($hidesFinancials) {
+            $record->makeHidden([
+                'visa_sale_amount',
+                'visa_cost_amount',
+                'transport_amount',
+                'transport_cost_amount',
+                'hotel_sale_amount',
+                'hotel_cost_amount',
+                'total_receivable',
+                'balance',
+                'profit',
+                'sale_transaction_id',
+                'cost_transaction_id',
+            ]);
+            $record->vendor?->makeHidden([
+                'adult_retail_amount',
+                'adult_cost_amount',
+                'child_retail_amount',
+                'child_cost_amount',
+                'included_bus_cost_amount',
+                'total_cost',
+                'total_paid',
+                'balance',
+            ]);
+            $record->transportItems->each->makeHidden([
+                'unit_sale_amount',
+                'unit_cost_amount',
+                'surcharge_sale_amount',
+                'surcharge_cost_amount',
+                'total_sale_amount',
+                'total_cost_amount',
+            ]);
+            $record->setRelation('payments', collect());
         }
         $record->makeHidden('status');
 
@@ -188,7 +232,7 @@ class VisaGroupController extends Controller
             ? $this->access->agentCanEditGroup($company->id, request()->user(), $record)
             : (bool) request()->user()?->hasCompanyPermission(\App\Constants\Permissions::UMRAH_GROUP_UPDATE);
         $hasStarted = $this->access->groupHasStarted($record);
-        $changeLogs = $isMember ? collect() : ChangeLog::where('company_id', $company->id)
+        $changeLogs = $hidesFinancials ? collect() : ChangeLog::where('company_id', $company->id)
             ->where(function ($query) use ($record) {
                 $query->where(fn ($entity) => $entity->where('entity_type', 'visa_group')->where('entity_id', $record->id))
                     ->orWhere(fn ($entity) => $entity->where('entity_type', 'passenger')->whereIn('entity_id', $record->passengers->pluck('id')));

@@ -77,6 +77,11 @@ const canViewAccounting = computed(() =>
         String((page.props.auth as any)?.currentCompanyRole || ''),
     ),
 );
+const isOperations = computed(
+    () =>
+        String((page.props.auth as any)?.currentCompanyRole || '') ===
+        'operations',
+);
 const canApprove = computed(() => props.agentCapabilities.can_approve);
 
 const selectedPassengerIds = ref<string[]>(
@@ -1100,7 +1105,7 @@ const submit = () => {
                                 {{ voucherServiceLabel }}
                             </div>
                             <div
-                                v-if="includesHotelService"
+                                v-if="includesHotelService && !isOperations"
                                 class="mt-2 flex justify-between"
                             >
                                 <span>Hotel charge</span

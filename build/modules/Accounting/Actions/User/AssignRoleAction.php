@@ -15,7 +15,7 @@ class AssignRoleAction implements PaletteAction
     {
         return [
             'email' => 'required|email',
-            'role' => 'required|string',
+            'role' => 'required|string|in:manager,accountant,operations',
         ];
     }
 
@@ -37,6 +37,9 @@ class AssignRoleAction implements PaletteAction
 
         if (!$membership) {
             throw new \Exception("User {$params['email']} is not a member of {$company->name}");
+        }
+        if ($membership->role === 'owner') {
+            throw new \Exception('The owner role cannot be changed.');
         }
 
         CompanyContext::assignRole($user, $params['role']);

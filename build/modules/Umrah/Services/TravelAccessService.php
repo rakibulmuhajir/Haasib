@@ -30,6 +30,11 @@ class TravelAccessService
         return $this->companyRole($companyId, $user) === 'agent';
     }
 
+    public function hidesFinancialData(string $companyId, ?User $user): bool
+    {
+        return in_array($this->companyRole($companyId, $user), ['agent', 'operations'], true);
+    }
+
     public function linkedAgent(string $companyId, ?User $user): ?Agent
     {
         if (! $user) {

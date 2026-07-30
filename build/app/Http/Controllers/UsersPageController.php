@@ -73,24 +73,24 @@ class UsersPageController extends Controller
         ]);
     }
 
-    public function invite(Request $request): JsonResponse
+    public function invite(Request $request)
     {
         $data = $request->validate([
             'email' => ['required', 'email'],
-            'role' => ['required', 'string', 'in:owner,admin,accountant,viewer,member'],
+            'role' => ['required', 'string', 'in:manager,accountant,operations'],
         ]);
 
         $company = CompanyContext::getCompany();
 
-        // Check if user is owner or admin
+        // Owners and managers administer company membership.
         $currentUserRole = DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
             ->value('role');
 
-        if (! in_array($currentUserRole, ['owner', 'admin'])) {
+        if (! in_array($currentUserRole, ['owner', 'manager'], true)) {
             throw ValidationException::withMessages([
-                'email' => 'Only owners and admins can invite users.',
+                'email' => 'Only owners and managers can invite users.',
             ]);
         }
 
@@ -138,24 +138,13 @@ class UsersPageController extends Controller
 
         // TODO: Send invitation email
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Invitation sent successfully.',
-            'data' => [
-                'invitation' => [
-                    'id' => $invitation->id,
-                    'email' => $invitation->email,
-                    'role' => $invitation->role,
-                    'expires_at' => $invitation->expires_at->toIso8601String(),
-                ],
-            ],
-        ]);
+        return back()->with('success', 'Invitation sent successfully.');
     }
 
-    public function updateRole(Request $request, string $userId): JsonResponse
+    public function updateRole(Request $request, string $userId)
     {
         $data = $request->validate([
-            'role' => ['required', 'string', 'in:owner,admin,accountant,viewer,member'],
+            'role' => ['required', 'string', 'in:manager,accountant,operations'],
         ]);
 
         $company = CompanyContext::getCompany();
@@ -166,11 +155,8 @@ class UsersPageController extends Controller
             ->where('user_id', Auth::id())
             ->value('role');
 
-        if (! in_array($currentUserRole, ['owner', 'admin'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only owners and admins can change user roles.',
-            ], 403);
+        if (! in_array($currentUserRole, ['owner', 'manager'], true)) {
+            abort(403, 'Only owners and managers can change user roles.');
         }
 
         // Get target user's current role
@@ -180,26 +166,17 @@ class UsersPageController extends Controller
             ->value('role');
 
         if (! $targetUserRole) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found in this company.',
-            ], 404);
+            abort(404, 'User not found in this company.');
         }
 
         // Owners cannot be changed by anyone
         if ($targetUserRole === 'owner') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot change the role of an owner.',
-            ], 403);
+            abort(403, 'The owner role cannot be changed.');
         }
 
-        // Admins can only change member, viewer, and accountant roles
-        if ($currentUserRole === 'admin' && ! in_array($targetUserRole, ['member', 'viewer', 'accountant'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Admins can only change roles for members, viewers, and accountants.',
-            ], 403);
+        // Managers may manage peers and subordinate roles, but never an owner.
+        if ($currentUserRole === 'manager' && $targetUserRole === 'owner') {
+            abort(403, 'Managers cannot change an owner.');
         }
 
         // Update the role
@@ -211,32 +188,26 @@ class UsersPageController extends Controller
                 'updated_at' => now(),
             ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User role updated successfully.',
-        ]);
+        return back()->with('success', 'User role updated successfully.');
     }
 
-    public function remove(Request $request, string $userId): JsonResponse
+    public function remove(Request $request, string $userId)
     {
         $company = CompanyContext::getCompany();
 
-        // Check if current user is owner or admin
+        // Check if current user is owner or manager
         $currentUserRole = DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
             ->value('role');
 
-        if (! in_array($currentUserRole, ['owner', 'admin'])) {
-            abort(403, 'Only owners and admins can remove users.');
+        if (! in_array($currentUserRole, ['owner', 'manager'], true)) {
+            abort(403, 'Only owners and managers can remove users.');
         }
 
         // Don't allow removing yourself
         if ($userId === Auth::id()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You cannot remove yourself from the company.',
-            ], 403);
+            abort(403, 'You cannot remove yourself from the company.');
         }
 
         // Get target user's role
@@ -245,12 +216,9 @@ class UsersPageController extends Controller
             ->where('user_id', $userId)
             ->value('role');
 
-        // Don't allow removing owners (unless current user is also owner)
-        if ($targetUserRole === 'owner' && $currentUserRole !== 'owner') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only owners can remove other owners.',
-            ], 403);
+        // Ownership is protected. Transfer ownership explicitly before removal.
+        if ($targetUserRole === 'owner') {
+            abort(403, 'The owner cannot be removed. Transfer ownership first.');
         }
 
         DB::table('auth.company_user')
@@ -258,9 +226,6 @@ class UsersPageController extends Controller
             ->where('user_id', $userId)
             ->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User removed from company successfully.',
-        ]);
+        return back()->with('success', 'User removed from company successfully.');
     }
 }

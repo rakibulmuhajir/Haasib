@@ -133,8 +133,11 @@ class VoucherController extends Controller
         $hotels = Hotel::where('company_id', $company->id)->where('is_active', true)
             ->with(['vendor:id,name', 'roomRates' => fn ($q) => $q->where('is_active', true)])
             ->orderBy('city')->orderBy('name')->get();
-        if ($isMember) {
+        if ($this->access->hidesFinancialData($company->id, $request->user())) {
             $hotels->each(fn (Hotel $hotel) => $hotel->roomRates->each->makeHidden('cost_amount'));
+        }
+        if ($this->access->companyRole($company->id, $request->user()) === 'operations') {
+            $hotels->each(fn (Hotel $hotel) => $hotel->roomRates->each->makeHidden('retail_amount'));
         }
 
         return Inertia::render('Umrah/Vouchers/Create', [
@@ -549,13 +552,25 @@ class VoucherController extends Controller
             ->values()
             ->all();
 
-        if ($this->currentCompanyRole($company->id, request()) === 'agent') {
+        if ($this->access->hidesFinancialData($company->id, request()->user())) {
             $record->hotel_stays = collect($record->hotel_stays)->map(function (array $stay) {
-                unset($stay['unit_cost_amount'], $stay['total_cost_amount']);
+                unset(
+                    $stay['unit_retail_amount'],
+                    $stay['retail_amount'],
+                    $stay['total_retail_amount'],
+                    $stay['unit_cost_amount'],
+                    $stay['cost_amount'],
+                    $stay['total_cost_amount'],
+                );
 
                 return $stay;
             })->all();
-            $record->makeHidden(['hotel_cost_amount', 'hotel_cost_transaction_id']);
+            $record->makeHidden([
+                'hotel_sale_amount',
+                'hotel_cost_amount',
+                'hotel_sale_transaction_id',
+                'hotel_cost_transaction_id',
+            ]);
         }
 
         $capabilities = $this->voucherCapabilities($company->id, request());

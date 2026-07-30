@@ -171,10 +171,12 @@ class Company extends Model
     {
         $modules = (array) ($this->settings['modules'] ?? []);
 
-        $defaults = [
-            // Inventory is available by default, but can be explicitly disabled per company.
-            'inventory' => true,
-        ];
+          $defaults = [
+              // Inventory is available by default, but can be explicitly disabled per company.
+              'inventory' => true,
+              // Payroll is a core company module and remains available unless explicitly disabled.
+              'payroll' => true,
+          ];
 
         return (bool) ($modules[$moduleKey] ?? ($defaults[$moduleKey] ?? false));
     }

@@ -14,7 +14,7 @@ import {
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, Ban, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
 
 interface CompanyRef {
     id: string;
@@ -69,6 +69,8 @@ interface Payslip {
     created_at: string;
     gl_transaction_id?: string | null;
     payment_gl_transaction_id?: string | null;
+    voided_at?: string | null;
+    void_reason?: string | null;
 }
 
 const props = defineProps<{
@@ -112,6 +114,7 @@ const getStatusVariant = (status: string) => {
 };
 
 const formatStatus = (status: string) => {
+    if (status === 'cancelled') return 'Voided';
     return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
@@ -136,6 +139,17 @@ const handleDelete = () => {
     if (confirm('Are you sure you want to delete this draft payslip?')) {
         router.delete(
             `/${props.company.slug}/payslips/${props.payslip.id}`,
+        );
+    }
+};
+
+const handleVoid = () => {
+    const reason = window.prompt('Why is this payslip being voided?')?.trim();
+    if (reason) {
+        router.post(
+            `/${props.company.slug}/payslips/${props.payslip.id}/void`,
+            { reason },
+            { preserveScroll: true },
         );
     }
 };
@@ -174,6 +188,14 @@ const handleDelete = () => {
             >
                 <Trash2 class="mr-2 h-4 w-4" />
                 Delete
+            </Button>
+            <Button
+                v-if="canDeletePayslips && ['approved', 'paid'].includes(payslip.status)"
+                variant="destructive"
+                @click="handleVoid"
+            >
+                <Ban class="mr-2 h-4 w-4" />
+                Void Payslip
             </Button>
             <Button variant="outline">
                 <Printer class="mr-2 h-4 w-4" />
@@ -542,6 +564,15 @@ const handleDelete = () => {
                             <span class="font-medium">{{
                                 formatDate(payslip.created_at)
                             }}</span>
+                        </div>
+                        <div v-if="payslip.voided_at" class="border-t pt-3">
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Voided</span>
+                                <span class="font-medium">{{ formatDate(payslip.voided_at) }}</span>
+                            </div>
+                            <p v-if="payslip.void_reason" class="mt-2 text-sm text-muted-foreground">
+                                {{ payslip.void_reason }}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>

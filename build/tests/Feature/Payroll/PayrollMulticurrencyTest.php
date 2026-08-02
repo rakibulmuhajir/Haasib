@@ -302,4 +302,13 @@ test('foreign payroll snapshots its exchange rate and posts in base currency', f
         ->and((float) $paymentEntries->sum('currency_debit'))->toBe(100.0)
         ->and((float) $paymentEntries->sum('currency_credit'))->toBe(100.0)
         ->and($payslip->fresh()->status)->toBe('paid');
+
+    $voided = $service->void($payslip->fresh(), 'Duplicate test payroll.', $user->id);
+
+    expect($voided->status)->toBe('cancelled')
+        ->and($voided->void_reason)->toBe('Duplicate test payroll.')
+        ->and($voided->voided_by_user_id)->toBe($user->id)
+        ->and($voided->voided_at)->not->toBeNull()
+        ->and($accrual->fresh()->reversed_by_id)->not->toBeNull()
+        ->and($payment->fresh()->reversed_by_id)->not->toBeNull();
 });

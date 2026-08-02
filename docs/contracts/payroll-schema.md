@@ -308,6 +308,9 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
   - `payment_reference` varchar(100) nullable.
   - `gl_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
   - `payment_gl_transaction_id` uuid nullable FK → `acct.transactions.id` (SET NULL/CASCADE).
+  - `voided_at` timestamp nullable.
+  - `voided_by_user_id` uuid nullable FK → `auth.users.id` (SET NULL/CASCADE).
+  - `void_reason` varchar(500) nullable.
   - `notes` text nullable.
   - `created_at`, `updated_at` timestamps.
 - Indexes/constraints:
@@ -318,8 +321,8 @@ Single source of truth for employees, payroll processing, payslips, benefits, an
 - RLS: company_id + super-admin override.
 - Model:
   - `$connection = 'pgsql'; $table = 'pay.payslips'; $keyType = 'string'; public $incrementing = false;`
-  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','exchange_rate','base_currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','base_gross_pay','base_total_earnings','base_total_deductions','base_employer_costs','base_net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','payment_gl_transaction_id','notes'];`
-  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','exchange_rate'=>'decimal:8','gross_pay'=>'decimal:6','total_earnings'=>'decimal:6','total_deductions'=>'decimal:6','employer_costs'=>'decimal:6','net_pay'=>'decimal:6','base_gross_pay'=>'decimal:2','base_total_earnings'=>'decimal:2','base_total_deductions'=>'decimal:2','base_employer_costs'=>'decimal:2','base_net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','payment_gl_transaction_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
+  - `$fillable = ['company_id','payroll_period_id','employee_id','payslip_number','currency','exchange_rate','base_currency','gross_pay','total_earnings','total_deductions','employer_costs','net_pay','base_gross_pay','base_total_earnings','base_total_deductions','base_employer_costs','base_net_pay','status','approved_at','approved_by_user_id','paid_at','payment_method','payment_reference','gl_transaction_id','payment_gl_transaction_id','voided_at','voided_by_user_id','void_reason','notes'];`
+  - `$casts = ['company_id'=>'string','payroll_period_id'=>'string','employee_id'=>'string','exchange_rate'=>'decimal:8','gross_pay'=>'decimal:6','total_earnings'=>'decimal:6','total_deductions'=>'decimal:6','employer_costs'=>'decimal:6','net_pay'=>'decimal:6','base_gross_pay'=>'decimal:2','base_total_earnings'=>'decimal:2','base_total_deductions'=>'decimal:2','base_employer_costs'=>'decimal:2','base_net_pay'=>'decimal:2','approved_at'=>'datetime','approved_by_user_id'=>'string','paid_at'=>'datetime','gl_transaction_id'=>'string','payment_gl_transaction_id'=>'string','voided_at'=>'datetime','voided_by_user_id'=>'string','created_at'=>'datetime','updated_at'=>'datetime'];`
 - Relationships: belongsTo Company; belongsTo PayrollPeriod; belongsTo Employee; hasMany PayslipLine; belongsTo GlTransaction; belongsTo PaymentGlTransaction.
 - Business rules:
   - net_pay = total_earnings - total_deductions.

@@ -21,6 +21,7 @@ import {
   CheckCircle,
   DollarSign,
   Trash2,
+  Ban,
   MoreHorizontal,
 } from 'lucide-vue-next'
 
@@ -129,6 +130,13 @@ const handleDelete = (id: string) => {
   }
 }
 
+const handleVoid = (id: string) => {
+  const reason = window.prompt('Why is this payslip being voided?')?.trim()
+  if (reason) {
+    router.post(`/${props.company.slug}/payslips/${id}/void`, { reason }, { preserveScroll: true })
+  }
+}
+
 const getStatusVariant = (status: string) => {
   const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
     draft: 'outline',
@@ -140,6 +148,7 @@ const getStatusVariant = (status: string) => {
 }
 
 const formatStatus = (status: string) => {
+  if (status === 'cancelled') return 'Voided'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 </script>
@@ -223,6 +232,14 @@ const formatStatus = (status: string) => {
             >
               <Trash2 class="mr-2 h-4 w-4" />
               Delete
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              v-if="canDeletePayslips && ['approved', 'paid'].includes(row._raw.status)"
+              class="text-destructive"
+              @click="handleVoid(row.id)"
+            >
+              <Ban class="mr-2 h-4 w-4" />
+              Void Payslip
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

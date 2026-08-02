@@ -7,6 +7,7 @@ use App\Modules\Payroll\Http\Requests\ApprovePayslipRequest;
 use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
+use App\Modules\Payroll\Http\Requests\VoidPayslipRequest;
 use App\Modules\Payroll\Http\Requests\StorePayslipRequest;
 use App\Modules\Payroll\Models\DeductionType;
 use App\Modules\Payroll\Models\EarningType;
@@ -19,6 +20,7 @@ use App\Services\CurrentCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -368,6 +370,25 @@ class PayslipController extends Controller
         return redirect()
             ->route('payslips.index', ['company' => $company->slug])
             ->with('success', 'Payslip deleted successfully.');
+    }
+
+    public function void(VoidPayslipRequest $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $this->setPayrollContext($company->id);
+        $payslip = Payslip::where('company_id', $company->id)->findOrFail($payslipId);
+
+        try {
+            $payrollPostingService->void($payslip, $request->validated('reason'), (string) $request->user()->id);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Payslip could not be voided. No accounting changes were saved.');
+        }
+
+        return back()->with('success', 'Payslip voided and accounting entries reversed.');
     }
 
     private function isCompanyOwner(Request $request, string $companyId): bool

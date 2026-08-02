@@ -439,6 +439,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{company}/payslips/{payslip}/edit', [PayslipController::class, 'edit'])->whereUuid('payslip')->name('payslips.edit');
             Route::post('/{company}/payslips/{payslip}/approve', [PayslipController::class, 'approve'])->whereUuid('payslip')->name('payslips.approve');
             Route::post('/{company}/payslips/{payslip}/mark-paid', [PayslipController::class, 'markPaid'])->whereUuid('payslip')->name('payslips.mark-paid');
+            Route::post('/{company}/payslips/{payslip}/void', [PayslipController::class, 'void'])->whereUuid('payslip')->name('payslips.void');
             Route::delete('/{company}/payslips/{payslip}', [PayslipController::class, 'destroy'])->whereUuid('payslip')->name('payslips.destroy');
 
             // Salary Advances

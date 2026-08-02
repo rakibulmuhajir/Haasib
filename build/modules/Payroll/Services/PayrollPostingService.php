@@ -7,6 +7,7 @@ use App\Models\CompanyCurrency;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Transaction;
 use App\Modules\Accounting\Services\GlPostingService;
+use App\Modules\Accounting\Services\PostingService;
 use App\Modules\Payroll\Models\DeductionType;
 use App\Modules\Payroll\Models\EarningType;
 use App\Modules\Payroll\Models\Employee;
@@ -19,7 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 class PayrollPostingService
 {
-    public function __construct(private readonly GlPostingService $postingService) {}
+    public function __construct(
+        private readonly GlPostingService $postingService,
+        private readonly PostingService $reversalService,
+    ) {}
 
     public function prepareAutomaticAdvanceDeductions(Payslip $payslip): void
     {
@@ -459,6 +463,47 @@ class PayrollPostingService
             ]);
 
             return $transaction;
+        });
+    }
+
+    public function void(Payslip $payslip, string $reason, string $userId): Payslip
+    {
+        return DB::transaction(function () use ($payslip, $reason, $userId) {
+            $payslip->refresh();
+
+            if ($payslip->status === 'cancelled') {
+                return $payslip;
+            }
+
+            if (! in_array($payslip->status, ['approved', 'paid'], true)) {
+                throw ValidationException::withMessages([
+                    'payslip' => 'Only approved or paid payslips can be voided.',
+                ]);
+            }
+
+            foreach ([$payslip->payment_gl_transaction_id, $payslip->gl_transaction_id] as $transactionId) {
+                if (! $transactionId) {
+                    continue;
+                }
+
+                $transaction = Transaction::where('company_id', $payslip->company_id)
+                    ->findOrFail($transactionId);
+                $this->reversalService->reverseTransaction($transaction, $reason);
+            }
+
+            SalaryAdvanceRecovery::where('company_id', $payslip->company_id)
+                ->where('payslip_id', $payslip->id)
+                ->where('recovery_type', 'payroll_deduction')
+                ->delete();
+
+            $payslip->update([
+                'status' => 'cancelled',
+                'voided_at' => now(),
+                'voided_by_user_id' => $userId,
+                'void_reason' => $reason,
+            ]);
+
+            return $payslip->refresh();
         });
     }
 

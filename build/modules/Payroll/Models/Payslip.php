@@ -48,6 +48,9 @@ class Payslip extends Model
         'payment_reference',
         'gl_transaction_id',
         'payment_gl_transaction_id',
+        'voided_at',
+        'voided_by_user_id',
+        'void_reason',
         'notes',
     ];
 
@@ -71,6 +74,8 @@ class Payslip extends Model
         'paid_at' => 'datetime',
         'gl_transaction_id' => 'string',
         'payment_gl_transaction_id' => 'string',
+        'voided_at' => 'datetime',
+        'voided_by_user_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

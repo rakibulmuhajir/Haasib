@@ -17,6 +17,10 @@ class DeletePayslipRequest extends BaseFormRequest
             return false;
         }
 
+        if ($user->isGodMode()) {
+            return true;
+        }
+
         return DB::table('auth.company_user')
             ->where('company_id', $company->id)
             ->where('user_id', $user->id)

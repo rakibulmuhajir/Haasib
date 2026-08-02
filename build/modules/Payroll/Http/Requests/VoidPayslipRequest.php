@@ -13,8 +13,15 @@ class VoidPayslipRequest extends BaseFormRequest
         $company = app(CurrentCompany::class)->get();
         $user = $this->user();
 
-        return $company && $user && $this->validateRlsContext()
-            && DB::table('auth.company_user')
+        if (! $company || ! $user || ! $this->validateRlsContext()) {
+            return false;
+        }
+
+        if ($user->isGodMode()) {
+            return true;
+        }
+
+        return DB::table('auth.company_user')
                 ->where('company_id', $company->id)
                 ->where('user_id', $user->id)
                 ->where('role', 'owner')

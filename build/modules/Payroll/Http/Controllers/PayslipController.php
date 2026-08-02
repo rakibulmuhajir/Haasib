@@ -393,6 +393,10 @@ class PayslipController extends Controller
 
     private function isCompanyOwner(Request $request, string $companyId): bool
     {
+        if ($request->user()?->isGodMode()) {
+            return true;
+        }
+
         return DB::table('auth.company_user')
             ->where('company_id', $companyId)
             ->where('user_id', $request->user()?->id)

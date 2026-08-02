@@ -69,6 +69,11 @@ class TravelAccessServiceTest extends TestCase
         $this->assertNotContains('umrah.group-accounting.view', $roles['agent']);
         $this->assertNotContains('umrah.voucher-accounting.view', $roles['agent']);
         $this->assertNotContains('account.view', $roles['agent']);
-        $this->assertNotContains('umrah.group.view', $roles['member']);
+        $this->assertContains('umrah.group.view', $roles['operations']);
+        $this->assertContains('umrah.voucher.create', $roles['operations']);
+        $this->assertNotContains('account.view', $roles['operations']);
+        $this->assertNotContains('umrah.group-accounting.view', $roles['operations']);
+        $this->assertNotContains('umrah.voucher-accounting.view', $roles['operations']);
+        $this->assertNotContains('umrah.payment.view', $roles['operations']);
     }
 }

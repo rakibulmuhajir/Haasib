@@ -43,16 +43,19 @@ export const umrahNav: ModuleNavConfig = {
                         href: `/${slug}/umrah/vouchers`,
                         icon: ScrollText,
                     },
-                    {
-                        title: 'Payments',
-                        href: `/${slug}/umrah/payments`,
-                        icon: WalletCards,
-                    },
-                    {
-                        title: 'Reports',
-                        icon: BarChart3,
-                        children:
-                            ['agent', 'operations'].includes(String(context.currentCompanyRole))
+                    ...(context.currentCompanyRole === 'operations'
+                        ? []
+                        : [
+                              {
+                                  title: 'Payments',
+                                  href: `/${slug}/umrah/payments`,
+                                  icon: WalletCards,
+                              },
+                              {
+                                  title: 'Reports',
+                                  icon: BarChart3,
+                                  children:
+                            context.currentCompanyRole === 'agent'
                                 ? [
                                       {
                                           title: 'My Statement',
@@ -132,7 +135,8 @@ export const umrahNav: ModuleNavConfig = {
                                           icon: ScrollText,
                                       },
                                   ],
-                    },
+                              },
+                          ]),
                     ...(['agent', 'operations'].includes(String(context.currentCompanyRole))
                         ? []
                         : [

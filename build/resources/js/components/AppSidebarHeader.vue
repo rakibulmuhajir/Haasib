@@ -66,7 +66,7 @@ const handleModeChecked = (val: boolean | 'indeterminate') => {
       </div>
 
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1.5">
+        <div v-if="canUseAccountantMode" class="flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1.5">
           <Label for="mode-toggle" class="text-[11px] font-medium text-muted-foreground">
             {{ modeLabel }}
           </Label>

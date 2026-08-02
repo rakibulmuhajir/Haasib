@@ -70,6 +70,7 @@ const props = defineProps<{
     status: string
     period_id: string
   }
+  canDeletePayslips: boolean
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -216,7 +217,7 @@ const formatStatus = (status: string) => {
               Mark Paid
             </DropdownMenuItem>
             <DropdownMenuItem
-              v-if="row._raw.status === 'draft'"
+              v-if="canDeletePayslips && row._raw.status === 'draft'"
               class="text-destructive"
               @click="handleDelete(row.id)"
             >

@@ -141,7 +141,7 @@ class UsersPageController extends Controller
         return back()->with('success', 'Invitation sent successfully.');
     }
 
-    public function updateRole(Request $request, string $userId)
+    public function updateRole(Request $request, string $companySlug, string $userId)
     {
         $data = $request->validate([
             'role' => ['required', 'string', 'in:manager,accountant,operations'],
@@ -191,7 +191,7 @@ class UsersPageController extends Controller
         return back()->with('success', 'User role updated successfully.');
     }
 
-    public function remove(Request $request, string $userId)
+    public function remove(Request $request, string $companySlug, string $userId)
     {
         $company = CompanyContext::getCompany();
 

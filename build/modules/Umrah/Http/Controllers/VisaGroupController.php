@@ -117,8 +117,8 @@ class VisaGroupController extends Controller
                 'adult_retail_amount' => (float) $defaultVendor->adult_retail_amount,
                 'child_retail_amount' => (float) $defaultVendor->child_retail_amount,
             ] : null,
-            // The existing restricted form mode hides all price/cost controls.
-            'isAgent' => $hidesFinancials,
+            'isAgent' => $isMember,
+            'isOperations' => $this->access->companyRole($company->id, $request->user()) === 'operations',
             'transportFares' => $transportFares,
             'passengerStatuses' => Passenger::STATUSES,
             'passengerServiceTypes' => Passenger::SERVICE_TYPES,

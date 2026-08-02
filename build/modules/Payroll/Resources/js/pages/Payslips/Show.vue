@@ -14,7 +14,7 @@ import {
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, CheckCircle, DollarSign, Printer } from 'lucide-vue-next';
+import { ArrowLeft, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
 
 interface CompanyRef {
     id: string;
@@ -74,6 +74,7 @@ interface Payslip {
 const props = defineProps<{
     company: CompanyRef;
     payslip: Payslip;
+    canDeletePayslips: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -130,6 +131,14 @@ const handleMarkPaid = () => {
         `/${props.company.slug}/payslips/${props.payslip.id}/mark-paid`,
     );
 };
+
+const handleDelete = () => {
+    if (confirm('Are you sure you want to delete this draft payslip?')) {
+        router.delete(
+            `/${props.company.slug}/payslips/${props.payslip.id}`,
+        );
+    }
+};
 </script>
 
 <template>
@@ -157,6 +166,14 @@ const handleMarkPaid = () => {
             >
                 <DollarSign class="mr-2 h-4 w-4" />
                 Mark Paid
+            </Button>
+            <Button
+                v-if="canDeletePayslips && payslip.status === 'draft'"
+                variant="destructive"
+                @click="handleDelete"
+            >
+                <Trash2 class="mr-2 h-4 w-4" />
+                Delete
             </Button>
             <Button variant="outline">
                 <Printer class="mr-2 h-4 w-4" />

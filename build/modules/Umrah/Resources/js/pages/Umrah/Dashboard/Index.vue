@@ -22,6 +22,7 @@ const props = defineProps<{
     upcomingGroups: any[];
     recentGroups: any[];
     isAgent: boolean;
+    isOperations: boolean;
     capabilities: {
         canCreateGroup: boolean;
         canCreateVoucher: boolean;
@@ -29,6 +30,7 @@ const props = defineProps<{
         canViewAgents: boolean;
         canViewVendors: boolean;
         canViewReports: boolean;
+        canViewPayments: boolean;
     };
 }>();
 
@@ -40,7 +42,11 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
     <Head :title="isAgent ? 'My Umrah Dashboard' : 'Umrah Dashboard'" />
     <PageShell
         :title="isAgent ? 'My Umrah Dashboard' : 'Umrah Dashboard'"
-        :description="isAgent ? 'Your groups, passengers, upcoming travel and account balance.' : 'Visa groups, passengers, travel dates, payments and balances.'"
+        :description="isAgent
+            ? 'Your groups, passengers, upcoming travel and account balance.'
+            : isOperations
+                ? 'Visa groups, passengers and upcoming travel.'
+                : 'Visa groups, passengers, travel dates, payments and balances.'"
         :breadcrumbs="breadcrumbs"
         :icon="Plane"
     >
@@ -62,15 +68,15 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
                 <div class="text-sm text-muted-foreground">Passengers</div>
                 <div class="mt-1 text-2xl font-semibold">{{ summary.passports_in_process }}</div>
             </div>
-            <div class="bg-background p-4">
+            <div v-if="!isOperations" class="bg-background p-4">
                 <div class="text-sm text-muted-foreground">{{ isAgent ? 'Amount Due' : 'Agent Balances' }}</div>
                 <MoneyText class="mt-1 text-2xl font-semibold" :amount="summary.agent_balance" :currency="company.base_currency" />
             </div>
-            <div class="bg-background p-4">
+            <div v-if="!isOperations" class="bg-background p-4">
                 <div class="text-sm text-muted-foreground">{{ isAgent ? 'Charges This Month' : 'Month Revenue' }}</div>
                 <MoneyText class="mt-1 text-2xl font-semibold" :amount="summary.month_charges" :currency="company.base_currency" />
             </div>
-            <div class="bg-background p-4">
+            <div v-if="!isOperations" class="bg-background p-4">
                 <div class="text-sm text-muted-foreground">{{ isAgent ? 'Paid This Month' : 'Collected This Month' }}</div>
                 <MoneyText class="mt-1 text-2xl font-semibold" :amount="summary.payments_this_month" :currency="company.base_currency" />
             </div>
@@ -129,7 +135,7 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
                             <div class="truncate text-sm text-muted-foreground">{{ group.name }}</div>
                             <div class="mt-1 text-xs text-muted-foreground">{{ group.passenger_count }} pax</div>
                         </div>
-                        <div class="shrink-0 text-right">
+                        <div v-if="!isOperations" class="shrink-0 text-right">
                             <MoneyText class="font-medium" :amount="group.balance" :currency="company.base_currency" />
                             <Badge class="mt-1 block" :variant="Number(group.balance || 0) <= 0 ? 'default' : 'secondary'">
                                 {{ Number(group.balance || 0) <= 0 ? 'Paid' : 'Due' }}
@@ -147,7 +153,7 @@ const openGroup = (id: string) => router.get(`/${props.company.slug}/umrah/group
             <Button variant="outline" @click="router.get(`/${company.slug}/umrah/vouchers`)">
                 <ScrollText class="mr-2 h-4 w-4" />{{ isAgent ? 'My Vouchers' : 'Vouchers' }}
             </Button>
-            <Button variant="outline" @click="router.get(`/${company.slug}/umrah/payments`)">
+            <Button v-if="capabilities.canViewPayments" variant="outline" @click="router.get(`/${company.slug}/umrah/payments`)">
                 <CreditCard class="mr-2 h-4 w-4" />Payments
             </Button>
             <Button v-if="capabilities.canViewAgents" variant="outline" @click="router.get(`/${company.slug}/umrah/agents`)">

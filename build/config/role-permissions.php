@@ -151,7 +151,6 @@ return [
         'payslip.view',
         'payslip.approve',
         'payslip.pay',
-        'payslip.delete',
 
         // Banking - Bank Accounts
         'bank_account.create',

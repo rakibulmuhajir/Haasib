@@ -66,6 +66,70 @@ test('enabled payroll state is shared with the sidebar after refresh', function 
             ->where('auth.currentCompany.settings.modules.payroll', true));
 });
 
+test('only the company owner can delete a draft payslip', function () {
+    [$owner, $company] = createPayrollTestCompany([
+        'modules' => ['payroll' => true],
+    ]);
+
+    $manager = User::factory()->withoutTwoFactor()->create();
+    DB::table('auth.company_user')->insert([
+        'company_id' => $company->id,
+        'user_id' => $manager->id,
+        'role' => 'manager',
+        'joined_at' => now(),
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $employee = Employee::create([
+        'company_id' => $company->id,
+        'employee_number' => 'EMP-DELETE-1',
+        'first_name' => 'Delete',
+        'last_name' => 'Test',
+        'hire_date' => '2026-08-01',
+        'employment_type' => 'full_time',
+        'employment_status' => 'active',
+        'pay_frequency' => 'monthly',
+        'base_salary' => 1000,
+        'currency' => 'SAR',
+        'is_active' => true,
+    ]);
+    $period = PayrollPeriod::create([
+        'company_id' => $company->id,
+        'period_start' => '2026-08-01',
+        'period_end' => '2026-08-31',
+        'payment_date' => '2026-08-31',
+        'status' => 'open',
+    ]);
+    $managerBlockedPayslip = Payslip::create([
+        'company_id' => $company->id,
+        'payroll_period_id' => $period->id,
+        'employee_id' => $employee->id,
+        'payslip_number' => 'PS-DELETE-1',
+        'currency' => 'SAR',
+        'base_currency' => 'SAR',
+        'status' => 'draft',
+    ]);
+
+    $this->actingAs($manager)
+        ->delete(route('payslips.destroy', [
+            'company' => $company->slug,
+            'payslip' => $managerBlockedPayslip->id,
+        ]))
+        ->assertForbidden();
+    $this->assertDatabaseHas('pay.payslips', ['id' => $managerBlockedPayslip->id]);
+
+    $this->actingAs($owner)
+        ->delete(route('payslips.destroy', [
+            'company' => $company->slug,
+            'payslip' => $managerBlockedPayslip->id,
+        ]))
+        ->assertRedirect(route('payslips.index', ['company' => $company->slug]))
+        ->assertSessionHas('success', 'Payslip deleted successfully.');
+    $this->assertDatabaseMissing('pay.payslips', ['id' => $managerBlockedPayslip->id]);
+});
+
 test('salary advance may exceed several months of salary', function () {
     [$user, $company] = createPayrollTestCompany([
         'modules' => ['payroll' => true],

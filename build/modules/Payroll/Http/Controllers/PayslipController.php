@@ -4,6 +4,7 @@ namespace App\Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Http\Requests\ApprovePayslipRequest;
+use App\Modules\Payroll\Http\Requests\DeletePayslipRequest;
 use App\Modules\Payroll\Http\Requests\GeneratePeriodPayslipsRequest;
 use App\Modules\Payroll\Http\Requests\MarkPayslipPaidRequest;
 use App\Modules\Payroll\Http\Requests\StorePayslipRequest;
@@ -71,6 +72,7 @@ class PayslipController extends Controller
             ],
             'payslips' => $payslips,
             'filters' => $request->only(['search', 'status', 'period_id', 'employee_id', 'start_date', 'end_date']),
+            'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
         ]);
     }
 
@@ -158,7 +160,7 @@ class PayslipController extends Controller
             ->with('success', 'Payslip created successfully.');
     }
 
-    public function show(PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): Response
+    public function show(Request $request, PayrollPostingService $payrollPostingService, string $companySlug, string $payslipId): Response
     {
         $company = app(CurrentCompany::class)->get();
         $this->setPayrollContext($company->id);
@@ -187,6 +189,7 @@ class PayslipController extends Controller
                 'base_currency' => $company->base_currency,
             ],
             'payslip' => $payslip,
+            'canDeletePayslips' => $this->isCompanyOwner($request, $company->id),
         ]);
     }
 
@@ -349,7 +352,7 @@ class PayslipController extends Controller
         return back()->with('success', "{$paid} payslips marked paid and posted.");
     }
 
-    public function destroy(string $companySlug, string $payslipId): RedirectResponse
+    public function destroy(DeletePayslipRequest $request, string $companySlug, string $payslipId): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
         $this->setPayrollContext($company->id);
@@ -365,5 +368,15 @@ class PayslipController extends Controller
         return redirect()
             ->route('payslips.index', ['company' => $company->slug])
             ->with('success', 'Payslip deleted successfully.');
+    }
+
+    private function isCompanyOwner(Request $request, string $companyId): bool
+    {
+        return DB::table('auth.company_user')
+            ->where('company_id', $companyId)
+            ->where('user_id', $request->user()?->id)
+            ->where('role', 'owner')
+            ->where('is_active', true)
+            ->exists();
     }
 }

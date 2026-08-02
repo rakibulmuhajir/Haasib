@@ -70,6 +70,7 @@ const props = defineProps<{
         child_retail_amount: number;
     } | null;
     isAgent: boolean;
+    isOperations: boolean;
     transportFares: any[];
     passengerStatuses: Record<string, string>;
     passengerServiceTypes: Record<string, string>;
@@ -83,7 +84,9 @@ const currentRole = computed(
 const canViewAccounting = computed(() =>
     ['super_admin', 'owner', 'accountant'].includes(String(currentRole.value)),
 );
-const canManageSetup = computed(() => !props.isAgent && String(currentRole.value) !== 'agent');
+const canManageSetup = computed(
+    () => !props.isAgent && !props.isOperations,
+);
 const hasDefaultVisaVendor = computed(
     () =>
         props.isAgent
@@ -621,7 +624,9 @@ const submit = () => {
     <Head title="New Visa Group" />
     <PageShell
         title="New Visa Group"
-        description="Create the group, pricing, transport need, and starting passport list."
+        :description="isOperations
+            ? 'Create the group, transport plan, and starting passport list.'
+            : 'Create the group, pricing, transport need, and starting passport list.'"
         :breadcrumbs="breadcrumbs"
         :icon="Plane"
     >
@@ -1111,8 +1116,11 @@ const submit = () => {
                                             >Standard bus</span
                                         ><span
                                             class="mt-1 block text-xs text-muted-foreground"
-                                            >Complete journey included with the
-                                            visa cost.</span
+                                            >{{
+                                                isOperations
+                                                    ? 'Complete journey included with the visa service.'
+                                                    : 'Complete journey included with the visa cost.'
+                                            }}</span
                                         ></span
                                     >
                                 </Label>
@@ -1405,7 +1413,10 @@ const submit = () => {
                                 >
                                     {{ form.errors.transport_items }}
                                 </p>
-                                <div class="rounded-md border p-3 text-sm">
+                                <div
+                                    v-if="!isOperations"
+                                    class="rounded-md border p-3 text-sm"
+                                >
                                     <div class="flex justify-between">
                                         <span
                                             >Included bus cost removed from visa
@@ -1473,7 +1484,10 @@ const submit = () => {
                                 data-passenger-row
                                 class="grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_90px_140px_220px_130px_40px]"
                             >
-                                <div class="space-y-1">
+                                <div
+                                    v-if="!isOperations"
+                                    class="space-y-1"
+                                >
                                     <Label class="text-xs text-muted-foreground"
                                         >Full Name</Label
                                     >
@@ -1496,7 +1510,10 @@ const submit = () => {
                                         }}
                                     </p>
                                 </div>
-                                <div class="space-y-1">
+                                <div
+                                    v-if="!isOperations"
+                                    class="space-y-1"
+                                >
                                     <Label class="text-xs text-muted-foreground"
                                         >Passport #</Label
                                     >
@@ -1613,7 +1630,10 @@ const submit = () => {
                                         }}
                                     </p>
                                 </div>
-                                <div class="space-y-1">
+                                <div
+                                    v-if="!isOperations"
+                                    class="space-y-1"
+                                >
                                     <Label class="text-xs text-muted-foreground"
                                         >Transport Charge</Label
                                     >
@@ -1668,7 +1688,7 @@ const submit = () => {
                 </div>
 
                 <div class="space-y-6">
-                    <Card>
+                    <Card v-if="!isOperations">
                         <CardHeader><CardTitle>Amounts</CardTitle></CardHeader>
                         <CardContent class="space-y-4">
                             <div v-if="isAgent && agentVisaPricing" class="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">

@@ -125,6 +125,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::get('/{company}/users', [UsersPageController::class, 'index'])->name('users.index');
+        Route::post('/{company}/users', [UsersPageController::class, 'store'])->name('users.store');
         Route::post('/{company}/users/invite', [UsersPageController::class, 'invite'])->name('users.invite');
         Route::put('/{company}/users/{user}/role', [UsersPageController::class, 'updateRole'])->name('users.update-role');
         Route::delete('/{company}/users/{user}', [UsersPageController::class, 'remove'])->name('users.remove');

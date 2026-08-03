@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createRoleAccessCompany(): array
@@ -87,9 +88,59 @@ test('company settings exposes active members and pending invitations', function
             ->where('users.0.role', 'owner')
             ->where('users.1.id', $manager->id)
             ->where('users.1.role', 'manager')
+            ->where('users.1.permissions', fn ($permissions) => collect($permissions)->contains('company.manage-users'))
             ->has('pendingInvitations', 1)
             ->where('pendingInvitations.0.email', $invitedEmail)
             ->where('pendingInvitations.0.role', 'accountant'));
+});
+
+test('owner can create a company user with a password and scoped role', function () {
+    [$company, $owner] = createRoleAccessCompany();
+    $email = 'password-user-'.str()->random(8).'@example.test';
+
+    $this->actingAs($owner)
+        ->post(route('users.store', ['company' => $company->slug]), [
+            'name' => 'Password User',
+            'email' => $email,
+            'role' => 'accountant',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'User created successfully.');
+
+    $createdUser = User::where('email', $email)->firstOrFail();
+
+    expect(Hash::check('SecurePass123!', $createdUser->password))->toBeTrue()
+        ->and(DB::table('auth.company_user')
+            ->where('company_id', $company->id)
+            ->where('user_id', $createdUser->id)
+            ->value('role'))->toBe('accountant');
+
+    app(CompanyContextService::class)->withContext(
+        $company,
+        fn () => expect($createdUser->fresh()->hasCompanyPermission('account.view'))->toBeTrue(),
+    );
+});
+
+test('accountant cannot create users with passwords', function () {
+    [$company] = createRoleAccessCompany();
+    $accountant = User::factory()->withoutTwoFactor()->create();
+    addRoleAccessMember($company, $accountant, 'accountant');
+
+    $email = 'forbidden-user-'.str()->random(8).'@example.test';
+
+    $this->actingAs($accountant)
+        ->post(route('users.store', ['company' => $company->slug]), [
+            'name' => 'Forbidden User',
+            'email' => $email,
+            'role' => 'operations',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
+        ])
+        ->assertForbidden();
+
+    expect(User::where('email', $email)->exists())->toBeFalse();
 });
 
 test('owner and manager can invite allowed roles and owner can change roles', function () {

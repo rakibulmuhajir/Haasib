@@ -13,9 +13,12 @@ import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDateTime } from '@/lib/datetime'
+import { toast } from 'vue-sonner'
 import {
   Building2,
   CalendarRange,
+  Check,
+  ChevronDown,
   Coins,
   ExternalLink,
   KeyRound,
@@ -59,6 +62,7 @@ interface CompanyUser {
   email: string
   role: string
   joined_at: string | null
+  permissions: string[]
 }
 
 interface PendingInvitation {
@@ -76,6 +80,7 @@ const availableCurrencies = props.availableCurrencies || []
 const users = (props.users || []) as CompanyUser[]
 const pendingInvitations = (props.pendingInvitations || []) as PendingInvitation[]
 const logoPreview = ref(company.value.logo_url || '')
+const expandedUserId = ref<string | null>(null)
 
 const formatDate = (value: string | null) => value ? formatDateTime(value, { mode: 'date' }) : '—'
 const roleLabel = (role: string | null) => ({
@@ -93,6 +98,39 @@ const roleDescription = (role: string) => ({
   operations: 'Creates groups and vouchers without seeing prices, costs, or accounting.',
   agent: 'Works only with their own groups, vouchers, payments, and reports.',
 }[role] || 'Company access')
+
+const permissionGroup = (permission: string) => {
+  const prefix = permission.split('.')[0]
+
+  if (['company'].includes(prefix)) return 'Company & team'
+  if (['customer', 'vendor'].includes(prefix)) return 'Contacts'
+  if (['invoice', 'bill', 'credit_note', 'vendor_credit'].includes(prefix)) return 'Sales & purchases'
+  if (['account', 'journal', 'posting_template', 'tax'].includes(prefix)) return 'Accounting'
+  if (['payment', 'bank_account', 'bank_transaction', 'bank_feed', 'bank_reconciliation', 'bank_rule'].includes(prefix)) return 'Banking & payments'
+  if (['item', 'item_category', 'warehouse', 'stock'].includes(prefix)) return 'Inventory'
+  if (['employee', 'payroll', 'payroll_run', 'leave_request', 'payslip'].includes(prefix)) return 'Payroll'
+  if (prefix === 'umrah') return 'Umrah operations'
+  if (['fuel', 'fuel_rate', 'fuel_product', 'fuel_sale', 'pump', 'pump_reading', 'tank_reading', 'investor', 'handover', 'amanat', 'daily_close'].includes(prefix)) return 'Fuel station'
+
+  return 'Other'
+}
+
+const permissionLabel = (permission: string) => permission
+  .split('.')
+  .map((part) => part.replaceAll('_', ' ').replaceAll('-', ' '))
+  .join(' · ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase())
+
+const permissionGroups = (permissions: string[]) => permissions.reduce<Record<string, string[]>>((groups, permission) => {
+  const group = permissionGroup(permission)
+  groups[group] ||= []
+  groups[group].push(permission)
+  return groups
+}, {})
+
+const toggleUserPermissions = (userId: string) => {
+  expandedUserId.value = expandedUserId.value === userId ? null : userId
+}
 
 const generalForm = useForm({
   name: company.value.name,
@@ -114,6 +152,26 @@ const moduleSettingsForm = useForm({
   inventory: company.value.settings?.modules?.inventory !== false,
   payroll: company.value.settings?.modules?.payroll !== false,
 })
+
+const inviteForm = useForm({
+  email: '',
+  role: 'operations',
+})
+
+const createPasswordLogin = ref(false)
+const createUserForm = useForm({
+  name: '',
+  email: '',
+  role: 'operations',
+  password: '',
+  password_confirmation: '',
+})
+
+const invitationRoles = [
+  { value: 'manager', label: 'Manager' },
+  { value: 'accountant', label: 'Accountant' },
+  { value: 'operations', label: 'Operations Clerk' },
+]
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -149,6 +207,26 @@ const saveFiscalYearSettings = () => fiscalYearForm.patch(
   `/${company.value.slug}/settings`,
   { preserveScroll: true },
 )
+
+const inviteUser = () => inviteForm.post(`/${company.value.slug}/users/invite`, {
+  preserveScroll: true,
+  onSuccess: () => {
+    inviteForm.reset()
+    inviteForm.role = 'operations'
+    toast.success('Invitation sent successfully')
+  },
+  onError: () => toast.error('Could not send the invitation'),
+})
+
+const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
+  preserveScroll: true,
+  onSuccess: () => {
+    createUserForm.reset()
+    createUserForm.role = 'operations'
+    toast.success('User created successfully')
+  },
+  onError: () => toast.error('Could not create the user'),
+})
 </script>
 
 <template>
@@ -272,14 +350,115 @@ const saveFiscalYearSettings = () => fiscalYearForm.patch(
         </TabsContent>
 
         <TabsContent value="users" class="space-y-5">
+          <Card v-if="company.can_manage_users">
+            <CardHeader>
+              <CardTitle>Add user</CardTitle>
+              <CardDescription>Invite someone by email or create their login and password now.</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-5">
+              <div class="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                <div>
+                  <Label for="create-password-login">Create login with password</Label>
+                  <p class="mt-1 text-xs leading-5 text-muted-foreground">
+                    {{ createPasswordLogin ? 'The user can sign in immediately.' : 'The user receives a 7-day invitation.' }}
+                  </p>
+                </div>
+                <Switch id="create-password-login" v-model:checked="createPasswordLogin" />
+              </div>
+
+              <div v-if="!createPasswordLogin">
+              <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px_auto] md:items-start" @submit.prevent="inviteUser">
+                <div class="space-y-2">
+                  <Label for="invite-email">Email address</Label>
+                  <Input
+                    id="invite-email"
+                    v-model="inviteForm.email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="name@company.com"
+                    :disabled="inviteForm.processing"
+                  />
+                  <p v-if="inviteForm.errors.email" class="text-xs text-destructive">{{ inviteForm.errors.email }}</p>
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="invite-role">Role</Label>
+                  <Select v-model="inviteForm.role" :disabled="inviteForm.processing">
+                    <SelectTrigger id="invite-role">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="role in invitationRoles" :key="role.value" :value="role.value">
+                        {{ role.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p v-if="inviteForm.errors.role" class="text-xs text-destructive">{{ inviteForm.errors.role }}</p>
+                </div>
+
+                <Button type="submit" class="md:mt-7" :disabled="inviteForm.processing || !inviteForm.email">
+                  <UserPlus class="mr-2 h-4 w-4" />
+                  {{ inviteForm.processing ? 'Sending…' : 'Send invitation' }}
+                </Button>
+              </form>
+              <p class="mt-4 text-xs leading-5 text-muted-foreground">
+                Invitations expire after 7 days. The Owner role cannot be assigned by invitation.
+              </p>
+              </div>
+
+              <form v-else class="space-y-4" @submit.prevent="createUser">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label for="new-user-name">Full name</Label>
+                    <Input id="new-user-name" v-model="createUserForm.name" autocomplete="name" :disabled="createUserForm.processing" />
+                    <p v-if="createUserForm.errors.name" class="text-xs text-destructive">{{ createUserForm.errors.name }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="new-user-email">Email address</Label>
+                    <Input id="new-user-email" v-model="createUserForm.email" type="email" autocomplete="email" :disabled="createUserForm.processing" />
+                    <p v-if="createUserForm.errors.email" class="text-xs text-destructive">{{ createUserForm.errors.email }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="new-user-role">Role</Label>
+                    <Select v-model="createUserForm.role" :disabled="createUserForm.processing">
+                      <SelectTrigger id="new-user-role"><SelectValue placeholder="Select a role" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="role in invitationRoles" :key="role.value" :value="role.value">{{ role.label }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p v-if="createUserForm.errors.role" class="text-xs text-destructive">{{ createUserForm.errors.role }}</p>
+                  </div>
+                  <div class="hidden md:block" />
+                  <div class="space-y-2">
+                    <Label for="new-user-password">Password</Label>
+                    <Input id="new-user-password" v-model="createUserForm.password" type="password" autocomplete="new-password" :disabled="createUserForm.processing" />
+                    <p v-if="createUserForm.errors.password" class="text-xs text-destructive">{{ createUserForm.errors.password }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="new-user-password-confirmation">Confirm password</Label>
+                    <Input id="new-user-password-confirmation" v-model="createUserForm.password_confirmation" type="password" autocomplete="new-password" :disabled="createUserForm.processing" />
+                  </div>
+                </div>
+                <div class="flex justify-end border-t border-border pt-4">
+                  <Button type="submit" :disabled="createUserForm.processing || !createUserForm.name || !createUserForm.email || !createUserForm.password">
+                    <UserPlus class="mr-2 h-4 w-4" />
+                    {{ createUserForm.processing ? 'Creating…' : 'Create user' }}
+                  </Button>
+                </div>
+                <p class="text-xs leading-5 text-muted-foreground">The Owner role cannot be assigned here. Password rules are enforced by the server.</p>
+              </form>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader class="flex flex-row items-start justify-between gap-4">
               <div class="space-y-1.5">
                 <CardTitle>Users & permissions</CardTitle>
                 <CardDescription>{{ users.length }} active {{ users.length === 1 ? 'user' : 'users' }} · {{ pendingInvitations.length }} pending</CardDescription>
               </div>
-              <Button v-if="company.can_manage_users" @click="router.get(`/${company.slug}/users`)">
-                <UserPlus class="mr-2 h-4 w-4" /> Invite or manage
+              <Button v-if="company.can_manage_users" variant="outline" @click="router.get(`/${company.slug}/users`)">
+                Manage roles
+                <ExternalLink class="ml-2 h-3.5 w-3.5" />
               </Button>
             </CardHeader>
             <CardContent class="space-y-6">
@@ -294,15 +473,41 @@ const saveFiscalYearSettings = () => fiscalYearForm.patch(
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow v-for="user in users" :key="user.id">
+                    <template v-for="user in users" :key="user.id">
+                    <TableRow>
                       <TableCell>
                         <div class="font-medium">{{ user.name }}</div>
                         <div class="text-xs text-muted-foreground">{{ user.email }}</div>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{{ roleLabel(user.role) }}</Badge></TableCell>
+                      <TableCell>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{{ roleLabel(user.role) }}</Badge>
+                          <Button variant="ghost" size="sm" class="h-7 px-2 text-xs" @click="toggleUserPermissions(user.id)">
+                            {{ user.permissions.length }} permissions
+                            <ChevronDown class="ml-1 h-3.5 w-3.5 transition-transform" :class="expandedUserId === user.id ? 'rotate-180' : ''" />
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell class="hidden max-w-md text-sm text-muted-foreground md:table-cell">{{ roleDescription(user.role) }}</TableCell>
                       <TableCell class="hidden text-right text-sm text-muted-foreground sm:table-cell">{{ formatDate(user.joined_at) }}</TableCell>
                     </TableRow>
+                    <TableRow v-if="expandedUserId === user.id" class="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colspan="4" class="p-5">
+                        <div v-if="user.permissions.length" class="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+                          <section v-for="([group, permissions]) in Object.entries(permissionGroups(user.permissions))" :key="group" class="space-y-2">
+                            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ group }}</h4>
+                            <ul class="space-y-1.5">
+                              <li v-for="permission in permissions" :key="permission" class="flex items-start gap-2 text-sm">
+                                <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                <span>{{ permissionLabel(permission) }}</span>
+                              </li>
+                            </ul>
+                          </section>
+                        </div>
+                        <p v-else class="text-sm text-muted-foreground">No permissions are currently granted to this role.</p>
+                      </TableCell>
+                    </TableRow>
+                    </template>
                   </TableBody>
                 </Table>
               </div>

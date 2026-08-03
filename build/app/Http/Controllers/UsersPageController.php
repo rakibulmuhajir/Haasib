@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Fortify\CreateNewUser;
 use App\Facades\CompanyContext;
+use App\Http\Requests\StoreCompanyUserRequest;
+use App\Services\CompanyContextService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +16,34 @@ use Inertia\Response;
 
 class UsersPageController extends Controller
 {
+    public function store(
+        StoreCompanyUserRequest $request,
+        CreateNewUser $createNewUser,
+        CompanyContextService $companyContext,
+    ) {
+        $company = CompanyContext::getCompany();
+        $data = $request->validated();
+
+        DB::transaction(function () use ($company, $companyContext, $createNewUser, $data, $request): void {
+            $user = $createNewUser->create($data);
+
+            DB::table('auth.company_user')->insert([
+                'company_id' => $company->id,
+                'user_id' => $user->id,
+                'role' => $data['role'],
+                'invited_by_user_id' => $request->user()->id,
+                'joined_at' => now(),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $companyContext->assignRole($user, $data['role']);
+        });
+
+        return back()->with('success', 'User created successfully.');
+    }
+
     public function index(Request $request): Response
     {
         $company = CompanyContext::getCompany();

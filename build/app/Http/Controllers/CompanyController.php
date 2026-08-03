@@ -172,13 +172,28 @@ class CompanyController extends Controller
                 ->value('name');
         }
 
+        $permissionsByRole = DB::table('roles as r')
+            ->join('role_has_permissions as rp', 'rp.role_id', '=', 'r.id')
+            ->join('permissions as p', 'p.id', '=', 'rp.permission_id')
+            ->where('r.company_id', $company->id)
+            ->where('r.guard_name', 'web')
+            ->orderBy('p.name')
+            ->get(['r.name as role', 'p.name as permission'])
+            ->groupBy('role')
+            ->map(fn ($permissions) => $permissions->pluck('permission')->values()->all());
+
         $companyUsers = DB::table('auth.company_user as cu')
             ->join('auth.users as u', 'u.id', '=', 'cu.user_id')
             ->where('cu.company_id', $company->id)
             ->where('cu.is_active', true)
             ->orderByRaw("CASE cu.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'accountant' THEN 3 WHEN 'operations' THEN 4 ELSE 5 END")
             ->orderBy('u.name')
-            ->get(['u.id', 'u.name', 'u.email', 'cu.role', 'cu.joined_at']);
+            ->get(['u.id', 'u.name', 'u.email', 'cu.role', 'cu.joined_at'])
+            ->map(function ($companyUser) use ($permissionsByRole) {
+                $companyUser->permissions = $permissionsByRole->get($companyUser->role, []);
+
+                return $companyUser;
+            });
 
         $pendingInvitations = DB::table('auth.company_invitations')
             ->where('company_id', $company->id)

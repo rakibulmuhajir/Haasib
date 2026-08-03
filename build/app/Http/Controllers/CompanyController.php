@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Services\CommandBus;
 use App\Services\CompanyBootstrapService;
 use App\Services\CompanyRbacBootstrapper;
+use App\Services\UserPermissionPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -153,7 +154,7 @@ class CompanyController extends Controller
     /**
      * Show the company settings page.
      */
-    public function settings(Request $request): Response
+    public function settings(Request $request, UserPermissionPresenter $permissionPresenter): Response
     {
         $company = CompanyContext::getCompany();
         $user = $request->user();
@@ -189,8 +190,14 @@ class CompanyController extends Controller
             ->orderByRaw("CASE cu.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'accountant' THEN 3 WHEN 'operations' THEN 4 ELSE 5 END")
             ->orderBy('u.name')
             ->get(['u.id', 'u.name', 'u.email', 'cu.role', 'cu.joined_at'])
-            ->map(function ($companyUser) use ($permissionsByRole) {
-                $companyUser->permissions = $permissionsByRole->get($companyUser->role, []);
+            ->map(function ($companyUser) use ($company, $permissionPresenter, $permissionsByRole) {
+                $display = $permissionPresenter->forCompany(
+                    $company,
+                    $companyUser->role,
+                    $permissionsByRole->get($companyUser->role, []),
+                );
+                $companyUser->permissions = $display['permissions'];
+                $companyUser->capabilities = $display['capabilities'];
 
                 return $companyUser;
             });

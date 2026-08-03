@@ -50,6 +50,8 @@ interface UserRow {
   role: string
   is_active: boolean
   joined_at: string | null
+  permissions: string[]
+  capabilities: { label: string; allowed: boolean; detail: string | null }[]
 }
 
 const props = defineProps<{
@@ -61,6 +63,7 @@ const props = defineProps<{
 const searchQuery = ref('')
 const roleDialogOpen = ref(false)
 const createDialogOpen = ref(false)
+const permissionDialogOpen = ref(false)
 const selectedUser = ref<UserRow | null>(null)
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -116,6 +119,37 @@ const roleLabels: Record<string, string> = {
 const canManageUsers = computed(() => ['owner', 'manager'].includes(props.currentUserRole))
 const canManageUser = (user: UserRow) => canManageUsers.value && user.role !== 'owner'
 
+const permissionGroup = (permission: string) => {
+  const prefix = permission.split('.')[0]
+  if (prefix === 'company') return 'Company & team'
+  if (['customer', 'vendor'].includes(prefix)) return 'Contacts'
+  if (['invoice', 'bill', 'credit_note', 'vendor_credit'].includes(prefix)) return 'Sales & purchases'
+  if (['account', 'journal', 'posting_template', 'tax'].includes(prefix)) return 'Accounting'
+  if (['payment', 'bank_account', 'bank_transaction', 'bank_feed', 'bank_reconciliation', 'bank_rule'].includes(prefix)) return 'Banking & payments'
+  if (['item', 'item_category', 'warehouse', 'stock'].includes(prefix)) return 'Inventory'
+  if (['employee', 'payroll', 'payroll_run', 'leave_request', 'payslip'].includes(prefix)) return 'Payroll'
+  if (prefix === 'umrah') return 'Umrah operations'
+  return 'Other'
+}
+
+const permissionLabel = (permission: string) => permission
+  .split('.')
+  .map((part) => part.replaceAll('_', ' ').replaceAll('-', ' '))
+  .join(' · ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase())
+
+const permissionGroups = (permissions: string[]) => permissions.reduce<Record<string, string[]>>((groups, permission) => {
+  const group = permissionGroup(permission)
+  groups[group] ||= []
+  groups[group].push(permission)
+  return groups
+}, {})
+
+const openPermissions = (user: UserRow) => {
+  selectedUser.value = user
+  permissionDialogOpen.value = true
+}
+
 const openRoleDialog = (user: UserRow) => {
   selectedUser.value = user
   roleForm.userId = user.id
@@ -162,6 +196,10 @@ const tableColumns = [
     key: 'is_active',
     label: 'Status',
     sortable: true,
+  },
+  {
+    key: 'permissions',
+    label: 'Permissions',
   },
   {
     key: 'joined_at',
@@ -247,6 +285,12 @@ const tableColumns = [
         <Badge :variant="row.is_active ? 'default' : 'secondary'">
           {{ row.is_active ? 'Active' : 'Inactive' }}
         </Badge>
+      </template>
+
+      <template #cell-permissions="{ row }">
+        <Button size="sm" variant="outline" @click="openPermissions(row)">
+          {{ row.permissions.length }} module permissions
+        </Button>
       </template>
 
       <template #cell-joined_at="{ row }">
@@ -350,6 +394,37 @@ const tableColumns = [
             />
             Update Role
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="permissionDialogOpen">
+      <DialogContent class="max-h-[80vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{{ selectedUser?.name || selectedUser?.email }} permissions</DialogTitle>
+          <DialogDescription>
+            Effective access granted by the {{ roleLabels[selectedUser?.role || ''] || selectedUser?.role }} role. Read-only.
+          </DialogDescription>
+        </DialogHeader>
+        <div v-if="selectedUser?.capabilities.length" class="grid gap-2 md:grid-cols-2">
+          <div v-for="capability in selectedUser.capabilities" :key="capability.label" class="rounded-md border p-3">
+            <p class="text-sm font-medium">{{ capability.label }}</p>
+            <p class="mt-1 text-xs" :class="capability.allowed ? 'text-emerald-600' : 'text-destructive'">
+              {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
+            </p>
+          </div>
+        </div>
+        <div v-if="selectedUser?.permissions.length" class="grid gap-5 py-2 md:grid-cols-2">
+          <section v-for="([group, permissions]) in Object.entries(permissionGroups(selectedUser.permissions))" :key="group" class="space-y-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ group }}</h3>
+            <ul class="space-y-1.5">
+              <li v-for="permission in permissions" :key="permission" class="text-sm">{{ permissionLabel(permission) }}</li>
+            </ul>
+          </section>
+        </div>
+        <p v-else class="py-4 text-sm text-muted-foreground">No permissions are currently granted.</p>
+        <DialogFooter>
+          <Button variant="outline" @click="permissionDialogOpen = false">Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

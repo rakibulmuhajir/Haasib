@@ -67,7 +67,9 @@ test('owner can remove a manager', function () {
 test('company settings exposes active members and their permissions', function () {
     [$company, $owner] = createRoleAccessCompany();
     $manager = User::factory()->withoutTwoFactor()->create();
+    $operations = User::factory()->withoutTwoFactor()->create();
     addRoleAccessMember($company, $manager, 'manager');
+    addRoleAccessMember($company, $operations, 'operations');
 
     $this->actingAs($owner)
         ->get(route('company.settings', ['company' => $company->slug]))
@@ -75,11 +77,35 @@ test('company settings exposes active members and their permissions', function (
         ->assertInertia(fn (Assert $page) => $page
             ->component('company/Settings')
             ->where('company.can_manage_users', true)
-            ->has('users', 2)
+            ->has('users', 3)
             ->where('users.0.role', 'owner')
             ->where('users.1.id', $manager->id)
             ->where('users.1.role', 'manager')
-            ->where('users.1.permissions', fn ($permissions) => collect($permissions)->contains('company.manage-users')));
+            ->where('users.1.permissions', fn ($permissions) => collect($permissions)->contains('umrah.group-accounting.view')
+                && collect($permissions)->contains('payslip.view')
+                && ! collect($permissions)->contains('account.view'))
+            ->where('users.2.id', $operations->id)
+            ->where('users.2.capabilities', function ($capabilities) {
+                $capabilities = collect($capabilities)->keyBy('label');
+
+                return $capabilities->get('View selling prices and customer rates')['allowed'] === false
+                    && $capabilities->get('View supplier costs and profit')['allowed'] === false
+                    && $capabilities->get('View group accounting')['allowed'] === false;
+            }));
+
+    $this->actingAs($owner)
+        ->get(route('users.index', ['company' => $company->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('users/Index')
+            ->where('users', function ($users) use ($manager) {
+                $managerPayload = collect($users)->firstWhere('id', $manager->id);
+
+                return $managerPayload
+                    && collect($managerPayload['permissions'])->contains('umrah.group-accounting.view')
+                    && collect($managerPayload['permissions'])->contains('payslip.view')
+                    && ! collect($managerPayload['permissions'])->contains('account.view');
+            }));
 });
 
 test('owner can create a company user with a password and scoped role', function () {

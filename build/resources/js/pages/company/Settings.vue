@@ -63,6 +63,7 @@ interface CompanyUser {
   role: string
   joined_at: string | null
   permissions: string[]
+  capabilities: { label: string; allowed: boolean; detail: string | null }[]
 }
 
 const page = usePage()
@@ -409,7 +410,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
                         <div class="flex flex-wrap items-center gap-2">
                           <Badge variant="outline">{{ roleLabel(user.role) }}</Badge>
                           <Button variant="ghost" size="sm" class="h-7 px-2 text-xs" @click="toggleUserPermissions(user.id)">
-                            {{ user.permissions.length }} permissions
+                            {{ user.permissions.length }} module permissions
                             <ChevronDown class="ml-1 h-3.5 w-3.5 transition-transform" :class="expandedUserId === user.id ? 'rotate-180' : ''" />
                           </Button>
                         </div>
@@ -419,6 +420,18 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
                     </TableRow>
                     <TableRow v-if="expandedUserId === user.id" class="bg-muted/20 hover:bg-muted/20">
                       <TableCell colspan="4" class="p-5">
+                        <div v-if="user.capabilities.length" class="mb-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          <div v-for="capability in user.capabilities" :key="capability.label" class="flex items-start gap-2 rounded-md border border-border bg-background p-3">
+                            <Check v-if="capability.allowed" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                            <span v-else class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">×</span>
+                            <div>
+                              <p class="text-sm font-medium">{{ capability.label }}</p>
+                              <p class="text-xs" :class="capability.allowed ? 'text-emerald-700' : 'text-destructive'">
+                                {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                         <div v-if="user.permissions.length" class="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
                           <section v-for="([group, permissions]) in Object.entries(permissionGroups(user.permissions))" :key="group" class="space-y-2">
                             <h4 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ group }}</h4>

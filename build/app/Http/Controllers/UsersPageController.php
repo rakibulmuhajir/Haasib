@@ -6,6 +6,7 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Facades\CompanyContext;
 use App\Http\Requests\StoreCompanyUserRequest;
 use App\Services\CompanyContextService;
+use App\Services\UserPermissionPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -43,7 +44,7 @@ class UsersPageController extends Controller
         return back()->with('success', 'User created successfully.');
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, UserPermissionPresenter $permissionPresenter): Response
     {
         $company = CompanyContext::getCompany();
 
@@ -58,6 +59,16 @@ class UsersPageController extends Controller
             abort(403, 'You are not a member of this company.');
         }
 
+        $permissionsByRole = DB::table('roles as r')
+            ->join('role_has_permissions as rp', 'rp.role_id', '=', 'r.id')
+            ->join('permissions as p', 'p.id', '=', 'rp.permission_id')
+            ->where('r.company_id', $company->id)
+            ->where('r.guard_name', 'web')
+            ->orderBy('p.name')
+            ->get(['r.name as role', 'p.name as permission'])
+            ->groupBy('role')
+            ->map(fn ($permissions) => $permissions->pluck('permission')->values()->all());
+
         $users = DB::table('auth.company_user as cu')
             ->join('auth.users as u', 'cu.user_id', '=', 'u.id')
             ->where('cu.company_id', $company->id)
@@ -71,7 +82,18 @@ class UsersPageController extends Controller
                 'cu.joined_at'
             )
             ->orderBy('u.name')
-            ->get();
+            ->get()
+            ->map(function ($companyUser) use ($company, $permissionPresenter, $permissionsByRole) {
+                $display = $permissionPresenter->forCompany(
+                    $company,
+                    $companyUser->role,
+                    $permissionsByRole->get($companyUser->role, []),
+                );
+                $companyUser->permissions = $display['permissions'];
+                $companyUser->capabilities = $display['capabilities'];
+
+                return $companyUser;
+            });
 
         return Inertia::render('users/Index', [
             'company' => [

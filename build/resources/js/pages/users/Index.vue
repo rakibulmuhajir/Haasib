@@ -60,7 +60,7 @@ const props = defineProps<{
 
 const searchQuery = ref('')
 const roleDialogOpen = ref(false)
-const inviteDialogOpen = ref(false)
+const createDialogOpen = ref(false)
 const selectedUser = ref<UserRow | null>(null)
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -97,9 +97,12 @@ const roleForm = useForm({
   role: '',
 })
 
-const inviteForm = useForm({
+const createForm = useForm({
+  name: '',
   email: '',
   role: 'operations',
+  password: '',
+  password_confirmation: '',
 })
 
 const availableRoles = ['manager', 'accountant', 'operations']
@@ -129,11 +132,12 @@ const handleRoleUpdate = () => {
   })
 }
 
-const handleInvite = () => {
-  inviteForm.post(`/${props.company.slug}/users/invite`, {
+const handleCreate = () => {
+  createForm.post(`/${props.company.slug}/users`, {
     onSuccess: () => {
-      inviteForm.reset()
-      inviteDialogOpen.value = false
+      createForm.reset()
+      createForm.role = 'operations'
+      createDialogOpen.value = false
     },
   })
 }
@@ -192,9 +196,9 @@ const tableColumns = [
     </template>
 
     <template #actions>
-      <Button v-if="canManageUsers" size="sm" @click="inviteDialogOpen = true">
+      <Button v-if="canManageUsers" size="sm" @click="createDialogOpen = true">
         <UserPlus class="mr-2 h-4 w-4" />
-        Invite User
+        Add User
       </Button>
     </template>
 
@@ -206,9 +210,9 @@ const tableColumns = [
       :description="searchQuery ? 'Try adjusting your search terms' : 'This company has no team members yet'"
     >
       <template #actions>
-        <Button v-if="!searchQuery" @click="inviteDialogOpen = true" size="sm">
+        <Button v-if="!searchQuery && canManageUsers" @click="createDialogOpen = true" size="sm">
           <UserPlus class="mr-2 h-4 w-4" />
-          Invite User
+          Add User
         </Button>
       </template>
     </EmptyState>
@@ -350,27 +354,32 @@ const tableColumns = [
       </DialogContent>
     </Dialog>
 
-    <!-- Invite User Dialog -->
-    <Dialog v-model:open="inviteDialogOpen">
+    <!-- Create User Dialog -->
+    <Dialog v-model:open="createDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-slate-100">Invite User</DialogTitle>
+          <DialogTitle class="text-slate-100">Add User</DialogTitle>
           <DialogDescription class="text-slate-400">
-            Send an invitation to join {{ company.name }}
+            Create a login for {{ company.name }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label for="email" class="text-slate-200">Email</Label>
+            <Label for="new-user-name" class="text-slate-200">Full name</Label>
+            <Input id="new-user-name" v-model="createForm.name" autocomplete="name" />
+            <p v-if="createForm.errors.name" class="text-xs text-red-400">{{ createForm.errors.name }}</p>
+          </div>
+          <div class="space-y-2">
+            <Label for="new-user-email" class="text-slate-200">Email</Label>
             <Input
-              id="email"
-              v-model="inviteForm.email"
+              id="new-user-email"
+              v-model="createForm.email"
               type="email"
               placeholder="user@example.com"
               class="bg-slate-950/50 border-slate-700"
             />
-            <p v-if="inviteForm.errors.email" class="text-xs text-red-400">
-              {{ inviteForm.errors.email }}
+            <p v-if="createForm.errors.email" class="text-xs text-red-400">
+              {{ createForm.errors.email }}
             </p>
           </div>
           <div class="space-y-2">
@@ -378,7 +387,7 @@ const tableColumns = [
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between">
-                  <span>{{ roleLabels[inviteForm.role] }}</span>
+                  <span>{{ roleLabels[createForm.role] }}</span>
                   <span class="ml-2">▼</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -386,28 +395,37 @@ const tableColumns = [
                 <DropdownMenuItem
                   v-for="role in availableRoles"
                   :key="role"
-                  @click="inviteForm.role = role"
+                  @click="createForm.role = role"
                   class="capitalize"
                 >
                   {{ roleLabels[role] }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <p v-if="inviteForm.errors.role" class="text-xs text-red-400">
-              {{ inviteForm.errors.role }}
+            <p v-if="createForm.errors.role" class="text-xs text-red-400">
+              {{ createForm.errors.role }}
             </p>
+          </div>
+          <div class="space-y-2">
+            <Label for="new-user-password" class="text-slate-200">Password</Label>
+            <Input id="new-user-password" v-model="createForm.password" type="password" autocomplete="new-password" />
+            <p v-if="createForm.errors.password" class="text-xs text-red-400">{{ createForm.errors.password }}</p>
+          </div>
+          <div class="space-y-2">
+            <Label for="new-user-password-confirmation" class="text-slate-200">Confirm password</Label>
+            <Input id="new-user-password-confirmation" v-model="createForm.password_confirmation" type="password" autocomplete="new-password" />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="inviteDialogOpen = false" :disabled="inviteForm.processing">
+          <Button variant="outline" @click="createDialogOpen = false" :disabled="createForm.processing">
             Cancel
           </Button>
-          <Button @click="handleInvite" :disabled="inviteForm.processing">
+          <Button @click="handleCreate" :disabled="createForm.processing">
             <span
-              v-if="inviteForm.processing"
+              v-if="createForm.processing"
               class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
             />
-            Send Invitation
+            Create User
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -123,17 +123,6 @@ interface Financials {
   }>
 }
 
-interface PendingInvitation {
-  id: string
-  email: string
-  role: string
-  expires_at: string
-  created_at: string
-  inviter_name: string | null
-  inviter_email: string | null
-  token: string
-}
-
 interface User {
   id: string
   name: string | null
@@ -272,7 +261,6 @@ const props = defineProps<{
   stats: Stats
   users: User[]
   currentUserRole: string
-  pendingInvitations: PendingInvitation[]
   financials: Financials
   dashboard: DashboardData
   isFuelStation?: boolean
@@ -333,17 +321,20 @@ const languageField = inlineEdit.registerField('language', props.company.languag
 const localeField = inlineEdit.registerField('locale', props.company.locale || 'en_US')
 const fiscalYearField = inlineEdit.registerField('fiscal_year_start_month', props.company.fiscal_year_start_month || 1)
 
-// Invite dialog
-const inviteDialogOpen = ref(false)
+// User management dialogs
+const createUserDialogOpen = ref(false)
 const roleDialogOpen = ref(false)
 const removeDialogOpen = ref(false)
 const selectedUser = ref<User | null>(null)
 const productDeleteDialogOpen = ref(false)
 const selectedProduct = ref<FuelProductDashboardItem | null>(null)
 
-const inviteForm = useForm({
+const createUserForm = useForm({
+  name: '',
   email: '',
-  role: 'member',
+  role: 'operations',
+  password: '',
+  password_confirmation: '',
 })
 
 const roleForm = useForm({
@@ -788,15 +779,16 @@ const getRoleBadgeVariant = (role: string) => {
   return variants[role.toLowerCase()] || 'outline'
 }
 
-const handleInvite = () => {
-  inviteForm.post(`/${props.company.slug}/users/invite`, {
+const handleCreateUser = () => {
+  createUserForm.post(`/${props.company.slug}/users`, {
     onSuccess: () => {
-      inviteForm.reset()
-      inviteDialogOpen.value = false
-      toast.success('Invitation sent successfully')
+      createUserForm.reset()
+      createUserForm.role = 'operations'
+      createUserDialogOpen.value = false
+      toast.success('User created successfully')
     },
     onError: () => {
-      toast.error('Failed to send invitation')
+      toast.error('Failed to create user')
     },
   })
 }
@@ -1717,35 +1709,6 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </CardContent>
         </Card>
 
-        <!-- Pending Invitations (visible to owners) -->
-        <Card v-if="currentUserRole === 'owner' && pendingInvitations.length > 0" class="border-amber-100 bg-amber-50">
-          <CardHeader class="pb-3">
-            <CardTitle class="text-amber-900">Pending Invitations</CardTitle>
-            <CardDescription class="text-amber-700">
-              Invites sent from {{ company.name }}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-3">
-              <div
-                v-for="invite in pendingInvitations"
-                :key="invite.id"
-                class="flex flex-col gap-1 rounded-lg border border-amber-200/80 bg-white px-4 py-3 shadow-xs"
-              >
-                <div class="flex items-center justify-between">
-                  <div class="font-medium text-amber-900">{{ invite.email }}</div>
-                  <Badge variant="outline" class="capitalize text-amber-800">
-                    {{ invite.role }}
-                  </Badge>
-                </div>
-                <div class="text-xs text-amber-700">
-                  Expires {{ formatDate(invite.expires_at) }}
-                  <span v-if="invite.inviter_name"> • Invited by {{ invite.inviter_name }}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </TabsContent>
 
       <!-- Users Tab -->
@@ -1759,9 +1722,9 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           hoverable
         >
           <template #header>
-            <Button v-if="canManage" size="sm" @click="inviteDialogOpen = true">
+            <Button v-if="canManage" size="sm" @click="createUserDialogOpen = true">
               <UserPlus class="mr-2 h-4 w-4" />
-              Invite User
+              Add User
             </Button>
           </template>
 
@@ -2191,27 +2154,32 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       </DialogContent>
     </Dialog>
 
-    <!-- Invite User Dialog -->
-    <Dialog v-model:open="inviteDialogOpen">
+    <!-- Create User Dialog -->
+    <Dialog v-model:open="createUserDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-zinc-900">Invite User</DialogTitle>
+          <DialogTitle class="text-zinc-900">Add User</DialogTitle>
           <DialogDescription class="text-zinc-500">
-            Send an invitation to join {{ company.name }}
+            Create a login for {{ company.name }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label for="email" class="text-zinc-700">Email</Label>
+            <Label for="company-user-name" class="text-zinc-700">Full name</Label>
+            <Input id="company-user-name" v-model="createUserForm.name" class="border-zinc-200" />
+            <p v-if="createUserForm.errors.name" class="text-xs text-red-600">{{ createUserForm.errors.name }}</p>
+          </div>
+          <div class="space-y-2">
+            <Label for="company-user-email" class="text-zinc-700">Email</Label>
             <Input
-              id="email"
-              v-model="inviteForm.email"
+              id="company-user-email"
+              v-model="createUserForm.email"
               type="email"
               placeholder="user@example.com"
               class="border-zinc-200"
             />
-            <p v-if="inviteForm.errors.email" class="text-xs text-red-600">
-              {{ inviteForm.errors.email }}
+            <p v-if="createUserForm.errors.email" class="text-xs text-red-600">
+              {{ createUserForm.errors.email }}
             </p>
           </div>
           <div class="space-y-2">
@@ -2219,7 +2187,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between border-zinc-200">
-                  <span class="capitalize">{{ inviteForm.role }}</span>
+                  <span class="capitalize">{{ createUserForm.role }}</span>
                   <span class="ml-2">▼</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -2227,7 +2195,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 <DropdownMenuItem
                   v-for="role in availableRoles"
                   :key="role"
-                  @click="inviteForm.role = role"
+                  @click="createUserForm.role = role"
                   class="capitalize"
                 >
                   {{ role }}
@@ -2235,14 +2203,23 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          <div class="space-y-2">
+            <Label for="company-user-password" class="text-zinc-700">Password</Label>
+            <Input id="company-user-password" v-model="createUserForm.password" type="password" autocomplete="new-password" class="border-zinc-200" />
+            <p v-if="createUserForm.errors.password" class="text-xs text-red-600">{{ createUserForm.errors.password }}</p>
+          </div>
+          <div class="space-y-2">
+            <Label for="company-user-password-confirmation" class="text-zinc-700">Confirm password</Label>
+            <Input id="company-user-password-confirmation" v-model="createUserForm.password_confirmation" type="password" autocomplete="new-password" class="border-zinc-200" />
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="inviteDialogOpen = false" :disabled="inviteForm.processing">
+          <Button variant="outline" @click="createUserDialogOpen = false" :disabled="createUserForm.processing">
             Cancel
           </Button>
-          <Button @click="handleInvite" :disabled="inviteForm.processing">
-            <span v-if="inviteForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Send Invitation
+          <Button @click="handleCreateUser" :disabled="createUserForm.processing">
+            <span v-if="createUserForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Create User
           </Button>
         </DialogFooter>
       </DialogContent>

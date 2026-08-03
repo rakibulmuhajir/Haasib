@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -74,24 +73,6 @@ class UsersPageController extends Controller
             ->orderBy('u.name')
             ->get();
 
-        // Get pending invitations for this company
-        $pendingInvitations = DB::table('auth.company_invitations as ci')
-            ->leftJoin('auth.users as inviter', 'ci.invited_by_user_id', '=', 'inviter.id')
-            ->where('ci.company_id', $company->id)
-            ->where('ci.status', 'pending')
-            ->where('ci.expires_at', '>', now())
-            ->select(
-                'ci.id',
-                'ci.email',
-                'ci.role',
-                'ci.token',
-                'ci.expires_at',
-                'ci.created_at',
-                'inviter.name as inviter_name'
-            )
-            ->orderBy('ci.created_at', 'desc')
-            ->get();
-
         return Inertia::render('users/Index', [
             'company' => [
                 'id' => $company->id,
@@ -99,77 +80,8 @@ class UsersPageController extends Controller
                 'slug' => $company->slug,
             ],
             'users' => $users,
-            'pendingInvitations' => $pendingInvitations,
             'currentUserRole' => $currentUserRole,
         ]);
-    }
-
-    public function invite(Request $request)
-    {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'role' => ['required', 'string', 'in:manager,accountant,operations'],
-        ]);
-
-        $company = CompanyContext::getCompany();
-
-        // Owners and managers administer company membership.
-        $currentUserRole = DB::table('auth.company_user')
-            ->where('company_id', $company->id)
-            ->where('user_id', Auth::id())
-            ->value('role');
-
-        if (! in_array($currentUserRole, ['owner', 'manager'], true)) {
-            throw ValidationException::withMessages([
-                'email' => 'Only owners and managers can invite users.',
-            ]);
-        }
-
-        // Check if user already exists in company
-        $existingUser = DB::table('auth.users')
-            ->where('email', $data['email'])
-            ->first();
-
-        if ($existingUser) {
-            $isMember = DB::table('auth.company_user')
-                ->where('company_id', $company->id)
-                ->where('user_id', $existingUser->id)
-                ->exists();
-
-            if ($isMember) {
-                throw ValidationException::withMessages([
-                    'email' => 'This user is already a member of the company.',
-                ]);
-            }
-        }
-
-        // Check if invitation already exists
-        $existingInvitation = \App\Models\CompanyInvitation::where('company_id', $company->id)
-            ->where('email', $data['email'])
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->first();
-
-        if ($existingInvitation) {
-            throw ValidationException::withMessages([
-                'email' => 'An invitation has already been sent to this email address.',
-            ]);
-        }
-
-        // Create invitation
-        $invitation = \App\Models\CompanyInvitation::create([
-            'company_id' => $company->id,
-            'email' => $data['email'],
-            'role' => $data['role'],
-            'token' => \Illuminate\Support\Str::random(64),
-            'invited_by_user_id' => Auth::id(),
-            'expires_at' => now()->addDays(7),
-            'status' => 'pending',
-        ]);
-
-        // TODO: Send invitation email
-
-        return back()->with('success', 'Invitation sent successfully.');
     }
 
     public function updateRole(Request $request, string $companySlug, string $userId)

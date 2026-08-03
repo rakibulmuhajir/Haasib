@@ -64,19 +64,10 @@ test('owner can remove a manager', function () {
         ->exists())->toBeFalse();
 });
 
-test('company settings exposes active members and pending invitations', function () {
+test('company settings exposes active members and their permissions', function () {
     [$company, $owner] = createRoleAccessCompany();
     $manager = User::factory()->withoutTwoFactor()->create();
     addRoleAccessMember($company, $manager, 'manager');
-
-    $invitedEmail = 'settings-invite-'.str()->random(8).'@example.test';
-
-    $this->actingAs($owner)
-        ->post(route('users.invite', ['company' => $company->slug]), [
-            'email' => $invitedEmail,
-            'role' => 'accountant',
-        ])
-        ->assertRedirect();
 
     $this->actingAs($owner)
         ->get(route('company.settings', ['company' => $company->slug]))
@@ -88,10 +79,7 @@ test('company settings exposes active members and pending invitations', function
             ->where('users.0.role', 'owner')
             ->where('users.1.id', $manager->id)
             ->where('users.1.role', 'manager')
-            ->where('users.1.permissions', fn ($permissions) => collect($permissions)->contains('company.manage-users'))
-            ->has('pendingInvitations', 1)
-            ->where('pendingInvitations.0.email', $invitedEmail)
-            ->where('pendingInvitations.0.role', 'accountant'));
+            ->where('users.1.permissions', fn ($permissions) => collect($permissions)->contains('company.manage-users')));
 });
 
 test('owner can create a company user with a password and scoped role', function () {
@@ -143,7 +131,7 @@ test('accountant cannot create users with passwords', function () {
     expect(User::where('email', $email)->exists())->toBeFalse();
 });
 
-test('owner and manager can invite allowed roles and owner can change roles', function () {
+test('owner and manager can create allowed roles and owner can change roles', function () {
     [$company, $owner] = createRoleAccessCompany();
     $manager = User::factory()->withoutTwoFactor()->create();
     $accountant = User::factory()->withoutTwoFactor()->create();
@@ -151,20 +139,26 @@ test('owner and manager can invite allowed roles and owner can change roles', fu
     addRoleAccessMember($company, $accountant, 'accountant');
 
     $this->actingAs($owner)
-        ->post(route('users.invite', ['company' => $company->slug]), [
-            'email' => 'manager-invite-'.str()->random(8).'@example.test',
+        ->post(route('users.store', ['company' => $company->slug]), [
+            'name' => 'Manager Created User',
+            'email' => 'manager-created-'.str()->random(8).'@example.test',
             'role' => 'manager',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
         ])
         ->assertRedirect()
-        ->assertSessionHas('success', 'Invitation sent successfully.');
+        ->assertSessionHas('success', 'User created successfully.');
 
     $this->actingAs($manager)
-        ->post(route('users.invite', ['company' => $company->slug]), [
-            'email' => 'operations-invite-'.str()->random(8).'@example.test',
+        ->post(route('users.store', ['company' => $company->slug]), [
+            'name' => 'Operations Created User',
+            'email' => 'operations-created-'.str()->random(8).'@example.test',
             'role' => 'operations',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
         ])
         ->assertRedirect()
-        ->assertSessionHas('success', 'Invitation sent successfully.');
+        ->assertSessionHas('success', 'User created successfully.');
 
     $this->actingAs($owner)
         ->put(route('users.update-role', ['company' => $company->slug, 'user' => $accountant->id]), [

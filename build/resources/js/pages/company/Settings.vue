@@ -65,20 +65,12 @@ interface CompanyUser {
   permissions: string[]
 }
 
-interface PendingInvitation {
-  id: string
-  email: string
-  role: string
-  expires_at: string
-}
-
 const page = usePage()
 const props = page.props as any
 const company = ref<Company>(props.company)
 const companyCurrencies = props.companyCurrencies || []
 const availableCurrencies = props.availableCurrencies || []
 const users = (props.users || []) as CompanyUser[]
-const pendingInvitations = (props.pendingInvitations || []) as PendingInvitation[]
 const logoPreview = ref(company.value.logo_url || '')
 const expandedUserId = ref<string | null>(null)
 
@@ -153,12 +145,6 @@ const moduleSettingsForm = useForm({
   payroll: company.value.settings?.modules?.payroll !== false,
 })
 
-const inviteForm = useForm({
-  email: '',
-  role: 'operations',
-})
-
-const createPasswordLogin = ref(false)
 const createUserForm = useForm({
   name: '',
   email: '',
@@ -207,16 +193,6 @@ const saveFiscalYearSettings = () => fiscalYearForm.patch(
   `/${company.value.slug}/settings`,
   { preserveScroll: true },
 )
-
-const inviteUser = () => inviteForm.post(`/${company.value.slug}/users/invite`, {
-  preserveScroll: true,
-  onSuccess: () => {
-    inviteForm.reset()
-    inviteForm.role = 'operations'
-    toast.success('Invitation sent successfully')
-  },
-  onError: () => toast.error('Could not send the invitation'),
-})
 
 const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
   preserveScroll: true,
@@ -353,60 +329,10 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
           <Card v-if="company.can_manage_users">
             <CardHeader>
               <CardTitle>Add user</CardTitle>
-              <CardDescription>Invite someone by email or create their login and password now.</CardDescription>
+              <CardDescription>Create a login and assign the user’s company role.</CardDescription>
             </CardHeader>
             <CardContent class="space-y-5">
-              <div class="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-                <div>
-                  <Label for="create-password-login">Create login with password</Label>
-                  <p class="mt-1 text-xs leading-5 text-muted-foreground">
-                    {{ createPasswordLogin ? 'The user can sign in immediately.' : 'The user receives a 7-day invitation.' }}
-                  </p>
-                </div>
-                <Switch id="create-password-login" v-model:checked="createPasswordLogin" />
-              </div>
-
-              <div v-if="!createPasswordLogin">
-              <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px_auto] md:items-start" @submit.prevent="inviteUser">
-                <div class="space-y-2">
-                  <Label for="invite-email">Email address</Label>
-                  <Input
-                    id="invite-email"
-                    v-model="inviteForm.email"
-                    type="email"
-                    autocomplete="email"
-                    placeholder="name@company.com"
-                    :disabled="inviteForm.processing"
-                  />
-                  <p v-if="inviteForm.errors.email" class="text-xs text-destructive">{{ inviteForm.errors.email }}</p>
-                </div>
-
-                <div class="space-y-2">
-                  <Label for="invite-role">Role</Label>
-                  <Select v-model="inviteForm.role" :disabled="inviteForm.processing">
-                    <SelectTrigger id="invite-role">
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="role in invitationRoles" :key="role.value" :value="role.value">
-                        {{ role.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p v-if="inviteForm.errors.role" class="text-xs text-destructive">{{ inviteForm.errors.role }}</p>
-                </div>
-
-                <Button type="submit" class="md:mt-7" :disabled="inviteForm.processing || !inviteForm.email">
-                  <UserPlus class="mr-2 h-4 w-4" />
-                  {{ inviteForm.processing ? 'Sending…' : 'Send invitation' }}
-                </Button>
-              </form>
-              <p class="mt-4 text-xs leading-5 text-muted-foreground">
-                Invitations expire after 7 days. The Owner role cannot be assigned by invitation.
-              </p>
-              </div>
-
-              <form v-else class="space-y-4" @submit.prevent="createUser">
+              <form class="space-y-4" @submit.prevent="createUser">
                 <div class="grid gap-4 md:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="new-user-name">Full name</Label>
@@ -454,7 +380,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
             <CardHeader class="flex flex-row items-start justify-between gap-4">
               <div class="space-y-1.5">
                 <CardTitle>Users & permissions</CardTitle>
-                <CardDescription>{{ users.length }} active {{ users.length === 1 ? 'user' : 'users' }} · {{ pendingInvitations.length }} pending</CardDescription>
+                <CardDescription>{{ users.length }} active {{ users.length === 1 ? 'user' : 'users' }}</CardDescription>
               </div>
               <Button v-if="company.can_manage_users" variant="outline" @click="router.get(`/${company.slug}/users`)">
                 Manage roles
@@ -510,19 +436,6 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
                     </template>
                   </TableBody>
                 </Table>
-              </div>
-
-              <div v-if="pendingInvitations.length" class="space-y-3">
-                <h3 class="text-sm font-medium">Pending invitations</h3>
-                <div class="grid gap-2 md:grid-cols-2">
-                  <div v-for="invitation in pendingInvitations" :key="invitation.id" class="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3">
-                    <div>
-                      <p class="text-sm font-medium">{{ invitation.email }}</p>
-                      <p class="text-xs text-muted-foreground">Expires {{ formatDate(invitation.expires_at) }}</p>
-                    </div>
-                    <Badge variant="secondary">{{ roleLabel(invitation.role) }}</Badge>
-                  </div>
-                </div>
               </div>
 
               <div class="rounded-lg bg-muted/40 p-4">

@@ -195,13 +195,6 @@ class CompanyController extends Controller
                 return $companyUser;
             });
 
-        $pendingInvitations = DB::table('auth.company_invitations')
-            ->where('company_id', $company->id)
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->orderByDesc('created_at')
-            ->get(['id', 'email', 'role', 'expires_at']);
-
         return Inertia::render('company/Settings', [
             'company' => [
                 'id' => $company->id,
@@ -226,7 +219,6 @@ class CompanyController extends Controller
             'availableCurrencies' => DB::table('public.currencies')->where('is_active', true)->orderBy('code')->get(['code', 'name', 'symbol']),
             'currentUserRole' => $currentUserRole,
             'users' => $companyUsers,
-            'pendingInvitations' => $pendingInvitations,
         ]);
     }
 
@@ -284,28 +276,6 @@ class CompanyController extends Controller
             ->where('company_id', $company->id)
             ->where('user_id', Auth::id())
             ->value('role');
-
-        // Get pending invitations for this company (for inviter view)
-        $pendingInvitations = [];
-        if ($currentUserRole === 'owner') {
-            $pendingInvitations = DB::table('auth.company_invitations as ci')
-                ->leftJoin('auth.users as inviter', 'ci.invited_by_user_id', '=', 'inviter.id')
-                ->where('ci.company_id', $company->id)
-                ->where('ci.status', 'pending')
-                ->where('ci.expires_at', '>', now())
-                ->select(
-                    'ci.id',
-                    'ci.token',
-                    'ci.email',
-                    'ci.role',
-                    'ci.expires_at',
-                    'ci.created_at',
-                    'inviter.name as inviter_name',
-                    'inviter.email as inviter_email'
-                )
-                ->orderBy('ci.created_at', 'desc')
-                ->get();
-        }
 
         // Financial snapshot (AR only; AP/expenses placeholder)
         $openInvoices = DB::table('acct.invoices')
@@ -497,7 +467,6 @@ class CompanyController extends Controller
             ],
             'users' => $users,
             'currentUserRole' => $currentUserRole,
-            'pendingInvitations' => $pendingInvitations,
             'financials' => [
                 'ar_outstanding' => (float) $arOutstanding,
                 'ar_outstanding_count' => $arOutstandingCount,

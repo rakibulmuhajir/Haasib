@@ -92,9 +92,8 @@ export function useLexicon(): UseLexiconReturn {
   /**
    * Get a term in the current (or overridden) mode
    */
-  function t(key: LexiconKey | string, overrideMode?: UserMode): string {
-    const effectiveMode = overrideMode ?? mode.value
-    return getTerm(key, effectiveMode)
+  function t(key: LexiconKey | string, _overrideMode?: UserMode): string {
+    return getTerm(key, 'owner')
   }
 
   /**
@@ -103,10 +102,9 @@ export function useLexicon(): UseLexiconReturn {
   function tpl(
     key: LexiconKey | string,
     params: Record<string, string | number>,
-    overrideMode?: UserMode
+    _overrideMode?: UserMode
   ): string {
-    const effectiveMode = overrideMode ?? mode.value
-    return getTerm(key, effectiveMode, params)
+    return getTerm(key, 'owner', params)
   }
 
   /**
@@ -144,10 +142,10 @@ export function useLexicon(): UseLexiconReturn {
  */
 export function getTermForMode(
   key: LexiconKey | string,
-  mode: UserMode,
+  _mode: UserMode,
   params?: Record<string, string | number>
 ): string {
-  return getTerm(key, mode, params)
+  return getTerm(key, 'owner', params)
 }
 
 // -----------------------------------------------------------------------------

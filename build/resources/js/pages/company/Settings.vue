@@ -1,962 +1,433 @@
 <script setup lang="ts">
-import PageShell from '@/components/PageShell.vue';
-import CompanyCurrencies from '@/components/company/CompanyCurrencies.vue';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { ref } from 'vue'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
+import PageShell from '@/components/PageShell.vue'
+import CompanyCurrencies from '@/components/company/CompanyCurrencies.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatDateTime } from '@/lib/datetime'
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { formatDateTime } from '@/lib/datetime';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import {
-    Building,
-    Calculator,
-    Calendar,
-    ChevronRight,
-    CreditCard,
-    FileText,
-    Rocket,
-    Settings,
-    Shield,
-    TrendingUp,
-    Users,
-} from 'lucide-vue-next';
-import { ref } from 'vue';
+  Building2,
+  CalendarRange,
+  Coins,
+  ExternalLink,
+  KeyRound,
+  PackageCheck,
+  Settings2,
+  UserPlus,
+  Users,
+} from 'lucide-vue-next'
 
 interface Company {
-    id: string;
-    name: string;
-    slug: string;
-    industry?: string;
-    industry_code?: string;
-    industry_name?: string | null;
-    country?: string;
-    base_currency: string;
-    logo_url?: string | null;
-    language?: string | null;
-    locale?: string | null;
-    is_active: boolean;
-    created_at: string;
-    current_user_role: string;
-    can_manage_company: boolean;
-    can_manage_users: boolean;
-    settings?: {
-        fiscal_year_start_month?: number;
-        auto_create_fiscal_year?: boolean;
-        default_period_type?: string;
-        modules?: Record<string, boolean>;
-        contact_email?: string | null;
-        contact_phone?: string | null;
-        website?: string | null;
-    };
+  id: string
+  name: string
+  slug: string
+  industry?: string
+  industry_code?: string
+  industry_name?: string | null
+  country?: string
+  base_currency: string
+  logo_url?: string | null
+  language?: string | null
+  locale?: string | null
+  is_active: boolean
+  created_at: string
+  current_user_role: string | null
+  can_manage_company: boolean
+  can_manage_users: boolean
+  settings?: {
+    fiscal_year_start_month?: number
+    auto_create_fiscal_year?: boolean
+    default_period_type?: string
+    modules?: Record<string, boolean>
+    contact_email?: string | null
+    contact_phone?: string | null
+    website?: string | null
+  }
 }
 
-const page = usePage();
-const props = page.props as any;
+interface CompanyUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  joined_at: string | null
+}
 
-const company = ref<Company>(props.company);
-const companyCurrencies = props.companyCurrencies || [];
-const availableCurrencies = props.availableCurrencies || [];
-const formatDate = (value: string) => formatDateTime(value, { mode: 'date' });
+interface PendingInvitation {
+  id: string
+  email: string
+  role: string
+  expires_at: string
+}
+
+const page = usePage()
+const props = page.props as any
+const company = ref<Company>(props.company)
+const companyCurrencies = props.companyCurrencies || []
+const availableCurrencies = props.availableCurrencies || []
+const users = (props.users || []) as CompanyUser[]
+const pendingInvitations = (props.pendingInvitations || []) as PendingInvitation[]
+const logoPreview = ref(company.value.logo_url || '')
+
+const formatDate = (value: string | null) => value ? formatDateTime(value, { mode: 'date' }) : '—'
+const roleLabel = (role: string | null) => ({
+  owner: 'Owner',
+  manager: 'Manager',
+  accountant: 'Accountant',
+  operations: 'Operations Clerk',
+  agent: 'Agent',
+}[String(role)] || role || 'System administrator')
+
+const roleDescription = (role: string) => ({
+  owner: 'Full company access, including ownership and team controls.',
+  manager: 'Runs the business and manages team members, but cannot remove the Owner.',
+  accountant: 'Handles accounts, vouchers, payments, expenses, reports, and payroll.',
+  operations: 'Creates groups and vouchers without seeing prices, costs, or accounting.',
+  agent: 'Works only with their own groups, vouchers, payments, and reports.',
+}[role] || 'Company access')
 
 const generalForm = useForm({
-    name: company.value.name,
-    logo: null as File | null,
-    contact_email: company.value.settings?.contact_email || '',
-    contact_phone: company.value.settings?.contact_phone || '',
-    website: company.value.settings?.website || '',
-    language: company.value.language || 'en',
-    locale: company.value.locale || 'en_US',
-});
-const saveGeneralSettings = () =>
-    generalForm
-        .transform((data) => ({ ...data, _method: 'patch' }))
-        .post(`/${company.value.slug}/settings`, {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                generalForm.logo = null;
-            },
-        });
-const logoPreview = ref(company.value.logo_url || '');
-const selectLogo = (event: Event) => {
-    const file = (event.target as HTMLInputElement).files?.[0] || null;
-    generalForm.logo = file;
-    if (file) logoPreview.value = URL.createObjectURL(file);
-};
+  name: company.value.name,
+  logo: null as File | null,
+  contact_email: company.value.settings?.contact_email || '',
+  contact_phone: company.value.settings?.contact_phone || '',
+  website: company.value.settings?.website || '',
+  language: company.value.language || 'en',
+  locale: company.value.locale || 'en_US',
+})
 
-// Fiscal year form
 const fiscalYearForm = useForm({
-    fiscal_year_start_month:
-        company.value.settings?.fiscal_year_start_month ?? 1,
-    auto_create_fiscal_year:
-        company.value.settings?.auto_create_fiscal_year ?? true,
-    default_period_type:
-        company.value.settings?.default_period_type ?? 'monthly',
-});
+  fiscal_year_start_month: company.value.settings?.fiscal_year_start_month ?? 1,
+  auto_create_fiscal_year: company.value.settings?.auto_create_fiscal_year ?? true,
+  default_period_type: company.value.settings?.default_period_type ?? 'monthly',
+})
 
 const moduleSettingsForm = useForm({
-    inventory: company.value.settings?.modules?.inventory !== false,
-    payroll: company.value.settings?.modules?.payroll !== false,
-});
+  inventory: company.value.settings?.modules?.inventory !== false,
+  payroll: company.value.settings?.modules?.payroll !== false,
+})
 
 const months = [
-    { value: 1, label: 'January' },
-    { value: 2, label: 'February' },
-    { value: 3, label: 'March' },
-    { value: 4, label: 'April' },
-    { value: 5, label: 'May' },
-    { value: 6, label: 'June' },
-    { value: 7, label: 'July' },
-    { value: 8, label: 'August' },
-    { value: 9, label: 'September' },
-    { value: 10, label: 'October' },
-    { value: 11, label: 'November' },
-    { value: 12, label: 'December' },
-];
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+].map((label, index) => ({ value: index + 1, label }))
 
 const periodTypes = [
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'quarterly', label: 'Quarterly' },
-    { value: 'yearly', label: 'Yearly' },
-];
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'yearly', label: 'Yearly' },
+]
 
-const saveFiscalYearSettings = () => {
-    fiscalYearForm.patch(`/${company.value.slug}/settings`, {
-        onSuccess: () => {
-            // Update local company data with response
-            company.value = {
-                ...company.value,
-                settings: fiscalYearForm.data(),
-            };
-        },
-    });
-};
+const selectLogo = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0] || null
+  generalForm.logo = file
+  if (file) logoPreview.value = URL.createObjectURL(file)
+}
 
-const saveModuleSettings = () => {
-    moduleSettingsForm.patch(`/${company.value.slug}/settings/modules`, {
-        onSuccess: () => {
-            window.location.reload();
-        },
-    });
-};
+const saveGeneralSettings = () => generalForm
+  .transform((data) => ({ ...data, _method: 'patch' }))
+  .post(`/${company.value.slug}/settings`, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => { generalForm.logo = null },
+  })
 
-const settingsSections = [
-    {
-        title: 'General',
-        description: 'Company information, logo, and basic settings',
-        icon: Building,
-        href: '#general-settings',
-        color: 'text-blue-600',
-    },
-    {
-        title: 'Setup Wizard',
-        description: 'Review optional setup steps and industry defaults',
-        icon: Rocket,
-        href:
-            company.value.industry_code === 'fuel_station'
-                ? `/${company.value.slug}/fuel/onboarding`
-                : `/${company.value.slug}/onboarding`,
-        color: 'text-indigo-600',
-    },
-    {
-        title: 'Users & Permissions',
-        description: 'Manage team members and their access levels',
-        icon: Users,
-        href: `/${company.value.slug}/users`,
-        color: 'text-green-600',
-        disabled: !company.value.can_manage_users,
-    },
-    {
-        title: 'Tax Settings',
-        description: 'Configure VAT, tax rates, and tax compliance',
-        icon: Calculator,
-        href: `/${company.value.slug}/tax/settings`,
-        color: 'text-purple-600',
-        badge: {
-            text: 'New',
-            variant: 'default' as const,
-        },
-    },
-    {
-        title: 'Accounting',
-        description: 'Chart of accounts, fiscal years, and accounting periods',
-        icon: CreditCard,
-        href: '#fiscal-year-settings', // Scroll to fiscal year settings
-        color: 'text-orange-600',
-        disabled: false,
-    },
-    {
-        title: 'Security',
-        description: 'Security settings and two-factor authentication',
-        icon: Shield,
-        href: '#', // Will be implemented later
-        color: 'text-red-600',
-        disabled: true, // Not implemented yet
-    },
-];
+const saveModuleSettings = () => moduleSettingsForm.patch(
+  `/${company.value.slug}/settings/modules`,
+  { preserveScroll: true },
+)
 
-const quickActions = [
-    {
-        title: 'Enable Saudi VAT',
-        description: 'Quick setup for 15% Saudi Arabia VAT compliance',
-        icon: Calculator,
-        href: `/${company.value.slug}/tax/settings`,
-        variant: 'default' as const,
-        action: 'enable-saudi-vat',
-        condition: true, // Always show for Saudi companies
-    },
-    {
-        title: 'Manage Tax Rates',
-        description: 'Configure different tax rates and jurisdictions',
-        icon: Calculator,
-        href: `/${company.value.slug}/tax/settings`,
-        variant: 'outline' as const,
-    },
-    {
-        title: 'View Documentation',
-        description: 'Learn how to set up taxes and compliance',
-        icon: FileText,
-        href: '/docs/tax-management',
-        variant: 'outline' as const,
-    },
-];
-
-const getRoleDisplayName = (role: string) => {
-    const roleNames: Record<string, string> = {
-        owner: 'Owner',
-        manager: 'Manager',
-        accountant: 'Accountant',
-        member: 'Member',
-    };
-    return roleNames[role] || role;
-};
-
-const getRoleBadgeVariant = (role: string) => {
-    const variants: Record<
-        string,
-        'default' | 'secondary' | 'destructive' | 'outline'
-    > = {
-        owner: 'default',
-        manager: 'secondary',
-        accountant: 'outline',
-        member: 'secondary',
-    };
-    return variants[role] || 'secondary';
-};
+const saveFiscalYearSettings = () => fiscalYearForm.patch(
+  `/${company.value.slug}/settings`,
+  { preserveScroll: true },
+)
 </script>
 
 <template>
-    <Head title="Company Settings" />
+  <Head title="Settings" />
 
-    <PageShell :title="`${company.name} Settings`">
-        <div class="mx-auto max-w-7xl">
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-900">
-                    {{ company.name }} Settings
-                </h1>
-                <p class="mt-2 text-gray-600">
-                    Manage your company configuration, users, and settings.
-                </p>
-            </div>
-            <!-- Company Overview -->
-            <Card>
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2">
-                        <Building class="h-5 w-5" />
-                        {{ company.name }}
-                    </CardTitle>
-                    <CardDescription>
-                        Company overview and your current role in this
-                        organization
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div
-                        class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"
-                    >
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Industry
-                            </div>
-                            <div class="text-sm">
-                                {{
-                                    company.industry_name ||
-                                    company.industry ||
-                                    company.industry_code ||
-                                    'Not specified'
-                                }}
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Country
-                            </div>
-                            <div class="text-sm">
-                                {{ company.country || 'Not specified' }}
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Base Currency
-                            </div>
-                            <div class="text-sm">
-                                {{ company.base_currency }}
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Status
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <Badge
-                                    :variant="
-                                        company.is_active
-                                            ? 'default'
-                                            : 'secondary'
-                                    "
-                                >
-                                    {{
-                                        company.is_active
-                                            ? 'Active'
-                                            : 'Inactive'
-                                    }}
-                                </Badge>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Created
-                            </div>
-                            <div class="text-sm">
-                                {{ formatDate(company.created_at) }}
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-sm font-medium text-gray-500">
-                                Your Role
-                            </div>
-                            <div>
-                                <Badge
-                                    :variant="
-                                        getRoleBadgeVariant(
-                                            company.current_user_role,
-                                        )
-                                    "
-                                >
-                                    {{
-                                        getRoleDisplayName(
-                                            company.current_user_role,
-                                        )
-                                    }}
-                                </Badge>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card id="general-settings" class="mt-8">
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2"
-                        ><Building class="h-5 w-5" />General</CardTitle
-                    >
-                    <CardDescription
-                        >Company identity and contact details.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent>
-                    <form
-                        class="space-y-4"
-                        @submit.prevent="saveGeneralSettings"
-                    >
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div class="space-y-2">
-                                <Label>Company Name</Label
-                                ><Input
-                                    v-model="generalForm.name"
-                                    :disabled="!company.can_manage_company"
-                                />
-                                <p
-                                    v-if="generalForm.errors.name"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ generalForm.errors.name }}
-                                </p>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Base Currency</Label
-                                ><Input
-                                    :model-value="company.base_currency"
-                                    disabled
-                                />
-                            </div>
-                            <div class="space-y-2 md:col-span-2">
-                                <Label>Company Logo</Label>
-                                <div class="flex items-center gap-3">
-                                    <img
-                                        v-if="logoPreview"
-                                        :src="logoPreview"
-                                        :alt="`${company.name} logo preview`"
-                                        class="h-14 w-14 rounded-md border object-contain"
-                                    />
-                                    <Input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp"
-                                        :disabled="!company.can_manage_company"
-                                        @change="selectLogo"
-                                    />
-                                </div>
-                                <p
-                                    v-if="generalForm.errors.logo"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ generalForm.errors.logo }}
-                                </p>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Contact Email</Label
-                                ><Input
-                                    v-model="generalForm.contact_email"
-                                    type="email"
-                                    :disabled="!company.can_manage_company"
-                                />
-                                <p
-                                    v-if="generalForm.errors.contact_email"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ generalForm.errors.contact_email }}
-                                </p>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Contact Phone</Label
-                                ><Input
-                                    v-model="generalForm.contact_phone"
-                                    :disabled="!company.can_manage_company"
-                                />
-                                <p
-                                    v-if="generalForm.errors.contact_phone"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ generalForm.errors.contact_phone }}
-                                </p>
-                            </div>
-                            <div class="space-y-2 md:col-span-2">
-                                <Label>Website</Label
-                                ><Input
-                                    v-model="generalForm.website"
-                                    type="url"
-                                    :disabled="!company.can_manage_company"
-                                />
-                                <p
-                                    v-if="generalForm.errors.website"
-                                    class="text-xs text-destructive"
-                                >
-                                    {{ generalForm.errors.website }}
-                                </p>
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Language</Label
-                                ><Input
-                                    v-model="generalForm.language"
-                                    :disabled="!company.can_manage_company"
-                                />
-                            </div>
-                            <div class="space-y-2">
-                                <Label>Locale</Label
-                                ><Input
-                                    v-model="generalForm.locale"
-                                    :disabled="!company.can_manage_company"
-                                />
-                            </div>
-                        </div>
-                        <div
-                            v-if="company.can_manage_company"
-                            class="flex justify-end"
-                        >
-                            <Button
-                                type="submit"
-                                :disabled="generalForm.processing"
-                                >Save General Settings</Button
-                            >
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
-
-            <Card class="mt-8">
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2"
-                        ><TrendingUp class="h-5 w-5" />Currencies</CardTitle
-                    >
-                    <CardDescription
-                        >Manual rates use 1 secondary currency = X
-                        {{ company.base_currency }}.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent>
-                    <CompanyCurrencies
-                        :company="company"
-                        :enabled="companyCurrencies"
-                        :available="availableCurrencies"
-                        :can-manage="company.can_manage_company"
-                    />
-                </CardContent>
-            </Card>
-
-            <!-- Module Settings -->
-            <Card class="mt-8">
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2">
-                        <Settings class="h-5 w-5" />
-                        Modules
-                    </CardTitle>
-                    <CardDescription>
-                        Enable or disable optional modules for this company.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div class="flex items-center justify-between gap-6">
-                        <div>
-                            <div class="font-medium">Inventory</div>
-                            <div class="text-sm text-muted-foreground">
-                                Items, categories, warehouses, stock levels, and
-                                stock movements.
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <Switch
-                                id="inventory-module"
-                                v-model:checked="moduleSettingsForm.inventory"
-                                :disabled="
-                                    !company.can_manage_company ||
-                                    moduleSettingsForm.processing
-                                "
-                            />
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                :disabled="
-                                    !company.can_manage_company ||
-                                    moduleSettingsForm.processing
-                                "
-                                @click="saveModuleSettings"
-                            >
-                                Save
-                            </Button>
-                        </div>
-                    </div>
-                    <div
-                        v-if="moduleSettingsForm.errors.inventory"
-                        class="mt-2 text-sm text-destructive"
-                    >
-                        {{ moduleSettingsForm.errors.inventory }}
-                    </div>
-                    <div
-                        class="mt-6 flex items-center justify-between gap-6 border-t pt-6"
-                    >
-                        <div>
-                            <div class="font-medium">Payroll</div>
-                            <div class="text-sm text-muted-foreground">
-                                Employees, payroll periods, payslips, salary
-                                payments, and advances.
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <Switch
-                                id="payroll-module"
-                                v-model:checked="moduleSettingsForm.payroll"
-                                :disabled="
-                                    !company.can_manage_company ||
-                                    moduleSettingsForm.processing
-                                "
-                            />
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                :disabled="
-                                    !company.can_manage_company ||
-                                    moduleSettingsForm.processing
-                                "
-                                @click="saveModuleSettings"
-                            >
-                                Save
-                            </Button>
-                        </div>
-                    </div>
-                    <div
-                        v-if="moduleSettingsForm.errors.payroll"
-                        class="mt-2 text-sm text-destructive"
-                    >
-                        {{ moduleSettingsForm.errors.payroll }}
-                    </div>
-                </CardContent>
-            </Card>
-
-            <!-- Quick Actions -->
-            <Card>
-                <CardHeader>
-                    <CardTitle>Quick Actions</CardTitle>
-                    <CardDescription>
-                        Common tasks and quick setup options for your company
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div
-                        class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
-                    >
-                        <div v-for="action in quickActions" :key="action.title">
-                            <Link :href="action.href">
-                                <Card
-                                    class="cursor-pointer transition-shadow hover:shadow-md"
-                                >
-                                    <CardContent class="p-4">
-                                        <div class="flex items-start space-x-3">
-                                            <div
-                                                class="rounded-lg bg-gray-100 p-2"
-                                            >
-                                                <component
-                                                    :is="action.icon"
-                                                    class="h-5 w-5 text-gray-600"
-                                                />
-                                            </div>
-                                            <div class="min-w-0 flex-1">
-                                                <h4 class="text-sm font-medium">
-                                                    {{ action.title }}
-                                                </h4>
-                                                <p
-                                                    class="mt-1 text-sm text-gray-500"
-                                                >
-                                                    {{ action.description }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </Link>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <!-- Settings Sections -->
-            <div class="space-y-6">
-                <div>
-                    <h2 class="text-lg font-semibold">Settings</h2>
-                    <p class="mt-1 text-sm text-gray-600">
-                        Configure different aspects of your company
-                    </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Card
-                        v-for="section in settingsSections"
-                        :key="section.title"
-                        :class="{
-                            'cursor-not-allowed opacity-50': section.disabled,
-                        }"
-                    >
-                        <Link :href="section.disabled ? '#' : section.href">
-                            <CardContent class="p-6">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="rounded-lg bg-gray-100 p-2">
-                                            <component
-                                                :is="section.icon"
-                                                :class="`h-5 w-5 ${section.color}`"
-                                            />
-                                        </div>
-                                        <div>
-                                            <h3 class="font-medium">
-                                                {{ section.title }}
-                                            </h3>
-                                            <p
-                                                class="mt-1 text-sm text-gray-500"
-                                            >
-                                                {{ section.description }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <Badge
-                                            v-if="section.badge"
-                                            :variant="section.badge.variant"
-                                        >
-                                            {{ section.badge.text }}
-                                        </Badge>
-                                        <ChevronRight
-                                            class="h-4 w-4 text-gray-400"
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Link>
-                    </Card>
-                </div>
-            </div>
-
-            <!-- Tax Settings Spotlight -->
-            <Card class="border-purple-200 bg-purple-50">
-                <CardHeader>
-                    <CardTitle class="text-purple-900">
-                        <Calculator class="mr-2 inline h-5 w-5" />
-                        Tax Management Setup
-                    </CardTitle>
-                    <CardDescription class="text-purple-700">
-                        Configure VAT compliance and tax settings for your
-                        business
-                    </CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-4">
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div
-                            class="rounded-lg border border-purple-200 bg-white p-4"
-                        >
-                            <h4 class="font-medium text-purple-900">
-                                Saudi VAT (15%)
-                            </h4>
-                            <p class="mt-1 text-sm text-purple-700">
-                                Configure standard Saudi Arabia VAT rates and
-                                registration numbers
-                            </p>
-                        </div>
-                        <div
-                            class="rounded-lg border border-purple-200 bg-white p-4"
-                        >
-                            <h4 class="font-medium text-purple-900">
-                                Multiple Tax Rates
-                            </h4>
-                            <p class="mt-1 text-sm text-purple-700">
-                                Support for different tax jurisdictions and
-                                compound tax calculations
-                            </p>
-                        </div>
-                        <div
-                            class="rounded-lg border border-purple-200 bg-white p-4"
-                        >
-                            <h4 class="font-medium text-purple-900">
-                                Exemptions
-                            </h4>
-                            <p class="mt-1 text-sm text-purple-700">
-                                Handle zero-rated supplies and tax-exempt
-                                customers/vendors
-                            </p>
-                        </div>
-                    </div>
-                    <div class="pt-2">
-                        <Link :href="`/${company.slug}/tax/settings`">
-                            <Button
-                                variant="default"
-                                class="bg-purple-600 hover:bg-purple-700"
-                            >
-                                <Calculator class="mr-2 h-4 w-4" />
-                                Configure Tax Settings
-                            </Button>
-                        </Link>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <!-- Fiscal Year Settings -->
-            <Card
-                id="fiscal-year-settings"
-                class="border-orange-200 bg-orange-50"
-            >
-                <CardHeader>
-                    <CardTitle class="text-orange-900">
-                        <Calendar class="mr-2 inline h-5 w-5" />
-                        Fiscal Year & Accounting Periods
-                    </CardTitle>
-                    <CardDescription class="text-orange-700">
-                        Configure your company's fiscal year and automatic
-                        accounting period creation
-                    </CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-6">
-                    <form
-                        @submit.prevent="saveFiscalYearSettings"
-                        class="space-y-4"
-                    >
-                        <!-- Fiscal Year Start Month -->
-                        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                            <div>
-                                <Label for="fiscal_year_start_month"
-                                    >Fiscal Year Start Month</Label
-                                >
-                                <Select
-                                    v-model="
-                                        fiscalYearForm.fiscal_year_start_month
-                                    "
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue
-                                            placeholder="Select month"
-                                        />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="month in months"
-                                            :key="month.value"
-                                            :value="month.value"
-                                        >
-                                            {{ month.label }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p class="mt-1 text-sm text-orange-700">
-                                    Month when your fiscal year begins (most
-                                    companies use January)
-                                </p>
-                            </div>
-
-                            <!-- Period Type -->
-                            <div>
-                                <Label for="default_period_type"
-                                    >Default Accounting Period Type</Label
-                                >
-                                <Select
-                                    v-model="fiscalYearForm.default_period_type"
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue
-                                            placeholder="Select period type"
-                                        />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="period in periodTypes"
-                                            :key="period.value"
-                                            :value="period.value"
-                                        >
-                                            {{ period.label }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p class="mt-1 text-sm text-orange-700">
-                                    How accounting periods are automatically
-                                    created
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Auto Create Fiscal Year -->
-                        <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <Label for="auto_create_fiscal_year"
-                                    >Auto-Create Fiscal Years</Label
-                                >
-                                <p class="text-sm text-orange-700">
-                                    Automatically create fiscal years when
-                                    transactions are posted
-                                </p>
-                            </div>
-                            <Switch
-                                id="auto_create_fiscal_year"
-                                v-model="fiscalYearForm.auto_create_fiscal_year"
-                            />
-                        </div>
-
-                        <!-- Save Button -->
-                        <div class="pt-4">
-                            <Button
-                                type="submit"
-                                variant="default"
-                                class="bg-orange-600 hover:bg-orange-700"
-                                :disabled="fiscalYearForm.processing"
-                            >
-                                <TrendingUp class="mr-2 h-4 w-4" />
-                                {{
-                                    fiscalYearForm.processing
-                                        ? 'Saving...'
-                                        : 'Save Fiscal Year Settings'
-                                }}
-                            </Button>
-                        </div>
-                    </form>
-
-                    <!-- Info Cards -->
-                    <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div
-                            class="rounded-lg border border-orange-200 bg-white p-4"
-                        >
-                            <h4 class="mb-2 font-medium text-orange-900">
-                                <Calendar class="mr-1 inline h-4 w-4" />
-                                Current Settings
-                            </h4>
-                            <div class="space-y-2 text-sm">
-                                <div>
-                                    <strong>Start:</strong>
-                                    {{
-                                        months.find(
-                                            (m) =>
-                                                m.value ===
-                                                (company.settings
-                                                    ?.fiscal_year_start_month ??
-                                                    1),
-                                        )?.label
-                                    }}
-                                </div>
-                                <div>
-                                    <strong>Periods:</strong>
-                                    {{
-                                        company.settings?.default_period_type ||
-                                        'monthly'
-                                    }}
-                                </div>
-                                <div>
-                                    <strong>Auto-create:</strong>
-                                    {{
-                                        company.settings
-                                            ?.auto_create_fiscal_year
-                                            ? 'Yes'
-                                            : 'No'
-                                    }}
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            class="rounded-lg border border-orange-200 bg-white p-4"
-                        >
-                            <h4 class="mb-2 font-medium text-orange-900">
-                                <TrendingUp class="mr-1 inline h-4 w-4" />
-                                Impact
-                            </h4>
-                            <p class="mt-1 text-sm text-orange-700">
-                                These settings determine how transactions are
-                                organized and reported in your financial
-                                statements.
-                            </p>
-                        </div>
-                        <div
-                            class="rounded-lg border border-orange-200 bg-white p-4"
-                        >
-                            <h4 class="mb-2 font-medium text-orange-900">
-                                <CreditCard class="mr-1 inline h-4 w-4" />
-                                Fiscal Years
-                            </h4>
-                            <p class="mt-1 text-sm text-orange-700">
-                                When enabled, the system will automatically
-                                create fiscal years as needed for posting
-                                transactions.
-                            </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+  <PageShell title="Settings">
+    <div class="mx-auto w-full max-w-6xl space-y-6 pb-12">
+      <section class="flex flex-col gap-5 border-b border-border pb-6 md:flex-row md:items-end md:justify-between">
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-2xl font-semibold tracking-tight text-foreground">{{ company.name }}</h1>
+            <Badge :variant="company.is_active ? 'default' : 'secondary'">
+              {{ company.is_active ? 'Active' : 'Inactive' }}
+            </Badge>
+            <Badge variant="outline">{{ roleLabel(company.current_user_role) }}</Badge>
+          </div>
+          <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Company details, team access, currencies, modules, and accounting defaults.
+          </p>
+          <p class="text-xs text-muted-foreground">
+            {{ company.industry_name || company.industry || company.industry_code || 'General business' }}
+            · {{ company.country || 'Country not set' }}
+            · {{ company.base_currency }} base currency
+            · Created {{ formatDate(company.created_at) }}
+          </p>
         </div>
-    </PageShell>
+
+        <div class="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" @click="router.get(`/${company.slug}/onboarding`)">
+            Setup guide
+            <ExternalLink class="ml-2 h-3.5 w-3.5" />
+          </Button>
+          <Button variant="outline" size="sm" @click="router.get(`/${company.slug}/tax/settings`)">
+            Tax settings
+            <ExternalLink class="ml-2 h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </section>
+
+      <Tabs default-value="general" class="space-y-6">
+        <TabsList class="grid h-auto w-full grid-cols-2 gap-1 bg-muted/60 p-1 md:grid-cols-5">
+          <TabsTrigger value="general" class="gap-2 py-2.5">
+            <Building2 class="h-4 w-4" /> General
+          </TabsTrigger>
+          <TabsTrigger value="users" class="gap-2 py-2.5">
+            <Users class="h-4 w-4" /> Users
+          </TabsTrigger>
+          <TabsTrigger value="currencies" class="gap-2 py-2.5">
+            <Coins class="h-4 w-4" /> Currencies
+          </TabsTrigger>
+          <TabsTrigger value="modules" class="gap-2 py-2.5">
+            <PackageCheck class="h-4 w-4" /> Modules
+          </TabsTrigger>
+          <TabsTrigger value="accounting" class="col-span-2 gap-2 py-2.5 md:col-span-1">
+            <CalendarRange class="h-4 w-4" /> Accounting
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general">
+          <Card>
+            <CardHeader>
+              <CardTitle>Company details</CardTitle>
+              <CardDescription>Identity and contact information shown across Haasib.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form class="space-y-6" @submit.prevent="saveGeneralSettings">
+                <div class="grid gap-5 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label for="company-name">Company name</Label>
+                    <Input id="company-name" v-model="generalForm.name" :disabled="!company.can_manage_company" />
+                    <p v-if="generalForm.errors.name" class="text-xs text-destructive">{{ generalForm.errors.name }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="base-currency">Base currency</Label>
+                    <Input id="base-currency" :model-value="company.base_currency" disabled />
+                    <p class="text-xs text-muted-foreground">Fixed after the company is created.</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="contact-email">Contact email</Label>
+                    <Input id="contact-email" v-model="generalForm.contact_email" type="email" :disabled="!company.can_manage_company" />
+                    <p v-if="generalForm.errors.contact_email" class="text-xs text-destructive">{{ generalForm.errors.contact_email }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="contact-phone">Contact phone</Label>
+                    <Input id="contact-phone" v-model="generalForm.contact_phone" :disabled="!company.can_manage_company" />
+                    <p v-if="generalForm.errors.contact_phone" class="text-xs text-destructive">{{ generalForm.errors.contact_phone }}</p>
+                  </div>
+                  <div class="space-y-2 md:col-span-2">
+                    <Label for="website">Website</Label>
+                    <Input id="website" v-model="generalForm.website" type="url" :disabled="!company.can_manage_company" />
+                    <p v-if="generalForm.errors.website" class="text-xs text-destructive">{{ generalForm.errors.website }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="language">Language</Label>
+                    <Input id="language" v-model="generalForm.language" :disabled="!company.can_manage_company" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="locale">Locale</Label>
+                    <Input id="locale" v-model="generalForm.locale" :disabled="!company.can_manage_company" />
+                  </div>
+                  <div class="space-y-2 md:col-span-2">
+                    <Label for="company-logo">Company logo</Label>
+                    <div class="flex items-center gap-4 rounded-lg bg-muted/40 p-3">
+                      <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background ring-1 ring-border">
+                        <img v-if="logoPreview" :src="logoPreview" :alt="`${company.name} logo preview`" class="h-full w-full object-contain" />
+                        <Building2 v-else class="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <Input id="company-logo" type="file" accept="image/png,image/jpeg,image/webp" :disabled="!company.can_manage_company" @change="selectLogo" />
+                    </div>
+                    <p v-if="generalForm.errors.logo" class="text-xs text-destructive">{{ generalForm.errors.logo }}</p>
+                  </div>
+                </div>
+                <div v-if="company.can_manage_company" class="flex justify-end border-t border-border pt-5">
+                  <Button type="submit" :disabled="generalForm.processing">
+                    {{ generalForm.processing ? 'Saving…' : 'Save company details' }}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="users" class="space-y-5">
+          <Card>
+            <CardHeader class="flex flex-row items-start justify-between gap-4">
+              <div class="space-y-1.5">
+                <CardTitle>Users & permissions</CardTitle>
+                <CardDescription>{{ users.length }} active {{ users.length === 1 ? 'user' : 'users' }} · {{ pendingInvitations.length }} pending</CardDescription>
+              </div>
+              <Button v-if="company.can_manage_users" @click="router.get(`/${company.slug}/users`)">
+                <UserPlus class="mr-2 h-4 w-4" /> Invite or manage
+              </Button>
+            </CardHeader>
+            <CardContent class="space-y-6">
+              <div class="overflow-hidden rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead class="hidden md:table-cell">Access</TableHead>
+                      <TableHead class="hidden text-right sm:table-cell">Joined</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow v-for="user in users" :key="user.id">
+                      <TableCell>
+                        <div class="font-medium">{{ user.name }}</div>
+                        <div class="text-xs text-muted-foreground">{{ user.email }}</div>
+                      </TableCell>
+                      <TableCell><Badge variant="outline">{{ roleLabel(user.role) }}</Badge></TableCell>
+                      <TableCell class="hidden max-w-md text-sm text-muted-foreground md:table-cell">{{ roleDescription(user.role) }}</TableCell>
+                      <TableCell class="hidden text-right text-sm text-muted-foreground sm:table-cell">{{ formatDate(user.joined_at) }}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div v-if="pendingInvitations.length" class="space-y-3">
+                <h3 class="text-sm font-medium">Pending invitations</h3>
+                <div class="grid gap-2 md:grid-cols-2">
+                  <div v-for="invitation in pendingInvitations" :key="invitation.id" class="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3">
+                    <div>
+                      <p class="text-sm font-medium">{{ invitation.email }}</p>
+                      <p class="text-xs text-muted-foreground">Expires {{ formatDate(invitation.expires_at) }}</p>
+                    </div>
+                    <Badge variant="secondary">{{ roleLabel(invitation.role) }}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-lg bg-muted/40 p-4">
+                <div class="flex gap-3">
+                  <KeyRound class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p class="text-sm font-medium">Role rules are enforced server-side</p>
+                    <p class="mt-1 text-sm leading-6 text-muted-foreground">Owners and Managers can manage the team. Managers cannot change or remove an Owner. Financial data stays hidden from Operations Clerks and Agents.</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="currencies">
+          <Card>
+            <CardHeader>
+              <CardTitle>Currencies</CardTitle>
+              <CardDescription>Manual rates use 1 secondary currency = X {{ company.base_currency }}.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CompanyCurrencies :company="company" :enabled="companyCurrencies" :available="availableCurrencies" />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="modules">
+          <Card>
+            <CardHeader>
+              <CardTitle>Optional modules</CardTitle>
+              <CardDescription>Turn operational areas on or off for this company.</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-5">
+              <div class="divide-y divide-border rounded-lg border border-border">
+                <div class="flex items-center justify-between gap-5 p-5">
+                  <div>
+                    <p class="font-medium">Inventory</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Items, warehouses, stock levels, and stock movements.</p>
+                  </div>
+                  <Switch v-model:checked="moduleSettingsForm.inventory" :disabled="!company.can_manage_company || moduleSettingsForm.processing" />
+                </div>
+                <div class="flex items-center justify-between gap-5 p-5">
+                  <div>
+                    <p class="font-medium">Payroll</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Employees, payroll periods, payslips, payments, and advances.</p>
+                  </div>
+                  <Switch v-model:checked="moduleSettingsForm.payroll" :disabled="!company.can_manage_company || moduleSettingsForm.processing" />
+                </div>
+              </div>
+              <p v-if="moduleSettingsForm.errors.inventory || moduleSettingsForm.errors.payroll" class="text-sm text-destructive">
+                {{ moduleSettingsForm.errors.inventory || moduleSettingsForm.errors.payroll }}
+              </p>
+              <div v-if="company.can_manage_company" class="flex justify-end">
+                <Button :disabled="moduleSettingsForm.processing" @click="saveModuleSettings">
+                  <Settings2 class="mr-2 h-4 w-4" />
+                  {{ moduleSettingsForm.processing ? 'Saving…' : 'Save module settings' }}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounting">
+          <Card>
+            <CardHeader>
+              <CardTitle>Fiscal year & periods</CardTitle>
+              <CardDescription>Choose how transactions are grouped into financial reporting periods.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form class="space-y-6" @submit.prevent="saveFiscalYearSettings">
+                <div class="grid gap-5 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label for="fiscal-month">Fiscal year starts</Label>
+                    <Select v-model="fiscalYearForm.fiscal_year_start_month" :disabled="!company.can_manage_company">
+                      <SelectTrigger id="fiscal-month"><SelectValue placeholder="Select month" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="period-type">Reporting periods</Label>
+                    <Select v-model="fiscalYearForm.default_period_type" :disabled="!company.can_manage_company">
+                      <SelectTrigger id="period-type"><SelectValue placeholder="Select period type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="period in periodTypes" :key="period.value" :value="period.value">{{ period.label }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-5 rounded-lg bg-muted/40 p-4">
+                  <div>
+                    <p class="text-sm font-medium">Create fiscal years automatically</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Create the required year and periods when a transaction is posted.</p>
+                  </div>
+                  <Switch v-model:checked="fiscalYearForm.auto_create_fiscal_year" :disabled="!company.can_manage_company" />
+                </div>
+
+                <div v-if="company.can_manage_company" class="flex justify-end border-t border-border pt-5">
+                  <Button type="submit" :disabled="fiscalYearForm.processing">
+                    {{ fiscalYearForm.processing ? 'Saving…' : 'Save accounting settings' }}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  </PageShell>
 </template>

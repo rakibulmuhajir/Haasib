@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function createRoleAccessCompany(): array
 {
@@ -60,6 +61,35 @@ test('owner can remove a manager', function () {
         ->where('company_id', $company->id)
         ->where('user_id', $manager->id)
         ->exists())->toBeFalse();
+});
+
+test('company settings exposes active members and pending invitations', function () {
+    [$company, $owner] = createRoleAccessCompany();
+    $manager = User::factory()->withoutTwoFactor()->create();
+    addRoleAccessMember($company, $manager, 'manager');
+
+    $invitedEmail = 'settings-invite-'.str()->random(8).'@example.test';
+
+    $this->actingAs($owner)
+        ->post(route('users.invite', ['company' => $company->slug]), [
+            'email' => $invitedEmail,
+            'role' => 'accountant',
+        ])
+        ->assertRedirect();
+
+    $this->actingAs($owner)
+        ->get(route('company.settings', ['company' => $company->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('company/Settings')
+            ->where('company.can_manage_users', true)
+            ->has('users', 2)
+            ->where('users.0.role', 'owner')
+            ->where('users.1.id', $manager->id)
+            ->where('users.1.role', 'manager')
+            ->has('pendingInvitations', 1)
+            ->where('pendingInvitations.0.email', $invitedEmail)
+            ->where('pendingInvitations.0.role', 'accountant'));
 });
 
 test('owner and manager can invite allowed roles and owner can change roles', function () {

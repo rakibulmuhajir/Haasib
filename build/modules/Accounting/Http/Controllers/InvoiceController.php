@@ -120,7 +120,7 @@ class InvoiceController extends Controller
 
     protected function prefersOwnerMode(Request $request): bool
     {
-        return $request->cookie('haasib_user_mode', 'owner') !== 'accountant';
+        return true;
     }
 
     public function store(StoreInvoiceRequest $request): RedirectResponse

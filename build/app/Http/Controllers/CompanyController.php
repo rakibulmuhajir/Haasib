@@ -172,6 +172,21 @@ class CompanyController extends Controller
                 ->value('name');
         }
 
+        $companyUsers = DB::table('auth.company_user as cu')
+            ->join('auth.users as u', 'u.id', '=', 'cu.user_id')
+            ->where('cu.company_id', $company->id)
+            ->where('cu.is_active', true)
+            ->orderByRaw("CASE cu.role WHEN 'owner' THEN 1 WHEN 'manager' THEN 2 WHEN 'accountant' THEN 3 WHEN 'operations' THEN 4 ELSE 5 END")
+            ->orderBy('u.name')
+            ->get(['u.id', 'u.name', 'u.email', 'cu.role', 'cu.joined_at']);
+
+        $pendingInvitations = DB::table('auth.company_invitations')
+            ->where('company_id', $company->id)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->orderByDesc('created_at')
+            ->get(['id', 'email', 'role', 'expires_at']);
+
         return Inertia::render('company/Settings', [
             'company' => [
                 'id' => $company->id,
@@ -195,6 +210,8 @@ class CompanyController extends Controller
             'companyCurrencies' => CompanyCurrency::where('company_id', $company->id)->orderBy('currency_code')->get(),
             'availableCurrencies' => DB::table('public.currencies')->where('is_active', true)->orderBy('code')->get(['code', 'name', 'symbol']),
             'currentUserRole' => $currentUserRole,
+            'users' => $companyUsers,
+            'pendingInvitations' => $pendingInvitations,
         ]);
     }
 

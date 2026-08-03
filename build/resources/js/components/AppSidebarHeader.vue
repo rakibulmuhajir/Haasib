@@ -1,14 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { Component } from 'vue'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { SidebarTrigger } from '@/components/ui/sidebar'
-import { Switch } from '@/components/ui/switch'
-import { router } from '@inertiajs/vue3'
-import { useUserMode } from '@/composables/useUserMode'
-import { useLexicon } from '@/composables/useLexicon'
 import type { BreadcrumbItemType } from '@/types'
 
 interface Action {
@@ -33,19 +27,6 @@ const props = withDefaults(defineProps<Props>(), {
   actions: () => [],
 })
 
-const { t } = useLexicon()
-const { isAccountantMode, setMode, canUseAccountantMode } = useUserMode()
-const modeLabel = computed(() => (isAccountantMode.value ? t('accountantMode') : t('ownerMode')))
-const modeChecked = computed(() => isAccountantMode.value)
-
-const handleModeChecked = (val: boolean | 'indeterminate') => {
-  const next = val === true
-  if (next === isAccountantMode.value) return
-
-  setMode(next ? 'accountant' : 'owner')
-  // reload() already preserves scroll and state by default
-  router.reload()
-}
 </script>
 
 <template>
@@ -66,18 +47,6 @@ const handleModeChecked = (val: boolean | 'indeterminate') => {
       </div>
 
       <div class="flex items-center gap-3">
-        <div v-if="canUseAccountantMode" class="flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1.5">
-          <Label for="mode-toggle" class="text-[11px] font-medium text-muted-foreground">
-            {{ modeLabel }}
-          </Label>
-          <Switch
-            id="mode-toggle"
-            :checked="modeChecked"
-            :disabled="!canUseAccountantMode"
-            @update:checked="handleModeChecked"
-          />
-        </div>
-
         <div v-if="actions.length > 0 || $slots.actions" class="flex items-center gap-2">
           <slot name="actions">
             <Button

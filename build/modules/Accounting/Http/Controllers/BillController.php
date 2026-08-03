@@ -279,7 +279,7 @@ class BillController extends Controller
 
     protected function prefersOwnerMode(Request $request): bool
     {
-        return $request->cookie('haasib_user_mode', 'owner') !== 'accountant';
+        return true;
     }
 
     public function store(StoreBillRequest $request): RedirectResponse

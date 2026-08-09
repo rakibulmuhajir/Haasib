@@ -4,7 +4,7 @@
 **Environment:** Local Development (localhost:8000)
 **Database:** haasib_dev (PostgreSQL)
 **Test User:** admin@haasib.com / password
-**Company:** Naveed Filling Station (ID: 019b735a-c83c-709a-9194-905845772573)
+**Company:** Crescent Fuel Station (ID: 019b735a-c83c-709a-9194-905845772573)
 
 ---
 
@@ -131,7 +131,7 @@ Route::middleware(['identify.company'])->group(function () {
 | # | Step | Status | Error |
 |---|------|--------|-------|
 | 1 | Login to application | ✅ PASS | - |
-| 2 | Select company (Naveed Filling Station) | ✅ PASS | - |
+| 2 | Select company (Crescent Fuel Station) | ✅ PASS | - |
 | 3 | Navigate to Dashboard | ✅ PASS | - |
 | 4 | Create fuel purchase bill | ❌ BLOCKED | ERROR #1 (404) |
 | 5 | Receive goods into inventory | ⏸️ PENDING | Blocked by #4 |
@@ -149,7 +149,7 @@ Route::middleware(['identify.company'])->group(function () {
 ```sql
 -- Company exists
 SELECT id, name FROM auth.companies;
--- 019b735a-c83c-709a-9194-905845772573 | Naveed Filling station
+-- 019b735a-c83c-709a-9194-905845772573 | Crescent Fuel Station
 
 -- Vendors exist
 SELECT id, name FROM acct.vendors WHERE company_id = '019b735a-c83c-709a-9194-905845772573';

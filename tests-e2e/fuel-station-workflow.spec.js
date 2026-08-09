@@ -6,7 +6,7 @@ const BASE_URL = 'http://localhost:8000';
 const LOGIN_EMAIL = 'admin@haasib.com';
 const LOGIN_PASSWORD = 'password';
 const COMPANY_ID = '019b735a-c83c-709a-9194-905845772573';
-const COMPANY_SLUG = process.env.TEST_COMPANY_SLUG || 'naveed-filling-station'; // Use slug instead of UUID
+const COMPANY_SLUG = process.env.TEST_COMPANY_SLUG || 'demo-crescent-fuel'; // Use slug instead of UUID
 const AUTH_STATE_PATH = 'tests-e2e/auth-state.json';
 
 // Test data

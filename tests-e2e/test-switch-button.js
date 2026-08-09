@@ -45,7 +45,7 @@ const { chromium } = require('playwright');
     // Now try to access bills
     console.log('\nStep 5: Testing access to bills...');
 
-    const response = await page.goto('http://localhost:8000/naveed-filling-station/bills/create', {
+    const response = await page.goto('http://localhost:8000/demo-crescent-fuel/bills/create', {
       waitUntil: 'networkidle'
     });
 

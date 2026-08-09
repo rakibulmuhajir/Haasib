@@ -24,8 +24,8 @@ const { chromium } = require('playwright');
     console.log('\n🔄 Looking for company switch/link...');
 
     // Try clicking on the company card/name directly
-    const companyCard = page.locator('text=Naveed Filling Station').or(
-      page.locator('[href*="naveed-filling-station"]')
+    const companyCard = page.locator('text=Crescent Fuel Station').or(
+      page.locator('[href*="demo-crescent-fuel"]')
     );
 
     const count = await companyCard.count();
@@ -44,7 +44,7 @@ const { chromium } = require('playwright');
 
     // Now test with SLUG instead of UUID
     console.log('\n💰 Testing with company slug...');
-    const slug = 'naveed-filling-station';
+    const slug = 'demo-crescent-fuel';
 
     const response = await page.goto(`http://localhost:8000/${slug}/bills/create`, { waitUntil: 'networkidle' });
 

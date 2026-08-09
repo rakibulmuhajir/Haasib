@@ -4,7 +4,7 @@
 **Target:** Test complete fuel station daily operations for 3 consecutive days
 **Application:** http://localhost:8000
 **Credentials:** admin@haasib.com / password
-**Company:** Naveed Filling Station
+**Company:** Crescent Fuel Station
 
 ---
 
@@ -12,7 +12,7 @@
 
 ✅ **Database Connected:** haasib_dev (app_user)
 ✅ **Schemas Verified:** auth, acct, fuel, inv
-✅ **Company:** Naveed Filling Station (ID: 019b735a-c83c-709a-9194-905845772573)
+✅ **Company:** Crescent Fuel Station (ID: 019b735a-c83c-709a-9194-905845772573)
 ✅ **Tanks Configured:** 4 tanks (Petrol, Diesel, Hi-Octane, Lubricant)
 ✅ **Pumps Configured:** 3 pumps
 ✅ **Items:** 5 fuel/lubricant items
@@ -55,7 +55,7 @@
 1. Enter email: `admin@haasib.com`
 2. Enter password: `password`
 3. Click "Sign in"
-4. Verify company is selected: "Naveed Filling Station"
+4. Verify company is selected: "Crescent Fuel Station"
 5. Navigate to Dashboard
 
 **Expected Result:**

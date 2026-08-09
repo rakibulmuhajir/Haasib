@@ -130,7 +130,7 @@ Route::middleware(['identify.company'])->group(function () {
 | **Database** | PostgreSQL (haasib_dev) |
 | **URL** | http://localhost:8000 |
 | **Test User** | admin@haasib.com / password |
-| **Company** | Naveed Filling Station |
+| **Company** | Crescent Fuel Station |
 | **Testing Tool** | Playwright (JavaScript) |
 | **Browser** | Chromium |
 
@@ -139,7 +139,7 @@ Route::middleware(['identify.company'])->group(function () {
 ## Database State Verified
 
 ✅ **Users:** admin@haasib.com exists
-✅ **Company:** Naveed Filling Station (ID: 019b735a-c83c-709a-9194-905845772573)
+✅ **Company:** Crescent Fuel Station (ID: 019b735a-c83c-709a-9194-905845772573)
 ✅ **Vendor:** Parco LTD exists
 ✅ **Items:** Petrol, Diesel, Hi-Octane, Lubricants exist
 ✅ **Tanks:** 4 tanks configured (Petrol, Diesel, Hi-Octane, Lubricant)

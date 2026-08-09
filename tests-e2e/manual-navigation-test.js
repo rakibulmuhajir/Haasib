@@ -59,7 +59,7 @@ const { chromium } = require('playwright');
 
     // Try different selectors
     const selectors = [
-      'a[href*="naveed"]',
+      'a[href*="demo-crescent-fuel"]',
       'a[href*="filling"]',
       'button:has-text("Switch")',
       'button:has-text("Enter")',
@@ -85,7 +85,7 @@ const { chromium } = require('playwright');
 
     // Step 4: Check if we can access dashboard directly
     console.log('\nStep 4: Try accessing company dashboard directly');
-    const slug = 'naveed-filling-station';
+    const slug = 'demo-crescent-fuel';
 
     await page.goto(`http://localhost:8000/${slug}/dashboard`);
     await page.waitForLoadState('networkidle');

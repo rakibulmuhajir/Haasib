@@ -17,3 +17,15 @@ GEMINI.md
 build/public/build/*
 build/public/build
 build/public/build/manifest.json
+
+# Agent credentials and session transcripts. This repository is public, so
+# anything committed here is world-readable the moment it is pushed. auth.json
+# in particular holds an API key and OAuth refresh tokens.
+# The speckit prompt templates under .codex/prompts/ stay tracked on purpose.
+.codex/auth.json
+.codex/history.jsonl
+.codex/sessions/
+
+# curl cookie jars — session cookies, never source.
+cookies.txt
+**/cookies.txt

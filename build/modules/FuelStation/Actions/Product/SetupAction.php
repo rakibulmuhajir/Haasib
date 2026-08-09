@@ -731,14 +731,15 @@ class SetupAction implements PaletteAction
             'recorded_by_user_id' => $userId,
         ];
 
+        // fuel.tank_readings records its author in recorded_by_user_id, which is
+        // already in $payload. The table has no created_by_user_id or
+        // updated_by_user_id column, and passing either threw an undefined-column
+        // error for every product set up with an opening quantity.
         if ($reading) {
-            $reading->update($payload + [
-                'updated_by_user_id' => $userId,
-            ]);
+            $reading->update($payload);
         } else {
             TankReading::create($payload + [
                 'company_id' => $companyId,
-                'created_by_user_id' => $userId,
             ]);
         }
 

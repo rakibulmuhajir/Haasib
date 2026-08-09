@@ -283,6 +283,8 @@ class DailyCloseService
             $stockReconciliations = [];
             $totalShrinkage = 0;
             $totalGain = 0;
+            $shrinkageInventoryPostings = [];
+            $gainInventoryPostings = [];
 
             if (!empty($data['tank_readings'])) {
                 foreach ($data['tank_readings'] as $tankData) {
@@ -344,9 +346,21 @@ class DailyCloseService
                     $avgCost = (float) ($item?->avg_cost ?? 0);
                     $varianceAmount = round(abs($varianceLiters) * $avgCost, 2);
 
-                    // Track variances for GL posting
+                    // Track variances for GL posting. The inventory side is resolved
+                    // per item, the same way sales and COGS are: a diesel shrinkage
+                    // must not credit the petrol inventory account. Previously every
+                    // tank's variance collapsed onto the single fallback inventory
+                    // account, which left per-product stock values misstated even
+                    // though the journal still balanced.
+                    $varianceInventoryAccount = $item?->asset_account_id ?: null;
+
                     if ($varianceType === 'loss' && $varianceAmount > 0) {
                         $totalShrinkage += $varianceAmount;
+                        $shrinkageInventoryPostings[] = [
+                            'account_id' => $varianceInventoryAccount,
+                            'amount' => $varianceAmount,
+                            'label' => $item?->name ?? 'Fuel',
+                        ];
                         $tankVariances[] = [
                             'tank_name' => $tank->name,
                             'item_name' => $item?->name ?? 'Unknown',
@@ -356,6 +370,11 @@ class DailyCloseService
                         ];
                     } elseif ($varianceType === 'gain' && $varianceAmount > 0) {
                         $totalGain += $varianceAmount;
+                        $gainInventoryPostings[] = [
+                            'account_id' => $varianceInventoryAccount,
+                            'amount' => $varianceAmount,
+                            'label' => $item?->name ?? 'Fuel',
+                        ];
                         $tankVariances[] = [
                             'tank_name' => $tank->name,
                             'item_name' => $item?->name ?? 'Unknown',
@@ -1113,7 +1132,9 @@ class DailyCloseService
                 ];
             }
 
-            // Fuel shrinkage (loss): Dr Shrinkage Expense, Cr Inventory
+            // Fuel shrinkage (loss): Dr Shrinkage Expense, Cr Inventory per product.
+            // The expense stays on one account — items carry no shrinkage-account
+            // mapping — but the credit follows each tank's own inventory account.
             if ($totalShrinkage > 0 && $accounts['fuel_shrinkage']) {
                 $entries[] = [
                     'account_id' => $accounts['fuel_shrinkage'],
@@ -1121,22 +1142,48 @@ class DailyCloseService
                     'amount' => round($totalShrinkage, 2),
                     'description' => 'Fuel shrinkage loss',
                 ];
-                $entries[] = [
-                    'account_id' => $accounts['fuel_inventory'],
-                    'type' => 'credit',
-                    'amount' => round($totalShrinkage, 2),
-                    'description' => 'Inventory reduction (shrinkage)',
-                ];
+
+                $grouped = [];
+                foreach ($shrinkageInventoryPostings as $posting) {
+                    $this->addGroupedPosting(
+                        $grouped,
+                        $posting['account_id'] ?: $accounts['fuel_inventory'],
+                        $posting['amount'],
+                        $posting['label']
+                    );
+                }
+
+                foreach ($grouped as $posting) {
+                    $entries[] = [
+                        'account_id' => $posting['account_id'],
+                        'type' => 'credit',
+                        'amount' => round($posting['amount'], 2),
+                        'description' => 'Inventory reduction (shrinkage) - ' . implode(', ', $posting['labels']),
+                    ];
+                }
             }
 
-            // Fuel variance gain: Dr Inventory, Cr Variance Gain
+            // Fuel variance gain: Dr Inventory per product, Cr Variance Gain
             if ($totalGain > 0 && $accounts['fuel_variance_gain']) {
-                $entries[] = [
-                    'account_id' => $accounts['fuel_inventory'],
-                    'type' => 'debit',
-                    'amount' => round($totalGain, 2),
-                    'description' => 'Inventory increase (gain)',
-                ];
+                $grouped = [];
+                foreach ($gainInventoryPostings as $posting) {
+                    $this->addGroupedPosting(
+                        $grouped,
+                        $posting['account_id'] ?: $accounts['fuel_inventory'],
+                        $posting['amount'],
+                        $posting['label']
+                    );
+                }
+
+                foreach ($grouped as $posting) {
+                    $entries[] = [
+                        'account_id' => $posting['account_id'],
+                        'type' => 'debit',
+                        'amount' => round($posting['amount'], 2),
+                        'description' => 'Inventory increase (gain) - ' . implode(', ', $posting['labels']),
+                    ];
+                }
+
                 $entries[] = [
                     'account_id' => $accounts['fuel_variance_gain'],
                     'type' => 'credit',

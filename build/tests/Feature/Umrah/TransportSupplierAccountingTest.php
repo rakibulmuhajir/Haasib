@@ -10,6 +10,21 @@ use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use Illuminate\Support\Facades\DB;
 
+/** A bare company with the row-level-security context set, as the tests below expect. */
+function transportSupplierCompany(string $slug): Company
+{
+    $company = Company::create([
+        'name' => 'Transport Supplier Test',
+        'slug' => $slug,
+        'owner_id' => User::factory()->create()->id,
+        'base_currency' => 'USD',
+    ]);
+
+    DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
+
+    return $company;
+}
+
 test('mandatory and specialized transport costs belong to their transport provider', function () {
     $user = User::factory()->create();
     $company = Company::create([

@@ -725,8 +725,14 @@ class IndustryCoaPackSeeder extends Seeder
             ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity', 'subtype' => 'retained_earnings', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'retained_earnings'],
             ['code' => '4100', 'name' => 'Visa Service Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit', 'is_system' => true, 'system_identifier' => 'primary_revenue'],
             ['code' => '4110', 'name' => 'Transport Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
+            // UmrahCoreService::accountId() resolves hotel revenue and hotel cost by
+            // these exact codes. Without them it falls through to "first revenue by
+            // code" and "first cogs by code", silently merging every hotel booking
+            // into Visa Service Revenue and Visa Cost.
+            ['code' => '4120', 'name' => 'Hotel Revenue', 'type' => 'revenue', 'subtype' => 'revenue', 'normal_balance' => 'credit'],
             ['code' => '5100', 'name' => 'Visa Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'cogs'],
             ['code' => '5110', 'name' => 'Transport Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
+            ['code' => '5120', 'name' => 'Hotel Cost', 'type' => 'cogs', 'subtype' => 'cogs', 'normal_balance' => 'debit'],
             ['code' => '6100', 'name' => 'General & Administrative', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit', 'is_system' => true, 'system_identifier' => 'primary_expense'],
             ['code' => '6200', 'name' => 'Salaries', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6300', 'name' => 'Office Rent', 'type' => 'expense', 'subtype' => 'expense', 'normal_balance' => 'debit'],

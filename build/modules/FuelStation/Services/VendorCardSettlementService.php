@@ -360,14 +360,28 @@ class VendorCardSettlementService
             return $account;
         }
 
+        // No fees account yet, so create one. This previously could not succeed at
+        // all: normal_balance is NOT NULL, and accounts_currency_allowed_chk only
+        // permits a currency on monetary subtypes (bank, cash, AR, AP, ...), never
+        // on an operating expense. Any settlement carrying a fee therefore failed
+        // for every company that didn't already own a fees account.
+        //
+        // The code is matched too, so a company already using 6200 for something
+        // else (the fuel pack ships Investor Commission there) gets the next free
+        // code instead of a unique violation.
+        $code = '6200';
+        while (Account::where('company_id', $companyId)->where('code', $code)->exists()) {
+            $code = (string) ((int) $code + 1);
+        }
+
         return Account::create([
             'company_id' => $companyId,
-            'code' => '6200',
+            'code' => $code,
             'name' => 'Vendor Card Fees',
             'type' => 'expense',
             'subtype' => 'operating_expense',
+            'normal_balance' => 'debit',
             'is_active' => true,
-            'currency' => 'PKR',
         ]);
     }
 }

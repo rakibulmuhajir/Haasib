@@ -12,7 +12,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -111,6 +111,8 @@ const singleStatusForm = useForm({
 const selectedPassengerIds = ref<string[]>([]);
 const statusOverrideReason = ref('');
 const passengerOpen = ref(false);
+const addPassengerOpen = ref(false);
+const recordPaymentOpen = ref(false);
 const editingPassenger = ref<any>(null);
 const removePassengerTarget = ref<any>(null);
 const editPassengerForm = useForm({ full_name: '', passport_number: '', nationality: '', date_of_birth: '', imported_age: '' as string | number, service_type: 'visa_transport', transport_charge_amount: '0', visa_status: 'received', notes: '', override_reason: '' });
@@ -287,6 +289,7 @@ const addPassenger = () =>
                     passengerForm.visa_status = 'received';
                     passengerForm.service_type = 'visa_transport';
                     passengerForm.transport_charge_amount = '0';
+                    addPassengerOpen.value = false;
                 },
                 onError: () => toast.error('Failed to add passenger'),
             },
@@ -404,6 +407,7 @@ const addPayment = () =>
                     paymentForm.payment_date = new Date()
                         .toISOString()
                         .slice(0, 10);
+                    recordPaymentOpen.value = false;
                 },
                 onError: () => toast.error('Failed to record payment'),
             },
@@ -419,6 +423,22 @@ const addPayment = () =>
         :icon="Plane"
     >
         <template #actions>
+            <Button
+                type="button"
+                @click="addPassengerOpen = true"
+            >
+                <Plus class="mr-2 h-4 w-4" />
+                Add Passenger
+            </Button>
+            <Button
+                v-if="groupCapabilities.can_record_payment"
+                type="button"
+                variant="outline"
+                @click="recordPaymentOpen = true"
+            >
+                <WalletCards class="mr-2 h-4 w-4" />
+                Record Payment
+            </Button>
             <Button
                 v-if="groupCapabilities.can_view_accounting"
                 variant="outline"
@@ -489,7 +509,7 @@ const addPayment = () =>
             ></Card>
         </div>
 
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div class="grid gap-6">
             <div class="space-y-6">
                 <Card>
                     <CardHeader>
@@ -1081,10 +1101,13 @@ const addPayment = () =>
             </div>
 
             <div class="space-y-6">
-                <Card>
-                    <CardHeader
-                        ><CardTitle>Add Passenger</CardTitle></CardHeader
-                    >
+                <Dialog v-model:open="addPassengerOpen">
+                    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                        <DialogHeader>
+                            <DialogTitle>Add Passenger</DialogTitle>
+                            <DialogDescription>Add one passenger to {{ group.group_number }}. Group visa and transport totals will be recalculated.</DialogDescription>
+                        </DialogHeader>
+                <Card class="border-0 shadow-none">
                     <CardContent>
                         <form class="space-y-3" @submit.prevent="addPassenger">
                             <div class="space-y-2">
@@ -1194,18 +1217,25 @@ const addPayment = () =>
                                 type="submit"
                                 class="w-full"
                                 :disabled="passengerForm.processing"
-                                ><Plus class="mr-2 h-4 w-4" />Add
+                                ><span v-if="passengerForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /><Plus v-else class="mr-2 h-4 w-4" />Add
                                 Passenger</Button
                             >
                         </form>
                     </CardContent>
                 </Card>
+                    </DialogContent>
+                </Dialog>
 
-                <Card v-if="groupCapabilities.can_record_payment">
-                    <CardHeader>
-                        <CardTitle>Record Payment</CardTitle>
-                        <CardDescription
-                            >{{
+                <Dialog v-model:open="recordPaymentOpen">
+                    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                        <DialogHeader>
+                            <DialogTitle>Record Payment</DialogTitle>
+                            <DialogDescription>Record money received from the agent or paid to a vendor for this group.</DialogDescription>
+                        </DialogHeader>
+                <Card v-if="groupCapabilities.can_record_payment" class="border-0 shadow-none">
+                    <CardContent class="space-y-4 p-0">
+                        <div class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                            {{
                                 paymentForm.direction === 'received'
                                     ? 'Agent balance'
                                     : 'Vendor balance'
@@ -1214,9 +1244,8 @@ const addPayment = () =>
                             <MoneyText
                                 :amount="remainingAfterPayment"
                                 :currency="company.base_currency"
-                        /></CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                            />
+                        </div>
                         <form class="space-y-3" @submit.prevent="addPayment">
                             <div class="space-y-2">
                                 <Label>Date</Label
@@ -1373,12 +1402,14 @@ const addPayment = () =>
                                 :disabled="
                                     paymentForm.processing || !canRecordPayment
                                 "
-                                ><WalletCards class="mr-2 h-4 w-4" />Record
+                                ><span v-if="paymentForm.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /><WalletCards v-else class="mr-2 h-4 w-4" />Record
                                 Payment</Button
                             >
                         </form>
                     </CardContent>
                 </Card>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
         <Card v-if="changeLogs.length">

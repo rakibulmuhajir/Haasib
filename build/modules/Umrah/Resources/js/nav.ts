@@ -164,9 +164,14 @@ export const umrahNav: ModuleNavConfig = {
                                   icon: Users,
                               },
                               {
-                                  title: 'Visa & Transport Vendors',
+                                  title: 'Visa Vendors',
                                   href: `/${slug}/umrah/vendors`,
                                   icon: FileText,
+                              },
+                              {
+                                  title: 'Transport Providers',
+                                  href: `/${slug}/umrah/transport-providers`,
+                                  icon: Bus,
                               },
                               ...(['owner', 'manager', 'super_admin'].includes(
                                   String(context.currentCompanyRole),

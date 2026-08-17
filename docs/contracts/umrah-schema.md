@@ -16,12 +16,12 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Agent group creation receives only the active default visa vendor's adult/child retail rates. Supplier identity, supplier costs, mandatory transport provider, and provider payable are not included in the agent payload. The server resolves suppliers and recalculates all charges; agent-created groups cannot submit a group discount.
 - Voucher accounting is the later travel-stage source for Company-booked hotel revenue/cost. A voucher may display its parent group's posted visa and transport amounts, but it must never repost or duplicate them.
 - Flight and hotel are informational in phase 1.
-- Transport is mandatory for visa groups. The standard bus amount included in a visa rate is always deducted from the visa vendor payable. Standard-bus groups assign that amount to the selected mandatory transport provider; specialized transport replaces it with the selected fare suppliers' snapshotted costs.
+- Transport is mandatory for visa groups. Visa and standard-bus rates are independent: standard-bus groups add the selected transport provider's snapshotted sale and cost to the visa amounts without deducting anything from the visa vendor payable. Specialized transport replaces the standard-bus pricing with selected fare suppliers' snapshotted amounts.
 - Transport service is the vehicle source of truth. Do not maintain a separate vehicle type setup screen.
 - Transport sectors and journey packages are configurable. Fares belong to a transport service and either one sector or one journey package.
 - Group transport items are immutable pricing snapshots. Later fare changes must not alter historical group totals.
 - Drivers are reusable transport staff records. A transport service can have a default driver, and group creation can override the driver for that trip.
-- Visa and transport services provide default retail/cost amounts. Visa vendor adult and child amounts are used for group pricing from passenger DOB. Users may override copied transport prices/costs per group.
+- Visa and transport providers have separate CRUDs and independent default retail/cost amounts. Visa vendor adult and child amounts are used for visa pricing from passenger DOB. A transport provider supplies standard-bus retail/cost per chargeable passenger and controls whether children are charged. Users may override copied transport prices/costs per group where the accounting workflow permits it.
 
 ## Guardrails
 
@@ -77,8 +77,8 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `vendor_type` varchar(30) default `government`.
   - `is_company_owned` boolean default false. Transport providers owned by the company remain payable parties and follow the same allocation rules as external providers.
   - `is_default` boolean default false. Exactly one active non-transport vendor may be the company default for new visa groups.
-  - `provides_mandatory_transport` boolean default false. For a visa vendor, the vendor itself receives the mandatory transport payable.
-  - `mandatory_transport_vendor_id` uuid nullable self FK -> `umrah.visa_vendors.id`. Required for a visa vendor when `provides_mandatory_transport` is false and must reference an active transport provider.
+  - `provides_mandatory_transport` boolean default false. Legacy compatibility only; new visa-vendor CRUD does not bundle transport with visa pricing.
+  - `mandatory_transport_vendor_id` uuid nullable self FK -> `umrah.visa_vendors.id`. Legacy compatibility only; new groups select a transport provider independently.
   - `phone`, `email`, `city` nullable.
   - `logo_url` varchar(500) nullable.
   - `notes` text nullable.
@@ -86,7 +86,10 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `adult_cost_amount` numeric(15,2) default 0.
   - `child_retail_amount` numeric(15,2) default 0.
   - `child_cost_amount` numeric(15,2) default 0.
-  - `included_bus_cost_amount` numeric(15,2) default 50. Per visa passenger cost already included in adult/child vendor cost for mandatory all-sector bus transport.
+  - `included_bus_cost_amount` numeric(15,2) default 0. Legacy compatibility only; must remain zero for newly created or updated visa vendors.
+  - `standard_bus_retail_amount` numeric(15,2) default 0. Transport-provider sale rate per chargeable passenger; zero for visa vendors.
+  - `standard_bus_cost_amount` numeric(15,2) default 0. Transport-provider cost rate per chargeable passenger; zero for visa vendors.
+  - `charge_child_fare` boolean default true. For transport providers, whether passengers under 12 are charged the standard-bus fare. When false, child and infant passengers are excluded; aggregate unnamed PAX are treated as adults.
   - `total_cost` numeric(15,2) default 0.
   - `total_paid` numeric(15,2) default 0.
   - `balance` numeric(15,2) default 0.
@@ -96,7 +99,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `vendor_type` in `government`, `visa_provider`, `transport_provider`, `hotel`, `other`.
   - Active non-transport vendors require positive adult and child retail and cost rates before they can be created or updated.
 - Model fillable:
-  - `company_id`, `vendor_number`, `name`, `vendor_type`, `is_company_owned`, `is_default`, `provides_mandatory_transport`, `mandatory_transport_vendor_id`, `phone`, `email`, `city`, `logo_url`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `included_bus_cost_amount`, `total_cost`, `total_paid`, `balance`, `is_active`.
+  - `company_id`, `vendor_number`, `name`, `vendor_type`, `is_company_owned`, `is_default`, `provides_mandatory_transport`, `mandatory_transport_vendor_id`, `phone`, `email`, `city`, `logo_url`, `notes`, `adult_retail_amount`, `adult_cost_amount`, `child_retail_amount`, `child_cost_amount`, `included_bus_cost_amount`, `standard_bus_retail_amount`, `standard_bus_cost_amount`, `charge_child_fare`, `total_cost`, `total_paid`, `balance`, `is_active`.
 
 ### umrah.visa_services (legacy)
 - Purpose: Historical visa service templates retained only for existing group references.
@@ -321,9 +324,13 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `hotel_info` jsonb nullable.
   - `transport_required` boolean default false.
   - `transport_mode` varchar(30) default `standard_bus`. Values: `standard_bus`, `specialized`.
-  - `included_bus_cost_per_passenger` numeric(15,2) default 50. Snapshot from visa vendor.
-  - `included_bus_cost_deduction` numeric(15,2) default 0. Per-group amount always removed from the visa vendor payable for visa passengers.
-  - `mandatory_transport_cost_amount` numeric(15,2) default 0. Standard-bus payable snapshot assigned to `mandatory_transport_vendor_id`; zero when specialized fare costs replace the mandatory bus.
+  - `included_bus_cost_per_passenger` numeric(15,2) default 0. Legacy historical snapshot only.
+  - `included_bus_cost_deduction` numeric(15,2) default 0. Legacy historical snapshot only; new groups do not deduct transport from visa cost.
+  - `standard_bus_retail_amount` numeric(15,2) default 0. Per-passenger sale-rate snapshot from the independently selected transport provider.
+  - `standard_bus_cost_amount` numeric(15,2) default 0. Per-passenger cost-rate snapshot from the independently selected transport provider.
+  - `standard_bus_charge_child_fare` boolean default true. Snapshot of the provider's child-fare rule.
+  - `standard_bus_billable_passenger_count` integer default 0. Passenger count to which standard-bus rates were applied.
+  - `mandatory_transport_cost_amount` numeric(15,2) default 0. Standard-bus cost total assigned to `mandatory_transport_vendor_id`; zero for specialized transport.
   - `transport_quantity` integer default 0.
   - `transport_pax_capacity` integer nullable. Copied from selected transport service and overrideable on the group.
   - `passenger_count` integer default 0.

@@ -8,7 +8,6 @@ use App\Modules\Umrah\Http\Requests\StoreVisaVendorRequest;
 use App\Modules\Umrah\Http\Requests\UpdateVisaVendorRequest;
 use App\Modules\Umrah\Http\Requests\UpdateVisaVendorStatusRequest;
 use App\Modules\Umrah\Http\Requests\VendorStatementRequest;
-use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CurrentCompany;
@@ -30,10 +29,9 @@ class VisaVendorController extends Controller
 
         return Inertia::render('Umrah/Vendors/Index', [
             'company' => $this->companyPayload($company),
-            'vendors' => VisaVendor::where('company_id', $company->id)->orderBy('name')->paginate(20),
-            'vendorTypes' => VisaVendor::TYPES,
+            'vendors' => VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->paginate(20),
+            'vendorTypes' => collect(VisaVendor::TYPES)->except(VisaVendor::TYPE_TRANSPORT_PROVIDER),
             'nextVendorNumber' => $this->service->nextVendorNumber($company->id),
-            'transportVendors' => VisaVendor::where('company_id', $company->id)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'canManageVendors' => (bool) request()->user()?->hasCompanyPermission(Permissions::UMRAH_VENDOR_UPDATE),
         ]);
     }
@@ -58,7 +56,7 @@ class VisaVendorController extends Controller
     public function show(VendorStatementRequest $request, string $companySlug, string $vendor): Response
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $this->service->recalculateVendor($record->id);
 
         return Inertia::render('Umrah/Vendors/Show', [
@@ -72,7 +70,7 @@ class VisaVendorController extends Controller
     public function statementPdf(VendorStatementRequest $request, string $companySlug, string $vendor)
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $this->service->recalculateVendor($record->id);
         $statement = $this->service->vendorStatement($record->fresh(), $request->validated('date_from'), $request->validated('date_to'));
 
@@ -107,7 +105,7 @@ class VisaVendorController extends Controller
     public function update(UpdateVisaVendorRequest $request, string $companySlug, string $vendor): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $data = $request->validated();
 
         DB::transaction(function () use ($company, $data, $record): void {
@@ -125,16 +123,10 @@ class VisaVendorController extends Controller
     public function updateStatus(UpdateVisaVendorStatusRequest $request, string $companySlug, string $vendor): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
-        $record = VisaVendor::where('company_id', $company->id)->findOrFail($vendor);
+        $record = VisaVendor::where('company_id', $company->id)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->findOrFail($vendor);
         $active = (bool) $request->validated('is_active');
         if (! $active && $record->is_default) {
             throw ValidationException::withMessages(['vendor' => 'Choose another default visa vendor before deactivating this one.']);
-        }
-        if (! $active && VisaVendor::where('company_id', $company->id)->where('mandatory_transport_vendor_id', $record->id)->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages(['vendor' => 'Assign another mandatory transport provider to linked visa vendors first.']);
-        }
-        if (! $active && TransportFare::where('company_id', $company->id)->where('transport_vendor_id', $record->id)->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages(['vendor' => 'Deactivate this transport provider\'s active fares first.']);
         }
         $record->update(['is_active' => $active]);
 
@@ -153,16 +145,6 @@ class VisaVendorController extends Controller
 
     private function pricingPayload(array $data): array
     {
-        if (($data['vendor_type'] ?? null) === VisaVendor::TYPE_TRANSPORT_PROVIDER) {
-            return [
-                'adult_retail_amount' => 0,
-                'adult_cost_amount' => 0,
-                'child_retail_amount' => 0,
-                'child_cost_amount' => 0,
-                'included_bus_cost_amount' => 0,
-            ];
-        }
-
         $adultRetail = $this->money($data['adult_retail_amount'] ?? 0);
         $adultCost = $this->money($data['adult_cost_amount'] ?? 0);
 
@@ -171,7 +153,7 @@ class VisaVendorController extends Controller
             'adult_cost_amount' => $adultCost,
             'child_retail_amount' => $this->money($data['child_retail_amount'] ?? $adultRetail),
             'child_cost_amount' => $this->money($data['child_cost_amount'] ?? $adultCost),
-            'included_bus_cost_amount' => $this->money($data['included_bus_cost_amount'] ?? 50),
+            'included_bus_cost_amount' => 0,
         ];
     }
 
@@ -182,24 +164,23 @@ class VisaVendorController extends Controller
 
     private function vendorPayload(string $companyId, array $data, bool $isDefault, ?VisaVendor $record = null): array
     {
-        $isTransportProvider = $data['vendor_type'] === VisaVendor::TYPE_TRANSPORT_PROVIDER;
-        $providesTransport = ! $isTransportProvider && (bool) ($data['provides_mandatory_transport'] ?? false);
-
         return [
             'company_id' => $companyId,
             'vendor_number' => $data['vendor_number'] ?: ($record?->vendor_number ?? $this->service->nextVendorNumber($companyId)),
             'name' => $data['name'],
             'vendor_type' => $data['vendor_type'],
-            'is_company_owned' => $isTransportProvider && (bool) ($data['is_company_owned'] ?? false),
+            'is_company_owned' => false,
             'is_default' => $isDefault,
-            'provides_mandatory_transport' => $providesTransport,
-            'mandatory_transport_vendor_id' => ! $isTransportProvider && ! $providesTransport ? ($data['mandatory_transport_vendor_id'] ?? null) : null,
+            'provides_mandatory_transport' => false,
+            'mandatory_transport_vendor_id' => null,
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
             'city' => $data['city'] ?? null,
             'logo_url' => $data['logo_url'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...$this->pricingPayload($data),
+            'standard_bus_retail_amount' => 0,
+            'standard_bus_cost_amount' => 0,
             'is_active' => $record?->is_active ?? true,
         ];
     }

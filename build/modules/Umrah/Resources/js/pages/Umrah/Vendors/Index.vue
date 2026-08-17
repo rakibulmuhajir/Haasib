@@ -52,7 +52,6 @@ const props = defineProps<{
         next_page_url: string | null;
     };
     vendorTypes: Record<string, string>;
-    transportVendors: Array<{ id: string; name: string }>;
     nextVendorNumber: string;
     canManageVendors: boolean;
 }>();
@@ -60,7 +59,7 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
     {
-        title: 'Visa & Transport Vendors',
+        title: 'Visa Vendors',
         href: `/${props.company.slug}/umrah/vendors`,
     },
 ];
@@ -69,10 +68,7 @@ const form = useForm({
     vendor_number: props.nextVendorNumber,
     name: '',
     vendor_type: 'government',
-    is_company_owned: false,
     is_default: false,
-    provides_mandatory_transport: false,
-    mandatory_transport_vendor_id: 'none',
     phone: '',
     email: '',
     city: '',
@@ -81,24 +77,16 @@ const form = useForm({
     adult_cost_amount: '0',
     child_retail_amount: '0',
     child_cost_amount: '0',
-    included_bus_cost_amount: '50',
     notes: '',
 });
 const hasRequiredVisaRates = computed(
     () =>
-        form.vendor_type === 'transport_provider' ||
         [
             form.adult_retail_amount,
             form.adult_cost_amount,
             form.child_retail_amount,
             form.child_cost_amount,
         ].every((amount) => Number(amount) > 0),
-);
-const requiresTransportProvider = computed(
-    () =>
-        form.vendor_type !== 'transport_provider' &&
-        !form.provides_mandatory_transport &&
-        Number(form.included_bus_cost_amount || 0) > 0,
 );
 
 const editingVendor = ref<any | null>(null);
@@ -145,10 +133,7 @@ const resetForm = () => {
     form.vendor_number = props.nextVendorNumber;
     form.name = '';
     form.vendor_type = 'government';
-    form.is_company_owned = false;
     form.is_default = false;
-    form.provides_mandatory_transport = false;
-    form.mandatory_transport_vendor_id = 'none';
     form.phone = '';
     form.email = '';
     form.city = '';
@@ -157,7 +142,6 @@ const resetForm = () => {
     form.adult_cost_amount = '0';
     form.child_retail_amount = '0';
     form.child_cost_amount = '0';
-    form.included_bus_cost_amount = '50';
     form.notes = '';
 };
 
@@ -167,13 +151,7 @@ const startEdit = (vendor: any) => {
     form.vendor_number = vendor.vendor_number || '';
     form.name = vendor.name || '';
     form.vendor_type = vendor.vendor_type || 'government';
-    form.is_company_owned = Boolean(vendor.is_company_owned);
     form.is_default = Boolean(vendor.is_default);
-    form.provides_mandatory_transport = Boolean(
-        vendor.provides_mandatory_transport,
-    );
-    form.mandatory_transport_vendor_id =
-        vendor.mandatory_transport_vendor_id || 'none';
     form.phone = vendor.phone || '';
     form.email = vendor.email || '';
     form.city = vendor.city || '';
@@ -186,26 +164,12 @@ const startEdit = (vendor: any) => {
     form.child_cost_amount = String(
         vendor.child_cost_amount ?? vendor.adult_cost_amount ?? 0,
     );
-    form.included_bus_cost_amount = String(
-        vendor.included_bus_cost_amount ?? 50,
-    );
     form.notes = vendor.notes || '';
 };
 
 const payload = (data: any) => ({
     ...data,
-    is_company_owned:
-        data.vendor_type === 'transport_provider' && data.is_company_owned,
-    is_default: data.vendor_type !== 'transport_provider' && data.is_default,
-    provides_mandatory_transport:
-        data.vendor_type !== 'transport_provider' &&
-        data.provides_mandatory_transport,
-    mandatory_transport_vendor_id:
-        data.vendor_type !== 'transport_provider' &&
-        !data.provides_mandatory_transport &&
-        data.mandatory_transport_vendor_id !== 'none'
-            ? data.mandatory_transport_vendor_id
-            : null,
+    is_default: data.is_default,
     adult_retail_amount: Number(data.adult_retail_amount || 0),
     adult_cost_amount: Number(data.adult_cost_amount || 0),
     child_retail_amount: Number(
@@ -214,7 +178,6 @@ const payload = (data: any) => ({
     child_cost_amount: Number(
         data.child_cost_amount || data.adult_cost_amount || 0,
     ),
-    included_bus_cost_amount: Number(data.included_bus_cost_amount || 0),
 });
 
 const submit = () => {
@@ -246,9 +209,9 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Visa & Transport Vendors" />
+    <Head title="Visa Vendors" />
     <PageShell
-        title="Visa & Transport Vendors"
+        title="Visa Vendors"
         description="Visa suppliers and transport providers with rates and payable balances."
         :breadcrumbs="breadcrumbs"
         :icon="FileText"
@@ -295,66 +258,11 @@ const submit = () => {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <Label
-                            v-if="form.vendor_type === 'transport_provider'"
-                            class="flex items-center gap-3 rounded-md border p-3"
-                        >
-                            <Checkbox v-model="form.is_company_owned" />
-                            <span>Company-owned transport provider</span>
-                        </Label>
-                        <div
-                            v-if="form.vendor_type !== 'transport_provider'"
-                            class="space-y-3 rounded-md border p-3"
-                        >
+                        <div class="space-y-3 rounded-md border p-3">
                             <Label class="flex items-center gap-3">
                                 <Checkbox v-model="form.is_default" />
                                 <span>Default visa vendor for new groups</span>
                             </Label>
-                            <Label class="flex items-center gap-3">
-                                <Checkbox
-                                    v-model="form.provides_mandatory_transport"
-                                />
-                                <span
-                                    >Also provides mandatory bus transport</span
-                                >
-                            </Label>
-                            <div
-                                v-if="requiresTransportProvider"
-                                class="space-y-2"
-                            >
-                                <Label>Mandatory transport provider</Label>
-                                <Select
-                                    v-model="form.mandatory_transport_vendor_id"
-                                >
-                                    <SelectTrigger
-                                        ><SelectValue
-                                            placeholder="Select provider"
-                                    /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none"
-                                            >Select provider</SelectItem
-                                        >
-                                        <SelectItem
-                                            v-for="vendor in transportVendors"
-                                            :key="vendor.id"
-                                            :value="vendor.id"
-                                            >{{ vendor.name }}</SelectItem
-                                        >
-                                    </SelectContent>
-                                </Select>
-                                <p
-                                    v-if="
-                                        form.errors
-                                            .mandatory_transport_vendor_id
-                                    "
-                                    class="text-xs text-destructive"
-                                >
-                                    {{
-                                        form.errors
-                                            .mandatory_transport_vendor_id
-                                    }}
-                                </p>
-                            </div>
                         </div>
                         <div class="grid gap-3 md:grid-cols-2">
                             <div class="space-y-2">
@@ -467,25 +375,6 @@ const submit = () => {
                                 </div>
                             </div>
                         </div>
-                        <div
-                            v-if="form.vendor_type !== 'transport_provider'"
-                            class="space-y-2 rounded-md border p-3"
-                        >
-                            <Label
-                                >Included Standard Bus Cost per Passenger</Label
-                            >
-                            <Input
-                                v-model="form.included_bus_cost_amount"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Set to zero when no standard-bus amount is
-                                included. A transport provider is required only
-                                when this amount is greater than zero.
-                            </p>
-                        </div>
                         <div class="space-y-2">
                             <Label>Notes</Label
                             ><Textarea v-model="form.notes" />
@@ -535,8 +424,6 @@ const submit = () => {
                                     >Child Cost</TableHead
                                 >
                                 <TableHead class="text-right"
-                                    >Bus Included</TableHead
-                                ><TableHead class="text-right"
                                     >Payable</TableHead
                                 >
                                 <TableHead>Status</TableHead>
@@ -548,7 +435,7 @@ const submit = () => {
                         <TableBody>
                             <TableEmpty
                                 v-if="!vendors.data.length"
-                                :colspan="11"
+                                :colspan="10"
                                 >No visa vendors yet.</TableEmpty
                             >
                             <TableRow
@@ -566,13 +453,6 @@ const submit = () => {
                                             v-if="vendor.is_default"
                                             variant="secondary"
                                             >Default</Badge
-                                        >
-                                        <Badge
-                                            v-if="
-                                                vendor.provides_mandatory_transport
-                                            "
-                                            variant="outline"
-                                            >Visa + transport</Badge
                                         >
                                     </div>
                                 </TableCell>
@@ -600,13 +480,6 @@ const submit = () => {
                                 <TableCell class="text-right"
                                     ><MoneyText
                                         :amount="vendor.child_cost_amount"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell class="text-right"
-                                    ><MoneyText
-                                        :amount="
-                                            vendor.included_bus_cost_amount
-                                        "
                                         :currency="company.base_currency"
                                 /></TableCell>
                                 <TableCell class="text-right font-semibold"

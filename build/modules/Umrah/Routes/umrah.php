@@ -9,6 +9,7 @@ use App\Modules\Umrah\Http\Controllers\HotelController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
+use App\Modules\Umrah\Http\Controllers\TransportProviderController;
 use App\Modules\Umrah\Http\Controllers\VisaGroupController;
 use App\Modules\Umrah\Http\Controllers\VisaVendorController;
 use App\Modules\Umrah\Http\Controllers\VoucherAccountingController;
@@ -37,6 +38,13 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('vendors/{vendor}', [VisaVendorController::class, 'show'])->whereUuid('vendor')->name('umrah.vendors.show');
         Route::put('vendors/{vendor}', [VisaVendorController::class, 'update'])->whereUuid('vendor')->name('umrah.vendors.update');
         Route::patch('vendors/{vendor}/status', [VisaVendorController::class, 'updateStatus'])->whereUuid('vendor')->name('umrah.vendors.status.update');
+
+        Route::get('transport-providers', [TransportProviderController::class, 'index'])->name('umrah.transport-providers.index');
+        Route::post('transport-providers', [TransportProviderController::class, 'store'])->name('umrah.transport-providers.store');
+        Route::get('transport-providers/{transportProvider}/statement.pdf', [TransportProviderController::class, 'statementPdf'])->whereUuid('transportProvider')->name('umrah.transport-providers.statement.pdf');
+        Route::get('transport-providers/{transportProvider}', [TransportProviderController::class, 'show'])->whereUuid('transportProvider')->name('umrah.transport-providers.show');
+        Route::put('transport-providers/{transportProvider}', [TransportProviderController::class, 'update'])->whereUuid('transportProvider')->name('umrah.transport-providers.update');
+        Route::patch('transport-providers/{transportProvider}/status', [TransportProviderController::class, 'updateStatus'])->whereUuid('transportProvider')->name('umrah.transport-providers.status.update');
 
         Route::get('groups', [VisaGroupController::class, 'index'])->name('umrah.groups.index');
         Route::get('payments', [PaymentController::class, 'index'])->name('umrah.payments.index');

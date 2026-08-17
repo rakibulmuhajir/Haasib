@@ -41,6 +41,11 @@ class UmrahCoreService
         return $this->nextNumber($companyId, VisaVendor::query(), 'vendor_number', 'UVN');
     }
 
+    public function nextTransportProviderNumber(string $companyId): string
+    {
+        return $this->nextNumber($companyId, VisaVendor::query(), 'vendor_number', 'TPN');
+    }
+
     public function nextGroupNumber(string $companyId): string
     {
         return $this->nextNumber($companyId, VisaGroup::query(), 'group_number', 'UGR');
@@ -80,21 +85,19 @@ class UmrahCoreService
 
             return $data;
         }
-        if ((float) $vendor->included_bus_cost_amount <= 0) {
-            $data['mandatory_transport_vendor_id'] = null;
-
-            return $data;
-        }
-
         $providerId = ! $forceDefaults && ! empty($data['mandatory_transport_vendor_id'])
             ? $data['mandatory_transport_vendor_id']
-            : $vendor->resolvedMandatoryTransportVendorId();
+            : ($vendor->resolvedMandatoryTransportVendorId() ?: VisaVendor::where('company_id', $companyId)
+                ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                ->where('is_active', true)
+                ->orderBy('created_at')
+                ->value('id'));
         $provider = VisaVendor::where('company_id', $companyId)
             ->where('is_active', true)
-            ->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))
+            ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
             ->find($providerId);
         if (! $provider) {
-            throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Configure the mandatory transport provider for the selected visa vendor.']);
+            throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select an active standard bus transport provider.']);
         }
         $data['mandatory_transport_vendor_id'] = $provider->id;
 
@@ -133,8 +136,12 @@ class UmrahCoreService
                 ],
                 'transport_required' => (bool) ($data['transport_required'] ?? false),
                 'transport_mode' => $data['transport_mode'] ?? VisaGroup::TRANSPORT_STANDARD_BUS,
-                'included_bus_cost_per_passenger' => $data['included_bus_cost_per_passenger'] ?? 50,
+                'included_bus_cost_per_passenger' => 0,
                 'included_bus_cost_deduction' => $data['included_bus_cost_deduction'] ?? 0,
+                'standard_bus_retail_amount' => $data['standard_bus_retail_amount'] ?? 0,
+                'standard_bus_cost_amount' => $data['standard_bus_cost_amount'] ?? 0,
+                'standard_bus_charge_child_fare' => $data['standard_bus_charge_child_fare'] ?? true,
+                'standard_bus_billable_passenger_count' => $data['standard_bus_billable_passenger_count'] ?? 0,
                 'mandatory_transport_cost_amount' => $data['mandatory_transport_cost_amount'] ?? 0,
                 'transport_quantity' => $primaryTransport['quantity'] ?? (int) ($data['transport_quantity'] ?? 1),
                 'transport_pax_capacity' => $primaryTransport['pax_capacity'] ?? ($data['transport_pax_capacity'] ?? null),
@@ -225,16 +232,15 @@ class UmrahCoreService
             } elseif ($group->vendor_id) {
                 $vendor = VisaVendor::where('company_id', $group->company_id)->find($group->vendor_id);
                 if ($vendor) {
-                    $pricing = $this->calculateVisaPricingFromVendor($vendor, [$passenger->toArray()], optional($group->travel_date)->toDateString(), 1);
-                    $costDeduction = min($pricing['cost'], (float) $group->included_bus_cost_per_passenger);
-                    $mandatoryTransportCost = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS ? $costDeduction : 0;
+                    $amounts = $this->passengerFinancialContribution($group, $passenger->toArray());
 
                     $group->update([
-                        'visa_sale_amount' => round((float) $group->visa_sale_amount + $pricing['sale'], 2),
-                        'visa_cost_amount' => round((float) $group->visa_cost_amount + $pricing['cost'] - $costDeduction, 2),
-                        'included_bus_cost_deduction' => round((float) $group->included_bus_cost_deduction + $costDeduction, 2),
-                        'mandatory_transport_cost_amount' => round((float) $group->mandatory_transport_cost_amount + $mandatoryTransportCost, 2),
-                        'transport_cost_amount' => round((float) $group->transport_cost_amount + $mandatoryTransportCost, 2),
+                        'visa_sale_amount' => round((float) $group->visa_sale_amount + $amounts['visa_sale'], 2),
+                        'visa_cost_amount' => round((float) $group->visa_cost_amount + $amounts['visa_cost'], 2),
+                        'transport_amount' => round((float) $group->transport_amount + $amounts['transport_sale'], 2),
+                        'mandatory_transport_cost_amount' => round((float) $group->mandatory_transport_cost_amount + $amounts['mandatory_transport_cost'], 2),
+                        'transport_cost_amount' => round((float) $group->transport_cost_amount + $amounts['mandatory_transport_cost'], 2),
+                        'standard_bus_billable_passenger_count' => (int) $group->standard_bus_billable_passenger_count + ($amounts['mandatory_transport_cost'] > 0 || $amounts['transport_sale'] > 0 ? 1 : 0),
                     ]);
                 }
             }
@@ -265,6 +271,7 @@ class UmrahCoreService
                 'transport_amount' => max(round((float) $group->transport_amount - $old['transport_sale'] + $new['transport_sale'], 2), 0),
                 'mandatory_transport_cost_amount' => max(round((float) $group->mandatory_transport_cost_amount - $old['mandatory_transport_cost'] + $new['mandatory_transport_cost'], 2), 0),
                 'transport_cost_amount' => max(round((float) $group->transport_cost_amount - $old['mandatory_transport_cost'] + $new['mandatory_transport_cost'], 2), 0),
+                'standard_bus_billable_passenger_count' => max((int) $group->standard_bus_billable_passenger_count - (($old['mandatory_transport_cost'] > 0 || $old['transport_sale'] > 0) ? 1 : 0) + (($new['mandatory_transport_cost'] > 0 || $new['transport_sale'] > 0) ? 1 : 0), 0),
             ]);
             $this->recalculateGroup($group->fresh());
             $this->postGroupFinancialAdjustment($group->fresh(), $before, $data['override_reason'] ?? 'Passenger corrected');
@@ -296,6 +303,7 @@ class UmrahCoreService
                 'transport_amount' => max(round((float) $group->transport_amount - $amounts['transport_sale'], 2), 0),
                 'mandatory_transport_cost_amount' => max(round((float) $group->mandatory_transport_cost_amount - $amounts['mandatory_transport_cost'], 2), 0),
                 'transport_cost_amount' => max(round((float) $group->transport_cost_amount - $amounts['mandatory_transport_cost'], 2), 0),
+                'standard_bus_billable_passenger_count' => max((int) $group->standard_bus_billable_passenger_count - (($amounts['mandatory_transport_cost'] > 0 || $amounts['transport_sale'] > 0) ? 1 : 0), 0),
             ]);
             $this->recalculateGroup($group->fresh());
             $this->postGroupFinancialAdjustment($group->fresh(), $before, $reason);
@@ -913,10 +921,16 @@ class UmrahCoreService
             return ['visa_sale' => 0.0, 'visa_cost' => 0.0, 'bus_deduction' => 0.0, 'mandatory_transport_cost' => 0.0, 'transport_sale' => 0.0];
         }
         $pricing = $this->calculateVisaPricingFromVendor($vendor, [$passenger], optional($group->travel_date)->toDateString(), 1);
-        $deduction = min($pricing['cost'], (float) $group->included_bus_cost_per_passenger);
-        $mandatoryTransportCost = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS ? $deduction : 0.0;
+        $busCharged = $group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS
+            && ($group->standard_bus_charge_child_fare || $this->ageBand($passenger['date_of_birth'] ?? null, optional($group->travel_date)->toDateString(), $passenger['imported_age'] ?? null) === 'adult');
 
-        return ['visa_sale' => $pricing['sale'], 'visa_cost' => round($pricing['cost'] - $deduction, 2), 'bus_deduction' => $deduction, 'mandatory_transport_cost' => $mandatoryTransportCost, 'transport_sale' => 0.0];
+        return [
+            'visa_sale' => $pricing['sale'],
+            'visa_cost' => $pricing['cost'],
+            'bus_deduction' => 0.0,
+            'mandatory_transport_cost' => $busCharged ? (float) $group->standard_bus_cost_amount : 0.0,
+            'transport_sale' => $busCharged ? (float) $group->standard_bus_retail_amount : 0.0,
+        ];
     }
 
     private function applyServiceDefaults(string $companyId, array $data): array
@@ -927,6 +941,11 @@ class UmrahCoreService
         $data['transport_amount'] = $this->transportOnlyPassengerCharges($data['passengers'] ?? []);
         $data['transport_cost_amount'] = 0;
         $data['included_bus_cost_deduction'] = 0;
+        $data['included_bus_cost_per_passenger'] = 0;
+        $data['standard_bus_retail_amount'] = 0;
+        $data['standard_bus_cost_amount'] = 0;
+        $data['standard_bus_charge_child_fare'] = true;
+        $data['standard_bus_billable_passenger_count'] = 0;
         $data['mandatory_transport_cost_amount'] = 0;
 
         if (! empty($data['vendor_id'])) {
@@ -936,31 +955,27 @@ class UmrahCoreService
                 $pricing = $this->calculateVisaPricingFromVendor($vendor, $data['passengers'] ?? [], $data['travel_date'] ?? null, (int) ($data['passenger_count'] ?? 0));
                 $data['visa_sale_amount'] = $pricing['sale'];
                 $data['visa_cost_amount'] = $pricing['cost'];
-                $data['included_bus_cost_per_passenger'] = (float) $vendor->included_bus_cost_amount;
-
-                $replacement = $this->transportPricing->separateIncludedBusCost(
-                    $pricing['cost'],
-                    (float) $vendor->included_bus_cost_amount,
-                    $pricing['passenger_count'],
-                );
-                $data['included_bus_cost_deduction'] = $replacement['deduction'];
-                $data['visa_cost_amount'] = $replacement['adjusted_visa_cost'];
-
                 if ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
-                    if ($replacement['deduction'] <= 0) {
-                        $data['mandatory_transport_vendor_id'] = null;
-
-                        return $data;
-                    }
                     $transportVendor = VisaVendor::where('company_id', $companyId)
                         ->where('is_active', true)
-                        ->where(fn ($query) => $query->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))
+                        ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
                         ->find($data['mandatory_transport_vendor_id'] ?? null);
                     if (! $transportVendor) {
-                        throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Configure the provider responsible for mandatory bus transport.']);
+                        throw ValidationException::withMessages(['mandatory_transport_vendor_id' => 'Select the standard bus transport provider.']);
                     }
-                    $data['mandatory_transport_cost_amount'] = $replacement['deduction'];
-                    $data['transport_cost_amount'] = $replacement['deduction'];
+                    $billablePassengers = $this->standardBusBillablePassengerCount(
+                        $data['passengers'] ?? [],
+                        $data['travel_date'] ?? null,
+                        (int) ($data['passenger_count'] ?? 0),
+                        (bool) $transportVendor->charge_child_fare,
+                    );
+                    $data['standard_bus_retail_amount'] = (float) $transportVendor->standard_bus_retail_amount;
+                    $data['standard_bus_cost_amount'] = (float) $transportVendor->standard_bus_cost_amount;
+                    $data['standard_bus_charge_child_fare'] = (bool) $transportVendor->charge_child_fare;
+                    $data['standard_bus_billable_passenger_count'] = $billablePassengers;
+                    $data['transport_amount'] = round((float) $data['transport_amount'] + ((float) $transportVendor->standard_bus_retail_amount * $billablePassengers), 2);
+                    $data['mandatory_transport_cost_amount'] = round((float) $transportVendor->standard_bus_cost_amount * $billablePassengers, 2);
+                    $data['transport_cost_amount'] = $data['mandatory_transport_cost_amount'];
                 }
             }
         }
@@ -981,6 +996,52 @@ class UmrahCoreService
             ->filter(fn (array $passenger) => trim((string) ($passenger['full_name'] ?? '')) !== '')
             ->filter(fn (array $passenger) => ($passenger['service_type'] ?? Passenger::SERVICE_VISA_TRANSPORT) === Passenger::SERVICE_TRANSPORT_ONLY)
             ->sum(fn (array $passenger) => (float) ($passenger['transport_charge_amount'] ?? 0)), 2);
+    }
+
+    private function standardBusBillablePassengerCount(array $passengers, ?string $travelDate, int $passengerCount, bool $chargeChildFare): int
+    {
+        $named = collect($passengers)
+            ->filter(fn (array $passenger) => trim((string) ($passenger['full_name'] ?? '')) !== '')
+            ->filter(fn (array $passenger) => ($passenger['service_type'] ?? Passenger::SERVICE_VISA_TRANSPORT) !== Passenger::SERVICE_TRANSPORT_ONLY);
+
+        if ($named->isEmpty()) {
+            return max($passengerCount, 0);
+        }
+
+        if ($chargeChildFare) {
+            return $named->count();
+        }
+
+        return $named->filter(fn (array $passenger) => $this->ageBand(
+            $passenger['date_of_birth'] ?? null,
+            $travelDate,
+            $passenger['imported_age'] ?? null,
+        ) === 'adult')->count();
+    }
+
+    /** @return array{passenger_count:int, sale:float, cost:float, retail_rate:float, cost_rate:float, charge_child_fare:bool} */
+    public function standardBusPricingForGroup(VisaGroup $group, VisaVendor $provider): array
+    {
+        $passengers = $group->passengers()->get([
+            'full_name', 'date_of_birth', 'imported_age', 'service_type',
+        ])->toArray();
+        $count = $this->standardBusBillablePassengerCount(
+            $passengers,
+            optional($group->travel_date)->toDateString(),
+            (int) $group->passenger_count,
+            (bool) $provider->charge_child_fare,
+        );
+        $retailRate = (float) $provider->standard_bus_retail_amount;
+        $costRate = (float) $provider->standard_bus_cost_amount;
+
+        return [
+            'passenger_count' => $count,
+            'sale' => round($retailRate * $count, 2),
+            'cost' => round($costRate * $count, 2),
+            'retail_rate' => $retailRate,
+            'cost_rate' => $costRate,
+            'charge_child_fare' => (bool) $provider->charge_child_fare,
+        ];
     }
 
     private function resolveTransportItems(string $companyId, array $items, array $passengers, int $fallbackPassengerCount): array

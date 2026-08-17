@@ -133,8 +133,7 @@ class DemoTravelAgencySeeder extends Seeder
         ]));
 
         // ---- Vendors ------------------------------------------------------------
-        // The visa vendor's per-passenger rates ARE the group pricing. The bus
-        // portion carved out of the visa cost is billed by the transport provider.
+        // Visa and standard-bus rates are independent supplier prices.
         $visaVendor = VisaVendor::create([
             'company_id' => $company->id,
             'vendor_number' => 'VIS-0001',
@@ -146,7 +145,6 @@ class DemoTravelAgencySeeder extends Seeder
             'adult_cost_amount' => 44_000,
             'child_retail_amount' => 38_000,
             'child_cost_amount' => 32_000,
-            'included_bus_cost_amount' => 6_000,
             'is_default' => true,
             'is_active' => true,
         ]);
@@ -157,8 +155,10 @@ class DemoTravelAgencySeeder extends Seeder
             'name' => 'Safar Coaches',
             'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
             'city' => 'Makkah',
-            'provides_mandatory_transport' => true,
             'is_company_owned' => false,
+            'standard_bus_retail_amount' => 7_500,
+            'standard_bus_cost_amount' => 6_000,
+            'charge_child_fare' => true,
             'is_active' => true,
         ]);
 

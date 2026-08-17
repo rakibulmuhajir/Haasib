@@ -81,9 +81,9 @@ class VisaGroupController extends Controller
         $memberAgentId = $this->memberAgentId($company->id, $request);
         $isMember = $this->isMember($company->id, $request);
         $hidesFinancials = $this->access->hidesFinancialData($company->id, $request->user());
-        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'vendor_number', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount', 'included_bus_cost_amount']);
+        $vendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'vendor_number', 'is_default', 'adult_retail_amount', 'adult_cost_amount', 'child_retail_amount', 'child_cost_amount']);
         $defaultVendor = $vendors->firstWhere('is_default', true);
-        $transportVendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']);
+        $transportVendors = VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned', 'standard_bus_retail_amount', 'standard_bus_cost_amount', 'charge_child_fare']);
         $transportFares = TransportFare::where('company_id', $company->id)->where('is_active', true)->with(['transportVendor:id,name,is_company_owned', 'service:id,name,vehicle_type,pax_capacity', 'sector:id,code,name', 'package:id,name'])->orderBy('name')->get();
         if ($hidesFinancials) {
             $vendors->each->makeHidden([
@@ -91,7 +91,6 @@ class VisaGroupController extends Controller
                 'adult_cost_amount',
                 'child_retail_amount',
                 'child_cost_amount',
-                'included_bus_cost_amount',
             ]);
             $transportVendors = collect();
             $transportFares->each(function (TransportFare $fare) {
@@ -284,8 +283,8 @@ class VisaGroupController extends Controller
             'group' => $record,
             'requiresOverrideReason' => ! $this->access->isAgentMember($company->id, $request->user()) && $this->access->groupHasStarted($record),
             'canManageVendors' => $canManageVendors,
-            'vendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default', 'provides_mandatory_transport', 'mandatory_transport_vendor_id']) : [],
-            'transportVendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned']) : [],
+            'vendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', '!=', VisaVendor::TYPE_TRANSPORT_PROVIDER)->withCompleteVisaRates()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']) : [],
+            'transportVendors' => $canManageVendors ? VisaVendor::where('company_id', $company->id)->where('is_active', true)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orderBy('name')->get(['id', 'name', 'is_company_owned', 'standard_bus_retail_amount', 'standard_bus_cost_amount', 'charge_child_fare']) : [],
         ]);
     }
 

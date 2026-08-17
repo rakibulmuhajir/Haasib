@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\GroupTransportItem;
+use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\UmrahCoreService;
@@ -105,7 +106,7 @@ test('mandatory and specialized transport costs belong to their transport provid
         ->and($statement['closing_balance'])->toBe(520.0);
 });
 
-test('group vendors resolve from the company default and its transport mapping', function () {
+test('group vendors resolve visa and transport suppliers independently', function () {
     $user = User::factory()->create();
     $company = Company::create([
         'name' => 'Vendor Defaults Test',
@@ -127,7 +128,6 @@ test('group vendors resolve from the company default and its transport mapping',
         'name' => 'Default Visa',
         'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
         'is_default' => true,
-        'mandatory_transport_vendor_id' => $transportVendor->id,
     ]);
 
     $resolved = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
@@ -139,24 +139,10 @@ test('group vendors resolve from the company default and its transport mapping',
     expect($resolved['vendor_id'])->toBe($visaVendor->id)
         ->and($resolved['mandatory_transport_vendor_id'])->toBe($transportVendor->id);
 
-    $visaVendor->update(['is_default' => false]);
-    $combinedVendor = VisaVendor::create([
-        'company_id' => $company->id,
-        'vendor_number' => 'VIS-COMBINED',
-        'name' => 'Visa and Transport',
-        'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER,
-        'is_default' => true,
-        'provides_mandatory_transport' => true,
-    ]);
-    $combined = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
-        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
-    ], true);
-
-    expect($combined['vendor_id'])->toBe($combinedVendor->id)
-        ->and($combined['mandatory_transport_vendor_id'])->toBe($combinedVendor->id);
+    expect($resolved['vendor_id'])->not->toBe($resolved['mandatory_transport_vendor_id']);
 });
 
-test('zero included bus cost does not require a transport provider', function () {
+test('standard bus requires an independent transport provider regardless of visa rate', function () {
     $company = transportSupplierCompany('transport-zero-bus-cost');
     $visaVendor = VisaVendor::create([
         'company_id' => $company->id,
@@ -167,10 +153,43 @@ test('zero included bus cost does not require a transport provider', function ()
         'included_bus_cost_amount' => 0,
     ]);
 
-    $resolved = app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
+    expect(fn () => app(UmrahCoreService::class)->resolveGroupVendors($company->id, [
         'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
-    ], true);
+    ], true))->toThrow(\Illuminate\Validation\ValidationException::class);
+});
 
-    expect($resolved['vendor_id'])->toBe($visaVendor->id)
-        ->and($resolved['mandatory_transport_vendor_id'])->toBeNull();
+test('standard bus pricing excludes children when the provider does not charge child fare', function () {
+    $company = transportSupplierCompany('transport-child-fare');
+    $agent = Agent::create(['company_id' => $company->id, 'agent_number' => 'AGT-CHILD', 'name' => 'Child Fare Agent']);
+    $visaVendor = VisaVendor::create(['company_id' => $company->id, 'vendor_number' => 'VIS-CHILD', 'name' => 'Visa Supplier', 'vendor_type' => VisaVendor::TYPE_VISA_PROVIDER]);
+    $provider = VisaVendor::create([
+        'company_id' => $company->id,
+        'vendor_number' => 'TRN-CHILD',
+        'name' => 'Bus Supplier',
+        'vendor_type' => VisaVendor::TYPE_TRANSPORT_PROVIDER,
+        'standard_bus_retail_amount' => 100,
+        'standard_bus_cost_amount' => 80,
+        'charge_child_fare' => false,
+    ]);
+    $group = VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'vendor_id' => $visaVendor->id,
+        'mandatory_transport_vendor_id' => $provider->id,
+        'group_number' => 'UGR-CHILD',
+        'name' => 'Child Fare Group',
+        'status' => VisaGroup::STATUS_VISA_APPROVED,
+        'travel_date' => '2026-08-01',
+        'transport_required' => true,
+        'transport_mode' => VisaGroup::TRANSPORT_STANDARD_BUS,
+        'passenger_count' => 2,
+    ]);
+    Passenger::create(['company_id' => $company->id, 'visa_group_id' => $group->id, 'full_name' => 'Adult Passenger', 'imported_age' => 30, 'service_type' => Passenger::SERVICE_VISA_TRANSPORT]);
+    Passenger::create(['company_id' => $company->id, 'visa_group_id' => $group->id, 'full_name' => 'Child Passenger', 'imported_age' => 8, 'service_type' => Passenger::SERVICE_VISA_TRANSPORT]);
+
+    $pricing = app(UmrahCoreService::class)->standardBusPricingForGroup($group, $provider);
+
+    expect($pricing['passenger_count'])->toBe(1)
+        ->and($pricing['sale'])->toBe(100.0)
+        ->and($pricing['cost'])->toBe(80.0);
 });

@@ -4,7 +4,6 @@ namespace App\Modules\Umrah\Http\Requests;
 
 use App\Constants\Permissions;
 use App\Modules\Umrah\Models\VisaVendor;
-use App\Services\CompanyContextService;
 use Illuminate\Validation\Rule;
 
 class UpdateVisaVendorRequest extends UmrahFormRequest
@@ -16,12 +15,6 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
 
     public function rules(): array
     {
-        $companyId = app(CompanyContextService::class)->getCompanyId();
-        $requiresVisaRates = $this->input('vendor_type') !== VisaVendor::TYPE_TRANSPORT_PROVIDER;
-        $requiresTransportProvider = $requiresVisaRates
-            && ! $this->boolean('provides_mandatory_transport')
-            && (float) $this->input('included_bus_cost_amount', 0) > 0;
-
         return [
             'vendor_number' => [
                 'nullable',
@@ -30,26 +23,16 @@ class UpdateVisaVendorRequest extends UmrahFormRequest
                 $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This vendor number is already used.', (string) $this->route('vendor')),
             ],
             'name' => ['required', 'string', 'max:255'],
-            'vendor_type' => ['required', Rule::in(array_keys(VisaVendor::TYPES))],
-            'is_company_owned' => ['sometimes', 'boolean'],
+            'vendor_type' => ['required', Rule::in([VisaVendor::TYPE_GOVERNMENT, VisaVendor::TYPE_VISA_PROVIDER, VisaVendor::TYPE_OTHER])],
             'is_default' => ['sometimes', 'boolean'],
-            'provides_mandatory_transport' => ['sometimes', 'boolean'],
-            'mandatory_transport_vendor_id' => [
-                Rule::requiredIf($requiresTransportProvider),
-                'nullable',
-                'uuid',
-                Rule::notIn([(string) $this->route('vendor')]),
-                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->where('is_active', true)->whereNull('deleted_at')),
-            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'logo_url' => ['nullable', 'url:http,https', 'max:500'],
-            'adult_retail_amount' => $this->visaRateRules($requiresVisaRates),
-            'adult_cost_amount' => $this->visaRateRules($requiresVisaRates),
-            'child_retail_amount' => $this->visaRateRules($requiresVisaRates),
-            'child_cost_amount' => $this->visaRateRules($requiresVisaRates),
-            'included_bus_cost_amount' => ['nullable', 'numeric', 'min:0'],
+            'adult_retail_amount' => $this->visaRateRules(true),
+            'adult_cost_amount' => $this->visaRateRules(true),
+            'child_retail_amount' => $this->visaRateRules(true),
+            'child_cost_amount' => $this->visaRateRules(true),
             'notes' => ['nullable', 'string'],
         ];
     }

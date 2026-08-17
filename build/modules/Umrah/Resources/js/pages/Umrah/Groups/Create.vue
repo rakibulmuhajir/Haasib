@@ -147,8 +147,6 @@ const vendorForm = useForm({
     name: '',
     vendor_type: 'visa_provider',
     is_default: false,
-    provides_mandatory_transport: false,
-    mandatory_transport_vendor_id: 'none',
     phone: '',
     email: '',
     city: '',
@@ -156,7 +154,6 @@ const vendorForm = useForm({
     adult_cost_amount: '0',
     child_retail_amount: '0',
     child_cost_amount: '0',
-    included_bus_cost_amount: '50',
     notes: '',
 });
 const hasRequiredVendorRates = computed(() =>
@@ -210,16 +207,6 @@ const selectedVendor = computed(() =>
     props.vendors.find((item) => item.id === form.vendor_id),
 );
 const pricingVendor = computed(() => selectedVendor.value || props.agentVisaPricing);
-watch(
-    selectedVendor,
-    (vendor) => {
-        if (!vendor || props.isAgent) return;
-        form.mandatory_transport_vendor_id = vendor.provides_mandatory_transport
-            ? vendor.id
-            : vendor.mandatory_transport_vendor_id || 'none';
-    },
-    { immediate: true },
-);
 const defaultNationality = computed(
     () => selectedAgent.value?.country || 'Pakistan',
 );
@@ -231,11 +218,9 @@ const visaPassengers = computed(() =>
         (passenger) => passenger.service_type !== 'transport_only',
     ),
 );
-const includedBusDeduction = computed(() =>
-    Math.min(
-        Number(calculateVisaPricing().cost || 0),
-        visaPassengers.value.length *
-            Number(selectedVendor.value?.included_bus_cost_amount || 0),
+const selectedTransportVendor = computed(() =>
+    props.transportVendors.find(
+        (item) => item.id === form.mandatory_transport_vendor_id,
     ),
 );
 
@@ -359,20 +344,38 @@ const calculateVisaPricing = () => {
     );
 };
 
+const standardBusPricing = computed(() => {
+    if (form.transport_mode !== 'standard_bus' || !selectedTransportVendor.value)
+        return { sale: 0, cost: 0, passengers: 0 };
+
+    const chargeChildren = Boolean(selectedTransportVendor.value.charge_child_fare);
+    const passengers = namedPassengers.value.length
+        ? visaPassengers.value.filter(
+              (passenger) => chargeChildren || ageBand(passenger) === 'adult',
+          ).length
+        : Math.max(Number(form.passenger_count || 0), 0);
+
+    return {
+        passengers,
+        sale: passengers * Number(selectedTransportVendor.value.standard_bus_retail_amount || 0),
+        cost: passengers * Number(selectedTransportVendor.value.standard_bus_cost_amount || 0),
+    };
+});
+
 const updateVisaPricing = () => {
     const pricing = calculateVisaPricing();
     form.visa_sale_amount = String(pricing.sale.toFixed(2));
-    form.visa_cost_amount = String(
-        (pricing.cost - includedBusDeduction.value).toFixed(2),
-    );
+    form.visa_cost_amount = String(pricing.cost.toFixed(2));
     form.transport_amount = String(
-        (transportFareTotals.value.sale + transportOnlyCharges.value).toFixed(
+        ((form.transport_mode === 'standard_bus'
+            ? standardBusPricing.value.sale
+            : transportFareTotals.value.sale) + transportOnlyCharges.value).toFixed(
             2,
         ),
     );
     form.transport_cost_amount = String(
         (form.transport_mode === 'standard_bus'
-            ? includedBusDeduction.value
+            ? standardBusPricing.value.cost
             : transportFareTotals.value.cost
         ).toFixed(2),
     );
@@ -404,7 +407,7 @@ watch(
     updateVisaPricing,
     { deep: true },
 );
-watch(() => [form.transport_mode, form.transport_items], updateVisaPricing, {
+watch(() => [form.transport_mode, form.mandatory_transport_vendor_id, form.transport_items], updateVisaPricing, {
     deep: true,
 });
 
@@ -532,27 +535,16 @@ const createAgent = () => {
 };
 
 const createVendor = () => {
-    vendorForm
-        .transform((data) => ({
-            ...data,
-            mandatory_transport_vendor_id:
-                data.provides_mandatory_transport || data.mandatory_transport_vendor_id === 'none'
-                    ? null
-                    : data.mandatory_transport_vendor_id,
-        }))
-        .post(`/${props.company.slug}/umrah/vendors/quick-store`, {
+    vendorForm.post(`/${props.company.slug}/umrah/vendors/quick-store`, {
         preserveScroll: true,
         onSuccess: () => {
             vendorForm.reset();
             vendorForm.vendor_type = 'visa_provider';
             vendorForm.is_default = false;
-            vendorForm.provides_mandatory_transport = false;
-            vendorForm.mandatory_transport_vendor_id = 'none';
             vendorForm.adult_retail_amount = '0';
             vendorForm.adult_cost_amount = '0';
             vendorForm.child_retail_amount = '0';
             vendorForm.child_cost_amount = '0';
-            vendorForm.included_bus_cost_amount = '50';
             quickVendorOpen.value = false;
             router.reload({ only: ['vendors'] });
         },
@@ -1022,40 +1014,11 @@ const submit = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div v-if="canManageSetup" class="space-y-2">
-                                    <Label
-                                        >Included Standard Bus Cost per
-                                        Passenger</Label
-                                    >
-                                    <Input
-                                        v-model="
-                                            vendorForm.included_bus_cost_amount
-                                        "
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                    />
-                                </div>
                                 <div class="space-y-3 rounded-md border p-3">
                                     <Label class="flex items-center gap-3">
                                         <Checkbox v-model="vendorForm.is_default" />
                                         <span>Default visa vendor</span>
                                     </Label>
-                                    <Label class="flex items-center gap-3">
-                                        <Checkbox v-model="vendorForm.provides_mandatory_transport" />
-                                        <span>Also provides mandatory bus transport</span>
-                                    </Label>
-                                    <div v-if="!vendorForm.provides_mandatory_transport" class="space-y-2">
-                                        <Label>Mandatory transport provider</Label>
-                                        <Select v-model="vendorForm.mandatory_transport_vendor_id">
-                                            <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">Select provider</SelectItem>
-                                                <SelectItem v-for="vendor in transportVendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p v-if="vendorForm.errors.mandatory_transport_vendor_id" class="text-xs text-destructive">{{ vendorForm.errors.mandatory_transport_vendor_id }}</p>
-                                    </div>
                                 </div>
                                 <div class="flex justify-end gap-2">
                                     <Button
@@ -1149,10 +1112,10 @@ const submit = () => {
                                 class="space-y-3 rounded-md border p-3 text-sm"
                             >
                                 <div class="font-medium">
-                                    Mandatory bus transport included
+                                    Standard bus transport
                                 </div>
                                 <div class="mt-1 text-muted-foreground">
-                                    The included amount is removed from the visa vendor payable and assigned to the provider below. Company-owned providers remain payable.
+                                    Select the provider separately. Its sale and cost are added independently of the visa rates.
                                 </div>
                                 <div class="space-y-2">
                                     <Label>Mandatory transport provider</Label>
@@ -1171,13 +1134,6 @@ const submit = () => {
                                             >
                                                 {{ vendor.name }}<span v-if="vendor.is_company_owned"> · Company-owned</span>
                                             </SelectItem>
-                                            <SelectItem
-                                                v-for="vendor in vendors.filter((item) => item.provides_mandatory_transport)"
-                                                :key="vendor.id"
-                                                :value="vendor.id"
-                                            >
-                                                {{ vendor.name }} · Provides transport
-                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p
@@ -1188,11 +1144,15 @@ const submit = () => {
                                     </p>
                                 </div>
                                 <div v-if="canViewAccounting" class="flex justify-between border-t pt-3">
-                                    <span>Provider payable</span>
+                                    <span>Transport sale ({{ standardBusPricing.passengers }} PAX)</span>
                                     <MoneyText
-                                        :amount="includedBusDeduction"
+                                        :amount="standardBusPricing.sale"
                                         :currency="company.base_currency"
                                     />
+                                </div>
+                                <div v-if="canViewAccounting" class="flex justify-between">
+                                    <span>Provider payable</span>
+                                    <MoneyText :amount="standardBusPricing.cost" :currency="company.base_currency" />
                                 </div>
                             </div>
 
@@ -1419,10 +1379,9 @@ const submit = () => {
                                 >
                                     <div class="flex justify-between">
                                         <span
-                                            >Included bus cost removed from visa
-                                            cost</span
+                                            >Specialized transport supplier cost</span
                                         ><MoneyText
-                                            :amount="includedBusDeduction"
+                                            :amount="transportFareTotals.cost"
                                             :currency="company.base_currency"
                                         />
                                     </div>

@@ -23,6 +23,8 @@ const props = defineProps<{
         rows: any[];
     };
     filters: { date_from?: string; date_to?: string };
+    backUrl?: string;
+    statementUrl?: string;
 }>();
 
 const filter = reactive({
@@ -31,7 +33,7 @@ const filter = reactive({
 });
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
-    { title: 'Vendors', href: `/${props.company.slug}/umrah/vendors` },
+    { title: 'Vendors', href: props.backUrl || `/${props.company.slug}/umrah/vendors` },
     { title: props.vendor.name },
 ];
 const query = () =>
@@ -44,7 +46,8 @@ const applyFilters = () =>
     );
 const exportPdf = () => {
     const params = new URLSearchParams(query()).toString();
-    window.location.href = `/${props.company.slug}/umrah/vendors/${props.vendor.id}/statement.pdf${params ? `?${params}` : ''}`;
+    const url = props.statementUrl || `/${props.company.slug}/umrah/vendors/${props.vendor.id}/statement.pdf`;
+    window.location.href = `${url}${params ? `?${params}` : ''}`;
 };
 </script>
 
@@ -57,7 +60,7 @@ const exportPdf = () => {
         :icon="Truck"
     >
         <template #actions>
-            <Button variant="outline" @click="router.get(`/${company.slug}/umrah/vendors`)">
+            <Button variant="outline" @click="router.get(backUrl || `/${company.slug}/umrah/vendors`)">
                 <ArrowLeft class="mr-2 h-4 w-4" />Back
             </Button>
             <Button @click="exportPdf"><FileDown class="mr-2 h-4 w-4" />PDF</Button>

@@ -4,6 +4,7 @@ namespace App\Modules\Umrah\Services;
 
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\VisaGroup;
+use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Models\Voucher;
 use App\Modules\Umrah\Models\VoucherPassenger;
 use Illuminate\Support\Collection;
@@ -177,12 +178,36 @@ class GroupAccountingService
                 'transport_mode' => $group->transport_mode,
             ], false);
 
+            $transportSale = round((float) $data['transport_amount'], 2);
+            $transportSnapshot = [];
+            if ($group->transport_mode === VisaGroup::TRANSPORT_STANDARD_BUS && $vendors['mandatory_transport_vendor_id']) {
+                $provider = VisaVendor::where('company_id', $group->company_id)
+                    ->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)
+                    ->findOrFail($vendors['mandatory_transport_vendor_id']);
+                $pricing = $this->core->standardBusPricingForGroup($group, $provider);
+                $transportOnlySale = (float) $group->passengers()
+                    ->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)
+                    ->sum('transport_charge_amount');
+                $transportSale = round($pricing['sale'] + $transportOnlySale, 2);
+                $transportSnapshot = [
+                    'standard_bus_retail_amount' => $pricing['retail_rate'],
+                    'standard_bus_cost_amount' => $pricing['cost_rate'],
+                    'standard_bus_charge_child_fare' => $pricing['charge_child_fare'],
+                    'standard_bus_billable_passenger_count' => $pricing['passenger_count'],
+                    'mandatory_transport_cost_amount' => $pricing['cost'],
+                    'transport_cost_amount' => $pricing['cost'],
+                    'included_bus_cost_per_passenger' => 0,
+                    'included_bus_cost_deduction' => 0,
+                ];
+            }
+
             $group->update([
                 'vendor_id' => $vendors['vendor_id'],
                 'mandatory_transport_vendor_id' => $vendors['mandatory_transport_vendor_id'],
                 'visa_sale_amount' => round((float) $data['visa_sale_amount'], 2),
-                'transport_amount' => round((float) $data['transport_amount'], 2),
+                'transport_amount' => $transportSale,
                 'discount_amount' => round((float) $data['discount_amount'], 2),
+                ...$transportSnapshot,
             ]);
             $group = $this->core->recalculateGroup($group->fresh());
             $this->core->postGroupFinancialAdjustment($group, $before, $data['reason']);

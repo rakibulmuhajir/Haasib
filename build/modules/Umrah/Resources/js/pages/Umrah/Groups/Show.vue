@@ -587,7 +587,7 @@ const addPayment = () =>
                                 v-if="group.mandatory_transport_vendor"
                                 class="text-xs text-muted-foreground"
                             >
-                                Provider:
+                                Vendor:
                                 {{ group.mandatory_transport_vendor.name }}
                             </div>
                             <div

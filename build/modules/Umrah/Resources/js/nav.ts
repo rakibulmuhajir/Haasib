@@ -169,7 +169,7 @@ export const umrahNav: ModuleNavConfig = {
                                   icon: FileText,
                               },
                               {
-                                  title: 'Transport Providers',
+                                  title: 'Transport Vendors',
                                   href: `/${slug}/umrah/transport-providers`,
                                   icon: Bus,
                               },

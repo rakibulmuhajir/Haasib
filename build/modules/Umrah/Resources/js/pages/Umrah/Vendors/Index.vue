@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -31,10 +32,10 @@ import {
     Eye,
     FileText,
     Pencil,
+    Plus,
     Power,
     RotateCcw,
     Save,
-    X,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -90,6 +91,7 @@ const hasRequiredVisaRates = computed(
 );
 
 const editingVendor = ref<any | null>(null);
+const vendorDialogOpen = ref(false);
 const statusForm = useForm({ is_active: false });
 const updateStatus = (vendor: any) => {
     statusForm.is_active = !vendor.is_active;
@@ -145,6 +147,11 @@ const resetForm = () => {
     form.notes = '';
 };
 
+const startCreate = () => {
+    resetForm();
+    vendorDialogOpen.value = true;
+};
+
 const startEdit = (vendor: any) => {
     editingVendor.value = vendor;
     form.clearErrors();
@@ -165,6 +172,12 @@ const startEdit = (vendor: any) => {
         vendor.child_cost_amount ?? vendor.adult_cost_amount ?? 0,
     );
     form.notes = vendor.notes || '';
+    vendorDialogOpen.value = true;
+};
+
+const closeDialog = () => {
+    vendorDialogOpen.value = false;
+    resetForm();
 };
 
 const payload = (data: any) => ({
@@ -183,9 +196,7 @@ const payload = (data: any) => ({
 const submit = () => {
     const options = {
         preserveScroll: true,
-        onSuccess: () => {
-            resetForm();
-        },
+        onSuccess: closeDialog,
         onError: () =>
             toast.error(
                 editingVendor.value
@@ -212,22 +223,21 @@ const submit = () => {
     <Head title="Visa Vendors" />
     <PageShell
         title="Visa Vendors"
-        description="Visa suppliers and transport providers with rates and payable balances."
+        description="Visa vendors with independent adult and child rates and payable balances."
         :breadcrumbs="breadcrumbs"
         :icon="FileText"
     >
-        <div
-            class="grid gap-6"
-            :class="
-                canManageVendors ? 'lg:grid-cols-[520px_minmax(0,1fr)]' : ''
-            "
-        >
-            <Card v-if="canManageVendors" class="min-w-0">
-                <CardHeader
-                    ><CardTitle>{{
-                        editingVendor ? 'Edit Vendor' : 'Add Vendor'
-                    }}</CardTitle></CardHeader
-                >
+        <div class="space-y-4">
+            <div v-if="canManageVendors" class="flex justify-end">
+                <Button type="button" @click="startCreate"><Plus class="mr-2 h-4 w-4" />Add Visa Vendor</Button>
+            </div>
+            <Dialog v-model:open="vendorDialogOpen" @update:open="(open) => { if (!open && !form.processing) resetForm() }">
+                <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{{ editingVendor ? 'Edit Visa Vendor' : 'Add Visa Vendor' }}</DialogTitle>
+                        <DialogDescription>Maintain visa selling prices and supplier costs separately from transport fares.</DialogDescription>
+                    </DialogHeader>
+            <Card v-if="canManageVendors" class="min-w-0 border-0 shadow-none">
                 <CardContent>
                     <form class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
@@ -258,11 +268,9 @@ const submit = () => {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div class="space-y-3 rounded-md border p-3">
-                            <Label class="flex items-center gap-3">
-                                <Checkbox v-model="form.is_default" />
-                                <span>Default visa vendor for new groups</span>
-                            </Label>
+                        <div class="flex items-center gap-3 rounded-md border p-3">
+                            <Checkbox id="visa-vendor-default" v-model="form.is_default" />
+                            <Label for="visa-vendor-default">Default visa vendor for new groups</Label>
                         </div>
                         <div class="grid gap-3 md:grid-cols-2">
                             <div class="space-y-2">
@@ -381,19 +389,18 @@ const submit = () => {
                         </div>
                         <div class="grid gap-2 sm:grid-cols-2">
                             <Button
-                                v-if="editingVendor"
                                 type="button"
                                 variant="outline"
-                                @click="resetForm"
-                                ><X class="mr-2 h-4 w-4" />Cancel</Button
+                                :disabled="form.processing"
+                                @click="closeDialog"
+                                >Cancel</Button
                             >
                             <Button
                                 type="submit"
-                                :class="editingVendor ? '' : 'sm:col-span-2'"
                                 :disabled="
                                     form.processing || !hasRequiredVisaRates
                                 "
-                                ><Save class="mr-2 h-4 w-4" />{{
+                                ><span v-if="form.processing" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /><Save v-else class="mr-2 h-4 w-4" />{{
                                     editingVendor
                                         ? 'Save Changes'
                                         : 'Save Vendor'
@@ -403,6 +410,8 @@ const submit = () => {
                     </form>
                 </CardContent>
             </Card>
+                </DialogContent>
+            </Dialog>
 
             <Card class="min-w-0">
                 <CardHeader><CardTitle>Vendor List</CardTitle></CardHeader>

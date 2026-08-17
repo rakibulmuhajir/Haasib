@@ -1115,18 +1115,18 @@ const submit = () => {
                                     Standard bus transport
                                 </div>
                                 <div class="mt-1 text-muted-foreground">
-                                    Select the provider separately. Its sale and cost are added independently of the visa rates.
+                                    Select the transport vendor separately. Its sale and cost are added independently of the visa rates.
                                 </div>
                                 <div class="space-y-2">
-                                    <Label>Mandatory transport provider</Label>
+                                    <Label>Mandatory transport vendor</Label>
                                     <Select
                                         v-model="form.mandatory_transport_vendor_id"
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select provider" />
+                                            <SelectValue placeholder="Select transport vendor" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">Select provider</SelectItem>
+                                            <SelectItem value="none">Select transport vendor</SelectItem>
                                             <SelectItem
                                                 v-for="vendor in transportVendors"
                                                 :key="vendor.id"

@@ -40,7 +40,7 @@ class TransportProviderController extends Controller
         $company = app(CurrentCompany::class)->get();
         VisaVendor::create($this->payload($company->id, $request->validated()));
 
-        return back()->with('success', 'Transport provider created successfully.');
+        return back()->with('success', 'Transport vendor created successfully.');
     }
 
     public function update(UpdateTransportProviderRequest $request, string $companySlug, string $transportProvider): RedirectResponse
@@ -49,7 +49,7 @@ class TransportProviderController extends Controller
         $provider = $this->provider($company->id, $transportProvider);
         $provider->update($this->payload($company->id, $request->validated(), $provider));
 
-        return back()->with('success', 'Transport provider updated successfully.');
+        return back()->with('success', 'Transport vendor updated successfully.');
     }
 
     public function updateStatus(UpdateVisaVendorStatusRequest $request, string $companySlug, string $transportProvider): RedirectResponse
@@ -58,11 +58,11 @@ class TransportProviderController extends Controller
         $provider = $this->provider($company->id, $transportProvider);
         $active = (bool) $request->validated('is_active');
         if (! $active && TransportFare::where('company_id', $company->id)->where('transport_vendor_id', $provider->id)->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages(['vendor' => 'Deactivate this provider\'s active fares first.']);
+            throw ValidationException::withMessages(['vendor' => 'Deactivate this transport vendor\'s active fares first.']);
         }
         $provider->update(['is_active' => $active]);
 
-        return back()->with('success', $active ? 'Transport provider reactivated.' : 'Transport provider deactivated.');
+        return back()->with('success', $active ? 'Transport vendor reactivated.' : 'Transport vendor deactivated.');
     }
 
     public function show(VendorStatementRequest $request, string $companySlug, string $transportProvider): Response

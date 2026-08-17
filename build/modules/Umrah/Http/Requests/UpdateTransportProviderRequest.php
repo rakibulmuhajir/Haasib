@@ -15,7 +15,7 @@ class UpdateTransportProviderRequest extends UmrahFormRequest
     public function rules(): array
     {
         return [
-            'vendor_number' => ['nullable', 'string', 'max:50', $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This provider number is already used.', (string) $this->route('transportProvider'))],
+            'vendor_number' => ['nullable', 'string', 'max:50', $this->uniqueForCompany(VisaVendor::class, 'vendor_number', 'This transport vendor number is already used.', (string) $this->route('transportProvider'))],
             'name' => ['required', 'string', 'max:255'],
             'is_company_owned' => ['sometimes', 'boolean'],
             'phone' => ['nullable', 'string', 'max:50'],

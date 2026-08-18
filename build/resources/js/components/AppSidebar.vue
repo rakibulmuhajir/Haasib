@@ -10,13 +10,9 @@ import {
     SidebarHeader,
     SidebarRail,
 } from '@/components/ui/sidebar';
-import { useAppearance } from '@/composables/useAppearance';
-import { useLexicon } from '@/composables/useLexicon';
-import { getSidebarGroups } from '@/navigation/registry';
-import type { NavGroup } from '@/types';
-import { usePage } from '@inertiajs/vue3';
+import { useAppearanceToggle } from '@/composables/useAppearanceToggle';
+import { useNavGroups } from '@/composables/useNavGroups';
 import { Laptop2, Moon, SunMedium } from 'lucide-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface Props {
     variant?: 'inset' | 'sidebar' | 'floating';
@@ -28,117 +24,9 @@ withDefaults(defineProps<Props>(), {
     collapsible: 'icon',
 });
 
-const page = usePage();
-const authProps = computed(() => (page.props.auth as any) || {});
-const userCompanies = computed(() => authProps.value.companies || []);
-const companyFromUrl = computed(() => {
-    const match = page.url.match(/^\/([^/]+)/);
-    const possibleSlug = match ? match[1] : null;
-
-    return possibleSlug
-        ? userCompanies.value.find(
-              (company: any) => company.slug === possibleSlug,
-          ) || null
-        : null;
-});
-const currentCompany = computed(
-    () => companyFromUrl.value || authProps.value.currentCompany || null,
-);
-const isFuelStationCompany = computed(() => {
-    const modules = currentCompany.value?.settings?.modules ?? {};
-    if (modules?.fuel_station === true) return true;
-
-    const code =
-        currentCompany.value?.industry_code ??
-        currentCompany.value?.industryCode ??
-        null;
-    const legacy = currentCompany.value?.industry ?? null;
-    return code === 'fuel_station' || legacy === 'fuel_station';
-});
-const isUmrahCompany = computed(() => {
-    const modules = currentCompany.value?.settings?.modules ?? {};
-    if (modules?.umrah === true) return true;
-
-    const code =
-        currentCompany.value?.industry_code ??
-        currentCompany.value?.industryCode ??
-        null;
-    const legacy = currentCompany.value?.industry ?? null;
-    return (
-        ['umrah', 'travel'].includes(code) ||
-        ['umrah', 'travel'].includes(legacy)
-    );
-});
-const isInventoryEnabled = computed(() => {
-    const modules = currentCompany.value?.settings?.modules ?? {};
-    return modules?.inventory !== false;
-});
-const isPayrollEnabled = computed(() => {
-    const modules = currentCompany.value?.settings?.modules ?? {};
-    return modules?.payroll !== false;
-});
-const modeKey = computed(() => 'owner');
-
-const { t } = useLexicon();
-
-const navGroups = computed<NavGroup[]>(() => {
-    const slug = currentCompany.value?.slug;
-
-    const tOwner = (key: string) => t(key, 'owner');
-
-    return getSidebarGroups({
-        slug: slug ?? null,
-        mode: 'owner',
-        isFuelStationCompany: isFuelStationCompany.value,
-        isUmrahCompany: isUmrahCompany.value,
-        isInventoryEnabled: isInventoryEnabled.value,
-        isPayrollEnabled: isPayrollEnabled.value,
-        currentCompanyRole: authProps.value.currentCompanyRole || null,
-        t: tOwner,
-    });
-});
-
-const { appearance, updateAppearance } = useAppearance();
-const systemPrefersDark = ref(false);
-const removeMediaListener = ref<(() => void) | null>(null);
-
-onMounted(() => {
-    if (typeof window === 'undefined') return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    systemPrefersDark.value = mediaQuery.matches;
-
-    const handleChange = (event: MediaQueryListEvent) => {
-        systemPrefersDark.value = event.matches;
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    removeMediaListener.value = () =>
-        mediaQuery.removeEventListener('change', handleChange);
-});
-
-onBeforeUnmount(() => {
-    removeMediaListener.value?.();
-});
-
-const isDark = computed(
-    () =>
-        appearance.value === 'dark' ||
-        (appearance.value === 'system' && systemPrefersDark.value),
-);
-
-const appearanceLabel = computed(() => {
-    if (appearance.value === 'system') {
-        return systemPrefersDark.value ? 'System: Dark' : 'System: Light';
-    }
-
-    return appearance.value === 'dark' ? 'Dark mode' : 'Light mode';
-});
-
-const toggleAppearance = () => {
-    updateAppearance(isDark.value ? 'light' : 'dark');
-};
-
-const setSystem = () => updateAppearance('system');
+const { navGroups } = useNavGroups();
+const { appearance, isDark, appearanceLabel, toggleAppearance, setSystem } =
+    useAppearanceToggle();
 </script>
 
 <template>
@@ -148,7 +36,7 @@ const setSystem = () => updateAppearance('system');
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMainCollapsible :key="modeKey" :groups="navGroups" />
+            <NavMainCollapsible :groups="navGroups" />
         </SidebarContent>
 
         <SidebarFooter class="border-t border-sidebar-border/80 bg-sidebar/95">

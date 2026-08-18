@@ -1,10 +1,8 @@
 <script setup lang="ts">
+import CompanySwitcherItems from '@/components/CompanySwitcherItems.vue';
 import {
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -12,37 +10,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { router, usePage } from '@inertiajs/vue3';
-import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { useCompanySwitcher } from '@/composables/useCompanySwitcher';
+import { Building2, ChevronsUpDown } from 'lucide-vue-next';
 
-const page = usePage();
-const companies = computed(() => (page.props.auth as any)?.companies || []);
-const currentCompany = computed(() => {
-    const match = page.url.match(/^\/([^/]+)/);
-    const companyFromUrl = match
-        ? companies.value.find((company: any) => company.slug === match[1])
-        : null;
-
-    return companyFromUrl || (page.props.auth as any)?.currentCompany || null;
-});
-const canCreateCompanies = computed(() =>
-    Boolean((page.props.auth as any)?.canCreateCompanies),
-);
-
-const switchCompany = (slug: string) => {
-    router.post(
-        '/companies/switch',
-        { slug },
-        {
-            preserveScroll: true,
-        },
-    );
-};
-
-const createCompany = () => {
-    router.visit('/companies');
-};
+const { currentCompany } = useCompanySwitcher();
 </script>
 
 <template>
@@ -59,15 +30,11 @@ const createCompany = () => {
                         >
                             <Building2 class="size-4" />
                         </div>
-                        <div
-                            class="grid flex-1 text-left text-sm leading-tight"
-                        >
+                        <div class="grid flex-1 text-left text-sm leading-tight">
                             <span class="truncate font-semibold">
                                 {{ currentCompany?.name || 'No Company' }}
                             </span>
-                            <span
-                                class="truncate text-xs text-muted-foreground"
-                            >
+                            <span class="truncate text-xs text-muted-foreground">
                                 {{ currentCompany?.slug || 'Select company' }}
                             </span>
                         </div>
@@ -80,46 +47,7 @@ const createCompany = () => {
                     side="bottom"
                     :side-offset="4"
                 >
-                    <DropdownMenuLabel class="text-xs text-muted-foreground">
-                        Your Companies
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                        v-for="company in companies"
-                        :key="company.id"
-                        @click="switchCompany(company.slug)"
-                        class="gap-2 p-2"
-                    >
-                        <div
-                            class="flex size-6 items-center justify-center rounded-sm border"
-                        >
-                            <Building2 class="size-4 shrink-0" />
-                        </div>
-                        <div class="flex-1">
-                            <div class="font-medium">{{ company.name }}</div>
-                            <div class="text-xs text-muted-foreground">
-                                {{ company.slug }}
-                            </div>
-                        </div>
-                        <Check
-                            v-if="currentCompany?.id === company.id"
-                            class="size-4"
-                        />
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator v-if="canCreateCompanies" />
-                    <DropdownMenuItem
-                        v-if="canCreateCompanies"
-                        @click="createCompany"
-                        class="gap-2 p-2"
-                    >
-                        <div
-                            class="flex size-6 items-center justify-center rounded-md border border-dashed"
-                        >
-                            <Plus class="size-4" />
-                        </div>
-                        <div class="font-medium text-muted-foreground">
-                            Add Company
-                        </div>
-                    </DropdownMenuItem>
+                    <CompanySwitcherItems />
                 </DropdownMenuContent>
             </DropdownMenu>
         </SidebarMenuItem>

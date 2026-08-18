@@ -33,6 +33,8 @@ export type AppPageProps<
     quote: { message: string; author: string };
     auth: Auth;
     sidebarOpen: boolean;
+    /** Local only: offer the ledger skin preview switch. */
+    skinPreview?: boolean;
 };
 
 export interface User {

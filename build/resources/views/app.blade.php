@@ -41,6 +41,21 @@
             })();
         </script>
 
+        {{-- Ledger skin, applied before first paint for the same reason dark mode
+             is: a page that renders on white and then repaints onto paper is
+             worse than either. Local-only preview switch; see composables/useSkin.ts. --}}
+        <script>
+            (function() {
+                try {
+                    if (localStorage.getItem('skin') === 'ledger') {
+                        document.documentElement.setAttribute('data-skin', 'ledger');
+                    }
+                } catch (e) {
+                    // Private-browsing localStorage throws. No skin is a fine outcome.
+                }
+            })();
+        </script>
+
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
             html {
@@ -49,6 +64,17 @@
 
             html.dark {
                 background-color: oklch(0.145 0 0);
+            }
+
+            /* The skin repaints the page ground. Without these two rules the
+               hardcoded white above shows through above and below the app on a
+               short page, and the paper stops at the content edge. */
+            html[data-skin="ledger"] {
+                background-color: hsl(40 22% 98%);
+            }
+
+            html.dark[data-skin="ledger"] {
+                background-color: hsl(200 12% 7%);
             }
         </style>
 
@@ -59,7 +85,7 @@
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600|zilla-slab:500,600,700|ibm-plex-mono:400,500,600" rel="stylesheet" />
 
         @vite(['resources/js/app.ts'])
         @inertiaHead

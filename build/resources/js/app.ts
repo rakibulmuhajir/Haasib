@@ -4,6 +4,7 @@ import { createInertiaApp } from '@inertiajs/vue3'
 import type { DefineComponent } from 'vue'
 import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
+import { initializeSkin } from './composables/useSkin'
 import { useFlashMessages } from './composables/useFlashMessages'
 import CommandPalette from './components/palette/CommandPalette.vue'
 
@@ -158,3 +159,4 @@ createInertiaApp({
 
 // Initialize theme (light/dark mode)
 initializeTheme()
+initializeSkin()

@@ -270,3 +270,434 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HAASIB LEDGER SKIN
+   ──────────────────────────────────────────────────────────────────────────
+   Scoped under [data-skin="ledger"]. The :root and .dark blocks above are
+   untouched, so every existing page renders exactly as before until the skin
+   is deliberately switched on.
+
+   Two layers, on purpose:
+     Layer 1  semantic accounting tokens   --surface-* --amount-* --status-*
+     Layer 2  generic shadcn tokens REFERENCE layer 1   --background --border
+
+   That keeps accounting meaning independent of the component library's
+   vocabulary. If shadcn renames a token we remap one line, not a palette.
+
+   Rules this encodes:
+     - Rules and spacing separate things. Shadow only for surfaces that float.
+     - Direction is not severity. An ordinary outflow is INK with a minus sign.
+       Red means adverse or destructive, and nothing else.
+     - Every state needs a non-colour indicator; colour only reinforces.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Layer 1 exposed as utilities: bg-surface-canvas, text-amount-outflow ...
+
+   Every mapping carries a var() FALLBACK, and that is not belt-and-braces.
+   The layer-1 tokens are defined only inside [data-skin="ledger"]; this @theme
+   block is global. Without a fallback, `text-status-success` on an unskinned
+   page resolves to nothing and the colour silently disappears. The fallbacks
+   point at existing :root tokens wherever one carries the same meaning, so the
+   utilities stay correct in the default theme AND follow it into dark mode.
+   That is what makes these utilities safe inside shared components such as
+   badge, which render on skinned and unskinned pages alike.                   */
+@theme inline {
+    --font-display: var(--display-family, ui-serif, Georgia, serif);
+    --font-mono: var(--mono-family, ui-monospace, Consolas, monospace);
+
+    --color-surface-canvas: var(--surface-canvas, var(--background));
+    --color-surface-raised: var(--surface-raised, var(--card));
+    --color-surface-sunken: var(--surface-sunken, var(--muted));
+    --color-surface-band: var(--surface-band, var(--muted));
+
+    --color-rule-subtle: var(--rule-subtle, var(--border));
+    --color-rule-default: var(--rule-default, var(--border));
+    --color-rule-emphasis: var(--rule-emphasis, var(--foreground));
+
+    --color-text-metadata: var(--text-metadata, var(--muted-foreground));
+
+    /* info / attention / success have no :root equivalent, so they carry
+       literals. These match the stock palette values the app already reaches
+       for by hand (blue / amber / green-500), which keeps unskinned pages
+       looking as they do today while the skin overrides them wholesale. */
+    --color-status-info: var(--status-info, oklch(0.488 0.243 264.376));
+    --color-status-attention: var(--status-attention, oklch(0.555 0.163 48.998));
+    --color-status-critical: var(--status-critical, var(--destructive));
+    --color-status-success: var(--status-success, oklch(0.723 0.219 149.579));
+
+    /* Text that sits ON a status fill. A green chip is green in both themes,
+       so its label cannot inherit --foreground and flip out from under it —
+       and `text-white` was the same bug wearing a Tailwind name, invisible on
+       any theme where the fill goes pale. Each status names its own contrast. */
+    /* The modal scrim. Not chrome — it dims the page behind a dialog, so it is
+       one value in both themes rather than something that flips. It is a token
+       anyway because the skin may want its dimmer warmer than absolute black. */
+    --color-overlay: var(--overlay, hsl(0 0% 0% / 0.8));
+
+    --color-status-info-contrast: var(--status-info-contrast, hsl(0 0% 100%));
+    --color-status-attention-contrast: var(--status-attention-contrast, hsl(0 0% 9%));
+    --color-status-critical-contrast: var(--status-critical-contrast, var(--destructive-foreground));
+    --color-status-success-contrast: var(--status-success-contrast, hsl(0 0% 100%));
+
+    /* Direction is not severity: both flows fall back to ordinary ink. */
+    --color-amount-inflow: var(--amount-inflow, var(--foreground));
+    --color-amount-outflow: var(--amount-outflow, var(--foreground));
+    --color-amount-estimated: var(--amount-estimated, var(--muted-foreground));
+    --color-amount-overdue: var(--amount-overdue, var(--destructive));
+
+    --color-focus-ring: var(--focus-ring, var(--ring));
+}
+
+/* ── Layer 1 defaults ──────────────────────────────────────────────────────
+   The layer-1 tokens above are consumed by Tailwind utilities, but `@theme
+   inline` does NOT emit them as custom properties — verified against the built
+   stylesheet. Hand-written CSS in a component therefore cannot say
+   `var(--color-text-metadata)`; it resolves to nothing and the colour silently
+   vanishes. That failure is invisible in review and obvious to a user.
+
+   So the tokens are declared here for real, aliased to the existing default
+   theme. This ADDS properties; it overrides none. The original :root and .dark
+   blocks are untouched and no existing rule reads these names, so every page
+   renders exactly as before — but the financial primitives can be written in
+   plain CSS and stay correct with the skin off.                                */
+:root {
+    --surface-canvas: var(--background);
+    --surface-raised: var(--card);
+    --surface-sunken: var(--muted);
+    --surface-band: var(--muted);
+
+    --rule-subtle: var(--border);
+    --rule-default: var(--border);
+    --rule-emphasis: var(--foreground);
+
+    --text-metadata: var(--muted-foreground);
+
+    --status-info: oklch(0.488 0.243 264.376);
+    --status-attention: oklch(0.555 0.163 48.998);
+    --status-critical: var(--destructive);
+    --status-success: oklch(0.723 0.219 149.579);
+
+    --status-info-contrast: hsl(0 0% 100%);
+    --status-attention-contrast: hsl(0 0% 9%);
+    --status-critical-contrast: var(--destructive-foreground);
+    --status-success-contrast: hsl(0 0% 100%);
+
+    /* Direction is not severity: with the skin off, both flows are still ink. */
+    --amount-inflow: var(--foreground);
+    --amount-outflow: var(--foreground);
+    --amount-estimated: var(--muted-foreground);
+    --amount-overdue: var(--destructive);
+
+    --focus-ring: var(--ring);
+
+    --display-family: var(--font-sans);
+    --mono-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+
+    /* Spacing rhythm: 4 / 8 / 12 / 16 / 24 / 40, and nothing between.
+       Global, not skin-scoped. The density contracts below are selected by the
+       work rather than by the skin, so a compact table on an unskinned page has
+       to be able to resolve these — scoped under the skin they resolved to
+       nothing and compact silently did nothing at all. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 40px;
+
+    /* Density falls back to today's spacing so unskinned tables do not shift.
+       These are not round numbers picked for tidiness: 1.5rem/1rem is exactly
+       the `px-6 py-4` that every table cell in the app carries today, so a
+       component moving onto the density contract renders identically until a
+       density is actually chosen for it. */
+    --row-h: auto;
+    --field-h: auto;
+    --cell-px: 1.5rem;
+    --cell-py: 1rem;
+    --gutter: 1.5rem;
+}
+
+.dark {
+    /* Only the three literals need a dark counterpart; the rest are aliases
+       and follow .dark automatically. */
+    --status-info: oklch(0.707 0.165 254.624);
+    --status-attention: oklch(0.769 0.188 70.08);
+    --status-success: oklch(0.792 0.209 151.711);
+
+    /* Pale fills, so ink on top. critical is unchanged in dark and keeps its
+       own foreground, which is why it is absent here. */
+    --status-info-contrast: hsl(0 0% 9%);
+    --status-attention-contrast: hsl(0 0% 9%);
+    --status-success-contrast: hsl(0 0% 9%);
+}
+
+/* ── Layer 1: semantic tokens, light ─────────────────────────────────── */
+[data-skin="ledger"] {
+    --display-family: "Zilla Slab", Georgia, "Times New Roman", serif;
+    --mono-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+    --surface-canvas: hsl(40 22% 98%);
+    --surface-raised: hsl(0 0% 100%);
+    --surface-sunken: hsl(45 14% 94%);
+    --surface-band: hsl(88 33% 90%);
+
+    --rule-subtle: hsl(80 10% 91%);
+    --rule-default: hsl(90 7% 84%);
+    --rule-emphasis: hsl(219 29% 14%);
+
+    --text-primary: hsl(219 29% 14%);
+    --text-secondary: hsl(215 11% 40%);
+    --text-tertiary: hsl(213 10% 59%);
+    --text-quaternary: hsl(213 10% 70%);
+    --text-metadata: hsl(213 10% 59%);
+
+    --status-info: hsl(209 54% 36%);
+    --status-attention: hsl(41 80% 31%);
+    --status-critical: hsl(4 63% 45%);
+    --status-success: hsl(146 39% 30%);
+
+    /* The skin picks each status to read against the paper, so the paper is
+       what reads back against the status. One rule covers both themes. */
+    --status-info-contrast: var(--surface-canvas);
+    --status-attention-contrast: var(--surface-canvas);
+    --status-critical-contrast: var(--surface-canvas);
+    --status-success-contrast: var(--surface-canvas);
+
+    /* Direction is NOT severity. Ordinary money movement is ink, either way. */
+    --amount-inflow: hsl(219 29% 14%);
+    --amount-outflow: hsl(219 29% 14%);
+    --amount-estimated: hsl(215 11% 40%);
+    --amount-overdue: hsl(4 63% 45%);
+
+    --focus-ring: hsl(4 63% 45%);
+
+    --rule-w-hair: 1px;
+    --rule-w-base: 1.5px;
+    --rule-w-strong: 2.5px;
+
+
+    /* ── Layer 2: shadcn tokens reference layer 1 ─────────────────────── */
+    --background: var(--surface-canvas);
+    --foreground: var(--text-primary);
+    --card: var(--surface-raised);
+    --card-foreground: var(--text-primary);
+    --popover: var(--surface-raised);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--text-primary);
+    --primary-foreground: var(--surface-canvas);
+    --secondary: var(--surface-sunken);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--surface-sunken);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--surface-band);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--status-critical);
+    --destructive-foreground: hsl(0 0% 100%);
+    --border: var(--rule-default);
+    --input: var(--rule-default);
+    --ring: var(--focus-ring);
+
+    --surface-1: var(--surface-raised);
+    --surface-2: var(--surface-canvas);
+    --surface-3: var(--surface-sunken);
+
+    /* Near-square. rounded-lg/md/sm resolve through this automatically. */
+    --radius: 2px;
+
+    /* No gradients. The ledger is printed, not lit. */
+    --shell-hero: var(--surface-canvas);
+    --shell-hero-ring: var(--rule-default);
+
+    --nav-section-text: var(--text-metadata);
+    --nav-item-text: var(--text-secondary);
+    --nav-item-text-active: var(--text-primary);
+    --nav-item-text-hover: var(--text-primary);
+
+    --sidebar: var(--surface-canvas);
+    --sidebar-background: var(--surface-canvas);
+    --sidebar-foreground: var(--text-secondary);
+    --sidebar-primary: var(--text-primary);
+    --sidebar-primary-foreground: var(--surface-canvas);
+    --sidebar-accent: var(--surface-band);
+    --sidebar-accent-foreground: var(--text-primary);
+    --sidebar-border: var(--rule-default);
+    --sidebar-ring: var(--focus-ring);
+
+    --footer-background: var(--surface-canvas);
+    --footer-text: var(--text-secondary);
+    --footer-border: var(--rule-default);
+
+    --chart-1: hsl(219 29% 14%);
+    --chart-2: hsl(146 39% 30%);
+    --chart-3: hsl(41 80% 31%);
+    --chart-4: hsl(209 54% 36%);
+    --chart-5: hsl(213 10% 59%);
+}
+
+/* ── Dark: same grammar, dark stock. The green bar becomes a dark band. ── */
+.dark[data-skin="ledger"],
+.dark [data-skin="ledger"],
+[data-skin="ledger"].dark {
+    --surface-canvas: hsl(200 12% 7%);
+    --surface-raised: hsl(195 6% 9%);
+    --surface-sunken: hsl(200 13% 5%);
+    --surface-band: hsl(120 14% 11%);
+
+    --rule-subtle: hsl(150 8% 13%);
+    --rule-default: hsl(140 6% 18%);
+    --rule-emphasis: hsl(90 14% 91%);
+
+    --text-primary: hsl(90 14% 91%);
+    --text-secondary: hsl(130 5% 61%);
+    --text-tertiary: hsl(130 5% 45%);
+    --text-quaternary: hsl(130 5% 35%);
+    --text-metadata: hsl(130 5% 45%);
+
+    --status-info: hsl(209 51% 66%);
+    --status-attention: hsl(43 63% 58%);
+    --status-critical: hsl(5 68% 62%);
+    --status-success: hsl(146 36% 59%);
+
+    /* The skin picks each status to read against the paper, so the paper is
+       what reads back against the status. One rule covers both themes. */
+    --status-info-contrast: var(--surface-canvas);
+    --status-attention-contrast: var(--surface-canvas);
+    --status-critical-contrast: var(--surface-canvas);
+    --status-success-contrast: var(--surface-canvas);
+
+    --amount-inflow: hsl(90 14% 91%);
+    --amount-outflow: hsl(90 14% 91%);
+    --amount-estimated: hsl(130 5% 61%);
+    --amount-overdue: hsl(5 68% 62%);
+
+    --focus-ring: hsl(5 68% 62%);
+
+    --destructive-foreground: hsl(200 12% 7%);
+    --primary-foreground: hsl(200 12% 7%);
+
+    --chart-1: hsl(90 14% 91%);
+    --chart-2: hsl(146 36% 59%);
+    --chart-3: hsl(43 63% 58%);
+    --chart-4: hsl(209 51% 66%);
+    --chart-5: hsl(130 5% 45%);
+}
+
+/* ── Density contracts ─────────────────────────────────────────────────────
+   Selected by the WORK, not the person. A reconciliation screen is compact
+   because reconciliation is dense work, not because an accountant is looking
+   at it. Components take a `density` prop that sets data-density on the root. */
+[data-skin="ledger"],
+[data-density="comfortable"] {
+    --row-h: 44px;
+    --field-h: 40px;
+    --cell-px: var(--space-4);
+    --cell-py: var(--space-3);
+    --gutter: var(--space-5);
+}
+
+[data-density="compact"] {
+    --row-h: 32px;
+    --field-h: 32px;
+    --cell-px: var(--space-3);
+    --cell-py: var(--space-2);
+    --gutter: var(--space-4);
+}
+
+[data-density="print"] {
+    --row-h: 26px;
+    --field-h: 26px;
+    --cell-px: var(--space-2);
+    --cell-py: var(--space-1);
+    --gutter: var(--space-3);
+}
+
+/* ── Type roles ────────────────────────────────────────────────────────────
+   Display serif is for page titles and major conclusions ONLY. It never
+   appears on a button, a field label, or a table cell — that is the line
+   between confident and costume.
+
+   Tabular figures wherever alignment matters; visible mono only in tables,
+   references, IDs and metadata. Every amount in mono would read as a terminal. */
+[data-skin="ledger"] {
+    font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+.tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+/* Amounts never wrap. */
+.amount {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LEDGER SKIN — COMPONENT CORRECTIONS
+   ──────────────────────────────────────────────────────────────────────────
+   Findings from the Tier 0 gate: places where the shadcn component source
+   contradicts a grammar rule. Every correction here is SCOPED TO THE SKIN, so
+   component files stay untouched and existing pages render exactly as before.
+
+   The alternative — editing the component source under ui/ — would change the current theme
+   too, and would fork the components away from upstream shadcn-vue for a
+   reason that is really a theming decision. Corrections belong in the theme.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Rule 1 — rules, not elevation.
+   buttonVariants carries shadow-xs on four variants and Card carries shadow-sm.
+   A button is not a floating surface. Targeting is by data-slot rather than
+   by the shadow-* class, because Tailwind owns those class names. Zeroing
+   --tw-shadow rather than box-shadow is deliberate: Tailwind v4 composes
+   ring and shadow into one box-shadow, so this removes the drop shadow and
+   leaves the focus ring intact. */
+[data-skin="ledger"] [data-slot="button"],
+[data-skin="ledger"] [data-slot="card"],
+[data-skin="ledger"] [data-slot="input"],
+[data-skin="ledger"] [data-slot="checkbox"],
+[data-skin="ledger"] [data-slot="tabs-trigger"],
+[data-skin="ledger"] [data-slot="pin-input-slot"],
+[data-skin="ledger"] [data-slot="sidebar"],
+[data-skin="ledger"] [data-slot="sidebar-inset"] {
+    --tw-shadow: 0 0 #0000;
+}
+
+/* The switch thumb wears shadow-lg — a floating-surface shadow on a control
+   that does not float. Dialog, popover, dropdown, select, sheet and toast
+   keep theirs; they genuinely float. */
+[data-skin="ledger"] [data-slot="switch-thumb"] {
+    --tw-shadow: 0 0 #0000;
+}
+
+/* Radius: rounded-lg/md/sm resolve through --radius and follow the skin
+   automatically. These three do not. rounded-full is untouched — avatars,
+   pips and switch thumbs are meant to be round. */
+[data-skin="ledger"] .rounded-xl { border-radius: calc(var(--radius) + 2px); }
+[data-skin="ledger"] .rounded-2xl { border-radius: calc(var(--radius) + 3px); }
+[data-skin="ledger"] .rounded { border-radius: var(--radius); }
+
+/* Rule 4 — every state needs a non-colour indicator, and focus must be
+   visible on every control, not merely a colour shift. */
+[data-skin="ledger"] :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+/* Motion is functional here, never atmospheric. */
+@media (prefers-reduced-motion: reduce) {
+    [data-skin="ledger"] *,
+    [data-skin="ledger"] *::before,
+    [data-skin="ledger"] *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

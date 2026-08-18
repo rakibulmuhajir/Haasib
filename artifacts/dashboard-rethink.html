@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Haasib Dashboard Rethink</title>
+  <style>
+    :root {
+      --ink: #18211d;
+      --muted: #647169;
+      --faint: #8b9790;
+      --line: #dfe5e1;
+      --paper: #f5f7f5;
+      --surface: #ffffff;
+      --accent: #126e4b;
+      --accent-strong: #0d593c;
+      --accent-soft: #e4f2eb;
+      --warning: #a75916;
+      --warning-soft: #fff2df;
+      --danger: #ae3c3c;
+      --danger-soft: #fcebea;
+      --radius: 14px;
+      --sidebar: 238px;
+      --shadow: 0 16px 42px rgba(43, 63, 52, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; }
+    button:focus-visible, [tabindex]:focus-visible { outline: 3px solid rgba(18,110,75,.28); outline-offset: 2px; }
+
+    .app { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+    .sidebar {
+      position: sticky; top: 0; height: 100dvh; padding: 18px 14px;
+      border-right: 1px solid #27362f; background: #17231d; color: #e8eee9;
+      display: flex; flex-direction: column; z-index: 4;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 5px 8px 21px; }
+    .brand-mark { width: 31px; height: 31px; border-radius: 10px; display:grid; place-items:center; background:#d7f265; color:#17231d; font-weight:900; font-size:16px; }
+    .brand-name { font-size: 18px; font-weight: 760; letter-spacing: -.02em; }
+    .company {
+      display:flex; align-items:center; gap:10px; width:100%; padding:10px; color:inherit;
+      background:#213129; border:1px solid #35473d; border-radius:var(--radius); text-align:left; cursor:pointer;
+    }
+    .company:hover { background:#283a31; }
+    .company-avatar { width:30px; height:30px; border-radius:9px; background:#395247; display:grid; place-items:center; font-size:12px; font-weight:800; }
+    .company-copy { flex:1; min-width:0; }
+    .company-copy strong, .company-copy span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .company-copy strong { font-size:13px; } .company-copy span { margin-top:2px; color:#aebcb4; font-size:11px; }
+    .chevron { color:#9fb0a7; }
+    .nav-label { margin:23px 10px 8px; color:#7f9488; font-size:10px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+    .nav { display:grid; gap:3px; }
+    .nav button {
+      width:100%; border:0; color:#aebcb4; background:transparent; padding:9px 10px; border-radius:10px;
+      display:flex; align-items:center; gap:10px; cursor:pointer; text-align:left; font-size:13px; font-weight:580;
+    }
+    .nav button:hover { color:#fff; background:#213129; }
+    .nav button.active { color:#fff; background:#2a3d33; box-shadow: inset 3px 0 #d7f265; }
+    .nav-icon { width:20px; color:#8ea397; font:700 11px/1 ui-monospace, monospace; }
+    .nav .active .nav-icon { color:#d7f265; }
+    .sidebar-footer { margin-top:auto; }
+    .help { padding:12px; border:1px solid #35473d; border-radius:var(--radius); background:#1d2b24; }
+    .help strong { display:block; font-size:12px; } .help p { margin:5px 0 10px; color:#95a79d; font-size:11px; line-height:1.45; }
+    .help button { border:0; padding:0; background:transparent; color:#d7f265; font-weight:700; font-size:11px; cursor:pointer; }
+    .user { margin-top:12px; padding:9px 7px; display:flex; gap:10px; align-items:center; }
+    .user-avatar { width:30px; height:30px; border-radius:50%; background:#d7f265; color:#17231d; display:grid; place-items:center; font-size:11px; font-weight:850; }
+    .user div { min-width:0; } .user strong, .user span { display:block; } .user strong { font-size:12px; } .user span { margin-top:2px; color:#8ea397; font-size:10px; }
+
+    .shell { min-width:0; }
+    .topbar {
+      height:68px; padding:0 clamp(18px,3vw,42px); border-bottom:1px solid var(--line); background:rgba(245,247,245,.92);
+      display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:3; backdrop-filter:blur(12px);
+    }
+    .mobile-menu { display:none; }
+    .search {
+      width:min(440px, 45vw); padding:9px 12px; border:1px solid var(--line); background:var(--surface); border-radius:11px;
+      display:flex; align-items:center; gap:9px; color:var(--muted); font-size:12px; box-shadow:0 3px 12px rgba(50,70,60,.03);
+    }
+    .search span:last-child { margin-left:auto; padding:2px 6px; border:1px solid var(--line); border-radius:6px; color:var(--faint); font:600 10px ui-monospace, monospace; }
+    .top-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .icon-button, .primary, .secondary, .segmented button, .period {
+      border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); cursor:pointer;
+    }
+    .icon-button { width:36px; height:36px; display:grid; place-items:center; font-weight:750; }
+    .icon-button:hover, .secondary:hover, .period:hover { border-color:#b9c5be; background:#f9fbfa; }
+    .primary { padding:9px 13px; border-color:var(--accent); background:var(--accent); color:white; font-size:12px; font-weight:720; white-space:nowrap; }
+    .primary:hover { background:var(--accent-strong); }
+    button:active { transform:translateY(1px); }
+
+    main { max-width:1500px; margin:0 auto; padding:34px clamp(18px,3vw,42px) 56px; }
+    .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:27px; }
+    .eyebrow { margin:0 0 6px; color:var(--accent); font-size:11px; font-weight:760; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(28px,3vw,40px); line-height:1.02; letter-spacing:-.045em; font-weight:760; }
+    .subtitle { margin:9px 0 0; color:var(--muted); font-size:13px; }
+    .head-controls { display:flex; align-items:center; gap:8px; }
+    .segmented { display:flex; padding:3px; border:1px solid var(--line); border-radius:12px; background:#ebefec; }
+    .segmented button { border:0; padding:7px 10px; background:transparent; color:var(--muted); font-size:11px; font-weight:720; }
+    .segmented button.active { background:white; color:var(--ink); box-shadow:0 2px 7px rgba(40,60,50,.1); }
+    .period { padding:9px 11px; color:var(--muted); font-size:11px; font-weight:650; }
+
+    .dashboard { display:grid; grid-template-columns:minmax(0,1.72fr) minmax(290px,.72fr); gap:18px; align-items:start; }
+    .left, .right { display:grid; gap:18px; }
+    .panel { border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); box-shadow:0 4px 15px rgba(47,69,57,.035); overflow:hidden; }
+    .panel.pad { padding:20px; }
+    .panel-head { padding:18px 20px 14px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .panel-head h2 { margin:0; font-size:14px; letter-spacing:-.015em; }
+    .panel-head p { margin:4px 0 0; color:var(--muted); font-size:11px; }
+    .text-link { border:0; background:transparent; color:var(--accent); font-size:11px; font-weight:760; cursor:pointer; white-space:nowrap; }
+
+    .cash-hero { padding:24px; display:grid; grid-template-columns:minmax(260px,.86fr) minmax(340px,1.14fr); gap:28px; background:linear-gradient(145deg,#fff 30%,#f0f6f2); }
+    .metric-label { color:var(--muted); font-size:11px; font-weight:660; }
+    .cash-number { margin:9px 0 5px; font-size:clamp(32px,4vw,51px); line-height:1; letter-spacing:-.05em; font-weight:760; }
+    .cash-number small { font-size:.32em; letter-spacing:.03em; color:var(--muted); vertical-align:top; padding-top:7px; display:inline-block; }
+    .delta { color:var(--accent); font-size:11px; font-weight:680; }
+    .delta.neutral { color:var(--muted); }
+    .account-strip { margin-top:25px; padding-top:15px; border-top:1px solid var(--line); display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .account-strip span, .account-strip strong { display:block; } .account-strip span { color:var(--faint); font-size:9px; } .account-strip strong { margin-top:4px; font-size:12px; }
+    .chart-wrap { min-width:0; align-self:end; }
+    .chart-meta { display:flex; align-items:end; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .chart-meta strong { font-size:12px; } .chart-meta span { color:var(--muted); font-size:10px; }
+    .chart { height:145px; position:relative; border-bottom:1px solid var(--line); background:repeating-linear-gradient(to bottom,transparent 0,transparent 35px,#e9eeeb 36px); overflow:hidden; }
+    .chart svg { width:100%; height:100%; overflow:visible; }
+    .chart-labels { display:flex; justify-content:space-between; padding-top:7px; color:var(--faint); font-size:9px; }
+
+    .flow { display:grid; grid-template-columns:1fr 1fr; }
+    .flow-block { padding:19px 20px 18px; } .flow-block + .flow-block { border-left:1px solid var(--line); }
+    .flow-title { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .flow-title span { color:var(--muted); font-size:11px; font-weight:680; }
+    .flow-title b { padding:3px 6px; border-radius:7px; background:var(--accent-soft); color:var(--accent); font-size:9px; }
+    .flow-value { margin:11px 0 8px; font-size:25px; letter-spacing:-.035em; font-weight:750; }
+    .bar { height:5px; display:flex; gap:2px; overflow:hidden; border-radius:5px; background:#edf1ee; }
+    .bar span { display:block; background:var(--accent); } .bar .soft { background:#9bb9a9; }
+    .flow-foot { margin-top:10px; display:flex; justify-content:space-between; color:var(--muted); font-size:10px; }
+    .flow-foot strong { color:var(--ink); }
+
+    .attention-list { border-top:1px solid var(--line); }
+    .attention-item { min-height:63px; padding:13px 20px; display:grid; grid-template-columns:8px minmax(0,1fr) auto; gap:12px; align-items:center; border-bottom:1px solid #edf0ee; cursor:pointer; }
+    .attention-item:last-child { border-bottom:0; } .attention-item:hover { background:#fafcfb; }
+    .signal { width:7px; height:28px; border-radius:5px; background:var(--warning); } .signal.red { background:var(--danger); } .signal.green { background:var(--accent); }
+    .attention-copy strong { display:block; font-size:12px; font-weight:690; } .attention-copy span { display:block; margin-top:4px; color:var(--muted); font-size:10px; }
+    .amount { text-align:right; font-size:11px; font-weight:730; } .amount span { display:block; margin-top:4px; color:var(--faint); font-size:9px; font-weight:500; }
+
+    .quick-grid { padding:0 20px 20px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .quick {
+      min-height:72px; padding:12px; border:1px solid var(--line); border-radius:12px; background:white; color:var(--ink); text-align:left; cursor:pointer;
+    }
+    .quick:hover { border-color:#a9bbb1; box-shadow:0 8px 20px rgba(43,63,52,.07); }
+    .quick b { display:block; font-size:11px; } .quick span { display:block; margin-top:5px; color:var(--muted); font-size:9px; line-height:1.35; }
+    .quick.primary-quick { background:var(--accent); border-color:var(--accent); color:white; }
+    .quick.primary-quick span { color:#d9eee4; }
+
+    .health { padding:0 20px 18px; }
+    .health-score { display:flex; align-items:center; gap:14px; padding:15px; border-radius:12px; background:var(--accent-soft); }
+    .score { width:46px; height:46px; border-radius:50%; display:grid; place-items:center; border:5px solid #71a78b; background:white; color:var(--accent); font-size:13px; font-weight:850; }
+    .health-score strong { display:block; font-size:12px; } .health-score span { display:block; margin-top:4px; color:var(--muted); font-size:9px; }
+    .health-row { padding:13px 2px 11px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #edf0ee; font-size:10px; }
+    .health-row:last-child { border-bottom:0; } .status { color:var(--accent); font-weight:750; } .status.warn { color:var(--warning); }
+
+    .accountant-only { display:none; }
+    body.accountant .owner-only { display:none !important; }
+    body.accountant .accountant-only { display:block; }
+    body.accountant .dashboard { grid-template-columns:minmax(0,1fr) 330px; }
+    .accountant-grid { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); }
+    .accountant-metric { padding:17px 20px; border-right:1px solid var(--line); } .accountant-metric:nth-child(3n) { border-right:0; }
+    .accountant-metric:nth-child(n+4) { border-top:1px solid var(--line); }
+    .accountant-metric span { display:block; color:var(--muted); font-size:9px; } .accountant-metric strong { display:block; margin-top:6px; font-size:18px; letter-spacing:-.025em; }
+    .accountant-metric em { display:block; margin-top:5px; color:var(--accent); font-size:9px; font-style:normal; }
+    .status-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .status-card { padding:15px; border:1px solid var(--line); border-radius:12px; }
+    .status-card span { color:var(--muted); font-size:9px; } .status-card strong { display:block; margin-top:7px; font-size:13px; } .status-card small { display:block; margin-top:5px; color:var(--faint); font-size:9px; }
+
+    .toast { position:fixed; right:24px; bottom:24px; z-index:10; max-width:310px; padding:13px 15px; border-radius:12px; background:#17231d; color:white; box-shadow:var(--shadow); transform:translateY(30px); opacity:0; pointer-events:none; transition:.22s ease; font-size:11px; }
+    .toast.show { transform:translateY(0); opacity:1; }
+    .toast strong { display:block; margin-bottom:3px; }
+
+    @media (max-width:1100px) {
+      :root { --sidebar: 205px; }
+      .dashboard, body.accountant .dashboard { grid-template-columns:1fr; }
+      .right { grid-template-columns:1fr 1fr; } .right > :last-child { grid-column:1/-1; }
+      .cash-hero { grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width:760px) {
+      .app { grid-template-columns:1fr; } .sidebar { display:none; }
+      .topbar { height:60px; } .mobile-menu { display:grid; }
+      .search { flex:1; width:auto; } .search span:first-of-type { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .top-actions .primary { display:none; }
+      main { padding-top:24px; } .page-head { display:block; } .head-controls { margin-top:18px; justify-content:space-between; }
+      .cash-hero { grid-template-columns:1fr; } .chart { height:125px; }
+      .flow { grid-template-columns:1fr; } .flow-block + .flow-block { border-left:0; border-top:1px solid var(--line); }
+      .right { grid-template-columns:1fr; } .right > :last-child { grid-column:auto; }
+      .accountant-grid { grid-template-columns:1fr 1fr; } .accountant-metric:nth-child(3n) { border-right:1px solid var(--line); } .accountant-metric:nth-child(2n) { border-right:0; } .accountant-metric:nth-child(n+3) { border-top:1px solid var(--line); }
+      .status-cards { grid-template-columns:1fr; }
+    }
+    @media (max-width:460px) {
+      .search span:last-child, .top-actions .icon-button:first-child, .period { display:none; }
+      .head-controls { align-items:stretch; } .segmented { flex:1; } .segmented button { flex:1; }
+      .account-strip { grid-template-columns:1fr; gap:9px; }
+      .quick-grid { grid-template-columns:1fr; }
+      .attention-item { grid-template-columns:7px minmax(0,1fr); } .amount { grid-column:2; text-align:left; }
+      .accountant-grid { grid-template-columns:1fr; } .accountant-metric { border-right:0 !important; border-top:1px solid var(--line); }
+    }
+    @media (prefers-reduced-motion:reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand"><div class="brand-mark">H</div><div class="brand-name">Haasib</div></div>
+      <button class="company" data-action="Company switcher"><div class="company-avatar">AT</div><div class="company-copy"><strong>Ahmed Trading Co.</strong><span>Owner workspace</span></div><span class="chevron">⌄</span></button>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav">
+        <button class="active"><span class="nav-icon">01</span>Overview</button>
+        <button><span class="nav-icon">02</span>Money in</button>
+        <button><span class="nav-icon">03</span>Money out</button>
+        <button><span class="nav-icon">04</span>Banking</button>
+        <button><span class="nav-icon">05</span>Contacts</button>
+      </nav>
+      <div class="nav-label">Understand</div>
+      <nav class="nav">
+        <button><span class="nav-icon">06</span>Reports</button>
+        <button><span class="nav-icon">07</span>Accounting</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="help"><strong>Need a second opinion?</strong><p>Ask your accountant without leaving the page.</p><button data-action="Accountant request opened">Ask accountant →</button></div>
+        <div class="user"><div class="user-avatar">AK</div><div><strong>Ahmed Khan</strong><span>ahmed@trading.co</span></div></div>
+      </div>
+    </aside>
+
+    <div class="shell">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" aria-label="Open menu">≡</button>
+        <div class="search" tabindex="0"><b>⌕</b><span>Search invoices, bills, contacts…</span><span>Ctrl K</span></div>
+        <div class="top-actions"><button class="icon-button" aria-label="Notifications">3</button><button class="icon-button" aria-label="Help">?</button><button class="primary" data-action="Create menu opened">+ Create new</button></div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <div><p class="eyebrow">Tuesday, 18 August</p><h1><span class="owner-only">Good morning, Ahmed.</span><span class="accountant-only">Financial control centre.</span></h1><p class="subtitle owner-only">Here is what changed, what is due, and what needs you next.</p><p class="subtitle accountant-only">FY 2026 · Period: August 2026 · Books updated 8 minutes ago</p></div>
+          <div class="head-controls">
+            <div class="segmented" aria-label="Dashboard mode"><button class="active" data-mode="owner">Owner</button><button data-mode="accountant">Accountant</button></div>
+            <button class="period">This month ⌄</button>
+          </div>
+        </div>
+
+        <section class="dashboard">
+          <div class="left">
+            <article class="panel cash-hero owner-only">
+              <div><span class="metric-label">Cash you can use today</span><div class="cash-number"><small>PKR</small> 1,234,567</div><div class="delta">↑ 8.4% since 1 August</div><div class="account-strip"><div><span>Business account</span><strong>856,789</strong></div><div><span>Savings</span><strong>375,000</strong></div><div><span>Petty cash</span><strong>2,778</strong></div></div></div>
+              <div class="chart-wrap"><div class="chart-meta"><div><strong>Cash movement</strong><br><span>Last 8 weeks</span></div><span>Low: PKR 910k</span></div><div class="chart" aria-label="Cash movement chart"><svg viewBox="0 0 500 150" preserveAspectRatio="none" role="img"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#126e4b" stop-opacity=".22"/><stop offset="1" stop-color="#126e4b" stop-opacity="0"/></linearGradient></defs><path d="M0 118 C55 105,76 112,118 93 S190 65,230 79 S295 113,330 73 S411 35,500 40 L500 150 L0 150Z" fill="url(#fill)"/><path d="M0 118 C55 105,76 112,118 93 S190 65,230 79 S295 113,330 73 S411 35,500 40" fill="none" stroke="#126e4b" stroke-width="3" stroke-linecap="round"/></svg></div><div class="chart-labels"><span>23 Jun</span><span>7 Jul</span><span>21 Jul</span><span>4 Aug</span><span>18 Aug</span></div></div>
+            </article>
+
+            <article class="panel accountant-only">
+              <div class="panel-head"><div><h2>Key financial metrics</h2><p>Year to date, in base currency</p></div><button class="text-link">Open reports →</button></div>
+              <div class="accountant-grid"><div class="accountant-metric"><span>REVENUE YTD</span><strong>PKR 5.23m</strong><em>↑ 12.1% YoY</em></div><div class="accountant-metric"><span>EXPENSES YTD</span><strong>PKR 3.46m</strong><em>↓ 2.8% YoY</em></div><div class="accountant-metric"><span>NET INCOME</span><strong>PKR 1.78m</strong><em>34.0% margin</em></div><div class="accountant-metric"><span>AR OUTSTANDING</span><strong>PKR 456,789</strong><em>DSO 31 days</em></div><div class="accountant-metric"><span>AP OUTSTANDING</span><strong>PKR 234,567</strong><em>PKR 89k due soon</em></div><div class="accountant-metric"><span>CASH POSITION</span><strong>PKR 1.23m</strong><em>↑ 8.4% MTD</em></div></div>
+            </article>
+
+            <article class="panel owner-only">
+              <div class="flow"><div class="flow-block"><div class="flow-title"><span>Money coming in</span><b>Healthy</b></div><div class="flow-value">PKR 450,000</div><div class="bar"><span style="width:66%"></span><span class="soft" style="width:15%"></span></div><div class="flow-foot"><span>Received this month</span><strong>3 unpaid · 125k</strong></div></div><div class="flow-block"><div class="flow-title"><span>Money going out</span><b>5% lower</b></div><div class="flow-value">PKR 320,000</div><div class="bar"><span style="width:52%"></span><span class="soft" style="width:18%"></span></div><div class="flow-foot"><span>Paid this month</span><strong>5 bills · 89k</strong></div></div></div>
+            </article>
+
+            <article class="panel accountant-only pad"><div class="status-cards"><div class="status-card"><span>TRIAL BALANCE</span><strong>Balanced</strong><small>Debits equal credits</small></div><div class="status-card"><span>UNRECONCILED</span><strong>23 items</strong><small>PKR 156,000 total</small></div><div class="status-card"><span>PERIOD STATUS</span><strong>August open</strong><small>July locked</small></div></div></article>
+
+            <article class="panel">
+              <div class="panel-head"><div><h2><span class="owner-only">Needs your attention</span><span class="accountant-only">Exceptions and pending work</span></h2><p><span class="owner-only">Sorted by urgency, not by accounting jargon</span><span class="accountant-only">Items requiring review before close</span></p></div><button class="text-link">View all 7 →</button></div>
+              <div class="attention-list"><div class="attention-item" data-action="Invoice INV-1021 opened"><i class="signal red"></i><div class="attention-copy"><strong><span class="owner-only">A customer payment is late</span><span class="accountant-only">INV-1021 is 15 days overdue</span></strong><span>Northstar Retail · Invoice INV-1021</span></div><div class="amount">PKR 45,000<span>Send reminder →</span></div></div><div class="attention-item" data-action="Bank review opened"><i class="signal"></i><div class="attention-copy"><strong><span class="owner-only">12 bank transactions need a category</span><span class="accountant-only">12 unreconciled bank transactions</span></strong><span>Most can be handled in under 3 minutes</span></div><div class="amount">PKR 78,450<span>Review now →</span></div></div><div class="attention-item" data-action="Tax item opened"><i class="signal green"></i><div class="attention-copy"><strong>Sales tax payment due 25 August</strong><span>Draft return is ready for your review</span></div><div class="amount">PKR 62,300<span>7 days left →</span></div></div></div>
+            </article>
+          </div>
+
+          <aside class="right">
+            <article class="panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Start the jobs you do most</p></div></div><div class="quick-grid"><button class="quick primary-quick" data-action="Invoice draft started"><b>Create invoice</b><span>Bill a customer</span></button><button class="quick" data-action="Payment form opened"><b>Record payment</b><span>Mark money received</span></button><button class="quick" data-action="Expense form opened"><b>Add expense</b><span>Receipt or supplier bill</span></button><button class="quick" data-action="Bank import opened"><b>Import statement</b><span>CSV or bank feed</span></button></div></article>
+            <article class="panel"><div class="panel-head"><div><h2><span class="owner-only">Business health</span><span class="accountant-only">Close readiness</span></h2><p><span class="owner-only">A plain-language checkup</span><span class="accountant-only">August 2026 period</span></p></div></div><div class="health"><div class="health-score"><div class="score">82</div><div><strong><span class="owner-only">Looking healthy</span><span class="accountant-only">Close on track</span></strong><span>Two items need attention this week</span></div></div><div class="health-row"><span>Cash runway</span><strong class="status">4.8 months</strong></div><div class="health-row"><span>Invoices paid on time</span><strong class="status">87%</strong></div><div class="health-row"><span>Records up to date</span><strong class="status warn">12 to review</strong></div></div></article>
+            <article class="panel"><div class="panel-head"><div><h2>Recent activity</h2><p>Latest changes across the business</p></div><button class="text-link">See audit log</button></div><div class="attention-list"><div class="attention-item"><i class="signal green"></i><div class="attention-copy"><strong>Payment received</strong><span>INV-1018 · Today, 10:42</span></div><div class="amount">+85,000</div></div><div class="attention-item"><i class="signal green"></i><div class="attention-copy"><strong>Supplier bill recorded</strong><span>Pak Logistics · Yesterday</span></div><div class="amount">−24,500</div></div></div></article>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="toast" role="status" aria-live="polite"><strong>Mock interaction</strong><span></span></div>
+  <script>
+    const modeButtons = document.querySelectorAll('[data-mode]');
+    modeButtons.forEach(button => button.addEventListener('click', () => {
+      const accountant = button.dataset.mode === 'accountant';
+      document.body.classList.toggle('accountant', accountant);
+      modeButtons.forEach(item => item.classList.toggle('active', item === button));
+    }));
+    const toast = document.querySelector('.toast');
+    let timer;
+    document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => {
+      toast.querySelector('span').textContent = button.dataset.action + '. In the production app this would use an Inertia action.';
+      toast.classList.add('show'); clearTimeout(timer); timer = setTimeout(() => toast.classList.remove('show'), 2400);
+    }));
+  </script>
+</body>
+</html>

@@ -44,6 +44,22 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
+// ─────────────────────────────────────────────────────────────────────────
+// Ledger design system playground. Local only — never routable in production.
+// Renders the real component library under the scoped ledger skin so the
+// retheme can be judged against actual components rather than mockups.
+//
+// Declared FIRST: the catch-all /{company} route further down would otherwise
+// match /design and bounce a guest to the login page.
+// ─────────────────────────────────────────────────────────────────────────
+if (app()->environment('local')) {
+    // CheckFirstTimeUser sits in the global web stack and bounces guests to
+    // /login. The playground has no data and no user context, so it opts out.
+    Route::get('/design', fn () => Inertia::render('Design/Index'))
+        ->withoutMiddleware([\App\Http\Middleware\CheckFirstTimeUser::class])
+        ->name('design.index');
+}
+
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),

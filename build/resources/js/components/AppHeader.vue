@@ -223,7 +223,14 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" class="min-w-56">
-                                <template v-for="item in group.items" :key="item.title">
+                                <template v-for="(item, index) in group.items" :key="item.title">
+                                    <!-- A sub-list is fenced off from what came
+                                         before it, not from what follows — a
+                                         separator after the last one is a rule
+                                         drawn under nothing. -->
+                                    <DropdownMenuSeparator
+                                        v-if="item.children?.length && index > 0"
+                                    />
                                     <DropdownMenuItem
                                         v-if="item.href"
                                         as-child
@@ -258,7 +265,6 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                                         >
                                             <Link :href="child.href!">{{ child.title }}</Link>
                                         </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
                                     </template>
                                 </template>
                             </DropdownMenuContent>

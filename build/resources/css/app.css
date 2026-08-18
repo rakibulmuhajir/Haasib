@@ -272,11 +272,29 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   HAASIB LEDGER SKIN
+   SKINS
    ──────────────────────────────────────────────────────────────────────────
-   Scoped under [data-skin="ledger"]. The :root and .dark blocks above are
-   untouched, so every existing page renders exactly as before until the skin
-   is deliberately switched on.
+   A skin is a PALETTE, not a second design system. It restates colour, and may
+   restate radius, type family and resting density. It does NOT get to
+   re-decide what red means, whether focus is visible, or whether a button
+   floats — that grammar is house policy and lives further down under the bare
+   [data-skin] selector, applying to every skin at once.
+
+   That split is deliberate. Forking the grammar per theme would multiply the
+   verification surface across every page and every status: a theme that
+   quietly drops a non-colour indicator ships an accessibility bug that no
+   screenshot catches. One grammar, many palettes.
+
+   Adding a skin is three things and nothing else:
+     1. an entry in config/skins.php (label, and the pre-paint page ground)
+     2. a block here, [data-skin="your-id"], restating the layer-1 tokens
+     3. a matching .dark[data-skin="your-id"] block
+
+   See docs/theming.md.
+
+   Ledger is the first skin. The :root and .dark blocks above are untouched,
+   so every existing page renders exactly as before until a skin is
+   deliberately switched on.
 
    Two layers, on purpose:
      Layer 1  semantic accounting tokens   --surface-* --amount-* --status-*
@@ -586,8 +604,12 @@
 /* ── Density contracts ─────────────────────────────────────────────────────
    Selected by the WORK, not the person. A reconciliation screen is compact
    because reconciliation is dense work, not because an accountant is looking
-   at it. Components take a `density` prop that sets data-density on the root. */
-[data-skin="ledger"],
+   at it. Components take a `density` prop that sets data-density on the root.
+
+   `[data-skin]` with no value matches EVERY skin. A skin is a palette; the
+   rhythm is house policy, and a skin that wants a different resting density
+   restates these four properties in its own block. */
+[data-skin],
 [data-density="comfortable"] {
     --row-h: 44px;
     --field-h: 40px;
@@ -619,7 +641,7 @@
 
    Tabular figures wherever alignment matters; visible mono only in tables,
    references, IDs and metadata. Every amount in mono would read as a terminal. */
-[data-skin="ledger"] {
+[data-skin] {
     font-variant-numeric: tabular-nums;
 }
 
@@ -641,11 +663,17 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   LEDGER SKIN — COMPONENT CORRECTIONS
+   COMPONENT CORRECTIONS — ALL SKINS
    ──────────────────────────────────────────────────────────────────────────
    Findings from the Tier 0 gate: places where the shadcn component source
-   contradicts a grammar rule. Every correction here is SCOPED TO THE SKIN, so
-   component files stay untouched and existing pages render exactly as before.
+   contradicts a grammar rule. Every correction here is SCOPED TO [data-skin],
+   which matches any skin but not the stock theme — so component files stay
+   untouched and existing unskinned pages render exactly as before.
+
+   These are grammar, not taste, which is why they are not written per skin.
+   A skin does not get to re-decide that a button floats or that focus may be
+   invisible. One that genuinely needs an exception overrides it in its own
+   block, deliberately and in one place.
 
    The alternative — editing the component source under ui/ — would change the current theme
    too, and would fork the components away from upstream shadcn-vue for a
@@ -659,43 +687,43 @@
    --tw-shadow rather than box-shadow is deliberate: Tailwind v4 composes
    ring and shadow into one box-shadow, so this removes the drop shadow and
    leaves the focus ring intact. */
-[data-skin="ledger"] [data-slot="button"],
-[data-skin="ledger"] [data-slot="card"],
-[data-skin="ledger"] [data-slot="input"],
-[data-skin="ledger"] [data-slot="checkbox"],
-[data-skin="ledger"] [data-slot="tabs-trigger"],
-[data-skin="ledger"] [data-slot="pin-input-slot"],
-[data-skin="ledger"] [data-slot="sidebar"],
-[data-skin="ledger"] [data-slot="sidebar-inset"] {
+[data-skin] [data-slot="button"],
+[data-skin] [data-slot="card"],
+[data-skin] [data-slot="input"],
+[data-skin] [data-slot="checkbox"],
+[data-skin] [data-slot="tabs-trigger"],
+[data-skin] [data-slot="pin-input-slot"],
+[data-skin] [data-slot="sidebar"],
+[data-skin] [data-slot="sidebar-inset"] {
     --tw-shadow: 0 0 #0000;
 }
 
 /* The switch thumb wears shadow-lg — a floating-surface shadow on a control
    that does not float. Dialog, popover, dropdown, select, sheet and toast
    keep theirs; they genuinely float. */
-[data-skin="ledger"] [data-slot="switch-thumb"] {
+[data-skin] [data-slot="switch-thumb"] {
     --tw-shadow: 0 0 #0000;
 }
 
 /* Radius: rounded-lg/md/sm resolve through --radius and follow the skin
    automatically. These three do not. rounded-full is untouched — avatars,
    pips and switch thumbs are meant to be round. */
-[data-skin="ledger"] .rounded-xl { border-radius: calc(var(--radius) + 2px); }
-[data-skin="ledger"] .rounded-2xl { border-radius: calc(var(--radius) + 3px); }
-[data-skin="ledger"] .rounded { border-radius: var(--radius); }
+[data-skin] .rounded-xl { border-radius: calc(var(--radius) + 2px); }
+[data-skin] .rounded-2xl { border-radius: calc(var(--radius) + 3px); }
+[data-skin] .rounded { border-radius: var(--radius); }
 
 /* Rule 4 — every state needs a non-colour indicator, and focus must be
    visible on every control, not merely a colour shift. */
-[data-skin="ledger"] :focus-visible {
+[data-skin] :focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 1px;
 }
 
 /* Motion is functional here, never atmospheric. */
 @media (prefers-reduced-motion: reduce) {
-    [data-skin="ledger"] *,
-    [data-skin="ledger"] *::before,
-    [data-skin="ledger"] *::after {
+    [data-skin] *,
+    [data-skin] *::before,
+    [data-skin] *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;

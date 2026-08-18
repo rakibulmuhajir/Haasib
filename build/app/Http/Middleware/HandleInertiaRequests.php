@@ -121,10 +121,20 @@ class HandleInertiaRequests extends Middleware
                 'companies' => $companies->map(fn ($c) => $serializeCompany($c))->values(),
                 'canCreateCompanies' => $request->user() !== null,
             ],
-            // Local-only: enables the ledger skin preview switch in the UI.
-            // The skin itself is applied client-side from localStorage; this
-            // only decides whether the switch is offered at all.
+            // Local-only: enables the skin preview switch in the UI. The skin
+            // itself is applied client-side from localStorage; this only
+            // decides whether the switch is offered at all.
             'skinPreview' => app()->environment('local'),
+            // The skin registry, so the front end never carries a second copy
+            // of the list. Adding a skin is one entry in config/skins.php.
+            'skins' => collect(config('skins.available', []))
+                ->map(fn (array $skin, string $id) => [
+                    'id' => $id,
+                    'label' => $skin['label'],
+                    'description' => $skin['description'] ?? null,
+                ])
+                ->values()
+                ->all(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

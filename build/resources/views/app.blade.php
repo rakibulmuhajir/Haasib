@@ -41,14 +41,19 @@
             })();
         </script>
 
-        {{-- Ledger skin, applied before first paint for the same reason dark mode
+        {{-- The skin, applied before first paint for the same reason dark mode
              is: a page that renders on white and then repaints onto paper is
-             worse than either. Local-only preview switch; see composables/useSkin.ts. --}}
+             worse than either. The allow-list comes from config/skins.php so a
+             new skin needs no change here, and an unknown value in localStorage
+             is ignored rather than written onto the document. --}}
+        @php($skins = config('skins.available', []))
         <script>
             (function() {
+                var allowed = @json(array_values(array_diff(array_keys($skins), ['default'])));
                 try {
-                    if (localStorage.getItem('skin') === 'ledger') {
-                        document.documentElement.setAttribute('data-skin', 'ledger');
+                    var skin = localStorage.getItem('skin');
+                    if (skin && allowed.indexOf(skin) !== -1) {
+                        document.documentElement.setAttribute('data-skin', skin);
                     }
                 } catch (e) {
                     // Private-browsing localStorage throws. No skin is a fine outcome.
@@ -56,26 +61,21 @@
             })();
         </script>
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{-- The page ground, inline so it is painted before the stylesheet
+             arrives. Without it the default white shows through above and below
+             the app on a short page, and the skin's paper stops at the content
+             edge. Generated from the registry; keep each `ground` in step with
+             --surface-canvas for the same skin in app.css. --}}
         <style>
-            html {
-                background-color: oklch(1 0 0);
-            }
-
-            html.dark {
-                background-color: oklch(0.145 0 0);
-            }
-
-            /* The skin repaints the page ground. Without these two rules the
-               hardcoded white above shows through above and below the app on a
-               short page, and the paper stops at the content edge. */
-            html[data-skin="ledger"] {
-                background-color: hsl(40 22% 98%);
-            }
-
-            html.dark[data-skin="ledger"] {
-                background-color: hsl(200 12% 7%);
-            }
+            @foreach ($skins as $id => $skin)
+            @if ($id === 'default')
+            html { background-color: {{ $skin['ground']['light'] }}; }
+            html.dark { background-color: {{ $skin['ground']['dark'] }}; }
+            @else
+            html[data-skin="{{ $id }}"] { background-color: {{ $skin['ground']['light'] }}; }
+            html.dark[data-skin="{{ $id }}"] { background-color: {{ $skin['ground']['dark'] }}; }
+            @endif
+            @endforeach
         </style>
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>

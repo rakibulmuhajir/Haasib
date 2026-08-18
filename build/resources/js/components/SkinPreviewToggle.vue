@@ -1,31 +1,38 @@
 <script setup lang="ts">
 /**
- * SkinPreviewToggle — local-only switch for judging the ledger skin on real
- * screens rather than on a playground.
+ * SkinPreviewToggle — local-only switch for judging a skin on real screens
+ * rather than on a playground.
  *
  * Deliberately plain and deliberately in the corner. It is scaffolding for the
- * migration, not a product feature, and it is removed when the skin ships.
+ * migration, not a product feature. It cycles the registry rather than
+ * toggling two states, so adding a third skin needs nothing here.
  */
 import { usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import type { AppPageProps } from '@/types'
-import { useSkin } from '@/composables/useSkin'
+import { DEFAULT_SKIN, useSkin } from '@/composables/useSkin'
 
 const page = usePage<AppPageProps>()
 const enabled = computed(() => page.props.skinPreview === true)
+const options = computed(() => page.props.skins ?? [])
+const ids = computed(() => options.value.map((option) => option.id))
 
-const { skin, toggleSkin } = useSkin()
+const { skin, cycleSkin } = useSkin()
+
+const label = computed(
+    () => options.value.find((option) => option.id === skin.value)?.label ?? DEFAULT_SKIN,
+)
 </script>
 
 <template>
     <button
-        v-if="enabled"
+        v-if="enabled && ids.length > 1"
         type="button"
         class="skin-toggle"
-        :aria-pressed="skin === 'ledger'"
-        @click="toggleSkin"
+        :title="`Skin: ${label} — click to cycle`"
+        @click="cycleSkin(ids)"
     >
-        Skin: {{ skin === 'ledger' ? 'ledger' : 'default' }}
+        Skin: {{ label }}
     </button>
 </template>
 

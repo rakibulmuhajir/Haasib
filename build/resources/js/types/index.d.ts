@@ -20,6 +20,12 @@ export interface NavItem {
     children?: NavItem[];  // Sub-menu items (one level only)
 }
 
+export interface SkinOption {
+    id: string;
+    label: string;
+    description: string | null;
+}
+
 export interface NavGroup {
     label: string;
     collapsible?: boolean;
@@ -33,8 +39,10 @@ export type AppPageProps<
     quote: { message: string; author: string };
     auth: Auth;
     sidebarOpen: boolean;
-    /** Local only: offer the ledger skin preview switch. */
+    /** Local only: offer the skin preview switch. */
     skinPreview?: boolean;
+    /** The skin registry from config/skins.php. */
+    skins?: SkinOption[];
 };
 
 export interface User {

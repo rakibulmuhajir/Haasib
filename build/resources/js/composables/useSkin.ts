@@ -1,68 +1,70 @@
 /**
- * useSkin — turns the ledger skin on for real screens, not just the playground.
+ * useSkin — which palette the app is wearing.
  *
- * The skin is a `data-skin="ledger"` attribute on <html>, and it has to be on
- * <html> rather than a wrapper because reka-ui portals its overlays — dialog,
- * popover, dropdown, toast — straight to document.body. A skin scoped to the
- * page content would leave every overlay in the app rendering unskinned.
+ * A skin is a `data-skin` attribute on <html>, and it has to be on <html>
+ * rather than a wrapper because reka-ui portals its overlays — dialog, popover,
+ * dropdown, toast — straight to document.body. A skin scoped to the page
+ * content would leave every overlay in the app rendering unskinned.
  *
- * This exists so the pilot slice can be judged against real data with the skin
- * both on and off, without flipping anything for anyone else. It is a preview
- * switch, not the rollout: `skinPreview` is shared from the server and is true
- * only in local. When the skin eventually ships it will be set server-side in
- * the blade template and this file goes away.
+ * A skin is a PALETTE, not a second design system: the grammar rules live in
+ * app.css under the bare `[data-skin]` selector and apply to all of them. See
+ * docs/theming.md.
+ *
+ * The list of skins is not held here. It comes from config/skins.php, shared
+ * through Inertia, so adding one never means editing this file. 'default' is
+ * the stock theme and is represented by the absence of the attribute.
  */
 import { ref } from 'vue'
 
-export type Skin = 'ledger' | 'default'
+export const DEFAULT_SKIN = 'default'
 
 const STORAGE_KEY = 'skin'
 
-/** Module-level so every mounted toggle reflects the same state. */
-const skin = ref<Skin>('default')
+/** Module-level so every mounted picker reflects the same state. */
+const skin = ref<string>(DEFAULT_SKIN)
 
-function applySkin(value: Skin) {
+function applySkin(value: string) {
     if (typeof document === 'undefined') return
 
     const root = document.documentElement
 
-    if (value === 'ledger') root.setAttribute('data-skin', 'ledger')
+    if (value && value !== DEFAULT_SKIN) root.setAttribute('data-skin', value)
     else root.removeAttribute('data-skin')
-}
-
-function storedSkin(): Skin | null {
-    if (typeof window === 'undefined') return null
-
-    return localStorage.getItem(STORAGE_KEY) === 'ledger' ? 'ledger' : null
 }
 
 /**
  * Called once at boot. The blade template applies the attribute before first
- * paint; this only syncs the ref so the toggle starts in the right position.
+ * paint; this only syncs the ref so the picker starts in the right position.
+ * It reads the attribute rather than localStorage so the two can never
+ * disagree — blade has already validated the stored value against the registry.
  */
 export function initializeSkin() {
-    const stored = storedSkin()
+    if (typeof document === 'undefined') return
 
-    if (stored) {
-        skin.value = stored
-        applySkin(stored)
-    }
+    skin.value = document.documentElement.getAttribute('data-skin') || DEFAULT_SKIN
 }
 
 export function useSkin() {
-    function setSkin(value: Skin) {
+    function setSkin(value: string) {
         skin.value = value
         applySkin(value)
 
-        if (typeof window !== 'undefined') {
-            if (value === 'ledger') localStorage.setItem(STORAGE_KEY, 'ledger')
-            else localStorage.removeItem(STORAGE_KEY)
-        }
+        if (typeof window === 'undefined') return
+
+        if (value && value !== DEFAULT_SKIN) localStorage.setItem(STORAGE_KEY, value)
+        else localStorage.removeItem(STORAGE_KEY)
     }
 
-    function toggleSkin() {
-        setSkin(skin.value === 'ledger' ? 'default' : 'ledger')
+    /**
+     * Step to the next skin in the registry, wrapping at the end. A cycle
+     * rather than a two-state toggle, so a third skin needs no new control.
+     */
+    function cycleSkin(ids: string[]) {
+        if (!ids.length) return
+
+        const next = ids[(ids.indexOf(skin.value) + 1) % ids.length]
+        setSkin(next)
     }
 
-    return { skin, setSkin, toggleSkin }
+    return { skin, setSkin, cycleSkin }
 }

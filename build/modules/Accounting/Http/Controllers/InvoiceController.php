@@ -69,22 +69,6 @@ class InvoiceController extends Controller
     {
         $company = CompanyContext::getCompany();
 
-        // Owner mode → simplified quick create
-        if ($this->prefersOwnerMode($request)) {
-            return Inertia::render('accounting/invoices/QuickCreate', [
-                'company' => [
-                    'id' => $company->id,
-                    'name' => $company->name,
-                    'slug' => $company->slug,
-                    'base_currency' => $company->base_currency,
-                    'default_payment_terms' => $company->default_payment_terms ?? null,
-                ],
-                'recentCustomers' => [],
-                'defaultTaxCode' => null,
-                'defaultTerms' => $company->default_payment_terms ?? null,
-            ]);
-        }
-
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -94,12 +78,6 @@ class InvoiceController extends Controller
 
         $revenueAccounts = Account::where('company_id', $company->id)
             ->where('type', 'revenue')
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-
-        $arAccounts = Account::where('company_id', $company->id)
-            ->where('subtype', 'accounts_receivable')
             ->where('is_active', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
@@ -114,13 +92,7 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
-            'arAccounts' => $arAccounts,
         ]);
-    }
-
-    protected function prefersOwnerMode(Request $request): bool
-    {
-        return true;
     }
 
     public function store(StoreInvoiceRequest $request): RedirectResponse
@@ -138,7 +110,8 @@ class InvoiceController extends Controller
             'date' => $validated['invoice_date'] ?? null,
             'draft' => $status === 'draft',
             'payment_terms' => $validated['payment_terms'] ?? null,
-            'description' => $validated['description'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'internal_notes' => $validated['internal_notes'] ?? null,
             'send_immediately' => (bool) ($validated['send_immediately'] ?? ($status !== 'draft')),
             'line_items' => $validated['line_items'],
         ];
@@ -193,12 +166,6 @@ class InvoiceController extends Controller
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 
-        $arAccounts = Account::where('company_id', $company->id)
-            ->where('subtype', 'accounts_receivable')
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-
         return Inertia::render('accounting/invoices/Edit', [
             'company' => [
                 'id' => $company->id,
@@ -210,7 +177,6 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
-            'arAccounts' => $arAccounts,
         ]);
     }
 
@@ -231,13 +197,26 @@ class InvoiceController extends Controller
             'customer' => $validated['customer_id'] ?? $invoiceRecord->customer_id,
             'currency' => $validated['currency'] ?? $invoiceRecord->currency ?? $company->base_currency ?? 'USD',
             'due' => $validated['due_date'] ?? null,
+            // The form offers an invoice date and both notes; before this they
+            // were validated, accepted, and then dropped on the floor here.
+            'date' => $validated['invoice_date'] ?? null,
             'draft' => ($validated['status'] ?? $invoiceRecord->status) === 'draft',
             'payment_terms' => $validated['payment_terms'] ?? null,
-            'description' => $validated['description'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'internal_notes' => $validated['internal_notes'] ?? null,
             'line_items' => $validated['line_items'] ?? [],
         ];
 
-        $result = $commandBus->dispatch('invoice.update', $params, $request->user());
+        // destroy() already handled its failures; update() did not, so a
+        // refused amendment reached the user as a 500 page with their work
+        // gone. A rejected edit is a form state, not a crash.
+        try {
+            $result = $commandBus->dispatch('invoice.update', $params, $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', $e->getMessage())->withInput();
+        }
 
         return redirect()
             ->route('invoices.show', ['company' => $company->slug, 'invoice' => $invoiceRecord->id])

@@ -385,7 +385,7 @@ const formatCurrency = (amount: number) => {
                   @click="sendInvoice"
                   :disabled="form.processing || !isValid"
                   size="lg"
-                  class="w-full bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50"
+                  class="w-full bg-status-success text-status-success-contrast hover:opacity-90 disabled:opacity-50"
                 >
                   <Send class="mr-2 h-4 w-4" />
                   {{ t('sendInvoice') }}

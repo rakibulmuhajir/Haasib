@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\CompanyOnboardingService;
+use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -114,6 +115,12 @@ trait DemoSupport
         'acct.accounts',
         'auth.company_onboarding',
         'auth.company_user',
+        // RBAC is per-company: roles are rows scoped by company_id, so a re-seed
+        // must clear them or the unique (company_id, name, guard_name) survives
+        // the company it belonged to. model_has_* first — roles cascades the rest.
+        'model_has_permissions',
+        'model_has_roles',
+        'roles',
     ];
 
     /**
@@ -206,6 +213,12 @@ trait DemoSupport
         $user->companies()->syncWithoutDetaching([
             $company->id => ['role' => 'owner', 'is_active' => true, 'joined_at' => now()],
         ]);
+
+        // The pivot row alone grants nothing — permission checks go through Spatie
+        // roles scoped to the company. Real company creation does this via
+        // CompanyController; the seeder has to do it too or every permission-gated
+        // page 403s for the demo login.
+        app(CompanyRbacBootstrapper::class)->bootstrap($company, $user);
 
         $onboarding->initializeOnboarding($company);
 

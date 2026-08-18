@@ -29,6 +29,8 @@ class CreateAction implements PaletteAction
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'payment_terms' => 'nullable|integer|min:0|max:365',
             'description' => 'nullable|string|max:500',
+            'notes' => 'nullable|string',
+            'internal_notes' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
             'line_items.*.quantity' => 'required|numeric|min:0.01',
@@ -137,7 +139,12 @@ class CreateAction implements PaletteAction
                 'base_amount' => $baseAmount,
                 'payment_terms' => $paymentTerms,
                 'status' => $status,
-                'notes' => $params['description'] ?? null,
+                // Two separate columns, two separate audiences: `notes` prints
+                // on the invoice, `internal_notes` never leaves the company.
+                // `description` is the old single-field name kept working for
+                // the command palette, which still sends it.
+                'notes' => $params['notes'] ?? null,
+                'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
                 'created_by_user_id' => Auth::id(),
             ]);
 

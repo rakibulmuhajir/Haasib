@@ -11,27 +11,39 @@ use App\Modules\Accounting\Models\InvoiceLineItem;
 use App\Support\PaletteFormatter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class UpdateAction implements PaletteAction
 {
+    /** Statuses in which the invoice has been withdrawn from the ledger. */
+    private const WITHDRAWN = ['void', 'cancelled', 'reversed'];
+
     public function rules(): array
     {
         return [
             'id' => 'required|string|uuid',
             'customer' => 'required|string|max:255',
             'currency' => 'required|string|size:3|uppercase',
-            'due' => 'nullable|date|after_or_equal:today',
+            'date' => 'nullable|date',
+            // Not `after_or_equal:today`: that rule made any invoice whose due
+            // date had already passed permanently unamendable, which is exactly
+            // the invoice most likely to need correcting.
+            'due' => 'nullable|date',
             'draft' => 'nullable|boolean',
             'exchange_rate' => 'nullable|numeric|min:0.00000001|max:999999999',
             'payment_terms' => 'nullable|integer|min:0|max:365',
+            'description' => 'nullable|string|max:500',
+            'notes' => 'nullable|string',
+            'internal_notes' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.description' => 'required|string|max:500',
             'line_items.*.quantity' => 'required|numeric|min:0.01',
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'line_items.*.discount_rate' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.income_account_id' => 'nullable|uuid',
             'line_items.*.line_number' => 'nullable|integer|min:1',
         ];
     }
@@ -50,9 +62,20 @@ class UpdateAction implements PaletteAction
             ->where('company_id', $company->id)
             ->firstOrFail();
 
-        // Prevent updates to paid invoices
+        // An invoice stops being amendable once its figures have been reported
+        // somewhere else — money received against it, or the document itself
+        // withdrawn from the ledger. The UI hides the form in these states; this
+        // is the rule that actually holds, since the UI is only a suggestion.
         if ($invoice->paid_amount > 0) {
-            throw new \Exception('Cannot update invoice that has payments applied.');
+            throw ValidationException::withMessages([
+                'invoice' => 'Money has been received against this invoice, so it can no longer be changed. Issue a credit note instead.',
+            ]);
+        }
+
+        if (in_array($invoice->status, self::WITHDRAWN, true)) {
+            throw ValidationException::withMessages([
+                'invoice' => "This invoice has been {$invoice->status} and can no longer be changed. Raise a new one instead.",
+            ]);
         }
 
         // Resolve customer (UUID, email, or fuzzy name match)
@@ -61,9 +84,12 @@ class UpdateAction implements PaletteAction
         return DB::transaction(function () use ($params, $company, $customer, $invoice) {
             // Calculate dates
             $paymentTerms = $params['payment_terms'] ?? $customer->payment_terms ?? 30;
+            $invoiceDate = !empty($params['date'])
+                ? Carbon::parse($params['date'])
+                : $invoice->invoice_date->copy();
             $dueDate = !empty($params['due'])
                 ? Carbon::parse($params['due'])
-                : $invoice->invoice_date->copy()->addDays($paymentTerms);
+                : $invoiceDate->copy()->addDays($paymentTerms);
 
             // Determine status
             $status = ($params['draft'] ?? false)
@@ -110,6 +136,7 @@ class UpdateAction implements PaletteAction
             // Update invoice
             $invoice->update([
                 'customer_id' => $customer->id,
+                'invoice_date' => $invoiceDate,
                 'due_date' => $dueDate,
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
@@ -122,12 +149,21 @@ class UpdateAction implements PaletteAction
                 'base_amount' => $baseAmount,
                 'payment_terms' => $paymentTerms,
                 'status' => $status,
-                'notes' => $params['description'] ?? null,
+                // Same two-audience split as CreateAction; `description` stays
+                // accepted as the palette's older name for the internal note.
+                'notes' => $params['notes'] ?? null,
+                'internal_notes' => $params['internal_notes'] ?? $params['description'] ?? null,
                 'updated_by_user_id' => Auth::id(),
             ]);
 
-            // Delete existing line items
-            InvoiceLineItem::where('invoice_id', $invoice->id)->delete();
+            // forceDelete, not delete. InvoiceLineItem soft-deletes, but the
+            // unique index on (invoice_id, line_number) does not exclude
+            // soft-deleted rows — so the replacement line 1 collided with the
+            // discarded line 1 and every single invoice amendment failed with a
+            // constraint violation. Soft-deleting bought nothing anyway: the
+            // lines are rebuilt with fresh ids on each save, so the tombstones
+            // are orphans no screen can ever surface.
+            InvoiceLineItem::where('invoice_id', $invoice->id)->forceDelete();
 
             // Persist new line items
             foreach ($lineItems as $idx => $item) {

@@ -157,7 +157,7 @@ const handleDelete = () => {
                 <Badge variant="outline">{{ index + 1 }}</Badge>
                 <span class="font-medium">{{ getFieldLabel(condition.field) }}</span>
                 <span class="text-muted-foreground">{{ getOperatorLabel(condition.operator) }}</span>
-                <span class="font-mono bg-background px-2 py-1 rounded">"{{ condition.value }}"</span>
+                <span class="font-mono bg-background px-2 py-1 rounded-sm">"{{ condition.value }}"</span>
               </div>
               <p class="text-xs text-muted-foreground mt-2">
                 All conditions must match for the rule to apply
@@ -183,7 +183,7 @@ const handleDelete = () => {
               >
                 <span class="font-medium">{{ getActionLabel(key as string) }}</span>
                 <ArrowRight class="h-4 w-4 text-muted-foreground" />
-                <span class="font-mono bg-background px-2 py-1 rounded">
+                <span class="font-mono bg-background px-2 py-1 rounded-sm">
                   {{ formatActionValue(key as string, value) }}
                 </span>
               </div>

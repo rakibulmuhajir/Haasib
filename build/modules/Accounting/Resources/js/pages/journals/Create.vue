@@ -114,7 +114,7 @@ const submit = () => {
         <div
           v-for="(entry, idx) in form.entries"
           :key="idx"
-          class="grid gap-3 rounded border p-3 md:grid-cols-12"
+          class="grid gap-3 rounded-sm border p-3 md:grid-cols-12"
         >
           <div class="md:col-span-4">
             <Label>Account</Label>

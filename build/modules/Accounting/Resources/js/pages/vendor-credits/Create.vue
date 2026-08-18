@@ -243,7 +243,7 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="grid gap-3 rounded border p-3 md:grid-cols-5"
+            class="grid gap-3 rounded-sm border p-3 md:grid-cols-5"
           >
             <div class="md:col-span-2">
               <Label>Description <span class="text-status-critical">*</span></Label>

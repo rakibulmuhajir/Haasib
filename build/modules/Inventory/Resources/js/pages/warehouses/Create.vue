@@ -182,7 +182,7 @@ const submit = () => {
                   <SelectItem v-for="item in fuelItemOptions" :key="item.value" :value="item.value">
                     <div class="flex items-center gap-2">
                       <span>{{ item.label }}</span>
-                      <span v-if="item.category" class="rounded bg-status-info/10 px-2 py-1 text-xs text-status-info">
+                      <span v-if="item.category" class="rounded-sm bg-status-info/10 px-2 py-1 text-xs text-status-info">
                         {{ item.category }}
                       </span>
                     </div>

@@ -15,6 +15,15 @@
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 
+    /* Multiplicative, not additive, so the scale stays proportional at any
+       base. At the default 0.5rem these are exactly Tailwind's stock 0.75rem
+       and 1rem; at the ledger's 2px they come out near-square rather than
+       rounder than the button inside them. @theme inline means only these
+       five names reach the utilities, so a skin sets --radius and the whole
+       scale follows. rounded-full is untouched — avatars, pips and switch
+       thumbs are meant to be round. */
+    --radius-2xl: calc(var(--radius) * 2);
+    --radius-xl: calc(var(--radius) * 1.5);
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
@@ -520,7 +529,8 @@
     --surface-2: var(--surface-canvas);
     --surface-3: var(--surface-sunken);
 
-    /* Near-square. rounded-lg/md/sm resolve through this automatically. */
+    /* Near-square, and near-square at every step: the whole radius scale is
+       proportional to this one number. */
     --radius: 2px;
 
     /* No gradients. The ledger is printed, not lit. */
@@ -704,13 +714,6 @@
 [data-skin] [data-slot="switch-thumb"] {
     --tw-shadow: 0 0 #0000;
 }
-
-/* Radius: rounded-lg/md/sm resolve through --radius and follow the skin
-   automatically. These three do not. rounded-full is untouched — avatars,
-   pips and switch thumbs are meant to be round. */
-[data-skin] .rounded-xl { border-radius: calc(var(--radius) + 2px); }
-[data-skin] .rounded-2xl { border-radius: calc(var(--radius) + 3px); }
-[data-skin] .rounded { border-radius: var(--radius); }
 
 /* Rule 4 — every state needs a non-colour indicator, and focus must be
    visible on every control, not merely a colour shift. */

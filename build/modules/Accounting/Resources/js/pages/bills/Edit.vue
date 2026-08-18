@@ -209,7 +209,7 @@ const handleSubmit = () => {
           <select
             id="vendor_id"
             v-model="form.vendor_id"
-            class="w-full rounded border px-3 py-2"
+            class="w-full rounded-sm border px-3 py-2"
             :disabled="!['draft','received'].includes(bill.status)"
           >
             <option value="">{{ t('selectVendor') }}</option>
@@ -282,7 +282,7 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="rounded border p-3 space-y-3"
+            class="rounded-sm border p-3 space-y-3"
           >
             <!-- Item & Warehouse Row (if inventory enabled) -->
             <div v-if="inventoryEnabled && items?.length" class="grid gap-3 md:grid-cols-3">

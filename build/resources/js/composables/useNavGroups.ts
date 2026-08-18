@@ -67,13 +67,12 @@ export function useNavGroups() {
     const navGroups = computed<NavGroup[]>(() =>
         getSidebarGroups({
             slug: currentCompany.value?.slug ?? null,
-            mode: 'owner',
             isFuelStationCompany: isFuelStationCompany.value,
             isUmrahCompany: isUmrahCompany.value,
             isInventoryEnabled: isInventoryEnabled.value,
             isPayrollEnabled: isPayrollEnabled.value,
             currentCompanyRole: authProps.value.currentCompanyRole || null,
-            t: (key: string) => t(key, 'owner'),
+            t,
         }),
     )
 

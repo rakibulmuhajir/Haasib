@@ -130,7 +130,7 @@ Three steps. Nothing else should be necessary; if it is, the grammar has leaked 
 }
 ```
 
-That is the whole job. The registry drives the pre-paint script, the ground CSS, the Inertia payload and the preview switch; the grammar, density contracts, radius normalisation, focus ring and reduced-motion handling already apply through `[data-skin]`.
+That is the whole job. The registry drives the pre-paint script, the ground CSS, the Inertia payload and the preview switch; the grammar, density contracts, focus ring and reduced-motion handling already apply through `[data-skin]`. **Radius is one number.** `--radius-sm` through `--radius-2xl` are all derived from `--radius`, so `rounded-sm` / `md` / `lg` / `xl` / `2xl` follow a skin without any per-utility patching. `rounded-full` is deliberately outside the scale — avatars, pips and switch thumbs are meant to be round.
 
 If a skin genuinely needs an exception to the grammar — say a marketing theme that wants its cards to float — override it in that skin's own block, deliberately and in one place, with a comment saying why.
 

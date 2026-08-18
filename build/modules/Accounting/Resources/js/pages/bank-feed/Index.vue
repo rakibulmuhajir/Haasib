@@ -67,7 +67,7 @@ const formatCurrency = (val: number, currency = 'USD') => {
           </CardHeader>
           <CardContent>
             <div class="space-y-4">
-              <div v-if="props.balanceExplainer.is_balanced" class="bg-status-success/10 p-3 rounded text-sm text-status-success flex items-center gap-2">
+              <div v-if="props.balanceExplainer.is_balanced" class="bg-status-success/10 p-3 rounded-sm text-sm text-status-success flex items-center gap-2">
                 <span class="text-lg">✓</span>
                 <div>
                   <div class="font-semibold">Balances Match</div>
@@ -90,7 +90,7 @@ const formatCurrency = (val: number, currency = 'USD') => {
                   <span class="font-bold">{{ formatCurrency(props.balanceExplainer.difference, props.balanceExplainer.currency) }}</span>
                 </div>
 
-                <div class="mt-4 bg-status-attention/10 p-3 rounded text-sm text-status-attention">
+                <div class="mt-4 bg-status-attention/10 p-3 rounded-sm text-sm text-status-attention">
                   <div class="font-semibold mb-2">Why the difference?</div>
                   <ul class="space-y-1 list-disc list-inside">
                     <li v-for="(explanation, idx) in props.balanceExplainer.explanations" :key="idx">

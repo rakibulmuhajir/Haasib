@@ -206,9 +206,10 @@ class BillController extends Controller
             ])->values();
         }
 
-        // Owner mode → simplified quick create (but use full form if inventory enabled with items)
+        // Without inventory items there is nothing for the full form's line
+        // grid to do, so the short form is the whole job.
         $hasInventoryItems = $inventoryEnabled && count($items) > 0;
-        if ($this->prefersOwnerMode($request) && !$hasInventoryItems) {
+        if (! $hasInventoryItems) {
             $isFuelStation = ($company->industry_code ?? null) === 'fuel_station'
                 || ($company->industry ?? null) === 'fuel_station'
                 || $company->isModuleEnabled('fuel_station');
@@ -275,11 +276,6 @@ class BillController extends Controller
             'items' => $items,
             'warehouses' => $warehouses,
         ]);
-    }
-
-    protected function prefersOwnerMode(Request $request): bool
-    {
-        return true;
     }
 
     public function store(StoreBillRequest $request): RedirectResponse

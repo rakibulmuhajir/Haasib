@@ -503,7 +503,7 @@ const commonMistakes = [
       <CardContent>
         <p class="text-sm text-text-secondary">
           The full onboarding guide with detailed explanations, examples, and checklists is available in the project documentation at
-          <code class="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">docs/fuel-station-onboarding-guide.md</code>.
+          <code class="rounded-sm bg-muted px-1.5 py-0.5 text-xs font-mono">docs/fuel-station-onboarding-guide.md</code>.
           This in-app guide provides all the essential information you need for daily use.
         </p>
       </CardContent>

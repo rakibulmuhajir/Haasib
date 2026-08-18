@@ -78,7 +78,7 @@ const updateStatus = (type: 'hotels' | 'hotel-vendors', record: any) => {
                 <TableCell>{{ hotel.city }}</TableCell>
                 <TableCell>
                   <div class="flex items-center gap-2">
-                    <img v-if="hotel.vendor?.logo_url" :src="hotel.vendor.logo_url" :alt="`${hotel.vendor.name} logo`" class="h-8 w-8 rounded border object-contain" />
+                    <img v-if="hotel.vendor?.logo_url" :src="hotel.vendor.logo_url" :alt="`${hotel.vendor.name} logo`" class="h-8 w-8 rounded-sm border object-contain" />
                     <span>{{ hotel.vendor?.name || '-' }}</span>
                   </div>
                 </TableCell>
@@ -102,7 +102,7 @@ const updateStatus = (type: 'hotels' | 'hotel-vendors', record: any) => {
               <TableEmpty v-if="!hotelVendors.data.length" :colspan="11">No hotel vendors found.</TableEmpty>
               <TableRow v-for="vendor in hotelVendors.data" :key="vendor.id" :class="{ 'opacity-60': !vendor.is_active }">
                 <TableCell class="font-medium">{{ vendor.vendor_number }}</TableCell>
-                <TableCell><div class="flex items-center gap-2"><img v-if="vendor.logo_url" :src="vendor.logo_url" :alt="`${vendor.name} logo`" class="h-8 w-8 rounded border object-contain" /><span>{{ vendor.name }}</span></div></TableCell>
+                <TableCell><div class="flex items-center gap-2"><img v-if="vendor.logo_url" :src="vendor.logo_url" :alt="`${vendor.name} logo`" class="h-8 w-8 rounded-sm border object-contain" /><span>{{ vendor.name }}</span></div></TableCell>
                 <TableCell>{{ vendor.phone || '-' }}</TableCell>
                 <TableCell>{{ vendor.email || '-' }}</TableCell>
                 <TableCell>{{ vendor.city || '-' }}</TableCell>

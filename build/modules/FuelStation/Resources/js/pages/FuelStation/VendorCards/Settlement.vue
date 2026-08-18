@@ -356,7 +356,7 @@ const todayTableData = computed(() => {
               type="checkbox"
               :checked="selectedSales.has(row.select)"
               @change="toggleSaleSelection(row.select)"
-              class="rounded border-border"
+              class="rounded-sm border-border"
             />
           </template>
 
@@ -373,7 +373,7 @@ const todayTableData = computed(() => {
               :checked="selectedSales.size === props.pendingSales.length && props.pendingSales.length > 0"
               :indeterminate="selectedSales.size > 0 && selectedSales.size < props.pendingSales.length"
               @change="selectAllPending"
-              class="rounded border-border"
+              class="rounded-sm border-border"
             />
           </template>
         </DataTable>

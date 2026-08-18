@@ -144,7 +144,7 @@ const formatAddress = () => {
               <div
                 v-for="level in stockLevels.data"
                 :key="level.id"
-                class="flex items-center justify-between py-3 border-b last:border-0 cursor-pointer hover:bg-muted/50 -mx-2 px-2 rounded"
+                class="flex items-center justify-between py-3 border-b last:border-0 cursor-pointer hover:bg-muted/50 -mx-2 px-2 rounded-sm"
                 @click="router.get(`/${company.slug}/items/${level.item.id}`)"
               >
                 <div>

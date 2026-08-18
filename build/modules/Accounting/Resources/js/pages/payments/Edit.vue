@@ -251,7 +251,7 @@ const allocatedAmount = computed(() => {
         </CardHeader>
         <CardContent>
           <div class="space-y-2">
-            <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded">
+            <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded-sm">
               <span class="font-medium">Invoice #{{ allocation.invoice_id }}</span>
               <span class="font-medium">{{ formatCurrency(allocation.amount) }}</span>
             </div>

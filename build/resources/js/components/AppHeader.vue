@@ -285,7 +285,7 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                         <Search class="size-4" />
                         <span class="hidden text-sm md:inline">Search</span>
                         <kbd
-                            class="hidden rounded border border-rule-subtle px-1.5 font-mono text-[11px] text-text-metadata md:inline"
+                            class="hidden rounded-sm border border-rule-subtle px-1.5 font-mono text-[11px] text-text-metadata md:inline"
                             >{{ shortcut }}</kbd
                         >
                     </Button>

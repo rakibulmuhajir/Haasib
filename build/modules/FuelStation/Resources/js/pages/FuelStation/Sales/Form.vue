@@ -276,7 +276,7 @@ const setPaymentTotal = () => {
         <Card class="border-border/80">
           <CardHeader>
             <CardTitle class="text-base flex items-center gap-2">
-              <Fuel class="h-5 w-5 text-blue-600" />
+              <Fuel class="h-5 w-5 text-status-info" />
               Pump & Fuel Selection
             </CardTitle>
           </CardHeader>
@@ -369,13 +369,13 @@ const setPaymentTotal = () => {
                   Change
                 </Button>
               </div>
-              <div v-else class="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50">
-                <Building2 class="h-5 w-5 text-amber-600" />
+              <div v-else class="flex items-center gap-3 p-3 rounded-lg border border-status-attention/30 bg-status-attention/10">
+                <Building2 class="h-5 w-5 text-status-attention" />
                 <div class="flex-1">
-                  <p class="font-medium text-amber-800">No customer selected</p>
-                  <p class="text-sm text-amber-700">Required for {{ saleType }} sales</p>
+                  <p class="font-medium text-status-attention">No customer selected</p>
+                  <p class="text-sm text-status-attention">Required for {{ saleType }} sales</p>
                 </div>
-                <Button size="sm" class="border-amber-300 text-amber-700 hover:bg-amber-100" @click="showCustomerDialog = true">
+                <Button size="sm" class="border-status-attention/30 text-status-attention hover:bg-status-attention/10" @click="showCustomerDialog = true">
                   Select Customer
                 </Button>
               </div>
@@ -401,7 +401,7 @@ const setPaymentTotal = () => {
         <Card class="border-border/80">
           <CardHeader>
             <CardTitle class="text-base flex items-center gap-2">
-              <CreditCard class="h-5 w-5 text-green-600" />
+              <CreditCard class="h-5 w-5 text-status-success" />
               Payment Breakdown
             </CardTitle>
             <CardDescription>How was this sale paid?</CardDescription>
@@ -458,13 +458,13 @@ const setPaymentTotal = () => {
               </Button>
               <div class="flex justify-between items-center">
                 <span class="text-lg font-medium">Total Paid</span>
-                <span class="text-xl font-bold" :class="totalPaid >= total ? 'text-green-600' : 'text-amber-600'">
+                <span class="text-xl font-bold" :class="totalPaid >= total ? 'text-status-success' : 'text-status-attention'">
                   {{ formatCurrency(totalPaid) }}
                 </span>
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-sm text-text-secondary">Balance</span>
-                <span class="text-sm font-medium" :class="balance <= 0 ? 'text-green-600' : 'text-red-600'">
+                <span class="text-sm font-medium" :class="balance <= 0 ? 'text-status-success' : 'text-status-critical'">
                   {{ formatCurrency(balance) }}
                 </span>
               </div>
@@ -485,7 +485,7 @@ const setPaymentTotal = () => {
               <span>Subtotal</span>
               <span>{{ formatCurrency(subtotal) }}</span>
             </div>
-            <div v-if="discount > 0" class="flex justify-between text-green-600">
+            <div v-if="discount > 0" class="flex justify-between text-status-success">
               <span>Discount</span>
               <span>-{{ formatCurrency(discount) }}</span>
             </div>
@@ -516,7 +516,7 @@ const setPaymentTotal = () => {
           <CardContent class="pt-6">
             <div class="space-y-3">
               <Button
-                class="w-full bg-blue-600 hover:bg-blue-700"
+                class="w-full bg-status-info hover:bg-status-info"
                 size="lg"
                 :disabled="!selectedPump || !selectedFuelItem || !quantity || totalPaid !== total"
                 @click="submitSale"
@@ -529,9 +529,9 @@ const setPaymentTotal = () => {
               </Button>
             </div>
 
-            <div v-if="Object.keys(formErrors).length > 0" class="mt-4 p-3 rounded-lg border border-red-200 bg-red-50">
-              <p class="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
-              <ul class="text-sm text-red-700 space-y-1">
+            <div v-if="Object.keys(formErrors).length > 0" class="mt-4 p-3 rounded-lg border border-status-critical/30 bg-status-critical/10">
+              <p class="text-sm font-medium text-status-critical mb-2">Please fix the following errors:</p>
+              <ul class="text-sm text-status-critical space-y-1">
                 <li v-for="(messages, field) in formErrors" :key="field">
                   {{ messages[0] }}
                 </li>

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -162,10 +162,10 @@ function handleDelete() {
     </template>
 
     <!-- Create Form Card -->
-    <Card v-if="canCreateCompanies && showCreateForm" class="mb-6 border-zinc-200 bg-white">
+    <Card v-if="canCreateCompanies && showCreateForm" class="mb-6 border-rule-default bg-surface-raised">
       <CardHeader>
         <CardTitle>Create New Company</CardTitle>
-        <CardDescription class="text-zinc-500">
+        <CardDescription class="text-text-secondary">
           Add a new organization to your account
         </CardDescription>
       </CardHeader>
@@ -174,16 +174,16 @@ function handleDelete() {
           <div v-if="canAssignOwner" class="space-y-2 sm:col-span-2">
             <Label for="owner">Owner</Label>
             <Select v-model="createForm.owner_user_id">
-              <SelectTrigger id="owner" class="border-zinc-300">
+              <SelectTrigger id="owner" class="border-rule-default">
                 <SelectValue placeholder="Select the user who will own this company" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="user in props.users" :key="user.id" :value="user.id">
-                  {{ user.name }} · {{ user.email }}
+                  {{ user.name }} Â· {{ user.email }}
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="createForm.errors.owner_user_id" class="text-xs text-red-600">
+            <p v-if="createForm.errors.owner_user_id" class="text-xs text-status-critical">
               {{ createForm.errors.owner_user_id }}
             </p>
           </div>
@@ -203,7 +203,7 @@ function handleDelete() {
                 }
               "
             >
-              <SelectTrigger id="country" class="border-zinc-300">
+              <SelectTrigger id="country" class="border-rule-default">
                 <SelectValue placeholder="Select country" />
               </SelectTrigger>
               <SelectContent>
@@ -212,7 +212,7 @@ function handleDelete() {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="createForm.errors.country" class="text-xs text-red-600">
+            <p v-if="createForm.errors.country" class="text-xs text-status-critical">
               {{ createForm.errors.country }}
             </p>
           </div>
@@ -222,16 +222,16 @@ function handleDelete() {
               id="name"
               v-model="createForm.name"
               placeholder="Acme Inc"
-              class="border-zinc-300"
+              class="border-rule-default"
             />
-            <p v-if="createForm.errors.name" class="text-xs text-red-600">
+            <p v-if="createForm.errors.name" class="text-xs text-status-critical">
               {{ createForm.errors.name }}
             </p>
           </div>
           <div class="space-y-2">
             <Label for="industry">Industry</Label>
             <Select v-model="createForm.industry_code">
-              <SelectTrigger id="industry" class="border-zinc-300">
+              <SelectTrigger id="industry" class="border-rule-default">
                 <SelectValue placeholder="Select industry" />
               </SelectTrigger>
               <SelectContent>
@@ -240,7 +240,7 @@ function handleDelete() {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="createForm.errors.industry_code" class="text-xs text-red-600">
+            <p v-if="createForm.errors.industry_code" class="text-xs text-status-critical">
               {{ createForm.errors.industry_code }}
             </p>
           </div>
@@ -280,53 +280,53 @@ function handleDelete() {
       <Card
         v-for="company in filteredCompanies"
         :key="company.id"
-        class="border-zinc-200 bg-white transition-all hover:border-zinc-300 hover:shadow-md"
+        class="border-rule-default bg-surface-raised transition-all hover:border-rule-default hover:shadow-md"
       >
         <CardHeader class="space-y-2 pb-3">
           <div class="flex items-start justify-between">
-            <CardTitle class="flex items-center gap-2 text-zinc-900">
-              <Building2 class="h-4 w-4 text-zinc-500" />
+            <CardTitle class="flex items-center gap-2 text-foreground">
+              <Building2 class="h-4 w-4 text-text-secondary" />
               <span class="truncate">{{ company.name }}</span>
             </CardTitle>
             <Badge :variant="company.is_active ? 'default' : 'secondary'" class="shrink-0">
               {{ company.is_active ? 'Active' : 'Inactive' }}
             </Badge>
           </div>
-          <p class="text-sm text-zinc-500">{{ company.slug }}</p>
+          <p class="text-sm text-text-secondary">{{ company.slug }}</p>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="space-y-3 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-zinc-500">Role</span>
+              <span class="text-text-secondary">Role</span>
               <Badge variant="outline" class="capitalize">{{ company.role }}</Badge>
             </div>
             <div v-if="company.owner_name || company.owner_email" class="flex items-center justify-between gap-3">
-              <span class="text-zinc-500">Owner</span>
-              <span class="truncate text-right font-medium text-zinc-900">{{ company.owner_name || company.owner_email }}</span>
+              <span class="text-text-secondary">Owner</span>
+              <span class="truncate text-right font-medium text-foreground">{{ company.owner_name || company.owner_email }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1.5 text-zinc-500">
+              <span class="flex items-center gap-1.5 text-text-secondary">
                 <Globe class="h-3.5 w-3.5" />
                 Currency
               </span>
-              <span class="font-mono font-medium text-zinc-900">{{ company.base_currency }}</span>
+              <span class="font-mono font-medium text-foreground">{{ company.base_currency }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1.5 text-zinc-500">
+              <span class="flex items-center gap-1.5 text-text-secondary">
                 <Users class="h-3.5 w-3.5" />
                 Users
               </span>
-              <span class="font-medium text-zinc-900">{{ company.user_count || 0 }}</span>
+              <span class="font-medium text-foreground">{{ company.user_count || 0 }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-zinc-500">Created</span>
-              <div class="flex items-center gap-1.5 text-zinc-700">
+              <span class="text-text-secondary">Created</span>
+              <div class="flex items-center gap-1.5 text-text-secondary">
                 <Calendar class="h-3.5 w-3.5" />
                 <span>{{ formatDate(company.created_at) }}</span>
               </div>
             </div>
           </div>
-          <Separator class="bg-zinc-100" />
+          <Separator class="bg-surface-sunken" />
           <div class="flex items-center gap-2">
             <Button
               size="sm"
@@ -344,7 +344,7 @@ function handleDelete() {
               variant="ghost"
               @click="confirmDelete(company)"
               :disabled="company.role !== 'owner'"
-              class="text-red-600 hover:text-red-700 hover:bg-red-50"
+              class="text-status-critical hover:text-status-critical hover:bg-status-critical/10"
               aria-label="Delete company"
             >
               <Trash2 class="h-3.5 w-3.5" />

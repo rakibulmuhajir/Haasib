@@ -290,10 +290,10 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Physical loss</CardDescription>
-            <CardTitle class="text-2xl text-red-700">{{ qty(totals.physical_loss_liters) }} L</CardTitle>
+            <CardTitle class="text-2xl text-status-critical">{{ qty(totals.physical_loss_liters) }} L</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <AlertTriangle class="h-4 w-4 text-red-700" />
+            <AlertTriangle class="h-4 w-4 text-status-critical" />
             {{ money(totals.physical_loss_value) }}
           </CardContent>
         </Card>
@@ -301,10 +301,10 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Physical gain</CardDescription>
-            <CardTitle class="text-2xl text-emerald-700">{{ qty(totals.physical_gain_liters) }} L</CardTitle>
+            <CardTitle class="text-2xl text-status-success">{{ qty(totals.physical_gain_liters) }} L</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <PackageCheck class="h-4 w-4 text-emerald-700" />
+            <PackageCheck class="h-4 w-4 text-status-success" />
             {{ money(totals.physical_gain_value) }}
           </CardContent>
         </Card>
@@ -315,7 +315,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
             <CardTitle class="text-2xl">{{ money(totals.pending_claim_amount) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <ClipboardCheck class="h-4 w-4 text-amber-700" />
+            <ClipboardCheck class="h-4 w-4 text-status-attention" />
             {{ totals.pending_claim_count }} pending
           </CardContent>
         </Card>
@@ -368,7 +368,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
                   <TableCell class="text-right">{{ qty(row.expected_liters) }} L</TableCell>
                   <TableCell class="text-right">{{ qty(row.dip_liters) }} L</TableCell>
                   <TableCell class="text-right">
-                    <span :class="row.variance_type === 'loss' ? 'text-red-700' : 'text-emerald-700'">
+                    <span :class="row.variance_type === 'loss' ? 'text-status-critical' : 'text-status-success'">
                       {{ row.variance_type === 'loss' ? '-' : '+' }}{{ qty(Math.abs(row.variance_liters)) }} L
                     </span>
                   </TableCell>
@@ -433,7 +433,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
                   </TableCell>
                   <TableCell class="text-right">{{ qty(row.expected_quantity) }}</TableCell>
                   <TableCell class="text-right">{{ qty(row.received_quantity) }}</TableCell>
-                  <TableCell class="text-right text-red-700">{{ qty(Math.abs(row.variance_quantity)) }}</TableCell>
+                  <TableCell class="text-right text-status-critical">{{ qty(Math.abs(row.variance_quantity)) }}</TableCell>
                   <TableCell class="text-right">{{ money(row.claim_amount) }}</TableCell>
                   <TableCell>
                     <div class="flex flex-wrap items-center gap-2">

@@ -153,7 +153,7 @@ const isEditable = computed(() => {
                 <Badge :variant="getStatusBadgeVariant(credit_note.status)" class="mb-2">
                   {{ credit_note.status }}
                 </Badge>
-                <div class="text-2xl font-bold text-green-600">
+                <div class="text-2xl font-bold text-status-success">
                   {{ formatCurrency(credit_note.amount, credit_note.base_currency) }}
                 </div>
               </div>
@@ -224,7 +224,7 @@ const isEditable = computed(() => {
           <CardContent class="space-y-3">
             <div class="flex justify-between">
               <span>Credit Amount:</span>
-              <span class="font-bold text-green-600">{{ formatCurrency(credit_note.amount, credit_note.base_currency) }}</span>
+              <span class="font-bold text-status-success">{{ formatCurrency(credit_note.amount, credit_note.base_currency) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span>Status:</span>

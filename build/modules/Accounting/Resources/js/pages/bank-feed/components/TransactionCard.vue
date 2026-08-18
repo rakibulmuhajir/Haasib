@@ -63,7 +63,7 @@ const formatCurrency = (val: number) => {
           <h3 class="font-semibold text-lg leading-tight">{{ props.transaction.description }}</h3>
         </div>
         <div class="text-right">
-          <div class="text-lg font-bold" :class="[isSpend ? 'text-red-600' : 'text-green-600']">
+          <div class="text-lg font-bold" :class="[isSpend ? 'text-status-critical' : 'text-status-success']">
             {{ isSpend ? '-' : '+' }}{{ formatCurrency(amount) }}
           </div>
           <Badge variant="outline" class="mt-1 text-xs" v-if="props.transaction.suggestions?.match?.length">

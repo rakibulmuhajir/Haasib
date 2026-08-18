@@ -177,7 +177,7 @@ const submitAllocation = () => {
                 ><CardHeader
                     ><CardTitle class="flex items-center gap-2 text-base"
                         ><ArrowDownLeft
-                            class="h-4 w-4 text-emerald-700"
+                            class="h-4 w-4 text-status-success"
                         />Received</CardTitle
                     ></CardHeader
                 ><CardContent class="text-2xl font-semibold"
@@ -295,7 +295,7 @@ const submitAllocation = () => {
                                         }}</Button
                                     >
                                 </div>
-                                <div v-else class="text-sm text-amber-700">
+                                <div v-else class="text-sm text-status-attention">
                                     Unallocated advance
                                 </div>
                             </TableCell>
@@ -324,7 +324,7 @@ const submitAllocation = () => {
                                     :class="
                                         payment.direction === 'sent'
                                             ? 'text-destructive'
-                                            : 'text-emerald-700'
+                                            : 'text-status-success'
                                     "
                                 >
                                     <MoneyText

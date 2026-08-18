@@ -141,11 +141,11 @@ const goToShow = (row: any) => {
 const getRelationshipBadge = (relationship: string | null | undefined) => {
   switch (relationship) {
     case 'owner':
-      return { class: 'bg-purple-100 text-purple-800', label: 'Owner' }
+      return { class: 'bg-status-info/10 text-status-info', label: 'Owner' }
     case 'employee':
-      return { class: 'bg-sky-100 text-sky-800', label: 'Employee' }
+      return { class: 'bg-status-info/10 text-status-info', label: 'Employee' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', label: 'External' }
+      return { class: 'bg-surface-sunken text-text-primary', label: 'External' }
   }
 }
 </script>
@@ -171,14 +171,14 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-sky-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Balance</CardDescription>
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_balance) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-purple-600" />
+            <Banknote class="h-4 w-4 text-status-info" />
             <span>Liability to customers</span>
           </div>
         </CardContent>
@@ -191,7 +191,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Users class="h-4 w-4 text-sky-600" />
+            <Users class="h-4 w-4 text-status-info" />
             <span>Customers with balance</span>
           </div>
         </CardContent>
@@ -241,7 +241,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
           </template>
 
           <template #cell-balance="{ row }">
-            <span class="font-medium" :class="row._raw.amanat_balance > 0 ? 'text-emerald-600' : ''">
+            <span class="font-medium" :class="row._raw.amanat_balance > 0 ? 'text-status-success' : ''">
               {{ row.balance }}
             </span>
           </template>
@@ -273,19 +273,19 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
             <div class="space-y-2 sm:col-span-2">
               <Label>Name</Label>
               <Input v-model="holderForm.name" placeholder="Customer name" />
-              <p v-if="holderForm.errors.name" class="text-xs text-red-600">{{ holderForm.errors.name }}</p>
+              <p v-if="holderForm.errors.name" class="text-xs text-status-critical">{{ holderForm.errors.name }}</p>
             </div>
 
             <div class="space-y-2">
               <Label>Phone</Label>
               <Input v-model="holderForm.phone" placeholder="Optional" />
-              <p v-if="holderForm.errors.phone" class="text-xs text-red-600">{{ holderForm.errors.phone }}</p>
+              <p v-if="holderForm.errors.phone" class="text-xs text-status-critical">{{ holderForm.errors.phone }}</p>
             </div>
 
             <div class="space-y-2">
               <Label>CNIC</Label>
               <Input v-model="holderForm.cnic" placeholder="Optional" />
-              <p v-if="holderForm.errors.cnic" class="text-xs text-red-600">{{ holderForm.errors.cnic }}</p>
+              <p v-if="holderForm.errors.cnic" class="text-xs text-status-critical">{{ holderForm.errors.cnic }}</p>
             </div>
 
             <div class="space-y-2">
@@ -300,7 +300,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
                   <SelectItem value="owner">Owner</SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="holderForm.errors.relationship" class="text-xs text-red-600">{{ holderForm.errors.relationship }}</p>
+              <p v-if="holderForm.errors.relationship" class="text-xs text-status-critical">{{ holderForm.errors.relationship }}</p>
             </div>
 
           </div>

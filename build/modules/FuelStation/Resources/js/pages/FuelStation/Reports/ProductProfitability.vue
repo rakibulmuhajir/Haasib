@@ -255,7 +255,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
             <CardTitle class="text-2xl">{{ money(totals.revenue) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Fuel class="h-4 w-4 text-sky-600" />
+            <Fuel class="h-4 w-4 text-status-info" />
             {{ qty(totals.quantity) }} units/L sold
           </CardContent>
         </Card>
@@ -266,7 +266,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
             <CardTitle class="text-2xl">{{ money(totals.gross_profit) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Percent class="h-4 w-4 text-emerald-700" />
+            <Percent class="h-4 w-4 text-status-success" />
             {{ percent(totals.gross_margin_percent) }} margin
           </CardContent>
         </Card>
@@ -277,7 +277,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
             <CardTitle class="text-2xl">{{ money(totals.margin_per_unit) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <TrendingUp class="h-4 w-4 text-violet-700" />
+            <TrendingUp class="h-4 w-4 text-status-info" />
             Across selected products
           </CardContent>
         </Card>
@@ -288,7 +288,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
             <CardTitle class="text-2xl">{{ money(totals.stock_gain_value - totals.stock_loss_value) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletCards class="h-4 w-4 text-amber-700" />
+            <WalletCards class="h-4 w-4 text-status-attention" />
             Loss {{ money(totals.stock_loss_value) }} · Gain {{ money(totals.stock_gain_value) }}
           </CardContent>
         </Card>
@@ -337,10 +337,10 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
                   <TableCell class="text-right">{{ percent(row.gross_margin_percent) }}</TableCell>
                   <TableCell class="text-right">
                     <div v-if="row.stock_loss_quantity || row.stock_gain_quantity" class="space-y-1">
-                      <div v-if="row.stock_loss_quantity" class="text-red-700">
+                      <div v-if="row.stock_loss_quantity" class="text-status-critical">
                         -{{ qty(row.stock_loss_quantity) }} {{ row.unit }} · {{ money(row.stock_loss_value) }}
                       </div>
-                      <div v-if="row.stock_gain_quantity" class="text-emerald-700">
+                      <div v-if="row.stock_gain_quantity" class="text-status-success">
                         +{{ qty(row.stock_gain_quantity) }} {{ row.unit }} · {{ money(row.stock_gain_value) }}
                       </div>
                     </div>

@@ -194,9 +194,9 @@ const handleCreate = () => {
         <span>Chart of Accounts</span>
         <Popover>
           <PopoverTrigger>
-            <HelpCircle class="h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer" />
+            <HelpCircle class="h-5 w-5 text-text-tertiary hover:text-text-secondary cursor-pointer" />
           </PopoverTrigger>
-          <PopoverContent class="w-80 p-4 text-sm text-gray-600 shadow-lg">
+          <PopoverContent class="w-80 p-4 text-sm text-text-secondary shadow-lg">
             The Chart of Accounts is a list of all the accounts used to record your financial transactions.
           </PopoverContent>
         </Popover>
@@ -204,7 +204,7 @@ const handleCreate = () => {
     </template>
 
     <template #actions>
-      <Button variant="default" class="bg-blue-600 hover:bg-blue-700 font-semibold rounded-full px-6 shadow-sm" @click="handleCreate">
+      <Button variant="default" class="bg-status-info hover:bg-status-info font-semibold rounded-full px-6 shadow-sm" @click="handleCreate">
         Add a New Account
       </Button>
     </template>
@@ -220,12 +220,12 @@ const handleCreate = () => {
           class="flex flex-col items-center justify-center rounded-full px-6 py-2 transition-all duration-200 border min-w-[120px]"
           :class="[
             activeTab === tab.key
-              ? 'bg-[#1c2c52] text-white border-[#1c2c52] shadow-md'
-              : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-200'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-surface-raised text-text-secondary hover:bg-surface-sunken border-rule-default'
           ]"
         >
           <span class="text-sm font-semibold">{{ tab.label }}</span>
-          <span class="text-xs font-bold" :class="activeTab === tab.key ? 'text-blue-200' : 'text-gray-400'">
+          <span class="text-xs font-bold" :class="activeTab === tab.key ? 'text-status-info' : 'text-text-tertiary'">
             {{ tabCounts[tab.key] }}
           </span>
         </button>
@@ -236,26 +236,26 @@ const handleCreate = () => {
         <div 
           v-for="group in groupedAccounts" 
           :key="group.key"
-          class="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden"
+          class="rounded-lg border border-rule-default bg-surface-raised shadow-sm overflow-hidden"
         >
           <!-- Section Header -->
-          <div class="flex items-center gap-2 border-b border-gray-100 bg-gray-50/80 px-6 py-4">
-            <h2 class="font-bold text-gray-800 text-base">{{ group.label }}</h2>
+          <div class="flex items-center gap-2 border-b border-rule-subtle bg-surface-sunken px-6 py-4">
+            <h2 class="font-bold text-text-primary text-base">{{ group.label }}</h2>
             <Popover>
               <PopoverTrigger>
-                <HelpCircle class="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" />
+                <HelpCircle class="h-4 w-4 text-text-tertiary hover:text-text-secondary cursor-pointer" />
               </PopoverTrigger>
-              <PopoverContent class="w-80 text-sm text-gray-600 p-3">
+              <PopoverContent class="w-80 text-sm text-text-secondary p-3">
                 {{ group.help }}
               </PopoverContent>
             </Popover>
           </div>
 
           <!-- 4. Accounts List -->
-          <div class="divide-y divide-gray-100">
+          <div class="divide-y divide-rule-subtle">
             <!-- Empty State -->
-            <div v-if="group.accounts.length === 0" class="px-6 py-8 text-center bg-white">
-              <p class="text-sm text-gray-500 italic mb-4">
+            <div v-if="group.accounts.length === 0" class="px-6 py-8 text-center bg-surface-raised">
+              <p class="text-sm text-text-secondary italic mb-4">
                 You haven't added any {{ group.label }} accounts yet.
               </p>
             </div>
@@ -264,21 +264,21 @@ const handleCreate = () => {
             <div 
               v-for="account in group.accounts" 
               :key="account.id"
-              class="group relative flex items-start justify-between px-6 py-5 hover:bg-blue-50/30 transition-colors"
+              class="group relative flex items-start justify-between px-6 py-5 hover:bg-status-info/30 transition-colors"
             >
               <div class="flex-1 pr-8">
                 <div class="flex items-center gap-3">
-                  <span class="font-bold text-gray-900">{{ account.name }}</span>
+                  <span class="font-bold text-text-primary">{{ account.name }}</span>
                 </div>
                 
                 <!-- Status Line -->
-                <div class="mt-1 text-xs text-gray-500">
-                  <span v-if="!account.is_active" class="text-amber-600 font-medium mr-2">Archived</span>
+                <div class="mt-1 text-xs text-text-secondary">
+                  <span v-if="!account.is_active" class="text-status-attention font-medium mr-2">Archived</span>
                   <span>No transactions for this account</span> <!-- Placeholder for real transaction check -->
                 </div>
 
                 <!-- Description (Single Column Layout) -->
-                <div v-if="account.description" class="mt-2 text-sm text-gray-600 leading-relaxed max-w-3xl">
+                <div v-if="account.description" class="mt-2 text-sm text-text-secondary leading-relaxed max-w-3xl">
                   {{ account.description }}
                 </div>
               </div>
@@ -286,7 +286,7 @@ const handleCreate = () => {
               <!-- Edit Action -->
               <button 
                 @click="handleEdit(account.id)"
-                class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-blue-600 p-2"
+                class="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-status-info p-2"
                 title="Edit Account"
               >
                 <Pencil class="h-4 w-4" />
@@ -295,10 +295,10 @@ const handleCreate = () => {
           </div>
 
           <!-- 5. "Add a new account" footer -->
-          <div class="border-t border-gray-100 bg-gray-50/30 px-6 py-3">
+          <div class="border-t border-rule-subtle bg-surface-sunken px-6 py-3">
             <button 
               @click="handleCreate"
-              class="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+              class="flex items-center gap-2 text-sm font-semibold text-status-info hover:text-status-info transition-colors"
             >
               <PlusCircle class="h-4 w-4" />
               Add a new account

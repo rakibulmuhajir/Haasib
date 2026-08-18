@@ -136,10 +136,10 @@ const submit = () => {
           </div>
 
           <!-- Tank-specific fields -->
-          <div v-if="form.warehouse_type === 'tank'" class="space-y-4 rounded-lg border border-sky-200 bg-sky-50 p-4">
+          <div v-if="form.warehouse_type === 'tank'" class="space-y-4 rounded-lg border border-status-info/30 bg-status-info/10 p-4">
             <div class="flex items-center gap-2">
-              <div class="h-2 w-2 rounded-full bg-sky-600"></div>
-              <h4 class="font-medium text-sky-900">Tank Configuration</h4>
+              <div class="h-2 w-2 rounded-full bg-status-info"></div>
+              <h4 class="font-medium text-status-info">Tank Configuration</h4>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -182,7 +182,7 @@ const submit = () => {
                   <SelectItem v-for="item in fuelItemOptions" :key="item.value" :value="item.value">
                     <div class="flex items-center gap-2">
                       <span>{{ item.label }}</span>
-                      <span v-if="item.category" class="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700">
+                      <span v-if="item.category" class="rounded bg-status-info/10 px-2 py-1 text-xs text-status-info">
                         {{ item.category }}
                       </span>
                     </div>
@@ -193,8 +193,8 @@ const submit = () => {
                 Select the fuel item stored in this tank. Each tank stores one type of fuel.
               </p>
               <p v-if="form.errors.linked_item_id" class="text-sm text-destructive">{{ form.errors.linked_item_id }}</p>
-              <div v-if="!fuelItemOptions.length" class="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p class="text-sm text-amber-800">
+              <div v-if="!fuelItemOptions.length" class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-3">
+                <p class="text-sm text-status-attention">
                   <strong>No fuel items found.</strong> Please create fuel items first to link with tanks.
                 </p>
               </div>

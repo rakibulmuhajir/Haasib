@@ -102,14 +102,14 @@ const goToShow = (row: any) => {
   >
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Customers</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_customers }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <UsersRound class="h-4 w-4 text-sky-600" />
+            <UsersRound class="h-4 w-4 text-status-info" />
             <span>With credit accounts</span>
           </div>
         </CardContent>
@@ -118,11 +118,11 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Receivable</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ currency }} {{ formatCurrency(stats.total_receivable) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(stats.total_receivable) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-amber-600" />
+            <Wallet class="h-4 w-4 text-status-attention" />
             <span>Outstanding balance</span>
           </div>
         </CardContent>
@@ -131,11 +131,11 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Over Limit</CardDescription>
-          <CardTitle class="text-2xl text-red-600">{{ stats.over_limit }}</CardTitle>
+          <CardTitle class="text-2xl text-status-critical">{{ stats.over_limit }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <AlertTriangle class="h-4 w-4 text-red-600" />
+            <AlertTriangle class="h-4 w-4 text-status-critical" />
             <span>Exceeded credit limit</span>
           </div>
         </CardContent>
@@ -148,7 +148,7 @@ const goToShow = (row: any) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Ban class="h-4 w-4 text-zinc-500" />
+            <Ban class="h-4 w-4 text-text-secondary" />
             <span>Credit blocked</span>
           </div>
         </CardContent>
@@ -195,7 +195,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-balance="{ row }">
-            <span :class="row._raw.current_balance > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'">
+            <span :class="row._raw.current_balance > 0 ? 'text-status-attention font-medium' : 'text-muted-foreground'">
               {{ currency }} {{ formatCurrency(row._raw.current_balance) }}
             </span>
           </template>
@@ -210,9 +210,9 @@ const goToShow = (row: any) => {
           <template #cell-status="{ row }">
             <Badge
               :class="{
-                'bg-red-100 text-red-800': row.status === 'blocked',
-                'bg-amber-100 text-amber-800': row.status === 'over_limit',
-                'bg-emerald-100 text-emerald-800': row.status === 'active',
+                'bg-status-critical/10 text-status-critical': row.status === 'blocked',
+                'bg-status-attention/10 text-status-attention': row.status === 'over_limit',
+                'bg-status-success/10 text-status-success': row.status === 'active',
               }"
             >
               {{ row.status === 'blocked' ? 'Blocked' : row.status === 'over_limit' ? 'Over Limit' : 'Active' }}

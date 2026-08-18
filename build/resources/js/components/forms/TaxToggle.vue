@@ -201,7 +201,7 @@ onMounted(() => {
       <!-- No tax configured warning -->
   <span
         v-else-if="modelValue && !taxInfo && !isLoadingTax"
-        class="text-xs text-amber-600"
+        class="text-xs text-status-attention"
       >
         {{ t('noTaxProfileConfigured') }}
       </span>

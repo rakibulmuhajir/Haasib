@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,9 +60,9 @@ const displayText = computed(() => {
   }
   if (props.type === 'select' && props.options) {
     const option = props.options.find((o) => o.value === model.value)
-    return option?.label || String(model.value || '—')
+    return option?.label || String(model.value || 'â€”')
   }
-  return String(model.value || '—')
+  return String(model.value || 'â€”')
 })
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -78,7 +78,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   <div class="space-y-1.5">
     <!-- Label row with edit button -->
     <div class="flex items-center justify-between">
-      <Label class="text-sm font-medium text-zinc-500">{{ label }}</Label>
+      <Label class="text-sm font-medium text-text-secondary">{{ label }}</Label>
       <Button
         v-if="canEdit && !readonly && !editing"
         variant="ghost"
@@ -141,7 +141,7 @@ const handleKeydown = (e: KeyboardEvent) => {
         @click="emit('save')"
       >
         <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
-        <Check v-else class="h-4 w-4 text-green-600" />
+        <Check v-else class="h-4 w-4 text-status-success" />
       </Button>
 
       <!-- Cancel button -->
@@ -152,19 +152,19 @@ const handleKeydown = (e: KeyboardEvent) => {
         :disabled="saving"
         @click="emit('cancel')"
       >
-        <X class="h-4 w-4 text-red-600" />
+        <X class="h-4 w-4 text-status-critical" />
       </Button>
     </div>
 
     <!-- Display mode -->
-    <div v-else :class="['text-base text-zinc-900', valueClass]">
+    <div v-else :class="['text-base text-foreground', valueClass]">
       <div class="flex items-center gap-2">
-        <component :is="icon" v-if="icon" class="h-4 w-4 text-zinc-400" />
+        <component :is="icon" v-if="icon" class="h-4 w-4 text-text-tertiary" />
         <span>{{ displayText }}</span>
       </div>
     </div>
 
     <!-- Helper text -->
-    <p v-if="helperText" class="text-xs text-zinc-400">{{ helperText }}</p>
+    <p v-if="helperText" class="text-xs text-text-tertiary">{{ helperText }}</p>
   </div>
 </template>

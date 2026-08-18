@@ -34,6 +34,17 @@ export interface Entity {
 
 export interface EntitySearchProps {
   modelValue: string | null
+  /**
+   * The already-known entity for `modelValue`, when the parent has it.
+   *
+   * Without this the component resolves the id by fetching the entity's own
+   * page and hoping for JSON back. On an edit form that request loses — the
+   * route answers with an Inertia document — and the field renders its
+   * placeholder over a value that is in fact set, so the form looks empty and
+   * unsaved when it is neither. A parent holding the record should not have to
+   * ask the server for it again.
+   */
+  initialEntity?: Entity | null
   entityType: 'customer' | 'vendor'
   placeholder?: string
   recentLimit?: number
@@ -172,7 +183,17 @@ const loadRecentItems = async () => {
 
 // Load selected entity details if modelValue is set but entity is unknown
 const loadSelectedEntity = async () => {
-  if (!props.modelValue || !company.value) {
+  if (!props.modelValue) {
+    selectedEntity.value = null
+    return
+  }
+
+  if (props.initialEntity && props.initialEntity.id === props.modelValue) {
+    selectedEntity.value = props.initialEntity
+    return
+  }
+
+  if (!company.value) {
     selectedEntity.value = null
     return
   }

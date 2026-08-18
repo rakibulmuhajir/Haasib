@@ -167,8 +167,8 @@ const openBill = (billId: string) => {
 }
 
 const varianceClass = (variance: number) => {
-  if (variance > 0) return 'text-emerald-600'
-  if (variance < 0) return 'text-amber-600'
+  if (variance > 0) return 'text-status-success'
+  if (variance < 0) return 'text-status-attention'
   return 'text-muted-foreground'
 }
 </script>

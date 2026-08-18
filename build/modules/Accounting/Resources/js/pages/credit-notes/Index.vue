@@ -226,13 +226,13 @@ const tableData = computed(() => {
 
       <!-- Mobile Card Template -->
       <template #mobile-card="{ row }">
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm">
           <div class="space-y-3">
             <!-- Header with credit note number and status -->
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="font-semibold text-zinc-900">{{ row.credit_note_number }}</h3>
-                <p class="text-sm text-zinc-500">{{ row.customer }}</p>
+                <h3 class="font-semibold text-text-primary">{{ row.credit_note_number }}</h3>
+                <p class="text-sm text-text-secondary">{{ row.customer }}</p>
               </div>
               <Badge :variant="getStatusBadgeVariant(row.status)">
                 {{ row.status }}
@@ -241,23 +241,23 @@ const tableData = computed(() => {
 
             <!-- Amount and date -->
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Amount</span>
+              <span class="text-sm text-text-secondary">Amount</span>
               <span class="font-medium">{{ row.amount }}</span>
             </div>
 
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Date</span>
+              <span class="text-sm text-text-secondary">Date</span>
               <span class="font-medium">{{ row.credit_date }}</span>
             </div>
 
             <!-- Reason -->
             <div>
-              <span class="text-sm text-zinc-500">Reason</span>
-              <p class="text-sm text-zinc-900 mt-1">{{ row.reason }}</p>
+              <span class="text-sm text-text-secondary">Reason</span>
+              <p class="text-sm text-text-primary mt-1">{{ row.reason }}</p>
             </div>
 
             <!-- Actions -->
-            <div class="pt-2 border-t border-zinc-100">
+            <div class="pt-2 border-t border-rule-subtle">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" class="w-full justify-between">

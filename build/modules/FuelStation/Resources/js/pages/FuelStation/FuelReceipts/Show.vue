@@ -104,7 +104,7 @@ const goBack = () => {
           <div>
             <div class="text-sm text-muted-foreground">Status</div>
             <Badge
-              :class="receipt.status === 'posted' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+              :class="receipt.status === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'"
             >
               {{ receipt.status === 'posted' ? 'Posted' : receipt.status }}
             </Badge>
@@ -138,7 +138,7 @@ const goBack = () => {
 
           <div>
             <div class="text-sm text-muted-foreground">Total Liters</div>
-            <div class="text-xl font-bold text-sky-600">
+            <div class="text-xl font-bold text-status-info">
               {{ formatCurrency(receipt.metadata.total_liters || 0) }} L
             </div>
           </div>
@@ -179,7 +179,7 @@ const goBack = () => {
                 <tr v-for="(line, index) in receipt.metadata.lines" :key="index" class="border-t">
                   <td class="px-4 py-3 font-medium">{{ line.tank_name }}</td>
                   <td class="px-4 py-3">{{ line.fuel_name }}</td>
-                  <td class="px-4 py-3 text-right text-sky-600 font-medium">{{ formatCurrency(line.liters) }} L</td>
+                  <td class="px-4 py-3 text-right text-status-info font-medium">{{ formatCurrency(line.liters) }} L</td>
                   <td class="px-4 py-3 text-right">{{ currency }} {{ formatCurrency(line.rate) }}</td>
                   <td class="px-4 py-3 text-right font-medium">{{ currency }} {{ formatCurrency(line.amount) }}</td>
                 </tr>
@@ -187,7 +187,7 @@ const goBack = () => {
               <tfoot class="bg-muted/30">
                 <tr class="border-t">
                   <td colspan="2" class="px-4 py-3 font-semibold">Total</td>
-                  <td class="px-4 py-3 text-right font-semibold text-sky-600">
+                  <td class="px-4 py-3 text-right font-semibold text-status-info">
                     {{ formatCurrency(receipt.metadata.total_liters || 0) }} L
                   </td>
                   <td class="px-4 py-3"></td>

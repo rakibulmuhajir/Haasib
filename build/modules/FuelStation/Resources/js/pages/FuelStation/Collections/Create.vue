@@ -126,17 +126,17 @@ const collectFull = () => {
               <p v-if="form.errors.customer_id" class="text-sm text-destructive">{{ form.errors.customer_id }}</p>
 
               <!-- Show customer balance -->
-              <div v-if="selectedCustomer" class="rounded-md bg-amber-50 p-3 text-sm">
+              <div v-if="selectedCustomer" class="rounded-md bg-status-attention/10 p-3 text-sm">
                 <div class="flex items-center justify-between">
-                  <span class="text-amber-800">Outstanding Balance:</span>
-                  <span class="font-semibold text-amber-900">{{ currency }} {{ formatCurrency(selectedCustomer.current_balance) }}</span>
+                  <span class="text-status-attention">Outstanding Balance:</span>
+                  <span class="font-semibold text-status-attention">{{ currency }} {{ formatCurrency(selectedCustomer.current_balance) }}</span>
                 </div>
                 <Button
                   v-if="selectedCustomer.current_balance > 0"
                   type="button"
                   variant="link"
                   size="sm"
-                  class="mt-1 h-auto p-0 text-amber-700"
+                  class="mt-1 h-auto p-0 text-status-attention"
                   @click="collectFull"
                 >
                   Collect full amount

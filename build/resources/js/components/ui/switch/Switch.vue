@@ -10,7 +10,21 @@ import {
 } from "reka-ui"
 import { cn } from "@/lib/utils"
 
-const props = defineProps<SwitchRootProps & { class?: HTMLAttributes["class"]; checked?: boolean | null }>()
+/**
+ * `checked` is the legacy alias every call site in the app uses (v-model:checked);
+ * `modelValue` is reka-ui's own API. Both are supported, and `resolvedModelValue`
+ * below prefers whichever was actually passed.
+ *
+ * The explicit `undefined` defaults are load-bearing, not decoration. Vue casts an
+ * ABSENT Boolean-typed prop to `false` unless the prop declares a default — so
+ * without these, `props.checked` reads `false` even when the caller never passed
+ * it, `props.checked ?? props.modelValue` short-circuits to `false`, and the
+ * control sits permanently controlled at unchecked. Plain `v-model` never toggles.
+ */
+const props = withDefaults(
+  defineProps<SwitchRootProps & { class?: HTMLAttributes["class"]; checked?: boolean | null }>(),
+  { checked: undefined, modelValue: undefined },
+)
 
 const emits = defineEmits<SwitchRootEmits & { "update:checked": [payload: boolean] }>()
 
@@ -28,6 +42,7 @@ const handleUpdate = (value: boolean) => {
 
 <template>
   <SwitchRoot
+    data-slot="switch"
     v-bind="forwarded"
     :model-value="resolvedModelValue"
     @update:model-value="handleUpdate"
@@ -37,6 +52,7 @@ const handleUpdate = (value: boolean) => {
     )"
   >
     <SwitchThumb
+      data-slot="switch-thumb"
       :class="cn('pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5')"
     >
       <slot name="thumb" />

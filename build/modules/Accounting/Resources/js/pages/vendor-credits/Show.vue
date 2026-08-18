@@ -182,13 +182,13 @@ const amountRemaining = computed(() => {
           </div>
         </div>
 
-        <div v-if="amountRemaining > 0 && isApplicable" class="rounded-lg border border-green-200 bg-green-50 p-4">
+        <div v-if="amountRemaining > 0 && isApplicable" class="rounded-lg border border-status-success/30 bg-status-success/10 p-4">
           <div class="flex items-center justify-between">
             <div>
-              <div class="text-sm font-medium text-green-800">Available to Apply</div>
-              <div class="text-lg font-bold text-green-900">{{ formatMoney(amountRemaining, credit.currency) }}</div>
+              <div class="text-sm font-medium text-status-success">Available to Apply</div>
+              <div class="text-lg font-bold text-status-success">{{ formatMoney(amountRemaining, credit.currency) }}</div>
             </div>
-            <Button @click="applyCredit" variant="outline" class="border-green-300 text-green-800 hover:bg-green-100">
+            <Button @click="applyCredit" variant="outline" class="border-status-success/30 text-status-success hover:bg-status-success/10">
               <DollarSign class="mr-2 h-4 w-4" />
               Apply to Bills
             </Button>
@@ -223,8 +223,8 @@ const amountRemaining = computed(() => {
           </div>
         </div>
 
-        <div v-if="!isEditable" class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-          <div class="text-sm font-medium text-yellow-800">
+        <div v-if="!isEditable" class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
+          <div class="text-sm font-medium text-status-attention">
             This vendor credit cannot be modified in its current status.
           </div>
         </div>

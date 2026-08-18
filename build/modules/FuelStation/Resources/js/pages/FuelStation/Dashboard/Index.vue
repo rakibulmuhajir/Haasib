@@ -270,7 +270,7 @@ const workflowStats = computed(() => [
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center justify-between">
-            <Badge class="bg-emerald-600 text-white hover:bg-emerald-600">Operational</Badge>
+            <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">Operational</Badge>
             <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/pumps`)">
               View <ArrowRight class="ml-2 h-4 w-4" />
             </Button>
@@ -287,7 +287,7 @@ const workflowStats = computed(() => [
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center justify-between">
-            <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+            <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
               <Gauge class="mr-1 h-3.5 w-3.5" /> Meter captures
             </Badge>
             <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/pump-readings`)">
@@ -306,7 +306,7 @@ const workflowStats = computed(() => [
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center justify-between">
-            <Badge variant="secondary" class="bg-amber-100 text-amber-800 hover:bg-amber-100">Needs review</Badge>
+            <Badge variant="secondary" class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">Needs review</Badge>
             <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/tank-readings`)">
               Review <ArrowRight class="ml-2 h-4 w-4" />
             </Button>
@@ -321,7 +321,7 @@ const workflowStats = computed(() => [
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center justify-between">
-            <Badge variant="outline" class="border-indigo-200 text-indigo-700">Cash in transit</Badge>
+            <Badge variant="outline" class="border-status-info/30 text-status-info">Cash in transit</Badge>
             <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/handovers`)">
               View <ArrowRight class="ml-2 h-4 w-4" />
             </Button>
@@ -366,12 +366,12 @@ const workflowStats = computed(() => [
         </CardHeader>
         <CardContent class="space-y-3">
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl border border-border/70 bg-gradient-to-br from-emerald-500/10 to-sky-500/5 p-4">
+            <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <p class="text-sm font-medium text-text-tertiary">Today sales</p>
               <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.todaySales?.total ?? 0) }}</p>
               <p class="mt-1 text-sm text-text-secondary">All sale types</p>
             </div>
-            <div class="rounded-xl border border-border/70 bg-gradient-to-br from-indigo-500/10 to-emerald-500/5 p-4">
+            <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <p class="text-sm font-medium text-text-tertiary">This month</p>
               <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.monthlySales?.total_sales ?? 0) }}</p>
               <p class="mt-1 text-sm text-text-secondary">{{ formatLiters(data.monthlySales?.total_liters ?? 0) }}L dispensed</p>
@@ -379,17 +379,17 @@ const workflowStats = computed(() => [
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl border border-border/70 bg-gradient-to-br from-amber-500/10 to-rose-500/5 p-4">
+            <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <div class="flex items-center justify-between">
                 <p class="text-sm font-medium text-text-tertiary">Vendor card receivable</p>
-                <Receipt class="h-4 w-4 text-amber-600" />
+                <Receipt class="h-4 w-4 text-status-attention" />
               </div>
               <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.vendorCardReceivable ?? 0) }}</p>
             </div>
-            <div class="rounded-xl border border-border/70 bg-gradient-to-br from-sky-500/10 to-indigo-500/5 p-4">
+            <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <div class="flex items-center justify-between">
                 <p class="text-sm font-medium text-text-tertiary">Amanat balance</p>
-                <HandCoins class="h-4 w-4 text-sky-600" />
+                <HandCoins class="h-4 w-4 text-status-info" />
               </div>
               <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.amanatSummary?.total_balance ?? 0) }}</p>
               <p class="mt-1 text-sm text-text-secondary">{{ data.amanatSummary?.total_holders ?? 0 }} holder(s)</p>
@@ -403,7 +403,7 @@ const workflowStats = computed(() => [
       <Card class="border-border/80">
         <CardHeader>
           <CardTitle class="flex items-center gap-2 text-base">
-            <Warehouse class="h-4 w-4 text-sky-600" />
+            <Warehouse class="h-4 w-4 text-status-info" />
             Tank Levels
           </CardTitle>
           <CardDescription>Latest dip reading per tank.</CardDescription>
@@ -426,18 +426,18 @@ const workflowStats = computed(() => [
                     <p class="font-semibold text-text-primary">{{ l.tank?.name ?? 'Tank' }}</p>
                     <p class="mt-1 text-sm text-text-secondary">
                       <span class="inline-flex items-center gap-2">
-                        <Droplet class="h-4 w-4 text-emerald-600" />
+                        <Droplet class="h-4 w-4 text-status-success" />
                         {{ l.itemName }}
                       </span>
                     </p>
                   </div>
-                  <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                  <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
                     {{ l.percent }}%
                   </Badge>
                 </div>
 
                 <div class="mt-3">
-                  <Progress :value="l.percent" class="h-2 bg-slate-200/70" />
+                  <Progress :value="l.percent" class="h-2 bg-surface-sunken" />
                   <div class="mt-2 flex items-center justify-between text-xs text-text-tertiary">
                     <span>{{ formatLiters(l.current) }}L</span>
                     <span v-if="l.capacity > 0">{{ formatLiters(l.capacity) }}L capacity</span>
@@ -453,7 +453,7 @@ const workflowStats = computed(() => [
       <Card class="border-border/80">
         <CardHeader>
           <CardTitle class="flex items-center gap-2 text-base">
-            <BarChart3 class="h-4 w-4 text-sky-600" />
+            <BarChart3 class="h-4 w-4 text-status-info" />
             Sales By Type (Today)
           </CardTitle>
           <CardDescription>Counts and totals grouped by sale type.</CardDescription>
@@ -472,15 +472,15 @@ const workflowStats = computed(() => [
               <p class="font-semibold text-text-primary">{{ s.type.replace('_', ' ') }}</p>
               <p class="mt-1 text-sm text-text-secondary">{{ s.count }} sale(s)</p>
             </div>
-            <Badge class="bg-emerald-600 text-white hover:bg-emerald-600">
+            <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">
               {{ formatMoney(s.total) }}
             </Badge>
           </div>
 
-          <div v-if="currentRates.length > 0" class="mt-4 rounded-xl border border-border/70 bg-gradient-to-br from-sky-500/10 to-emerald-500/10 p-4">
+          <div v-if="currentRates.length > 0" class="mt-4 rounded-xl border border-border/70 bg-surface-sunken p-4">
             <div class="flex items-center justify-between gap-3">
               <div class="flex items-center gap-2">
-                <TrendingUp class="h-4 w-4 text-sky-700" />
+                <TrendingUp class="h-4 w-4 text-status-info" />
                 <p class="font-semibold text-text-primary">Current rates</p>
               </div>
               <Button variant="outline" size="sm" @click="router.get(`/${companySlug}/fuel/rates`)">
@@ -490,7 +490,7 @@ const workflowStats = computed(() => [
             <div class="mt-3 space-y-2">
               <div v-for="r in currentRates" :key="r.item?.id ?? r.effective_date" class="flex items-center justify-between text-sm">
                 <div class="flex items-center gap-2">
-                  <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                  <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
                     {{ r.item?.fuel_category ?? 'fuel' }}
                   </Badge>
                   <span class="font-medium text-text-primary">{{ r.item?.name ?? 'Fuel' }}</span>

@@ -175,14 +175,14 @@ const reasons = [
               <div class="flex items-center space-x-2">
                 <RadioGroupItem value="increase" id="increase" />
                 <Label for="increase" class="flex items-center gap-1 cursor-pointer">
-                  <Plus class="h-4 w-4 text-green-600" />
+                  <Plus class="h-4 w-4 text-status-success" />
                   Increase
                 </Label>
               </div>
               <div class="flex items-center space-x-2">
                 <RadioGroupItem value="decrease" id="decrease" />
                 <Label for="decrease" class="flex items-center gap-1 cursor-pointer">
-                  <Minus class="h-4 w-4 text-red-600" />
+                  <Minus class="h-4 w-4 text-status-critical" />
                   Decrease
                 </Label>
               </div>

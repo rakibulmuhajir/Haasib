@@ -170,7 +170,7 @@ const submit = () => {
           <span>Total Credit</span>
           <span>{{ totals.credit.toFixed(2) }}</span>
         </div>
-        <div class="flex justify-between text-sm font-semibold" :class="totals.balanced ? 'text-green-600' : 'text-red-600'">
+        <div class="flex justify-between text-sm font-semibold" :class="totals.balanced ? 'text-status-success' : 'text-status-critical'">
           <span>Balanced?</span>
           <span>{{ totals.balanced ? 'Yes' : 'No' }}</span>
         </div>

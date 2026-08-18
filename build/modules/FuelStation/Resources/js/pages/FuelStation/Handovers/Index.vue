@@ -195,13 +195,13 @@ const receiveHandover = (id: string) => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', icon: Clock, label: 'Pending' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: Clock, label: 'Pending' }
     case 'received':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: CheckCircle, label: 'Received' }
+      return { class: 'bg-status-success/10 text-status-success', icon: CheckCircle, label: 'Received' }
     case 'reconciled':
-      return { class: 'bg-sky-100 text-sky-800', icon: Check, label: 'Reconciled' }
+      return { class: 'bg-status-info/10 text-status-info', icon: Check, label: 'Reconciled' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Clock, label: status }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Clock, label: status }
   }
 }
 </script>
@@ -223,14 +223,14 @@ const getStatusBadge = (status: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Pending Handovers</CardDescription>
           <CardTitle class="text-2xl">{{ props.summary.pending_count }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Clock class="h-4 w-4 text-amber-600" />
+            <Clock class="h-4 w-4 text-status-attention" />
             <span>Awaiting receipt</span>
           </div>
         </CardContent>
@@ -239,11 +239,11 @@ const getStatusBadge = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Pending Amount</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.pending_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.pending_amount) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-amber-600" />
+            <Banknote class="h-4 w-4 text-status-attention" />
             <span>In attendant transit</span>
           </div>
         </CardContent>
@@ -294,7 +294,7 @@ const getStatusBadge = (status: string) => {
           </template>
 
           <template #cell-shift="{ row }">
-            <Badge variant="outline" :class="row._raw.shift === 'day' ? 'border-amber-200 text-amber-700' : 'border-indigo-200 text-indigo-700'">
+            <Badge variant="outline" :class="row._raw.shift === 'day' ? 'border-status-attention/30 text-status-attention' : 'border-status-info/30 text-status-info'">
               {{ row.shift }}
             </Badge>
           </template>
@@ -311,7 +311,7 @@ const getStatusBadge = (status: string) => {
               <Button
                 v-if="row.status === 'pending'"
                 size="sm"
-                class="bg-emerald-600 hover:bg-emerald-700"
+                class="bg-status-success hover:bg-status-success"
                 @click.stop="receiveHandover(row.id)"
               >
                 <Check class="mr-1 h-4 w-4" />
@@ -335,7 +335,7 @@ const getStatusBadge = (status: string) => {
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <HandCoins class="h-5 w-5 text-amber-600" />
+            <HandCoins class="h-5 w-5 text-status-attention" />
             Record Handover
           </DialogTitle>
           <DialogDescription>

@@ -156,8 +156,8 @@ const number = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', 
 const percent = (amount: number) => `${number(amount, 1)}%`
 
 const varianceTone = (amount: number) => {
-  if (amount > 0) return 'text-emerald-700'
-  if (amount < 0) return 'text-red-700'
+  if (amount > 0) return 'text-status-success'
+  if (amount < 0) return 'text-status-critical'
   return 'text-muted-foreground'
 }
 
@@ -299,7 +299,7 @@ const movementCards = computed(() => [
             <CardTitle class="text-2xl">{{ money(totals.revenue) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Fuel class="h-4 w-4 text-sky-600" />
+            <Fuel class="h-4 w-4 text-status-info" />
             {{ number(totals.liters) }} L sold
           </CardContent>
         </Card>
@@ -310,7 +310,7 @@ const movementCards = computed(() => [
             <CardTitle class="text-2xl">{{ money(totals.gross_profit) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Droplets class="h-4 w-4 text-emerald-600" />
+            <Droplets class="h-4 w-4 text-status-success" />
             {{ percent(totals.gross_margin_percent) }} margin
           </CardContent>
         </Card>
@@ -321,7 +321,7 @@ const movementCards = computed(() => [
             <CardTitle class="text-2xl">{{ money(totals.net_station_profit) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <ReceiptText class="h-4 w-4 text-violet-600" />
+            <ReceiptText class="h-4 w-4 text-status-info" />
             After expenses and payroll paid
           </CardContent>
         </Card>
@@ -334,7 +334,7 @@ const movementCards = computed(() => [
             </CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletCards class="h-4 w-4 text-amber-600" />
+            <WalletCards class="h-4 w-4 text-status-attention" />
             Closing cash {{ money(totals.closing_cash) }}
           </CardContent>
         </Card>
@@ -499,11 +499,11 @@ const movementCards = computed(() => [
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <div class="text-sm text-muted-foreground">Loss</div>
-                  <div class="text-lg font-semibold text-red-700">{{ number(totals.stock_loss) }} L</div>
+                  <div class="text-lg font-semibold text-status-critical">{{ number(totals.stock_loss) }} L</div>
                 </div>
                 <div>
                   <div class="text-sm text-muted-foreground">Gain</div>
-                  <div class="text-lg font-semibold text-emerald-700">{{ number(totals.stock_gain) }} L</div>
+                  <div class="text-lg font-semibold text-status-success">{{ number(totals.stock_gain) }} L</div>
                 </div>
               </div>
             </div>

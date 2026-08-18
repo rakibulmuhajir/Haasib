@@ -246,13 +246,13 @@ const handleSubmit = () => {
             class="grid gap-3 rounded border p-3 md:grid-cols-5"
           >
             <div class="md:col-span-2">
-              <Label>Description <span class="text-red-500">*</span></Label>
+              <Label>Description <span class="text-status-critical">*</span></Label>
               <Input
                 v-model="line.description"
-                :class="{ 'border-red-300': !line.description || line.description.trim() === '' }"
+                :class="{ 'border-status-critical/30': !line.description || line.description.trim() === '' }"
                 placeholder="Required for line item to be included"
               />
-              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-red-500 mt-1">
+              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-status-critical mt-1">
                 Description required - item will be excluded
               </p>
             </div>

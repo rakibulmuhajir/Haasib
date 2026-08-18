@@ -80,17 +80,17 @@ onMounted(() => {
 <template>
   <Head title="Bank Accounts Setup" />
 
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+  <div class="min-h-screen bg-surface-canvas">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
-          <Landmark class="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-status-info/15 mb-4">
+          <Landmark class="w-8 h-8 text-status-info" />
         </div>
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <h1 class="text-3xl font-bold text-text-primary mb-2">
           Bank & Cash Accounts
         </h1>
-        <p class="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+        <p class="text-text-secondary max-w-2xl mx-auto">
           Add your business bank accounts and cash accounts. These are used for receiving payments and reconciliation.
         </p>
       </div>
@@ -102,9 +102,9 @@ onMounted(() => {
             <div
               :class="[
                 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors',
-                index < 2 ? 'bg-green-600 text-white' :
-                index === 2 ? 'bg-blue-600 text-white' :
-                'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
+                index < 2 ? 'bg-status-success text-status-success-contrast' :
+                index === 2 ? 'bg-primary text-primary-foreground' :
+                'bg-surface-sunken text-text-secondary',
               ]"
             >
               {{ index + 1 }}
@@ -113,15 +113,15 @@ onMounted(() => {
               v-if="index < 6"
               :class="[
                 'w-12 h-0.5 mx-2',
-                index < 2 ? 'bg-green-600' : 'bg-slate-200 dark:bg-slate-700',
+                index < 2 ? 'bg-status-success' : 'bg-surface-sunken',
               ]"
             />
           </div>
         </div>
-        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span class="text-green-600">Identity</span>
-          <span class="text-green-600">Fiscal Year</span>
-          <span class="font-semibold text-blue-600">Bank Accounts</span>
+        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-text-secondary">
+          <span class="text-status-success">Identity</span>
+          <span class="text-status-success">Fiscal Year</span>
+          <span class="font-semibold text-status-info">Bank Accounts</span>
           <span>Defaults</span>
           <span>Tax</span>
           <span>Numbering</span>
@@ -149,12 +149,12 @@ onMounted(() => {
                 v-for="(account, index) in form.bank_accounts"
                 :key="index"
                 class="border rounded-lg p-6 space-y-4 relative"
-                :class="index > 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''"
+                :class="index > 0 ? 'bg-surface-sunken' : ''"
               >
                 <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <h3 class="text-sm font-semibold text-text-secondary">
                     Account {{ index + 1 }}
-                    <span v-if="index === 0" class="text-blue-600 dark:text-blue-400 ml-2">(Primary)</span>
+                    <span v-if="index === 0" class="text-status-info ml-2">(Primary)</span>
                   </h3>
                   <Button
                     v-if="index > 0"
@@ -162,7 +162,7 @@ onMounted(() => {
                     variant="ghost"
                     size="sm"
                     @click="removeAccount(index)"
-                    class="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    class="text-status-critical hover:bg-status-critical/10"
                   >
                     <Trash2 class="w-4 h-4" />
                   </Button>
@@ -171,7 +171,7 @@ onMounted(() => {
                 <!-- Account Name -->
                 <div class="space-y-2">
                   <Label :for="`account_name_${index}`">
-                    Account Name <span class="text-red-500">*</span>
+                    Account Name <span class="text-status-critical">*</span>
                   </Label>
                   <Input
                     :id="`account_name_${index}`"
@@ -180,7 +180,7 @@ onMounted(() => {
                     placeholder="e.g., Meezan Bank Rs, HBL USD Account, Cash Drawer"
                     required
                   />
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-text-secondary">
                     Give it a descriptive name you'll recognize (e.g., "Meezan Bank Current Account")
                   </p>
                 </div>
@@ -189,7 +189,7 @@ onMounted(() => {
                   <!-- Currency -->
                   <div class="space-y-2">
                     <Label :for="`currency_${index}`">
-                      Currency <span class="text-red-500">*</span>
+                      Currency <span class="text-status-critical">*</span>
                     </Label>
                     <Select v-model="account.currency" required>
                       <SelectTrigger :id="`currency_${index}`">
@@ -210,7 +210,7 @@ onMounted(() => {
                   <!-- Account Type -->
                   <div class="space-y-2">
                     <Label>
-                      Account Type <span class="text-red-500">*</span>
+                      Account Type <span class="text-status-critical">*</span>
                     </Label>
                     <RadioGroup v-model="account.account_type" class="flex gap-4 mt-2">
                       <div class="flex items-center space-x-2">
@@ -245,11 +245,11 @@ onMounted(() => {
             </Button>
 
             <!-- Info Box -->
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <p class="text-sm text-blue-900 dark:text-blue-100">
+            <div class="bg-status-info/10 border border-status-info/30 rounded-lg p-4">
+              <p class="text-sm text-text-primary">
                 <strong>💡 Tip:</strong> You can add more accounts later. Common accounts include:
               </p>
-              <ul class="mt-2 text-sm text-blue-700 dark:text-blue-300 list-disc list-inside space-y-1">
+              <ul class="mt-2 text-sm text-text-secondary list-disc list-inside space-y-1">
                 <li>Operating bank account (for daily transactions)</li>
                 <li>Savings account (for reserves)</li>
                 <li>Foreign currency accounts (USD, EUR, etc.)</li>
@@ -258,7 +258,7 @@ onMounted(() => {
             </div>
 
             <!-- Validation Errors -->
-            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-red-600 dark:text-red-400">
+            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-status-critical">
               <p v-for="(error, key) in form.errors" :key="key">{{ error }}</p>
             </div>
 

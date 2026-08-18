@@ -281,7 +281,7 @@ const progressPercent = computed(() => {
         <Card>
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
-              <ArrowDownLeft class="h-5 w-5 text-green-600" />
+              <ArrowDownLeft class="h-5 w-5 text-status-success" />
               Deposits & Credits
               <Badge variant="outline" class="ml-auto">{{ deposits.length }}</Badge>
             </CardTitle>
@@ -305,7 +305,7 @@ const progressPercent = computed(() => {
                 />
                 <CheckCircle2
                   v-else-if="isCleared(tx)"
-                  class="h-5 w-5 text-green-600"
+                  class="h-5 w-5 text-status-success"
                 />
                 <Clock
                   v-else
@@ -321,7 +321,7 @@ const progressPercent = computed(() => {
                   </div>
                 </div>
 
-                <span class="font-mono text-green-600 font-medium">
+                <span class="font-mono text-status-success font-medium">
                   +{{ formatCurrency(tx.amount, reconciliation.bank_account.currency) }}
                 </span>
               </div>
@@ -333,7 +333,7 @@ const progressPercent = computed(() => {
         <Card>
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
-              <ArrowUpRight class="h-5 w-5 text-red-600" />
+              <ArrowUpRight class="h-5 w-5 text-status-critical" />
               Payments & Withdrawals
               <Badge variant="outline" class="ml-auto">{{ withdrawals.length }}</Badge>
             </CardTitle>
@@ -357,7 +357,7 @@ const progressPercent = computed(() => {
                 />
                 <CheckCircle2
                   v-else-if="isCleared(tx)"
-                  class="h-5 w-5 text-green-600"
+                  class="h-5 w-5 text-status-success"
                 />
                 <Clock
                   v-else
@@ -373,7 +373,7 @@ const progressPercent = computed(() => {
                   </div>
                 </div>
 
-                <span class="font-mono text-red-600 font-medium">
+                <span class="font-mono text-status-critical font-medium">
                   {{ formatCurrency(tx.amount, reconciliation.bank_account.currency) }}
                 </span>
               </div>
@@ -405,14 +405,14 @@ const progressPercent = computed(() => {
                 </span>
               </div>
 
-              <div class="flex justify-between text-green-600">
+              <div class="flex justify-between text-status-success">
                 <span class="text-sm">+ Cleared Deposits</span>
                 <span class="font-mono">
                   {{ formatCurrency(localSummary.cleared_deposits, reconciliation.bank_account.currency) }}
                 </span>
               </div>
 
-              <div class="flex justify-between text-red-600">
+              <div class="flex justify-between text-status-critical">
                 <span class="text-sm">- Cleared Payments</span>
                 <span class="font-mono">
                   {{ formatCurrency(Math.abs(localSummary.cleared_withdrawals), reconciliation.bank_account.currency) }}
@@ -437,13 +437,13 @@ const progressPercent = computed(() => {
             <!-- Difference -->
             <div
               class="p-4 rounded-lg"
-              :class="Math.abs(localSummary.difference) < 0.01 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'"
+              :class="Math.abs(localSummary.difference) < 0.01 ? 'bg-status-success/10' : 'bg-status-critical/10'"
             >
               <div class="flex items-center justify-between">
                 <span class="font-medium">Difference</span>
                 <span
                   class="font-mono text-lg font-bold"
-                  :class="Math.abs(localSummary.difference) < 0.01 ? 'text-green-600' : 'text-red-600'"
+                  :class="Math.abs(localSummary.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'"
                 >
                   {{ formatCurrency(localSummary.difference, reconciliation.bank_account.currency) }}
                 </span>
@@ -451,14 +451,14 @@ const progressPercent = computed(() => {
 
               <p
                 v-if="Math.abs(localSummary.difference) < 0.01"
-                class="text-sm text-green-600 mt-2 flex items-center gap-1"
+                class="text-sm text-status-success mt-2 flex items-center gap-1"
               >
                 <CheckCircle2 class="h-4 w-4" />
                 Ready to finish!
               </p>
               <p
                 v-else
-                class="text-sm text-red-600 mt-2 flex items-center gap-1"
+                class="text-sm text-status-critical mt-2 flex items-center gap-1"
               >
                 <AlertTriangle class="h-4 w-4" />
                 Clear more transactions to balance

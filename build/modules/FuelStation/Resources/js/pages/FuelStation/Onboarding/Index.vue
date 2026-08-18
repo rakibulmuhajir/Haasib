@@ -1585,7 +1585,7 @@ onMounted(() => {
           <CardDescription>Daily close now posts cards, wallets, fuel cards, and bank transfers into mapped accounts.</CardDescription>
         </CardHeader>
         <CardContent class="space-y-3">
-          <Badge :class="paymentChannelStatus.isReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
+          <Badge :class="paymentChannelStatus.isReady ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'">
             {{ paymentChannelStatus.mappedCount }} / {{ paymentChannelStatus.enabledCount }} channels mapped
           </Badge>
           <p class="text-xs text-text-secondary">
@@ -1607,7 +1607,7 @@ onMounted(() => {
               {{ completedStepCount }} of {{ visibleSteps.length }} steps complete · {{ completedRequiredCount }} of {{ totalRequiredCount }} required steps done
             </CardDescription>
           </div>
-          <Badge :class="props.wizard.is_complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
+          <Badge :class="props.wizard.is_complete ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'">
             {{ props.wizard.is_complete ? 'Complete' : 'In Progress' }}
           </Badge>
         </div>
@@ -1619,8 +1619,8 @@ onMounted(() => {
           <span>{{ progress }}% Complete</span>
           <span>100%</span>
         </div>
-        <Alert v-if="firstIncompleteRequiredStep" class="mt-4 border-blue-200 bg-blue-50 text-blue-900">
-          <AlertTriangle class="h-4 w-4 text-blue-600" />
+        <Alert v-if="firstIncompleteRequiredStep" class="mt-4 border-status-info/30 bg-status-info/10 text-status-info">
+          <AlertTriangle class="h-4 w-4 text-status-info" />
           <AlertTitle>Next best step: {{ firstIncompleteRequiredStep.title }}</AlertTitle>
           <AlertDescription>{{ firstIncompleteRequiredStep.description }}</AlertDescription>
         </Alert>
@@ -1651,7 +1651,7 @@ onMounted(() => {
                     :is="isStepComplete(step.id) ? CheckCircle : Circle"
                     :class="[
                       'h-5 w-5',
-                      isStepComplete(step.id) ? 'text-emerald-600' : 'text-text-tertiary',
+                      isStepComplete(step.id) ? 'text-status-success' : 'text-text-tertiary',
                     ]"
                   />
                 </div>
@@ -1672,7 +1672,7 @@ onMounted(() => {
         <Card class="border-border/80 relative overflow-hidden">
           <CardHeader>
             <div class="flex items-center gap-3">
-              <component :is="currentStep?.icon || Fuel" class="h-6 w-6 text-blue-600" />
+              <component :is="currentStep?.icon || Fuel" class="h-6 w-6 text-status-info" />
               <div>
                 <CardTitle class="text-lg">{{ currentStep?.title }}</CardTitle>
                 <CardDescription>{{ currentStep?.description }}</CardDescription>
@@ -1705,7 +1705,7 @@ onMounted(() => {
               </div>
 
               <div class="space-y-2">
-                <Label>Industry <span class="text-red-500">*</span></Label>
+                <Label>Industry <span class="text-status-critical">*</span></Label>
                 <Select v-model="companyIdentityForm.industry_code" :disabled="Boolean(props.company.industry_code)" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select industry" />
@@ -1737,7 +1737,7 @@ onMounted(() => {
               </div>
 
               <div class="space-y-2">
-                <Label>Timezone <span class="text-red-500">*</span></Label>
+                <Label>Timezone <span class="text-status-critical">*</span></Label>
                 <Select v-model="companyIdentityForm.timezone" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select timezone" />
@@ -1768,7 +1768,7 @@ onMounted(() => {
             <!-- Fiscal Year -->
             <div v-if="activeStepId === 'fiscal_year'" class="space-y-6">
               <div class="space-y-2">
-                <Label>Fiscal Year Start Month <span class="text-red-500">*</span></Label>
+                <Label>Fiscal Year Start Month <span class="text-status-critical">*</span></Label>
                 <Select v-model="fiscalYearForm.fiscal_year_start_month" required>
                   <SelectTrigger>
                     <SelectValue />
@@ -1782,7 +1782,7 @@ onMounted(() => {
               </div>
 
               <div class="space-y-3">
-                <Label>Accounting Period Frequency <span class="text-red-500">*</span></Label>
+                <Label>Accounting Period Frequency <span class="text-status-critical">*</span></Label>
                 <RadioGroup v-model="fiscalYearForm.period_frequency" class="space-y-2">
                   <div class="flex items-center gap-3 border rounded-md p-3">
                     <RadioGroupItem value="monthly" id="monthly" />
@@ -1838,13 +1838,13 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                      <Label>Account Name <span class="text-red-500">*</span></Label>
+                      <Label>Account Name <span class="text-status-critical">*</span></Label>
                       <Input v-model="account.account_name" placeholder="Meezan Bank" />
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Currency <span class="text-red-500">*</span></Label>
+                        <Label>Currency <span class="text-status-critical">*</span></Label>
                         <Select v-model="account.currency" required>
                           <SelectTrigger>
                             <SelectValue />
@@ -1857,7 +1857,7 @@ onMounted(() => {
                         </Select>
                       </div>
                       <div class="space-y-2">
-                        <Label>Type <span class="text-red-500">*</span></Label>
+                        <Label>Type <span class="text-status-critical">*</span></Label>
                         <Select v-model="account.account_type" required>
                           <SelectTrigger>
                             <SelectValue />
@@ -1897,14 +1897,14 @@ onMounted(() => {
                 <AlertTitle>Could not save defaults</AlertTitle>
                 <AlertDescription>{{ defaultAccountsError }}</AlertDescription>
               </Alert>
-              <Alert v-if="!props.transitColumnsReady" class="border-amber-200 bg-amber-50 text-amber-900">
-                <AlertTriangle class="h-4 w-4 text-amber-600" />
+              <Alert v-if="!props.transitColumnsReady" class="border-status-attention/30 bg-status-attention/10 text-status-attention">
+                <AlertTriangle class="h-4 w-4 text-status-attention" />
                 <AlertTitle>System update required</AlertTitle>
                 <AlertDescription>{{ props.transitColumnsMessage }}</AlertDescription>
               </Alert>
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
-                  <Label>Accounts Receivable <span class="text-red-500">*</span></Label>
+                  <Label>Accounts Receivable <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.ar_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -1917,7 +1917,7 @@ onMounted(() => {
                   </Select>
                 </div>
                 <div class="space-y-2">
-                  <Label>Accounts Payable <span class="text-red-500">*</span></Label>
+                  <Label>Accounts Payable <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.ap_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -1933,7 +1933,7 @@ onMounted(() => {
 
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
-                  <Label>Default Revenue <span class="text-red-500">*</span></Label>
+                  <Label>Default Revenue <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.income_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -1946,7 +1946,7 @@ onMounted(() => {
                   </Select>
                 </div>
                 <div class="space-y-2">
-                  <Label>Default Expense <span class="text-red-500">*</span></Label>
+                  <Label>Default Expense <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.expense_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -1962,7 +1962,7 @@ onMounted(() => {
 
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
-                  <Label>Default Bank/Cash <span class="text-red-500">*</span></Label>
+                  <Label>Default Bank/Cash <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.bank_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -1975,7 +1975,7 @@ onMounted(() => {
                   </Select>
                 </div>
                 <div class="space-y-2">
-                  <Label>Retained Earnings <span class="text-red-500">*</span></Label>
+                  <Label>Retained Earnings <span class="text-status-critical">*</span></Label>
                   <Select v-model="defaultAccountsForm.retained_earnings_account_id" required>
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
@@ -2075,7 +2075,7 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Name <span class="text-red-500">*</span></Label>
+                        <Label>Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="partner.name" placeholder="Partner name" />
                       </div>
                       <div class="space-y-2">
@@ -2086,7 +2086,7 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Profit Share % <span class="text-red-500">*</span></Label>
+                        <Label>Profit Share % <span class="text-status-critical">*</span></Label>
                         <Input v-model="partner.profit_share_percentage" type="number" step="0.01" />
                       </div>
                       <div class="space-y-2">
@@ -2117,7 +2117,7 @@ onMounted(() => {
                   <Plus class="mr-2 h-4 w-4" />
                   Add Partner
                 </Button>
-                <div :class="['text-sm font-medium', isProfitShareValid ? 'text-emerald-600' : 'text-red-600']">
+                <div :class="['text-sm font-medium', isProfitShareValid ? 'text-status-success' : 'text-status-critical']">
                   Total profit share: {{ formatMoney(totalProfitShare) }}%
                 </div>
               </div>
@@ -2162,11 +2162,11 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>First Name <span class="text-red-500">*</span></Label>
+                        <Label>First Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="employee.first_name" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Last Name <span class="text-red-500">*</span></Label>
+                        <Label>Last Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="employee.last_name" />
                       </div>
                     </div>
@@ -2195,7 +2195,7 @@ onMounted(() => {
                     </div>
 
                     <div class="space-y-2">
-                      <Label>Base Salary <span class="text-red-500">*</span></Label>
+                      <Label>Base Salary <span class="text-status-critical">*</span></Label>
                       <Input v-model="employee.base_salary" type="number" step="0.01" />
                     </div>
                   </CardContent>
@@ -2222,7 +2222,7 @@ onMounted(() => {
             <!-- Tax Settings -->
             <div v-if="activeStepId === 'tax_settings'" class="space-y-6">
               <div class="space-y-3">
-                <Label>Tax Registration <span class="text-red-500">*</span></Label>
+                <Label>Tax Registration <span class="text-status-critical">*</span></Label>
                 <div class="flex items-center gap-3">
                   <Switch v-model:checked="taxSettingsForm.tax_registered" />
                   <span class="text-sm text-text-secondary">Tax registered business</span>
@@ -2259,22 +2259,22 @@ onMounted(() => {
             <div v-if="activeStepId === 'numbering'" class="space-y-6">
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
-                  <Label>Invoice Prefix <span class="text-red-500">*</span></Label>
+                  <Label>Invoice Prefix <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.invoice_prefix" />
                 </div>
                 <div class="space-y-2">
-                  <Label>Invoice Start Number <span class="text-red-500">*</span></Label>
+                  <Label>Invoice Start Number <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.invoice_start_number" type="number" />
                 </div>
               </div>
 
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-2">
-                  <Label>Bill Prefix <span class="text-red-500">*</span></Label>
+                  <Label>Bill Prefix <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.bill_prefix" />
                 </div>
                 <div class="space-y-2">
-                  <Label>Bill Start Number <span class="text-red-500">*</span></Label>
+                  <Label>Bill Start Number <span class="text-status-critical">*</span></Label>
                   <Input v-model="numberingForm.bill_start_number" type="number" />
                 </div>
               </div>
@@ -2344,7 +2344,7 @@ onMounted(() => {
                 </Label>
               </div>
 
-              <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-4 text-sm text-status-attention">
                 <strong>Note:</strong> Accounts are mapped automatically. Prices will be set in the Rates step. Packaged lubricant bottles (0.7L, 1L, etc.) are configured separately in the Lubricants step.
               </div>
 
@@ -2384,22 +2384,22 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Tank Name <span class="text-red-500">*</span></Label>
+                        <Label>Tank Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.name" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Tank Code <span class="text-red-500">*</span></Label>
+                        <Label>Tank Code <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.code" />
                       </div>
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Capacity (Liters) <span class="text-red-500">*</span></Label>
+                        <Label>Capacity (Liters) <span class="text-status-critical">*</span></Label>
                         <Input v-model="tank.capacity" type="number" step="0.01" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Linked Product <span class="text-red-500">*</span></Label>
+                        <Label>Linked Product <span class="text-status-critical">*</span></Label>
                         <Select v-model="tank.linked_item_id">
                           <SelectTrigger>
                             <SelectValue placeholder="Select product" />
@@ -2485,11 +2485,11 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Pump Name <span class="text-red-500">*</span></Label>
+                        <Label>Pump Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="pump.name" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Linked Tank <span class="text-red-500">*</span></Label>
+                        <Label>Linked Tank <span class="text-status-critical">*</span></Label>
                         <Select v-model="pump.tank_id">
                           <SelectTrigger>
                             <SelectValue placeholder="Select tank" />
@@ -2687,12 +2687,12 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Name <span class="text-red-500">*</span></Label>
+                        <Label>Name <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.name" />
                         <p class="text-xs text-text-secondary">Include type (bike/car/truck) in the name if needed.</p>
                       </div>
                       <div class="space-y-2">
-                        <Label>SKU <span class="text-red-500">*</span></Label>
+                        <Label>SKU <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.sku" />
                       </div>
                     </div>
@@ -2714,11 +2714,11 @@ onMounted(() => {
 
                     <div class="grid gap-4 md:grid-cols-2">
                       <div class="space-y-2">
-                        <Label>Purchase Cost <span class="text-red-500">*</span></Label>
+                        <Label>Purchase Cost <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.cost_price" type="number" step="0.01" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Sale Price <span class="text-red-500">*</span></Label>
+                        <Label>Sale Price <span class="text-status-critical">*</span></Label>
                         <Input v-model="lubricant.sale_price" type="number" step="0.01" />
                       </div>
                     </div>
@@ -2775,7 +2775,7 @@ onMounted(() => {
                         <Input v-model="reading.stick_reading" type="number" step="0.01" />
                       </div>
                       <div class="space-y-2">
-                        <Label>Liters <span class="text-red-500">*</span></Label>
+                        <Label>Liters <span class="text-status-critical">*</span></Label>
                         <Input v-model="reading.liters" type="number" step="0.01" />
                       </div>
                       <div class="space-y-2">
@@ -2851,7 +2851,7 @@ onMounted(() => {
             <div v-if="activeStepId === 'complete'" class="space-y-6">
               <div class="rounded-lg border border-border/70 bg-muted/30 p-4">
                 <div class="flex items-center gap-3">
-                  <CheckCircle class="h-6 w-6 text-emerald-600" />
+                  <CheckCircle class="h-6 w-6 text-status-success" />
                   <div>
                     <div class="font-semibold">Setup Status</div>
                     <div class="text-sm text-text-secondary">

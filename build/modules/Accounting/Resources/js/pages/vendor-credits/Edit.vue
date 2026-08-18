@@ -211,13 +211,13 @@ const isEditable = computed(() => {
     </template>
 
     <div v-if="!isEditable" class="mb-6">
-      <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+      <div class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
         <div class="flex items-center">
-          <div class="text-sm font-medium text-yellow-800">
+          <div class="text-sm font-medium text-status-attention">
             This vendor credit cannot be edited in its current status.
           </div>
           <div class="ml-2">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-attention/10 text-status-attention">
               {{ credit.status }}
             </span>
           </div>
@@ -301,14 +301,14 @@ const isEditable = computed(() => {
             class="grid gap-3 rounded border p-3 md:grid-cols-5"
           >
             <div class="md:col-span-2">
-              <Label>Description <span class="text-red-500">*</span></Label>
+              <Label>Description <span class="text-status-critical">*</span></Label>
               <Input
                 v-model="line.description"
-                :class="{ 'border-red-300': !line.description || line.description.trim() === '' }"
+                :class="{ 'border-status-critical/30': !line.description || line.description.trim() === '' }"
                 placeholder="Required for line item to be included"
                 :disabled="!isEditable"
               />
-              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-red-500 mt-1">
+              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-status-critical mt-1">
                 Description required - item will be excluded
               </p>
             </div>

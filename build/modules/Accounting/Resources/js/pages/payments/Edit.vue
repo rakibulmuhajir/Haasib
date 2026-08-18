@@ -110,7 +110,7 @@ const allocatedAmount = computed(() => {
     </template>
 
     <div v-if="allocatedAmount > 0" class="mb-6">
-      <Card class="border-yellow-200 bg-yellow-50">
+      <Card class="border-status-attention/30 bg-status-attention/10">
         <CardContent class="pt-6">
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">Allocated</Badge>

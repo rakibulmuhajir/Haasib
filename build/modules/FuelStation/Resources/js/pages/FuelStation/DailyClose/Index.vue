@@ -92,15 +92,15 @@ const getStatusConfig = (close: DailyClose) => {
       label: 'Locked',
       variant: 'secondary' as const,
       icon: Lock,
-      class: 'text-amber-600',
+      class: 'text-status-attention',
     }
   }
 
   const configs: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle; class: string }> = {
-    posted: { label: 'Posted', variant: 'default', icon: CheckCircle, class: 'text-green-600' },
-    reversed: { label: 'Reversed', variant: 'destructive', icon: XCircle, class: 'text-red-600' },
-    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, class: 'text-amber-600' },
-    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, class: 'text-blue-600' },
+    posted: { label: 'Posted', variant: 'default', icon: CheckCircle, class: 'text-status-success' },
+    reversed: { label: 'Reversed', variant: 'destructive', icon: XCircle, class: 'text-status-critical' },
+    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, class: 'text-status-attention' },
+    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, class: 'text-status-info' },
   }
   return configs[close.status] || configs.posted
 }
@@ -254,7 +254,7 @@ const unlockSingle = (closeId: string) => {
                 <div
                   :class="[
                     'font-semibold',
-                    close.variance === 0 ? 'text-green-600' : close.variance > 0 ? 'text-blue-600' : 'text-red-600',
+                    close.variance === 0 ? 'text-status-success' : close.variance > 0 ? 'text-status-info' : 'text-status-critical',
                   ]"
                 >
                   {{ close.variance >= 0 ? '+' : '' }}{{ currency }} {{ formatCurrency(close.variance) }}

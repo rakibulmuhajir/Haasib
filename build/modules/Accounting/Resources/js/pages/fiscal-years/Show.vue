@@ -135,7 +135,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
                     <SelectItem value="yearly">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="createPeriodsForm.errors.period_type" class="text-sm text-red-600 mt-1">
+                <p v-if="createPeriodsForm.errors.period_type" class="text-sm text-status-critical mt-1">
                   {{ createPeriodsForm.errors.period_type }}
                 </p>
               </div>

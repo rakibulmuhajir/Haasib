@@ -163,7 +163,7 @@ const isEditable = computed(() => {
             </button>
           </div>
           <div class="text-right">
-            <div class="text-2xl font-bold text-green-600">{{ formatCurrency(credit_note.amount) }}</div>
+            <div class="text-2xl font-bold text-status-success">{{ formatCurrency(credit_note.amount) }}</div>
             <div class="text-sm text-muted-foreground">{{ credit_note.base_currency }}</div>
           </div>
         </div>
@@ -171,7 +171,7 @@ const isEditable = computed(() => {
     </Card>
 
     <div v-if="!isEditable" class="mb-6">
-      <Card class="border-yellow-200 bg-yellow-50">
+      <Card class="border-status-attention/30 bg-status-attention/10">
         <CardContent class="pt-6">
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">{{ credit_note.status }}</Badge>
@@ -361,7 +361,7 @@ const isEditable = computed(() => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Credit Amount:</span>
-            <span class="font-bold text-green-600">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold text-status-success">{{ formatCurrency(form.amount) }}</span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Customer:</span>

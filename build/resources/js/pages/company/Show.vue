@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
@@ -906,7 +906,7 @@ const formatQuantity = (value?: number | null, unit?: string | null) => {
 }
 
 const formatPercent = (value?: number | null) => {
-  if (value === null || value === undefined) return '—'
+  if (value === null || value === undefined) return 'â€”'
   return `${Number(value).toFixed(1)}%`
 }
 
@@ -938,9 +938,9 @@ const hasPhysicalTankReading = (product: FuelProductDashboardItem) => {
 }
 
 const varianceClass = (value?: number | null) => {
-  if (value === null || value === undefined) return 'text-zinc-500'
-  if (Math.abs(value) < 0.001) return 'text-emerald-700'
-  return value < 0 ? 'text-red-700' : 'text-amber-700'
+  if (value === null || value === undefined) return 'text-text-secondary'
+  if (Math.abs(value) < 0.001) return 'text-status-success'
+  return value < 0 ? 'text-status-critical' : 'text-status-attention'
 }
 
 const variancePrefix = (value?: number | null) => {
@@ -1003,14 +1003,14 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       compact
     >
       <template v-if="isFuelStationCompany" #before-header>
-        <div class="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-2 rounded-lg border border-rule-default bg-surface-raised p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-xs font-medium uppercase text-zinc-500">Working date</p>
-            <p class="text-sm text-zinc-600">Products, stock, rates, and sales are shown for this business date.</p>
+            <p class="text-xs font-medium uppercase text-text-secondary">Working date</p>
+            <p class="text-sm text-text-secondary">Products, stock, rates, and sales are shown for this business date.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1">
-              <Calendar class="h-4 w-4 text-zinc-500" />
+            <div class="flex items-center gap-2 rounded-md border border-rule-default bg-surface-raised px-2 py-1">
+              <Calendar class="h-4 w-4 text-text-secondary" />
               <Input
                 v-model="productAsOfDate"
                 type="date"
@@ -1026,13 +1026,13 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       </template>
 
       <template v-if="!isFuelStationCompany" #description>
-        <span class="font-mono text-zinc-400">{{ company.slug }}</span>
-        <span class="mx-2 text-zinc-300">•</span>
-        <span class="text-zinc-600">{{ currencySymbol(company.base_currency) }}</span>
+        <span class="font-mono text-text-tertiary">{{ company.slug }}</span>
+        <span class="mx-2 text-text-quaternary">â€¢</span>
+        <span class="text-text-secondary">{{ currencySymbol(company.base_currency) }}</span>
       </template>
 
       <template v-if="!isFuelStationCompany" #actions>
-        <TabsList class="bg-zinc-100">
+        <TabsList class="bg-surface-sunken">
         <TabsTrigger value="overview" class="gap-2">
           <BarChart3 class="h-4 w-4" />
           Dashboard
@@ -1052,10 +1052,10 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       <TabsContent value="overview" class="space-y-6">
 
         <template v-if="isFuelStationCompany">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-subtle bg-surface-raised">
             <CardContent class="space-y-5 pt-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-sm text-zinc-600">Stock, rates, and recent sales for fuels, lubricants, and shop products.</p>
+                <p class="text-sm text-text-secondary">Stock, rates, and recent sales for fuels, lubricants, and shop products.</p>
                 <div class="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" @click="router.visit(`/${company.slug}/fuel/daily-close`)">
                     <FileText class="mr-2 h-4 w-4" />
@@ -1068,66 +1068,66 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-3 lg:grid-cols-6">
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Products</div>
-                  <div class="mt-1 text-2xl font-semibold text-zinc-900">{{ fuelProductSummary.total_products }}</div>
-                  <div class="text-xs text-zinc-500">{{ fuelProductSummary.active_products }} active</div>
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Products</div>
+                  <div class="mt-1 text-2xl font-semibold text-foreground">{{ fuelProductSummary.total_products }}</div>
+                  <div class="text-xs text-text-secondary">{{ fuelProductSummary.active_products }} active</div>
                 </div>
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Low stock</div>
-                  <div class="mt-1 text-2xl font-semibold" :class="fuelProductSummary.low_stock_count > 0 ? 'text-amber-700' : 'text-zinc-900'">
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Low stock</div>
+                  <div class="mt-1 text-2xl font-semibold" :class="fuelProductSummary.low_stock_count > 0 ? 'text-status-attention' : 'text-foreground'">
                     {{ fuelProductSummary.low_stock_count }}
                   </div>
-                  <div class="text-xs text-zinc-500">Needs refill</div>
+                  <div class="text-xs text-text-secondary">Needs refill</div>
                 </div>
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Yesterday</div>
-                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Yesterday</div>
+                  <div class="mt-1 text-lg font-semibold text-foreground">
                     <MoneyText :amount="fuelProductSummary.yesterday_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                   </div>
-                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.yesterday_liters, 'L') }}</div>
+                  <div class="text-xs text-text-secondary">{{ formatQuantity(fuelProductSummary.yesterday_liters, 'L') }}</div>
                 </div>
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Last 7 days</div>
-                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Last 7 days</div>
+                  <div class="mt-1 text-lg font-semibold text-foreground">
                     <MoneyText :amount="fuelProductSummary.last_week_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                   </div>
-                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.last_week_liters, 'L') }}</div>
+                  <div class="text-xs text-text-secondary">{{ formatQuantity(fuelProductSummary.last_week_liters, 'L') }}</div>
                 </div>
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Last 30 days</div>
-                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Last 30 days</div>
+                  <div class="mt-1 text-lg font-semibold text-foreground">
                     <MoneyText :amount="fuelProductSummary.last_month_sales" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                   </div>
-                  <div class="text-xs text-zinc-500">{{ formatQuantity(fuelProductSummary.last_month_liters, 'L') }}</div>
+                  <div class="text-xs text-text-secondary">{{ formatQuantity(fuelProductSummary.last_month_liters, 'L') }}</div>
                 </div>
-                <div class="rounded-lg border border-zinc-100 bg-zinc-50 p-3">
-                  <div class="text-xs text-zinc-500">Stock value</div>
-                  <div class="mt-1 text-lg font-semibold text-zinc-900">
+                <div class="rounded-lg border border-rule-subtle bg-surface-sunken p-3">
+                  <div class="text-xs text-text-secondary">Stock value</div>
+                  <div class="mt-1 text-lg font-semibold text-foreground">
                     <MoneyText :amount="fuelProductSummary.inventory_value" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                   </div>
-                  <div class="text-xs text-zinc-500">At product cost</div>
+                  <div class="text-xs text-text-secondary">At product cost</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <div class="grid gap-6 lg:grid-cols-3">
-            <Card class="border-zinc-200/80 bg-white lg:col-span-2">
+            <Card class="border-rule-subtle bg-surface-raised lg:col-span-2">
               <CardHeader>
                 <div class="flex items-center justify-between gap-3">
                   <div>
-                    <CardTitle class="text-base font-semibold text-zinc-900">Product Overview</CardTitle>
+                    <CardTitle class="text-base font-semibold text-foreground">Product Overview</CardTitle>
                     <CardDescription>Current stock, sale rate, margin, and recent movement.</CardDescription>
                   </div>
-                  <Badge variant="outline">{{ fuelProductRows.length }} products · {{ fuelProductSummary.active_products }} active</Badge>
+                  <Badge variant="outline">{{ fuelProductRows.length }} products Â· {{ fuelProductSummary.active_products }} active</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <div v-if="fuelProductRows.length === 0" class="rounded-lg border border-dashed border-zinc-200 p-6 text-center">
-                  <Package class="mx-auto h-8 w-8 text-zinc-400" />
-                  <p class="mt-2 text-sm font-medium text-zinc-900">No products yet</p>
-                  <p class="mt-1 text-sm text-zinc-500">Add the fuels and products this station sells.</p>
+                <div v-if="fuelProductRows.length === 0" class="rounded-lg border border-dashed border-rule-default p-6 text-center">
+                  <Package class="mx-auto h-8 w-8 text-text-tertiary" />
+                  <p class="mt-2 text-sm font-medium text-foreground">No products yet</p>
+                  <p class="mt-1 text-sm text-text-secondary">Add the fuels and products this station sells.</p>
                   <Button class="mt-4" size="sm" @click="productsDialogOpen = true">
                     <Plus class="mr-2 h-4 w-4" />
                     Add Fuel Product
@@ -1137,7 +1137,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                   <div
                     v-for="product in fuelProductRows"
                     :key="product.id"
-                    class="cursor-pointer rounded-lg border border-zinc-100 bg-white p-3 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                    class="cursor-pointer rounded-lg border border-rule-subtle bg-surface-raised p-3 transition-colors hover:border-rule-default hover:bg-surface-sunken"
                     role="button"
                     tabindex="0"
                     @click="openProduct(product)"
@@ -1146,27 +1146,27 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <div class="grid gap-3 lg:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1fr)_repeat(3,minmax(120px,0.8fr))_auto] lg:items-center">
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <p class="truncate text-sm font-semibold text-zinc-900">{{ product.name }}</p>
+                          <p class="truncate text-sm font-semibold text-foreground">{{ product.name }}</p>
                           <Badge :variant="!product.is_active ? 'outline' : product.is_low_stock ? 'destructive' : 'secondary'" class="text-xs">
                             {{ !product.is_active ? 'Inactive' : product.is_low_stock ? 'Low stock' : productCategoryLabel(product.fuel_category) }}
                           </Badge>
                         </div>
-                        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
                           <span v-if="product.sku">{{ product.sku }}</span>
                           <span>Rate <MoneyText :amount="product.sale_rate" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" /></span>
                           <span>Margin <MoneyText :amount="product.margin" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" /></span>
                         </div>
                       </div>
 
-                      <div class="rounded-md bg-zinc-50 p-2">
-                        <div class="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                      <div class="rounded-md bg-surface-sunken p-2">
+                        <div class="flex items-center justify-between gap-2 text-xs text-text-secondary">
                           <span>System stock</span>
                           <span v-if="product.capacity">{{ formatPercent(product.fill_percentage) }}</span>
                         </div>
-                        <div class="mt-1 text-sm font-semibold text-zinc-900">
+                        <div class="mt-1 text-sm font-semibold text-foreground">
                           {{ formatQuantity(product.current_stock, product.unit) }}
                         </div>
-                        <div class="mt-1 space-y-1 text-xs text-zinc-500">
+                        <div class="mt-1 space-y-1 text-xs text-text-secondary">
                           <div v-if="product.last_stock_movement_at">
                             {{ movementTypeLabel(product.last_stock_movement_type, product.last_stock_movement_reason) }}:
                             <DateTimeText :value="product.last_stock_movement_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
@@ -1175,21 +1175,21 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                           <div v-if="product.last_dip_quantity !== null">
                             {{ tankReadingLabel(product) }}: {{ formatQuantity(product.last_dip_quantity, product.unit) }}
                             <span v-if="product.last_dip_at">
-                              · <DateTimeText :value="product.last_dip_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
+                              Â· <DateTimeText :value="product.last_dip_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
                             </span>
                           </div>
                           <div v-if="product.last_dip_recorded_at">
                             Recorded:
                             <DateTimeText :value="product.last_dip_recorded_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
                           </div>
-                          <div v-if="stockPrecedence(product)" class="font-medium" :class="shouldShowCurrentVariance(product) ? 'text-zinc-700' : 'text-amber-700'">
+                          <div v-if="stockPrecedence(product)" class="font-medium" :class="shouldShowCurrentVariance(product) ? 'text-text-secondary' : 'text-status-attention'">
                             {{ stockPrecedence(product) }}
                           </div>
                           <div v-if="product.stock_variance !== null && shouldShowCurrentVariance(product)" :class="varianceClass(product.stock_variance)">
                             {{ Math.abs(product.stock_variance) < 0.001 ? 'No open variance' : 'Open variance' }}:
                             {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
                           </div>
-                          <div v-else-if="product.stock_variance !== null && hasPhysicalTankReading(product)" class="text-zinc-500">
+                          <div v-else-if="product.stock_variance !== null && hasPhysicalTankReading(product)" class="text-text-secondary">
                             Last checked variance: {{ variancePrefix(product.stock_variance) }}{{ formatQuantity(product.stock_variance, product.unit) }}
                           </div>
                           <div v-if="product.low_stock_level > 0">
@@ -1199,29 +1199,29 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                       </div>
 
                       <div>
-                        <div class="text-xs text-zinc-500">Yesterday</div>
-                        <div class="text-sm font-semibold text-zinc-900">
+                        <div class="text-xs text-text-secondary">Yesterday</div>
+                        <div class="text-sm font-semibold text-foreground">
                           <MoneyText :amount="product.sales.yesterday.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                         </div>
-                        <div class="text-xs text-zinc-500">{{ formatQuantity(product.sales.yesterday.quantity, product.unit) }}</div>
+                        <div class="text-xs text-text-secondary">{{ formatQuantity(product.sales.yesterday.quantity, product.unit) }}</div>
                       </div>
 
                       <div>
-                        <div class="text-xs text-zinc-500">Last 7 days</div>
-                        <div class="text-sm font-semibold text-zinc-900">
+                        <div class="text-xs text-text-secondary">Last 7 days</div>
+                        <div class="text-sm font-semibold text-foreground">
                           <MoneyText :amount="product.sales.last_week.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                         </div>
-                        <div class="text-xs text-zinc-500">{{ formatQuantity(product.sales.last_week.quantity, product.unit) }}</div>
+                        <div class="text-xs text-text-secondary">{{ formatQuantity(product.sales.last_week.quantity, product.unit) }}</div>
                       </div>
 
                       <div>
-                        <div class="text-xs text-zinc-500">Last 30 days</div>
-                        <div class="text-sm font-semibold text-zinc-900">
+                        <div class="text-xs text-text-secondary">Last 30 days</div>
+                        <div class="text-sm font-semibold text-foreground">
                           <MoneyText :amount="product.sales.last_month.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                         </div>
-                        <div class="text-xs text-zinc-500">
+                        <div class="text-xs text-text-secondary">
                           {{ formatQuantity(product.sales.last_month.quantity, product.unit) }}
-                          <span v-if="product.last_sold_at"> · {{ formatDate(product.last_sold_at) }}</span>
+                          <span v-if="product.last_sold_at"> Â· {{ formatDate(product.last_sold_at) }}</span>
                         </div>
                       </div>
 
@@ -1249,7 +1249,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                               <component :is="product.is_active ? PowerOff : Power" class="mr-2 h-4 w-4" />
                               {{ product.is_active ? 'Deactivate' : 'Activate' }}
                             </DropdownMenuItem>
-                            <DropdownMenuItem class="text-red-600 focus:text-red-600" @click="openProductDeleteDialog(product)">
+                            <DropdownMenuItem class="text-status-critical focus:text-status-critical" @click="openProductDeleteDialog(product)">
                               <Trash2 class="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -1263,11 +1263,11 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
             </Card>
 
             <div class="space-y-6">
-              <Card class="border-zinc-200/80 bg-white">
+              <Card class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
-                    <Warehouse class="h-5 w-5 text-zinc-700" />
-                    <CardTitle class="text-base font-semibold text-zinc-900">Stock Management</CardTitle>
+                    <Warehouse class="h-5 w-5 text-text-secondary" />
+                    <CardTitle class="text-base font-semibold text-foreground">Stock Management</CardTitle>
                   </div>
                   <CardDescription>Add stock, manage tanks, and review stock movement.</CardDescription>
                 </CardHeader>
@@ -1290,28 +1290,28 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 </CardContent>
               </Card>
 
-              <Card class="border-zinc-200/80 bg-white">
+              <Card class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
-                    <AlertTriangle class="h-5 w-5" :class="lowStockProducts.length > 0 ? 'text-amber-600' : 'text-zinc-400'" />
-                    <CardTitle class="text-base font-semibold text-zinc-900">Low Stock</CardTitle>
+                    <AlertTriangle class="h-5 w-5" :class="lowStockProducts.length > 0 ? 'text-status-attention' : 'text-text-tertiary'" />
+                    <CardTitle class="text-base font-semibold text-foreground">Low Stock</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="lowStockProducts.length === 0" class="text-sm text-zinc-500">No product is below its alert level.</div>
+                  <div v-if="lowStockProducts.length === 0" class="text-sm text-text-secondary">No product is below its alert level.</div>
                   <div v-else class="space-y-3">
-                    <div v-for="product in lowStockProducts" :key="product.id" class="rounded-md border border-amber-100 bg-amber-50 p-3">
+                    <div v-for="product in lowStockProducts" :key="product.id" class="rounded-md border border-status-attention/30 bg-status-attention/10 p-3">
                       <div class="flex items-start justify-between gap-3">
                         <div>
-                          <p class="text-sm font-semibold text-zinc-900">{{ product.name }}</p>
-                          <p class="text-xs text-zinc-600">{{ productCategoryLabel(product.fuel_category) }}</p>
+                          <p class="text-sm font-semibold text-foreground">{{ product.name }}</p>
+                          <p class="text-xs text-text-secondary">{{ productCategoryLabel(product.fuel_category) }}</p>
                         </div>
                         <Badge variant="destructive">{{ formatPercent(product.fill_percentage) }}</Badge>
                       </div>
-                      <div class="mt-2 text-sm text-zinc-700">
+                      <div class="mt-2 text-sm text-text-secondary">
                         {{ formatQuantity(product.current_stock, product.unit) }} left
                       </div>
-                      <div class="text-xs text-zinc-500">
+                      <div class="text-xs text-text-secondary">
                         Alert level {{ formatQuantity(product.low_stock_level, product.unit) }}
                       </div>
                     </div>
@@ -1319,28 +1319,28 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 </CardContent>
               </Card>
 
-              <Card class="border-zinc-200/80 bg-white">
+              <Card class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
-                    <TrendingUp class="h-5 w-5 text-emerald-600" />
-                    <CardTitle class="text-base font-semibold text-zinc-900">Top Products</CardTitle>
+                    <TrendingUp class="h-5 w-5 text-status-success" />
+                    <CardTitle class="text-base font-semibold text-foreground">Top Products</CardTitle>
                   </div>
                   <CardDescription>Ranked by sales in the last 30 days.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="topFuelProducts.length === 0" class="text-sm text-zinc-500">No posted sales in the last 30 days.</div>
+                  <div v-if="topFuelProducts.length === 0" class="text-sm text-text-secondary">No posted sales in the last 30 days.</div>
                   <div v-else class="space-y-3">
                     <div v-for="(product, index) in topFuelProducts" :key="product.id" class="flex items-center justify-between gap-3">
                       <div class="flex min-w-0 items-center gap-3">
-                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-700">
+                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-xs font-semibold text-text-secondary">
                           {{ index + 1 }}
                         </div>
                         <div class="min-w-0">
-                          <p class="truncate text-sm font-medium text-zinc-900">{{ product.name }}</p>
-                          <p class="text-xs text-zinc-500">{{ formatQuantity(product.sales.last_month.quantity, product.unit) }}</p>
+                          <p class="truncate text-sm font-medium text-foreground">{{ product.name }}</p>
+                          <p class="text-xs text-text-secondary">{{ formatQuantity(product.sales.last_month.quantity, product.unit) }}</p>
                         </div>
                       </div>
-                      <div class="text-sm font-semibold text-zinc-900">
+                      <div class="text-sm font-semibold text-foreground">
                         <MoneyText :amount="product.sales.last_month.amount" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                       </div>
                     </div>
@@ -1353,62 +1353,62 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
         <template v-else>
 
         <!-- Cash Position -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-subtle bg-surface-raised">
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-zinc-500 uppercase tracking-wider">Cash Position</CardTitle>
+            <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">Cash Position</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="mb-4">
-              <div class="text-3xl font-bold text-zinc-900">
+              <div class="text-3xl font-bold text-foreground">
                 <MoneyText :amount="dashboard.cash_position.total" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
               </div>
-              <p class="text-xs text-zinc-500 mt-1">Total across all accounts</p>
+              <p class="text-xs text-text-secondary mt-1">Total across all accounts</p>
             </div>
             <div v-if="dashboard.cash_position.accounts.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <div v-for="(account, idx) in dashboard.cash_position.accounts" :key="idx" 
-                class="p-3 bg-zinc-50 rounded-lg border border-zinc-100"
+                class="p-3 bg-surface-sunken rounded-lg border border-rule-subtle"
               >
-                <div class="text-xs text-zinc-500 mb-1 truncate">{{ account.name }}</div>
-                <div class="font-semibold text-zinc-800">
+                <div class="text-xs text-text-secondary mb-1 truncate">{{ account.name }}</div>
+                <div class="font-semibold text-text-primary">
                   <MoneyText :amount="account.balance" :currency="account.currency" :locale="moneyLocale(account.currency)" />
                 </div>
               </div>
             </div>
-            <div v-else class="text-sm text-zinc-500 italic">No bank accounts connected.</div>
+            <div v-else class="text-sm text-text-secondary italic">No bank accounts connected.</div>
           </CardContent>
         </Card>
 
         <!-- P&L Summary Widget -->
-        <Card class="border-zinc-200/80 bg-gradient-to-br from-white to-zinc-50">
+        <Card class="border-rule-subtle bg-surface-raised">
           <CardHeader class="pb-2">
             <div class="flex items-center justify-between">
-              <CardTitle class="text-sm font-medium text-zinc-500 uppercase tracking-wider">{{ t('profit') }} - {{ dashboard.profit_loss.period }}</CardTitle>
-              <Button variant="ghost" size="sm" class="text-xs text-zinc-500 hover:text-zinc-700" @click="router.visit(`/${company.slug}/reports/profit-loss`)">
-                View Report →
+              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('profit') }} - {{ dashboard.profit_loss.period }}</CardTitle>
+              <Button variant="ghost" size="sm" class="text-xs text-text-secondary hover:text-text-secondary" @click="router.visit(`/${company.slug}/reports/profit-loss`)">
+                View Report â†’
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div class="flex items-center gap-4 mb-4">
-              <div class="text-4xl font-bold" :class="dashboard.profit_loss.profit >= 0 ? 'text-emerald-600' : 'text-red-600'">
+              <div class="text-4xl font-bold" :class="dashboard.profit_loss.profit >= 0 ? 'text-status-success' : 'text-status-critical'">
                 <MoneyText :amount="dashboard.profit_loss.profit" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
               </div>
               <div v-if="dashboard.profit_loss.profit_growth !== 0" class="flex items-center gap-1 px-2 py-1 rounded-full text-sm"
-                :class="dashboard.profit_loss.profit_growth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'">
+                :class="dashboard.profit_loss.profit_growth >= 0 ? 'bg-status-success/15 text-status-success' : 'bg-status-critical/15 text-status-critical'">
                 <component :is="dashboard.profit_loss.profit_growth >= 0 ? TrendingUp : TrendingDown" class="h-4 w-4" />
                 {{ dashboard.profit_loss.profit_growth >= 0 ? '+' : '' }}{{ dashboard.profit_loss.profit_growth }}%
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-100">
+            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-rule-subtle">
               <div>
-                <div class="text-xs text-zinc-500 uppercase tracking-wide mb-1">{{ t('moneyIn') }}</div>
-                <div class="text-lg font-semibold text-zinc-800">
+                <div class="text-xs text-text-secondary uppercase tracking-wide mb-1">{{ t('moneyIn') }}</div>
+                <div class="text-lg font-semibold text-text-primary">
                   <MoneyText :amount="dashboard.profit_loss.income" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                 </div>
               </div>
               <div>
-                <div class="text-xs text-zinc-500 uppercase tracking-wide mb-1">{{ t('moneyOut') }}</div>
-                <div class="text-lg font-semibold text-zinc-800">
+                <div class="text-xs text-text-secondary uppercase tracking-wide mb-1">{{ t('moneyOut') }}</div>
+                <div class="text-lg font-semibold text-text-primary">
                   <MoneyText :amount="dashboard.profit_loss.expenses" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                 </div>
               </div>
@@ -1419,28 +1419,28 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
         <!-- Money In / Money Out -->
         <div class="grid gap-6 md:grid-cols-2">
           <!-- Money In -->
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-subtle bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500 uppercase tracking-wider">{{ t('moneyIn') }}</CardTitle>
+              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('moneyIn') }}</CardTitle>
               <Badge :variant="dashboard.money_in_out.money_in.growth >= 0 ? 'default' : 'destructive'" class="text-xs">
                 {{ dashboard.money_in_out.money_in.growth >= 0 ? '+' : '' }}{{ dashboard.money_in_out.money_in.growth.toFixed(1) }}%
               </Badge>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold text-zinc-900">
+              <div class="text-2xl font-bold text-foreground">
                 <MoneyText :amount="dashboard.money_in_out.money_in.current" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
               </div>
-              <p class="text-xs text-zinc-500 mt-1">
+              <p class="text-xs text-text-secondary mt-1">
                 This month vs
                 <MoneyText :amount="dashboard.money_in_out.money_in.last" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                 last month
               </p>
               
               <div class="mt-4 pt-4 border-t flex justify-between items-center">
-                <div class="text-sm text-zinc-600">
+                <div class="text-sm text-text-secondary">
                   <span class="font-medium">{{ financials.ar_overdue_count }}</span> invoices overdue
                 </div>
-                <div class="text-sm font-semibold text-amber-600">
+                <div class="text-sm font-semibold text-status-attention">
                   <MoneyText :amount="financials.ar_overdue" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                   overdue
                 </div>
@@ -1449,28 +1449,28 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </Card>
 
           <!-- Money Out -->
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-subtle bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500 uppercase tracking-wider">{{ t('moneyOut') }}</CardTitle>
+              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('moneyOut') }}</CardTitle>
               <Badge :variant="dashboard.money_in_out.money_out.growth <= 0 ? 'default' : 'outline'" class="text-xs">
                 {{ dashboard.money_in_out.money_out.growth >= 0 ? '+' : '' }}{{ dashboard.money_in_out.money_out.growth.toFixed(1) }}%
               </Badge>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold text-zinc-900">
+              <div class="text-2xl font-bold text-foreground">
                 <MoneyText :amount="dashboard.money_in_out.money_out.current" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
               </div>
-              <p class="text-xs text-zinc-500 mt-1">
+              <p class="text-xs text-text-secondary mt-1">
                 This month vs
                 <MoneyText :amount="dashboard.money_in_out.money_out.last" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
                 last month
               </p>
               
             <div class="mt-4 pt-4 border-t flex justify-between items-center">
-              <div class="text-sm text-zinc-600">
+              <div class="text-sm text-text-secondary">
                 <span class="font-medium">{{ dashboard.needs_attention.bills_due_soon }}</span> bills due soon
               </div>
-              <div class="text-sm font-semibold text-amber-600">
+              <div class="text-sm font-semibold text-status-attention">
                 <MoneyText
                   :amount="dashboard.needs_attention.bills_due_soon_amount || 0"
                   :currency="company.base_currency"
@@ -1487,9 +1487,9 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
         <div class="grid gap-6 md:grid-cols-3">
           
           <!-- Quick Actions -->
-          <Card class="md:col-span-2 border-zinc-200/80 bg-white">
+          <Card class="md:col-span-2 border-rule-subtle bg-surface-raised">
             <CardHeader>
-              <CardTitle class="text-base font-semibold text-zinc-900">Quick Actions</CardTitle>
+              <CardTitle class="text-base font-semibold text-foreground">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -1498,15 +1498,15 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                   <span>{{ t('createInvoice') }}</span>
                 </Button>
                 <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/payments/create`)">
-                  <Wallet class="h-6 w-6 text-emerald-600" />
+                  <Wallet class="h-6 w-6 text-status-success" />
                   <span>{{ t('recordPayment') }}</span>
                 </Button>
                 <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/bills/create`)">
-                  <Ban class="h-6 w-6 text-red-500" />
+                  <Ban class="h-6 w-6 text-status-critical" />
                   <span>{{ t('enterBill') }}</span>
                 </Button>
                 <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/banking/feed`)">
-                  <BarChart3 class="h-6 w-6 text-indigo-600" />
+                  <BarChart3 class="h-6 w-6 text-status-info" />
                   <span>{{ t('reviewTransactionsAction') }}</span>
                 </Button>
                 <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/sales/create`)">
@@ -1514,7 +1514,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                   <span>{{ t('recordSale') }}</span>
                 </Button>
                 <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/reports/profit-loss`)">
-                  <BarChart3 class="h-6 w-6 text-indigo-600" />
+                  <BarChart3 class="h-6 w-6 text-status-info" />
                   <span>{{ t('profitAndLoss') }}</span>
                 </Button>
               </div>
@@ -1522,35 +1522,35 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </Card>
 
           <!-- Needs Attention -->
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-subtle bg-surface-raised">
             <CardHeader>
-              <CardTitle class="text-base font-semibold text-zinc-900">Needs Attention</CardTitle>
+              <CardTitle class="text-base font-semibold text-foreground">Needs Attention</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="space-y-3">
-                <div v-if="dashboard.needs_attention.overdue_invoices > 0" class="flex items-center gap-3 p-2 rounded-md bg-red-50 border border-red-100">
-                  <AlertTriangle class="h-5 w-5 text-red-600" />
+                <div v-if="dashboard.needs_attention.overdue_invoices > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-critical/10 border border-status-critical/30">
+                  <AlertTriangle class="h-5 w-5 text-status-critical" />
                   <div class="text-sm">
-                    <span class="font-bold text-red-800">{{ dashboard.needs_attention.overdue_invoices }}</span> invoices overdue
+                    <span class="font-bold text-status-critical">{{ dashboard.needs_attention.overdue_invoices }}</span> invoices overdue
                   </div>
                 </div>
                 
-                <div v-if="dashboard.needs_attention.bills_due_soon > 0" class="flex items-center gap-3 p-2 rounded-md bg-amber-50 border border-amber-100">
-                  <Calendar class="h-5 w-5 text-amber-600" />
+                <div v-if="dashboard.needs_attention.bills_due_soon > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-attention/10 border border-status-attention/30">
+                  <Calendar class="h-5 w-5 text-status-attention" />
                   <div class="text-sm">
-                    <span class="font-bold text-amber-800">{{ dashboard.needs_attention.bills_due_soon }}</span> bills due this week
+                    <span class="font-bold text-status-attention">{{ dashboard.needs_attention.bills_due_soon }}</span> bills due this week
                   </div>
                 </div>
 
-                <div v-if="dashboard.needs_attention.unreconciled_transactions > 0" class="flex items-center gap-3 p-2 rounded-md bg-indigo-50 border border-indigo-100 cursor-pointer hover:bg-indigo-100 transition-colors" @click="router.visit(`/${company.slug}/banking/feed`)">
-                  <Wallet class="h-5 w-5 text-indigo-600" />
+                <div v-if="dashboard.needs_attention.unreconciled_transactions > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-info/10 border border-status-info/30 cursor-pointer hover:bg-status-info/15 transition-colors" @click="router.visit(`/${company.slug}/banking/feed`)">
+                  <Wallet class="h-5 w-5 text-status-info" />
                   <div class="text-sm">
                     {{ tpl('transactionsToReviewCount', { count: dashboard.needs_attention.unreconciled_transactions }) }}
                   </div>
                 </div>
 
-                <div v-if="dashboard.needs_attention.overdue_invoices === 0 && dashboard.needs_attention.bills_due_soon === 0 && dashboard.needs_attention.unreconciled_transactions === 0" class="text-center py-4 text-zinc-500 text-sm">
-                  <CheckCircle2 class="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                <div v-if="dashboard.needs_attention.overdue_invoices === 0 && dashboard.needs_attention.bills_due_soon === 0 && dashboard.needs_attention.unreconciled_transactions === 0" class="text-center py-4 text-text-secondary text-sm">
+                  <CheckCircle2 class="h-8 w-8 text-status-success mx-auto mb-2" />
                   All caught up!
                 </div>
               </div>
@@ -1558,22 +1558,22 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </Card>
         </div>
 
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-subtle bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-sm font-medium text-zinc-500">Recent Activity</CardTitle>
+            <CardTitle class="text-sm font-medium text-text-secondary">Recent Activity</CardTitle>
             <CardDescription>Last few accounting events</CardDescription>
           </CardHeader>
-          <CardContent class="space-y-3 text-sm text-zinc-700">
-            <div v-for="(item, idx) in financials.recent_activity" :key="idx" class="flex justify-between border-b border-zinc-200 pb-2 last:border-b-0 last:pb-0">
+          <CardContent class="space-y-3 text-sm text-text-secondary">
+            <div v-for="(item, idx) in financials.recent_activity" :key="idx" class="flex justify-between border-b border-rule-default pb-2 last:border-b-0 last:pb-0">
               <div>
-                <p class="font-medium text-zinc-900">{{ item.label }}</p>
-                <p class="text-xs text-zinc-500">{{ formatDate(item.occurred_at) }}</p>
+                <p class="font-medium text-foreground">{{ item.label }}</p>
+                <p class="text-xs text-text-secondary">{{ formatDate(item.occurred_at) }}</p>
               </div>
-              <div v-if="item.amount" class="font-mono text-sm text-zinc-800">
+              <div v-if="item.amount" class="font-mono text-sm text-text-primary">
                 <MoneyText :amount="item.amount" :currency="item.currency || company.base_currency" :locale="moneyLocale(item.currency || company.base_currency)" />
               </div>
             </div>
-            <div v-if="financials.recent_activity.length === 0" class="text-sm text-zinc-500">No recent activity.</div>
+            <div v-if="financials.recent_activity.length === 0" class="text-sm text-text-secondary">No recent activity.</div>
           </CardContent>
         </Card>
         </template>
@@ -1582,10 +1582,10 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
       <!-- Settings Tab -->
       <TabsContent v-if="canManage && !isFuelStationCompany" value="settings" class="space-y-6">
         <!-- Editable Settings -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-subtle bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900">Company Settings</CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardTitle class="text-foreground">Company Settings</CardTitle>
+            <CardDescription class="text-text-secondary">
               {{ canManage ? 'Click on the pencil icon to edit a setting' : 'Contact an owner or manager to make changes' }}
             </CardDescription>
           </CardHeader>
@@ -1606,41 +1606,41 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
 
               <!-- Slug (Read-only) -->
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Slug</Label>
-                <div class="font-mono text-base text-zinc-900">{{ company.slug }}</div>
-                <p class="text-xs text-zinc-400">Cannot be changed</p>
+                <Label class="text-sm font-medium text-text-secondary">Slug</Label>
+                <div class="font-mono text-base text-foreground">{{ company.slug }}</div>
+                <p class="text-xs text-text-tertiary">Cannot be changed</p>
               </div>
 
               <!-- Base Currency (Read-only) -->
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Base Currency</Label>
-                <div class="text-base text-zinc-900">
+                <Label class="text-sm font-medium text-text-secondary">Base Currency</Label>
+                <div class="text-base text-foreground">
                   <span class="font-mono">{{ currencySymbol(company.base_currency) }}</span>
-                  <span class="ml-2 text-sm text-zinc-500">({{ company.base_currency }})</span>
+                  <span class="ml-2 text-sm text-text-secondary">({{ company.base_currency }})</span>
                 </div>
-                <p class="text-xs text-zinc-400">Cannot be changed after creation</p>
+                <p class="text-xs text-text-tertiary">Cannot be changed after creation</p>
               </div>
 
               <!-- Country (Read-only) -->
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Country</Label>
-                <div class="text-base text-zinc-900">{{ company.country || '—' }}</div>
-                <p class="text-xs text-zinc-400">Cannot be changed</p>
+                <Label class="text-sm font-medium text-text-secondary">Country</Label>
+                <div class="text-base text-foreground">{{ company.country || 'â€”' }}</div>
+                <p class="text-xs text-text-tertiary">Cannot be changed</p>
               </div>
 
               <!-- Industry (Read-only) -->
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Industry</Label>
-                <div class="text-base text-zinc-900 capitalize">
-                  {{ company.industry_name || company.industry || company.industry_code || '—' }}
+                <Label class="text-sm font-medium text-text-secondary">Industry</Label>
+                <div class="text-base text-foreground capitalize">
+                  {{ company.industry_name || company.industry || company.industry_code || 'â€”' }}
                 </div>
               </div>
 
               <!-- Created Date (Read-only) -->
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Created</Label>
-                <div class="flex items-center gap-1.5 text-base text-zinc-900">
-                  <Calendar class="h-3.5 w-3.5 text-zinc-400" />
+                <Label class="text-sm font-medium text-text-secondary">Created</Label>
+                <div class="flex items-center gap-1.5 text-base text-foreground">
+                  <Calendar class="h-3.5 w-3.5 text-text-tertiary" />
                   {{ formatDate(company.created_at) }}
                 </div>
               </div>
@@ -1649,13 +1649,13 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
         </Card>
 
         <!-- Regional Settings -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-subtle bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900 flex items-center gap-2">
+            <CardTitle class="text-foreground flex items-center gap-2">
               <Globe class="h-4 w-4" />
               Regional Settings
             </CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardDescription class="text-text-secondary">
               Language, locale, and fiscal year preferences
             </CardDescription>
           </CardHeader>
@@ -1730,8 +1730,8 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
 
           <template #cell-name="{ row }">
             <div class="flex flex-col">
-              <span class="font-medium text-zinc-900">{{ row.name || 'Unknown' }}</span>
-              <div class="flex items-center gap-1 text-zinc-500">
+              <span class="font-medium text-foreground">{{ row.name || 'Unknown' }}</span>
+              <div class="flex items-center gap-1 text-text-secondary">
                 <Mail class="h-3 w-3" />
                 <span class="text-xs">{{ row.email }}</span>
               </div>
@@ -1753,11 +1753,11 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </template>
 
           <template #cell-joined_at="{ row }">
-            <div v-if="row.joined_at" class="flex items-center gap-1 text-zinc-700">
-              <Calendar class="h-3 w-3 text-zinc-400" />
+            <div v-if="row.joined_at" class="flex items-center gap-1 text-text-secondary">
+              <Calendar class="h-3 w-3 text-text-tertiary" />
               <span>{{ formatDate(row.joined_at) }}</span>
             </div>
-            <span v-else class="text-zinc-400">—</span>
+            <span v-else class="text-text-tertiary">â€”</span>
           </template>
 
           <template #cell-actions="{ row }">
@@ -1773,7 +1773,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <UserCog class="mr-2 h-4 w-4" />
                     Change Role
                   </DropdownMenuItem>
-                  <DropdownMenuItem @click="openRemoveDialog(row)" class="text-red-600 focus:text-red-600">
+                  <DropdownMenuItem @click="openRemoveDialog(row)" class="text-status-critical focus:text-status-critical">
                     <Trash2 class="mr-2 h-4 w-4" />
                     Remove User
                   </DropdownMenuItem>
@@ -1788,8 +1788,8 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
     <Dialog v-model:open="productsDialogOpen">
       <DialogContent class="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle class="text-zinc-900">Add Product</DialogTitle>
-          <DialogDescription class="text-zinc-500">
+          <DialogTitle class="text-foreground">Add Product</DialogTitle>
+          <DialogDescription class="text-text-secondary">
             Add the product, rate, opening stock, and storage in one place.
           </DialogDescription>
         </DialogHeader>
@@ -1798,8 +1798,8 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           <section class="space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-zinc-900">Product</h3>
-                <p class="text-xs text-zinc-500">What the station sells.</p>
+                <h3 class="text-sm font-semibold text-foreground">Product</h3>
+                <p class="text-xs text-text-secondary">What the station sells.</p>
               </div>
               <Badge variant="secondary">{{ row.type === 'fuel' ? 'Fuel' : row.type === 'lubricant' ? 'Lubricant' : 'Other' }}</Badge>
             </div>
@@ -1831,7 +1831,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <SelectItem value="high_octane">High Octane</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="productsForm.errors[`products.${index}.fuel_category`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.fuel_category`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.fuel_category`] }}
                 </p>
               </div>
@@ -1847,10 +1847,10 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <SelectItem value="packaged">Packaged item</SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-zinc-500">
+                <p class="text-xs text-text-secondary">
                   Bulk needs storage setup. Packaged is counted as bottles/units.
                 </p>
-                <p v-if="productsForm.errors[`products.${index}.lubricant_format`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.lubricant_format`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.lubricant_format`] }}
                 </p>
               </div>
@@ -1866,10 +1866,10 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <SelectItem value="packaged">Packaged item</SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-zinc-500">
+                <p class="text-xs text-text-secondary">
                   Bulk needs storage setup. Packaged is counted as units.
                 </p>
-                <p v-if="productsForm.errors[`products.${index}.packaging`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.packaging`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.packaging`] }}
                 </p>
               </div>
@@ -1877,24 +1877,24 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div class="space-y-2">
                 <Label>Name</Label>
                 <Input v-model="row.name" placeholder="Product name" />
-                <p v-if="productsForm.errors[`products.${index}.name`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.name`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.name`] }}
                 </p>
               </div>
             </div>
           </section>
 
-          <section class="space-y-3 border-t border-zinc-100 pt-4">
+          <section class="space-y-3 border-t border-rule-subtle pt-4">
             <div>
-              <h3 class="text-sm font-semibold text-zinc-900">Rate and Opening Stock</h3>
-              <p class="text-xs text-zinc-500">Starting numbers for the product.</p>
+              <h3 class="text-sm font-semibold text-foreground">Rate and Opening Stock</h3>
+              <p class="text-xs text-text-secondary">Starting numbers for the product.</p>
             </div>
 
             <div class="grid gap-3 md:grid-cols-4">
               <div class="space-y-2">
                 <Label>Effective Date</Label>
                 <Input v-model="productsForm.effective_date" type="date" />
-                <p v-if="productsForm.errors.effective_date" class="text-xs text-red-600">
+                <p v-if="productsForm.errors.effective_date" class="text-xs text-status-critical">
                   {{ productsForm.errors.effective_date }}
                 </p>
               </div>
@@ -1902,7 +1902,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div class="space-y-2">
                 <Label>Purchase Rate</Label>
                 <Input v-model="row.purchase_rate" type="number" step="0.01" min="0" />
-                <p v-if="productsForm.errors[`products.${index}.purchase_rate`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.purchase_rate`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.purchase_rate`] }}
                 </p>
               </div>
@@ -1910,7 +1910,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div class="space-y-2">
                 <Label>Sale Rate</Label>
                 <Input v-model="row.sale_rate" type="number" step="0.01" min="0" />
-                <p v-if="productsForm.errors[`products.${index}.sale_rate`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.sale_rate`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.sale_rate`] }}
                 </p>
               </div>
@@ -1918,17 +1918,17 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div v-if="row.track_inventory" class="space-y-2">
                 <Label>Opening Stock</Label>
                 <Input v-model="row.opening_quantity" type="number" step="0.001" min="0" placeholder="Optional" />
-                <p v-if="productsForm.errors[`products.${index}.opening_quantity`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.opening_quantity`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.opening_quantity`] }}
                 </p>
               </div>
             </div>
           </section>
 
-          <section v-if="row.track_inventory && isOpenPackaging(row)" class="space-y-3 border-t border-zinc-100 pt-4">
+          <section v-if="row.track_inventory && isOpenPackaging(row)" class="space-y-3 border-t border-rule-subtle pt-4">
             <div>
-              <h3 class="text-sm font-semibold text-zinc-900">Storage and Pump</h3>
-              <p class="text-xs text-zinc-500">Where the product is stored and how it is served.</p>
+              <h3 class="text-sm font-semibold text-foreground">Storage and Pump</h3>
+              <p class="text-xs text-text-secondary">Where the product is stored and how it is served.</p>
             </div>
 
             <div class="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -1944,16 +1944,16 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="productsForm.errors[`products.${index}.tank_id`]" class="text-xs text-red-600">
+                <p v-if="productsForm.errors[`products.${index}.tank_id`]" class="text-xs text-status-critical">
                   {{ productsForm.errors[`products.${index}.tank_id`] }}
                 </p>
-                <div v-if="row.new_tank" class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <div v-if="row.new_tank" class="flex items-center justify-between gap-3 rounded-md border border-status-success/30 bg-status-success/10 px-3 py-2">
                   <div class="min-w-0">
-                    <div class="truncate text-sm font-medium text-emerald-950">
+                    <div class="truncate text-sm font-medium text-status-success">
                       {{ row.new_tank.name }} ({{ row.new_tank.code }})
                     </div>
-                    <div class="text-xs text-emerald-700">
-                      Will be created with this product · {{ row.new_tank.capacity }} liters
+                    <div class="text-xs text-status-success">
+                      Will be created with this product Â· {{ row.new_tank.capacity }} liters
                     </div>
                   </div>
                   <Button type="button" variant="ghost" size="sm" @click="clearNewTank(row)">
@@ -1968,10 +1968,10 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               </div>
             </div>
 
-            <div v-if="row.type === 'fuel'" class="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+            <div v-if="row.type === 'fuel'" class="flex items-center justify-between gap-3 rounded-lg border border-rule-subtle bg-surface-sunken p-3">
               <div>
-                <div class="text-sm font-medium text-zinc-900">Create pump points</div>
-                <div class="text-xs text-zinc-500">Turn off only if pump/nozzles already exist.</div>
+                <div class="text-sm font-medium text-foreground">Create pump points</div>
+                <div class="text-xs text-text-secondary">Turn off only if pump/nozzles already exist.</div>
               </div>
               <Switch
                 :checked="row.create_pump_points"
@@ -1983,12 +1983,12 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div
                 v-for="(pumpSetup, pumpIndex) in row.pump_setups"
                 :key="pumpIndex"
-                class="grid gap-3 rounded-lg border border-zinc-100 p-3 md:grid-cols-[1fr_160px_auto] md:items-end"
+                class="grid gap-3 rounded-lg border border-rule-subtle p-3 md:grid-cols-[1fr_160px_auto] md:items-end"
               >
                 <div class="space-y-2">
                   <Label>{{ pumpIndex === 0 ? 'Pump Point' : `Pump Point ${pumpIndex + 1}` }}</Label>
                   <Input v-model="pumpSetup.name" :placeholder="`Point ${pumpIndex + 1}`" />
-                  <p v-if="productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.name`]" class="text-xs text-red-600">
+                  <p v-if="productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.name`]" class="text-xs text-status-critical">
                     {{ productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.name`] }}
                   </p>
                 </div>
@@ -2024,7 +2024,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </section>
 
           <Collapsible>
-            <CollapsibleTrigger class="flex w-full items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900">
+            <CollapsibleTrigger class="flex w-full items-center justify-between rounded-lg border border-rule-default px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-sunken hover:text-foreground">
               <span>Advanced setup</span>
               <ChevronDown class="h-4 w-4" />
             </CollapsibleTrigger>
@@ -2034,7 +2034,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 <div class="space-y-2">
                   <Label>SKU</Label>
                   <Input v-model="row.sku" placeholder="Auto-generated if blank" />
-                  <p v-if="productsForm.errors[`products.${index}.sku`]" class="text-xs text-red-600">
+                  <p v-if="productsForm.errors[`products.${index}.sku`]" class="text-xs text-status-critical">
                     {{ productsForm.errors[`products.${index}.sku`] }}
                   </p>
                 </div>
@@ -2054,18 +2054,18 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                 </div>
               </div>
 
-              <div v-if="row.type === 'fuel' && row.track_inventory && row.create_pump_points" class="space-y-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3">
+              <div v-if="row.type === 'fuel' && row.track_inventory && row.create_pump_points" class="space-y-3 rounded-lg border border-rule-subtle bg-surface-sunken p-3">
                 <div>
-                  <h3 class="text-sm font-semibold text-zinc-900">Nozzle Details</h3>
-                  <p class="text-xs text-zinc-500">Leave IDs blank for automatic numbering.</p>
+                  <h3 class="text-sm font-semibold text-foreground">Nozzle Details</h3>
+                  <p class="text-xs text-text-secondary">Leave IDs blank for automatic numbering.</p>
                 </div>
 
                 <div
                   v-for="(pumpSetup, pumpIndex) in row.pump_setups"
                   :key="pumpIndex"
-                  class="space-y-3 rounded-md border border-zinc-200 bg-white p-3"
+                  class="space-y-3 rounded-md border border-rule-default bg-surface-raised p-3"
                 >
-                  <div class="text-xs font-medium text-zinc-600">{{ pumpSetup.name || `Point ${pumpIndex + 1}` }}</div>
+                  <div class="text-xs font-medium text-text-secondary">{{ pumpSetup.name || `Point ${pumpIndex + 1}` }}</div>
                   <div
                     v-for="(nozzle, nozzleIndex) in pumpSetup.nozzles"
                     :key="nozzleIndex"
@@ -2074,7 +2074,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <div class="space-y-2">
                       <Label>Nozzle ID</Label>
                       <Input v-model="nozzle.code" placeholder="Auto" />
-                      <p v-if="productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.nozzles.${nozzleIndex}.code`]" class="text-xs text-red-600">
+                      <p v-if="productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.nozzles.${nozzleIndex}.code`]" class="text-xs text-status-critical">
                         {{ productsForm.errors[`products.${index}.pump_setups.${pumpIndex}.nozzles.${nozzleIndex}.code`] }}
                       </p>
                     </div>
@@ -2113,8 +2113,8 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
     <Dialog v-model:open="tankDialogOpen">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle class="text-zinc-900">Add Tank</DialogTitle>
-          <DialogDescription class="text-zinc-500">
+          <DialogTitle class="text-foreground">Add Tank</DialogTitle>
+          <DialogDescription class="text-text-secondary">
             This tank will be created when you create the product.
           </DialogDescription>
         </DialogHeader>
@@ -2123,19 +2123,19 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
             <div class="space-y-2">
               <Label>Tank Name</Label>
               <Input v-model="tankDraft.name" placeholder="e.g., Petrol Tank 1" />
-              <p v-if="tankDraftErrors.name" class="text-xs text-red-600">{{ tankDraftErrors.name }}</p>
+              <p v-if="tankDraftErrors.name" class="text-xs text-status-critical">{{ tankDraftErrors.name }}</p>
             </div>
             <div class="space-y-2">
               <Label>Tank Code</Label>
               <Input v-model="tankDraft.code" placeholder="e.g., TANK-PET" />
-              <p v-if="tankDraftErrors.code" class="text-xs text-red-600">{{ tankDraftErrors.code }}</p>
+              <p v-if="tankDraftErrors.code" class="text-xs text-status-critical">{{ tankDraftErrors.code }}</p>
             </div>
           </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label>Capacity (Liters)</Label>
               <Input v-model="tankDraft.capacity" type="number" step="0.01" min="1" />
-              <p v-if="tankDraftErrors.capacity" class="text-xs text-red-600">{{ tankDraftErrors.capacity }}</p>
+              <p v-if="tankDraftErrors.capacity" class="text-xs text-status-critical">{{ tankDraftErrors.capacity }}</p>
             </div>
             <div class="space-y-2">
               <Label>Low Level Alert (optional)</Label>
@@ -2158,37 +2158,37 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
     <Dialog v-model:open="createUserDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-zinc-900">Add User</DialogTitle>
-          <DialogDescription class="text-zinc-500">
+          <DialogTitle class="text-foreground">Add User</DialogTitle>
+          <DialogDescription class="text-text-secondary">
             Create a login for {{ company.name }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label for="company-user-name" class="text-zinc-700">Full name</Label>
-            <Input id="company-user-name" v-model="createUserForm.name" class="border-zinc-200" />
-            <p v-if="createUserForm.errors.name" class="text-xs text-red-600">{{ createUserForm.errors.name }}</p>
+            <Label for="company-user-name" class="text-text-secondary">Full name</Label>
+            <Input id="company-user-name" v-model="createUserForm.name" class="border-rule-default" />
+            <p v-if="createUserForm.errors.name" class="text-xs text-status-critical">{{ createUserForm.errors.name }}</p>
           </div>
           <div class="space-y-2">
-            <Label for="company-user-email" class="text-zinc-700">Email</Label>
+            <Label for="company-user-email" class="text-text-secondary">Email</Label>
             <Input
               id="company-user-email"
               v-model="createUserForm.email"
               type="email"
               placeholder="user@example.com"
-              class="border-zinc-200"
+              class="border-rule-default"
             />
-            <p v-if="createUserForm.errors.email" class="text-xs text-red-600">
+            <p v-if="createUserForm.errors.email" class="text-xs text-status-critical">
               {{ createUserForm.errors.email }}
             </p>
           </div>
           <div class="space-y-2">
-            <Label class="text-zinc-700">Role</Label>
+            <Label class="text-text-secondary">Role</Label>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="outline" class="w-full justify-between border-zinc-200">
+                <Button variant="outline" class="w-full justify-between border-rule-default">
                   <span class="capitalize">{{ createUserForm.role }}</span>
-                  <span class="ml-2">▼</span>
+                  <span class="ml-2">â–¼</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent class="w-full">
@@ -2204,13 +2204,13 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
             </DropdownMenu>
           </div>
           <div class="space-y-2">
-            <Label for="company-user-password" class="text-zinc-700">Password</Label>
-            <Input id="company-user-password" v-model="createUserForm.password" type="password" autocomplete="new-password" class="border-zinc-200" />
-            <p v-if="createUserForm.errors.password" class="text-xs text-red-600">{{ createUserForm.errors.password }}</p>
+            <Label for="company-user-password" class="text-text-secondary">Password</Label>
+            <Input id="company-user-password" v-model="createUserForm.password" type="password" autocomplete="new-password" class="border-rule-default" />
+            <p v-if="createUserForm.errors.password" class="text-xs text-status-critical">{{ createUserForm.errors.password }}</p>
           </div>
           <div class="space-y-2">
-            <Label for="company-user-password-confirmation" class="text-zinc-700">Confirm password</Label>
-            <Input id="company-user-password-confirmation" v-model="createUserForm.password_confirmation" type="password" autocomplete="new-password" class="border-zinc-200" />
+            <Label for="company-user-password-confirmation" class="text-text-secondary">Confirm password</Label>
+            <Input id="company-user-password-confirmation" v-model="createUserForm.password_confirmation" type="password" autocomplete="new-password" class="border-rule-default" />
           </div>
         </div>
         <DialogFooter>
@@ -2229,19 +2229,19 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
     <Dialog v-model:open="roleDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-zinc-900">Change User Role</DialogTitle>
-          <DialogDescription class="text-zinc-500">
+          <DialogTitle class="text-foreground">Change User Role</DialogTitle>
+          <DialogDescription class="text-text-secondary">
             Update the role for {{ selectedUser?.name || selectedUser?.email }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label class="text-zinc-700">Role</Label>
+            <Label class="text-text-secondary">Role</Label>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="outline" class="w-full justify-between border-zinc-200">
+                <Button variant="outline" class="w-full justify-between border-rule-default">
                   <span class="capitalize">{{ roleForm.role }}</span>
-                  <span class="ml-2">▼</span>
+                  <span class="ml-2">â–¼</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent class="w-full">

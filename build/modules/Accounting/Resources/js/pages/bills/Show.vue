@@ -259,8 +259,8 @@ const varianceQuantity = (line: ReceiptLineInput) => {
 
 const varianceLabelClass = (line: ReceiptLineInput) => {
   const variance = varianceQuantity(line)
-  if (variance > 0) return 'text-emerald-600'
-  if (variance < 0) return 'text-amber-600'
+  if (variance > 0) return 'text-status-success'
+  if (variance < 0) return 'text-status-attention'
   return 'text-muted-foreground'
 }
 
@@ -600,7 +600,7 @@ const navigateToVendor = () => {
               <Separator />
               <div class="flex justify-between text-base font-semibold">
                 <span>{{ t('balanceDue') }}</span>
-                <span :class="bill.balance > 0 ? 'text-destructive' : 'text-green-600'">
+                <span :class="bill.balance > 0 ? 'text-destructive' : 'text-status-success'">
                   {{ formatMoney(bill.balance, bill.currency) }}
                 </span>
               </div>
@@ -638,7 +638,7 @@ const navigateToVendor = () => {
               <!-- Goods Received Status -->
               <div
                 v-if="goodsFullyReceived"
-                class="flex items-center justify-center gap-2 p-2 rounded-md bg-green-50 text-green-700 text-sm"
+                class="flex items-center justify-center gap-2 p-2 rounded-md bg-status-success/10 text-status-success text-sm"
               >
                 <PackageCheck class="h-4 w-4" />
                 <span>{{ t('stockReceived') }}</span>
@@ -647,12 +647,12 @@ const navigateToVendor = () => {
               <!-- No Inventory Items Warning -->
               <div
                 v-if="inventoryEnabled && !hasLinkedItems && !['void', 'cancelled', 'draft'].includes(bill.status)"
-                class="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs"
+                class="flex items-start gap-2 p-3 rounded-md bg-status-attention/10 border border-status-attention/30 text-status-attention text-xs"
               >
                 <Package class="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <div>
                   <p class="font-medium mb-1">No inventory items</p>
-                  <p class="text-amber-700">
+                  <p class="text-status-attention">
                     This bill has no linked inventory items. To track goods receipt, edit the bill and select inventory items for each line.
                   </p>
                 </div>
@@ -817,7 +817,7 @@ const navigateToVendor = () => {
           <div v-if="Object.keys(receiptForm.errors).length" class="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {{ receiptForm.errors.lines ?? receiptForm.errors.receipt_date ?? receiptForm.errors.notes ?? 'Please review the receipt details.' }}
           </div>
-          <p v-if="hasMissingReasons || hasMissingTreatments" class="text-xs text-amber-600">
+          <p v-if="hasMissingReasons || hasMissingTreatments" class="text-xs text-status-attention">
             Select a variance reason for every variance and a treatment for every shortage.
           </p>
         </div>

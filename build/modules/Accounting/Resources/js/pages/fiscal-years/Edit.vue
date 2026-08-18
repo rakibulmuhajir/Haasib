@@ -72,7 +72,7 @@ const destroy = () => {
           <div>
             <Label for="name">Name</Label>
             <Input id="name" v-model="form.name" />
-            <p v-if="form.errors.name" class="text-sm text-red-600 mt-1">{{ form.errors.name }}</p>
+            <p v-if="form.errors.name" class="text-sm text-status-critical mt-1">{{ form.errors.name }}</p>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
@@ -82,12 +82,12 @@ const destroy = () => {
               <p v-if="hasPeriods" class="text-xs text-muted-foreground mt-1">
                 Dates are locked after periods are created.
               </p>
-              <p v-if="form.errors.start_date" class="text-sm text-red-600 mt-1">{{ form.errors.start_date }}</p>
+              <p v-if="form.errors.start_date" class="text-sm text-status-critical mt-1">{{ form.errors.start_date }}</p>
             </div>
             <div>
               <Label for="end_date">End date</Label>
               <Input id="end_date" type="date" v-model="form.end_date" :disabled="hasPeriods" />
-              <p v-if="form.errors.end_date" class="text-sm text-red-600 mt-1">{{ form.errors.end_date }}</p>
+              <p v-if="form.errors.end_date" class="text-sm text-status-critical mt-1">{{ form.errors.end_date }}</p>
             </div>
           </div>
 

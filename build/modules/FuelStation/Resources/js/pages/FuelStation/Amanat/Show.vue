@@ -116,13 +116,13 @@ const txTableData = computed(() => {
 const getTypeBadge = (type: string) => {
   switch (type) {
     case 'deposit':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: ArrowDownCircle, label: 'Deposit' }
+      return { class: 'bg-status-success/10 text-status-success', icon: ArrowDownCircle, label: 'Deposit' }
     case 'withdrawal':
-      return { class: 'bg-amber-100 text-amber-800', icon: ArrowUpCircle, label: 'Withdrawal' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: ArrowUpCircle, label: 'Withdrawal' }
     case 'fuel_purchase':
-      return { class: 'bg-sky-100 text-sky-800', icon: Fuel, label: 'Fuel Purchase' }
+      return { class: 'bg-status-info/10 text-status-info', icon: Fuel, label: 'Fuel Purchase' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Wallet, label: type }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Wallet, label: type }
   }
 }
 </script>
@@ -144,14 +144,14 @@ const getTypeBadge = (type: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-3">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 md:col-span-2">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken md:col-span-2">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
           <CardTitle class="text-3xl">{{ formatCurrency(profile.amanat_balance) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Available for fuel purchases</span>
           </div>
         </CardContent>
@@ -163,10 +163,10 @@ const getTypeBadge = (type: string) => {
           <CardTitle class="text-lg capitalize">{{ profile.relationship ?? 'External' }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0 space-y-2">
-          <Badge v-if="profile.is_credit_customer" class="bg-purple-100 text-purple-800 hover:bg-purple-100">
+          <Badge v-if="profile.is_credit_customer" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             Credit Customer
           </Badge>
-          <Badge v-if="profile.is_investor" class="bg-sky-100 text-sky-800 hover:bg-sky-100 ml-1">
+          <Badge v-if="profile.is_investor" class="bg-status-info/10 text-status-info hover:bg-status-info/10 ml-1">
             Investor
           </Badge>
         </CardContent>
@@ -199,8 +199,8 @@ const getTypeBadge = (type: string) => {
             <span
               class="font-medium"
               :class="{
-                'text-emerald-600': row.type === 'deposit',
-                'text-red-600': row.type === 'withdrawal' || row.type === 'fuel_purchase',
+                'text-status-success': row.type === 'deposit',
+                'text-status-critical': row.type === 'withdrawal' || row.type === 'fuel_purchase',
               }"
             >
               {{ row.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(Math.abs(row.amount)) }}

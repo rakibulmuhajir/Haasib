@@ -237,18 +237,18 @@ const unlockTransaction = () => {
       <div
         :class="[
           'rounded-lg border p-4 flex items-center gap-3',
-          transaction.status === 'reversed' ? 'bg-red-50 border-red-200' : '',
-          transaction.status === 'locked' || transaction.is_locked ? 'bg-amber-50 border-amber-200' : '',
-          transaction.status === 'correction' ? 'bg-blue-50 border-blue-200' : '',
+          transaction.status === 'reversed' ? 'bg-status-critical/10 border-status-critical/30' : '',
+          transaction.status === 'locked' || transaction.is_locked ? 'bg-status-attention/10 border-status-attention/30' : '',
+          transaction.status === 'correction' ? 'bg-status-info/10 border-status-info/30' : '',
         ]"
       >
         <component
           :is="statusConfig.icon"
           :class="[
             'h-5 w-5',
-            transaction.status === 'reversed' ? 'text-red-600' : '',
-            transaction.status === 'locked' || transaction.is_locked ? 'text-amber-600' : '',
-            transaction.status === 'correction' ? 'text-blue-600' : '',
+            transaction.status === 'reversed' ? 'text-status-critical' : '',
+            transaction.status === 'locked' || transaction.is_locked ? 'text-status-attention' : '',
+            transaction.status === 'correction' ? 'text-status-info' : '',
           ]"
         />
         <div class="flex-1">
@@ -338,7 +338,7 @@ const unlockTransaction = () => {
           </div>
 
           <!-- Gross Profit -->
-          <div class="flex justify-between items-center text-green-600 font-semibold">
+          <div class="flex justify-between items-center text-status-success font-semibold">
             <span>Gross Profit</span>
             <span>{{ currency }} {{ formatCurrency((metadata.total_revenue || 0) - (metadata.total_cogs || 0)) }}</span>
           </div>
@@ -362,7 +362,7 @@ const unlockTransaction = () => {
             </div>
             <div v-if="metadata.partner_deposits" class="flex justify-between items-center py-2">
               <span>Partner Deposits</span>
-              <span class="font-semibold text-green-600">+{{ currency }} {{ formatCurrency(metadata.partner_deposits) }}</span>
+              <span class="font-semibold text-status-success">+{{ currency }} {{ formatCurrency(metadata.partner_deposits) }}</span>
             </div>
           </div>
 
@@ -372,23 +372,23 @@ const unlockTransaction = () => {
           <div class="space-y-2">
             <div v-if="metadata.bank_deposits" class="flex justify-between items-center py-2">
               <span>Bank Deposits</span>
-              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.bank_deposits) }}</span>
+              <span class="font-semibold text-status-critical">-{{ currency }} {{ formatCurrency(metadata.bank_deposits) }}</span>
             </div>
             <div v-if="metadata.partner_withdrawals" class="flex justify-between items-center py-2">
               <span>Partner Withdrawals</span>
-              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.partner_withdrawals) }}</span>
+              <span class="font-semibold text-status-critical">-{{ currency }} {{ formatCurrency(metadata.partner_withdrawals) }}</span>
             </div>
             <div v-if="metadata.employee_advances" class="flex justify-between items-center py-2">
               <span>Employee Advances</span>
-              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.employee_advances) }}</span>
+              <span class="font-semibold text-status-critical">-{{ currency }} {{ formatCurrency(metadata.employee_advances) }}</span>
             </div>
             <div v-if="metadata.payroll_payouts" class="flex justify-between items-center py-2">
               <span>Approved Salaries</span>
-              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.payroll_payouts) }}</span>
+              <span class="font-semibold text-status-critical">-{{ currency }} {{ formatCurrency(metadata.payroll_payouts) }}</span>
             </div>
             <div v-if="metadata.expenses" class="flex justify-between items-center py-2">
               <span>Expenses</span>
-              <span class="font-semibold text-red-600">-{{ currency }} {{ formatCurrency(metadata.expenses) }}</span>
+              <span class="font-semibold text-status-critical">-{{ currency }} {{ formatCurrency(metadata.expenses) }}</span>
             </div>
           </div>
 
@@ -408,13 +408,13 @@ const unlockTransaction = () => {
               v-if="metadata.variance !== undefined && metadata.variance !== 0"
               :class="[
                 'flex justify-between items-center py-2 font-semibold',
-                metadata.variance > 0 ? 'text-blue-600' : 'text-red-600'
+                metadata.variance > 0 ? 'text-status-info' : 'text-status-critical'
               ]"
             >
               <span>{{ metadata.variance > 0 ? 'Cash Over' : 'Cash Short' }}</span>
               <span>{{ currency }} {{ formatCurrency(Math.abs(metadata.variance)) }}</span>
             </div>
-            <div v-else-if="metadata.variance === 0" class="flex justify-between items-center py-2 text-green-600 font-semibold">
+            <div v-else-if="metadata.variance === 0" class="flex justify-between items-center py-2 text-status-success font-semibold">
               <span>Variance</span>
               <span class="flex items-center gap-1">
                 <CheckCircle class="h-4 w-4" />

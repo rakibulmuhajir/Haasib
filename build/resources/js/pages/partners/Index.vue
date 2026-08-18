@@ -130,14 +130,14 @@ const goToCreate = () => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Partners</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_partners }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <UsersRound class="h-4 w-4 text-sky-600" />
+            <UsersRound class="h-4 w-4 text-status-info" />
             <span>{{ stats.active_partners }} active</span>
           </div>
         </CardContent>
@@ -150,7 +150,7 @@ const goToCreate = () => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Net investment</span>
           </div>
         </CardContent>
@@ -159,11 +159,11 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_invested) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Capital contributions</span>
           </div>
         </CardContent>
@@ -172,11 +172,11 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ currency }} {{ formatCurrency(stats.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(stats.total_withdrawn) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingDown class="h-4 w-4 text-amber-600" />
+            <TrendingDown class="h-4 w-4 text-status-attention" />
             <span>Partner drawings</span>
           </div>
         </CardContent>
@@ -234,7 +234,7 @@ const goToCreate = () => {
           </template>
 
           <template #cell-net_capital="{ row }">
-            <span :class="row._raw.net_capital >= 0 ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'">
+            <span :class="row._raw.net_capital >= 0 ? 'text-status-success font-medium' : 'text-status-critical font-medium'">
               {{ currency }} {{ formatCurrency(row._raw.net_capital) }}
             </span>
           </template>
@@ -253,7 +253,7 @@ const goToCreate = () => {
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ row._raw.is_active ? 'Active' : 'Inactive' }}
             </Badge>

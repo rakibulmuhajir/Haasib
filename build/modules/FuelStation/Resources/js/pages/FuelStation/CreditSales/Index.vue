@@ -176,14 +176,14 @@ const goToCustomer = (customerId: string) => {
   >
     <!-- Stats Cards -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Sales</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_sales }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-amber-600" />
+            <TrendingUp class="h-4 w-4 text-status-attention" />
             <span>Credit transactions</span>
           </div>
         </CardContent>
@@ -192,11 +192,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Liters</CardDescription>
-          <CardTitle class="text-2xl text-sky-600">{{ formatNumber(stats.total_liters) }} L</CardTitle>
+          <CardTitle class="text-2xl text-status-info">{{ formatNumber(stats.total_liters) }} L</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Droplets class="h-4 w-4 text-sky-600" />
+            <Droplets class="h-4 w-4 text-status-info" />
             <span>Fuel dispensed on credit</span>
           </div>
         </CardContent>
@@ -205,11 +205,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <CreditCard class="h-4 w-4 text-emerald-600" />
+            <CreditCard class="h-4 w-4 text-status-success" />
             <span>Credit sales value</span>
           </div>
         </CardContent>
@@ -222,7 +222,7 @@ const goToCustomer = (customerId: string) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Users class="h-4 w-4 text-indigo-600" />
+            <Users class="h-4 w-4 text-status-info" />
             <span>In selected period</span>
           </div>
         </CardContent>
@@ -322,7 +322,7 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-fuel="{ row }">
-            <Badge variant="outline" class="bg-amber-50">
+            <Badge variant="outline" class="bg-status-attention/10">
               <Fuel class="mr-1 h-3 w-3" />
               {{ row._raw.fuel_name }}
             </Badge>
@@ -337,7 +337,7 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium text-emerald-600">
+            <span class="font-medium text-status-success">
               {{ currency }} {{ formatCurrency(row._raw.amount) }}
             </span>
           </template>

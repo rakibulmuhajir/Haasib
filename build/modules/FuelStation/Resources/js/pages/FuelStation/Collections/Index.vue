@@ -194,14 +194,14 @@ const goToCustomer = (customerId: string) => {
 
     <!-- Stats Cards -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Collections</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_collections }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Payments received</span>
           </div>
         </CardContent>
@@ -210,11 +210,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Collected in period</span>
           </div>
         </CardContent>
@@ -227,7 +227,7 @@ const goToCustomer = (customerId: string) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-green-600" />
+            <Banknote class="h-4 w-4 text-status-success" />
             <span>Cash payments</span>
           </div>
         </CardContent>
@@ -240,7 +240,7 @@ const goToCustomer = (customerId: string) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <CreditCard class="h-4 w-4 text-blue-600" />
+            <CreditCard class="h-4 w-4 text-status-info" />
             <span>Bank/transfer payments</span>
           </div>
         </CardContent>
@@ -346,8 +346,8 @@ const goToCustomer = (customerId: string) => {
           <template #cell-method="{ row }">
             <Badge
               :class="{
-                'bg-green-100 text-green-800': row._raw.payment_method === 'cash',
-                'bg-blue-100 text-blue-800': row._raw.payment_method !== 'cash',
+                'bg-status-success/10 text-status-success': row._raw.payment_method === 'cash',
+                'bg-status-info/10 text-status-info': row._raw.payment_method !== 'cash',
               }"
             >
               {{ paymentMethodLabel(row._raw.payment_method) }}
@@ -355,7 +355,7 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium text-emerald-600">
+            <span class="font-medium text-status-success">
               {{ currency }} {{ formatCurrency(row._raw.amount) }}
             </span>
           </template>

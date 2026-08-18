@@ -143,14 +143,14 @@ const goToShow = (row: any) => {
 
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Receipts</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_receipts }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Truck class="h-4 w-4 text-sky-600" />
+            <Truck class="h-4 w-4 text-status-info" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -163,7 +163,7 @@ const goToShow = (row: any) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Droplets class="h-4 w-4 text-sky-600" />
+            <Droplets class="h-4 w-4 text-status-info" />
             <span>Received</span>
           </div>
         </CardContent>
@@ -176,7 +176,7 @@ const goToShow = (row: any) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Purchases</span>
           </div>
         </CardContent>
@@ -189,7 +189,7 @@ const goToShow = (row: any) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Calendar class="h-4 w-4 text-indigo-600" />
+            <Calendar class="h-4 w-4 text-status-info" />
             <span>Deliveries</span>
           </div>
         </CardContent>
@@ -234,7 +234,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-liters="{ row }">
-            <span class="font-medium text-sky-600">{{ row.liters }}</span>
+            <span class="font-medium text-status-info">{{ row.liters }}</span>
           </template>
 
           <template #cell-amount="{ row }">
@@ -243,7 +243,7 @@ const goToShow = (row: any) => {
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.status === 'posted' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+              :class="row._raw.status === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'"
             >
               {{ row._raw.status === 'posted' ? 'Posted' : row._raw.status }}
             </Badge>

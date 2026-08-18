@@ -107,14 +107,14 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle class="flex items-center gap-2">
-                <Gauge class="h-5 w-5 text-sky-600" />
+                <Gauge class="h-5 w-5 text-status-info" />
                 Meter Snapshot
               </CardTitle>
               <CardDescription>Current meter and linkage context.</CardDescription>
             </div>
 
             <Badge
-              :class="pump.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="pump.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ pump.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -122,7 +122,7 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
         </CardHeader>
 
         <CardContent class="grid gap-4 sm:grid-cols-2">
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-sky-500/10 to-indigo-500/5 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-tertiary">Current meter</p>
             <p class="mt-2 text-2xl font-semibold text-text-primary">
               {{ formatQty(pump.current_meter_reading) }}
@@ -130,10 +130,10 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
             <p class="mt-1 text-sm text-text-secondary">Units: liters on pump counter</p>
           </div>
 
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-emerald-500/10 to-sky-500/5 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-tertiary">Fuel item</p>
             <div class="mt-2 flex items-center gap-2">
-              <Droplet class="h-4 w-4 text-emerald-600" />
+              <Droplet class="h-4 w-4 text-status-success" />
               <p class="text-lg font-semibold text-text-primary">
                 {{ fuelLabel }}
               </p>
@@ -153,17 +153,17 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
         <CardContent class="space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <SunMedium class="h-4 w-4 text-amber-600" />
+              <SunMedium class="h-4 w-4 text-status-attention" />
               <span class="text-sm text-text-secondary">Day shift</span>
             </div>
-            <Badge class="bg-amber-100 text-amber-800 hover:bg-amber-100">day</Badge>
+            <Badge class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">day</Badge>
           </div>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <Moon class="h-4 w-4 text-indigo-600" />
+              <Moon class="h-4 w-4 text-status-info" />
               <span class="text-sm text-text-secondary">Night shift</span>
             </div>
-            <Badge class="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">night</Badge>
+            <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">night</Badge>
           </div>
         </CardContent>
       </Card>
@@ -178,7 +178,7 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
         <DataTable :data="tableData" :columns="columns">
           <template #cell-shift="{ row }">
             <Badge
-              :class="row._raw.shift === 'day' ? 'bg-amber-100 text-amber-800 hover:bg-amber-100' : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-100'"
+              :class="row._raw.shift === 'day' ? 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10' : 'bg-status-info/10 text-status-info hover:bg-status-info/10'"
             >
               {{ row._raw.shift }}
             </Badge>

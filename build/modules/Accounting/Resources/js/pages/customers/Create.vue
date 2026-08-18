@@ -61,18 +61,18 @@ const handleSubmit = () => {
     :icon="Users"
   >
     <div class="mx-auto max-w-xl">
-      <Card class="border-zinc-200/80 bg-white">
+      <Card class="border-rule-default bg-surface-raised">
         <CardHeader>
-          <CardTitle class="text-zinc-900">Customer Details</CardTitle>
-          <CardDescription class="text-zinc-500">
+          <CardTitle class="text-text-primary">Customer Details</CardTitle>
+          <CardDescription class="text-text-secondary">
             Enter the basic information. You can add more details after creating.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form class="space-y-5" @submit.prevent="handleSubmit">
             <div class="space-y-2">
-              <Label for="name" class="flex items-center gap-2 text-zinc-700">
-                <Building2 class="h-4 w-4 text-zinc-400" />
+              <Label for="name" class="flex items-center gap-2 text-text-primary">
+                <Building2 class="h-4 w-4 text-text-tertiary" />
                 Customer Name
               </Label>
               <Input
@@ -80,14 +80,14 @@ const handleSubmit = () => {
                 v-model="form.name"
                 placeholder="Acme Corporation"
                 required
-                class="border-zinc-200"
+                class="border-rule-default"
               />
-              <p v-if="form.errors.name" class="text-xs text-red-600">{{ form.errors.name }}</p>
+              <p v-if="form.errors.name" class="text-xs text-status-critical">{{ form.errors.name }}</p>
             </div>
 
             <div class="space-y-2">
-              <Label for="email" class="flex items-center gap-2 text-zinc-700">
-                <Mail class="h-4 w-4 text-zinc-400" />
+              <Label for="email" class="flex items-center gap-2 text-text-primary">
+                <Mail class="h-4 w-4 text-text-tertiary" />
                 Email
               </Label>
               <Input
@@ -95,41 +95,41 @@ const handleSubmit = () => {
                 v-model="form.email"
                 type="email"
                 placeholder="billing@acme.com"
-                class="border-zinc-200"
+                class="border-rule-default"
               />
-              <p v-if="form.errors.email" class="text-xs text-red-600">{{ form.errors.email }}</p>
+              <p v-if="form.errors.email" class="text-xs text-status-critical">{{ form.errors.email }}</p>
             </div>
 
             <div class="space-y-2">
-              <Label for="phone" class="flex items-center gap-2 text-zinc-700">
-                <Phone class="h-4 w-4 text-zinc-400" />
+              <Label for="phone" class="flex items-center gap-2 text-text-primary">
+                <Phone class="h-4 w-4 text-text-tertiary" />
                 Phone
               </Label>
               <Input
                 id="phone"
                 v-model="form.phone"
                 placeholder="+1 (555) 123-4567"
-                class="border-zinc-200"
+                class="border-rule-default"
               />
-              <p v-if="form.errors.phone" class="text-xs text-red-600">{{ form.errors.phone }}</p>
+              <p v-if="form.errors.phone" class="text-xs text-status-critical">{{ form.errors.phone }}</p>
             </div>
 
             <div class="space-y-2">
-              <Label for="logo_url" class="flex items-center gap-2 text-zinc-700">
-                <ImageIcon class="h-4 w-4 text-zinc-400" />
+              <Label for="logo_url" class="flex items-center gap-2 text-text-primary">
+                <ImageIcon class="h-4 w-4 text-text-tertiary" />
                 Logo URL
-                <span class="text-xs text-zinc-400">(optional)</span>
+                <span class="text-xs text-text-tertiary">(optional)</span>
               </Label>
               <Input
                 id="logo_url"
                 v-model="form.logo_url"
                 placeholder="https://example.com/logo.png"
-                class="border-zinc-200"
+                class="border-rule-default"
               />
-              <p v-if="form.errors.logo_url" class="text-xs text-red-600">{{ form.errors.logo_url }}</p>
+              <p v-if="form.errors.logo_url" class="text-xs text-status-critical">{{ form.errors.logo_url }}</p>
             </div>
 
-            <div class="flex justify-end gap-3 pt-4 border-t border-zinc-100">
+            <div class="flex justify-end gap-3 pt-4 border-t border-rule-subtle">
               <Button
                 type="button"
                 variant="outline"

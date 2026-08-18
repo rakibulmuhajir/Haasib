@@ -310,7 +310,7 @@ const filterByStatus = (statusValue: string) => {
         <template #mobile-card="{ row }">
           <div
             @click="navigateToBill(row.id)"
-            class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
           >
             <div class="space-y-3">
               <!-- Header with bill number and status -->
@@ -320,7 +320,7 @@ const filterByStatus = (statusValue: string) => {
                   <button
                     v-if="row.vendor_id"
                     @click.stop="navigateToVendor(row.vendor_id)"
-                    class="text-sm text-zinc-500 hover:text-primary hover:underline"
+                    class="text-sm text-text-secondary hover:text-primary hover:underline"
                   >
                     {{ row.vendor }}
                   </button>
@@ -339,23 +339,23 @@ const filterByStatus = (statusValue: string) => {
               <!-- Dates -->
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span class="text-zinc-500">Date:</span>
+                  <span class="text-text-secondary">Date:</span>
                   <span class="font-medium ml-1">{{ row.bill_date }}</span>
                 </div>
                 <div>
-                  <span class="text-zinc-500">Due:</span>
+                  <span class="text-text-secondary">Due:</span>
                   <span class="font-medium ml-1">{{ row.due_date }}</span>
                 </div>
               </div>
 
               <!-- Amounts -->
-              <div class="flex items-center justify-between pt-2 border-t border-zinc-100">
+              <div class="flex items-center justify-between pt-2 border-t border-rule-subtle">
                 <div>
-                  <span class="text-sm text-zinc-500">Total:</span>
+                  <span class="text-sm text-text-secondary">Total:</span>
                   <span class="font-medium ml-1">{{ row.total_amount }}</span>
                 </div>
                 <div>
-                  <span class="text-sm text-zinc-500">Balance:</span>
+                  <span class="text-sm text-text-secondary">Balance:</span>
                   <span class="font-medium ml-1">{{ row.balance }}</span>
                 </div>
               </div>

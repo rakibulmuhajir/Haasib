@@ -199,7 +199,7 @@ const handleRowClick = (row: any) => {
         <template #vendor="{ row }">
           <button
             v-if="row._original.vendor"
-            class="text-blue-600 hover:text-blue-800 transition-colors"
+            class="text-status-info hover:text-status-info transition-colors"
             @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
           >
             {{ row.vendor }}
@@ -257,7 +257,7 @@ const handleRowClick = (row: any) => {
                 <div class="text-sm text-muted-foreground mt-1">
                   <span v-if="row._original.vendor">
                     <button
-                      class="text-blue-600 hover:text-blue-800 transition-colors"
+                      class="text-status-info hover:text-status-info transition-colors"
                       @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
                     >
                       {{ row.vendor }}

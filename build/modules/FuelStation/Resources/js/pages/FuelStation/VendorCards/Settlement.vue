@@ -215,13 +215,13 @@ const selectAllPending = () => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', icon: Clock, label: 'Pending' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: Clock, label: 'Pending' }
     case 'settled':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: CheckCircle, label: 'Settled' }
+      return { class: 'bg-status-success/10 text-status-success', icon: CheckCircle, label: 'Settled' }
     case 'overdue':
-      return { class: 'bg-red-100 text-red-800', icon: AlertTriangle, label: 'Overdue' }
+      return { class: 'bg-status-critical/10 text-status-critical', icon: AlertTriangle, label: 'Overdue' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Clock, label: status }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Clock, label: status }
   }
 }
 
@@ -276,14 +276,14 @@ const todayTableData = computed(() => {
     :breadcrumbs="breadcrumbs"
   >
     <div class="grid gap-4 md:grid-cols-3">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-purple-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Pending Settlements</CardDescription>
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_pending) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <AlertTriangle class="h-4 w-4 text-amber-600" />
+            <AlertTriangle class="h-4 w-4 text-status-attention" />
             <span>{{ props.summary.count_pending }} transaction(s)</span>
           </div>
         </CardContent>
@@ -295,7 +295,7 @@ const todayTableData = computed(() => {
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_settled_today) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+          <Badge class="bg-status-success/10 text-status-success hover:bg-status-success/10">
             <CheckCircle class="mr-1 h-3 w-3" />
             Completed
           </Badge>
@@ -305,10 +305,10 @@ const todayTableData = computed(() => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-amber-200 text-amber-700">
+          <Badge variant="outline" class="border-status-attention/30 text-status-attention">
             <Clock class="mr-1 h-3 w-3" />
             Awaiting Settlement
           </Badge>
@@ -332,7 +332,7 @@ const todayTableData = computed(() => {
             </div>
             <Button
               v-if="selectedSales.size > 0"
-              class="bg-emerald-600 hover:bg-emerald-700"
+              class="bg-status-success hover:bg-status-success"
               @click="openSettlementDialog"
             >
               <Banknote class="mr-2 h-4 w-4" />
@@ -403,7 +403,7 @@ const todayTableData = computed(() => {
             <div class="text-xs text-muted-foreground">{{ account.clearing_account_name }}</div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="text-right font-semibold text-amber-600">{{ formatCurrency(account.balance) }}</div>
+            <div class="text-right font-semibold text-status-attention">{{ formatCurrency(account.balance) }}</div>
             <Button size="sm" @click="openClearingDialog(account)">Settle</Button>
           </div>
         </div>
@@ -427,7 +427,7 @@ const todayTableData = computed(() => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <CreditCard class="h-5 w-5 text-blue-600" />
+            <CreditCard class="h-5 w-5 text-status-info" />
             Vendor Card Settlement
           </DialogTitle>
           <DialogDescription>
@@ -476,7 +476,7 @@ const todayTableData = computed(() => {
             <Button type="button" variant="outline" :disabled="settlementForm.processing" @click="showSettlementDialog = false">
               Cancel
             </Button>
-            <Button type="submit" class="bg-blue-600 hover:bg-blue-700" :disabled="settlementForm.processing">
+            <Button type="submit" class="bg-status-info hover:bg-status-info" :disabled="settlementForm.processing">
               <span
                 v-if="settlementForm.processing"
                 class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"

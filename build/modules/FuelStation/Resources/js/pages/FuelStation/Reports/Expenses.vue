@@ -267,7 +267,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ money(totals.amount) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <ReceiptText class="h-4 w-4 text-red-700" />
+            <ReceiptText class="h-4 w-4 text-status-critical" />
             {{ number(totals.line_count) }} posted lines
           </CardContent>
         </Card>
@@ -278,7 +278,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ number(totals.account_count) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Tags class="h-4 w-4 text-sky-700" />
+            <Tags class="h-4 w-4 text-status-info" />
             Expense categories
           </CardContent>
         </Card>
@@ -289,7 +289,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ number(totals.transaction_count) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays class="h-4 w-4 text-violet-700" />
+            <CalendarDays class="h-4 w-4 text-status-info" />
             Posted transactions
           </CardContent>
         </Card>
@@ -300,7 +300,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ money(totals.line_count ? totals.amount / totals.line_count : 0) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletCards class="h-4 w-4 text-amber-700" />
+            <WalletCards class="h-4 w-4 text-status-attention" />
             Operating expenses only
           </CardContent>
         </Card>

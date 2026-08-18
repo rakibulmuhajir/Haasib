@@ -187,14 +187,14 @@ const goToShow = (row: any) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_invested) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>{{ props.summary.total_investors }} investor(s)</span>
           </div>
         </CardContent>
@@ -206,7 +206,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_earned) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             <TrendingUp class="mr-1 h-3 w-3" />
             Lifetime
           </Badge>
@@ -219,7 +219,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_paid) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="secondary" class="bg-zinc-100 text-zinc-700 hover:bg-zinc-100">
+          <Badge variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">
             <Banknote class="mr-1 h-3 w-3" />
             Disbursed
           </Badge>
@@ -229,10 +229,10 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-amber-200 text-amber-700">Pending Payment</Badge>
+          <Badge variant="outline" class="border-status-attention/30 text-status-attention">Pending Payment</Badge>
         </CardContent>
       </Card>
     </div>
@@ -274,14 +274,14 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-outstanding="{ row }">
-            <span :class="row._raw.outstanding_commission > 0 ? 'font-medium text-amber-600' : ''">
+            <span :class="row._raw.outstanding_commission > 0 ? 'font-medium text-status-attention' : ''">
               {{ row.outstanding }}
             </span>
           </template>
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ row._raw.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -309,7 +309,7 @@ const goToShow = (row: any) => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Users class="h-5 w-5 text-emerald-600" />
+            <Users class="h-5 w-5 text-status-success" />
             {{ selectedInvestor ? 'Edit Investor' : 'Add Investor' }}
           </DialogTitle>
           <DialogDescription>

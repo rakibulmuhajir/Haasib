@@ -382,7 +382,7 @@ const handleCancel = () => {
             </div>
           </div>
 
-          <p v-if="!hasActiveAction" class="text-sm text-amber-600">
+          <p v-if="!hasActiveAction" class="text-sm text-status-attention">
             At least one action is required
           </p>
         </CardContent>

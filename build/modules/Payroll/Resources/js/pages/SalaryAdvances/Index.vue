@@ -181,23 +181,23 @@ const getStatusBadge = (status: string) => {
     switch (status) {
         case 'pending':
             return {
-                class: 'bg-amber-100 text-amber-800',
+                class: 'bg-status-attention/10 text-status-attention',
                 label: 'Outstanding',
             };
         case 'partially_recovered':
             return {
-                class: 'bg-sky-100 text-sky-800',
+                class: 'bg-status-info/10 text-status-info',
                 label: 'Partly recovered',
             };
         case 'fully_recovered':
             return {
-                class: 'bg-emerald-100 text-emerald-800',
+                class: 'bg-status-success/10 text-status-success',
                 label: 'Recovered',
             };
         case 'cancelled':
-            return { class: 'bg-zinc-100 text-zinc-800', label: 'Cancelled' };
+            return { class: 'bg-surface-sunken text-text-primary', label: 'Cancelled' };
         default:
-            return { class: 'bg-zinc-100 text-zinc-800', label: status };
+            return { class: 'bg-surface-sunken text-text-primary', label: status };
     }
 };
 
@@ -404,7 +404,7 @@ const recoveryPercentage = computed(() => {
 
                     <Alert
                         v-if="advanceForm.amount && selectedEmployee"
-                        class="border-amber-300 bg-amber-50 text-amber-950 lg:col-span-12"
+                        class="border-status-attention/30 bg-status-attention/10 text-status-attention lg:col-span-12"
                     >
                         <AlertTriangle />
                         <AlertTitle>Advance warning</AlertTitle>
@@ -432,7 +432,7 @@ const recoveryPercentage = computed(() => {
         <!-- Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card
-                class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10"
+                class="relative overflow-hidden border-border/80 bg-surface-sunken"
             >
                 <CardHeader class="pb-2">
                     <CardDescription>Total Given</CardDescription>
@@ -445,7 +445,7 @@ const recoveryPercentage = computed(() => {
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <TrendingUp class="h-4 w-4 text-sky-600" />
+                        <TrendingUp class="h-4 w-4 text-status-info" />
                         <span>{{ stats.total_advances }} advances</span>
                     </div>
                 </CardContent>
@@ -454,7 +454,7 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Outstanding</CardDescription>
-                    <CardTitle class="text-2xl text-amber-600"
+                    <CardTitle class="text-2xl text-status-attention"
                         >{{ currency }}
                         {{ formatCurrency(stats.total_outstanding) }}</CardTitle
                     >
@@ -463,7 +463,7 @@ const recoveryPercentage = computed(() => {
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <Clock class="h-4 w-4 text-amber-600" />
+                        <Clock class="h-4 w-4 text-status-attention" />
                         <span
                             >{{
                                 stats.pending_count +
@@ -478,7 +478,7 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Recovered</CardDescription>
-                    <CardTitle class="text-2xl text-emerald-600"
+                    <CardTitle class="text-2xl text-status-success"
                         >{{ currency }}
                         {{ formatCurrency(stats.total_recovered) }}</CardTitle
                     >
@@ -487,7 +487,7 @@ const recoveryPercentage = computed(() => {
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <CheckCircle class="h-4 w-4 text-emerald-600" />
+                        <CheckCircle class="h-4 w-4 text-status-success" />
                         <span>Via payroll</span>
                     </div>
                 </CardContent>
@@ -611,7 +611,7 @@ const recoveryPercentage = computed(() => {
                     </template>
 
                     <template #cell-recovered="{ row }">
-                        <span class="text-emerald-600"
+                        <span class="text-status-success"
                             >{{ currency }}
                             {{
                                 formatCurrency(row._raw.amount_recovered)
@@ -623,7 +623,7 @@ const recoveryPercentage = computed(() => {
                         <span
                             :class="
                                 row._raw.amount_outstanding > 0
-                                    ? 'font-medium text-amber-600'
+                                    ? 'font-medium text-status-attention'
                                     : 'text-muted-foreground'
                             "
                         >

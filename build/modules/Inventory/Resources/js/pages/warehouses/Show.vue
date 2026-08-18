@@ -110,7 +110,7 @@ const formatAddress = () => {
               <div>
                 <CardTitle class="flex items-center gap-2">
                   {{ warehouse.name }}
-                  <Star v-if="warehouse.is_primary" class="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  <Star v-if="warehouse.is_primary" class="h-5 w-5 text-status-attention fill-status-attention" />
                 </CardTitle>
                 <CardDescription>Code: {{ warehouse.code }}</CardDescription>
               </div>

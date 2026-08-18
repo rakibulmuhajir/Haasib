@@ -1730,7 +1730,7 @@ const completedWorkflowSteps = computed(() => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <FileWarning class="h-5 w-5 text-amber-500" />
+            <FileWarning class="h-5 w-5 text-status-attention" />
             Restore Draft?
           </DialogTitle>
           <DialogDescription>
@@ -1746,25 +1746,25 @@ const completedWorkflowSteps = computed(() => {
     </Dialog>
 
     <!-- Amendment Banner -->
-    <div v-if="isAmendmentMode" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+    <div v-if="isAmendmentMode" class="mb-6 rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
       <div class="flex items-start gap-3">
-        <RotateCcw class="h-5 w-5 text-amber-600 mt-0.5" />
+        <RotateCcw class="h-5 w-5 text-status-attention mt-0.5" />
         <div class="flex-1">
-          <h3 class="font-medium text-amber-900">Amending Entry: {{ originalTransaction?.transaction_number }}</h3>
-          <p class="text-sm text-amber-700 mt-1">
+          <h3 class="font-medium text-status-attention">Amending Entry: {{ originalTransaction?.transaction_number }}</h3>
+          <p class="text-sm text-status-attention mt-1">
             This will create a reversal of the original entry and post a new corrected entry.
             Both entries will remain in history for audit purposes.
           </p>
           <div class="mt-3">
-            <Label for="amendment-reason" class="text-amber-900">Reason for Amendment *</Label>
+            <Label for="amendment-reason" class="text-status-attention">Reason for Amendment *</Label>
             <Textarea
               id="amendment-reason"
               v-model="amendmentReason"
               placeholder="Explain why this entry needs to be amended (minimum 10 characters)..."
               class="mt-1"
-              :class="{ 'border-red-500': amendmentReason.length > 0 && amendmentReason.length < 10 }"
+              :class="{ 'border-status-critical': amendmentReason.length > 0 && amendmentReason.length < 10 }"
             />
-            <p v-if="amendmentReason.length > 0 && amendmentReason.length < 10" class="text-sm text-red-500 mt-1">
+            <p v-if="amendmentReason.length > 0 && amendmentReason.length < 10" class="text-sm text-status-critical mt-1">
               Please provide at least 10 characters
             </p>
           </div>
@@ -1794,7 +1794,7 @@ const completedWorkflowSteps = computed(() => {
             <Badge variant="secondary" class="justify-center">
               {{ completedWorkflowSteps }}/4 sections saved
             </Badge>
-            <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+            <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-status-success/10 text-status-success' : 'bg-status-critical/10 text-status-critical'">
               {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}: {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
             </Badge>
           </div>
@@ -1906,7 +1906,7 @@ const completedWorkflowSteps = computed(() => {
                       <!-- Amount -->
                       <div class="col-span-3 text-right">
                         <span class="text-base font-semibold">{{ currency }} {{ formatCurrency(rateAdjustedNozzleRevenue(form.nozzle_readings[idx])) }}</span>
-                        <div v-if="rateChangeSplitForReading(form.nozzle_readings[idx])" class="text-xs text-sky-700">
+                        <div v-if="rateChangeSplitForReading(form.nozzle_readings[idx])" class="text-xs text-status-info">
                           Split by rate-change meter
                         </div>
                       </div>
@@ -1946,10 +1946,10 @@ const completedWorkflowSteps = computed(() => {
                           <div class="w-20 text-right">
                             <template v-if="form.nozzle_readings[idx].closing_manual && form.nozzle_readings[idx].opening_manual">
                               <span v-if="Math.abs((form.nozzle_readings[idx].closing_manual - form.nozzle_readings[idx].opening_manual) - form.nozzle_readings[idx].liters_sold) <= 0.5"
-                                class="text-green-600 text-sm font-medium">
+                                class="text-status-success text-sm font-medium">
                                 <CheckCircle class="h-4 w-4 inline" />
                               </span>
-                              <span v-else class="text-amber-600 text-sm">
+                              <span v-else class="text-status-attention text-sm">
                                 {{ ((form.nozzle_readings[idx].closing_manual - form.nozzle_readings[idx].opening_manual) - form.nozzle_readings[idx].liters_sold).toFixed(0) }}L
                               </span>
                             </template>
@@ -2081,7 +2081,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Footer with Submit -->
             <div class="flex justify-end">
               <Button @click="saveSales" :variant="tabsSaved.sales ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.sales" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.sales" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.sales ? 'Saved' : 'Save Meter Sales' }}
               </Button>
@@ -2149,7 +2149,7 @@ const completedWorkflowSteps = computed(() => {
                     <div v-if="baselineLabel(tank)" class="text-xs text-muted-foreground">
                       {{ baselineLabel(tank) }}
                     </div>
-                    <div v-else class="text-xs text-amber-700">
+                    <div v-else class="text-xs text-status-attention">
                       No stock entry before this close date.
                     </div>
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
@@ -2172,7 +2172,7 @@ const completedWorkflowSteps = computed(() => {
                       <div class="text-muted-foreground">
                         {{ stockMovementLabel(tank.stock_movements_since_baseline_liters || 0) }}
                       </div>
-                      <div v-if="tank.current_stock_after_close_date" class="text-amber-700">
+                      <div v-if="tank.current_stock_after_close_date" class="text-status-attention">
                         This stock entry is after the selected close date, so it is not used as the opening baseline.
                       </div>
                     </div>
@@ -2209,8 +2209,8 @@ const completedWorkflowSteps = computed(() => {
                       <span
                         :class="[
                           'text-base font-semibold',
-                          tankVariances[index]?.variance > 0 ? 'text-red-600' :
-                          tankVariances[index]?.variance < 0 ? 'text-amber-600' : 'text-green-600'
+                          tankVariances[index]?.variance > 0 ? 'text-status-critical' :
+                          tankVariances[index]?.variance < 0 ? 'text-status-attention' : 'text-status-success'
                         ]"
                       >
                         {{ tankVariances[index]?.variance > 0 ? '-' : tankVariances[index]?.variance < 0 ? '+' : '' }}{{ Math.abs(tankVariances[index]?.variance || 0).toFixed(0) }} L
@@ -2222,7 +2222,7 @@ const completedWorkflowSteps = computed(() => {
 
                 <!-- Variance Explanation (if significant) -->
                 <div v-if="tank.previous_liters > 0 && tank.liters > 0 && Math.abs(tankVariances[index]?.variance || 0) > 5" class="text-xs px-3 py-2 rounded-md"
-                  :class="tankVariances[index]?.variance > 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'"
+                  :class="tankVariances[index]?.variance > 0 ? 'bg-status-critical/10 text-status-critical' : 'bg-status-attention/10 text-status-attention'"
                 >
                   <span v-if="tankVariances[index]?.variance > 0">
                     Loss of {{ Math.abs(tankVariances[index]?.variance).toFixed(0) }}L detected ({{ Math.abs(tankVariances[index]?.variance_percent).toFixed(1) }}% of sales) — may indicate evaporation, leakage, or measurement error
@@ -2241,8 +2241,8 @@ const completedWorkflowSteps = computed(() => {
                 <div
                   :class="[
                     'text-lg font-bold',
-                    totalTankVariance > 0 ? 'text-red-600' :
-                    totalTankVariance < 0 ? 'text-amber-600' : 'text-green-600'
+                    totalTankVariance > 0 ? 'text-status-critical' :
+                    totalTankVariance < 0 ? 'text-status-attention' : 'text-status-success'
                   ]"
                 >
                   {{ totalTankVariance > 0 ? 'Loss: ' : totalTankVariance < 0 ? 'Gain: ' : '' }}{{ Math.abs(totalTankVariance).toFixed(0) }} L
@@ -2255,7 +2255,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end">
               <Button @click="saveTanks" :variant="tabsSaved.tanks ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.tanks" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.tanks" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.tanks ? 'Saved' : 'Save Tank Dip' }}
               </Button>
@@ -2584,7 +2584,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end pt-2">
               <Button @click="saveMoneyIn" :variant="tabsSaved.moneyIn ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.moneyIn" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.moneyIn" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.moneyIn ? 'Saved' : 'Save Cash In' }}
               </Button>
@@ -2966,7 +2966,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end">
               <Button @click="saveMoneyOut" :variant="tabsSaved.moneyOut ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.moneyOut" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.moneyOut" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.moneyOut ? 'Saved' : 'Save Cash Out' }}
               </Button>
@@ -3065,13 +3065,13 @@ const completedWorkflowSteps = computed(() => {
               <!-- Variance -->
               <div v-if="form.closing_cash > 0" class="mt-4 flex items-center gap-2">
                 <component :is="cashVariance === 0 ? CheckCircle : AlertCircle"
-                  :class="['h-5 w-5', cashVariance === 0 ? 'text-green-600' : cashVariance > 0 ? 'text-blue-600' : 'text-red-600']"
+                  :class="['h-5 w-5', cashVariance === 0 ? 'text-status-success' : cashVariance > 0 ? 'text-status-info' : 'text-status-critical']"
                 />
-                <span v-if="cashVariance === 0" class="text-green-600 font-medium">Cash matches expected amount</span>
-                <span v-else-if="cashVariance > 0" class="text-blue-600 font-medium">
+                <span v-if="cashVariance === 0" class="text-status-success font-medium">Cash matches expected amount</span>
+                <span v-else-if="cashVariance > 0" class="text-status-info font-medium">
                   Cash over by {{ currency }} {{ formatCurrency(cashVariance) }}
                 </span>
-                <span v-else class="text-red-600 font-medium">
+                <span v-else class="text-status-critical font-medium">
                   Cash short by {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
                 </span>
               </div>
@@ -3088,7 +3088,7 @@ const completedWorkflowSteps = computed(() => {
               <Button variant="outline" @click="router.visit(`/${company.slug}/fuel/dashboard`)">
                 Cancel
               </Button>
-              <Button @click="submitDailyClose" :disabled="submitting" class="bg-green-600 hover:bg-green-700 min-w-40">
+              <Button @click="submitDailyClose" :disabled="submitting" class="bg-status-success hover:bg-status-success min-w-40">
                 <Loader2 v-if="submitting" class="h-4 w-4 mr-2 animate-spin" />
                 <CheckCircle v-else class="h-4 w-4 mr-2" />
                 Post Daily Close

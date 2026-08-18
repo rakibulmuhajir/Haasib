@@ -96,16 +96,16 @@ const goToCustomer = () => {
 
     <div class="mx-auto max-w-2xl space-y-6">
       <!-- Amount Card -->
-      <Card class="border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="border-border/80 bg-surface-sunken">
         <CardContent class="pt-6">
           <div class="text-center">
             <p class="text-sm text-muted-foreground">Amount Collected</p>
-            <p class="text-4xl font-bold text-emerald-600">
+            <p class="text-4xl font-bold text-status-success">
               {{ currency }} {{ formatCurrency(collection.amount) }}
             </p>
             <Badge class="mt-2" :class="{
-              'bg-emerald-100 text-emerald-800': collection.status === 'posted',
-              'bg-amber-100 text-amber-800': collection.status === 'pending',
+              'bg-status-success/10 text-status-success': collection.status === 'posted',
+              'bg-status-attention/10 text-status-attention': collection.status === 'pending',
             }">
               {{ collection.status === 'posted' ? 'Posted' : collection.status }}
             </Badge>

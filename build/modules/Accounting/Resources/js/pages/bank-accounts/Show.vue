@@ -291,7 +291,7 @@ const handleViewTransaction = (id: string) => {
                     <div class="flex items-center gap-2">
                       <component
                         :is="tx.amount > 0 ? ArrowDownLeft : ArrowUpRight"
-                        :class="tx.amount > 0 ? 'text-green-600' : 'text-red-600'"
+                        :class="tx.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'"
                         class="h-4 w-4"
                       />
                       <div>
@@ -304,12 +304,17 @@ const handleViewTransaction = (id: string) => {
                     <Badge v-if="tx.category" variant="outline">{{ tx.category }}</Badge>
                     <span v-else class="text-muted-foreground text-sm">Uncategorized</span>
                   </TableCell>
-                  <TableCell class="text-right font-mono" :class="tx.amount > 0 ? 'text-green-600' : 'text-red-600'">
-                    {{ formatCurrency(Math.abs(tx.amount), bankAccount.currency) }}
+                  <!-- Direction is not severity. Money leaving a bank account is
+                       what a bank account is for; it was rendered in red, next to
+                       deposits in green, so an ordinary register read as a page of
+                       alarms. Both flows are ink, and the arrow plus the sign carry
+                       the direction. -->
+                  <TableCell class="text-right font-mono" :class="tx.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'">
+                    {{ tx.amount > 0 ? '' : '-' }}{{ formatCurrency(Math.abs(tx.amount), bankAccount.currency) }}
                   </TableCell>
                   <TableCell class="text-center">
-                    <CheckCircle2 v-if="tx.is_reconciled" class="h-4 w-4 text-green-600 mx-auto" />
-                    <Clock v-else class="h-4 w-4 text-amber-500 mx-auto" />
+                    <CheckCircle2 v-if="tx.is_reconciled" class="h-4 w-4 text-status-success mx-auto" />
+                    <Clock v-else class="h-4 w-4 text-status-attention mx-auto" />
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -332,7 +337,7 @@ const handleViewTransaction = (id: string) => {
             <div class="space-y-4">
               <div>
                 <p class="text-sm text-muted-foreground">Unreconciled Transactions</p>
-                <p class="text-2xl font-bold" :class="bankAccount.unreconciled_count > 0 ? 'text-amber-600' : 'text-green-600'">
+                <p class="text-2xl font-bold" :class="bankAccount.unreconciled_count > 0 ? 'text-status-attention' : 'text-status-success'">
                   {{ bankAccount.unreconciled_count }}
                 </p>
               </div>

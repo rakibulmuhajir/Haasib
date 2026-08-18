@@ -20,12 +20,12 @@ const width = computed(() => `${Math.min(Math.max(props.value ?? 0, 0), 100)}%`)
     :aria-valuemax="100"
     :aria-valuenow="value"
     :class="cn(
-      'relative h-1 w-full overflow-hidden rounded-full bg-slate-800/70',
+      'relative h-1 w-full overflow-hidden rounded-full bg-surface-sunken',
       props.class,
     )"
   >
     <div
-      class="h-full w-full flex-1 bg-cyan-400 transition-all duration-200"
+      class="h-full w-full flex-1 bg-primary transition-all duration-200"
       :style="{ width }"
     />
   </div>

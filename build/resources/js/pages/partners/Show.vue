@@ -182,7 +182,7 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Net Capital</CardDescription>
-          <CardTitle class="text-2xl" :class="partner.net_capital >= 0 ? 'text-emerald-600' : 'text-red-600'">
+          <CardTitle class="text-2xl" :class="partner.net_capital >= 0 ? 'text-status-success' : 'text-status-critical'">
             {{ currency }} {{ formatCurrency(partner.net_capital) }}
           </CardTitle>
         </CardHeader>
@@ -197,11 +197,11 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(partner.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(partner.total_invested) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -210,11 +210,11 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ currency }} {{ formatCurrency(partner.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(partner.total_withdrawn) }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingDown class="h-4 w-4 text-amber-600" />
+            <TrendingDown class="h-4 w-4 text-status-attention" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -263,7 +263,7 @@ const goBack = () => {
           <div>
             <div class="text-sm text-muted-foreground">Status</div>
             <Badge
-              :class="partner.is_active ? 'bg-emerald-600 text-white' : 'bg-zinc-200 text-zinc-800'"
+              :class="partner.is_active ? 'bg-status-success text-status-success-contrast' : 'bg-surface-sunken text-text-primary'"
             >
               {{ partner.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -271,11 +271,11 @@ const goBack = () => {
 
           <div class="pt-4 flex flex-col gap-2">
             <Button class="w-full" variant="outline" @click="openInvestDialog">
-              <TrendingUp class="mr-2 h-4 w-4 text-emerald-600" />
+              <TrendingUp class="mr-2 h-4 w-4 text-status-success" />
               Record Investment
             </Button>
             <Button class="w-full" variant="outline" @click="openWithdrawDialog">
-              <TrendingDown class="mr-2 h-4 w-4 text-amber-600" />
+              <TrendingDown class="mr-2 h-4 w-4 text-status-attention" />
               Record Withdrawal
             </Button>
           </div>
@@ -298,14 +298,14 @@ const goBack = () => {
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.transaction_type === 'investment' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+                :class="row._raw.transaction_type === 'investment' ? 'bg-status-success/15 text-status-success' : 'bg-status-attention/15 text-status-attention'"
               >
                 {{ row._raw.transaction_type === 'investment' ? 'Investment' : 'Withdrawal' }}
               </Badge>
             </template>
 
             <template #cell-amount="{ row }">
-              <span :class="row._raw.transaction_type === 'investment' ? 'text-emerald-600' : 'text-amber-600'" class="font-medium">
+              <span :class="row._raw.transaction_type === 'investment' ? 'text-status-success' : 'text-status-attention'" class="font-medium">
                 {{ row._raw.transaction_type === 'investment' ? '+' : '-' }}{{ currency }} {{ formatCurrency(row._raw.amount) }}
               </span>
             </template>

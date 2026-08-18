@@ -149,7 +149,7 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
-          <CardTitle class="text-2xl" :class="customer.current_balance > 0 ? 'text-amber-600' : 'text-emerald-600'">
+          <CardTitle class="text-2xl" :class="customer.current_balance > 0 ? 'text-status-attention' : 'text-status-success'">
             {{ currency }} {{ formatCurrency(customer.current_balance) }}
           </CardTitle>
         </CardHeader>
@@ -183,9 +183,9 @@ const goBack = () => {
           <CardTitle class="text-2xl">
             <Badge
               :class="{
-                'bg-red-100 text-red-800': customer.is_credit_blocked,
-                'bg-amber-100 text-amber-800': !customer.is_credit_blocked && customer.credit_limit > 0 && customer.current_balance > customer.credit_limit,
-                'bg-emerald-100 text-emerald-800': !customer.is_credit_blocked && (customer.credit_limit === 0 || customer.current_balance <= customer.credit_limit),
+                'bg-status-critical/10 text-status-critical': customer.is_credit_blocked,
+                'bg-status-attention/10 text-status-attention': !customer.is_credit_blocked && customer.credit_limit > 0 && customer.current_balance > customer.credit_limit,
+                'bg-status-success/10 text-status-success': !customer.is_credit_blocked && (customer.credit_limit === 0 || customer.current_balance <= customer.credit_limit),
               }"
             >
               {{ customer.is_credit_blocked ? 'Blocked' : (customer.credit_limit > 0 && customer.current_balance > customer.credit_limit ? 'Over Limit' : 'Active') }}
@@ -241,14 +241,14 @@ const goBack = () => {
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.type === 'sale' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'"
+                :class="row._raw.type === 'sale' ? 'bg-status-attention/10 text-status-attention' : 'bg-status-success/10 text-status-success'"
               >
                 {{ row._raw.type === 'sale' ? 'Sale' : 'Collection' }}
               </Badge>
             </template>
 
             <template #cell-amount="{ row }">
-              <span :class="row._raw.type === 'sale' ? 'text-amber-600' : 'text-emerald-600'" class="font-medium">
+              <span :class="row._raw.type === 'sale' ? 'text-status-attention' : 'text-status-success'" class="font-medium">
                 {{ row._raw.type === 'sale' ? '+' : '-' }}{{ currency }} {{ formatCurrency(row._raw.amount) }}
               </span>
             </template>

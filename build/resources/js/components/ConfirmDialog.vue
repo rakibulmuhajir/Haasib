@@ -42,26 +42,15 @@ const emit = defineEmits<{
   'cancel': []
 }>()
 
+/* Variants carry the icon and the class hooks; the colours themselves live in
+   the stylesheet below so a theme change reaches them. The destructive confirm
+   uses the button component's own destructive variant rather than a literal
+   red, which is why there is no buttonClass for it any more. */
 const variantConfig = {
-  default: {
-    icon: Info,
-    iconBg: 'bg-zinc-100',
-    iconColor: 'text-zinc-600',
-    buttonClass: '',
-  },
-  destructive: {
-    icon: AlertTriangle,
-    iconBg: 'bg-red-50',
-    iconColor: 'text-red-600',
-    buttonClass: 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-600',
-  },
-  success: {
-    icon: CheckCircle,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-600',
-    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-600',
-  },
-}
+  default: { icon: Info, button: 'default' },
+  destructive: { icon: AlertTriangle, button: 'destructive' },
+  success: { icon: CheckCircle, button: 'default' },
+} as const
 
 const config = variantConfig[props.variant]
 const DisplayIcon = props.icon || config.icon
@@ -89,29 +78,19 @@ const handleOpenChange = (value: boolean) => {
 
 <template>
   <Dialog :open="open" @update:open="handleOpenChange">
-    <DialogContent 
-      class="sm:max-w-md border-zinc-200 bg-white shadow-xl"
-    >
+    <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <div class="flex gap-4">
           <!-- Icon -->
-          <div
-            :class="[
-              'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-              variantConfig[variant].iconBg
-            ]"
-          >
-            <component
-              :is="DisplayIcon"
-              :class="['h-5 w-5', variantConfig[variant].iconColor]"
-            />
+          <div class="confirm-icon" :data-variant="variant">
+            <component :is="DisplayIcon" class="h-5 w-5" />
           </div>
           
           <div class="flex-1 pt-0.5">
-            <DialogTitle class="text-lg font-semibold text-zinc-900">
+            <DialogTitle class="text-lg font-semibold text-foreground">
               {{ title }}
             </DialogTitle>
-            <DialogDescription class="mt-1.5 text-sm leading-relaxed text-zinc-500">
+            <DialogDescription class="mt-1.5 text-sm leading-relaxed text-text-secondary">
               <slot name="description">
                 {{ description }}
               </slot>
@@ -131,14 +110,13 @@ const handleOpenChange = (value: boolean) => {
           variant="outline"
           @click="handleCancel"
           :disabled="loading"
-          class="border-zinc-200 hover:bg-zinc-50"
         >
           {{ cancelText }}
         </Button>
         <Button
+          :variant="variantConfig[variant].button"
           @click="handleConfirm"
           :disabled="loading"
-          :class="variantConfig[variant].buttonClass"
         >
           <span
             v-if="loading"
@@ -150,3 +128,29 @@ const handleOpenChange = (value: boolean) => {
     </DialogContent>
   </Dialog>
 </template>
+
+<style scoped>
+/* A tinted disc, not a filled sticker: the icon reads as an aside to the
+   question, and the question is the thing being asked. */
+.confirm-icon {
+  display: flex;
+  height: 44px;
+  width: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.confirm-icon[data-variant='destructive'] {
+  background: color-mix(in oklab, var(--status-critical) 12%, transparent);
+  color: var(--status-critical);
+}
+
+.confirm-icon[data-variant='success'] {
+  background: color-mix(in oklab, var(--status-success) 14%, transparent);
+  color: var(--status-success);
+}
+</style>

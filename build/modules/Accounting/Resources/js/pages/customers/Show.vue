@@ -381,11 +381,11 @@ const cancelShippingEdit = () => {
       <div class="flex items-center gap-3">
         <Avatar class="h-8 w-8">
           <AvatarImage v-if="customer.logo_url" :src="customer.logo_url" :alt="customer.name" />
-          <AvatarFallback class="bg-zinc-100 text-zinc-600 text-xs">{{ getInitials(customer.name) }}</AvatarFallback>
+          <AvatarFallback class="bg-surface-sunken text-text-secondary text-xs">{{ getInitials(customer.name) }}</AvatarFallback>
         </Avatar>
-        <span class="font-mono text-zinc-400">{{ customer.customer_number }}</span>
-        <span v-if="customer.email" class="text-zinc-300">•</span>
-        <span v-if="customer.email" class="text-zinc-500">{{ customer.email }}</span>
+        <span class="font-mono text-text-tertiary">{{ customer.customer_number }}</span>
+        <span v-if="customer.email" class="text-text-tertiary">•</span>
+        <span v-if="customer.email" class="text-text-secondary">{{ customer.email }}</span>
       </div>
     </template>
 
@@ -397,7 +397,7 @@ const cancelShippingEdit = () => {
     </template>
 
     <Tabs v-model="activeTab" class="w-full">
-      <TabsList class="mb-6 bg-zinc-100">
+      <TabsList class="mb-6 bg-surface-sunken">
         <TabsTrigger value="overview" class="gap-2">
           <BarChart3 class="h-4 w-4" />
           Overview
@@ -416,119 +416,119 @@ const cancelShippingEdit = () => {
       <TabsContent value="overview" class="space-y-6">
         <!-- Key Financial Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Open Balance</CardTitle>
-              <Receipt class="h-4 w-4 text-zinc-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Open Balance</CardTitle>
+              <Receipt class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ money(summary.open_balance) }}</div>
-              <p class="text-xs text-zinc-500 mt-1">{{ summary.invoice_count }} open invoice{{ summary.invoice_count === 1 ? '' : 's' }}</p>
+              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.open_balance) }}</div>
+              <p class="text-xs text-text-secondary mt-1">{{ summary.invoice_count }} open invoice{{ summary.invoice_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Overdue</CardTitle>
-              <AlertTriangle class="h-4 w-4 text-amber-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Overdue</CardTitle>
+              <AlertTriangle class="h-4 w-4 text-status-attention" />
             </CardHeader>
             <CardContent>
-              <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-amber-600' : 'text-zinc-900']">
+              <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-status-attention' : 'text-text-primary']">
                 {{ money(summary.overdue_balance) }}
               </div>
-              <p class="text-xs text-zinc-500 mt-1">Past due date</p>
+              <p class="text-xs text-text-secondary mt-1">Past due date</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Available Credit</CardTitle>
-              <CreditCard class="h-4 w-4 text-emerald-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Available Credit</CardTitle>
+              <CreditCard class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ money(summary.available_credit) }}</div>
-              <p class="text-xs text-zinc-500 mt-1">{{ summary.credit_note_count }} credit note{{ summary.credit_note_count === 1 ? '' : 's' }}</p>
+              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.available_credit) }}</div>
+              <p class="text-xs text-text-secondary mt-1">{{ summary.credit_note_count }} credit note{{ summary.credit_note_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Paid YTD</CardTitle>
-              <Wallet class="h-4 w-4 text-emerald-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Paid YTD</CardTitle>
+              <Wallet class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ money(summary.paid_ytd) }}</div>
-              <p class="text-xs text-zinc-500 mt-1">This year</p>
+              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.paid_ytd) }}</div>
+              <p class="text-xs text-text-secondary mt-1">This year</p>
             </CardContent>
           </Card>
         </div>
 
         <!-- AR Aging & Quick Stats -->
         <div class="grid gap-4 lg:grid-cols-2">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader>
-              <CardTitle class="text-sm font-medium text-zinc-500">AR Aging</CardTitle>
+              <CardTitle class="text-sm font-medium text-text-secondary">AR Aging</CardTitle>
               <CardDescription>Outstanding balance by age</CardDescription>
             </CardHeader>
-            <CardContent class="space-y-2 text-sm text-zinc-700">
+            <CardContent class="space-y-2 text-sm text-text-primary">
               <div class="flex justify-between">
                 <span>Current</span>
-                <span class="font-medium text-zinc-900">{{ money(summary.aging?.current ?? 0) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.aging?.current ?? 0) }}</span>
               </div>
               <div class="flex justify-between">
                 <span>1-30 days</span>
-                <span class="font-medium text-zinc-900">{{ money(summary.aging?.bucket_1_30 ?? 0) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_1_30 ?? 0) }}</span>
               </div>
               <div class="flex justify-between">
                 <span>31-60 days</span>
-                <span class="font-medium text-zinc-900">{{ money(summary.aging?.bucket_31_60 ?? 0) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_31_60 ?? 0) }}</span>
               </div>
               <div class="flex justify-between">
                 <span>61-90 days</span>
-                <span class="font-medium text-zinc-900">{{ money(summary.aging?.bucket_61_90 ?? 0) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_61_90 ?? 0) }}</span>
               </div>
               <div class="flex justify-between">
                 <span>90+ days</span>
-                <span :class="['font-medium', (summary.aging?.bucket_90_plus ?? 0) > 0 ? 'text-red-600' : 'text-zinc-900']">
+                <span :class="['font-medium', (summary.aging?.bucket_90_plus ?? 0) > 0 ? 'text-status-critical' : 'text-text-primary']">
                   {{ money(summary.aging?.bucket_90_plus ?? 0) }}
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader>
-              <CardTitle class="text-sm font-medium text-zinc-500">Quick Stats</CardTitle>
+              <CardTitle class="text-sm font-medium text-text-secondary">Quick Stats</CardTitle>
               <CardDescription>Customer performance metrics</CardDescription>
             </CardHeader>
-            <CardContent class="space-y-3 text-sm text-zinc-700">
+            <CardContent class="space-y-3 text-sm text-text-primary">
               <div class="flex justify-between">
                 <span class="flex items-center gap-2">
-                  <FileText class="h-4 w-4 text-zinc-400" />
+                  <FileText class="h-4 w-4 text-text-tertiary" />
                   Total Billed
                 </span>
-                <span class="font-medium text-zinc-900">{{ money(summary.total_billed) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.total_billed) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="flex items-center gap-2">
-                  <TrendingUp class="h-4 w-4 text-zinc-400" />
+                  <TrendingUp class="h-4 w-4 text-text-tertiary" />
                   Invoiced YTD
                 </span>
-                <span class="font-medium text-zinc-900">{{ money(summary.invoiced_ytd) }}</span>
+                <span class="font-medium text-text-primary">{{ money(summary.invoiced_ytd) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="flex items-center gap-2">
-                  <Clock class="h-4 w-4 text-zinc-400" />
+                  <Clock class="h-4 w-4 text-text-tertiary" />
                   Avg Days to Pay
                 </span>
-                <span class="font-medium text-zinc-900">{{ summary.avg_days_to_pay ? `${summary.avg_days_to_pay} days` : '—' }}</span>
+                <span class="font-medium text-text-primary">{{ summary.avg_days_to_pay ? `${summary.avg_days_to_pay} days` : '—' }}</span>
               </div>
               <div v-if="creditUsedPercent !== null" class="flex justify-between">
                 <span class="flex items-center gap-2">
-                  <Percent class="h-4 w-4 text-zinc-400" />
+                  <Percent class="h-4 w-4 text-text-tertiary" />
                   Credit Used
                 </span>
-                <span :class="['font-medium', creditUsedPercent > 80 ? 'text-amber-600' : 'text-zinc-900']">
+                <span :class="['font-medium', creditUsedPercent > 80 ? 'text-status-attention' : 'text-text-primary']">
                   {{ creditUsedPercent }}%
                 </span>
               </div>
@@ -552,10 +552,10 @@ const cancelShippingEdit = () => {
 
         <!-- Invoices & Payments Tables -->
         <div class="grid gap-4 lg:grid-cols-2">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-zinc-500">Recent Invoices</CardTitle>
+                <CardTitle class="text-sm font-medium text-text-secondary">Recent Invoices</CardTitle>
                 <CardDescription>Last 25 invoices</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/invoices?customer=${customer.id}`)">
@@ -573,10 +573,10 @@ const cancelShippingEdit = () => {
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-zinc-500">Recent Payments</CardTitle>
+                <CardTitle class="text-sm font-medium text-text-secondary">Recent Payments</CardTitle>
                 <CardDescription>Last 25 payments</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/payments?customer=${customer.id}`)">
@@ -593,10 +593,10 @@ const cancelShippingEdit = () => {
       <!-- Settings Tab -->
       <TabsContent value="settings" class="space-y-6">
         <!-- Contact Information -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900">Contact Information</CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardTitle class="text-text-primary">Contact Information</CardTitle>
+            <CardDescription class="text-text-secondary">
               {{ canManage ? 'Click the pencil icon to edit' : 'Contact an admin to make changes' }}
             </CardDescription>
           </CardHeader>
@@ -616,12 +616,12 @@ const cancelShippingEdit = () => {
               />
 
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Customer Number</Label>
-                <div class="flex items-center gap-2 font-mono text-base text-zinc-900">
-                  <Hash class="h-4 w-4 text-zinc-400" />
+                <Label class="text-sm font-medium text-text-secondary">Customer Number</Label>
+                <div class="flex items-center gap-2 font-mono text-base text-text-primary">
+                  <Hash class="h-4 w-4 text-text-tertiary" />
                   {{ customer.customer_number }}
                 </div>
-                <p class="text-xs text-zinc-400">Auto-generated, cannot be changed</p>
+                <p class="text-xs text-text-tertiary">Auto-generated, cannot be changed</p>
               </div>
 
               <InlineEditable
@@ -656,13 +656,13 @@ const cancelShippingEdit = () => {
         </Card>
 
         <!-- Billing Settings -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900 flex items-center gap-2">
+            <CardTitle class="text-text-primary flex items-center gap-2">
               <CreditCard class="h-4 w-4" />
               Billing Settings
             </CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardDescription class="text-text-secondary">
               Payment terms, credit limits, and tax information
             </CardDescription>
           </CardHeader>
@@ -753,10 +753,10 @@ const cancelShippingEdit = () => {
         </Card>
 
         <!-- Notes -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900">Internal Notes</CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardTitle class="text-text-primary">Internal Notes</CardTitle>
+            <CardDescription class="text-text-secondary">
               Private notes about this customer (not visible on invoices)
             </CardDescription>
           </CardHeader>
@@ -781,11 +781,11 @@ const cancelShippingEdit = () => {
       <TabsContent value="addresses" class="space-y-6">
         <div class="grid gap-6 lg:grid-cols-2">
           <!-- Billing Address -->
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-zinc-900">Billing Address</CardTitle>
-                <CardDescription class="text-zinc-500">Used on invoices and statements</CardDescription>
+                <CardTitle class="text-text-primary">Billing Address</CardTitle>
+                <CardDescription class="text-text-secondary">Used on invoices and statements</CardDescription>
               </div>
               <Button
                 v-if="canManage && !billingEditing"
@@ -797,7 +797,7 @@ const cancelShippingEdit = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <div v-if="!billingEditing" class="space-y-2 text-sm text-zinc-700">
+              <div v-if="!billingEditing" class="space-y-2 text-sm text-text-primary">
                 <div v-if="formatAddress(customer.billing_address)">
                   <p v-if="customer.billing_address?.street">{{ customer.billing_address.street }}</p>
                   <p v-if="customer.billing_address?.city || customer.billing_address?.state || customer.billing_address?.zip">
@@ -805,7 +805,7 @@ const cancelShippingEdit = () => {
                   </p>
                   <p v-if="customer.billing_address?.country">{{ customer.billing_address.country }}</p>
                 </div>
-                <p v-else class="text-zinc-400">No billing address set</p>
+                <p v-else class="text-text-tertiary">No billing address set</p>
               </div>
 
               <form v-else class="space-y-3" @submit.prevent="saveBillingAddress">
@@ -847,11 +847,11 @@ const cancelShippingEdit = () => {
           </Card>
 
           <!-- Shipping Address -->
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-zinc-900">Shipping Address</CardTitle>
-                <CardDescription class="text-zinc-500">Delivery address for goods</CardDescription>
+                <CardTitle class="text-text-primary">Shipping Address</CardTitle>
+                <CardDescription class="text-text-secondary">Delivery address for goods</CardDescription>
               </div>
               <div class="flex gap-2">
                 <Button
@@ -874,7 +874,7 @@ const cancelShippingEdit = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div v-if="!shippingEditing" class="space-y-2 text-sm text-zinc-700">
+              <div v-if="!shippingEditing" class="space-y-2 text-sm text-text-primary">
                 <div v-if="formatAddress(customer.shipping_address)">
                   <p v-if="customer.shipping_address?.street">{{ customer.shipping_address.street }}</p>
                   <p v-if="customer.shipping_address?.city || customer.shipping_address?.state || customer.shipping_address?.zip">
@@ -882,7 +882,7 @@ const cancelShippingEdit = () => {
                   </p>
                   <p v-if="customer.shipping_address?.country">{{ customer.shipping_address.country }}</p>
                 </div>
-                <p v-else class="text-zinc-400">No shipping address set</p>
+                <p v-else class="text-text-tertiary">No shipping address set</p>
               </div>
 
               <form v-else class="space-y-3" @submit.prevent="saveShippingAddress">

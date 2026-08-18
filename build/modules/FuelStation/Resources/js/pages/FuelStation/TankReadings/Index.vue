@@ -117,18 +117,18 @@ const formatMoney = (n: number) => {
 const statusVariant = (s: TankReadingStatus) => {
   switch (s) {
     case 'posted':
-      return 'bg-emerald-600 text-white hover:bg-emerald-600'
+      return 'bg-status-success text-status-success-contrast hover:bg-status-success'
     case 'confirmed':
-      return 'bg-sky-100 text-sky-800 hover:bg-sky-100'
+      return 'bg-status-info/10 text-status-info hover:bg-status-info/10'
     default:
-      return 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+      return 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'
   }
 }
 
 const varianceBadge = (t: VarianceType, liters: number) => {
-  if (t === 'none' || liters === 0) return { label: 'No variance', cls: 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200' }
-  if (t === 'gain') return { label: `Gain • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' }
-  return { label: `Loss • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-red-100 text-red-800 hover:bg-red-100' }
+  if (t === 'none' || liters === 0) return { label: 'No variance', cls: 'bg-surface-sunken text-text-primary hover:bg-surface-sunken' }
+  if (t === 'gain') return { label: `Gain • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-status-success/10 text-status-success hover:bg-status-success/10' }
+  return { label: `Loss • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-status-critical/10 text-status-critical hover:bg-status-critical/10' }
 }
 
 const readingsPage = computed(() => props.readings ?? ({ data: [], current_page: 1, per_page: 50, total: 0 } as Paginated<TankReadingRow>))
@@ -325,7 +325,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.total }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-sky-200 text-sky-700">
+          <Badge variant="outline" class="border-status-info/30 text-status-info">
             {{ tanks.length }} tank(s)
           </Badge>
         </CardContent>
@@ -337,7 +337,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.draft }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-amber-100 text-amber-800 hover:bg-amber-100">Editable</Badge>
+          <Badge class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">Editable</Badge>
         </CardContent>
       </Card>
 
@@ -347,7 +347,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.confirmed }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">Ready to post</Badge>
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">Ready to post</Badge>
         </CardContent>
       </Card>
 
@@ -357,7 +357,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.posted }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-emerald-600 text-white hover:bg-emerald-600">JE created</Badge>
+          <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">JE created</Badge>
         </CardContent>
       </Card>
 
@@ -365,9 +365,9 @@ const goToShow = (row: any) => {
         <CardHeader class="pb-2">
           <CardDescription>Variance</CardDescription>
           <CardTitle class="text-2xl">
-            <span class="text-red-600">{{ stats.losses }}</span>
+            <span class="text-status-critical">{{ stats.losses }}</span>
             <span class="text-text-tertiary">/</span>
-            <span class="text-emerald-600">{{ stats.gains }}</span>
+            <span class="text-status-success">{{ stats.gains }}</span>
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -448,7 +448,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-reading_type="{ row }">
-            <Badge variant="secondary" class="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">
+            <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
               {{ row._raw.reading_type.replace('_', ' ') }}
             </Badge>
           </template>
@@ -487,7 +487,7 @@ const goToShow = (row: any) => {
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Warehouse class="h-5 w-5 text-sky-600" />
+            <Warehouse class="h-5 w-5 text-status-info" />
             Record tank dip
           </DialogTitle>
           <DialogDescription>
@@ -580,13 +580,13 @@ const goToShow = (row: any) => {
           <div class="rounded-xl border border-border/70 bg-muted/30 p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-start gap-2">
-                <AlertTriangle class="mt-0.5 h-4 w-4 text-amber-600" />
+                <AlertTriangle class="mt-0.5 h-4 w-4 text-status-attention" />
                 <div>
                   <p class="text-sm font-medium text-text-primary">Variance reason (optional)</p>
                   <p class="text-sm text-text-secondary">Use a reason code for audit clarity.</p>
                 </div>
               </div>
-              <Badge variant="outline" class="border-sky-200 text-sky-700">{{ currencyCode }}</Badge>
+              <Badge variant="outline" class="border-status-info/30 text-status-info">{{ currencyCode }}</Badge>
             </div>
             <div class="mt-3 space-y-2">
               <Label for="variance_reason">Reason</Label>

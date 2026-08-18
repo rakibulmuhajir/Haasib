@@ -320,13 +320,13 @@ const submit = () => {
       <Card
         v-for="{ item, rate, source } in currentCards"
         :key="item.id"
-        class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10"
+        class="relative overflow-hidden border-border/80 bg-surface-sunken"
       >
         <CardHeader class="pb-3">
           <div class="flex items-start justify-between gap-3">
             <div>
               <CardTitle class="flex items-center gap-2 text-base">
-                <Droplet class="h-4 w-4 text-sky-600" />
+                <Droplet class="h-4 w-4 text-status-info" />
                 {{ item.name }}
               </CardTitle>
               <CardDescription class="mt-1">
@@ -334,21 +334,21 @@ const submit = () => {
                 <span v-else>Fuel item</span>
               </CardDescription>
             </div>
-            <Badge v-if="rate && source === 'history'" class="bg-emerald-600 text-white hover:bg-emerald-600">Current</Badge>
-            <Badge v-else-if="rate" variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">Product rate</Badge>
-            <Badge v-else variant="secondary" class="bg-zinc-200 text-zinc-800 hover:bg-zinc-200">No rate</Badge>
+            <Badge v-if="rate && source === 'history'" class="bg-status-success text-status-success-contrast hover:bg-status-success">Current</Badge>
+            <Badge v-else-if="rate" variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">Product rate</Badge>
+            <Badge v-else variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">No rate</Badge>
           </div>
         </CardHeader>
 
         <CardContent class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <div class="rounded-lg border border-border/70 bg-white/50 p-3">
+            <div class="rounded-lg border border-border/70 bg-surface-raised/50 p-3">
               <p class="text-xs font-medium text-text-tertiary">Supplier purchase (reference)</p>
               <p class="mt-1 text-sm font-semibold text-text-primary">
                 {{ rate ? `${formatMoney(rate.purchase_rate)} / L` : '—' }}
               </p>
             </div>
-            <div class="rounded-lg border border-border/70 bg-white/50 p-3">
+            <div class="rounded-lg border border-border/70 bg-surface-raised/50 p-3">
               <p class="text-xs font-medium text-text-tertiary">Govt sale (OGRA)</p>
               <p class="mt-1 text-sm font-semibold text-text-primary">
                 {{ rate ? `${formatMoney(rate.sale_rate)} / L` : '—' }}
@@ -358,7 +358,7 @@ const submit = () => {
 
           <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
             <div class="flex items-center gap-2">
-              <Badge variant="secondary" class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+              <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
                 Spread
               </Badge>
               <span class="text-sm font-semibold text-text-primary">
@@ -419,7 +419,7 @@ const submit = () => {
             <div class="flex items-center gap-2">
               <Badge
                 v-if="row._isCurrent"
-                class="bg-emerald-600 text-white hover:bg-emerald-600"
+                class="bg-status-success text-status-success-contrast hover:bg-status-success"
               >
                 Current
               </Badge>
@@ -433,7 +433,7 @@ const submit = () => {
               <Badge
                 v-if="row._raw.item?.fuel_category"
                 variant="secondary"
-                class="bg-sky-100 text-sky-800 hover:bg-sky-100"
+                class="bg-status-info/10 text-status-info hover:bg-status-info/10"
               >
                 {{ row._raw.item.fuel_category }}
               </Badge>
@@ -442,7 +442,7 @@ const submit = () => {
 
           <template #cell-margin="{ row }">
             <Badge
-              :class="spreadFor(row._raw) >= 0 ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' : 'bg-red-100 text-red-800 hover:bg-red-100'"
+              :class="spreadFor(row._raw) >= 0 ? 'bg-status-success/10 text-status-success hover:bg-status-success/10' : 'bg-status-critical/10 text-status-critical hover:bg-status-critical/10'"
             >
               {{ row.margin }}
             </Badge>
@@ -455,7 +455,7 @@ const submit = () => {
       <DialogContent class="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <TrendingUp class="h-5 w-5 text-sky-600" />
+            <TrendingUp class="h-5 w-5 text-status-info" />
             Add Rate Change
           </DialogTitle>
           <DialogDescription>
@@ -536,7 +536,7 @@ const submit = () => {
                   If staff records midnight dip and meters, Daily Close can split sales before and after the rate change.
                 </p>
               </div>
-              <Badge variant="outline" class="border-sky-200 text-sky-700">
+              <Badge variant="outline" class="border-status-info/30 text-status-info">
                 {{ currencyCode }}
               </Badge>
             </div>

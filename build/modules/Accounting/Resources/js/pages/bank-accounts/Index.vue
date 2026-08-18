@@ -254,10 +254,10 @@ const totalBalance = computed(() => {
               <div class="text-right">
                 <p class="font-bold text-lg">{{ formatCurrency(account.current_balance, account.currency) }}</p>
                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span v-if="account.unreconciled_count > 0" class="text-amber-600">
+                  <span v-if="account.unreconciled_count > 0" class="text-status-attention">
                     {{ account.unreconciled_count }} unreconciled
                   </span>
-                  <span v-else class="text-green-600">
+                  <span v-else class="text-status-success">
                     All reconciled
                   </span>
                 </div>

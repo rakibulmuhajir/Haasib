@@ -227,7 +227,7 @@ const handleSearch = () => {
               </div>
               <div class="text-right">
                 <div class="text-sm font-medium">{{ row.currency }}</div>
-                <div v-if="!row.is_active" class="text-xs text-red-500">Inactive</div>
+                <div v-if="!row.is_active" class="text-xs text-text-secondary">Inactive</div>
               </div>
             </div>
             <div class="flex gap-2 pt-2">

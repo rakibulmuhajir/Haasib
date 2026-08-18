@@ -269,7 +269,7 @@ const filterByMethod = (method: string) => {
       <template #mobile-card="{ row }">
         <div
           @click="navigateToPayment(row.id)"
-          class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+          class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         >
           <div class="space-y-3">
             <!-- Header with payment number and method -->
@@ -278,7 +278,7 @@ const filterByMethod = (method: string) => {
                 <h3 class="font-semibold text-primary">{{ row.payment_number }}</h3>
                 <button
                   @click.stop="navigateToCustomer(row.customer_id)"
-                  class="text-sm text-zinc-500 hover:text-primary hover:underline"
+                  class="text-sm text-text-secondary hover:text-primary hover:underline"
                 >
                   {{ row.customer }}
                 </button>
@@ -296,12 +296,12 @@ const filterByMethod = (method: string) => {
 
             <!-- Amount and date -->
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Amount</span>
+              <span class="text-sm text-text-secondary">Amount</span>
               <span class="font-medium">{{ row.amount }}</span>
             </div>
 
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Date</span>
+              <span class="text-sm text-text-secondary">Date</span>
               <span class="font-medium">{{ row.payment_date }}</span>
             </div>
           </div>

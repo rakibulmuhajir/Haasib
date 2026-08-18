@@ -214,7 +214,7 @@ const handleDelete = (id: string) => {
       <template #cell-name="{ row }">
         <div class="flex items-center gap-2">
           <span>{{ row.name }}</span>
-          <Star v-if="row._raw.is_primary" class="h-4 w-4 text-yellow-500 fill-yellow-500" />
+          <Star v-if="row._raw.is_primary" class="h-4 w-4 text-status-attention fill-status-attention" />
         </div>
       </template>
 

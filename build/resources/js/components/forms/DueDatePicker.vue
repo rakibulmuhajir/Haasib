@@ -252,7 +252,7 @@ watch(referenceDate, () => {
           v-if="daysFromNow !== null"
           :class="{
             'text-destructive': daysFromNow < 0,
-            'text-amber-600': daysFromNow === 0,
+            'text-status-attention': daysFromNow === 0,
           }"
         >
           ({{ dueLabel }})
@@ -293,7 +293,7 @@ watch(referenceDate, () => {
         class="text-sm whitespace-nowrap"
         :class="{
           'text-destructive': daysFromNow < 0,
-          'text-amber-600': daysFromNow === 0,
+          'text-status-attention': daysFromNow === 0,
           'text-muted-foreground': daysFromNow > 0,
         }"
       >

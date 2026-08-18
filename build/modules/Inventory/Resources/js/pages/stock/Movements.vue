@@ -249,7 +249,7 @@ const movementTypes = [
       </template>
 
       <template #cell-quantity="{ row }">
-        <span :class="row._raw.quantity > 0 ? 'text-green-600' : 'text-red-600'">
+        <span :class="row._raw.quantity > 0 ? 'text-status-success' : 'text-status-critical'">
           {{ row.quantity }}
         </span>
       </template>

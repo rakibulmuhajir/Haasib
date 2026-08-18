@@ -237,7 +237,7 @@ const getStatusIcon = (status: string) => {
               <TableCell class="text-right font-mono">
                 {{ formatCurrency(recon.statement_ending_balance, recon.bank_account.currency) }}
               </TableCell>
-              <TableCell class="text-right font-mono" :class="Math.abs(recon.difference) < 0.01 ? 'text-green-600' : 'text-red-600'">
+              <TableCell class="text-right font-mono" :class="Math.abs(recon.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'">
                 {{ formatCurrency(recon.difference, recon.bank_account.currency) }}
               </TableCell>
               <TableCell>

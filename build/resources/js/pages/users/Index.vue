@@ -230,7 +230,7 @@ const tableColumns = [
     search-placeholder="Search users by name, email, or role..."
   >
     <template #description>
-      Manage users for <span class="font-medium text-slate-300">{{ company.name }}</span>
+      Manage users for <span class="font-medium text-text-quaternary">{{ company.name }}</span>
     </template>
 
     <template #actions>
@@ -266,8 +266,8 @@ const tableColumns = [
     >
       <template #cell-name="{ row }">
         <div class="flex flex-col">
-          <span class="font-medium text-slate-100">{{ row.name || 'Unknown' }}</span>
-          <div class="flex items-center gap-1 text-slate-400">
+          <span class="font-medium text-text-primary">{{ row.name || 'Unknown' }}</span>
+          <div class="flex items-center gap-1 text-text-tertiary">
             <Mail class="h-3 w-3" />
             <span class="text-xs">{{ row.email }}</span>
           </div>
@@ -294,11 +294,11 @@ const tableColumns = [
       </template>
 
       <template #cell-joined_at="{ row }">
-        <div v-if="row.joined_at" class="flex items-center gap-1 text-slate-300">
+        <div v-if="row.joined_at" class="flex items-center gap-1 text-text-quaternary">
           <Calendar class="h-3 w-3" />
           <span>{{ formatDate(row.joined_at) }}</span>
         </div>
-        <span v-else class="text-slate-500">—</span>
+        <span v-else class="text-text-secondary">—</span>
       </template>
 
       <template #cell-actions="{ row }">
@@ -326,8 +326,8 @@ const tableColumns = [
       <template #mobile-card="{ row }">
         <div class="flex items-start justify-between">
           <div class="flex-1">
-            <div class="font-medium text-slate-100">{{ row.name || 'Unknown' }}</div>
-            <div class="flex items-center gap-1 text-xs text-slate-400 mt-1">
+            <div class="font-medium text-text-primary">{{ row.name || 'Unknown' }}</div>
+            <div class="flex items-center gap-1 text-xs text-text-tertiary mt-1">
               <Mail class="h-3 w-3" />
               <span>{{ row.email }}</span>
             </div>
@@ -352,14 +352,14 @@ const tableColumns = [
     <Dialog v-model:open="roleDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-slate-100">Change User Role</DialogTitle>
-          <DialogDescription class="text-slate-400">
+          <DialogTitle class="text-text-primary">Change User Role</DialogTitle>
+          <DialogDescription class="text-text-tertiary">
             Update the role for {{ selectedUser?.name || selectedUser?.email }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label class="text-slate-200">Role</Label>
+            <Label class="text-text-quaternary">Role</Label>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between">
@@ -378,7 +378,7 @@ const tableColumns = [
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <p v-if="roleForm.errors.role" class="text-xs text-red-400">
+            <p v-if="roleForm.errors.role" class="text-xs text-status-critical">
               {{ roleForm.errors.role }}
             </p>
           </div>
@@ -409,7 +409,7 @@ const tableColumns = [
         <div v-if="selectedUser?.capabilities.length" class="grid gap-2 md:grid-cols-2">
           <div v-for="capability in selectedUser.capabilities" :key="capability.label" class="rounded-md border p-3">
             <p class="text-sm font-medium">{{ capability.label }}</p>
-            <p class="mt-1 text-xs" :class="capability.allowed ? 'text-emerald-600' : 'text-destructive'">
+            <p class="mt-1 text-xs" :class="capability.allowed ? 'text-status-success' : 'text-destructive'">
               {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
             </p>
           </div>
@@ -433,32 +433,32 @@ const tableColumns = [
     <Dialog v-model:open="createDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle class="text-slate-100">Add User</DialogTitle>
-          <DialogDescription class="text-slate-400">
+          <DialogTitle class="text-text-primary">Add User</DialogTitle>
+          <DialogDescription class="text-text-tertiary">
             Create a login for {{ company.name }}
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
           <div class="space-y-2">
-            <Label for="new-user-name" class="text-slate-200">Full name</Label>
+            <Label for="new-user-name" class="text-text-quaternary">Full name</Label>
             <Input id="new-user-name" v-model="createForm.name" autocomplete="name" />
-            <p v-if="createForm.errors.name" class="text-xs text-red-400">{{ createForm.errors.name }}</p>
+            <p v-if="createForm.errors.name" class="text-xs text-status-critical">{{ createForm.errors.name }}</p>
           </div>
           <div class="space-y-2">
-            <Label for="new-user-email" class="text-slate-200">Email</Label>
+            <Label for="new-user-email" class="text-text-quaternary">Email</Label>
             <Input
               id="new-user-email"
               v-model="createForm.email"
               type="email"
               placeholder="user@example.com"
-              class="bg-slate-950/50 border-slate-700"
+              class="bg-surface-sunken border-rule-default"
             />
-            <p v-if="createForm.errors.email" class="text-xs text-red-400">
+            <p v-if="createForm.errors.email" class="text-xs text-status-critical">
               {{ createForm.errors.email }}
             </p>
           </div>
           <div class="space-y-2">
-            <Label class="text-slate-200">Role</Label>
+            <Label class="text-text-quaternary">Role</Label>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between">
@@ -477,17 +477,17 @@ const tableColumns = [
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <p v-if="createForm.errors.role" class="text-xs text-red-400">
+            <p v-if="createForm.errors.role" class="text-xs text-status-critical">
               {{ createForm.errors.role }}
             </p>
           </div>
           <div class="space-y-2">
-            <Label for="new-user-password" class="text-slate-200">Password</Label>
+            <Label for="new-user-password" class="text-text-quaternary">Password</Label>
             <Input id="new-user-password" v-model="createForm.password" type="password" autocomplete="new-password" />
-            <p v-if="createForm.errors.password" class="text-xs text-red-400">{{ createForm.errors.password }}</p>
+            <p v-if="createForm.errors.password" class="text-xs text-status-critical">{{ createForm.errors.password }}</p>
           </div>
           <div class="space-y-2">
-            <Label for="new-user-password-confirmation" class="text-slate-200">Confirm password</Label>
+            <Label for="new-user-password-confirmation" class="text-text-quaternary">Confirm password</Label>
             <Input id="new-user-password-confirmation" v-model="createForm.password_confirmation" type="password" autocomplete="new-password" />
           </div>
         </div>

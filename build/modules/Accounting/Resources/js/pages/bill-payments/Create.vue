@@ -478,7 +478,7 @@ const handleSubmit = () => {
         </div>
         <div
           v-if="Math.abs(totalSplit - totalAllocated) > 0.000001"
-          class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+          class="rounded-md border border-status-attention/30 bg-status-attention/10 p-3 text-sm text-status-attention"
         >
           Sources cover {{ formatNumber(totalSplit) }} {{ form.currency }}. Allocations are
           {{ formatNumber(totalAllocated) }} {{ form.currency }}. The two must match before saving.

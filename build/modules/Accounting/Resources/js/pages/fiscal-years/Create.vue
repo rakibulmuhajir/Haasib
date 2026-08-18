@@ -67,19 +67,19 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
             <div>
               <Label for="name">Name</Label>
               <Input id="name" v-model="form.name" placeholder="FY 2025" />
-              <p v-if="form.errors.name" class="text-sm text-red-600 mt-1">{{ form.errors.name }}</p>
+              <p v-if="form.errors.name" class="text-sm text-status-critical mt-1">{{ form.errors.name }}</p>
             </div>
 
             <div class="grid gap-4 md:grid-cols-2">
               <div>
                 <Label for="start_date">Start date</Label>
                 <Input id="start_date" type="date" v-model="form.start_date" />
-                <p v-if="form.errors.start_date" class="text-sm text-red-600 mt-1">{{ form.errors.start_date }}</p>
+                <p v-if="form.errors.start_date" class="text-sm text-status-critical mt-1">{{ form.errors.start_date }}</p>
               </div>
               <div>
                 <Label for="end_date">End date</Label>
                 <Input id="end_date" type="date" v-model="form.end_date" />
-                <p v-if="form.errors.end_date" class="text-sm text-red-600 mt-1">{{ form.errors.end_date }}</p>
+                <p v-if="form.errors.end_date" class="text-sm text-status-critical mt-1">{{ form.errors.end_date }}</p>
               </div>
             </div>
 
@@ -96,7 +96,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
                     <SelectItem value="yearly">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="form.errors.period_type" class="text-sm text-red-600 mt-1">{{ form.errors.period_type }}</p>
+                <p v-if="form.errors.period_type" class="text-sm text-status-critical mt-1">{{ form.errors.period_type }}</p>
               </div>
 
               <div class="flex items-center justify-between rounded-lg border p-3">

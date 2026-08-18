@@ -105,8 +105,8 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
         <CardTitle>Used by posting templates</CardTitle>
       </CardHeader>
       <CardContent>
-        <Alert v-if="!props.transitColumnsReady" class="mb-6 border-amber-200 bg-amber-50 text-amber-900">
-          <AlertTriangle class="h-4 w-4 text-amber-600" />
+        <Alert v-if="!props.transitColumnsReady" class="mb-6 border-status-attention/30 bg-status-attention/10 text-status-attention">
+          <AlertTriangle class="h-4 w-4 text-status-attention" />
           <AlertTitle>System update required</AlertTitle>
           <AlertDescription>
             {{ props.transitColumnsMessage }}
@@ -131,7 +131,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Customer balances owed to you.</p>
-            <p v-if="form.errors.ar_account_id" class="text-sm text-red-600">{{ form.errors.ar_account_id }}</p>
+            <p v-if="form.errors.ar_account_id" class="text-sm text-status-critical">{{ form.errors.ar_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -145,7 +145,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Vendor balances you still need to pay.</p>
-            <p v-if="form.errors.ap_account_id" class="text-sm text-red-600">{{ form.errors.ap_account_id }}</p>
+            <p v-if="form.errors.ap_account_id" class="text-sm text-status-critical">{{ form.errors.ap_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -159,7 +159,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Used for sales when a line has no specific income account.</p>
-            <p v-if="form.errors.income_account_id" class="text-sm text-red-600">{{ form.errors.income_account_id }}</p>
+            <p v-if="form.errors.income_account_id" class="text-sm text-status-critical">{{ form.errors.income_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -173,7 +173,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Used for bills when a line has no specific expense account.</p>
-            <p v-if="form.errors.expense_account_id" class="text-sm text-red-600">{{ form.errors.expense_account_id }}</p>
+            <p v-if="form.errors.expense_account_id" class="text-sm text-status-critical">{{ form.errors.expense_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -187,7 +187,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Where receipts and bill payments are deposited.</p>
-            <p v-if="form.errors.bank_account_id" class="text-sm text-red-600">{{ form.errors.bank_account_id }}</p>
+            <p v-if="form.errors.bank_account_id" class="text-sm text-status-critical">{{ form.errors.bank_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -201,7 +201,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">Where accumulated profit is stored at year end.</p>
-            <p v-if="form.errors.retained_earnings_account_id" class="text-sm text-red-600">{{ form.errors.retained_earnings_account_id }}</p>
+            <p v-if="form.errors.retained_earnings_account_id" class="text-sm text-status-critical">{{ form.errors.retained_earnings_account_id }}</p>
             </div>
           </div>
 
@@ -217,7 +217,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
                 </SelectContent>
               </Select>
               <p class="text-xs text-muted-foreground">Used when received quantity is lower than expected.</p>
-              <p v-if="form.errors.transit_loss_account_id" class="text-sm text-red-600">{{ form.errors.transit_loss_account_id }}</p>
+              <p v-if="form.errors.transit_loss_account_id" class="text-sm text-status-critical">{{ form.errors.transit_loss_account_id }}</p>
             </div>
 
             <div class="space-y-2">
@@ -231,7 +231,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
                 </SelectContent>
               </Select>
               <p class="text-xs text-muted-foreground">Used when received quantity is higher than expected.</p>
-              <p v-if="form.errors.transit_gain_account_id" class="text-sm text-red-600">{{ form.errors.transit_gain_account_id }}</p>
+              <p v-if="form.errors.transit_gain_account_id" class="text-sm text-status-critical">{{ form.errors.transit_gain_account_id }}</p>
             </div>
           </div>
 

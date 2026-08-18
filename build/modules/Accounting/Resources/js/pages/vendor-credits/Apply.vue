@@ -240,7 +240,7 @@ const getDaysOverdue = (dueDate?: string) => {
       v-if="showToast"
       :class="[
         'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300',
-        validationState === 'exceeded' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        validationState === 'exceeded' ? 'bg-status-critical text-status-critical-contrast' : 'bg-status-success text-status-success-contrast'
       ]"
     >
       {{ toastMessage }}
@@ -261,19 +261,19 @@ const getDaysOverdue = (dueDate?: string) => {
         <div class="grid gap-6 md:grid-cols-3">
           <div>
             <div class="text-sm font-medium text-muted-foreground">Available Credit</div>
-            <div class="text-2xl font-bold text-blue-600">
+            <div class="text-2xl font-bold text-status-info">
               {{ formatMoney(credit.amount, credit.currency) }}
             </div>
           </div>
           <div>
             <div class="text-sm font-medium text-muted-foreground">Applied Amount</div>
-            <div class="text-2xl font-bold" :class="hasExceeded ? 'text-red-600' : 'text-green-600'">
+            <div class="text-2xl font-bold" :class="hasExceeded ? 'text-status-critical' : 'text-status-success'">
               {{ formatMoney(totalApplied, credit.currency) }}
             </div>
           </div>
           <div>
             <div class="text-sm font-medium text-muted-foreground">Remaining</div>
-            <div class="text-2xl font-bold" :class="hasUnusedCredit ? 'text-orange-600' : 'text-gray-600'">
+            <div class="text-2xl font-bold" :class="hasUnusedCredit ? 'text-status-attention' : 'text-text-secondary'">
               {{ formatMoney(Math.max(0, remainingCredit), credit.currency) }}
             </div>
           </div>
@@ -283,13 +283,13 @@ const getDaysOverdue = (dueDate?: string) => {
         <div class="mt-6 space-y-2">
           <div class="flex justify-between text-sm">
             <span>Credit Utilization</span>
-            <span :class="hasExceeded ? 'text-red-600 font-semibold' : 'text-muted-foreground'">
+            <span :class="hasExceeded ? 'text-status-critical font-semibold' : 'text-muted-foreground'">
               {{ utilizationPercentage.toFixed(1) }}%
             </span>
           </div>
           <Progress
             :value="Math.min(100, utilizationPercentage)"
-            :class="hasExceeded ? 'bg-red-100' : ''"
+            :class="hasExceeded ? 'bg-status-critical/10' : ''"
           />
         </div>
 
@@ -299,9 +299,9 @@ const getDaysOverdue = (dueDate?: string) => {
             <div
               :class="[
                 'w-3 h-3 rounded-full',
-                validationState === 'perfect' ? 'bg-green-500' :
-                validationState === 'partial' ? 'bg-orange-500' :
-                validationState === 'exceeded' ? 'bg-red-500' : 'bg-gray-500'
+                validationState === 'perfect' ? 'bg-status-success' :
+                validationState === 'partial' ? 'bg-status-attention' :
+                validationState === 'exceeded' ? 'bg-status-critical' : 'bg-surface-raised'
               ]"
             ></div>
             <span class="text-sm font-medium">
@@ -359,7 +359,7 @@ const getDaysOverdue = (dueDate?: string) => {
       </CardHeader>
       <CardContent>
         <div v-if="unpaidBills.length === 0" class="text-center py-8 text-muted-foreground">
-          <CheckCircle2 class="h-12 w-12 mx-auto mb-4 text-green-500" />
+          <CheckCircle2 class="h-12 w-12 mx-auto mb-4 text-status-success" />
           <div class="text-lg font-medium">No unpaid bills</div>
           <div class="text-sm">All bills have been paid or no bills are associated with this vendor</div>
         </div>
@@ -379,7 +379,7 @@ const getDaysOverdue = (dueDate?: string) => {
                       Due: {{ formatDate(bill.due_date) }}
                       <span
                         v-if="getDaysOverdue(bill.due_date)"
-                        class="ml-2 text-xs font-medium px-2 py-1 rounded-full bg-orange-100 text-orange-800"
+                        class="ml-2 text-xs font-medium px-2 py-1 rounded-full bg-status-attention/10 text-status-attention"
                       >
                         {{ getDaysOverdue(bill.due_date) }} days overdue
                       </span>
@@ -446,9 +446,9 @@ const getDaysOverdue = (dueDate?: string) => {
     </Card>
 
     <!-- Warning Alert -->
-    <Alert v-if="hasExceeded" class="mt-6 border-red-200 bg-red-50">
-      <AlertCircle class="h-4 w-4 text-red-600" />
-      <AlertDescription class="text-red-800">
+    <Alert v-if="hasExceeded" class="mt-6 border-status-critical/30 bg-status-critical/10">
+      <AlertCircle class="h-4 w-4 text-status-critical" />
+      <AlertDescription class="text-status-critical">
         Total applications exceed the available credit amount by {{ formatMoney(totalApplied - credit.amount, credit.currency) }}.
         Please reduce the amounts to continue.
       </AlertDescription>

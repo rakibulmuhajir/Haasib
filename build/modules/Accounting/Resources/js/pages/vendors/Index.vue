@@ -153,7 +153,7 @@ const handleSearch = () => {
         hoverable
         @row-click="handleRowClick"
       >
-        <template #vendor_number="{ row }">
+        <template #cell-vendor_number="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewVendor(row.id)"
@@ -162,7 +162,7 @@ const handleSearch = () => {
           </button>
         </template>
 
-        <template #name="{ row }">
+        <template #cell-name="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewVendor(row.id)"

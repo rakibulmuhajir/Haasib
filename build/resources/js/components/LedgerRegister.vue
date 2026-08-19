@@ -311,7 +311,14 @@ const handleRowClick = (row: T) => {
                             @click="handleSort(column)"
                         >
                             <span class="reg-head__inner" :class="isFigure(column) && 'justify-end'">
-                                <span>{{ column.label }}</span>
+                                <!-- A column heading is usually its label, but a
+                                     column of checkboxes wants a select-all in
+                                     the heading, and a page that has to build
+                                     one by hand is a page that has to build the
+                                     table around it by hand too. -->
+                                <slot :name="`header-${String(column.key)}`" :column="column">
+                                    <span>{{ column.label }}</span>
+                                </slot>
                                 <component
                                     :is="getSortIcon(column)"
                                     v-if="column.sortable"

@@ -162,7 +162,7 @@ const tableData = computed(() =>
       :clickable="true"
       @row-click="(row: any) => router.get(`/${company.slug}/journals/${row.id}`)"
     >
-      <template #status="{ value }">
+      <template #cell-status="{ value }">
         <Badge :variant="badgeVariant(value)">{{ value }}</Badge>
       </template>
     </LedgerRegister>

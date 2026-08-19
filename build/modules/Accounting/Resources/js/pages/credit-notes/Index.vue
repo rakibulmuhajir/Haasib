@@ -196,13 +196,13 @@ const tableData = computed(() => {
       :data="tableData"
       :pagination="credit_notes"
     >
-      <template #status="{ value }">
+      <template #cell-status="{ value }">
         <Badge :variant="getStatusBadgeVariant(value)">
           {{ value }}
         </Badge>
       </template>
 
-      <template #actions="{ row }">
+      <template #cell-actions="{ row }">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" class="h-8 w-8 p-0">

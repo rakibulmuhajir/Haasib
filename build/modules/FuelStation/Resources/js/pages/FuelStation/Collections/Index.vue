@@ -317,7 +317,7 @@ const goToCustomer = (customerId: string) => {
               title="No collections found"
               description="No collections match the current filters."
             >
-              <template #action>
+              <template #actions>
                 <Button @click="goToCreate">
                   <Plus class="mr-2 h-4 w-4" />
                   Record Collection

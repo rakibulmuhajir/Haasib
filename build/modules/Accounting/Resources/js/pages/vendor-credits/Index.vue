@@ -185,7 +185,7 @@ const handleRowClick = (row: any) => {
         hoverable
         @row-click="handleRowClick"
       >
-        <template #credit_number="{ row }">
+        <template #cell-credit_number="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewCredit(row.id)"
@@ -194,7 +194,7 @@ const handleRowClick = (row: any) => {
           </button>
         </template>
 
-        <template #vendor="{ row }">
+        <template #cell-vendor="{ row }">
           <button
             v-if="row._original.vendor"
             class="text-status-info hover:text-status-info transition-colors"
@@ -205,7 +205,7 @@ const handleRowClick = (row: any) => {
           <span v-else>{{ row.vendor }}</span>
         </template>
 
-        <template #status="{ value }">
+        <template #cell-status="{ value }">
           <Badge :variant="statusVariant(value)">{{ value }}</Badge>
         </template>
 

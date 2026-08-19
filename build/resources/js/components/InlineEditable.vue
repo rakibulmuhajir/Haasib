@@ -160,7 +160,13 @@ const handleKeydown = (e: KeyboardEvent) => {
     <div v-else :class="['text-base text-foreground', valueClass]">
       <div class="flex items-center gap-2">
         <component :is="icon" v-if="icon" class="h-4 w-4 text-text-tertiary" />
-        <span>{{ displayText }}</span>
+        <!-- A field whose resting state is a chip rather than a line of text --
+             a status, a flag -- needs to say so here. Two pages already wrote
+             this slot and it rendered nothing, so their status showed as the
+             raw word instead of the badge they had written. -->
+        <slot name="display" :value="displayText">
+          <span>{{ displayText }}</span>
+        </slot>
       </div>
     </div>
 

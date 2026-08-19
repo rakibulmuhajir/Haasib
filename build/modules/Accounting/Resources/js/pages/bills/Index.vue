@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -83,13 +83,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'bill_number', label: t('billNumber') },
-  { key: 'vendor', label: t('vendor') },
-  { key: 'bill_date', label: t('date') },
-  { key: 'due_date', label: t('due') },
-  { key: 'total_amount', label: t('total') },
-  { key: 'balance', label: t('balance') },
-  { key: 'status', label: t('status') },
+  { key: 'bill_number', label: t('billNumber'), kind: 'ref' as const },
+  { key: 'vendor', label: t('vendor'), kind: 'text' as const },
+  { key: 'bill_date', label: t('date'), kind: 'date' as const },
+  { key: 'due_date', label: t('due'), kind: 'date' as const },
+  { key: 'total_amount', label: t('total'), kind: 'amount' as const },
+  { key: 'balance', label: t('balance'), kind: 'amount' as const },
+  { key: 'status', label: t('status'), kind: 'status' as const },
   { key: 'receive_stock', label: t('receiveStock') },
 ]
 
@@ -245,7 +245,7 @@ const filterByStatus = (statusValue: string) => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="bills"
@@ -374,7 +374,7 @@ const filterByStatus = (statusValue: string) => {
             </div>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

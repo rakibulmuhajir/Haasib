@@ -155,7 +155,10 @@ const GRAMMAR = [
     {
         key: 'dataTableShim',
         label: 'pages still on the DataTable shim',
-        allow: ['resources/js/components/DataTable.vue'],
+        // The shim is gone -- every page imports LedgerRegister directly now.
+        // The rule stays as a tripwire: it costs nothing and it catches the
+        // day someone reintroduces a second table component by that name.
+        allow: [],
         pattern: /from ['"]@\/components\/DataTable\.vue['"]/g,
         fix: 'Import LedgerRegister directly; DataTable exists only to retire.',
     },

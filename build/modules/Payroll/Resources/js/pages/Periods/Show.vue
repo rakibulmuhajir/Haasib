@@ -4,7 +4,7 @@ import PageShell from '@/components/PageShell.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { ArrowLeft, Lock, Calendar, FileText, Plus } from 'lucide-vue-next'
@@ -85,10 +85,10 @@ const getPayslipStatusVariant = (status: string) => {
 }
 
 const columns = [
-  { key: 'payslip_number', label: 'Number' },
-  { key: 'employee_name', label: 'Employee' },
-  { key: 'net_pay', label: 'Net Pay' },
-  { key: 'status', label: 'Status' },
+  { key: 'payslip_number', label: 'Number', kind: 'ref' as const },
+  { key: 'employee_name', label: 'Employee', kind: 'text' as const },
+  { key: 'net_pay', label: 'Net Pay', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const tableData = computed(() => {
@@ -261,7 +261,7 @@ const handleClose = () => {
             Create the first payslip
           </Button>
         </div>
-        <DataTable
+        <LedgerRegister
           v-else
           :columns="columns"
           :data="tableData"
@@ -275,7 +275,7 @@ const handleClose = () => {
               {{ formatStatus(row.status) }}
             </Badge>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

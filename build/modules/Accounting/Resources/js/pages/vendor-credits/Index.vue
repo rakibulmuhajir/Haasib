@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
@@ -64,12 +64,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'credit_number', label: 'Credit #' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'credit_date', label: 'Date' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'reason', label: 'Reason' },
-  { key: 'status', label: 'Status' },
+  { key: 'credit_number', label: 'Credit #', kind: 'ref' as const },
+  { key: 'vendor', label: 'Vendor', kind: 'text' as const },
+  { key: 'credit_date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'reason', label: 'Reason', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: 'actions', label: 'Actions' },
 ]
 
@@ -177,7 +177,7 @@ const handleRowClick = (row: any) => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="credits"
@@ -280,7 +280,7 @@ const handleRowClick = (row: any) => {
             </div>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

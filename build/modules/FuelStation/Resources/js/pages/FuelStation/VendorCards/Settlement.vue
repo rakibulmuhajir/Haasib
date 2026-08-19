@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -222,19 +222,19 @@ const getStatusBadge = (status: string) => {
 }
 
 const pendingColumns = [
-  { key: 'select', label: '', sortable: false, width: '50px' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'date', label: 'Date' },
-  { key: 'outstanding', label: 'Outstanding', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'select', label: '', sortable: false, width: '50px', kind: 'text' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const todayColumns = [
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'date', label: 'Date' },
-  { key: 'amount', label: 'Settled', align: 'right' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Settled', kind: 'amount' as const, align: 'right' as const },
 ]
 
 const pendingTableData = computed(() => {
@@ -339,7 +339,7 @@ const todayTableData = computed(() => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="pendingTableData" :columns="pendingColumns">
+        <LedgerRegister :data="pendingTableData" :columns="pendingColumns">
           <template #empty>
             <EmptyState
               title="No pending settlements"
@@ -372,7 +372,7 @@ const todayTableData = computed(() => {
               class="rounded-sm border-border"
             />
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -414,7 +414,7 @@ const todayTableData = computed(() => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="todayTableData" :columns="todayColumns" />
+        <LedgerRegister :data="todayTableData" :columns="todayColumns" />
       </CardContent>
     </Card>
 

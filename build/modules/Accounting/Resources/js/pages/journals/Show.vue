@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -76,11 +76,11 @@ const money = (val: number) =>
   formatMoneyText(val ?? 0, props.company.base_currency || 'USD')
 
 const columns = [
-  { key: 'line_number', label: '#' },
-  { key: 'account', label: 'Account' },
-  { key: 'description', label: 'Description' },
-  { key: 'debit', label: 'Debit' },
-  { key: 'credit', label: 'Credit' },
+  { key: 'line_number', label: '#', kind: 'ref' as const },
+  { key: 'account', label: 'Account', kind: 'text' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'debit', label: 'Debit', kind: 'in' as const },
+  { key: 'credit', label: 'Credit', kind: 'out' as const },
 ]
 
 const tableData = computed(() =>
@@ -178,7 +178,7 @@ const tableData = computed(() =>
     </div>
 
     <div class="mt-6">
-      <DataTable :columns="columns" :data="tableData" />
+      <LedgerRegister :columns="columns" :data="tableData" />
     </div>
   </PageShell>
 </template>

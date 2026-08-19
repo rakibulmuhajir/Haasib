@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -80,11 +80,11 @@ const currentPeriodLabel = computed(() => {
 })
 
 const payslipColumns = [
-  { key: 'payslip_number', label: 'Payslip' },
-  { key: 'employee_name', label: 'Employee' },
-  { key: 'period', label: 'Period' },
-  { key: 'net_pay', label: 'Net Pay' },
-  { key: 'status', label: 'Status' },
+  { key: 'payslip_number', label: 'Payslip', kind: 'ref' as const },
+  { key: 'employee_name', label: 'Employee', kind: 'text' as const },
+  { key: 'period', label: 'Period', kind: 'date' as const },
+  { key: 'net_pay', label: 'Net Pay', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const payslipRows = computed(() => props.recentPayslips.map((payslip) => ({
@@ -98,8 +98,8 @@ const payslipRows = computed(() => props.recentPayslips.map((payslip) => ({
 })))
 
 const advanceColumns = [
-  { key: 'employee', label: 'Employee' },
-  { key: 'outstanding', label: 'Remaining Advance' },
+  { key: 'employee', label: 'Employee', kind: 'text' as const },
+  { key: 'outstanding', label: 'Remaining Advance', kind: 'amount' as const },
 ]
 
 const advanceRows = computed(() => props.employeesWithAdvances.map((employee) => ({
@@ -205,14 +205,14 @@ const runMonthlyPayroll = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTable :columns="payslipColumns" :data="payslipRows" @row-click="(row) => router.get(`/${company.slug}/payslips/${row.id}`)">
+          <LedgerRegister :columns="payslipColumns" :data="payslipRows" @row-click="(row) => router.get(`/${company.slug}/payslips/${row.id}`)">
             <template #cell-net_pay="{ row }">
               <MoneyText :amount="row.net_pay" :currency="row._raw.currency" />
             </template>
             <template #cell-status="{ row }">
               <StatusBadge :status="row.status" />
             </template>
-          </DataTable>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -230,11 +230,11 @@ const runMonthlyPayroll = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTable :columns="advanceColumns" :data="advanceRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
+          <LedgerRegister :columns="advanceColumns" :data="advanceRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
             <template #cell-outstanding="{ row }">
               <MoneyText :amount="row.outstanding" :currency="company.base_currency" />
             </template>
-          </DataTable>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

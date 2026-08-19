@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -81,11 +81,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'payslip_number', label: 'Number' },
-  { key: 'employee', label: 'Employee' },
-  { key: 'period', label: 'Period' },
-  { key: 'net_pay', label: 'Net Pay' },
-  { key: 'status', label: 'Status' },
+  { key: 'payslip_number', label: 'Number', kind: 'ref' as const },
+  { key: 'employee', label: 'Employee', kind: 'text' as const },
+  { key: 'period', label: 'Period', kind: 'date' as const },
+  { key: 'net_pay', label: 'Net Pay', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -178,7 +178,7 @@ const formatStatus = (status: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -241,6 +241,6 @@ const formatStatus = (status: string) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

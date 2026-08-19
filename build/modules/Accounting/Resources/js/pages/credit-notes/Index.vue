@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -124,13 +124,13 @@ const formatCurrency = (amount: number, currency: string) => {
 }
 
 const columns = [
-  { key: 'credit_note_number', label: 'Credit Note #' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'reason', label: 'Reason' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
-  { key: 'credit_date', label: 'Date' },
+  { key: 'credit_note_number', label: 'Credit Note #', kind: 'ref' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'reason', label: 'Reason', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'credit_date', label: 'Date', kind: 'date' as const },
   { key: 'actions', label: '', sortable: false },
 ]
 
@@ -191,7 +191,7 @@ const tableData = computed(() => {
     </div>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       :columns="columns"
       :data="tableData"
       :pagination="credit_notes"
@@ -276,7 +276,7 @@ const tableData = computed(() => {
           </div>
         </div>
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <!-- Empty State -->
     <EmptyState

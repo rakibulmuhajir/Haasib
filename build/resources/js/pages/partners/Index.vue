@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -82,11 +82,11 @@ const formatCurrency = (amount: number) => {
 }
 
 const columns = [
-  { key: 'name', label: 'Partner' },
-  { key: 'profit_share', label: 'Profit Share' },
-  { key: 'net_capital', label: 'Net Capital' },
-  { key: 'drawing_limit', label: 'Drawing Limit' },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Partner', kind: 'text' as const },
+  { key: 'profit_share', label: 'Profit Share', kind: 'amount' as const },
+  { key: 'net_capital', label: 'Net Capital', kind: 'amount' as const },
+  { key: 'drawing_limit', label: 'Drawing Limit', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -207,7 +207,7 @@ const goToCreate = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -281,7 +281,7 @@ const goToCreate = () => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

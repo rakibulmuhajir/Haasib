@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -78,12 +78,12 @@ const filteredInvestors = computed(() => {
 })
 
 const columns = [
-  { key: 'name', label: 'Name' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'invested', label: 'Invested', align: 'right' as const },
-  { key: 'earned', label: 'Earned', align: 'right' as const },
-  { key: 'outstanding', label: 'Outstanding', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'phone', label: 'Phone', kind: 'text' as const },
+  { key: 'invested', label: 'Invested', kind: 'amount' as const, align: 'right' as const },
+  { key: 'earned', label: 'Earned', kind: 'amount' as const, align: 'right' as const },
+  { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -244,7 +244,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -300,7 +300,7 @@ const goToShow = (row: any) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import RelatedActions from '@/components/RelatedActions.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -239,20 +239,20 @@ const formatAddress = (addr: AddressRef | null | undefined) => {
 }
 
 const invoiceColumns = [
-  { key: 'invoice_number', label: 'Invoice #' },
-  { key: 'invoice_date', label: 'Date' },
-  { key: 'due_date', label: 'Due' },
-  { key: 'total_amount', label: 'Total' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'status', label: 'Status' },
+  { key: 'invoice_number', label: 'Invoice #', kind: 'ref' as const },
+  { key: 'invoice_date', label: 'Date', kind: 'date' as const },
+  { key: 'due_date', label: 'Due', kind: 'date' as const },
+  { key: 'total_amount', label: 'Total', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const paymentColumns = [
-  { key: 'payment_number', label: 'Payment #' },
-  { key: 'payment_date', label: 'Date' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'payment_method', label: 'Method' },
-  { key: 'reference_number', label: 'Reference' },
+  { key: 'payment_number', label: 'Payment #', kind: 'ref' as const },
+  { key: 'payment_date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'payment_method', label: 'Method', kind: 'text' as const },
+  { key: 'reference_number', label: 'Reference', kind: 'ref' as const },
 ]
 
 const invoiceRows = computed(() =>
@@ -551,11 +551,11 @@ const cancelShippingEdit = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <DataTable :columns="invoiceColumns" :data="invoiceRows" key-field="id" compact>
+              <LedgerRegister :columns="invoiceColumns" :data="invoiceRows" key-field="id" compact>
                 <template #cell-status="{ row }">
                   <StatusBadge :status="row.status" />
                 </template>
-              </DataTable>
+              </LedgerRegister>
             </CardContent>
           </Card>
 
@@ -570,7 +570,7 @@ const cancelShippingEdit = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <DataTable :columns="paymentColumns" :data="paymentRows" key-field="id" compact />
+              <LedgerRegister :columns="paymentColumns" :data="paymentRows" key-field="id" compact />
             </CardContent>
           </Card>
         </div>

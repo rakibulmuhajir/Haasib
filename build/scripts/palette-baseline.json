@@ -4,7 +4,7 @@
   "grammar": {
     "rawTable": 0,
     "uiTable": 0,
-    "dataTableShim": 46,
+    "dataTableShim": 0,
     "directionAsSeverity": 6,
     "moneyAsText": 0,
     "moneyAsFixed": 0,

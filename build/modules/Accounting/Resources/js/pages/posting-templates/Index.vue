@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
@@ -54,10 +54,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'doc_type', label: 'Doc Type' },
-  { key: 'name', label: 'Name' },
-  { key: 'status', label: 'Status' },
-  { key: 'effective_from', label: 'Effective From' },
+  { key: 'doc_type', label: 'Doc Type', kind: 'text' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'effective_from', label: 'Effective From', kind: 'date' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -89,7 +89,7 @@ const tableData = computed(() =>
       Control how documents post to the general ledger.
     </div>
 
-    <DataTable :columns="columns" :data="tableData" key-field="id">
+    <LedgerRegister :columns="columns" :data="tableData" key-field="id">
       <template #cell-name="{ row }">
         <div class="flex items-center gap-2">
           <span>{{ row.name }}</span>
@@ -109,7 +109,7 @@ const tableData = computed(() =>
           Edit
         </Button>
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <div class="mt-6 text-sm text-muted-foreground flex items-center gap-2">
       <Settings class="w-4 h-4" />

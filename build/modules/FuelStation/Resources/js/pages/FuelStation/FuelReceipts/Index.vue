@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -100,11 +100,11 @@ const formatDate = (dateStr: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'reference', label: 'Reference' },
-  { key: 'liters', label: 'Liters' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -217,7 +217,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -258,7 +258,7 @@ const goToShow = (row: any) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

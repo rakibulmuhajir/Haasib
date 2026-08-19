@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
@@ -10,7 +10,6 @@ import DateTimeText from '@/components/DateTimeText.vue'
 import Derivation from '@/components/Derivation.vue'
 import type { DerivationLine } from '@/components/Derivation.vue'
 import MetaChip from '@/components/MetaChip.vue'
-import LedgerRegister from '@/components/LedgerRegister.vue'
 import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useFormFeedback } from '@/composables/useFormFeedback'
@@ -882,10 +881,10 @@ const deleteProduct = () => {
 }
 
 const tableColumns = [
-  { key: 'name', label: 'User', sortable: true },
-  { key: 'role', label: 'Role', sortable: true },
-  { key: 'is_active', label: 'Status', sortable: true },
-  { key: 'joined_at', label: 'Joined', sortable: true },
+  { key: 'name', label: 'User', sortable: true, kind: 'text' as const },
+  { key: 'role', label: 'Role', sortable: true, kind: 'text' as const },
+  { key: 'is_active', label: 'Status', sortable: true, kind: 'status' as const },
+  { key: 'joined_at', label: 'Joined', sortable: true, kind: 'date' as const },
   { key: 'actions', label: '', class: 'text-right' },
 ]
 
@@ -1725,7 +1724,7 @@ const startActions = computed(() => {
 
       <!-- Users Tab -->
       <TabsContent v-if="canManage && !isFuelStationCompany" value="users" class="space-y-6">
-        <DataTable
+        <LedgerRegister
           :data="users"
           :columns="tableColumns"
           title="Team Members"
@@ -1793,7 +1792,7 @@ const startActions = computed(() => {
               </DropdownMenu>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </TabsContent>
 
     <!-- Product Setup Dialog -->

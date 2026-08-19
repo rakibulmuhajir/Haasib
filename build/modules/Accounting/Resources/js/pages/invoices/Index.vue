@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
@@ -108,12 +108,15 @@ const isOverdue = (invoice: InvoiceRow) =>
   new Date(invoice.due_date) < new Date()
 
 const columns = [
-  { key: 'invoice_number', label: t('invoiceNumber') },
-  { key: 'customer', label: t('customer') },
-  { key: 'status', label: t('status') },
-  { key: 'total_amount', label: t('total'), numeric: true },
-  { key: 'balance', label: t('balance'), numeric: true },
-  { key: 'due_date', label: t('dueDate'), numeric: true },
+  { key: 'invoice_number', label: t('invoiceNumber'), kind: 'ref' as const },
+  { key: 'customer', label: t('customer'), kind: 'text' as const },
+  { key: 'status', label: t('status'), kind: 'status' as const },
+  { key: 'total_amount', label: t('total'), kind: 'amount' as const },
+  { key: 'balance', label: t('balance'), kind: 'amount' as const },
+  /* A due date is a date. It was declared numeric because it needed to sit on
+     the right, and numeric was the only prop that did that -- which right-
+     aligned it and then set it in the figure face beside two real figures. */
+  { key: 'due_date', label: t('dueDate'), kind: 'date' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -172,7 +175,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
     <!-- A long register of like things: compact is a statement about the work,
          not about who is doing it. -->
-    <DataTable
+    <LedgerRegister
       :columns="columns"
       :data="rows"
       :pagination="invoices"
@@ -286,7 +289,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
           @action="router.get(`/${company.slug}/invoices/create`)"
         />
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>
 

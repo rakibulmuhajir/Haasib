@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -63,11 +63,11 @@ const formatQty = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
 
 const columns = [
-  { key: 'reading_date', label: 'Date' },
-  { key: 'shift', label: 'Shift' },
-  { key: 'opening_meter', label: 'Opening' },
-  { key: 'closing_meter', label: 'Closing' },
-  { key: 'liters_dispensed', label: 'Liters' },
+  { key: 'reading_date', label: 'Date', kind: 'date' as const },
+  { key: 'shift', label: 'Shift', kind: 'status' as const },
+  { key: 'opening_meter', label: 'Opening', kind: 'amount' as const },
+  { key: 'closing_meter', label: 'Closing', kind: 'amount' as const },
+  { key: 'liters_dispensed', label: 'Liters', kind: 'amount' as const },
 ]
 
 const tableData = computed(() =>
@@ -175,7 +175,7 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
         <CardDescription>Latest 20 readings captured for this pump.</CardDescription>
       </CardHeader>
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns">
+        <LedgerRegister :data="tableData" :columns="columns">
           <template #cell-shift="{ row }">
             <Badge
               :class="row._raw.shift === 'day' ? 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10' : 'bg-status-info/10 text-status-info hover:bg-status-info/10'"
@@ -183,7 +183,7 @@ const fuelLabel = computed(() => props.pump.tank?.linked_item?.name ?? props.pum
               {{ row._raw.shift }}
             </Badge>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

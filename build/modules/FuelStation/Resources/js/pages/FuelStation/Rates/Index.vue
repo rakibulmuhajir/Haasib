@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -163,12 +163,12 @@ const filteredRates = computed(() => {
 })
 
 const columns = [
-  { key: 'effective_date', label: 'Effective' },
-  { key: 'item', label: 'Fuel item' },
-  { key: 'purchase_rate', label: 'Supplier purchase' },
-  { key: 'sale_rate', label: 'Govt sale' },
-  { key: 'margin', label: 'Spread' },
-  { key: 'impact', label: 'Impact' },
+  { key: 'effective_date', label: 'Effective', kind: 'date' as const },
+  { key: 'item', label: 'Fuel item', kind: 'text' as const },
+  { key: 'purchase_rate', label: 'Supplier purchase', kind: 'amount' as const },
+  { key: 'sale_rate', label: 'Govt sale', kind: 'amount' as const },
+  { key: 'margin', label: 'Spread', kind: 'amount' as const },
+  { key: 'impact', label: 'Impact', kind: 'text' as const },
 ]
 
 const tableData = computed(() =>
@@ -395,7 +395,7 @@ const submit = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns" striped>
+        <LedgerRegister :data="tableData" :columns="columns" banded>
           <template #empty>
             <EmptyState
               title="No rate changes yet"
@@ -445,7 +445,7 @@ const submit = () => {
               {{ row.margin }}
             </Badge>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

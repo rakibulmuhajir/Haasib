@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,12 +68,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'payment_number', label: 'Payment #' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'payment_date', label: 'Date' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'payment_method', label: 'Method' },
-  { key: 'reference_number', label: 'Reference' },
+  { key: 'payment_number', label: 'Payment #', kind: 'ref' as const },
+  { key: 'vendor', label: 'Vendor', kind: 'text' as const },
+  { key: 'payment_date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'payment_method', label: 'Method', kind: 'text' as const },
+  { key: 'reference_number', label: 'Reference', kind: 'ref' as const },
   { key: 'actions', label: 'Actions' },
 ]
 
@@ -170,7 +170,7 @@ const handleSearch = () => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="payments"
@@ -201,7 +201,7 @@ const handleSearch = () => {
             </Button>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

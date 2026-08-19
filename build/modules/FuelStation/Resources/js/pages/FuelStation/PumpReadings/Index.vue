@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -109,12 +109,12 @@ const filtered = computed(() => {
 })
 
 const columns = [
-  { key: 'reading_date', label: 'Date' },
-  { key: 'pump', label: 'Pump' },
-  { key: 'shift', label: 'Shift' },
-  { key: 'opening', label: 'Opening' },
-  { key: 'closing', label: 'Closing' },
-  { key: 'liters', label: 'Liters' },
+  { key: 'reading_date', label: 'Date', kind: 'date' as const },
+  { key: 'pump', label: 'Pump', kind: 'text' as const },
+  { key: 'shift', label: 'Shift', kind: 'status' as const },
+  { key: 'opening', label: 'Opening', kind: 'amount' as const },
+  { key: 'closing', label: 'Closing', kind: 'amount' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
 ]
 
 const tableData = computed(() =>
@@ -291,7 +291,7 @@ const submit = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           :pagination="pagination"
@@ -336,7 +336,7 @@ const submit = () => {
               <span class="font-medium text-text-primary">{{ row.reading_date }}</span>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

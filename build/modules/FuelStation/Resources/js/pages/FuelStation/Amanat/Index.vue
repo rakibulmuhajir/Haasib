@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -104,10 +104,10 @@ const filteredCustomers = computed(() => {
 })
 
 const columns = [
-  { key: 'name', label: 'Customer' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'relationship', label: 'Type' },
-  { key: 'balance', label: 'Balance', align: 'right' as const },
+  { key: 'name', label: 'Customer', kind: 'text' as const },
+  { key: 'phone', label: 'Phone', kind: 'text' as const },
+  { key: 'relationship', label: 'Type', kind: 'status' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const, align: 'right' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -211,7 +211,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -246,7 +246,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

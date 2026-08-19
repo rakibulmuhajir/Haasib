@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -150,13 +150,13 @@ const submitCommission = () => {
 
 // Lots table
 const lotColumns = [
-  { key: 'date', label: 'Date' },
-  { key: 'amount', label: 'Amount', align: 'right' as const },
-  { key: 'rate', label: 'Rate', align: 'right' as const },
-  { key: 'units', label: 'Units', align: 'right' as const },
-  { key: 'remaining', label: 'Remaining', align: 'right' as const },
-  { key: 'progress', label: 'Progress' },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const, align: 'right' as const },
+  { key: 'rate', label: 'Rate', kind: 'amount' as const, align: 'right' as const },
+  { key: 'units', label: 'Units', kind: 'amount' as const, align: 'right' as const },
+  { key: 'remaining', label: 'Remaining', kind: 'amount' as const, align: 'right' as const },
+  { key: 'progress', label: 'Progress', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const lotTableData = computed(() => {
@@ -300,7 +300,7 @@ const getStatusBadgeClass = (status: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="lotTableData" :columns="lotColumns">
+        <LedgerRegister :data="lotTableData" :columns="lotColumns">
           <template #empty>
             <EmptyState
               title="No investment lots"
@@ -331,7 +331,7 @@ const getStatusBadgeClass = (status: string) => {
               {{ row.status.charAt(0).toUpperCase() + row.status.slice(1) }}
             </Badge>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

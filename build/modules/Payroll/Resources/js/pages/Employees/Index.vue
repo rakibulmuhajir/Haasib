@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -84,11 +84,11 @@ const handleSearch = () => {
 }
 
 const columns = [
-  { key: 'employee_number', label: 'ID' },
-  { key: 'name', label: 'Name' },
-  { key: 'department', label: 'Department' },
-  { key: 'position', label: 'Position' },
-  { key: 'status', label: 'Status' },
+  { key: 'employee_number', label: 'ID', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'department', label: 'Department', kind: 'text' as const },
+  { key: 'position', label: 'Position', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -170,7 +170,7 @@ const formatStatus = (status: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -211,6 +211,6 @@ const formatStatus = (status: string) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

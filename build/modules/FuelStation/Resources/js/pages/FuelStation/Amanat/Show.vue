@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -76,10 +76,10 @@ const formatDateTime = (date: string) => {
 
 // Transaction table
 const txColumns = [
-  { key: 'date', label: 'Date' },
-  { key: 'type', label: 'Type' },
-  { key: 'details', label: 'Details' },
-  { key: 'amount', label: 'Amount', align: 'right' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'type', label: 'Type', kind: 'status' as const },
+  { key: 'details', label: 'Details', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const, align: 'right' as const },
 ]
 
 const transactionRows = computed(() => {
@@ -172,7 +172,7 @@ const getTypeBadge = (type: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="txTableData" :columns="txColumns">
+        <LedgerRegister :data="txTableData" :columns="txColumns">
           <template #empty>
             <EmptyState
               title="No transactions"
@@ -202,7 +202,7 @@ const getTypeBadge = (type: string) => {
               />
             </span>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -130,11 +130,11 @@ const submitWithdrawal = () => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'type', label: 'Type' },
-  { key: 'description', label: 'Description' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'balance', label: 'Balance' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'type', label: 'Type', kind: 'text' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
@@ -287,7 +287,7 @@ const goBack = () => {
           <CardDescription>All investments and withdrawals for this partner.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <DataTable :data="tableData" :columns="columns">
+          <LedgerRegister :data="tableData" :columns="columns">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
                 No transactions yet
@@ -315,7 +315,7 @@ const goBack = () => {
             <template #cell-balance="{ row }">
               <span class="font-medium"><MoneyText :amount="row._raw.balance" :currency="props.currency" /></span>
             </template>
-          </DataTable>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

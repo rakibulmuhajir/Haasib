@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -123,12 +123,12 @@ const formatQuantity = (qty: number) => {
 }
 
 const columns = [
-  { key: 'sku', label: 'SKU' },
-  { key: 'name', label: 'Name' },
-  { key: 'item_type', label: 'Type' },
-  { key: 'category', label: 'Category' },
-  { key: 'selling_price', label: 'Price' },
-  { key: 'total_quantity', label: 'On Hand' },
+  { key: 'sku', label: 'SKU', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'item_type', label: 'Type', kind: 'text' as const },
+  { key: 'category', label: 'Category', kind: 'text' as const },
+  { key: 'selling_price', label: 'Price', kind: 'amount' as const },
+  { key: 'total_quantity', label: 'On Hand', kind: 'amount' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -223,7 +223,7 @@ const handleDelete = (id: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -264,6 +264,6 @@ const handleDelete = (id: string) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

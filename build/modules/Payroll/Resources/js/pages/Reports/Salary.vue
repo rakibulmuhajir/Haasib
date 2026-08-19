@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -109,14 +109,14 @@ const applyFilter = () => {
 }
 
 const columns = [
-  { key: 'employee', label: 'Employee' },
-  { key: 'base_salary', label: 'Base Salary' },
-  { key: 'gross_pay', label: 'Gross' },
-  { key: 'deductions', label: 'Deductions' },
-  { key: 'net_pay', label: 'Net Salary' },
-  { key: 'paid', label: 'Paid' },
-  { key: 'unpaid', label: 'Unpaid' },
-  { key: 'advance_outstanding', label: 'Advance Balance' },
+  { key: 'employee', label: 'Employee', kind: 'text' as const },
+  { key: 'base_salary', label: 'Base Salary', kind: 'amount' as const },
+  { key: 'gross_pay', label: 'Gross', kind: 'amount' as const },
+  { key: 'deductions', label: 'Deductions', kind: 'amount' as const },
+  { key: 'net_pay', label: 'Net Salary', kind: 'amount' as const },
+  { key: 'paid', label: 'Paid', kind: 'amount' as const },
+  { key: 'unpaid', label: 'Unpaid', kind: 'amount' as const },
+  { key: 'advance_outstanding', label: 'Advance Balance', kind: 'amount' as const },
 ]
 
 const tableRows = computed(() => props.rows.map((row) => ({
@@ -279,7 +279,7 @@ const openPayslips = (row: SalaryRow) => {
         </div>
       </CardHeader>
       <CardContent>
-        <DataTable :columns="columns" :data="tableRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
+        <LedgerRegister :columns="columns" :data="tableRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
           <template #cell-employee="{ row }">
             <div>
               <p class="font-medium">{{ row._raw.employee_name }}</p>
@@ -320,7 +320,7 @@ const openPayslips = (row: SalaryRow) => {
           <template #cell-advance_outstanding="{ row }">
             <MoneyText :amount="row.advance_outstanding" :currency="company.base_currency" />
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

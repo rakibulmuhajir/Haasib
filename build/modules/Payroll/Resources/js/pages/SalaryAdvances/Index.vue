@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DataTable from '@/components/DataTable.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -203,12 +203,12 @@ const getStatusBadge = (status: string) => {
 };
 
 const columns = [
-    { key: 'date', label: 'Date' },
-    { key: 'employee', label: 'Employee' },
-    { key: 'amount', label: 'Amount' },
-    { key: 'recovered', label: 'Recovered' },
-    { key: 'outstanding', label: 'Outstanding' },
-    { key: 'status', label: 'Recovery' },
+    { key: 'date', label: 'Date', kind: 'date' as const },
+    { key: 'employee', label: 'Employee', kind: 'text' as const },
+    { key: 'amount', label: 'Amount', kind: 'out' as const },
+    { key: 'recovered', label: 'Recovered', kind: 'in' as const },
+    { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const },
+    { key: 'status', label: 'Recovery', kind: 'status' as const },
 ];
 
 const tableData = computed(() => {
@@ -575,7 +575,7 @@ const recoveryPercentage = computed(() => {
             </CardHeader>
 
             <CardContent class="p-0">
-                <DataTable :data="tableData" :columns="columns">
+                <LedgerRegister :data="tableData" :columns="columns">
                     <template #empty>
                         <EmptyState
                             title="No salary advances yet"
@@ -630,7 +630,7 @@ const recoveryPercentage = computed(() => {
                             {{ getStatusBadge(row._raw.status).label }}
                         </Badge>
                     </template>
-                </DataTable>
+                </LedgerRegister>
             </CardContent>
         </Card>
     </PageShell>

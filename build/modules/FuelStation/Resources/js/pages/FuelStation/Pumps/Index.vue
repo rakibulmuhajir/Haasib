@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
@@ -104,11 +104,11 @@ const stats = computed(() => {
 })
 
 const columns = [
-  { key: 'name', label: 'Point' },
-  { key: 'tank', label: 'Tank' },
-  { key: 'fuel', label: 'Fuel' },
-  { key: 'meter', label: 'Meter' },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Point', kind: 'ref' as const },
+  { key: 'tank', label: 'Tank', kind: 'text' as const },
+  { key: 'fuel', label: 'Fuel', kind: 'text' as const },
+  { key: 'meter', label: 'Meter', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -312,7 +312,7 @@ const goToWarehouses = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -377,7 +377,7 @@ const goToWarehouses = () => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

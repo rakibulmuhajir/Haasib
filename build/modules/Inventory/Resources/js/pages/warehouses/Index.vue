@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -110,13 +110,13 @@ const formatQuantity = (qty: number) => {
 }
 
 const columns = [
-  { key: 'code', label: 'Code' },
-  { key: 'name', label: 'Name' },
-  { key: 'type', label: 'Type' },
-  { key: 'city', label: 'Location' },
-  { key: 'item_count', label: 'Items' },
-  { key: 'total_units', label: 'Total Units' },
-  { key: 'status', label: 'Status' },
+  { key: 'code', label: 'Code', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'type', label: 'Type', kind: 'text' as const },
+  { key: 'city', label: 'Location', kind: 'text' as const },
+  { key: 'item_count', label: 'Items', kind: 'amount' as const },
+  { key: 'total_units', label: 'Total Units', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -199,7 +199,7 @@ const handleDelete = (id: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -246,6 +246,6 @@ const handleDelete = (id: string) => {
         </DropdownMenu>
         <span v-else class="text-xs text-muted-foreground italic">Deleted</span>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

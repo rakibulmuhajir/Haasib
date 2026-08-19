@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -79,11 +79,11 @@ const handleSearch = () => {
 }
 
 const columns = [
-  { key: 'code', label: 'Code' },
-  { key: 'name', label: 'Name' },
-  { key: 'parent', label: 'Parent' },
-  { key: 'items_count', label: 'Items' },
-  { key: 'status', label: 'Status' },
+  { key: 'code', label: 'Code', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'parent', label: 'Parent', kind: 'text' as const },
+  { key: 'items_count', label: 'Items', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -151,7 +151,7 @@ const handleDelete = (id: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -190,6 +190,6 @@ const handleDelete = (id: string) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

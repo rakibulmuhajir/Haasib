@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -62,10 +62,10 @@ const filteredCustomers = computed(() => {
 })
 
 const columns = [
-  { key: 'name', label: 'Customer' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'limit', label: 'Credit Limit' },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Customer', kind: 'text' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
+  { key: 'limit', label: 'Credit Limit', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -166,7 +166,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -218,7 +218,7 @@ const goToShow = (row: any) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

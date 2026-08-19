@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -135,11 +135,11 @@ const paymentMethodLabel = (method: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'reference', label: 'Reference' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'method', label: 'Method' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'method', label: 'Method', kind: 'status' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -306,7 +306,7 @@ const goToCustomer = (customerId: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -359,7 +359,7 @@ const goToCustomer = (customerId: string) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

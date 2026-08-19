@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
@@ -144,14 +144,14 @@ const filtered = computed(() => {
 })
 
 const columns = [
-  { key: 'reading_date', label: 'Date' },
-  { key: 'tank', label: 'Tank' },
-  { key: 'level', label: 'Level' },
-  { key: 'reading_type', label: 'Type' },
-  { key: 'dip', label: 'Dip (L)' },
-  { key: 'system', label: 'System (L)' },
-  { key: 'variance', label: 'Variance' },
-  { key: 'status', label: 'Status' },
+  { key: 'reading_date', label: 'Date', kind: 'date' as const },
+  { key: 'tank', label: 'Tank', kind: 'text' as const },
+  { key: 'level', label: 'Level', kind: 'text' as const },
+  { key: 'reading_type', label: 'Type', kind: 'status' as const },
+  { key: 'dip', label: 'Dip (L)', kind: 'amount' as const },
+  { key: 'system', label: 'System (L)', kind: 'amount' as const },
+  { key: 'variance', label: 'Variance', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -410,7 +410,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           :pagination="pagination"
@@ -462,7 +462,7 @@ const goToShow = (row: any) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

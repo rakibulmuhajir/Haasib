@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -92,22 +92,22 @@ const formatMoney = (val: number, currency: string) =>
   formatMoneyText(val, currency || 'USD')
 
 const pendingColumns = [
-  { key: 'bill_number', label: t('billNumber') },
-  { key: 'vendor', label: t('vendor') },
-  { key: 'bill_date', label: t('date') },
-  { key: 'pending_lines', label: 'Pending Lines' },
-  { key: 'total_amount', label: t('total') },
-  { key: 'action', label: t('receiveStock') },
+  { key: 'bill_number', label: t('billNumber'), kind: 'ref' as const },
+  { key: 'vendor', label: t('vendor'), kind: 'text' as const },
+  { key: 'bill_date', label: t('date'), kind: 'date' as const },
+  { key: 'pending_lines', label: 'Pending Lines', kind: 'amount' as const },
+  { key: 'total_amount', label: t('total'), kind: 'amount' as const },
+  { key: 'action', label: t('receiveStock'), kind: 'text' as const },
 ]
 
 const receiptColumns = [
-  { key: 'receipt_date', label: 'Receipt Date' },
-  { key: 'bill_number', label: t('billNumber') },
-  { key: 'vendor', label: t('vendor') },
-  { key: 'lines_count', label: 'Lines' },
-  { key: 'total_received', label: 'Received Qty' },
-  { key: 'total_variance', label: 'Variance' },
-  { key: 'action', label: 'Actions' },
+  { key: 'receipt_date', label: 'Receipt Date', kind: 'date' as const },
+  { key: 'bill_number', label: t('billNumber'), kind: 'ref' as const },
+  { key: 'vendor', label: t('vendor'), kind: 'text' as const },
+  { key: 'lines_count', label: 'Lines', kind: 'amount' as const },
+  { key: 'total_received', label: 'Received Qty', kind: 'amount' as const },
+  { key: 'total_variance', label: 'Variance', kind: 'amount' as const },
+  { key: 'action', label: 'Actions', kind: 'text' as const },
 ]
 
 const pendingRows = computed(() =>
@@ -198,7 +198,7 @@ const varianceClass = (variance: number) => {
           :icon="Package"
         />
 
-        <DataTable
+        <LedgerRegister
           v-else
           :columns="pendingColumns"
           :data="pendingRows"
@@ -216,7 +216,7 @@ const varianceClass = (variance: number) => {
               {{ t('receiveStock') }}
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </TabsContent>
 
       <TabsContent value="received" class="space-y-4">
@@ -227,7 +227,7 @@ const varianceClass = (variance: number) => {
           :icon="PackageCheck"
         />
 
-        <DataTable
+        <LedgerRegister
           v-else
           :columns="receiptColumns"
           :data="receiptRows"
@@ -265,7 +265,7 @@ const varianceClass = (variance: number) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </TabsContent>
     </Tabs>
   </PageShell>

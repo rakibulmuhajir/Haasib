@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -105,12 +105,12 @@ const formatDate = (date: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'attendant', label: 'Attendant' },
-  { key: 'pump', label: 'Pump' },
-  { key: 'shift', label: 'Shift' },
-  { key: 'total', label: 'Total', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'attendant', label: 'Attendant', kind: 'text' as const },
+  { key: 'pump', label: 'Pump', kind: 'text' as const },
+  { key: 'shift', label: 'Shift', kind: 'status' as const },
+  { key: 'total', label: 'Total', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -269,7 +269,7 @@ const getStatusBadge = (status: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns">
+        <LedgerRegister :data="tableData" :columns="columns">
           <template #empty>
             <EmptyState
               title="No handovers"
@@ -321,7 +321,7 @@ const getStatusBadge = (status: string) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

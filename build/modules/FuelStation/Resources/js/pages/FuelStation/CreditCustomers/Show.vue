@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -92,10 +92,10 @@ const toggleBlock = () => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'type', label: 'Type' },
-  { key: 'description', label: 'Description' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'type', label: 'Type', kind: 'status' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
@@ -229,7 +229,7 @@ const goBack = () => {
           <CardDescription>Recent credit sales and collections.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <DataTable :data="tableData" :columns="columns">
+          <LedgerRegister :data="tableData" :columns="columns">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
                 No transactions yet
@@ -253,7 +253,7 @@ const goBack = () => {
                 />
               </span>
             </template>
-          </DataTable>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

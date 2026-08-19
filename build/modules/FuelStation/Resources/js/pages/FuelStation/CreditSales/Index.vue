@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -131,12 +131,12 @@ const formatDate = (dateStr: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'fuel', label: 'Fuel' },
-  { key: 'liters', label: 'Liters' },
-  { key: 'rate', label: 'Rate' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'fuel', label: 'Fuel', kind: 'text' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'rate', label: 'Rate', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
@@ -288,7 +288,7 @@ const goToCustomer = (customerId: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns">
+        <LedgerRegister :data="tableData" :columns="columns">
           <template #empty>
             <EmptyState
               title="No credit sales found"
@@ -335,7 +335,7 @@ const goToCustomer = (customerId: string) => {
               <MoneyText :amount="row._raw.amount" :currency="props.currency" />
             </span>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

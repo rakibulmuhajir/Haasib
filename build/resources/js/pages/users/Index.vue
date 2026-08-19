@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -186,30 +186,36 @@ const tableColumns = [
     key: 'name',
     label: 'User',
     sortable: true,
+    kind: 'text' as const,
   },
   {
     key: 'role',
     label: 'Role',
     sortable: true,
+    kind: 'text' as const,
   },
   {
     key: 'is_active',
     label: 'Status',
     sortable: true,
+    kind: 'status' as const,
   },
   {
     key: 'permissions',
     label: 'Permissions',
+    kind: 'text' as const,
   },
   {
     key: 'joined_at',
     label: 'Joined',
     sortable: true,
+    kind: 'date' as const,
   },
   {
     key: 'actions',
     label: 'Actions',
     class: 'text-right',
+    kind: 'text' as const,
   },
 ]
 </script>
@@ -256,7 +262,7 @@ const tableColumns = [
     </EmptyState>
 
     <!-- Users Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :data="filteredUsers"
       :columns="tableColumns"
@@ -346,7 +352,7 @@ const tableColumns = [
           </Button>
         </div>
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <!-- Role Assignment Dialog -->
     <Dialog v-model:open="roleDialogOpen">

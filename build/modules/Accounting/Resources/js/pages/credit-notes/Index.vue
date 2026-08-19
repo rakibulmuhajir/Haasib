@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import DataTable from '@/components/DataTable.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ import {
   Search,
   Receipt,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -118,11 +120,7 @@ const getStatusBadgeVariant = (status: string) => {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 
 const columns = [
@@ -234,9 +232,7 @@ const tableData = computed(() => {
                 <h3 class="font-semibold text-text-primary">{{ row.credit_note_number }}</h3>
                 <p class="text-sm text-text-secondary">{{ row.customer }}</p>
               </div>
-              <Badge :variant="getStatusBadgeVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+              <StatusBadge :status="row.status" />
             </div>
 
             <!-- Amount and date -->

@@ -19,6 +19,7 @@ import {
 import { toast } from 'vue-sonner'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -98,11 +99,7 @@ const isCompleted = computed(() => props.reconciliation.status === 'completed')
 const isCancelled = computed(() => props.reconciliation.status === 'cancelled')
 
 function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
+  return formatMoneyText(amount, currency)
 }
 
 function formatDate(dateStr: string | null) {

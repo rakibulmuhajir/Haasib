@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -76,6 +77,19 @@ const formatDate = (dateStr: string) => {
 const goBack = () => {
   router.get(`/${companySlug.value}/fuel/receipts`)
 }
+
+const lineColumns = [
+  { key: 'tank_name', label: 'Tank', kind: 'text' as const },
+  { key: 'fuel_name', label: 'Fuel', kind: 'text' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'rate', label: 'Rate', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+]
+
+const lineTotals = computed(() => ({
+  liters: `${formatCurrency(props.receipt.metadata.total_liters || 0)} L`,
+  amount: `${currency.value} ${formatCurrency(props.receipt.total_amount)}`,
+}))
 </script>
 
 <template>
@@ -103,11 +117,7 @@ const goBack = () => {
         <CardContent class="space-y-4">
           <div>
             <div class="text-sm text-muted-foreground">Status</div>
-            <Badge
-              :class="receipt.status === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'"
-            >
-              {{ receipt.status === 'posted' ? 'Posted' : receipt.status }}
-            </Badge>
+            <StatusBadge :status="receipt.status" />
           </div>
 
           <div>
@@ -163,41 +173,21 @@ const goBack = () => {
           <CardTitle class="text-base">Fuel Lines</CardTitle>
           <CardDescription>Details of fuel received per tank.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div class="rounded-lg border">
-            <table class="w-full">
-              <thead class="bg-muted/50">
-                <tr>
-                  <th class="text-left px-4 py-3 text-sm font-medium">Tank</th>
-                  <th class="text-left px-4 py-3 text-sm font-medium">Fuel</th>
-                  <th class="text-right px-4 py-3 text-sm font-medium">Liters</th>
-                  <th class="text-right px-4 py-3 text-sm font-medium">Rate</th>
-                  <th class="text-right px-4 py-3 text-sm font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(line, index) in receipt.metadata.lines" :key="index" class="border-t">
-                  <td class="px-4 py-3 font-medium">{{ line.tank_name }}</td>
-                  <td class="px-4 py-3">{{ line.fuel_name }}</td>
-                  <td class="px-4 py-3 text-right text-status-info font-medium">{{ formatCurrency(line.liters) }} L</td>
-                  <td class="px-4 py-3 text-right">{{ currency }} {{ formatCurrency(line.rate) }}</td>
-                  <td class="px-4 py-3 text-right font-medium">{{ currency }} {{ formatCurrency(line.amount) }}</td>
-                </tr>
-              </tbody>
-              <tfoot class="bg-muted/30">
-                <tr class="border-t">
-                  <td colspan="2" class="px-4 py-3 font-semibold">Total</td>
-                  <td class="px-4 py-3 text-right font-semibold text-status-info">
-                    {{ formatCurrency(receipt.metadata.total_liters || 0) }} L
-                  </td>
-                  <td class="px-4 py-3"></td>
-                  <td class="px-4 py-3 text-right font-semibold">
-                    {{ currency }} {{ formatCurrency(receipt.total_amount) }}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        <CardContent class="p-0">
+          <LedgerRegister
+            :data="receipt.metadata.lines || []"
+            :columns="lineColumns"
+            :totals="lineTotals"
+            key-field="tank_id"
+          >
+            <template #cell-tank_name="{ row }">{{ row.tank_name }}</template>
+            <template #cell-fuel_name="{ row }">{{ row.fuel_name }}</template>
+            <!-- Fuel arriving in a tank is the business working, not a
+                 notice. Ink, like every other ordinary movement. -->
+            <template #cell-liters="{ row }">{{ formatCurrency(row.liters) }} L</template>
+            <template #cell-rate="{ row }">{{ currency }} {{ formatCurrency(row.rate) }}</template>
+            <template #cell-amount="{ row }">{{ currency }} {{ formatCurrency(row.amount) }}</template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

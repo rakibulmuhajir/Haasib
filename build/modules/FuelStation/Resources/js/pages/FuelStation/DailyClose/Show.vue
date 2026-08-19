@@ -404,17 +404,19 @@ const unlockTransaction = () => {
               <span>Actual Closing Cash</span>
               <span>{{ currency }} {{ formatCurrency(metadata.closing_cash) }}</span>
             </div>
+            <!-- Over and short are both variances, and the label beside the
+                 figure already says which. Blue for one and red for the other
+                 said the till being over was merely informational. -->
             <div
               v-if="metadata.variance !== undefined && metadata.variance !== 0"
-              :class="[
-                'flex justify-between items-center py-2 font-semibold',
-                metadata.variance > 0 ? 'text-status-info' : 'text-status-critical'
-              ]"
+              class="flex justify-between items-center py-2 font-semibold text-status-attention"
             >
               <span>{{ metadata.variance > 0 ? 'Cash Over' : 'Cash Short' }}</span>
               <span>{{ currency }} {{ formatCurrency(Math.abs(metadata.variance)) }}</span>
             </div>
-            <div v-else-if="metadata.variance === 0" class="flex justify-between items-center py-2 text-status-success font-semibold">
+            <!-- A till that balanced is the ordinary outcome, not an achievement.
+                 The tick is the indicator; green on top of it is celebration. -->
+            <div v-else-if="metadata.variance === 0" class="flex justify-between items-center py-2 font-semibold">
               <span>Variance</span>
               <span class="flex items-center gap-1">
                 <CheckCircle class="h-4 w-4" />

@@ -28,6 +28,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { printBaseCss } from '@/lib/printSheet';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
@@ -53,6 +54,18 @@ const props = defineProps<{
         base_currency: string;
         logo_url?: string | null;
         helpline?: string | null;
+        /** Assembled server-side by CompanyLetterhead — the same identity
+            every invoice, bill and receipt in the application prints. */
+        letterhead?: {
+            name: string;
+            legalName?: string | null;
+            logoUrl?: string | null;
+            lines?: string[];
+            email?: string | null;
+            phone?: string | null;
+            taxId?: string | null;
+            taxIdLabel?: string | null;
+        } | null;
     };
     voucher: any;
     statuses: Record<string, string>;
@@ -232,138 +245,51 @@ const roomBeds = (stay: any) =>
             0,
     );
 
-const legacyVoucherHtml = () => {
-    const passengerRows = (props.voucher.passengers || [])
-        .map(
-            (passenger: any, index: number) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${escapeHtml(passenger.full_name)}</td>
-      <td>${escapeHtml(passenger.passport_number || 'No passport')}</td>
-      <td>${escapeHtml(passenger.nationality || '')}</td>
-      <td>${escapeHtml(passenger.date_of_birth || (passenger.imported_age !== null ? `Age ${passenger.imported_age}` : ''))}</td>
-      <td>${escapeHtml(passenger.visa_status || '')}</td>
-    </tr>
-  `,
-        )
+/**
+ * The same faces the application serves, from the same origin.
+ *
+ * A print window fetching a stylesheet from a CDN is the worst place for that
+ * dependency to live: the sheet is produced precisely when the network may not
+ * be there, and a failed fetch silently reprints the document in a fallback
+ * face. Only the latin subsets are declared -- everything a voucher prints is
+ * latin or is an image.
+ *
+ * Both voucher templates interpolate this, so the print window and the legacy
+ * one cannot drift into different typefaces.
+ */
+/**
+ * What is printed beneath the company's name.
+ *
+ * A voucher is presented at a hotel desk in Makkah and at an airport counter,
+ * by someone who may need to ring the issuer or show a registration number.
+ * Until the letterhead arrived it carried a name, a logo and a helpline, which
+ * is not enough to identify a company to anyone who does not already know it.
+ *
+ * The helpline stays as the fallback for the phone line, because it is the
+ * number the company chose to publish and companies that set one may not have
+ * filled in the contact field.
+ */
+const issuerLines = computed<string[]>(() => {
+    const letterhead = props.company.letterhead;
+
+    return [
+        letterhead?.legalName,
+        ...(letterhead?.lines ?? []),
+        letterhead?.email,
+        (letterhead?.phone ?? props.company.helpline)
+            ? `Helpline: ${letterhead?.phone ?? props.company.helpline}`
+            : null,
+        letterhead?.taxId
+            ? `${letterhead.taxIdLabel ?? 'Tax no.'} ${letterhead.taxId}`
+            : null,
+    ].filter((line): line is string => Boolean(line));
+});
+
+/** The same lines, as markup, for the two print templates. */
+const issuerLinesHtml = (className: string) =>
+    issuerLines.value
+        .map((line) => `<div class="${className}">${escapeHtml(line)}</div>`)
         .join('');
-
-    const hotelRows = (props.voucher.hotel_stays || [])
-        .map(
-            (stay: any) => `
-    <tr>
-      <td>${escapeHtml(stay.hotel_name)}</td>
-      <td>${escapeHtml(stay.city || '')}</td>
-      <td>${escapeHtml(`${stay.room_count || 1} ${stay.room_type || ''} (${roomBeds(stay)} beds each)`)}</td>
-      <td>${escapeHtml(formatDate(stay.check_in_date))}</td>
-      <td>${escapeHtml(formatDate(stay.check_out_date))}</td>
-      <td>${escapeHtml(stay.notes || '')}</td>
-    </tr>
-  `,
-        )
-        .join('');
-    const hotelSection = `
-  <h2>Hotel Stays</h2>
-  <table>
-    <thead><tr><th>Hotel</th><th>City</th><th>Room</th><th>Check-in</th><th>Checkout</th><th>Notes</th></tr></thead>
-    <tbody>${hotelRows || '<tr><td colspan="6">No hotel stays added.</td></tr>'}</tbody>
-  </table>`;
-    const transportRows = (props.voucher.group?.transport_items || [])
-        .map(
-            (item: any) => `
-    <tr>
-      <td>${escapeHtml(item.sector?.name || item.description || 'Transport')}</td>
-      <td>${escapeHtml(item.service?.name || item.service?.vehicle_type || '')}</td>
-      <td>${escapeHtml(formatDateTime(item.scheduled_at))}</td>
-      <td>${escapeHtml(item.driver?.name || item.service?.driver_name || '')}</td>
-      <td>${escapeHtml(item.driver?.phone || item.service?.driver_contact || '')}</td>
-    </tr>
-  `,
-        )
-        .join('');
-    const transportSection = includesTransport.value
-        ? `
-  <h2>Transport</h2>
-  <table>
-    <thead><tr><th>Sector</th><th>Vehicle</th><th>Schedule</th><th>Driver</th><th>Contact</th></tr></thead>
-    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
-  </table>`
-        : '';
-
-    const flightSection =
-        props.voucher.service_bundle === 'hotel'
-            ? ''
-            : `
-  <h2>Flights</h2>
-  <div class="grid">
-    <div class="box">
-      <strong>Onward</strong><br>
-      ${escapeHtml(props.voucher.onward_airline)} · ${escapeHtml(props.airlines[props.voucher.onward_airline] || '')} ${escapeHtml(props.voucher.onward_flight_number || '')}<br>
-      ${escapeHtml(props.voucher.onward_departure_city)} · ${escapeHtml(props.airportCities[props.voucher.onward_departure_city] || '')}
-      to ${escapeHtml(props.voucher.onward_arrival_city)} · ${escapeHtml(props.airportCities[props.voucher.onward_arrival_city] || '')}<br>
-      Depart ${escapeHtml(formatDateTime(props.voucher.onward_departure_at))}<br>
-      Arrive ${escapeHtml(formatDateTime(props.voucher.onward_arrival_at))}
-    </div>
-    <div class="box">
-      <strong>Return</strong><br>
-      ${escapeHtml(props.voucher.return_airline)} · ${escapeHtml(props.airlines[props.voucher.return_airline] || '')} ${escapeHtml(props.voucher.return_flight_number || '')}<br>
-      ${escapeHtml(props.voucher.return_departure_city)} · ${escapeHtml(props.airportCities[props.voucher.return_departure_city] || '')}
-      to ${escapeHtml(props.voucher.return_arrival_city)} · ${escapeHtml(props.airportCities[props.voucher.return_arrival_city] || '')}<br>
-      Depart ${escapeHtml(formatDateTime(props.voucher.return_departure_at))}<br>
-      Arrive ${escapeHtml(formatDateTime(props.voucher.return_arrival_at))}
-    </div>
-  </div>`;
-
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(props.voucher.voucher_number)} - Voucher</title>
-  <style>
-    body { color: #111827; font-family: Arial, sans-serif; margin: 32px; }
-    h1, h2 { margin: 0; }
-    h1 { font-size: 24px; }
-    h2 { border-bottom: 1px solid #d1d5db; font-size: 15px; margin-top: 28px; padding-bottom: 6px; }
-    .muted { color: #6b7280; }
-    .grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
-    .box { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; }
-    .label { color: #6b7280; font-size: 12px; margin-bottom: 4px; }
-    table { border-collapse: collapse; margin-top: 10px; width: 100%; }
-    th, td { border: 1px solid #d1d5db; font-size: 12px; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #f3f4f6; }
-    @media print { body { margin: 18mm; } }
-  </style>
-</head>
-<body>
-  <div style="text-align:center;margin-bottom:18px">
-    ${props.company.logo_url ? `<img src="${escapeHtml(props.company.logo_url)}" alt="Company logo" style="display:block;height:60px;max-width:180px;object-fit:contain;margin:0 auto 6px">` : ''}
-    <strong style="display:block;font-size:18px">${escapeHtml(props.company.name)}</strong>
-    ${props.company.helpline ? `<span class="muted">Helpline: ${escapeHtml(props.company.helpline)}</span>` : ''}
-  </div>
-  <h1>${escapeHtml(props.voucher.title)}</h1>
-  <div class="muted">${escapeHtml(props.voucher.voucher_number)} · ${escapeHtml(props.statuses[props.voucher.status] || props.voucher.status)} · ${escapeHtml(props.serviceBundles[props.voucher.service_bundle] || props.voucher.service_bundle)}</div>
-
-  <div class="grid">
-    <div class="box"><div class="label">Group</div>${escapeHtml(props.voucher.group?.group_number)} · ${escapeHtml(props.voucher.group?.name)}</div>
-    <div class="box"><div class="label">Agent</div>${escapeHtml(props.voucher.agent?.name || '')}</div>
-    <div class="box"><div class="label">Passengers</div>${(props.voucher.passengers || []).length}</div>
-    <div class="box"><div class="label">Created By</div>${escapeHtml(props.voucher.created_by?.name || 'System')}</div>
-  </div>
-
-  ${flightSection}
-
-  ${hotelSection}
-
-  ${transportSection}
-
-  <h2>Passengers</h2>
-  <table>
-    <thead><tr><th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB / Age</th><th>Status</th></tr></thead>
-    <tbody>${passengerRows}</tbody>
-  </table>
-</body>
-</html>`;
-};
 
 const voucherHtml = () => {
     const agent = props.voucher.agent;
@@ -445,10 +371,11 @@ const voucherHtml = () => {
 <html><head><meta charset="utf-8">
 <title>${escapeHtml(props.voucher.voucher_number)} - Voucher</title>
 <style>
-@page { margin: 10mm; size: A4; }
-* { box-sizing: border-box; }
-body { color: #111; font-family: Arial, sans-serif; font-size: 9px; line-height: 1.25; margin: 0; }
-table { border-collapse: collapse; width: 100%; }
+${printBaseCss()}
+
+/* A voucher's own arrangement: three parties across the head -- the agent who
+   sold it, us, and whoever is carrying it out -- then a strip of the five
+   facts a desk clerk checks first. Everything else is the shared sheet. */
 .masthead { margin-bottom: 5px; table-layout: fixed; }
 .masthead td { border: 0; padding: 0 5px; text-align: center; vertical-align: top; width: 33.333%; }
 .masthead td:first-child { padding-left: 0; text-align: left; }
@@ -456,23 +383,15 @@ table { border-collapse: collapse; width: 100%; }
 .party-logo { display: block; height: 40px; margin-bottom: 3px; max-width: 135px; object-fit: contain; }
 .masthead td:nth-child(2) .party-logo { margin-left: auto; margin-right: auto; }
 .masthead td:last-child .party-logo { margin-left: auto; }
-.party-name { font-size: 10px; font-weight: 700; }
-.main-name { color: #173d85; font-size: 15px; font-weight: 700; }
-.secondary { color: #555; font-size: 8px; }
-.document-title { border-bottom: 2px solid #111; border-top: 1px solid #111; font-size: 16px; font-weight: 700; letter-spacing: .4px; margin: 4px 0; padding: 3px; text-align: center; text-transform: uppercase; }
+.party-name { font-family: "Zilla Slab", Georgia, serif; font-size: 10px; font-weight: 700; }
+.main-name { color: var(--mark); font-family: "Zilla Slab", Georgia, serif; font-size: 15px; font-weight: 700; }
 .identity { margin-bottom: 4px; }
 .identity td { padding: 3px 5px; }
 .focus { font-size: 11px; font-weight: 700; }
-.label { color: #555; display: block; font-size: 7px; text-transform: uppercase; }
-.section-title { background: #e5e5e5; border: 1px solid #333; font-size: 10px; font-weight: 700; margin-top: 5px; padding: 2px 4px; text-align: center; text-transform: uppercase; }
-th, td { border: 1px solid #555; font-size: 8px; padding: 3px 4px; text-align: left; vertical-align: top; }
-th { background: #f2f2f2; font-weight: 700; }
-.primary { font-weight: 700; }
-.footer-note { border-top: 1px solid #555; font-size: 8px; margin-top: 6px; padding-top: 4px; }
 </style></head><body>
 <table class="masthead"><tr>
     <td>${logo(agent, 'Agent logo')}<div class="party-name">${escapeHtml(agent?.name || 'Agent')}</div><div class="secondary">${escapeHtml([agent?.city, agent?.country].filter(Boolean).join(', '))}</div><div class="secondary">${escapeHtml(agent?.phone || '')}</div></td>
-    <td>${logo(props.company, 'Company logo')}<div class="main-name">${escapeHtml(props.company.name)}</div>${props.company.helpline ? `<div class="secondary">Helpline: ${escapeHtml(props.company.helpline)}</div>` : ''}</td>
+    <td>${logo(props.company, 'Company logo')}<div class="main-name">${escapeHtml(props.company.name)}</div>${issuerLinesHtml('secondary')}</td>
     <td>${logo(partner, `${partnerRole} logo`)}<div class="party-name">${escapeHtml(partner?.name || partnerRole)}</div><div class="secondary">${escapeHtml(partnerRole)}</div><div class="secondary">${escapeHtml([partner?.city, partner?.phone].filter(Boolean).join(' | '))}</div></td>
 </tr></table>
 <div class="document-title">${escapeHtml(props.voucher.title || 'Travel Voucher')}</div>
@@ -492,8 +411,6 @@ ${flights}
 ${props.voucher.notes ? `<div class="footer-note"><strong>Special instructions:</strong> ${escapeHtml(props.voucher.notes)}</div>` : ''}
 </body></html>`;
 };
-
-void legacyVoucherHtml;
 
 const printVoucher = () => {
     const printFrame = document.createElement('iframe');
@@ -656,8 +573,12 @@ const exportVoucher = () => {
                 class="mb-2 max-h-20 max-w-48 object-contain"
             />
             <div class="text-xl font-semibold">{{ company.name }}</div>
-            <div v-if="company.helpline" class="text-sm text-muted-foreground">
-                Helpline: {{ company.helpline }}
+            <div
+                v-for="line in issuerLines"
+                :key="line"
+                class="text-sm text-muted-foreground"
+            >
+                {{ line }}
             </div>
         </div>
 

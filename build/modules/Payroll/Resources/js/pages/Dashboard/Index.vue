@@ -3,12 +3,13 @@ import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Banknote, Calendar, CheckCircle, FileText, UserCog, WalletCards } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -72,11 +73,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const formatCurrency = (amount: number, currency = props.company.base_currency) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'PKR',
-  }).format(amount || 0)
+  return formatMoneyText(amount || 0, currency || 'PKR')
 }
 
 const formatDate = (date: string | null | undefined) => formatDateTime(date, { mode: 'date', fallback: '-' })
@@ -114,16 +111,6 @@ const advanceRows = computed(() => props.employeesWithAdvances.map((employee) =>
   employee: `${employee.name} · ${employee.employee_number}`,
   outstanding: formatCurrency(employee.outstanding_advances),
 })))
-
-const statusVariant = (status: string) => {
-  const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    approved: 'secondary',
-    paid: 'success',
-    cancelled: 'destructive',
-  }
-  return variants[status] || 'secondary'
-}
 
 const accountRows = computed(() => [
   { label: 'Salary expense', account: props.accounts.salary_expense, hint: 'Payroll approval increases this expense.' },
@@ -224,9 +211,7 @@ const runMonthlyPayroll = () => {
         <CardContent>
           <DataTable :columns="payslipColumns" :data="payslipRows" @row-click="(row) => router.get(`/${company.slug}/payslips/${row.id}`)">
             <template #cell-status="{ row }">
-              <Badge :variant="statusVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+              <StatusBadge :status="row.status" />
             </template>
           </DataTable>
         </CardContent>

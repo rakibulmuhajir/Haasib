@@ -12,6 +12,7 @@ import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { FileText, Package, Plus, Search } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -93,11 +94,7 @@ const columns = [
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })

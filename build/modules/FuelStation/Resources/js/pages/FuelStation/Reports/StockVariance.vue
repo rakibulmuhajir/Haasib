@@ -2,23 +2,16 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { AlertTriangle, ClipboardCheck, PackageCheck, TrendingUp, Warehouse } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 
 interface Company {
   id: string
@@ -112,17 +105,11 @@ const productId = ref(props.filters.product_id)
 const varianceType = ref(props.filters.variance_type)
 const claimStatus = ref(props.filters.claim_status)
 
-const symbol = computed(() => currencySymbol(props.company.base_currency))
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
   { title: 'Stock Variance & Claims', href: `/${props.company.slug}/fuel/reports/stock-variance` },
 ])
-
-const money = (amount: number) => `${symbol.value} ${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-}).format(amount || 0)}`
 
 const qty = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
   minimumFractionDigits: decimals,
@@ -132,12 +119,6 @@ const qty = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
 const human = (value: string | null | undefined) => {
   if (!value) return '—'
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
-}
-
-const badgeVariant = (status: string | null) => {
-  if (status === 'received' || status === 'posted') return 'default'
-  if (status === 'pending' || status === 'supplier_claim') return 'secondary'
-  return 'outline'
 }
 
 const applyFilters = () => {
@@ -186,6 +167,28 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
 
   applyFilters()
 }
+
+const physicalColumns = [
+  { key: 'date_label', label: 'Date', kind: 'date' as const },
+  { key: 'tank_product', label: 'Tank / Product', kind: 'text' as const },
+  { key: 'expected_liters', label: 'Expected', kind: 'amount' as const },
+  { key: 'dip_liters', label: 'Dip', kind: 'amount' as const },
+  { key: 'variance_liters', label: 'Variance', kind: 'amount' as const },
+  { key: 'value', label: 'Value', kind: 'amount' as const },
+  { key: 'variance_reason', label: 'Reason', kind: 'text' as const },
+  { key: 'status', label: 'Posting', kind: 'status' as const },
+]
+
+const claimColumns = [
+  { key: 'date_label', label: 'Date', kind: 'date' as const },
+  { key: 'vendor_bill', label: 'Vendor / Bill', kind: 'text' as const },
+  { key: 'product', label: 'Product', kind: 'text' as const },
+  { key: 'expected_quantity', label: 'Expected', kind: 'amount' as const },
+  { key: 'received_quantity', label: 'Received', kind: 'amount' as const },
+  { key: 'variance_quantity', label: 'Short', kind: 'amount' as const },
+  { key: 'claim_amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'claim_status', label: 'Status', kind: 'status' as const },
+]
 </script>
 
 <template>
@@ -294,7 +297,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <AlertTriangle class="h-4 w-4 text-status-critical" />
-            {{ money(totals.physical_loss_value) }}
+            <MoneyText :amount="totals.physical_loss_value" :currency="company.base_currency" :fraction-digits="0" />
           </CardContent>
         </Card>
 
@@ -305,14 +308,14 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <PackageCheck class="h-4 w-4 text-status-success" />
-            {{ money(totals.physical_gain_value) }}
+            <MoneyText :amount="totals.physical_gain_value" :currency="company.base_currency" :fraction-digits="0" />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Pending supplier claims</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.pending_claim_amount) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.pending_claim_amount" :currency="company.base_currency" :fraction-digits="0" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <ClipboardCheck class="h-4 w-4 text-status-attention" />
@@ -323,11 +326,11 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Final delivery loss</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.final_loss_amount) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.final_loss_amount" :currency="company.base_currency" :fraction-digits="0" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <Warehouse class="h-4 w-4 text-muted-foreground" />
-            Claims received {{ money(totals.received_claim_amount) }}
+            Claims received <MoneyText :amount="totals.received_claim_amount" :currency="company.base_currency" :fraction-digits="0" />
           </CardContent>
         </Card>
       </div>
@@ -338,56 +341,45 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           <CardDescription>Difference between expected stock and latest posted dip readings.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="physicalRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No tank dip variance found for this range.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Tank / Product</TableHead>
-                  <TableHead class="text-right">Expected</TableHead>
-                  <TableHead class="text-right">Dip</TableHead>
-                  <TableHead class="text-right">Variance</TableHead>
-                  <TableHead class="text-right">Value</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Posting</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in physicalRows" :key="row.id">
-                  <TableCell>
-                    <div class="font-medium">{{ row.date_label }}</div>
-                    <div class="text-xs text-muted-foreground">{{ row.time_label }}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div class="font-medium">{{ row.tank_name }}</div>
-                    <div class="text-xs text-muted-foreground">{{ row.product_name }} · {{ human(row.reading_type) }}</div>
-                  </TableCell>
-                  <TableCell class="text-right">{{ qty(row.expected_liters) }} L</TableCell>
-                  <TableCell class="text-right">{{ qty(row.dip_liters) }} L</TableCell>
-                  <TableCell class="text-right">
-                    <span :class="row.variance_type === 'loss' ? 'text-status-critical' : 'text-status-success'">
-                      {{ row.variance_type === 'loss' ? '-' : '+' }}{{ qty(Math.abs(row.variance_liters)) }} L
-                    </span>
-                  </TableCell>
-                  <TableCell class="text-right">{{ money(row.value) }}</TableCell>
-                  <TableCell>{{ human(row.variance_reason) }}</TableCell>
-                  <TableCell>
-                    <Badge :variant="badgeVariant(row.status)">{{ human(row.status) }}</Badge>
-                    <Link
-                      v-if="row.journal_entry_id"
-                      :href="`/${company.slug}/journals/${row.journal_entry_id}`"
-                      class="ml-2 text-xs text-primary underline-offset-4 hover:underline"
-                    >
-                      Journal
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="physicalRows" :columns="physicalColumns">
+            <template #empty>No tank dip variance found for this range.</template>
+
+            <template #cell-date_label="{ row }">
+              <div class="font-medium">{{ row.date_label }}</div>
+              <div class="text-xs text-muted-foreground">{{ row.time_label }}</div>
+            </template>
+
+            <template #cell-tank_product="{ row }">
+              <div class="font-medium">{{ row.tank_name }}</div>
+              <div class="text-xs text-muted-foreground">{{ row.product_name }} · {{ human(row.reading_type) }}</div>
+            </template>
+
+            <template #cell-expected_liters="{ row }">{{ qty(row.expected_liters) }} L</template>
+            <template #cell-dip_liters="{ row }">{{ qty(row.dip_liters) }} L</template>
+
+            <template #cell-variance_liters="{ row }">
+              <!-- A tank reading over expectation is not good news; it means the
+                   dip and the meter disagree, same as a reading under it.
+                   The sign says which way, the colour says look at it. -->
+              <span class="text-status-attention">
+                {{ row.variance_type === 'loss' ? '-' : '+' }}{{ qty(Math.abs(row.variance_liters)) }} L
+              </span>
+            </template>
+
+            <template #cell-value="{ row }"><MoneyText :amount="row.value" :currency="company.base_currency" :fraction-digits="0" /></template>
+            <template #cell-variance_reason="{ row }">{{ human(row.variance_reason) }}</template>
+
+            <template #cell-status="{ row }">
+              <StatusBadge :status="row.status" />
+              <Link
+                v-if="row.journal_entry_id"
+                :href="`/${company.slug}/journals/${row.journal_entry_id}`"
+                class="ml-2 text-xs text-primary underline-offset-4 hover:underline"
+              >
+                Journal
+              </Link>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -397,65 +389,52 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           <CardDescription>Short received quantities from purchase receipts, split into supplier claims and final losses.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="claimRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No delivery shortage claims or final losses found for this range.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vendor / Bill</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead class="text-right">Expected</TableHead>
-                  <TableHead class="text-right">Received</TableHead>
-                  <TableHead class="text-right">Short</TableHead>
-                  <TableHead class="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in claimRows" :key="row.id">
-                  <TableCell>{{ row.date_label }}</TableCell>
-                  <TableCell>
-                    <div class="font-medium">{{ row.vendor_name }}</div>
-                    <Link
-                      v-if="row.bill_id"
-                      :href="`/${company.slug}/bills/${row.bill_id}`"
-                      class="text-xs text-primary underline-offset-4 hover:underline"
-                    >
-                      {{ row.bill_number ?? 'Open bill' }}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <div class="font-medium">{{ row.product_name }}</div>
-                    <div class="text-xs text-muted-foreground">{{ row.warehouse_name }}</div>
-                  </TableCell>
-                  <TableCell class="text-right">{{ qty(row.expected_quantity) }}</TableCell>
-                  <TableCell class="text-right">{{ qty(row.received_quantity) }}</TableCell>
-                  <TableCell class="text-right text-status-critical">{{ qty(Math.abs(row.variance_quantity)) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.claim_amount) }}</TableCell>
-                  <TableCell>
-                    <div class="flex flex-wrap items-center gap-2">
-                      <Badge :variant="badgeVariant(row.claim_status ?? row.variance_treatment)">
-                        {{ row.variance_treatment === 'final_loss' ? 'Final loss' : human(row.claim_status) }}
-                      </Badge>
-                      <Link
-                        v-if="row.claim_received_transaction_id"
-                        :href="`/${company.slug}/journals/${row.claim_received_transaction_id}`"
-                        class="text-xs text-primary underline-offset-4 hover:underline"
-                      >
-                        {{ row.claim_received_transaction_number ?? 'Claim journal' }}
-                      </Link>
-                    </div>
-                    <div v-if="row.claim_received_at" class="mt-1 text-xs text-muted-foreground">
-                      Received {{ row.claim_received_at }}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="claimRows" :columns="claimColumns">
+            <template #empty>No delivery shortage claims or final losses found for this range.</template>
+
+            <template #cell-date_label="{ row }">{{ row.date_label }}</template>
+
+            <template #cell-vendor_bill="{ row }">
+              <div class="font-medium">{{ row.vendor_name }}</div>
+              <Link
+                v-if="row.bill_id"
+                :href="`/${company.slug}/bills/${row.bill_id}`"
+                class="text-xs text-primary underline-offset-4 hover:underline"
+              >
+                {{ row.bill_number ?? 'Open bill' }}
+              </Link>
+            </template>
+
+            <template #cell-product="{ row }">
+              <div class="font-medium">{{ row.product_name }}</div>
+              <div class="text-xs text-muted-foreground">{{ row.warehouse_name }}</div>
+            </template>
+
+            <template #cell-expected_quantity="{ row }">{{ qty(row.expected_quantity) }}</template>
+            <template #cell-received_quantity="{ row }">{{ qty(row.received_quantity) }}</template>
+
+            <!-- The column is headed "Short". Painting every row of it red says
+                 nothing the heading has not already said. -->
+            <template #cell-variance_quantity="{ row }">{{ qty(Math.abs(row.variance_quantity)) }}</template>
+
+            <template #cell-claim_amount="{ row }"><MoneyText :amount="row.claim_amount" :currency="company.base_currency" :fraction-digits="0" /></template>
+
+            <template #cell-claim_status="{ row }">
+              <div class="flex flex-wrap items-center gap-2">
+                <StatusBadge :status="row.variance_treatment === 'final_loss' ? 'final_loss' : row.claim_status" />
+                <Link
+                  v-if="row.claim_received_transaction_id"
+                  :href="`/${company.slug}/journals/${row.claim_received_transaction_id}`"
+                  class="text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  {{ row.claim_received_transaction_number ?? 'Claim journal' }}
+                </Link>
+              </div>
+              <div v-if="row.claim_received_at" class="mt-1 text-xs text-muted-foreground">
+                Received {{ row.claim_received_at }}
+              </div>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

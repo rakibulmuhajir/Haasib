@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, Search, Banknote } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface VendorCardSale {
   id: string
@@ -94,13 +95,7 @@ const filteredPendingSales = computed(() => {
 })
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const formatDate = (date: string) => {

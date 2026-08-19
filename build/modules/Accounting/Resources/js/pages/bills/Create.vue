@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { EntitySearch, QuickAddModal } from '@/components/forms'
+import RelatedActions from '@/components/RelatedActions.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -156,11 +158,7 @@ const totals = computed(() => {
 })
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, form.currency || 'USD')
 }
 
 const addLine = () => form.line_items.push(lineItemTemplate())
@@ -531,5 +529,13 @@ const handleSubmit = () => {
         </CardContent>
       </Card>
     </form>
+
+    <!-- The vendor action opens the same QuickAddModal the field does, so the
+         bill being entered survives the detour. -->
+    <RelatedActions
+      screen="bill.create"
+      :slug="company.slug"
+      @select="(key) => key === 'vendor.create' && handleQuickAddClick('')"
+    />
   </PageShell>
 </template>

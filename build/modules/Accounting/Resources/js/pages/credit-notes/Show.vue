@@ -2,9 +2,12 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentIssuer, DocumentLine } from '@/components/LedgerDocument.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
   DropdownMenu,
@@ -18,9 +21,6 @@ import {
   ArrowLeft,
   Edit,
   MoreHorizontal,
-  Receipt,
-  Calendar,
-  FileText,
   Send,
 } from 'lucide-vue-next'
 
@@ -57,6 +57,7 @@ interface CompanyRef {
   id: string
   name: string
   slug: string
+  letterhead: DocumentIssuer
 }
 
 const props = defineProps<{
@@ -71,34 +72,50 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.credit_note.credit_note_number },
 ])
 
-const getStatusBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'draft':
-      return 'secondary'
-    case 'issued':
-      return 'default'
-    case 'partial':
-      return 'warning'
-    case 'applied':
-      return 'success'
-    case 'void':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
-}
-
 const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })
 }
+
+/**
+ * A credit note is a document, and until now it was a Card with a big green
+ * number in it. Green said "good news"; a credit note is a reduction, and the
+ * grammar reserves colour for whether something needs attention, never for
+ * which direction money moved. It goes through LedgerDocument for the same
+ * reason invoices and bills do -- it is the same sheet with different words.
+ *
+ * There are no line items to show: a credit note carries one amount and the
+ * reason for it, so the reason IS the line. Quantities and unit rates are
+ * suppressed rather than padded with a quantity of one.
+ */
+const issuer = computed(() => props.company.letterhead)
+
+const creditTo = computed(() => ({
+  name: props.credit_note.customer.name,
+  email: props.credit_note.customer.email,
+}))
+
+const documentDates = computed(() =>
+  [
+    { label: 'Issued', value: formatDate(props.credit_note.credit_date) },
+    {
+      label: 'Against',
+      value: props.credit_note.invoice?.invoice_number ?? null,
+    },
+  ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
+)
+
+const documentLines = computed<DocumentLine[]>(() => [
+  {
+    description: props.credit_note.reason || 'Credit',
+    amount: props.credit_note.amount,
+  },
+])
+
+const overprint = computed(() => {
+  if (['void', 'cancelled', 'reversed'].includes(props.credit_note.status)) return 'Void'
+  if (props.credit_note.status === 'draft') return 'Draft'
+  return null
+})
 
 const isEditable = computed(() => {
   return ['draft', 'issued'].includes(props.credit_note.status)
@@ -141,67 +158,25 @@ const isEditable = computed(() => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Credit Note Content -->
       <div class="lg:col-span-2 space-y-6">
-        <!-- Credit Note Header -->
-        <Card>
-          <CardContent class="pt-6">
-            <div class="flex justify-between items-start mb-6">
-              <div>
-                <h1 class="text-2xl font-bold">Credit Note {{ credit_note.credit_note_number }}</h1>
-                <p class="text-muted-foreground">Date: {{ formatDate(credit_note.credit_date) }}</p>
-              </div>
-              <div class="text-right">
-                <Badge :variant="getStatusBadgeVariant(credit_note.status)" class="mb-2">
-                  {{ credit_note.status }}
-                </Badge>
-                <div class="text-2xl font-bold text-status-success">
-                  {{ formatCurrency(credit_note.amount, credit_note.base_currency) }}
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-6">
-              <div>
-                <h3 class="font-semibold mb-2">Customer:</h3>
-                <div>
-                  <p class="font-medium">{{ credit_note.customer.name }}</p>
-                  <p v-if="credit_note.customer.email">{{ credit_note.customer.email }}</p>
-                </div>
-              </div>
-              <div class="text-right">
-                <p v-if="credit_note.invoice" class="mb-1">
-                  <span class="font-medium">Applied to:</span> {{ credit_note.invoice.invoice_number }}
-                </p>
-                <p class="mb-1">
-                  <span class="font-medium">Currency:</span> {{ credit_note.base_currency }}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Reason -->
-        <Card>
-          <CardHeader>
-            <CardTitle>Reason for Credit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="p-4 bg-muted/50 rounded-lg">
-              <p class="font-medium">{{ credit_note.reason }}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Terms -->
-        <Card v-if="credit_note.terms">
-          <CardHeader>
-            <CardTitle>Terms and Conditions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="prose prose-sm max-w-none">
-              <p>{{ credit_note.terms }}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <LedgerDocument
+          doc-type="Credit Note"
+          :doc-number="credit_note.credit_note_number"
+          :issuer="issuer"
+          :bill-to="creditTo"
+          bill-to-label="Credit to"
+          :dates="documentDates"
+          :lines="documentLines"
+          grand-total-label="Credit total"
+          :grand-total-amount="credit_note.amount"
+          :currency="credit_note.base_currency"
+          locale="en-PK"
+          :overprint="overprint"
+          :show-quantity="false"
+        >
+          <template v-if="credit_note.terms" #terms>
+            <p dir="auto">{{ credit_note.terms }}</p>
+          </template>
+        </LedgerDocument>
 
         <!-- Notes -->
         <Card v-if="credit_note.notes">
@@ -223,12 +198,16 @@ const isEditable = computed(() => {
           </CardHeader>
           <CardContent class="space-y-3">
             <div class="flex justify-between">
-              <span>Credit Amount:</span>
-              <span class="font-bold text-status-success">{{ formatCurrency(credit_note.amount, credit_note.base_currency) }}</span>
+              <span>Credit amount</span>
+              <MoneyText
+                :amount="credit_note.amount"
+                :currency="credit_note.base_currency"
+                locale="en-PK"
+              />
             </div>
             <div class="flex justify-between text-sm">
-              <span>Status:</span>
-              <span>{{ credit_note.status }}</span>
+              <span>Status</span>
+              <StatusBadge :status="credit_note.status" explain />
             </div>
             <div v-if="credit_note.invoice" class="flex justify-between text-sm">
               <span>Applied to:</span>

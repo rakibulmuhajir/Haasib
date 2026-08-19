@@ -11,10 +11,12 @@
 | every skin. A skin restates colour, and may adjust radius, type and default
 | density. It does not get to re-decide what red means.
 |
-| This file is the single registry. Adding a skin means: one entry here, one
-| token block in resources/css/app.css under [data-skin="your-id"], and
-| nothing else. The blade template reads this list to apply the skin before
-| first paint, and it is shared to the front end so the picker can offer it.
+| There is one skin. The stock shadcn theme used to be registered here as
+| 'default' and was the default; it was removed deliberately. A second theme is
+| somewhere a half-converted page can hide — "it looks fine on default" — and
+| the point of this pass is that no element renders undecided. The machinery
+| stays because adding a skin later should not mean rebuilding it: one entry
+| here plus one token block under [data-skin="your-id"] in app.css.
 |
 | `ground` is the page background applied inline in <head>, before the
 | stylesheet loads. It exists so a page does not render on white and then
@@ -26,21 +28,13 @@
 return [
 
     /*
-    | The skin applied when a visitor has expressed no preference. 'default' is
-    | the stock theme and has no [data-skin] attribute at all.
+    | The skin every page renders in. Applied as a static attribute on <html>
+    | in app.blade.php — not read from localStorage, because there is nothing
+    | to choose between.
     */
-    'default' => 'default',
+    'default' => 'ledger',
 
     'available' => [
-
-        'default' => [
-            'label' => 'Default',
-            'description' => 'The stock theme.',
-            'ground' => [
-                'light' => 'oklch(1 0 0)',
-                'dark' => 'oklch(0.145 0 0)',
-            ],
-        ],
 
         'ledger' => [
             'label' => 'Ledger',

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDateTime } from '@/lib/datetime'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard, Eye, Plus } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -77,11 +78,7 @@ const columns = [
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const formatPaymentMethod = (method: string) => {
   switch (method) {

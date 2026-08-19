@@ -1,10 +1,27 @@
 <script setup lang="ts">
+/**
+ * An invoice, shown as an invoice.
+ *
+ * This page used to be three Cards — a header card, a hand-built line-item
+ * grid, and a stack of TotalRows in a sidebar. It held the same facts, but it
+ * did not look like the thing the customer receives, so what the sender saw and
+ * what the recipient saw were two different artefacts.
+ *
+ * Now the page IS the document. LedgerDocument decides the letterhead, the logo
+ * position, the party blocks, the line table and the reckoning; this file only
+ * says which of the invoice's fields go where. Everything that is *about* the
+ * document rather than *on* it — the actions, the history, the currency
+ * conversion — sits beside it in the rail.
+ */
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
+import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentIssuer, DocumentLine, DocumentTotal } from '@/components/LedgerDocument.vue'
 import MoneyText from '@/components/MoneyText.vue'
+import MetaChip from '@/components/MetaChip.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import TotalRow from '@/components/TotalRow.vue'
 import DefinitionList from '@/components/DefinitionList.vue'
 import Explain from '@/components/Explain.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -45,6 +62,7 @@ interface Customer {
   email?: string
   phone?: string
   billing_address?: Record<string, unknown>
+  tax_number?: string
 }
 
 interface Invoice {
@@ -74,10 +92,15 @@ interface Invoice {
   created_at: string
 }
 
+/**
+ * `letterhead` is assembled server-side by CompanyLetterhead, so every document
+ * in the application names its issuer from one place and one set of rules.
+ */
 interface CompanyRef {
   id: string
   name: string
   slug: string
+  letterhead: DocumentIssuer
 }
 
 const props = defineProps<{
@@ -124,15 +147,80 @@ const isForeign = computed(
 
 const inBase = (amount: number) => amount * (props.invoice.exchange_rate || 1)
 
-const details = computed(() => [
-  { term: 'Reference', value: props.invoice.reference },
-  { term: 'Invoice date', value: formatDate(props.invoice.invoice_date) },
-  { term: 'Due date', value: formatDate(props.invoice.due_date) },
-  {
-    term: 'Payment terms',
-    value: props.invoice.payment_terms ? `${props.invoice.payment_terms} days` : null,
-  },
-])
+/**
+ * An address arrives as a loose object whose shape varies by how it was
+ * captured. Pull the parts a postal address is made of, in the order they are
+ * written, and drop whatever is absent rather than printing an empty line.
+ */
+const ADDRESS_PARTS = ['line1', 'line2', 'street', 'city', 'state', 'postal_code', 'country']
+
+const addressLines = (address?: Record<string, unknown> | null): string[] => {
+  if (!address) return []
+  return ADDRESS_PARTS.map((part) => address[part])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+}
+
+/* The issuer arrives assembled. It used to be built here from four company
+   fields, three of which the controller never sent — so the letterhead was a
+   name and nothing else on every invoice ever rendered. */
+const issuer = computed(() => props.company.letterhead)
+
+const billTo = computed(() => ({
+  name: props.invoice.customer.name,
+  lines: addressLines(props.invoice.customer.billing_address),
+  email: props.invoice.customer.email,
+  phone: props.invoice.customer.phone,
+  taxId: props.invoice.customer.tax_number,
+}))
+
+const documentDates = computed(() =>
+  [
+    { label: 'Issued', value: formatDate(props.invoice.invoice_date) },
+    { label: 'Due', value: formatDate(props.invoice.due_date) },
+    {
+      label: 'Terms',
+      value: props.invoice.payment_terms ? `${props.invoice.payment_terms} days` : null,
+    },
+    { label: 'Reference', value: props.invoice.reference ?? null },
+  ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
+)
+
+const documentLines = computed<DocumentLine[]>(() =>
+  props.invoice.line_items.map((item) => ({
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: item.unit_price,
+    amount: item.total,
+  })),
+)
+
+/* Everything between the lines and the answer. Zero-value rows are left out —
+   a discount of nothing is not a fact about this invoice. */
+const documentTotals = computed<DocumentTotal[]>(() => {
+  const totals: DocumentTotal[] = [{ label: 'Subtotal', amount: props.invoice.subtotal }]
+  if (props.invoice.discount_amount > 0) {
+    totals.push({ label: 'Discount', amount: props.invoice.discount_amount, sign: '−' })
+  }
+  if (props.invoice.tax_amount > 0) {
+    totals.push({ label: 'Sales tax', amount: props.invoice.tax_amount, sign: '+' })
+  }
+  if (props.invoice.paid_amount > 0) {
+    totals.push({ label: 'Paid', amount: props.invoice.paid_amount, sign: '−', muted: true })
+  }
+  return totals
+})
+
+/**
+ * Stamped across the sheet when the document's standing is in question. A paid
+ * invoice gets one too — it is the difference between a bill and a receipt, and
+ * the reader should not have to work it out from the balance.
+ */
+const overprint = computed(() => {
+  if (['void', 'cancelled', 'reversed'].includes(props.invoice.status)) return 'Void'
+  if (props.invoice.status === 'draft') return 'Draft'
+  if (props.invoice.status === 'paid' || props.invoice.balance === 0) return 'Paid'
+  return null
+})
 
 const history = computed(() =>
   [
@@ -142,6 +230,10 @@ const history = computed(() =>
     { term: 'Paid', value: formatDate(props.invoice.paid_at) },
   ].filter((item) => item.value),
 )
+
+/* `window` is not in template scope, and the browser's own print dialog is
+   also the "save as PDF" dialog — one control, both jobs. */
+const printDocument = () => window.print()
 
 const sendInvoice = () => router.post(`/${props.company.slug}/invoices/${props.invoice.id}/send`)
 const duplicateInvoice = () =>
@@ -207,147 +299,42 @@ const voidInvoice = () => {
       </Button>
     </template>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <div class="space-y-6 lg:col-span-2">
+    <div class="page">
+      <!-- The document itself, exactly as the customer will receive it. -->
+      <LedgerDocument
+        doc-type="Invoice"
+        :doc-number="invoice.invoice_number"
+        :issuer="issuer"
+        :bill-to="billTo"
+        :dates="documentDates"
+        :lines="documentLines"
+        :totals="documentTotals"
+        grand-total-label="Invoice total"
+        :grand-total-amount="invoice.total_amount"
+        amount-due-label="Still owed"
+        :amount-due-amount="invoice.balance"
+        :currency="invoice.currency"
+        locale="en-PK"
+        :overprint="overprint"
+      >
+        <template v-if="invoice.notes" #terms>
+          <p dir="auto">{{ invoice.notes }}</p>
+        </template>
+      </LedgerDocument>
+
+      <!-- The rail: what is true *about* this invoice but does not belong on
+           the sheet the customer receives. -->
+      <aside class="rail">
         <Card>
-          <CardContent class="pt-6">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div class="min-w-0">
-                <div class="reference">{{ invoice.invoice_number }}</div>
-                <p class="mt-1 text-lg" dir="auto">{{ invoice.customer.name }}</p>
-                <p v-if="invoice.customer.email" class="text-sm text-text-secondary">
-                  {{ invoice.customer.email }}
-                </p>
-                <p v-if="invoice.customer.phone" class="text-sm text-text-secondary">
-                  {{ invoice.customer.phone }}
-                </p>
-              </div>
-
-              <div class="text-right">
-                <StatusBadge :status="displayStatus" explain />
-                <!-- The one place a number is allowed to raise its voice, and
-                     it earns it: this is what the reader came to find out. -->
-                <p v-if="isOverdue" class="mt-2 text-sm text-status-critical">
-                  {{ daysLate }} {{ daysLate === 1 ? 'day' : 'days' }} late
-                </p>
-              </div>
+          <CardContent class="space-y-3 pt-6">
+            <div class="flex flex-wrap items-center gap-2">
+              <StatusBadge :status="displayStatus" explain />
+              <MetaChip v-if="isOverdue" tone="late">
+                {{ daysLate }} {{ daysLate === 1 ? 'day' : 'days' }} late
+              </MetaChip>
             </div>
 
-            <div class="mt-6 border-t border-border pt-4">
-              <DefinitionList :items="details" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>What was billed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="lines" data-density="compact">
-              <div class="lines__head">
-                <span>Description</span>
-                <span class="lines__num">Quantity</span>
-                <span class="lines__num">Unit price</span>
-                <span class="lines__num">Total</span>
-              </div>
-
-              <div v-for="item in invoice.line_items" :key="item.id" class="lines__row">
-                <span dir="auto">{{ item.description }}</span>
-                <span class="lines__num lines__figure">{{ item.quantity }}</span>
-                <span class="lines__num">
-                  <MoneyText
-                    :amount="item.unit_price"
-                    :currency="invoice.currency"
-                    locale="en-PK"
-                    :show-currency="false"
-                  />
-                </span>
-                <span class="lines__num">
-                  <MoneyText
-                    :amount="item.total"
-                    :currency="invoice.currency"
-                    locale="en-PK"
-                    :show-currency="false"
-                  />
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card v-if="invoice.description || invoice.notes">
-          <CardHeader>
-            <CardTitle>Notes</CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div v-if="invoice.notes">
-              <h4 class="text-sm font-medium">Note to the customer</h4>
-              <p class="mt-1 text-sm text-text-secondary" dir="auto">{{ invoice.notes }}</p>
-            </div>
-            <div v-if="invoice.description">
-              <h4 class="text-sm font-medium">Internal note</h4>
-              <p class="mt-1 text-sm text-text-secondary" dir="auto">{{ invoice.description }}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div class="space-y-6">
-        <!-- The derivation. Every figure that produced the balance is here, in
-             the order it was applied, so the answer can be checked rather than
-             believed. -->
-        <Card>
-          <CardContent class="pt-6">
-            <TotalRow
-              level="line"
-              label="Subtotal"
-              :amount="invoice.subtotal"
-              :currency="invoice.currency"
-              locale="en-PK"
-            />
-            <TotalRow
-              v-if="invoice.discount_amount > 0"
-              level="line"
-              label="Discount"
-              direction="outflow"
-              :amount="invoice.discount_amount"
-              :currency="invoice.currency"
-              locale="en-PK"
-            />
-            <TotalRow
-              v-if="invoice.tax_amount > 0"
-              level="line"
-              label="Sales tax"
-              :amount="invoice.tax_amount"
-              :currency="invoice.currency"
-              locale="en-PK"
-            />
-            <TotalRow
-              level="total"
-              label="Invoice total"
-              :amount="invoice.total_amount"
-              :currency="invoice.currency"
-              locale="en-PK"
-            />
-            <TotalRow
-              level="line"
-              label="Paid"
-              direction="outflow"
-              :amount="invoice.paid_amount"
-              :currency="invoice.currency"
-              locale="en-PK"
-            />
-            <TotalRow
-              level="grand"
-              label="Still owed"
-              :amount="invoice.balance"
-              :currency="invoice.currency"
-              locale="en-PK"
-              :tone="isOverdue ? 'overdue' : invoice.balance === 0 ? 'muted' : 'default'"
-            />
-
-            <p v-if="isForeign" class="mt-3 text-sm text-text-metadata">
+            <p v-if="isForeign" class="text-sm text-text-metadata">
               In your <Explain term="baseCurrency" />:
               <MoneyText
                 :amount="inBase(invoice.balance)"
@@ -357,15 +344,6 @@ const voidInvoice = () => {
               />
               at {{ invoice.exchange_rate }}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card v-if="history.length">
-          <CardHeader>
-            <CardTitle>What happened when</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DefinitionList :items="history" />
           </CardContent>
         </Card>
 
@@ -387,9 +365,9 @@ const voidInvoice = () => {
               <Send class="mr-2 h-4 w-4" />
               Send to customer
             </Button>
-            <Button class="w-full" variant="outline">
+            <Button class="w-full" variant="outline" @click="printDocument">
               <Download class="mr-2 h-4 w-4" />
-              Download PDF
+              Print or save as PDF
             </Button>
             <Button
               class="w-full"
@@ -402,7 +380,26 @@ const voidInvoice = () => {
             </Button>
           </CardContent>
         </Card>
-      </div>
+
+        <Card v-if="history.length">
+          <CardHeader>
+            <CardTitle>What happened when</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DefinitionList :items="history" />
+          </CardContent>
+        </Card>
+
+        <!-- Internal notes are for the company, so they stay off the sheet. -->
+        <Card v-if="invoice.description">
+          <CardHeader>
+            <CardTitle>Internal note</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p class="text-sm text-text-secondary" dir="auto">{{ invoice.description }}</p>
+          </CardContent>
+        </Card>
+      </aside>
     </div>
 
     <ConfirmDialog
@@ -415,66 +412,40 @@ const voidInvoice = () => {
       :loading="voiding"
       @confirm="voidInvoice"
     />
+
+    <RelatedActions screen="invoice.show" :slug="company.slug" :subject="invoice" />
   </PageShell>
 </template>
 
 <style scoped>
-.reference {
-  font-family: var(--mono-family);
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.lines__head,
-.lines__row {
+.page {
   display: grid;
-  grid-template-columns: 1fr 5rem 8rem 8rem;
-  gap: var(--space-3, 12px);
-  align-items: baseline;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
 }
 
-.lines__head {
-  padding-bottom: var(--cell-py);
-  border-bottom: 1px solid var(--rule-default);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-metadata);
+@media (min-width: 1100px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
 }
 
-.lines__row {
-  padding-block: var(--cell-py);
-  border-bottom: 1px solid var(--rule-subtle);
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.lines__row:last-child {
-  border-bottom: 0;
-}
-
-.lines__num {
-  text-align: right;
-}
-
-/* Quantities are figures too, and they sit in a column with the rest. */
-.lines__figure {
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 40rem) {
-  .lines__head {
+/* Printing an invoice should produce the invoice, not the application around
+   it. The document keeps its own print rules; this hides the rest of the page. */
+@media print {
+  .rail {
     display: none;
   }
 
-  .lines__row {
-    grid-template-columns: 1fr auto;
-    row-gap: 2px;
-  }
-
-  .lines__row > :nth-child(2),
-  .lines__row > :nth-child(3) {
-    display: none;
+  .page {
+    display: block;
   }
 }
 </style>

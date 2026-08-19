@@ -34,11 +34,19 @@ interface AccountRef {
   name: string
 }
 
+/** Prefilled from the screen you arrived from. */
+interface Preselect {
+  customer_id?: string | null
+  invoice_id?: string | null
+  vendor_id?: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   vendors: VendorRef[]
   expenseAccounts: AccountRef[]
   apAccounts: AccountRef[]
+  preselect?: Preselect
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -59,7 +67,7 @@ const lineItemTemplate = () => ({
 })
 
 const form = useForm({
-  vendor_id: '',
+  vendor_id: props.preselect?.vendor_id ?? '',
   bill_id: '',
   credit_date: new Date().toISOString().slice(0, 10),
   amount: 0,

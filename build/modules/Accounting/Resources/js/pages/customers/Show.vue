@@ -2,8 +2,11 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
 import DataTable from '@/components/DataTable.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +43,7 @@ import {
   XCircle,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -211,11 +215,7 @@ const paymentTermsOptions = [
 const canManage = computed(() => props.canEdit !== false)
 
 const money = (val: number | null | undefined) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.customer.base_currency || props.company.base_currency,
-  }).format(val ?? 0)
+  formatMoneyText(val ?? 0, props.customer.base_currency || props.company.base_currency)
 
 const creditUsedPercent = computed(() => {
   if (!props.customer.credit_limit || props.customer.credit_limit === 0) return null
@@ -270,18 +270,6 @@ const paymentRows = computed(() =>
     reference_number: p.reference_number ?? '—',
   }))
 )
-
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    paid: 'default',
-    sent: 'secondary',
-    draft: 'outline',
-    overdue: 'destructive',
-    void: 'secondary',
-    cancelled: 'secondary',
-  }
-  return variants[status.toLowerCase()] || 'outline'
-}
 
 // Address save handlers
 const saveBillingAddress = async () => {
@@ -422,7 +410,7 @@ const cancelShippingEdit = () => {
               <Receipt class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.open_balance) }}</div>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.open_balance" :currency="customer.base_currency || company.base_currency" /></div>
               <p class="text-xs text-text-secondary mt-1">{{ summary.invoice_count }} open invoice{{ summary.invoice_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
@@ -434,7 +422,7 @@ const cancelShippingEdit = () => {
             </CardHeader>
             <CardContent>
               <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-status-attention' : 'text-text-primary']">
-                {{ money(summary.overdue_balance) }}
+                <MoneyText :amount="summary.overdue_balance" :currency="customer.base_currency || company.base_currency" />
               </div>
               <p class="text-xs text-text-secondary mt-1">Past due date</p>
             </CardContent>
@@ -446,7 +434,7 @@ const cancelShippingEdit = () => {
               <CreditCard class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.available_credit) }}</div>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.available_credit" :currency="customer.base_currency || company.base_currency" /></div>
               <p class="text-xs text-text-secondary mt-1">{{ summary.credit_note_count }} credit note{{ summary.credit_note_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
@@ -457,7 +445,7 @@ const cancelShippingEdit = () => {
               <Wallet class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.paid_ytd) }}</div>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.paid_ytd" :currency="customer.base_currency || company.base_currency" /></div>
               <p class="text-xs text-text-secondary mt-1">This year</p>
             </CardContent>
           </Card>
@@ -473,24 +461,24 @@ const cancelShippingEdit = () => {
             <CardContent class="space-y-2 text-sm text-text-primary">
               <div class="flex justify-between">
                 <span>Current</span>
-                <span class="font-medium text-text-primary">{{ money(summary.aging?.current ?? 0) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.aging?.current ?? 0" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span>1-30 days</span>
-                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_1_30 ?? 0) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.aging?.bucket_1_30 ?? 0" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span>31-60 days</span>
-                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_31_60 ?? 0) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.aging?.bucket_31_60 ?? 0" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span>61-90 days</span>
-                <span class="font-medium text-text-primary">{{ money(summary.aging?.bucket_61_90 ?? 0) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.aging?.bucket_61_90 ?? 0" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span>90+ days</span>
                 <span :class="['font-medium', (summary.aging?.bucket_90_plus ?? 0) > 0 ? 'text-status-critical' : 'text-text-primary']">
-                  {{ money(summary.aging?.bucket_90_plus ?? 0) }}
+                  <MoneyText :amount="summary.aging?.bucket_90_plus ?? 0" :currency="customer.base_currency || company.base_currency" />
                 </span>
               </div>
             </CardContent>
@@ -507,14 +495,14 @@ const cancelShippingEdit = () => {
                   <FileText class="h-4 w-4 text-text-tertiary" />
                   Total Billed
                 </span>
-                <span class="font-medium text-text-primary">{{ money(summary.total_billed) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.total_billed" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span class="flex items-center gap-2">
                   <TrendingUp class="h-4 w-4 text-text-tertiary" />
                   Invoiced YTD
                 </span>
-                <span class="font-medium text-text-primary">{{ money(summary.invoiced_ytd) }}</span>
+                <span class="font-medium text-text-primary"><MoneyText :amount="summary.invoiced_ytd" :currency="customer.base_currency || company.base_currency" /></span>
               </div>
               <div class="flex justify-between">
                 <span class="flex items-center gap-2">
@@ -565,9 +553,7 @@ const cancelShippingEdit = () => {
             <CardContent>
               <DataTable :columns="invoiceColumns" :data="invoiceRows" key-field="id" compact>
                 <template #cell-status="{ row }">
-                  <Badge :variant="getStatusVariant(row.status)" class="capitalize">
-                    {{ row.status }}
-                  </Badge>
+                  <StatusBadge :status="row.status" />
                 </template>
               </DataTable>
             </CardContent>
@@ -925,5 +911,7 @@ const cancelShippingEdit = () => {
         </div>
       </TabsContent>
     </Tabs>
+
+    <RelatedActions screen="customer.show" :slug="company.slug" :subject="customer" />
   </PageShell>
 </template>

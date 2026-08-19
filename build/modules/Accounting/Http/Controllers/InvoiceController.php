@@ -17,6 +17,7 @@ use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Services\CompanyLetterhead;
 use Inertia\Response;
 
 class InvoiceController extends Controller
@@ -92,6 +93,11 @@ class InvoiceController extends Controller
             'customers' => $customers,
             'currencies' => $currencies,
             'revenueAccounts' => $revenueAccounts,
+            // Arriving from a customer, or from another invoice to the same
+            // one: the party is already known, so the form should not ask.
+            'preselect' => [
+                'customer_id' => $request->query('customer_id'),
+            ],
         ]);
     }
 
@@ -139,6 +145,9 @@ class InvoiceController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                // Assembled once, in CompanyLetterhead, so every document in the
+                // application names its issuer the same way.
+                'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'invoice' => $invoiceRecord,
         ]);

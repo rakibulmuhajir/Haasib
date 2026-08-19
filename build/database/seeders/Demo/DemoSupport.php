@@ -192,6 +192,9 @@ trait DemoSupport
         array $bankAccounts,
         ?string $tradeName = null,
         string $industry = 'services',
+        array $address = [],
+        array $contact = [],
+        ?string $taxNumber = null,
     ): Company {
         $onboarding = app(CompanyOnboardingService::class);
 
@@ -208,6 +211,11 @@ trait DemoSupport
             'locale' => 'en',
             'timezone' => 'Asia/Karachi',
             'created_by_user_id' => $user->id,
+            // Every document this company issues carries a letterhead, and a
+            // letterhead with only a name on it is not one. A demo company
+            // without an address is a document nobody has actually looked at.
+            'address' => $address === [] ? null : $address,
+            'settings' => $contact === [] ? null : $contact,
         ]);
 
         $user->companies()->syncWithoutDetaching([
@@ -246,6 +254,32 @@ trait DemoSupport
             'bank_account_id' => $this->accountBySubtype($company, 'bank')->id,
             'retained_earnings_account_id' => $this->accountBySubtype($company, 'retained_earnings')->id,
         ]);
+
+        // The tax number the company's documents are filed under. Letterheads
+        // print it beside the name; without a registration row there is nothing
+        // to print, so a demo company without one is a letterhead half-tested.
+        if ($taxNumber !== null) {
+            $jurisdictionId = DB::table('acct.jurisdictions')
+                ->where('country_code', $country)
+                ->where('level', 'country')
+                ->value('id');
+
+            if ($jurisdictionId !== null) {
+                DB::table('acct.company_tax_registrations')->insert([
+                    'id' => (string) Str::uuid7(),
+                    'company_id' => $company->id,
+                    'jurisdiction_id' => $jurisdictionId,
+                    'registration_number' => $taxNumber,
+                    'registration_type' => 'sales_tax',
+                    'registered_name' => $company->name,
+                    'effective_from' => now()->startOfYear()->toDateString(),
+                    'is_active' => true,
+                    'created_by_user_id' => $user->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
 
         $onboarding->completeOnboarding($company->fresh());
 
@@ -358,6 +392,43 @@ trait DemoSupport
         } finally {
             CompanyContext::clearContext();
             Auth::logout();
+        }
+    }
+
+    /**
+     * Bring every bank account's cached balance back in line with the ledger.
+     *
+     * `current_balance` is a cache of a figure the journals already hold, and
+     * nothing in the seeding path maintains it -- which left every demo company
+     * reporting a cash position of zero while its books showed millions. Rather
+     * than invent a number, this recomputes each account from its own GL
+     * account: opening balance plus every posted debit, less every posted
+     * credit. A demo whose headline figure disagrees with its ledger is worse
+     * than one with no data at all.
+     */
+    protected function syncBankBalances(Company $company): void
+    {
+        $accounts = DB::table('acct.company_bank_accounts')
+            ->where('company_id', $company->id)
+            ->whereNull('deleted_at')
+            ->whereNotNull('gl_account_id')
+            ->get(['id', 'gl_account_id', 'opening_balance']);
+
+        foreach ($accounts as $account) {
+            $movement = DB::table('acct.journal_entries as je')
+                ->join('acct.transactions as t', 't.id', '=', 'je.transaction_id')
+                ->where('je.account_id', $account->gl_account_id)
+                ->where('t.status', 'posted')
+                ->whereNull('t.deleted_at')
+                ->selectRaw('COALESCE(SUM(je.debit_amount - je.credit_amount), 0) as net')
+                ->value('net');
+
+            DB::table('acct.company_bank_accounts')
+                ->where('id', $account->id)
+                ->update([
+                    'current_balance' => (float) $account->opening_balance + (float) $movement,
+                    'updated_at' => now(),
+                ]);
         }
     }
 

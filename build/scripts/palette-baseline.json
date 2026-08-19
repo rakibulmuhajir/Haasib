@@ -1,5 +1,14 @@
 {
   "total": 0,
   "files": 0,
+  "grammar": {
+    "rawTable": 6,
+    "uiTable": 1,
+    "dataTableShim": 46,
+    "directionAsSeverity": 8,
+    "moneyAsText": 0,
+    "statusAsText": 0,
+    "handRolledMoney": 0
+  },
   "note": "May only decrease. Run --update after removing violations."
 }

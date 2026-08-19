@@ -4,6 +4,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +29,7 @@ import {
   Plus,
   Warehouse,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
   id: string
@@ -102,26 +104,9 @@ const formatDate = (dateStr: string) => {
 
 const formatMoney = (n: number) => {
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n ?? 0)
+    return formatMoneyText(n ?? 0, currencyCode.value, { fractionDigits: 2 })
   } catch (_e) {
     return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
-  }
-}
-
-const statusVariant = (s: TankReadingStatus) => {
-  switch (s) {
-    case 'posted':
-      return 'bg-status-success text-status-success-contrast hover:bg-status-success'
-    case 'confirmed':
-      return 'bg-status-info/10 text-status-info hover:bg-status-info/10'
-    default:
-      return 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'
   }
 }
 
@@ -467,9 +452,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge :class="statusVariant(row._raw.status)">
-              {{ row._raw.status }}
-            </Badge>
+            <StatusBadge :status="row._raw.status" />
           </template>
 
           <template #cell-_actions="{ row }">

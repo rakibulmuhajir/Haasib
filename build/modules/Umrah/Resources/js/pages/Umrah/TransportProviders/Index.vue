@@ -1,15 +1,16 @@
 <script setup lang="ts">
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -27,6 +28,22 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
     { title: 'Transport Vendors', href: `/${props.company.slug}/umrah/transport-providers` },
+];
+
+/**
+ * Sale, cost and payable are all figures, so they share one alignment and one
+ * typeface and the eye can compare down a column. Whether children are charged
+ * is an annotation rather than a state of the vendor, so it is a chip in the
+ * margin, not a status.
+ */
+const columns = [
+    { key: 'name', label: 'Vendor', kind: 'text' as const },
+    { key: 'standard_bus_retail_amount', label: 'Bus sale', kind: 'amount' as const },
+    { key: 'standard_bus_cost_amount', label: 'Bus cost', kind: 'amount' as const },
+    { key: 'charge_child_fare', label: 'Child fare', kind: 'text' as const },
+    { key: 'balance', label: 'Payable', kind: 'amount' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
 ];
 
 const editing = ref<any | null>(null);
@@ -122,21 +139,47 @@ const updateStatus = (provider: any) => {
             <Card class="min-w-0">
                 <CardHeader><CardTitle>Transport Vendor List</CardTitle></CardHeader>
                 <CardContent class="p-0">
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead class="text-right">Bus Sale</TableHead><TableHead class="text-right">Bus Cost</TableHead><TableHead>Child Fare</TableHead><TableHead class="text-right">Payable</TableHead><TableHead>Status</TableHead><TableHead class="text-right">Action</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            <TableEmpty v-if="!providers.data.length" :colspan="7">No transport vendors yet.</TableEmpty>
-                            <TableRow v-for="provider in providers.data" :key="provider.id" :class="{ 'opacity-60': !provider.is_active }">
-                                <TableCell><div class="font-medium">{{ provider.name }}</div><div class="text-xs text-muted-foreground">{{ provider.vendor_number }}</div></TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="provider.standard_bus_retail_amount" :currency="company.base_currency" /></TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="provider.standard_bus_cost_amount" :currency="company.base_currency" /></TableCell>
-                                <TableCell><Badge variant="outline">{{ provider.charge_child_fare ? 'Charged' : 'Free' }}</Badge></TableCell>
-                                <TableCell class="text-right font-semibold"><MoneyText :amount="provider.balance" :currency="company.base_currency" /></TableCell>
-                                <TableCell><Badge :variant="provider.is_active ? 'default' : 'secondary'">{{ provider.is_active ? 'Active' : 'Inactive' }}</Badge></TableCell>
-                                <TableCell class="text-right"><Button type="button" variant="ghost" size="icon" :aria-label="`View ${provider.name}`" @click="router.get(`/${company.slug}/umrah/transport-providers/${provider.id}`)"><Eye class="h-4 w-4" /></Button><Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`Edit ${provider.name}`" @click="startEdit(provider)"><Pencil class="h-4 w-4" /></Button><Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`${provider.is_active ? 'Deactivate' : 'Reactivate'} ${provider.name}`" :disabled="statusForm.processing" @click="updateStatus(provider)"><Power v-if="provider.is_active" class="h-4 w-4" /><RotateCcw v-else class="h-4 w-4" /></Button></TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                    <LedgerRegister :data="providers.data" :columns="columns">
+                        <template #empty>No transport vendors yet.</template>
+
+                        <template #cell-name="{ row }">
+                            <div class="font-medium">{{ row.name }}</div>
+                            <div class="text-xs text-text-secondary">{{ row.vendor_number }}</div>
+                        </template>
+
+                        <template #cell-standard_bus_retail_amount="{ row }">
+                            <MoneyText :amount="row.standard_bus_retail_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-standard_bus_cost_amount="{ row }">
+                            <MoneyText :amount="row.standard_bus_cost_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-balance="{ row }">
+                            <MoneyText :amount="row.balance" :currency="company.base_currency" class="font-semibold" />
+                        </template>
+
+                        <template #cell-charge_child_fare="{ row }">
+                            <MetaChip tone="neutral">{{ row.charge_child_fare ? 'Charged' : 'Free' }}</MetaChip>
+                        </template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge :status="row.is_active ? 'active' : 'inactive'" />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button type="button" variant="ghost" size="icon" :aria-label="`View ${row.name}`" @click="router.get(`/${company.slug}/umrah/transport-providers/${row.id}`)">
+                                    <Eye class="h-4 w-4" />
+                                </Button>
+                                <Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`Edit ${row.name}`" @click="startEdit(row)">
+                                    <Pencil class="h-4 w-4" />
+                                </Button>
+                                <Button v-if="canManageProviders" type="button" variant="ghost" size="icon" :aria-label="`${row.is_active ? 'Deactivate' : 'Reactivate'} ${row.name}`" :disabled="statusForm.processing" @click="updateStatus(row)">
+                                    <Power v-if="row.is_active" class="h-4 w-4" />
+                                    <RotateCcw v-else class="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                     <RecordPagination :current-page="providers.current_page" :last-page="providers.last_page" :from="providers.from" :to="providers.to" :total="providers.total" :previous-url="providers.prev_page_url" :next-url="providers.next_page_url" />
                 </CardContent>
             </Card>

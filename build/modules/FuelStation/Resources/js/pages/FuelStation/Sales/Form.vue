@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -19,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Plus, Calculator, CreditCard, Banknote, Smartphone, Building2, Search } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItem {
   id: string
@@ -161,13 +161,7 @@ watch(saleType, (newType) => {
 
 // Methods
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const selectCustomer = (customer: Customer) => {
@@ -464,7 +458,10 @@ const setPaymentTotal = () => {
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-sm text-text-secondary">Balance</span>
-                <span class="text-sm font-medium" :class="balance <= 0 ? 'text-status-success' : 'text-status-critical'">
+<!-- An unpaid balance on a sale in progress is the normal state of a
+                     sale in progress, not a failure. Amber says it is still open;
+                     settled says nothing, because there is nothing left to say. -->
+                <span class="text-sm font-medium" :class="balance <= 0 ? '' : 'text-status-attention'">
                   {{ formatCurrency(balance) }}
                 </span>
               </div>

@@ -24,6 +24,7 @@ import {
   Ban,
   MoreHorizontal,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -93,11 +94,7 @@ const formatDate = (date: string) => {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 
 const tableData = computed(() => {

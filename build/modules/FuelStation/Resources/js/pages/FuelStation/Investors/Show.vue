@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import { formatMoneyText } from '@/lib/money'
 
 interface InvestorLot {
   id: string
@@ -76,13 +77,7 @@ const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.
 const currency = computed(() => currencySymbol(currencyCode.value))
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const formatNumber = (value: number, decimals = 2) => {

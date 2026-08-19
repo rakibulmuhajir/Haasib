@@ -251,10 +251,13 @@ const unlockSingle = (closeId: string) => {
 
               <div class="text-right min-w-24">
                 <div class="text-sm text-muted-foreground">Variance</div>
+                <!-- A till that is over is as much a discrepancy as one that
+                     is short, so the sign carries the direction and the colour
+                     only says whether the drawer balanced. -->
                 <div
                   :class="[
-                    'font-semibold',
-                    close.variance === 0 ? 'text-status-success' : close.variance > 0 ? 'text-status-info' : 'text-status-critical',
+                    'font-mono font-semibold tabular-nums',
+                    close.variance === 0 ? 'text-text-primary' : 'text-status-attention',
                   ]"
                 >
                   {{ close.variance >= 0 ? '+' : '' }}{{ currency }} {{ formatCurrency(close.variance) }}

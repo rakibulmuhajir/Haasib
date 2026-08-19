@@ -66,6 +66,19 @@ class DemoTravelAgencySeeder extends Seeder
             ],
             tradeName: 'Bab-al-Salam Travel & Tours',
             industry: 'services',
+            address: [
+                'line1' => 'Ground Floor, Al-Haram Plaza',
+                'line2' => 'Blue Area',
+                'city' => 'Islamabad',
+                'state' => 'Islamabad Capital Territory',
+                'postal_code' => '44000',
+                'country' => 'Pakistan',
+            ],
+            contact: [
+                'contact_email' => 'hisab@babalsalam.pk',
+                'contact_phone' => '+92 51 227 4400',
+            ],
+            taxNumber: '4419077-2',
         );
 
         $this->command?->info("  company: {$company->name} ({$company->id})");
@@ -540,5 +553,7 @@ class DemoTravelAgencySeeder extends Seeder
         }
 
         $this->command?->info("  overhead months posted: {$overheadMonths}");
+
+        $this->syncBankBalances($company);
     }
 }

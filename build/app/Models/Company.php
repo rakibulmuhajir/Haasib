@@ -22,6 +22,7 @@ class Company extends Model
 
     protected $casts = [
         'settings' => 'array',
+        'address' => 'array',
         'created_by_user_id' => 'string',
         'is_active' => 'boolean',
         'tax_registered' => 'boolean',
@@ -48,6 +49,8 @@ class Company extends Model
         'slug',
         'country',
         'country_id',
+        // The postal address printed on every document this company issues.
+        'address',
         'base_currency',
         'language',
         'locale',

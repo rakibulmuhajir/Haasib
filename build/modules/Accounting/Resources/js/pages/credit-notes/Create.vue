@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -30,11 +31,19 @@ interface CurrencyRef {
   currency_code: string
 }
 
+/** Prefilled from the screen you arrived from. */
+interface Preselect {
+  customer_id?: string | null
+  invoice_id?: string | null
+  vendor_id?: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   customers: Array<{ id: string; name: string }>
   invoices: InvoiceRef[]
   currencies: CurrencyRef[]
+  preselect?: Preselect
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -45,8 +54,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const form = useForm({
-  customer_id: '',
-  invoice_id: '',
+  customer_id: props.preselect?.customer_id ?? '',
+  invoice_id: props.preselect?.invoice_id ?? '',
   amount: 0,
   base_currency: props.company.base_currency,
   reason: '',
@@ -73,11 +82,7 @@ watch(() => form.customer_id, () => {
 })
 
 const formatCurrency = (amount: number, currencyCode?: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode || form.base_currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currencyCode || form.base_currency || 'USD')
 }
 
 const submit = () => {

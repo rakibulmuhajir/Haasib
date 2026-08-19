@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -97,11 +98,7 @@ const statusOptions = [
 ]
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.base_currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, form.base_currency || 'USD')
 }
 
 const submit = () => {
@@ -151,9 +148,7 @@ const isEditable = computed(() => {
             <div class="flex items-center gap-2 mb-2">
               <Receipt class="h-5 w-5 text-muted-foreground" />
               <span class="text-sm font-medium text-muted-foreground">Credit Note</span>
-              <Badge :variant="credit_note.status === 'applied' ? 'default' : 'secondary'">
-                {{ credit_note.status }}
-              </Badge>
+              <StatusBadge :status="credit_note.status" />
             </div>
             <button
               @click="router.get(`/${company.slug}/credit-notes/${credit_note.id}`)"
@@ -174,7 +169,7 @@ const isEditable = computed(() => {
       <Card class="border-status-attention/30 bg-status-attention/10">
         <CardContent class="pt-6">
           <div class="flex items-center">
-            <Badge variant="secondary" class="mr-2">{{ credit_note.status }}</Badge>
+            <StatusBadge :status="credit_note.status" class="mr-2" />
             <span class="text-sm">This credit note cannot be edited in its current status.</span>
           </div>
         </CardContent>

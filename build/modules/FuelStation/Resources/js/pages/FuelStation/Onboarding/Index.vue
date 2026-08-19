@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -1226,7 +1228,7 @@ watch(
   { immediate: true }
 )
 
-const formatMoney = (value: number | string) => {
+const formatNumber = (value: number | string) => {
   const numberValue = Number(value || 0)
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numberValue)
 }
@@ -2118,7 +2120,7 @@ onMounted(() => {
                   Add Partner
                 </Button>
                 <div :class="['text-sm font-medium', isProfitShareValid ? 'text-status-success' : 'text-status-critical']">
-                  Total profit share: {{ formatMoney(totalProfitShare) }}%
+                  Total profit share: {{ formatNumber(totalProfitShare) }}%
                 </div>
               </div>
 
@@ -2525,35 +2527,35 @@ onMounted(() => {
                           Initial meter readings (optional). These set the starting point for today only and won’t block adding older readings later.
                         </p>
                         <div class="border rounded-lg overflow-hidden mt-2">
-                        <table class="w-full text-sm">
-                          <thead class="bg-muted/50">
-                            <tr>
-                              <th class="text-left py-2 px-3 font-medium">Side</th>
-                              <th class="text-right py-2 px-3 font-medium">Electronic</th>
-                              <th class="text-right py-2 px-3 font-medium">Manual</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr class="border-t">
-                              <td class="py-2 px-3 font-medium">Front</td>
-                              <td class="py-2 px-3">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Side</TableHead>
+                              <TableHead class="text-right">Electronic</TableHead>
+                              <TableHead class="text-right">Manual</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell class="font-medium">Front</TableCell>
+                              <TableCell>
                                 <Input v-model="pump.front_electronic" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </td>
-                              <td class="py-2 px-3">
+                              </TableCell>
+                              <TableCell>
                                 <Input v-model="pump.front_manual" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </td>
-                            </tr>
-                            <tr v-if="Number(pump.nozzle_count) === 2" class="border-t">
-                              <td class="py-2 px-3 font-medium">Back</td>
-                              <td class="py-2 px-3">
+                              </TableCell>
+                            </TableRow>
+                            <TableRow v-if="Number(pump.nozzle_count) === 2">
+                              <TableCell class="font-medium">Back</TableCell>
+                              <TableCell>
                                 <Input v-model="pump.back_electronic" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </td>
-                              <td class="py-2 px-3">
+                              </TableCell>
+                              <TableCell>
                                 <Input v-model="pump.back_manual" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
                         </div>
                       </div>
                     </div>
@@ -2622,8 +2624,8 @@ onMounted(() => {
                           </div>
                         </div>
                         <div class="text-right text-sm">
-                          <div>Buy: {{ formatMoney(rateMap.get(item.id || '')?.purchase_rate ?? item.avg_cost ?? 0) }}</div>
-                          <div>Sell: {{ formatMoney(rateMap.get(item.id || '')?.sale_rate ?? item.sale_price ?? 0) }}</div>
+                          <div>Buy: <MoneyText :amount="Number(rateMap.get(item.id || '')?.purchase_rate ?? item.avg_cost ?? 0)" :currency="currencyCode" /></div>
+                          <div>Sell: <MoneyText :amount="Number(rateMap.get(item.id || '')?.sale_rate ?? item.sale_price ?? 0)" :currency="currencyCode" /></div>
                         </div>
                       </div>
                     </div>

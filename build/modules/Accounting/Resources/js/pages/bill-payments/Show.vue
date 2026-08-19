@@ -4,10 +4,12 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -74,11 +76,7 @@ const sourceColumns = [
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const allocationRows = computed(() =>
   (props.groupPayments || [props.payment])
@@ -138,7 +136,7 @@ const groupedAmount = computed(() =>
       </div>
       <div class="space-y-1">
         <div class="text-sm text-muted-foreground">Amount</div>
-        <div class="font-semibold">{{ formatMoney(groupedAmount, payment.currency) }}</div>
+        <div class="font-semibold"><MoneyText :amount="groupedAmount" :currency="payment.currency" /></div>
       </div>
       <div class="space-y-1">
         <div class="text-sm text-muted-foreground">Sources</div>

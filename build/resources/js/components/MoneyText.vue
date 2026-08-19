@@ -171,17 +171,23 @@ const label = computed(() => moneyLabel(parts.value, props.currency))
 }
 
 /* ── Scale ───────────────────────────────────────────────────────────── */
-/* Sans, not mono. Setting every amount in monospace makes an accounts page
-   read as a terminal; the figures need tabular alignment, not a typewriter. */
+/* Ordinary amounts stay in the body face — setting every figure in monospace
+   makes an accounts page read as a terminal. The conclusion is the exception:
+   it is the one number a page exists to deliver, it has no column to align
+   with, and at 44px the typewriter is the point. Sized from --text-conclusion
+   so the step is a token decision, not a number typed into a component. */
 .money--conclusion {
-    font-size: 1.75rem;
-    line-height: 1.1;
+    font-family: var(--mono-family);
+    font-size: var(--text-conclusion);
+    line-height: 1;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.035em;
 }
 
 .money--conclusion .money__currency {
-    font-size: 0.5em;
+    font-size: 0.44em;
+    font-weight: 500;
+    color: var(--text-secondary);
 }
 
 /* The base-currency equivalent is a footnote to the figure beside it. */

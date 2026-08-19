@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -111,11 +112,7 @@ const accountTypeLabels: Record<string, string> = {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
+  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {

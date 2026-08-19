@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, FileText } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -75,11 +76,7 @@ const paymentMethods = [
 ]
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, form.currency || 'USD')
 }
 
 const submit = () => {

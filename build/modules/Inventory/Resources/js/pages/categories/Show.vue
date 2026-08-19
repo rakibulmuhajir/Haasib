@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { Pencil, ArrowLeft, Package, FolderTree } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -60,11 +61,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 </script>
 

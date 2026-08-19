@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -217,9 +218,7 @@ const isEditable = computed(() => {
             This vendor credit cannot be edited in its current status.
           </div>
           <div class="ml-2">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-attention/10 text-status-attention">
-              {{ credit.status }}
-            </span>
+            <StatusBadge :status="credit.status" />
           </div>
         </div>
       </div>

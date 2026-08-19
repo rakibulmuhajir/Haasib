@@ -107,7 +107,136 @@ function scan() {
     }
 
     offenders.sort((a, b) => b.count - a.count)
-    return { total, offenders, scanned: files.length }
+    return { total, offenders, scanned: files.length, files }
+}
+
+/**
+ * -- Grammar ratchets -----------------------------------------------------
+ *
+ * Colour was never the only way a page could render undecided. A page that
+ * hand-writes a <table>, or formats its own currency, has re-decided something
+ * the base components already decided, and it will drift the moment the base
+ * changes. These count the remaining places that happens.
+ *
+ * They ratchet exactly like the palette count: the number may fall, never
+ * rise. Some are deliberately non-zero. `ui/table` is not a violation of taste
+ * -- those primitives now carry the register grammar themselves -- but a page
+ * on LedgerRegister gets sorting, banding, density, the stacked narrow layout
+ * and the totals row for free, so the number should keep falling.
+ */
+const GRAMMAR = [
+    {
+        key: 'rawTable',
+        label: 'hand-written <table> elements',
+        // Only the two components that ARE the table are allowed one.
+        allow: [
+            'resources/js/components/LedgerRegister.vue',
+            'resources/js/components/ui/table/Table.vue',
+        ],
+        pattern: /<table[\s>]/g,
+        fix: 'Use LedgerRegister (or the ui/table primitives) instead of writing a table.',
+    },
+    {
+        key: 'uiTable',
+        label: 'pages importing ui/table directly',
+        allow: ['resources/js/components/ui/table'],
+        pattern: /from ['"][^'"]*components\/ui\/table['"]/g,
+        fix: 'Prefer LedgerRegister: it brings sorting, banding, density and the narrow-screen layout with it.',
+    },
+    {
+        key: 'dataTableShim',
+        label: 'pages still on the DataTable shim',
+        allow: ['resources/js/components/DataTable.vue'],
+        pattern: /from ['"]@\/components\/DataTable\.vue['"]/g,
+        fix: 'Import LedgerRegister directly; DataTable exists only to retire.',
+    },
+    {
+        key: 'directionAsSeverity',
+        label: 'figures coloured by which way they point',
+        allow: ['resources/js/pages/Design/Index.vue'],
+        /*
+         * A ternary choosing between the good colour and the bad one.
+         *
+         * This is the single most common way the grammar gets broken, and it
+         * always looks reasonable at the call site: net capital positive is
+         * green, negative is red; money in is green, money out is red. The
+         * result is a product where red means both "you are owed this" and
+         * "this is overdue", and the reader has no way to tell which.
+         *
+         * Colour answers "does this need attention". The sign, the column and
+         * the label answer "which way did it go". Some matches here are
+         * legitimate -- a genuine pass/fail like "do these two figures
+         * reconcile" is a state, not a direction -- which is why this ratchets
+         * down rather than failing at zero.
+         */
+        pattern: /status-(?:success|info)[^'"`]*['"`][^)\n]{0,80}:[^)\n]{0,80}status-critical|status-critical[^'"`]*['"`][^)\n]{0,80}:[^)\n]{0,80}status-(?:success|info)/g,
+        fix: 'Ink for the figure, sign for the direction, amber only when someone has to act.',
+    },
+    {
+        key: 'moneyAsText',
+        label: 'figures rendered as text instead of MoneyText',
+        allow: ['resources/js/components', 'resources/js/pages/Design/Index.vue'],
+        /*
+         * A page-local `formatMoney` helper interpolated into the template.
+         *
+         * It looks harmless -- the figure comes out with a currency symbol and
+         * two decimals -- but it is a string, so it does not get tabular
+         * figures, it does not get the one negative convention, it does not
+         * right-align, and it cannot be told apart from a label by anything
+         * downstream. Two columns of these will not line up on the decimal.
+         */
+        pattern: /\{\{\s*(?:formatMoney|money|fmtMoney)\(/g,
+        fix: 'Render the figure with <MoneyText :amount :currency /> so alignment, sign and scale stay one decision.',
+    },
+    {
+        key: 'statusAsText',
+        label: 'record states printed as raw strings',
+        allow: ['resources/js/components', 'resources/js/pages/Design/Index.vue'],
+        /*
+         * A `.status` property interpolated straight into the page, which puts
+         * the database's own word on screen -- `partially_paid`, `unposted` --
+         * and gives the reader no rule, no weight and no strike to read it by.
+         *
+         * Deliberately narrow: only a dotted property named exactly `status`.
+         * A flash message called `status`, a `statusConfig.label` and a
+         * server-sent `gl_status_label` are all something else and are left
+         * alone.
+         */
+        pattern: /\{\{\s*[A-Za-z_][A-Za-z0-9_.]*\.status\s*\}\}/g,
+        fix: 'Pass it to <StatusBadge :status /> so the word, the tone and the strike come from one vocabulary.',
+    },
+    {
+        key: 'handRolledMoney',
+        label: 'hand-rolled currency formatting',
+        allow: ['resources/js/components/MoneyText.vue', 'resources/js/lib'],
+        // Intl currency formatting written inline, rather than going through
+        // MoneyText, which owns the negative convention and the tabular figures.
+        pattern: /style:\s*['"]currency['"]/g,
+        fix: 'Render figures through MoneyText so alignment, sign and scale stay one decision.',
+    },
+]
+
+function scanGrammar(files) {
+    const results = {}
+
+    for (const rule of GRAMMAR) {
+        let total = 0
+        const offenders = []
+
+        for (const file of files) {
+            const rel = relative(ROOT, file).split(sep).join('/')
+            if (rule.allow.some((a) => rel === a || rel.startsWith(a + '/'))) continue
+            const matches = readFileSync(file, 'utf8').match(rule.pattern)
+            if (!matches) continue
+            offenders.push({ file: rel, count: matches.length })
+            total += matches.length
+        }
+
+        offenders.sort((a, b) => b.count - a.count)
+        results[rule.key] = { total, offenders }
+    }
+
+    return results
 }
 
 function readBaseline() {
@@ -115,34 +244,57 @@ function readBaseline() {
     return JSON.parse(readFileSync(BASELINE_FILE, 'utf8'))
 }
 
-function writeBaseline(total, files) {
+function writeBaseline(total, fileCount, grammarCounts) {
     writeFileSync(
         BASELINE_FILE,
-        `${JSON.stringify({ total, files, note: 'May only decrease. Run --update after removing violations.' }, null, 2)}\n`,
+        `${JSON.stringify(
+            {
+                total,
+                files: fileCount,
+                grammar: grammarCounts,
+                note: 'May only decrease. Run --update after removing violations.',
+            },
+            null,
+            2,
+        )}\n`,
     )
 }
 
 const mode = process.argv[2]
-const { total, offenders, scanned } = scan()
+const { total, offenders, scanned, files } = scan()
+const grammar = scanGrammar(files)
+const grammarCounts = () =>
+    Object.fromEntries(GRAMMAR.map((r) => [r.key, grammar[r.key].total]))
 
 if (mode === '--report') {
     console.log(`Hardcoded palette utilities: ${total} across ${offenders.length} files (${scanned} scanned)\n`)
     for (const { file, count } of offenders) {
         console.log(`${String(count).padStart(5)}  ${file}`)
     }
+    for (const rule of GRAMMAR) {
+        const found = grammar[rule.key]
+        console.log(`\n${rule.label}: ${found.total} across ${found.offenders.length} files`)
+        for (const { file, count } of found.offenders.slice(0, 12)) {
+            console.log(`${String(count).padStart(5)}  ${file}`)
+        }
+        if (found.offenders.length > 12) {
+            console.log(`        ... and ${found.offenders.length - 12} more`)
+        }
+    }
     process.exit(0)
 }
 
 if (mode === '--update') {
-    writeBaseline(total, offenders.length)
-    console.log(`Baseline set to ${total} violations across ${offenders.length} files.`)
+    writeBaseline(total, offenders.length, grammarCounts())
+    console.log(`Baseline set to ${total} palette violations across ${offenders.length} files.`)
+    for (const rule of GRAMMAR) console.log(`  ${rule.label}: ${grammar[rule.key].total}`)
     process.exit(0)
 }
 
 const baseline = readBaseline()
 
 if (!baseline) {
-    writeBaseline(total, offenders.length)
+    writeBaseline(total, offenders.length, grammarCounts())
     console.log(`No baseline found. Wrote ${total} violations across ${offenders.length} files.`)
     process.exit(0)
 }
@@ -172,4 +324,47 @@ if (total < baseline.total) {
     process.exit(1)
 }
 
+/* Grammar ratchets are checked after the palette one, and a rise in any of
+   them fails the run the same way. A fall is reported but does not fail --
+   unlike the palette count, these move constantly as pages are converted, and
+   failing a build for making progress would only teach everyone to run
+   --update blindly. */
+let grammarFailed = false
+const drops = []
+
+for (const rule of GRAMMAR) {
+    const current = grammar[rule.key].total
+    const base = baseline.grammar?.[rule.key]
+
+    if (base === undefined) continue
+
+    if (current > base) {
+        console.error(
+            `Grammar ratchet FAILED — ${rule.label}\n\n` +
+                `  baseline  ${base}\n` +
+                `  current   ${current}  (+${current - base})\n\n` +
+                `  ${rule.fix}\n`,
+        )
+        grammarFailed = true
+    } else if (current < base) {
+        drops.push(`  ${rule.label}: ${base} -> ${current}`)
+    }
+}
+
+if (grammarFailed) {
+    console.error(`Run 'node scripts/lint-palette.mjs --report' to see where.`)
+    process.exit(1)
+}
+
 console.log(`Palette ratchet OK — ${total} violations, holding at baseline.`)
+
+if (drops.length) {
+    console.log(`\nGrammar ratchets improved:\n${drops.join('\n')}`)
+    console.log(`\nLock it in with: node scripts/lint-palette.mjs --update`)
+} else {
+    console.log(
+        `Grammar ratchets OK — ` +
+            GRAMMAR.map((r) => `${r.key} ${grammar[r.key].total}`).join(', ') +
+            `.`,
+    )
+}

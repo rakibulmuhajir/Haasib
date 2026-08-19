@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Plus, Eye, Pencil, Search, Wallet, TrendingUp, Banknote } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface InvestorRow {
   id: string
@@ -77,13 +78,7 @@ const filteredInvestors = computed(() => {
 })
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const columns = [

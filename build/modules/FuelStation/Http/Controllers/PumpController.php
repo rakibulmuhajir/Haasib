@@ -33,46 +33,9 @@ class PumpController extends Controller
             ->with('linkedItem')
             ->get();
 
-        // DEBUG: Get user role and permissions
-        $user = request()->user();
-        $userRole = null;
-        $canCreatePump = false;
-        $hasCompanyContext = false;
-
-        if ($user && $company) {
-            // Use the existing permission checking method
-            $canCreatePump = $user->hasCompanyPermission('pump.create');
-            $hasCompanyContext = true;
-
-            // Try to get user role for the current company
-            try {
-                $companyUser = $user->companies()
-                    ->where('company_id', $company->id)
-                    ->withPivot('role')
-                    ->first();
-                $userRole = $companyUser?->pivot->role;
-            } catch (\Exception $e) {
-                try {
-                    $role = $user->roles()->first();
-                    $userRole = $role?->name;
-                } catch (\Exception $e2) {
-                    $userRole = 'Unknown';
-                }
-            }
-        }
-
         return Inertia::render('FuelStation/Pumps/Index', [
             'pumps' => $pumps,
             'tanks' => $tanks,
-            'debug' => [
-                'user_id' => $user?->id,
-                'user_email' => $user?->email,
-                'user_role' => $userRole,
-                'can_create_pump' => $canCreatePump,
-                'has_company_context' => $hasCompanyContext,
-                'company_id' => $company?->id,
-                'company_name' => $company?->name,
-            ],
         ]);
     }
 

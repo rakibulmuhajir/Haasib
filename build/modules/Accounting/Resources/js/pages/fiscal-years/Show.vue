@@ -6,14 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CalendarDays, Lock, Unlock, Pencil } from 'lucide-vue-next'
@@ -74,9 +68,22 @@ const reopenPeriod = (id: string) => {
   router.post(`/${props.company.slug}/accounting-periods/${id}/reopen`, {}, { preserveScroll: true })
 }
 
-const badgeVariant = (val: boolean) => (val ? 'outline' : 'success')
-const badgeLabel = (val: boolean) => (val ? 'Closed' : 'Open')
 const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
+
+/**
+ * A period's number is its place in the fiscal year, not a figure to sum, so
+ * it stays text rather than amount even though it is a digit. Open and
+ * closed are the same two states a fiscal year itself carries, defined once
+ * in status.ts -- a period does not get its own vocabulary for the same
+ * fact.
+ */
+const periodColumns = [
+  { key: 'period_number', label: '#', kind: 'text' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'dates', label: 'Dates', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+]
 </script>
 
 <template>
@@ -145,49 +152,38 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
             </div>
           </div>
 
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Dates</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead class="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="p in periods" :key="p.id">
-                <TableCell class="font-medium">{{ p.period_number }}</TableCell>
-                <TableCell>{{ p.name }}</TableCell>
-                <TableCell>
-                  {{ formatDate(p.start_date) }} → {{ formatDate(p.end_date) }}
-                </TableCell>
-                <TableCell>
-                  <Badge :variant="badgeVariant(p.is_closed)">{{ badgeLabel(p.is_closed) }}</Badge>
-                </TableCell>
-                <TableCell class="text-right">
-                  <Button
-                    v-if="!p.is_closed"
-                    size="sm"
-                    variant="outline"
-                    @click="closePeriod(p.id)"
-                  >
-                    <Lock class="mr-2 h-4 w-4" />
-                    Close
-                  </Button>
-                  <Button
-                    v-else
-                    size="sm"
-                    variant="secondary"
-                    @click="reopenPeriod(p.id)"
-                  >
-                    <Unlock class="mr-2 h-4 w-4" />
-                    Reopen
-                  </Button>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          <LedgerRegister v-else :data="periods" :columns="periodColumns">
+            <template #cell-dates="{ row }">
+              {{ formatDate(row.start_date) }} → {{ formatDate(row.end_date) }}
+            </template>
+
+            <template #cell-status="{ row }">
+              <StatusBadge :status="row.is_closed ? 'closed' : 'open'" />
+            </template>
+
+            <template #cell-actions="{ row }">
+              <div class="flex justify-end gap-2">
+                <Button
+                  v-if="!row.is_closed"
+                  size="sm"
+                  variant="outline"
+                  @click="closePeriod(row.id)"
+                >
+                  <Lock class="mr-2 h-4 w-4" />
+                  Close
+                </Button>
+                <Button
+                  v-else
+                  size="sm"
+                  variant="secondary"
+                  @click="reopenPeriod(row.id)"
+                >
+                  <Unlock class="mr-2 h-4 w-4" />
+                  Reopen
+                </Button>
+              </div>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

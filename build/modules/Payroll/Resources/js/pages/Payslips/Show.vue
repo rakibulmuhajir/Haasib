@@ -1,20 +1,14 @@
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, Ban, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
     id: string;
@@ -89,41 +83,28 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currencyDisplay: 'narrowSymbol',
-        currency: currency || 'USD',
-    }).format(amount);
+    return formatMoneyText(amount, currency || 'USD');
 };
 
 const formatDate = (date: string) => {
     return formatSharedDateTime(date, { mode: 'date' });
 };
 
-const getStatusVariant = (status: string) => {
-    const variants: Record<
-        string,
-        'success' | 'secondary' | 'destructive' | 'outline'
-    > = {
-        draft: 'outline',
-        approved: 'secondary',
-        paid: 'success',
-        cancelled: 'destructive',
-    };
-    return variants[status] || 'secondary';
-};
-
-const formatStatus = (status: string) => {
-    if (status === 'cancelled') return 'Voided';
-    return status.charAt(0).toUpperCase() + status.slice(1);
-};
-
-const earnings = props.payslip.lines.filter(
-    (line) => line.line_type === 'earning',
-);
-const deductions = props.payslip.lines.filter(
-    (line) => line.line_type === 'deduction',
-);
+/**
+ * Earnings and deductions were two tables that happened to sit on the same
+ * page. They are the same register: one column for what was added to the
+ * pay, one for what was taken off it, read down the line items that make up
+ * this payslip in the order they were entered. Quantity and rate only mean
+ * anything for an earning paid by rate, so a deduction row leaves them blank
+ * rather than printing a zero that was never computed.
+ */
+const lineColumns = [
+    { key: 'description', label: 'Description', kind: 'text' as const },
+    { key: 'quantity', label: 'Quantity', kind: 'amount' as const },
+    { key: 'rate', label: 'Rate', kind: 'amount' as const },
+    { key: 'earning', label: 'Earning', kind: 'in' as const },
+    { key: 'deduction', label: 'Deduction', kind: 'out' as const },
+];
 
 const handleApprove = () => {
     router.post(`/${props.company.slug}/payslips/${props.payslip.id}/approve`);
@@ -211,9 +192,7 @@ const handleVoid = () => {
                     <CardHeader>
                         <div class="flex items-center justify-between">
                             <CardTitle>Payslip Details</CardTitle>
-                            <Badge :variant="getStatusVariant(payslip.status)">
-                                {{ formatStatus(payslip.status) }}
-                            </Badge>
+                            <StatusBadge :status="payslip.status" />
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -269,141 +248,43 @@ const handleVoid = () => {
                 <!-- Earnings -->
                 <Card>
                     <CardHeader>
-                        <CardTitle>Earnings</CardTitle>
+                        <CardTitle>Payslip Lines</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead class="text-right"
-                                        >Quantity</TableHead
-                                    >
-                                    <TableHead class="text-right"
-                                        >Rate</TableHead
-                                    >
-                                    <TableHead class="text-right"
-                                        >Amount</TableHead
-                                    >
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <TableRow
-                                    v-for="line in earnings"
-                                    :key="line.id"
-                                >
-                                    <TableCell>{{
-                                        line.description
-                                    }}</TableCell>
-                                    <TableCell class="text-right">{{
-                                        line.quantity ?? '-'
-                                    }}</TableCell>
-                                    <TableCell class="text-right">
-                                        {{
-                                            line.rate
-                                                ? formatCurrency(
-                                                      line.rate,
-                                                      payslip.currency,
-                                                  )
-                                                : '-'
-                                        }}
-                                    </TableCell>
-                                    <TableCell class="text-right font-medium">
-                                        {{
-                                            formatCurrency(
-                                                line.amount,
-                                                payslip.currency,
-                                            )
-                                        }}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow v-if="earnings.length === 0">
-                                    <TableCell
-                                        colspan="4"
-                                        class="text-center text-muted-foreground"
-                                    >
-                                        No earnings recorded
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow class="bg-muted/50 font-bold">
-                                    <TableCell colspan="3">Gross Pay</TableCell>
-                                    <TableCell class="text-right">
-                                        {{
-                                            formatCurrency(
-                                                payslip.gross_pay,
-                                                payslip.currency,
-                                            )
-                                        }}
-                                    </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                    <CardContent class="p-0">
+                        <LedgerRegister
+                            :data="payslip.lines"
+                            :columns="lineColumns"
+                            :key-field="(row: PayslipLine, i: number) => row.id ?? `${row.line_type}-${i}`"
+                            :totals="{ earning: formatCurrency(payslip.gross_pay, payslip.currency), deduction: formatCurrency(payslip.total_deductions, payslip.currency) }"
+                        >
+                            <template #empty>No lines recorded</template>
 
-                <!-- Deductions -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Deductions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead class="text-right"
-                                        >Amount</TableHead
-                                    >
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <TableRow
-                                    v-for="line in deductions"
-                                    :key="line.id"
+                            <template #cell-description="{ row }">
+                                <div>{{ row.description }}</div>
+                                <div
+                                    v-if="row.salary_advance_id"
+                                    class="text-xs text-muted-foreground"
                                 >
-                                    <TableCell>
-                                        <div>{{ line.description }}</div>
-                                        <div
-                                            v-if="line.salary_advance_id"
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Salary advance recovery
-                                        </div>
-                                    </TableCell>
-                                    <TableCell
-                                        class="text-right font-medium text-destructive"
-                                    >
-                                        -{{
-                                            formatCurrency(
-                                                line.amount,
-                                                payslip.currency,
-                                            )
-                                        }}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow v-if="deductions.length === 0">
-                                    <TableCell
-                                        colspan="2"
-                                        class="text-center text-muted-foreground"
-                                    >
-                                        No deductions recorded
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow class="bg-muted/50 font-bold">
-                                    <TableCell>Total Deductions</TableCell>
-                                    <TableCell
-                                        class="text-right text-destructive"
-                                    >
-                                        -{{
-                                            formatCurrency(
-                                                payslip.total_deductions,
-                                                payslip.currency,
-                                            )
-                                        }}
-                                    </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
+                                    Salary advance recovery
+                                </div>
+                            </template>
+
+                            <template #cell-quantity="{ row }">
+                                {{ row.line_type === 'earning' ? (row.quantity ?? '—') : '—' }}
+                            </template>
+
+                            <template #cell-rate="{ row }">
+                                {{ row.line_type === 'earning' && row.rate ? formatCurrency(row.rate, payslip.currency) : '—' }}
+                            </template>
+
+                            <template #cell-earning="{ row }">
+                                {{ row.line_type === 'earning' ? formatCurrency(row.amount, payslip.currency) : '—' }}
+                            </template>
+
+                            <template #cell-deduction="{ row }">
+                                {{ row.line_type === 'deduction' ? formatCurrency(row.amount, payslip.currency) : '—' }}
+                            </template>
+                        </LedgerRegister>
                     </CardContent>
                 </Card>
 

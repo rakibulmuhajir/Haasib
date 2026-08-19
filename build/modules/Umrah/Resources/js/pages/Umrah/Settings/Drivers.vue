@@ -1,20 +1,12 @@
 <script setup lang="ts">
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -36,6 +28,20 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
     { title: 'Drivers', href: `/${props.company.slug}/umrah/settings/drivers` },
+];
+
+/**
+ * A settings list is still a register. It gets the same headings, the same
+ * banding and the same status chip as every other table in the application,
+ * because a driver being inactive and an invoice being voided are the same
+ * kind of fact and should not be drawn two different ways.
+ */
+const columns = [
+    { key: 'name', label: 'Driver', kind: 'text' as const },
+    { key: 'phone', label: 'Phone', kind: 'text' as const },
+    { key: 'notes', label: 'Notes', kind: 'text' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
 ];
 
 const form = useForm({
@@ -187,85 +193,65 @@ const reactivateDriver = (driver: (typeof props.drivers)[number]) => {
             </Card>
 
             <Card class="min-w-0">
-                <CardHeader
-                    ><CardTitle>Available Drivers</CardTitle></CardHeader
-                >
+                <CardHeader>
+                    <CardTitle>Available Drivers</CardTitle>
+                </CardHeader>
                 <CardContent class="p-0">
-                    <Table>
-                        <TableHeader
-                            ><TableRow
-                                ><TableHead>Driver</TableHead
-                                ><TableHead>Phone</TableHead
-                                ><TableHead>Notes</TableHead
-                                ><TableHead>Status</TableHead
-                                ><TableHead class="w-16 text-right"
-                                    >Action</TableHead
-                                ></TableRow
-                            ></TableHeader
-                        >
-                        <TableBody>
-                            <TableEmpty v-if="!drivers.length" :colspan="5"
-                                >No drivers yet.</TableEmpty
-                            >
-                            <TableRow
-                                v-for="driver in drivers"
-                                :key="driver.id"
-                                :class="{ 'opacity-60': !driver.is_active }"
-                            >
-                                <TableCell class="font-medium">{{
-                                    driver.name
-                                }}</TableCell>
-                                <TableCell>{{ driver.phone || '-' }}</TableCell>
-                                <TableCell
-                                    class="max-w-72 truncate text-muted-foreground"
-                                    >{{ driver.notes || '-' }}</TableCell
+                    <LedgerRegister :data="drivers" :columns="columns">
+                        <template #empty>No drivers yet.</template>
+
+                        <template #cell-phone="{ row }">{{
+                            row.phone || '—'
+                        }}</template>
+
+                        <template #cell-notes="{ row }">
+                            <span class="block max-w-72 truncate text-text-secondary">{{
+                                row.notes || '—'
+                            }}</span>
+                        </template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge
+                                :status="row.is_active ? 'active' : 'inactive'"
+                            />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Edit driver"
+                                    @click="startEdit(row)"
                                 >
-                                <TableCell
-                                    ><Badge
-                                        :variant="
-                                            driver.is_active
-                                                ? 'secondary'
-                                                : 'outline'
-                                        "
-                                        >{{
-                                            driver.is_active
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}</Badge
-                                    ></TableCell
+                                    <Pencil class="size-4" />
+                                </Button>
+                                <Button
+                                    v-if="row.is_active"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Deactivate driver"
+                                    :disabled="statusForm.processing"
+                                    @click="removeDriver(row)"
                                 >
-                                <TableCell
-                                    ><div class="flex justify-end gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Edit driver"
-                                            @click="startEdit(driver)"
-                                            ><Pencil class="size-4" /></Button
-                                        ><Button
-                                            v-if="driver.is_active"
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Deactivate driver"
-                                            :disabled="statusForm.processing"
-                                            @click="removeDriver(driver)"
-                                            ><Power class="size-4" /></Button
-                                        ><Button
-                                            v-else
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Reactivate driver"
-                                            :disabled="statusForm.processing"
-                                            @click="reactivateDriver(driver)"
-                                            ><RotateCcw class="size-4"
-                                        /></Button></div
-                                ></TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                    <Power class="size-4" />
+                                </Button>
+                                <Button
+                                    v-else
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Reactivate driver"
+                                    :disabled="statusForm.processing"
+                                    @click="reactivateDriver(row)"
+                                >
+                                    <RotateCcw class="size-4" />
+                                </Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                 </CardContent>
             </Card>
         </div>

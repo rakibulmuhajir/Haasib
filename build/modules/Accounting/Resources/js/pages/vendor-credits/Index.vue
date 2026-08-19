@@ -4,11 +4,13 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { ReceiptText, Plus, Eye, Pencil, Trash2 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -72,11 +74,7 @@ const columns = [
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const tableData = computed(() =>
   props.credits.data.map((c) => ({
@@ -266,9 +264,7 @@ const handleRowClick = (row: any) => {
                   <span v-else>{{ row.vendor }}</span>
                 </div>
               </div>
-              <Badge :variant="statusVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+              <StatusBadge :status="row.status" />
             </div>
             <div class="flex justify-between items-center">
               <div>

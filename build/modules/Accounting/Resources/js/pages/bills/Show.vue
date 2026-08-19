@@ -2,6 +2,11 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
+import LedgerDocument from '@/components/LedgerDocument.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import type { DocumentIssuer, DocumentLine, DocumentTotal } from '@/components/LedgerDocument.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,14 +19,14 @@ import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { FileText, Pencil, Trash2, Building, Package, PackageCheck, Ban } from 'lucide-vue-next'
+import { FileText, Pencil, Trash2, Package, PackageCheck, Ban } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
   name: string
   slug: string
   base_currency: string
-  logo_url?: string
+  letterhead: DocumentIssuer
 }
 
 interface LineItem {
@@ -50,6 +55,10 @@ interface VendorRef {
   id: string
   name: string
   logo_url?: string
+  email?: string | null
+  phone?: string | null
+  address?: Record<string, unknown> | null
+  tax_id?: string | null
 }
 
 interface BillRef {
@@ -157,36 +166,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.bill.bill_number, href: `/${props.company.slug}/bills/${props.bill.id}` },
 ])
 
-const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
-
 const formatNumber = (val: number, decimals: number = 2) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val)
 
 const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })
-}
-
-const statusVariant = (s: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
-  if (s === 'draft') return 'secondary'
-  if (s === 'received') return 'default'
-  if (s === 'partial') return 'outline'
-  if (s === 'paid') return 'default'
-  if (s === 'overdue') return 'destructive'
-  return 'secondary'
-}
-
-const billStatusLabel = (s: string) => {
-  if (s === 'received') return t('billReceived')
-  if (s === 'partial') return t('partiallyPaid')
-  if (s === 'void') return t('voided')
-  if (s === 'cancelled') return t('cancelled')
-  if (t(s as any)) return t(s as any)
-  return s
 }
 
 const handleDelete = () => {
@@ -379,6 +363,79 @@ const handleReceiveGoods = () => {
   openReceiptDialog()
 }
 
+/**
+ * The bill as a document rather than a screen.
+ *
+ * A bill is an invoice somebody sent us, so the vendor issues it and the
+ * company receives it -- which is why the vendor block is the letterhead here
+ * and the customer block is the letterhead on an invoice. Same sheet, parties
+ * swapped. The page used to render line items as bordered cards, one card per
+ * line, which is the only place in the app that shape appeared; going through
+ * LedgerDocument puts bills into the same register grammar as everything else.
+ */
+const ADDRESS_PARTS = ['line1', 'line2', 'street', 'city', 'state', 'postal_code', 'country']
+
+const addressLines = (address?: Record<string, unknown> | null): string[] => {
+  if (!address) return []
+  return ADDRESS_PARTS.map((part) => address[part])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+}
+
+const issuer = computed(() => ({
+  name: props.bill.vendor?.name ?? t('vendor'),
+  logoUrl: props.bill.vendor?.logo_url,
+  lines: addressLines(props.bill.vendor?.address),
+  email: props.bill.vendor?.email ?? undefined,
+  phone: props.bill.vendor?.phone ?? undefined,
+  taxId: props.bill.vendor?.tax_id ?? undefined,
+  taxIdLabel: 'NTN',
+}))
+
+/* Same identity as the issuer block elsewhere; on a bill it is the party
+   receiving rather than the party sending. */
+const billedTo = computed(() => props.company.letterhead)
+
+const documentDates = computed(() =>
+  [
+    { label: t('billDate'), value: formatDate(props.bill.bill_date) },
+    { label: t('dueDate'), value: formatDate(props.bill.due_date) },
+  ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
+)
+
+const documentLines = computed<DocumentLine[]>(() =>
+  props.bill.line_items.map((item) => ({
+    description: item.description,
+    detail: item.item?.name && item.item.name !== item.description ? item.item.name : undefined,
+    quantity: item.quantity,
+    unit: item.item?.unit_of_measure,
+    unitPrice: item.unit_price,
+    amount: item.total,
+  })),
+)
+
+/* Zero rows are left out: a discount of nothing is not a fact about this bill. */
+const documentTotals = computed<DocumentTotal[]>(() => {
+  const totals: DocumentTotal[] = [{ label: t('subtotal'), amount: props.bill.subtotal }]
+  if (props.bill.discount_amount > 0) {
+    totals.push({ label: t('discount'), amount: props.bill.discount_amount, sign: '−' })
+  }
+  if (props.bill.tax_amount > 0) {
+    totals.push({ label: t('tax'), amount: props.bill.tax_amount, sign: '+' })
+  }
+  if (props.bill.paid_amount > 0) {
+    totals.push({ label: t('paid'), amount: props.bill.paid_amount, sign: '−', muted: true })
+  }
+  return totals
+})
+
+/* Stamped across the sheet when the bill's standing is in question. */
+const overprint = computed(() => {
+  if (['void', 'cancelled', 'reversed'].includes(props.bill.status)) return 'Void'
+  if (props.bill.status === 'draft') return 'Draft'
+  if (props.bill.status === 'paid' || Number(props.bill.balance) === 0) return 'Paid'
+  return null
+})
+
 const navigateToVendor = () => {
   if (props.bill.vendor_id) {
     router.get(`/${props.company.slug}/vendors/${props.bill.vendor_id}`)
@@ -387,9 +444,9 @@ const navigateToVendor = () => {
 </script>
 
 <template>
-  <Head :title="`${t('bills')} ${bill.bill_number}`" />
+  <Head :title="`${t('bill')} ${bill.bill_number}`" />
   <PageShell
-    :title="`${t('bills')} ${bill.bill_number}`"
+    :title="`${t('bill')} ${bill.bill_number}`"
     :breadcrumbs="breadcrumbs"
     :icon="FileText"
   >
@@ -421,111 +478,27 @@ const navigateToVendor = () => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Content -->
       <div class="lg:col-span-2 space-y-6">
-        <!-- Bill Details Card -->
-        <Card>
-          <CardHeader>
-            <!-- Vendor Logo Section -->
-            <div class="mb-4 pb-4 border-b">
-              <div class="flex items-center gap-4">
-                <div v-if="bill.vendor?.logo_url" class="flex-shrink-0">
-                  <img
-                    :src="bill.vendor.logo_url"
-                    :alt="`${bill.vendor.name} logo`"
-                    class="h-16 w-auto object-contain"
-                  />
-                </div>
-                <div v-else class="flex-shrink-0">
-                  <div class="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Building class="h-8 w-8 text-primary" />
-                  </div>
-                </div>
-                <div>
-                  <h2 class="text-xl font-semibold">{{ bill.vendor?.name ?? t('vendor') }}</h2>
-                  <p class="text-sm text-muted-foreground">{{ t('vendor') }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between">
-              <div>
-                <CardTitle>{{ bill.bill_number }}</CardTitle>
-                <CardDescription>{{ formatDate(bill.bill_date) }}</CardDescription>
-              </div>
-              <Badge :variant="statusVariant(bill.status)" class="text-base px-4 py-1">
-                {{ billStatusLabel(bill.status) }}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent class="space-y-6">
-            <!-- Due Date -->
-            <div>
-              <h3 class="text-sm font-medium text-muted-foreground mb-2">{{ t('dueDate') }}</h3>
-              <p class="text-lg font-semibold">{{ formatDate(bill.due_date) }}</p>
-            </div>
-
-            <Separator />
-
-            <!-- Line Items -->
-            <div>
-              <h3 class="text-lg font-semibold mb-4">{{ t('lineItems') }}</h3>
-              <div class="space-y-3">
-                <div
-                  v-for="item in bill.line_items"
-                  :key="item.id"
-                  class="p-4 border rounded-lg"
-                >
-                  <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-medium">{{ item.description }}</h4>
-                    <span class="font-semibold">{{ formatMoney(item.total, bill.currency) }}</span>
-                  </div>
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
-                    <div>
-                      <span class="font-medium">{{ t('quantity') }}:</span> {{ formatNumber(item.quantity) }}
-                    </div>
-                    <div>
-                      <span class="font-medium">{{ t('price') }}:</span> {{ formatMoney(item.unit_price, bill.currency) }}
-                    </div>
-                    <div v-if="item.tax_rate > 0">
-                      <span class="font-medium">{{ t('tax') }}:</span> {{ formatNumber(item.tax_rate) }}%
-                    </div>
-                    <div v-if="item.discount_rate > 0">
-                      <span class="font-medium">{{ t('discount') }}:</span> {{ formatNumber(item.discount_rate) }}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <!-- Totals -->
-            <div class="space-y-3">
-              <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ t('subtotal') }}</span>
-                <span class="font-medium">{{ formatMoney(bill.subtotal, bill.currency) }}</span>
-              </div>
-              <div v-if="bill.tax_amount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ t('tax') }}</span>
-                <span class="font-medium">{{ formatMoney(bill.tax_amount, bill.currency) }}</span>
-              </div>
-              <div v-if="bill.discount_amount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ t('discount') }}</span>
-                <span class="font-medium text-destructive">-{{ formatMoney(bill.discount_amount, bill.currency) }}</span>
-              </div>
-              <Separator />
-              <div class="flex justify-between text-lg font-bold">
-                <span>{{ t('total') }}</span>
-                <span>{{ formatMoney(bill.total_amount, bill.currency) }}</span>
-              </div>
-            </div>
-
-            <!-- Notes -->
-            <div v-if="bill.notes" class="pt-4 border-t">
-              <h4 class="text-sm font-medium text-muted-foreground mb-2">{{ t('notes') }}</h4>
-              <p class="text-sm">{{ bill.notes }}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <LedgerDocument
+          :doc-type="t('bill')"
+          :doc-number="bill.bill_number"
+          :issuer="issuer"
+          :bill-to="billedTo"
+          :bill-to-label="t('billedTo')"
+          :dates="documentDates"
+          :lines="documentLines"
+          :totals="documentTotals"
+          :grand-total-label="t('total')"
+          :grand-total-amount="bill.total_amount"
+          :amount-due-label="t('balanceDue')"
+          :amount-due-amount="bill.balance"
+          :currency="bill.currency"
+          locale="en-PK"
+          :overprint="overprint"
+        >
+          <template v-if="bill.notes" #terms>
+            <p dir="auto">{{ bill.notes }}</p>
+          </template>
+        </LedgerDocument>
 
         <Card v-if="supplierClaims.length > 0">
           <CardHeader>
@@ -542,9 +515,7 @@ const navigateToVendor = () => {
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="font-medium">{{ claim.item_name }}</p>
-                    <Badge :variant="claim.claim_status === 'received' ? 'default' : 'outline'">
-                      {{ claim.claim_status === 'received' ? 'Received' : 'Pending' }}
-                    </Badge>
+                    <StatusBadge :status="claim.claim_status" fallback="Pending" />
                   </div>
                   <p class="text-sm text-muted-foreground">
                     Short {{ formatNumber(Math.abs(claim.variance_quantity), 3) }}
@@ -556,7 +527,7 @@ const navigateToVendor = () => {
                   </p>
                 </div>
                 <div class="flex flex-col items-start gap-2 sm:items-end">
-                  <span class="font-semibold">{{ formatMoney(claim.claim_amount, bill.currency) }}</span>
+                  <span class="font-semibold"><MoneyText :amount="claim.claim_amount" :currency="bill.currency" /></span>
                   <Button
                     v-if="claim.claim_status === 'pending'"
                     size="sm"
@@ -591,17 +562,17 @@ const navigateToVendor = () => {
             <div class="space-y-2">
               <div class="flex justify-between text-sm">
                 <span class="text-muted-foreground">{{ t('billAmount') }}</span>
-                <span class="font-medium">{{ formatMoney(bill.total_amount, bill.currency) }}</span>
+                <span class="font-medium"><MoneyText :amount="bill.total_amount" :currency="bill.currency" /></span>
               </div>
               <div class="flex justify-between text-sm">
                 <span class="text-muted-foreground">{{ t('amountPaid') }}</span>
-                <span class="font-medium">{{ formatMoney(bill.paid_amount, bill.currency) }}</span>
+                <span class="font-medium"><MoneyText :amount="bill.paid_amount" :currency="bill.currency" /></span>
               </div>
               <Separator />
               <div class="flex justify-between text-base font-semibold">
                 <span>{{ t('balanceDue') }}</span>
                 <span :class="bill.balance > 0 ? 'text-destructive' : 'text-status-success'">
-                  {{ formatMoney(bill.balance, bill.currency) }}
+                  <MoneyText :amount="bill.balance" :currency="bill.currency" />
                 </span>
               </div>
             </div>
@@ -685,7 +656,7 @@ const navigateToVendor = () => {
             </div>
             <div class="flex justify-between">
               <span class="text-muted-foreground">{{ t('status') }}</span>
-              <Badge :variant="statusVariant(bill.status)">{{ billStatusLabel(bill.status) }}</Badge>
+              <StatusBadge :status="bill.status" explain />
             </div>
             <div class="flex justify-between">
               <span class="text-muted-foreground">{{ t('stockStatus') }}</span>
@@ -844,7 +815,7 @@ const navigateToVendor = () => {
           <div v-if="selectedClaim" class="rounded-md border bg-muted/30 p-3 text-sm">
             <div class="flex justify-between">
               <span>{{ selectedClaim.item_name }}</span>
-              <span class="font-medium">{{ formatMoney(selectedClaim.claim_amount, bill.currency) }}</span>
+              <span class="font-medium"><MoneyText :amount="selectedClaim.claim_amount" :currency="bill.currency" /></span>
             </div>
           </div>
 
@@ -937,5 +908,7 @@ const navigateToVendor = () => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <RelatedActions screen="bill.show" :slug="company.slug" :subject="bill" />
   </PageShell>
 </template>

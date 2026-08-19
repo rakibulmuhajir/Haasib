@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { CalendarClock, Droplet, Plus, TrendingUp } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
   id: string
@@ -102,13 +103,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const formatMoney = (amount: number) => {
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount ?? 0)
+    return formatMoneyText(amount ?? 0, currencyCode.value, { fractionDigits: 2 })
   } catch (_e) {
     return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount ?? 0)
   }
@@ -441,8 +436,11 @@ const submit = () => {
           </template>
 
           <template #cell-margin="{ row }">
+<!-- A positive margin is the ordinary case and needs no colour. A
+                 negative one means the pump is selling below what the fuel cost,
+                 which is the rare thing on this page somebody must act on. -->
             <Badge
-              :class="spreadFor(row._raw) >= 0 ? 'bg-status-success/10 text-status-success hover:bg-status-success/10' : 'bg-status-critical/10 text-status-critical hover:bg-status-critical/10'"
+              :class="spreadFor(row._raw) >= 0 ? '' : 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'"
             >
               {{ row.margin }}
             </Badge>

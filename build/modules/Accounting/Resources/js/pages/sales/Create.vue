@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { Plus, Trash2 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 type CompanyRef = {
   id: string
@@ -77,11 +78,7 @@ const total = computed(() => {
 })
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, props.company.base_currency || 'USD')
 }
 
 const addLine = () => {

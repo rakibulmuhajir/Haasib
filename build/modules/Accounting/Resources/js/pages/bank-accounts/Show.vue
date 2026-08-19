@@ -4,14 +4,9 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import {
   Landmark,
   Pencil,
@@ -21,11 +16,10 @@ import {
   ArrowDownLeft,
   MoreHorizontal,
   Calendar,
-  CheckCircle2,
-  Clock
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -114,11 +108,7 @@ const accountTypeLabels: Record<string, string> = {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
+  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {
@@ -152,6 +142,23 @@ const handleViewTransaction = (id: string) => {
   // Navigate to bank feed with this transaction highlighted
   router.get(`/${props.company.slug}/banking/feed`, { transaction_id: id })
 }
+
+/**
+ * This account moves money in both directions, so the register gives each
+ * direction its own column instead of a single signed figure. A statement
+ * reader should never have to parse a minus sign to know which way money
+ * went -- the column heading already says so. Reconciliation is a state, so
+ * it goes through StatusBadge and reuses the same "reconciled" vocabulary as
+ * bank reconciliation and journals rather than a bespoke icon.
+ */
+const transactionColumns = [
+  { key: 'transaction_date', label: 'Date', kind: 'date' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'category', label: 'Category', kind: 'text' as const },
+  { key: 'deposited', label: 'Deposited', kind: 'in' as const },
+  { key: 'withdrawn', label: 'Withdrawn', kind: 'out' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+]
 </script>
 
 <template>
@@ -263,62 +270,46 @@ const handleViewTransaction = (id: string) => {
             <CardTitle>Recent Transactions</CardTitle>
             <CardDescription>Last 25 transactions</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div v-if="recentTransactions.length === 0" class="text-center py-8 text-muted-foreground">
-              No transactions yet
-            </div>
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead class="text-right">Amount</TableHead>
-                  <TableHead class="text-center">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow
-                  v-for="tx in recentTransactions"
-                  :key="tx.id"
-                  class="cursor-pointer hover:bg-muted/50"
-                  @click="handleViewTransaction(tx.id)"
-                >
-                  <TableCell class="whitespace-nowrap">
-                    {{ formatDate(tx.transaction_date) }}
-                  </TableCell>
-                  <TableCell>
-                    <div class="flex items-center gap-2">
-                      <component
-                        :is="tx.amount > 0 ? ArrowDownLeft : ArrowUpRight"
-                        :class="tx.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'"
-                        class="h-4 w-4"
-                      />
-                      <div>
-                        <p class="font-medium">{{ tx.description }}</p>
-                        <p v-if="tx.payee_name" class="text-xs text-muted-foreground">{{ tx.payee_name }}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge v-if="tx.category" variant="outline">{{ tx.category }}</Badge>
-                    <span v-else class="text-muted-foreground text-sm">Uncategorized</span>
-                  </TableCell>
-                  <!-- Direction is not severity. Money leaving a bank account is
-                       what a bank account is for; it was rendered in red, next to
-                       deposits in green, so an ordinary register read as a page of
-                       alarms. Both flows are ink, and the arrow plus the sign carry
-                       the direction. -->
-                  <TableCell class="text-right font-mono" :class="tx.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'">
-                    {{ tx.amount > 0 ? '' : '-' }}{{ formatCurrency(Math.abs(tx.amount), bankAccount.currency) }}
-                  </TableCell>
-                  <TableCell class="text-center">
-                    <CheckCircle2 v-if="tx.is_reconciled" class="h-4 w-4 text-status-success mx-auto" />
-                    <Clock v-else class="h-4 w-4 text-status-attention mx-auto" />
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+          <CardContent class="p-0">
+            <LedgerRegister
+              :data="recentTransactions"
+              :columns="transactionColumns"
+              clickable
+              @row-click="(row) => handleViewTransaction(row.id)"
+            >
+              <template #empty>No transactions yet</template>
+
+              <template #cell-description="{ row }">
+                <div class="flex items-center gap-2">
+                  <component
+                    :is="row.amount > 0 ? ArrowDownLeft : ArrowUpRight"
+                    :class="row.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'"
+                    class="h-4 w-4"
+                  />
+                  <div>
+                    <p class="font-medium">{{ row.description }}</p>
+                    <p v-if="row.payee_name" class="text-xs text-muted-foreground">{{ row.payee_name }}</p>
+                  </div>
+                </div>
+              </template>
+
+              <template #cell-category="{ row }">
+                <MetaChip v-if="row.category" tone="neutral" bare>{{ row.category }}</MetaChip>
+                <span v-else class="text-muted-foreground text-sm">Uncategorized</span>
+              </template>
+
+              <template #cell-deposited="{ row }">
+                {{ row.amount > 0 ? formatCurrency(row.amount, bankAccount.currency) : '—' }}
+              </template>
+
+              <template #cell-withdrawn="{ row }">
+                {{ row.amount < 0 ? formatCurrency(Math.abs(row.amount), bankAccount.currency) : '—' }}
+              </template>
+
+              <template #cell-status="{ row }">
+                <StatusBadge :status="row.is_reconciled ? 'reconciled' : 'pending'" />
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
       </div>

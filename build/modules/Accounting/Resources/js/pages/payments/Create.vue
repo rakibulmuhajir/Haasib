@@ -2,15 +2,16 @@
 import { computed, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, Smartphone, FileText } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -117,11 +118,7 @@ watch(() => form.invoice_id, () => {
 })
 
 const formatCurrency = (amount: number, currencyCode?: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode || form.currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currencyCode || form.currency || 'USD')
 }
 
 const submit = () => {
@@ -367,5 +364,7 @@ const submit = () => {
         </CardContent>
       </Card>
     </form>
+
+    <RelatedActions screen="payment.create" :slug="company.slug" />
   </PageShell>
 </template>

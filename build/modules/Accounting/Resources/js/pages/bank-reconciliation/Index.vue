@@ -3,28 +3,19 @@ import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import {
   RefreshCcw,
   PlusCircle,
-  CheckCircle2,
-  Clock,
-  XCircle,
   Eye
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -91,24 +82,19 @@ const statusFilter = ref(props.filters.status || '__all')
 
 const noneValue = '__all'
 
-const statusLabels: Record<string, string> = {
-  in_progress: 'In Progress',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-}
-
-const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  in_progress: 'default',
-  completed: 'secondary',
-  cancelled: 'destructive',
+// The reconciliation's own lifecycle, not the balance check -- that one gets
+// its own colour further down. An in-progress reconciliation is waiting on
+// someone, which is what "pending" means everywhere else in this app;
+// "completed" is the same fact as "matched" on a bank register, so it reuses
+// that state rather than inventing a synonym.
+const reconciliationStatus: Record<string, string> = {
+  in_progress: 'pending',
+  completed: 'reconciled',
+  cancelled: 'cancelled',
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
+  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {
@@ -131,13 +117,21 @@ const handleView = (id: string) => {
   router.get(`/${props.company.slug}/banking/reconciliation/${id}`)
 }
 
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'completed': return CheckCircle2
-    case 'cancelled': return XCircle
-    default: return Clock
-  }
-}
+/**
+ * A reconciliation run is a register row like any other: which account,
+ * against what statement, and whether the two sides came out even. The
+ * difference is a pass/fail check rather than an ordinary figure -- it either
+ * confirms the books or it doesn't -- so it keeps the success/critical colour
+ * the rest of this register's amounts don't get.
+ */
+const reconciliationColumns = [
+  { key: 'bank_account', label: 'Bank Account', kind: 'text' as const },
+  { key: 'statement_date', label: 'Statement Date', kind: 'date' as const },
+  { key: 'statement_ending_balance', label: 'Statement Balance', kind: 'amount' as const },
+  { key: 'difference', label: 'Difference', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+]
 </script>
 
 <template>
@@ -198,7 +192,7 @@ const getStatusIcon = (status: string) => {
 
     <!-- Reconciliations Table -->
     <Card>
-      <CardContent class="pt-6">
+      <CardContent class="p-0">
         <div v-if="reconciliations.data.length === 0" class="text-center py-12 text-muted-foreground">
           <RefreshCcw class="mx-auto h-12 w-12 mb-4 opacity-50" />
           <p class="text-lg font-medium">No reconciliations found</p>
@@ -209,51 +203,44 @@ const getStatusIcon = (status: string) => {
           </Button>
         </div>
 
-        <Table v-else>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Bank Account</TableHead>
-              <TableHead>Statement Date</TableHead>
-              <TableHead class="text-right">Statement Balance</TableHead>
-              <TableHead class="text-right">Difference</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead class="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow
-              v-for="recon in reconciliations.data"
-              :key="recon.id"
-              class="cursor-pointer hover:bg-muted/50"
-              @click="handleView(recon.id)"
-            >
-              <TableCell>
-                <div>
-                  <p class="font-medium">{{ recon.bank_account.account_name }}</p>
-                  <p class="text-xs text-muted-foreground">{{ recon.bank_account.account_number }}</p>
-                </div>
-              </TableCell>
-              <TableCell>{{ formatDate(recon.statement_date) }}</TableCell>
-              <TableCell class="text-right font-mono">
-                {{ formatCurrency(recon.statement_ending_balance, recon.bank_account.currency) }}
-              </TableCell>
-              <TableCell class="text-right font-mono" :class="Math.abs(recon.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'">
-                {{ formatCurrency(recon.difference, recon.bank_account.currency) }}
-              </TableCell>
-              <TableCell>
-                <Badge :variant="statusVariants[recon.status]">
-                  <component :is="getStatusIcon(recon.status)" class="mr-1 h-3 w-3" />
-                  {{ statusLabels[recon.status] }}
-                </Badge>
-              </TableCell>
-              <TableCell class="text-right">
-                <Button variant="ghost" size="sm" @click.stop="handleView(recon.id)">
-                  <Eye class="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <LedgerRegister
+          v-else
+          :data="reconciliations.data"
+          :columns="reconciliationColumns"
+          clickable
+          @row-click="(row) => handleView(row.id)"
+        >
+          <template #cell-bank_account="{ row }">
+            <div>
+              <p class="font-medium">{{ row.bank_account.account_name }}</p>
+              <p class="text-xs text-muted-foreground">{{ row.bank_account.account_number }}</p>
+            </div>
+          </template>
+
+          <template #cell-statement_date="{ row }">{{ formatDate(row.statement_date) }}</template>
+
+          <template #cell-statement_ending_balance="{ row }">
+            {{ formatCurrency(row.statement_ending_balance, row.bank_account.currency) }}
+          </template>
+
+          <template #cell-difference="{ row }">
+            <span :class="Math.abs(row.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'">
+              {{ formatCurrency(row.difference, row.bank_account.currency) }}
+            </span>
+          </template>
+
+          <template #cell-status="{ row }">
+            <StatusBadge :status="reconciliationStatus[row.status]" />
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="flex justify-end gap-2" @click.stop>
+              <Button variant="ghost" size="sm" @click="handleView(row.id)">
+                <Eye class="h-4 w-4" />
+              </Button>
+            </div>
+          </template>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

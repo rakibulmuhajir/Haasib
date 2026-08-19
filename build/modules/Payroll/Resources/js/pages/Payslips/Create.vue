@@ -17,20 +17,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
     id: string;
@@ -164,6 +158,25 @@ const removeLine = (index: number) => {
     form.lines.splice(index, 1);
 };
 
+/**
+ * Earnings and deductions are being entered into one payslip, not two --
+ * they were only ever split into separate tables because the old table
+ * component had no notion of a column carrying either direction. One column
+ * for what is added, one for what is taken off, edited in place as the line
+ * is built. Quantity and rate only apply to a rate-based earning, so a
+ * deduction row leaves them out rather than showing controls that do
+ * nothing.
+ */
+const lineColumns = [
+    { key: 'type', label: 'Type', kind: 'text' as const },
+    { key: 'description', label: 'Description', kind: 'text' as const },
+    { key: 'quantity', label: 'Qty', kind: 'amount' as const },
+    { key: 'rate', label: 'Rate', kind: 'amount' as const },
+    { key: 'earning', label: 'Earning', kind: 'in' as const },
+    { key: 'deduction', label: 'Deduction', kind: 'out' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
+
 const earnings = computed(() =>
     form.lines.filter((l) => l.line_type === 'earning'),
 );
@@ -207,11 +220,7 @@ const estimatedAdvanceRecovery = computed(() => {
 });
 
 const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currencyDisplay: 'narrowSymbol',
-        currency: currency || 'USD',
-    }).format(amount);
+    return formatMoneyText(amount, currency || 'USD');
 };
 
 const formatDate = (date: string) => {
@@ -452,265 +461,155 @@ const submit = () => {
                         </CardContent>
                     </Card>
 
-                    <!-- Earnings -->
+                    <!-- Payslip lines -->
                     <Card>
                         <CardHeader>
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <CardTitle>Earnings</CardTitle>
+                                    <CardTitle>Payslip Lines</CardTitle>
                                     <CardDescription
-                                        >Add earnings for this
-                                        payslip</CardDescription
+                                        >Add earnings and deductions for this
+                                        payslip. Salary advance recoveries are
+                                        added automatically from outstanding
+                                        advances.</CardDescription
                                     >
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addEarning"
-                                >
-                                    <Plus class="mr-2 h-4 w-4" />
-                                    Add Earning
-                                </Button>
+                                <div class="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        @click="addEarning"
+                                    >
+                                        <Plus class="mr-2 h-4 w-4" />
+                                        Add Earning
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        @click="addDeduction"
+                                    >
+                                        <Plus class="mr-2 h-4 w-4" />
+                                        Add Deduction
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead class="w-28">Qty</TableHead>
-                                        <TableHead class="w-28">Rate</TableHead>
-                                        <TableHead class="w-32"
-                                            >Amount</TableHead
-                                        >
-                                        <TableHead class="w-12"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <template
-                                        v-for="(line, index) in form.lines"
-                                        :key="index"
-                                    >
-                                        <TableRow
-                                            v-if="line.line_type === 'earning'"
-                                        >
-                                            <TableCell>
-                                                <Select
-                                                    v-model="
-                                                        line.earning_type_id
-                                                    "
-                                                >
-                                                    <SelectTrigger class="w-32">
-                                                        <SelectValue
-                                                            placeholder="Type"
-                                                        />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem
-                                                            v-for="et in earningTypes"
-                                                            :key="et.id"
-                                                            :value="et.id"
-                                                        >
-                                                            {{ et.name }}
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model="line.description"
-                                                    placeholder="Description"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model.number="
-                                                        line.quantity
-                                                    "
-                                                    type="number"
-                                                    step="0.01"
-                                                    placeholder="Qty"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model.number="line.rate"
-                                                    type="number"
-                                                    step="0.01"
-                                                    placeholder="Rate"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model.number="line.amount"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    class="h-8 w-8 text-destructive"
-                                                    @click="removeLine(index)"
-                                                >
-                                                    <Trash2 class="h-4 w-4" />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    </template>
-                                    <TableRow v-if="earnings.length === 0">
-                                        <TableCell
-                                            colspan="6"
-                                            class="text-center text-muted-foreground"
-                                        >
-                                            No earnings added. Click "Add
-                                            Earning" to start.
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow class="bg-muted/50 font-bold">
-                                        <TableCell colspan="4"
-                                            >Gross Pay</TableCell
-                                        >
-                                        <TableCell colspan="2">
-                                            {{
-                                                formatCurrency(
-                                                    grossPay,
-                                                    form.currency,
-                                                )
-                                            }}
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                        <CardContent class="p-0">
+                            <LedgerRegister
+                                :data="form.lines"
+                                :columns="lineColumns"
+                                :key-field="(_row: PayslipLine, i: number) => i"
+                                :totals="{ earning: formatCurrency(grossPay, form.currency), deduction: formatCurrency(totalDeductions, form.currency) }"
+                            >
+                                <template #empty
+                                    >No lines added. Add an earning or a
+                                    deduction to start.</template
+                                >
 
-                    <!-- Deductions -->
-                    <Card>
-                        <CardHeader>
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Deductions</CardTitle>
-                                    <CardDescription
-                                        >Add regular deductions. Salary advance
-                                        recoveries are added automatically from
-                                        outstanding advances.</CardDescription
+                                <template #cell-type="{ row }">
+                                    <Select
+                                        v-if="row.line_type === 'earning'"
+                                        v-model="row.earning_type_id"
                                     >
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="addDeduction"
-                                >
-                                    <Plus class="mr-2 h-4 w-4" />
-                                    Add Deduction
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead class="w-32"
-                                            >Amount</TableHead
-                                        >
-                                        <TableHead class="w-12"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <template
-                                        v-for="(line, index) in form.lines"
-                                        :key="index"
+                                        <SelectTrigger class="w-32">
+                                            <SelectValue placeholder="Type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem
+                                                v-for="et in earningTypes"
+                                                :key="et.id"
+                                                :value="et.id"
+                                            >
+                                                {{ et.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        v-else
+                                        v-model="row.deduction_type_id"
                                     >
-                                        <TableRow
-                                            v-if="
-                                                line.line_type === 'deduction'
-                                            "
+                                        <SelectTrigger class="w-32">
+                                            <SelectValue placeholder="Type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem
+                                                v-for="dt in deductionTypes"
+                                                :key="dt.id"
+                                                :value="dt.id"
+                                            >
+                                                {{ dt.name }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </template>
+
+                                <template #cell-description="{ row }">
+                                    <Input
+                                        v-model="row.description"
+                                        placeholder="Description"
+                                    />
+                                </template>
+
+                                <template #cell-quantity="{ row }">
+                                    <Input
+                                        v-if="row.line_type === 'earning'"
+                                        v-model.number="row.quantity"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Qty"
+                                    />
+                                    <span v-else>—</span>
+                                </template>
+
+                                <template #cell-rate="{ row }">
+                                    <Input
+                                        v-if="row.line_type === 'earning'"
+                                        v-model.number="row.rate"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Rate"
+                                    />
+                                    <span v-else>—</span>
+                                </template>
+
+                                <template #cell-earning="{ row }">
+                                    <Input
+                                        v-if="row.line_type === 'earning'"
+                                        v-model.number="row.amount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                    />
+                                    <span v-else>—</span>
+                                </template>
+
+                                <template #cell-deduction="{ row }">
+                                    <Input
+                                        v-if="row.line_type === 'deduction'"
+                                        v-model.number="row.amount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                    />
+                                    <span v-else>—</span>
+                                </template>
+
+                                <template #cell-actions="{ row }">
+                                    <div class="flex justify-end gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            class="h-8 w-8 text-destructive"
+                                            @click="removeLine(form.lines.indexOf(row))"
                                         >
-                                            <TableCell>
-                                                <Select
-                                                    v-model="
-                                                        line.deduction_type_id
-                                                    "
-                                                >
-                                                    <SelectTrigger class="w-32">
-                                                        <SelectValue
-                                                            placeholder="Type"
-                                                        />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem
-                                                            v-for="dt in deductionTypes"
-                                                            :key="dt.id"
-                                                            :value="dt.id"
-                                                        >
-                                                            {{ dt.name }}
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model="line.description"
-                                                    placeholder="Description"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Input
-                                                    v-model.number="line.amount"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    class="h-8 w-8 text-destructive"
-                                                    @click="removeLine(index)"
-                                                >
-                                                    <Trash2 class="h-4 w-4" />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    </template>
-                                    <TableRow v-if="deductions.length === 0">
-                                        <TableCell
-                                            colspan="4"
-                                            class="text-center text-muted-foreground"
-                                        >
-                                            No deductions added. Click "Add
-                                            Deduction" to start.
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow class="bg-muted/50 font-bold">
-                                        <TableCell colspan="2"
-                                            >Total Deductions</TableCell
-                                        >
-                                        <TableCell
-                                            colspan="2"
-                                            class="text-destructive"
-                                        >
-                                            -{{
-                                                formatCurrency(
-                                                    totalDeductions,
-                                                    form.currency,
-                                                )
-                                            }}
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </template>
+                            </LedgerRegister>
                         </CardContent>
                     </Card>
 

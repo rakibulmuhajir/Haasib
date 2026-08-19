@@ -1,5 +1,3 @@
-import { formatDateTime } from '@/lib/datetime'
-
 /**
  * Format text with semantic color tags
  * Supports: {success}, {error}, {warning}, {accent}, {primary}, {secondary}, {link:url}
@@ -71,23 +69,3 @@ function sanitizeUrl(url: string): string {
   return `/${url}`
 }
 
-/**
- * Helper to format money
- */
-export function formatMoney(amount: number | string, currency = 'USD'): string {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount
-  if (isNaN(num)) return String(amount)
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency,
-  }).format(num)
-}
-
-/**
- * Helper to format date
- */
-export function formatDate(date: string | Date): string {
-  return formatDateTime(date, { mode: 'date' })
-}

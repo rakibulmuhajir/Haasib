@@ -87,7 +87,7 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
           <Badge
             v-if="badge"
             :variant="badge.variant || 'secondary'"
-            class="shrink-0 rounded-full px-2.5 font-medium"
+            class="shrink-0 px-2.5"
           >
             {{ badge.text }}
           </Badge>

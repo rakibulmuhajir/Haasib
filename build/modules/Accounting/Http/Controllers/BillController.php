@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Services\CompanyLetterhead;
 use Inertia\Response;
 
 class BillController extends Controller
@@ -347,7 +348,14 @@ class BillController extends Controller
     public function show(string $company, string $bill): Response
     {
         $companyModel = app(CompanyContextService::class)->requireCompany();
-        $record = \App\Modules\Accounting\Models\Bill::with(['vendor:id,name,logo_url', 'lineItems.item'])
+        // A bill is an invoice somebody sent us, so the vendor is the issuer of
+        // the document on this page. An issuer needs more than a name and a
+        // logo -- an address, a way to reach them, and the tax number the
+        // document is filed under.
+        $record = \App\Modules\Accounting\Models\Bill::with([
+            'vendor:id,name,logo_url,email,phone,address,tax_id',
+            'lineItems.item',
+        ])
             ->where('company_id', $companyModel->id)
             ->findOrFail($bill);
 
@@ -403,6 +411,10 @@ class BillController extends Controller
                 'slug' => $companyModel->slug,
                 'base_currency' => $companyModel->base_currency,
                 'logo_url' => $companyModel->logo_url,
+                // On a bill the company is the recipient, not the issuer, but it
+                // is the same identity either way -- so it comes from the same
+                // assembler the issuer block uses everywhere else.
+                'letterhead' => app(CompanyLetterhead::class)->forCompany($companyModel),
             ],
             'bill' => $record,
             'journalTransactionId' => $journalTransactionId,

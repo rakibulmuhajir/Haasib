@@ -7,6 +7,11 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
+import Derivation from '@/components/Derivation.vue'
+import type { DerivationLine } from '@/components/Derivation.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import type { RegisterColumn } from '@/components/LedgerRegister.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useFormFeedback } from '@/composables/useFormFeedback'
 import { useLexicon } from '@/composables/useLexicon'
@@ -69,6 +74,7 @@ import {
   ChevronDown,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { currencySymbol as sharedCurrencySymbol } from '@/lib/utils'
 
 const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 
@@ -120,6 +126,8 @@ interface Financials {
     currency?: string
     status?: string
     occurred_at: string
+    /** Which column the figure belongs in. `null` for entries with no money. */
+    direction?: 'in' | 'out' | null
   }>
 }
 
@@ -887,15 +895,9 @@ const moneyLocale = (currencyCode?: string) => {
   return 'en-US'
 }
 
-const currencySymbol = (currencyCode: string) => {
-  const locale = moneyLocale(currencyCode)
-  const formatter = new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currencyCode,
-    currencyDisplay: 'narrowSymbol',
-  })
-  return formatter.formatToParts(0).find((p) => p.type === 'currency')?.value ?? currencyCode
-}
+/* The symbol lookup lives in lib/utils; this page only supplies the locale,
+   because Rs and ₨ differ by locale for the same PKR code. */
+const currencySymbol = (currencyCode: string) => sharedCurrencySymbol(currencyCode, moneyLocale(currencyCode))
 
 const formatQuantity = (value?: number | null, unit?: string | null) => {
   const quantity = Number(value ?? 0).toLocaleString(moneyLocale(props.company.base_currency), {
@@ -906,7 +908,7 @@ const formatQuantity = (value?: number | null, unit?: string | null) => {
 }
 
 const formatPercent = (value?: number | null) => {
-  if (value === null || value === undefined) return 'â€”'
+  if (value === null || value === undefined) return '—'
   return `${Number(value).toFixed(1)}%`
 }
 
@@ -990,6 +992,133 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
 
   return readingDate >= stockDate
 }
+/* ── The dashboard, read as a reckoning ─────────────────────────────────────
+   Eight cards each announcing a number is a list of facts. The page below is
+   an argument: this is what you hold, this is what is already spoken for,
+   therefore this is what is free. Everything else on the page answers to it. */
+
+const baseCurrency = computed(() => props.company.base_currency)
+const baseLocale = computed(() => moneyLocale(props.company.base_currency))
+
+/** Money already promised to someone else in the next few days. */
+const committedSoon = computed(() => props.dashboard.needs_attention.bills_due_soon_amount ?? 0)
+
+const standLines = computed<DerivationLine[]>(() => {
+  const lines: DerivationLine[] = [
+    { label: 'In your accounts', amount: props.dashboard.cash_position.total, sign: null },
+  ]
+  if (committedSoon.value > 0) {
+    lines.push({ label: 'Bills falling due', amount: committedSoon.value, sign: '−' })
+  }
+  return lines
+})
+
+const freeToCommit = computed(() => props.dashboard.cash_position.total - committedSoon.value)
+
+const accountCount = computed(() => props.dashboard.cash_position.accounts.length)
+
+/* Profit and loss, stated the same way — earned, less spent, therefore kept. */
+const periodLines = computed<DerivationLine[]>(() => [
+  { label: 'Money earned', amount: props.dashboard.profit_loss.income, sign: null },
+  { label: 'Money spent', amount: props.dashboard.profit_loss.expenses, sign: '−' },
+])
+
+const periodResultLabel = computed(() =>
+  props.dashboard.profit_loss.profit < 0 ? 'Loss for the period' : 'Kept',
+)
+
+interface AttentionItem {
+  key: string
+  label: string
+  why: string
+  chip: string
+  tone: 'late' | 'attention' | 'info'
+  href: string
+}
+
+/* Ordered by how badly it wants you: money already late, then money about to
+   leave, then bookkeeping. Rows with a count of zero never appear — an item
+   that says "0 overdue invoices" is asking to be read and then ignored. */
+const attentionItems = computed<AttentionItem[]>(() => {
+  const n = props.dashboard.needs_attention
+  const slug = props.company.slug
+  const items: AttentionItem[] = []
+
+  if (n.overdue_invoices > 0) {
+    items.push({
+      key: 'overdue',
+      label: n.overdue_invoices === 1 ? 'One invoice is overdue' : `${n.overdue_invoices} invoices are overdue`,
+      why: 'Work you have already done that has not been paid for.',
+      chip: 'Past due',
+      tone: 'late',
+      href: `/${slug}/invoices?status=overdue`,
+    })
+  }
+
+  if (n.bills_due_soon > 0) {
+    items.push({
+      key: 'bills',
+      label: n.bills_due_soon === 1 ? 'One bill is due this week' : `${n.bills_due_soon} bills are due this week`,
+      why: 'Money that leaves the account whether or not you look.',
+      chip: '7 days',
+      tone: 'attention',
+      href: `/${slug}/bills`,
+    })
+  }
+
+  if (n.unreconciled_transactions > 0) {
+    items.push({
+      key: 'unreconciled',
+      label: `${n.unreconciled_transactions} bank ${n.unreconciled_transactions === 1 ? 'line has' : 'lines have'} not been matched`,
+      why: 'Until these are matched, the figures above are an estimate.',
+      chip: 'To match',
+      tone: 'info',
+      href: `/${slug}/bank-reconciliation`,
+    })
+  }
+
+  return items
+})
+
+/* The register. IN and OUT are separate columns because a signed single column
+   makes the reader do the sorting; two columns let the eye do it. */
+interface ActivityRow {
+  key: string
+  occurred_at: string
+  label: string
+  inAmount: number | null
+  outAmount: number | null
+  currency: string
+}
+
+const activityRows = computed<ActivityRow[]>(() =>
+  props.financials.recent_activity.map((item, index) => ({
+    key: `${item.type}-${index}`,
+    occurred_at: item.occurred_at,
+    label: item.label,
+    inAmount: item.direction === 'in' ? (item.amount ?? null) : null,
+    outAmount: item.direction === 'out' ? (item.amount ?? null) : null,
+    currency: item.currency || props.company.base_currency,
+  })),
+)
+
+const activityColumns: RegisterColumn<ActivityRow>[] = [
+  { key: 'occurred_at', label: 'Date', kind: 'date' },
+  { key: 'label', label: 'Entry', kind: 'text' },
+  { key: 'inAmount', label: 'In', kind: 'in' },
+  { key: 'outAmount', label: 'Out', kind: 'out' },
+]
+
+/* Where the page lets you start something rather than only read. */
+const startActions = computed(() => {
+  const slug = props.company.slug
+  return [
+    { key: 'invoice', label: 'Write an invoice', href: `/${slug}/invoices/create` },
+    { key: 'payment', label: 'Record a payment', href: `/${slug}/payments/create` },
+    { key: 'bill', label: 'Enter a bill', href: `/${slug}/bills/create` },
+    { key: 'customer', label: 'Add a customer', href: `/${slug}/customers/create` },
+  ]
+})
 </script>
 
 <template>
@@ -1027,7 +1156,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
 
       <template v-if="!isFuelStationCompany" #description>
         <span class="font-mono text-text-tertiary">{{ company.slug }}</span>
-        <span class="mx-2 text-text-quaternary">â€¢</span>
+        <span class="mx-2 text-text-quaternary">•</span>
         <span class="text-text-secondary">{{ currencySymbol(company.base_currency) }}</span>
       </template>
 
@@ -1120,7 +1249,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                     <CardTitle class="text-base font-semibold text-foreground">Product Overview</CardTitle>
                     <CardDescription>Current stock, sale rate, margin, and recent movement.</CardDescription>
                   </div>
-                  <Badge variant="outline">{{ fuelProductRows.length }} products Â· {{ fuelProductSummary.active_products }} active</Badge>
+                  <Badge variant="outline">{{ fuelProductRows.length }} products · {{ fuelProductSummary.active_products }} active</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1175,7 +1304,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                           <div v-if="product.last_dip_quantity !== null">
                             {{ tankReadingLabel(product) }}: {{ formatQuantity(product.last_dip_quantity, product.unit) }}
                             <span v-if="product.last_dip_at">
-                              Â· <DateTimeText :value="product.last_dip_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
+                              · <DateTimeText :value="product.last_dip_at" mode="datetime" :locale="moneyLocale(company.base_currency)" />
                             </span>
                           </div>
                           <div v-if="product.last_dip_recorded_at">
@@ -1221,7 +1350,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                         </div>
                         <div class="text-xs text-text-secondary">
                           {{ formatQuantity(product.sales.last_month.quantity, product.unit) }}
-                          <span v-if="product.last_sold_at"> Â· {{ formatDate(product.last_sold_at) }}</span>
+                          <span v-if="product.last_sold_at"> · {{ formatDate(product.last_sold_at) }}</span>
                         </div>
                       </div>
 
@@ -1351,231 +1480,114 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
           </div>
         </template>
         <template v-else>
+        <div class="ledger-home">
+          <!-- Where you stand ------------------------------------------------
+               The one conclusion the page exists to state. Everything under it
+               is either the working that produced it or the work that changes
+               it. -->
+          <section class="reckon">
+            <h2 class="reckon__title">Where you stand</h2>
+            <Derivation
+              :lines="standLines"
+              total-label="Free to commit"
+              :total-amount="freeToCommit"
+              :currency="baseCurrency"
+              :locale="baseLocale"
+            >
+              <template #footnote>
+                Across {{ accountCount }} {{ accountCount === 1 ? 'account' : 'accounts' }}.
+                Money customers still owe you is not counted here — it is not yours until it arrives.
+              </template>
+            </Derivation>
+          </section>
 
-        <!-- Cash Position -->
-        <Card class="border-rule-subtle bg-surface-raised">
-          <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">Cash Position</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="mb-4">
-              <div class="text-3xl font-bold text-foreground">
-                <MoneyText :amount="dashboard.cash_position.total" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-              </div>
-              <p class="text-xs text-text-secondary mt-1">Total across all accounts</p>
-            </div>
-            <div v-if="dashboard.cash_position.accounts.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              <div v-for="(account, idx) in dashboard.cash_position.accounts" :key="idx" 
-                class="p-3 bg-surface-sunken rounded-lg border border-rule-subtle"
-              >
-                <div class="text-xs text-text-secondary mb-1 truncate">{{ account.name }}</div>
-                <div class="font-semibold text-text-primary">
-                  <MoneyText :amount="account.balance" :currency="account.currency" :locale="moneyLocale(account.currency)" />
-                </div>
-              </div>
-            </div>
-            <div v-else class="text-sm text-text-secondary italic">No bank accounts connected.</div>
-          </CardContent>
-        </Card>
+          <!-- What needs you -------------------------------------------------
+               A queue, not a scoreboard. Each row is one click from the thing
+               that clears it. -->
+          <section class="needs">
+            <h2 class="needs__title">What needs you</h2>
 
-        <!-- P&L Summary Widget -->
-        <Card class="border-rule-subtle bg-surface-raised">
-          <CardHeader class="pb-2">
-            <div class="flex items-center justify-between">
-              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('profit') }} - {{ dashboard.profit_loss.period }}</CardTitle>
-              <Button variant="ghost" size="sm" class="text-xs text-text-secondary hover:text-text-secondary" @click="router.visit(`/${company.slug}/reports/profit-loss`)">
-                View Report â†’
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div class="flex items-center gap-4 mb-4">
-              <div class="text-4xl font-bold" :class="dashboard.profit_loss.profit >= 0 ? 'text-status-success' : 'text-status-critical'">
-                <MoneyText :amount="dashboard.profit_loss.profit" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-              </div>
-              <div v-if="dashboard.profit_loss.profit_growth !== 0" class="flex items-center gap-1 px-2 py-1 rounded-full text-sm"
-                :class="dashboard.profit_loss.profit_growth >= 0 ? 'bg-status-success/15 text-status-success' : 'bg-status-critical/15 text-status-critical'">
-                <component :is="dashboard.profit_loss.profit_growth >= 0 ? TrendingUp : TrendingDown" class="h-4 w-4" />
-                {{ dashboard.profit_loss.profit_growth >= 0 ? '+' : '' }}{{ dashboard.profit_loss.profit_growth }}%
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-rule-subtle">
-              <div>
-                <div class="text-xs text-text-secondary uppercase tracking-wide mb-1">{{ t('moneyIn') }}</div>
-                <div class="text-lg font-semibold text-text-primary">
-                  <MoneyText :amount="dashboard.profit_loss.income" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-                </div>
-              </div>
-              <div>
-                <div class="text-xs text-text-secondary uppercase tracking-wide mb-1">{{ t('moneyOut') }}</div>
-                <div class="text-lg font-semibold text-text-primary">
-                  <MoneyText :amount="dashboard.profit_loss.expenses" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <ul v-if="attentionItems.length" class="needs__list">
+              <li v-for="item in attentionItems" :key="item.key">
+                <button type="button" class="need" @click="router.visit(item.href)">
+                  <span class="need__body">
+                    <span class="need__label">{{ item.label }}</span>
+                    <span class="need__why">{{ item.why }}</span>
+                  </span>
+                  <MetaChip :tone="item.tone">{{ item.chip }}</MetaChip>
+                </button>
+              </li>
+            </ul>
 
-        <!-- Money In / Money Out -->
-        <div class="grid gap-6 md:grid-cols-2">
-          <!-- Money In -->
-          <Card class="border-rule-subtle bg-surface-raised">
-            <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('moneyIn') }}</CardTitle>
-              <Badge :variant="dashboard.money_in_out.money_in.growth >= 0 ? 'default' : 'destructive'" class="text-xs">
-                {{ dashboard.money_in_out.money_in.growth >= 0 ? '+' : '' }}{{ dashboard.money_in_out.money_in.growth.toFixed(1) }}%
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold text-foreground">
-                <MoneyText :amount="dashboard.money_in_out.money_in.current" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-              </div>
-              <p class="text-xs text-text-secondary mt-1">
-                This month vs
-                <MoneyText :amount="dashboard.money_in_out.money_in.last" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-                last month
-              </p>
-              
-              <div class="mt-4 pt-4 border-t flex justify-between items-center">
-                <div class="text-sm text-text-secondary">
-                  <span class="font-medium">{{ financials.ar_overdue_count }}</span> invoices overdue
-                </div>
-                <div class="text-sm font-semibold text-status-attention">
-                  <MoneyText :amount="financials.ar_overdue" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-                  overdue
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            <p v-else class="needs__clear">Nothing is waiting on you.</p>
+          </section>
 
-          <!-- Money Out -->
-          <Card class="border-rule-subtle bg-surface-raised">
-            <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary uppercase tracking-wider">{{ t('moneyOut') }}</CardTitle>
-              <Badge :variant="dashboard.money_in_out.money_out.growth <= 0 ? 'default' : 'outline'" class="text-xs">
-                {{ dashboard.money_in_out.money_out.growth >= 0 ? '+' : '' }}{{ dashboard.money_in_out.money_out.growth.toFixed(1) }}%
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold text-foreground">
-                <MoneyText :amount="dashboard.money_in_out.money_out.current" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-              </div>
-              <p class="text-xs text-text-secondary mt-1">
-                This month vs
-                <MoneyText :amount="dashboard.money_in_out.money_out.last" :currency="company.base_currency" :locale="moneyLocale(company.base_currency)" />
-                last month
-              </p>
-              
-            <div class="mt-4 pt-4 border-t flex justify-between items-center">
-              <div class="text-sm text-text-secondary">
-                <span class="font-medium">{{ dashboard.needs_attention.bills_due_soon }}</span> bills due soon
-              </div>
-              <div class="text-sm font-semibold text-status-attention">
+          <!-- What's been happening -------------------------------------------
+               In and out kept apart so the direction is read, not computed. -->
+          <section class="happening">
+            <LedgerRegister
+              title="What's been happening"
+              :data="activityRows"
+              :columns="activityColumns"
+              key-field="key"
+              :clickable="false"
+              sprockets
+            >
+              <template #cell-label="{ row }">
+                <span class="entry">{{ row.label }}</span>
+              </template>
+              <template #cell-inAmount="{ row }">
                 <MoneyText
-                  :amount="dashboard.needs_attention.bills_due_soon_amount || 0"
-                  :currency="company.base_currency"
-                  :locale="moneyLocale(company.base_currency)"
+                  v-if="row.inAmount !== null"
+                  :amount="row.inAmount"
+                  :currency="row.currency"
+                  :locale="moneyLocale(row.currency)"
+                  :show-currency="false"
                 />
-                due soon
-              </div>
+                <span v-else class="void" aria-hidden="true">—</span>
+              </template>
+              <template #cell-outAmount="{ row }">
+                <MoneyText
+                  v-if="row.outAmount !== null"
+                  :amount="row.outAmount"
+                  :currency="row.currency"
+                  :locale="moneyLocale(row.currency)"
+                  :show-currency="false"
+                />
+                <span v-else class="void" aria-hidden="true">—</span>
+              </template>
+              <template #empty>Nothing has been recorded yet.</template>
+            </LedgerRegister>
+          </section>
+
+          <!-- The period ------------------------------------------------------ -->
+          <section class="reckon reckon--period">
+            <h2 class="reckon__title">{{ dashboard.profit_loss.period }}</h2>
+            <Derivation
+              :lines="periodLines"
+              :total-label="periodResultLabel"
+              :total-amount="dashboard.profit_loss.profit"
+              :currency="baseCurrency"
+              :locale="baseLocale"
+            />
+          </section>
+
+          <!-- Start something -------------------------------------------------- -->
+          <section class="start">
+            <h2 class="start__title">Start something</h2>
+            <div class="start__strip">
+              <button
+                v-for="action in startActions"
+                :key="action.key"
+                type="button"
+                class="start__action"
+                @click="router.visit(action.href)"
+              >
+                {{ action.label }}
+              </button>
             </div>
-          </CardContent>
-          </Card>
+          </section>
         </div>
-
-        <!-- Quick Actions & Needs Attention -->
-        <div class="grid gap-6 md:grid-cols-3">
-          
-          <!-- Quick Actions -->
-          <Card class="md:col-span-2 border-rule-subtle bg-surface-raised">
-            <CardHeader>
-              <CardTitle class="text-base font-semibold text-foreground">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/invoices/create`)">
-                  <Receipt class="h-6 w-6 text-primary" />
-                  <span>{{ t('createInvoice') }}</span>
-                </Button>
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/payments/create`)">
-                  <Wallet class="h-6 w-6 text-status-success" />
-                  <span>{{ t('recordPayment') }}</span>
-                </Button>
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/bills/create`)">
-                  <Ban class="h-6 w-6 text-status-critical" />
-                  <span>{{ t('enterBill') }}</span>
-                </Button>
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/banking/feed`)">
-                  <BarChart3 class="h-6 w-6 text-status-info" />
-                  <span>{{ t('reviewTransactionsAction') }}</span>
-                </Button>
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/sales/create`)">
-                  <Receipt class="h-6 w-6 text-primary" />
-                  <span>{{ t('recordSale') }}</span>
-                </Button>
-                <Button variant="outline" class="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5" @click="router.visit(`/${company.slug}/reports/profit-loss`)">
-                  <BarChart3 class="h-6 w-6 text-status-info" />
-                  <span>{{ t('profitAndLoss') }}</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <!-- Needs Attention -->
-          <Card class="border-rule-subtle bg-surface-raised">
-            <CardHeader>
-              <CardTitle class="text-base font-semibold text-foreground">Needs Attention</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div class="space-y-3">
-                <div v-if="dashboard.needs_attention.overdue_invoices > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-critical/10 border border-status-critical/30">
-                  <AlertTriangle class="h-5 w-5 text-status-critical" />
-                  <div class="text-sm">
-                    <span class="font-bold text-status-critical">{{ dashboard.needs_attention.overdue_invoices }}</span> invoices overdue
-                  </div>
-                </div>
-                
-                <div v-if="dashboard.needs_attention.bills_due_soon > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-attention/10 border border-status-attention/30">
-                  <Calendar class="h-5 w-5 text-status-attention" />
-                  <div class="text-sm">
-                    <span class="font-bold text-status-attention">{{ dashboard.needs_attention.bills_due_soon }}</span> bills due this week
-                  </div>
-                </div>
-
-                <div v-if="dashboard.needs_attention.unreconciled_transactions > 0" class="flex items-center gap-3 p-2 rounded-md bg-status-info/10 border border-status-info/30 cursor-pointer hover:bg-status-info/15 transition-colors" @click="router.visit(`/${company.slug}/banking/feed`)">
-                  <Wallet class="h-5 w-5 text-status-info" />
-                  <div class="text-sm">
-                    {{ tpl('transactionsToReviewCount', { count: dashboard.needs_attention.unreconciled_transactions }) }}
-                  </div>
-                </div>
-
-                <div v-if="dashboard.needs_attention.overdue_invoices === 0 && dashboard.needs_attention.bills_due_soon === 0 && dashboard.needs_attention.unreconciled_transactions === 0" class="text-center py-4 text-text-secondary text-sm">
-                  <CheckCircle2 class="h-8 w-8 text-status-success mx-auto mb-2" />
-                  All caught up!
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card class="border-rule-subtle bg-surface-raised">
-          <CardHeader>
-            <CardTitle class="text-sm font-medium text-text-secondary">Recent Activity</CardTitle>
-            <CardDescription>Last few accounting events</CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-3 text-sm text-text-secondary">
-            <div v-for="(item, idx) in financials.recent_activity" :key="idx" class="flex justify-between border-b border-rule-default pb-2 last:border-b-0 last:pb-0">
-              <div>
-                <p class="font-medium text-foreground">{{ item.label }}</p>
-                <p class="text-xs text-text-secondary">{{ formatDate(item.occurred_at) }}</p>
-              </div>
-              <div v-if="item.amount" class="font-mono text-sm text-text-primary">
-                <MoneyText :amount="item.amount" :currency="item.currency || company.base_currency" :locale="moneyLocale(item.currency || company.base_currency)" />
-              </div>
-            </div>
-            <div v-if="financials.recent_activity.length === 0" class="text-sm text-text-secondary">No recent activity.</div>
-          </CardContent>
-        </Card>
         </template>
       </TabsContent>
 
@@ -1624,7 +1636,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <!-- Country (Read-only) -->
               <div class="space-y-1.5">
                 <Label class="text-sm font-medium text-text-secondary">Country</Label>
-                <div class="text-base text-foreground">{{ company.country || 'â€”' }}</div>
+                <div class="text-base text-foreground">{{ company.country || '—' }}</div>
                 <p class="text-xs text-text-tertiary">Cannot be changed</p>
               </div>
 
@@ -1632,7 +1644,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <div class="space-y-1.5">
                 <Label class="text-sm font-medium text-text-secondary">Industry</Label>
                 <div class="text-base text-foreground capitalize">
-                  {{ company.industry_name || company.industry || company.industry_code || 'â€”' }}
+                  {{ company.industry_name || company.industry || company.industry_code || '—' }}
                 </div>
               </div>
 
@@ -1757,7 +1769,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <Calendar class="h-3 w-3 text-text-tertiary" />
               <span>{{ formatDate(row.joined_at) }}</span>
             </div>
-            <span v-else class="text-text-tertiary">â€”</span>
+            <span v-else class="text-text-tertiary">—</span>
           </template>
 
           <template #cell-actions="{ row }">
@@ -1953,7 +1965,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
                       {{ row.new_tank.name }} ({{ row.new_tank.code }})
                     </div>
                     <div class="text-xs text-status-success">
-                      Will be created with this product Â· {{ row.new_tank.capacity }} liters
+                      Will be created with this product · {{ row.new_tank.capacity }} liters
                     </div>
                   </div>
                   <Button type="button" variant="ghost" size="sm" @click="clearNewTank(row)">
@@ -2188,7 +2200,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between border-rule-default">
                   <span class="capitalize">{{ createUserForm.role }}</span>
-                  <span class="ml-2">â–¼</span>
+                  <span class="ml-2">▼</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent class="w-full">
@@ -2241,7 +2253,7 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" class="w-full justify-between border-rule-default">
                   <span class="capitalize">{{ roleForm.role }}</span>
-                  <span class="ml-2">â–¼</span>
+                  <span class="ml-2">▼</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent class="w-full">
@@ -2291,3 +2303,152 @@ const shouldShowCurrentVariance = (product: FuelProductDashboardItem) => {
   </PageShell>
   </Tabs>
 </template>
+
+<style scoped>
+/* The generic dashboard, set as one continuous sheet rather than a grid of
+   cards. Cards break a page into equally-loud boxes; rules and space let one
+   thing be the conclusion and the rest be support. */
+.ledger-home {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.reckon__title,
+.needs__title,
+.start__title {
+    font-family: var(--display-family);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    padding-bottom: 8px;
+    border-bottom: var(--rule-w-base, 1.5px) solid var(--rule-emphasis);
+}
+
+/* The period reckoning is the same device at a quieter volume — it reports a
+   month, not a standing. */
+.reckon--period :deep(.total__what),
+.reckon--period :deep(.money--conclusion) {
+    font-size: 26px;
+}
+
+.needs__list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 4px;
+}
+
+.need {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 12px 8px 12px 0;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: var(--rule-w-hair, 1px) solid var(--rule-default);
+    cursor: pointer;
+}
+
+.needs__list li:last-child .need {
+    border-bottom: 0;
+}
+
+/* Hover is an outline, not a fill — the same move the register makes, so a
+   row behaves the same whichever part of the page it is in. */
+.need:hover {
+    outline: var(--rule-w-base, 1.5px) solid var(--rule-emphasis);
+    outline-offset: calc(var(--rule-w-base, 1.5px) * -1);
+}
+
+.need__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.need__label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.need__why {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.needs__clear {
+    margin-top: 16px;
+    font-size: 15px;
+    color: var(--text-secondary);
+}
+
+/* The register carries its own card padding for the pages that give it a
+   border. Here it sits bare on the sheet, so its heading has to share the left
+   edge with every other section heading or the page reads as two documents. */
+.happening :deep(.reghead) {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+}
+
+.happening :deep(.reghead__title) {
+    font-size: 19px;
+}
+
+.entry {
+    color: var(--text-primary);
+}
+
+/* An empty column reads as "nothing moved that way", which is information.
+   Blank would read as a rendering fault. */
+.void {
+    font-family: var(--mono-family);
+    color: var(--text-tertiary);
+}
+
+.start__strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 16px;
+    border: var(--rule-w-hair, 1px) solid var(--rule-default);
+}
+
+.start__action {
+    flex: 1 1 180px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--surface-raised);
+    border: 0;
+    border-right: var(--rule-w-hair, 1px) solid var(--rule-default);
+    cursor: pointer;
+}
+
+.start__action:last-child {
+    border-right: 0;
+}
+
+.start__action:hover {
+    background: var(--surface-band);
+}
+
+@media (max-width: 640px) {
+    .ledger-home {
+        gap: 32px;
+    }
+
+    .start__action {
+        flex-basis: 100%;
+        border-right: 0;
+        border-bottom: var(--rule-w-hair, 1px) solid var(--rule-default);
+    }
+}
+</style>

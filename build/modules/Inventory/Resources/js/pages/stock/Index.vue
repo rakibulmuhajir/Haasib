@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import DataTable from '@/components/DataTable.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -152,15 +153,6 @@ const formatQuantity = (qty: number) => {
 
 const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })
-}
-
-const formatMoney = (val: number | string | null, currency = 'USD') => {
-  const amount = Number(val ?? 0)
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'narrowSymbol',
-  }).format(amount)
 }
 
 const formatMovementType = (type: string) => {
@@ -325,7 +317,7 @@ const openBill = (billId: string) => {
               </span>
             </span>
             <span class="shrink-0 text-right text-sm">
-              <span class="block font-medium">{{ formatMoney(bill.total_amount, bill.currency) }}</span>
+              <span class="block font-medium"><MoneyText :amount="bill.total_amount" :currency="bill.currency" /></span>
               <span class="block text-xs text-muted-foreground">{{ formatQuantity(Number(bill.pending_quantity ?? 0)) }} pending</span>
             </span>
           </Button>

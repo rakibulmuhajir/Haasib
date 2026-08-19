@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PageShell from '@/components/PageShell.vue';
 import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
@@ -14,6 +15,7 @@ import {
     User,
     Users,
 } from 'lucide-vue-next';
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
     id: string;
@@ -113,11 +115,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currencyDisplay: 'narrowSymbol',
-        currency: currency || 'USD',
-    }).format(amount);
+    return formatMoneyText(amount, currency || 'USD');
 };
 
 const formatDate = (date: string | null) => {
@@ -432,7 +430,7 @@ const formatPayFrequency = (freq: string) => {
                                             <span class="font-medium">{{
                                                 payslip.label
                                             }}</span>
-                                            <Badge>{{ payslip.status }}</Badge>
+                                            <StatusBadge :status="payslip.status" />
                                         </div>
                                         <div
                                             class="mt-2 flex items-center justify-between text-muted-foreground"
@@ -476,7 +474,7 @@ const formatPayFrequency = (freq: string) => {
                                                     company.base_currency,
                                                 )
                                             }}</span>
-                                            <Badge>{{ advance.status }}</Badge>
+                                            <StatusBadge :status="advance.status" />
                                         </div>
                                         <p class="mt-1 text-muted-foreground">
                                             {{ formatDate(advance.date) }} ·

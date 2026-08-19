@@ -2,23 +2,16 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Package, Percent, TrendingUp, WalletCards } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 
 interface Company {
   id: string
@@ -115,17 +108,11 @@ const endDate = ref(props.filters.end_date)
 const groupBy = ref(props.filters.group_by)
 const product = ref(props.filters.product)
 
-const symbol = computed(() => currencySymbol(props.company.base_currency))
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
   { title: 'Product Profitability', href: `/${props.company.slug}/fuel/reports/product-profitability` },
 ])
-
-const money = (amount: number) => `${symbol.value} ${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-}).format(amount || 0)}`
 
 const qty = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
   minimumFractionDigits: decimals,
@@ -178,6 +165,38 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
 
   applyFilters()
 }
+
+const productColumns = [
+  { key: 'name', label: 'Product', kind: 'text' as const },
+  { key: 'quantity', label: 'Qty', kind: 'amount' as const },
+  { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
+  { key: 'cogs', label: 'COGS', kind: 'amount' as const },
+  { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
+  { key: 'margin_per_unit', label: 'Margin/unit', kind: 'amount' as const },
+  { key: 'gross_margin_percent', label: 'Margin %', kind: 'amount' as const },
+  { key: 'stock_variance', label: 'Stock variance', kind: 'amount' as const },
+]
+
+const trendColumns = [
+  { key: 'label', label: 'Period', kind: 'text' as const },
+  { key: 'quantity', label: 'Qty', kind: 'amount' as const },
+  { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
+  { key: 'cogs', label: 'COGS', kind: 'amount' as const },
+  { key: 'gross_profit', label: 'Profit', kind: 'amount' as const },
+  { key: 'margin_per_unit', label: 'Margin/unit', kind: 'amount' as const },
+  { key: 'daily_close', label: 'Daily closes', kind: 'ref' as const },
+]
+
+const rateChangeColumns = [
+  { key: 'date_label', label: 'Date', kind: 'date' as const },
+  { key: 'product_name', label: 'Product', kind: 'text' as const },
+  { key: 'old_rate', label: 'Old rate', kind: 'amount' as const },
+  { key: 'new_rate', label: 'New rate', kind: 'amount' as const },
+  { key: 'old_rate_liters', label: 'Old-rate L', kind: 'amount' as const },
+  { key: 'new_rate_liters', label: 'New-rate L', kind: 'amount' as const },
+  { key: 'estimated_rate_change_effect', label: 'Effect', kind: 'amount' as const },
+  { key: 'transaction_number', label: 'Daily Close', kind: 'ref' as const },
+]
 </script>
 
 <template>
@@ -252,7 +271,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Revenue</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.revenue) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.revenue" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <Fuel class="h-4 w-4 text-status-info" />
@@ -263,7 +282,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Gross profit</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.gross_profit) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.gross_profit" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <Percent class="h-4 w-4 text-status-success" />
@@ -274,7 +293,7 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Margin per unit</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.margin_per_unit) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.margin_per_unit" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <TrendingUp class="h-4 w-4 text-status-info" />
@@ -285,11 +304,11 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Stock variance value</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.stock_gain_value - totals.stock_loss_value) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.stock_gain_value - totals.stock_loss_value" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
             <WalletCards class="h-4 w-4 text-status-attention" />
-            Loss {{ money(totals.stock_loss_value) }} · Gain {{ money(totals.stock_gain_value) }}
+            Loss <MoneyText :amount="totals.stock_loss_value" :currency="company.base_currency" /> · Gain <MoneyText :amount="totals.stock_gain_value" :currency="company.base_currency" />
           </CardContent>
         </Card>
       </div>
@@ -300,56 +319,44 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           <CardDescription>Sales, cost, margin, and stock variance by product.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="productRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No product sales or stock variance found for this range.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead class="text-right">Qty</TableHead>
-                  <TableHead class="text-right">Revenue</TableHead>
-                  <TableHead class="text-right">COGS</TableHead>
-                  <TableHead class="text-right">Gross profit</TableHead>
-                  <TableHead class="text-right">Margin/unit</TableHead>
-                  <TableHead class="text-right">Margin %</TableHead>
-                  <TableHead class="text-right">Stock variance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in productRows" :key="row.key">
-                  <TableCell>
-                    <div class="font-medium">{{ row.name }}</div>
-                    <div class="mt-1 flex flex-wrap gap-2">
-                      <Badge v-if="row.estimated_cogs" variant="outline">Estimated cost</Badge>
-                      <span class="text-xs text-muted-foreground">{{ row.unit }}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell class="text-right">{{ qty(row.quantity) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.revenue) }}</TableCell>
-                  <TableCell class="text-right">
-                    <div>{{ money(row.cogs) }}</div>
-                    <div class="text-xs text-muted-foreground">{{ money(row.avg_cost) }}/{{ row.unit }}</div>
-                  </TableCell>
-                  <TableCell class="text-right font-medium">{{ money(row.gross_profit) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.margin_per_unit) }}</TableCell>
-                  <TableCell class="text-right">{{ percent(row.gross_margin_percent) }}</TableCell>
-                  <TableCell class="text-right">
-                    <div v-if="row.stock_loss_quantity || row.stock_gain_quantity" class="space-y-1">
-                      <div v-if="row.stock_loss_quantity" class="text-status-critical">
-                        -{{ qty(row.stock_loss_quantity) }} {{ row.unit }} · {{ money(row.stock_loss_value) }}
-                      </div>
-                      <div v-if="row.stock_gain_quantity" class="text-status-success">
-                        +{{ qty(row.stock_gain_quantity) }} {{ row.unit }} · {{ money(row.stock_gain_value) }}
-                      </div>
-                    </div>
-                    <span v-else class="text-muted-foreground">—</span>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="productRows" :columns="productColumns">
+            <template #empty>No product sales or stock variance found for this range.</template>
+
+            <template #cell-name="{ row }">
+              <div class="font-medium">{{ row.name }}</div>
+              <div class="mt-1 flex flex-wrap items-center gap-2">
+                <MetaChip v-if="row.estimated_cogs" tone="neutral" bare>Estimated cost</MetaChip>
+                <span class="text-xs text-muted-foreground">{{ row.unit }}</span>
+              </div>
+            </template>
+
+            <template #cell-quantity="{ row }">{{ qty(row.quantity) }}</template>
+            <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
+            <template #cell-cogs="{ row }">
+              <div><MoneyText :amount="row.cogs" :currency="company.base_currency" /></div>
+              <div class="text-xs text-muted-foreground"><MoneyText :amount="row.avg_cost" :currency="company.base_currency" />/{{ row.unit }}</div>
+            </template>
+            <template #cell-gross_profit="{ row }"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></template>
+            <template #cell-margin_per_unit="{ row }"><MoneyText :amount="row.margin_per_unit" :currency="company.base_currency" /></template>
+            <template #cell-gross_margin_percent="{ row }">{{ percent(row.gross_margin_percent) }}</template>
+
+            <!-- A variance is a variance whichever way it points. Fuel that went
+                 missing and fuel that appeared are the same question -- why does
+                 the dip not match the book -- so they get the same amber, and the
+                 sign says which way it went. Red here would mean the reader has
+                 to remember that this red is different from an overdue red. -->
+            <template #cell-stock_variance="{ row }">
+              <div v-if="row.stock_loss_quantity || row.stock_gain_quantity" class="space-y-1 text-status-attention">
+                <div v-if="row.stock_loss_quantity">
+                  -{{ qty(row.stock_loss_quantity) }} {{ row.unit }} · <MoneyText :amount="row.stock_loss_value" :currency="company.base_currency" />
+                </div>
+                <div v-if="row.stock_gain_quantity">
+                  +{{ qty(row.stock_gain_quantity) }} {{ row.unit }} · <MoneyText :amount="row.stock_gain_value" :currency="company.base_currency" />
+                </div>
+              </div>
+              <span v-else class="text-muted-foreground">—</span>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -359,44 +366,26 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           <CardDescription>Use product filter above to see one product over time.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="periodRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No trend data found for this range.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Period</TableHead>
-                  <TableHead class="text-right">Qty</TableHead>
-                  <TableHead class="text-right">Revenue</TableHead>
-                  <TableHead class="text-right">COGS</TableHead>
-                  <TableHead class="text-right">Profit</TableHead>
-                  <TableHead class="text-right">Margin/unit</TableHead>
-                  <TableHead class="text-right">Daily closes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in periodRows" :key="row.key">
-                  <TableCell class="font-medium">{{ row.label }}</TableCell>
-                  <TableCell class="text-right">{{ qty(row.quantity) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.revenue) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.cogs) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.gross_profit) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.margin_per_unit) }}</TableCell>
-                  <TableCell class="text-right">
-                    <Link
-                      v-if="row.detail_url_id"
-                      :href="`/${company.slug}/fuel/daily-close/${row.detail_url_id}`"
-                      class="text-primary underline-offset-4 hover:underline"
-                    >
-                      {{ row.daily_close_numbers[0] }}
-                    </Link>
-                    <span v-else>{{ row.daily_close_count }}</span>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="periodRows" :columns="trendColumns">
+            <template #empty>No trend data found for this range.</template>
+
+            <template #cell-quantity="{ row }">{{ qty(row.quantity) }}</template>
+            <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
+            <template #cell-cogs="{ row }"><MoneyText :amount="row.cogs" :currency="company.base_currency" /></template>
+            <template #cell-gross_profit="{ row }"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></template>
+            <template #cell-margin_per_unit="{ row }"><MoneyText :amount="row.margin_per_unit" :currency="company.base_currency" /></template>
+
+            <template #cell-daily_close="{ row }">
+              <Link
+                v-if="row.detail_url_id"
+                :href="`/${company.slug}/fuel/daily-close/${row.detail_url_id}`"
+                class="text-primary underline-offset-4 hover:underline"
+              >
+                {{ row.daily_close_numbers[0] }}
+              </Link>
+              <span v-else>{{ row.daily_close_count }}</span>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -406,41 +395,25 @@ const setRange = (range: 'today' | 'last7' | 'month' | 'lastMonth') => {
           <CardDescription>When a rate change included meter snapshots, sales are split between old and new rates.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="rateChangeRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No rate-change snapshot sales found for this range.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead class="text-right">Old rate</TableHead>
-                  <TableHead class="text-right">New rate</TableHead>
-                  <TableHead class="text-right">Old-rate L</TableHead>
-                  <TableHead class="text-right">New-rate L</TableHead>
-                  <TableHead class="text-right">Effect</TableHead>
-                  <TableHead class="text-right">Daily Close</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in rateChangeRows" :key="`${row.transaction_id}-${row.product_name}`">
-                  <TableCell>{{ row.date_label }}</TableCell>
-                  <TableCell class="font-medium">{{ row.product_name }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.old_rate) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.new_rate) }}</TableCell>
-                  <TableCell class="text-right">{{ qty(row.old_rate_liters) }}</TableCell>
-                  <TableCell class="text-right">{{ qty(row.new_rate_liters) }}</TableCell>
-                  <TableCell class="text-right">{{ money(row.estimated_rate_change_effect) }}</TableCell>
-                  <TableCell class="text-right">
-                    <Link :href="`/${company.slug}/fuel/daily-close/${row.transaction_id}`" class="text-primary underline-offset-4 hover:underline">
-                      {{ row.transaction_number }}
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister
+            :data="rateChangeRows.map((row) => ({ ...row, key: `${row.transaction_id}-${row.product_name}` }))"
+            :columns="rateChangeColumns"
+            key-field="key"
+          >
+            <template #empty>No rate-change snapshot sales found for this range.</template>
+
+            <template #cell-old_rate="{ row }"><MoneyText :amount="row.old_rate" :currency="company.base_currency" /></template>
+            <template #cell-new_rate="{ row }"><MoneyText :amount="row.new_rate" :currency="company.base_currency" /></template>
+            <template #cell-old_rate_liters="{ row }">{{ qty(row.old_rate_liters) }}</template>
+            <template #cell-new_rate_liters="{ row }">{{ qty(row.new_rate_liters) }}</template>
+            <template #cell-estimated_rate_change_effect="{ row }"><MoneyText :amount="row.estimated_rate_change_effect" :currency="company.base_currency" /></template>
+
+            <template #cell-transaction_number="{ row }">
+              <Link :href="`/${company.slug}/fuel/daily-close/${row.transaction_id}`" class="text-primary underline-offset-4 hover:underline">
+                {{ row.transaction_number }}
+              </Link>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

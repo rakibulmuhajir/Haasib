@@ -197,11 +197,11 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                         <Link
                             v-if="isDirectLink(group)"
                             :href="group.items[0].href!"
-                            class="rounded-md px-3 py-1.5 text-sm hover:bg-surface-sunken"
+                            class="rounded-none border-b-2 px-3 py-1.5 text-sm hover:bg-surface-sunken"
                             :class="
                                 groupIsActive(group)
-                                    ? 'bg-surface-sunken font-medium text-text-primary'
-                                    : 'text-text-secondary'
+                                    ? 'border-status-critical font-medium text-text-primary'
+                                    : 'border-transparent text-text-secondary'
                             "
                         >
                             {{ group.items[0].title }}
@@ -211,11 +211,11 @@ const showSecondRow = computed(() => props.breadcrumbs.length > 0);
                             <DropdownMenuTrigger as-child>
                                 <button
                                     type="button"
-                                    class="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm hover:bg-surface-sunken data-[state=open]:bg-surface-sunken"
+                                    class="flex items-center gap-1 rounded-none border-b-2 px-3 py-1.5 text-sm hover:bg-surface-sunken data-[state=open]:bg-surface-sunken"
                                     :class="
                                         groupIsActive(group)
-                                            ? 'font-medium text-text-primary'
-                                            : 'text-text-secondary'
+                                            ? 'border-status-critical font-medium text-text-primary'
+                                            : 'border-transparent text-text-secondary'
                                     "
                                 >
                                     {{ group.label }}

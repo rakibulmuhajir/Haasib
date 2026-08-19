@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
+import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -86,19 +87,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
-const formatMoney = (n: number) => {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n ?? 0)
-  } catch (_e) {
-    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
-  }
-}
 
 const formatLiters = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n ?? 0)
@@ -317,7 +305,7 @@ const workflowStats = computed(() => [
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Pending Handovers</CardDescription>
-          <CardTitle class="text-2xl">{{ formatMoney(data.pendingHandovers?.total_amount ?? 0) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="data.pendingHandovers?.total_amount ?? 0" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center justify-between">
@@ -368,12 +356,12 @@ const workflowStats = computed(() => [
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <p class="text-sm font-medium text-text-tertiary">Today sales</p>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.todaySales?.total ?? 0) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary"><MoneyText :amount="data.todaySales?.total ?? 0" :currency="currencyCode" /></p>
               <p class="mt-1 text-sm text-text-secondary">All sale types</p>
             </div>
             <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <p class="text-sm font-medium text-text-tertiary">This month</p>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.monthlySales?.total_sales ?? 0) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary"><MoneyText :amount="data.monthlySales?.total_sales ?? 0" :currency="currencyCode" /></p>
               <p class="mt-1 text-sm text-text-secondary">{{ formatLiters(data.monthlySales?.total_liters ?? 0) }}L dispensed</p>
             </div>
           </div>
@@ -384,14 +372,14 @@ const workflowStats = computed(() => [
                 <p class="text-sm font-medium text-text-tertiary">Vendor card receivable</p>
                 <Receipt class="h-4 w-4 text-status-attention" />
               </div>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.vendorCardReceivable ?? 0) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary"><MoneyText :amount="data.vendorCardReceivable ?? 0" :currency="currencyCode" /></p>
             </div>
             <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
               <div class="flex items-center justify-between">
                 <p class="text-sm font-medium text-text-tertiary">Amanat balance</p>
                 <HandCoins class="h-4 w-4 text-status-info" />
               </div>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatMoney(data.amanatSummary?.total_balance ?? 0) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary"><MoneyText :amount="data.amanatSummary?.total_balance ?? 0" :currency="currencyCode" /></p>
               <p class="mt-1 text-sm text-text-secondary">{{ data.amanatSummary?.total_holders ?? 0 }} holder(s)</p>
             </div>
           </div>
@@ -473,7 +461,7 @@ const workflowStats = computed(() => [
               <p class="mt-1 text-sm text-text-secondary">{{ s.count }} sale(s)</p>
             </div>
             <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">
-              {{ formatMoney(s.total) }}
+              <MoneyText :amount="s.total" :currency="currencyCode" />
             </Badge>
           </div>
 
@@ -495,7 +483,7 @@ const workflowStats = computed(() => [
                   </Badge>
                   <span class="font-medium text-text-primary">{{ r.item?.name ?? 'Fuel' }}</span>
                 </div>
-                <span class="text-text-secondary">{{ formatMoney(r.sale_rate ?? 0) }} / L</span>
+                <span class="text-text-secondary"><MoneyText :amount="r.sale_rate ?? 0" :currency="currencyCode" /> / L</span>
               </div>
             </div>
           </div>

@@ -474,6 +474,10 @@ export const invoiceBillTerms: TermDictionary = {
   notes: 'Notes',
   vendor: 'Vendor',
   customer: 'Customer',
+  // Singular, for naming one document. `bills` is the nav label and reads
+  // as "Bills BILL-0001" wherever it stands in for the document's own name.
+  bill: 'Bill',
+  billedTo: 'Billed to',
   date: 'Date',
   due: 'Due',
   balance: 'Balance',

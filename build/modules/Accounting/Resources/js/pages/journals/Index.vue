@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Plus, Search } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -72,11 +73,7 @@ const handleSearch = () => {
 }
 
 const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
+  formatMoneyText(amount, props.company.base_currency || 'USD')
 
 const badgeVariant = (val: string) => {
   if (val === 'draft') return 'secondary'

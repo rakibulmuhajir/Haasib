@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { HandCoins, ArrowLeft, Check, Clock, CheckCircle, Banknote, CreditCard } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface Handover {
   id: string
@@ -52,13 +53,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const formatDateTime = (date: string) => {

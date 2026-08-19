@@ -1,0 +1,210 @@
+{
+  "resources/js/navigation/coreNav.ts": {
+    "titles": [
+      "Companies"
+    ],
+    "hrefs": [
+      "/${slug}",
+      "/companies"
+    ]
+  },
+  "modules/Umrah/Resources/js/nav.ts": {
+    "titles": [
+      "Advances",
+      "Agent Statement",
+      "Agents",
+      "Company & Currencies",
+      "Dashboard",
+      "Departure Manifest",
+      "Departure Manifest",
+      "Drivers",
+      "Expenses",
+      "Group Profitability",
+      "Hotel Rooming",
+      "Hotel Rooming",
+      "Hotels",
+      "My Statement",
+      "Passenger Status",
+      "Passenger Status",
+      "Payments",
+      "Receivable Aging",
+      "Salaries",
+      "Transport Dispatch",
+      "Transport Services",
+      "Transport Vendors",
+      "Trips / Visa Groups",
+      "Vendor Payables",
+      "Visa Vendors",
+      "Voucher Control",
+      "Voucher Control",
+      "Vouchers"
+    ],
+    "hrefs": [
+      "/${slug}/payroll",
+      "/${slug}/settings",
+      "/${slug}/umrah",
+      "/${slug}/umrah/agents",
+      "/${slug}/umrah/expenses",
+      "/${slug}/umrah/groups",
+      "/${slug}/umrah/payments",
+      "/${slug}/umrah/reports/advances",
+      "/${slug}/umrah/reports/agent-statement",
+      "/${slug}/umrah/reports/agent-statement",
+      "/${slug}/umrah/reports/departure-manifest",
+      "/${slug}/umrah/reports/departure-manifest",
+      "/${slug}/umrah/reports/group-profitability",
+      "/${slug}/umrah/reports/hotel-rooming",
+      "/${slug}/umrah/reports/hotel-rooming",
+      "/${slug}/umrah/reports/passenger-status",
+      "/${slug}/umrah/reports/passenger-status",
+      "/${slug}/umrah/reports/receivable-aging",
+      "/${slug}/umrah/reports/transport-dispatch",
+      "/${slug}/umrah/reports/vendor-aging",
+      "/${slug}/umrah/reports/voucher-control",
+      "/${slug}/umrah/reports/voucher-control",
+      "/${slug}/umrah/settings/drivers",
+      "/${slug}/umrah/settings/hotels",
+      "/${slug}/umrah/settings/transport-services",
+      "/${slug}/umrah/transport-providers",
+      "/${slug}/umrah/vendors",
+      "/${slug}/umrah/vouchers"
+    ]
+  },
+  "modules/Tax/Resources/js/nav.ts": {
+    "titles": [],
+    "hrefs": []
+  },
+  "modules/Payroll/Resources/js/nav.ts": {
+    "titles": [
+      "Payroll Overview",
+      "Salary Advances"
+    ],
+    "hrefs": [
+      "/${slug}/employees",
+      "/${slug}/payroll",
+      "/${slug}/payroll-periods",
+      "/${slug}/payslips",
+      "/${slug}/salary-advances"
+    ]
+  },
+  "modules/Inventory/Resources/js/nav.ts": {
+    "titles": [
+      "Stock Management"
+    ],
+    "hrefs": [
+      "/${slug}/item-categories",
+      "/${slug}/items",
+      "/${slug}/stock",
+      "/${slug}/stock/adjustment",
+      "/${slug}/stock/movements",
+      "/${slug}/stock/receipts",
+      "/${slug}/warehouses"
+    ]
+  },
+  "modules/FuelStation/Resources/js/nav.ts": {
+    "titles": [
+      "Advance Balances",
+      "Amanat Depositors",
+      "Bank Accounts",
+      "Bill Payments",
+      "Credit Customers",
+      "Customers",
+      "Daily Close",
+      "Daily Close History",
+      "Employees",
+      "Expenses",
+      "Fuel Deliveries",
+      "Help Guide",
+      "Investors",
+      "Partners",
+      "Payroll Overview",
+      "People",
+      "Product Profitability",
+      "Products",
+      "Profit Summary",
+      "Pumps & Nozzles",
+      "Purchases",
+      "Rate Changes",
+      "Reports",
+      "Salary Report",
+      "Settings",
+      "Setup Wizard",
+      "Station Performance",
+      "Station Settings",
+      "Stock Management",
+      "Stock Movements",
+      "Stock Variance & Claims",
+      "Tanks & Warehouses",
+      "Vendor Card Settlement",
+      "Vendors"
+    ],
+    "hrefs": [
+      "/${slug}",
+      "/${slug}/banking/accounts",
+      "/${slug}/bill-payments",
+      "/${slug}/customers",
+      "/${slug}/employees",
+      "/${slug}/fuel/amanat",
+      "/${slug}/fuel/credit-customers",
+      "/${slug}/fuel/daily-close",
+      "/${slug}/fuel/daily-close/history",
+      "/${slug}/fuel/guide",
+      "/${slug}/fuel/investors",
+      "/${slug}/fuel/onboarding",
+      "/${slug}/fuel/pumps",
+      "/${slug}/fuel/rates",
+      "/${slug}/fuel/receipts",
+      "/${slug}/fuel/reports/expenses",
+      "/${slug}/fuel/reports/performance",
+      "/${slug}/fuel/reports/product-profitability",
+      "/${slug}/fuel/reports/stock-variance",
+      "/${slug}/fuel/settings",
+      "/${slug}/fuel/vendor-cards/pending",
+      "/${slug}/partners",
+      "/${slug}/payroll",
+      "/${slug}/payroll/reports/salary",
+      "/${slug}/reports/profit-loss",
+      "/${slug}/salary-advances",
+      "/${slug}/stock",
+      "/${slug}/stock/movements",
+      "/${slug}/vendors",
+      "/${slug}/warehouses"
+    ]
+  },
+  "modules/Accounting/Resources/js/nav.ts": {
+    "titles": [
+      "Bank",
+      "Bill Payments",
+      "Bills",
+      "Credit Notes",
+      "Default Accounts",
+      "Fiscal Years",
+      "Invoices",
+      "Journal Entries",
+      "Payments",
+      "Posting Templates",
+      "Setup",
+      "Vendor Credits"
+    ],
+    "hrefs": [
+      "/${slug}/accounting/default-accounts",
+      "/${slug}/accounts",
+      "/${slug}/banking/accounts",
+      "/${slug}/banking/feed",
+      "/${slug}/banking/reconciliation",
+      "/${slug}/banking/rules",
+      "/${slug}/bill-payments",
+      "/${slug}/bills",
+      "/${slug}/credit-notes",
+      "/${slug}/customers",
+      "/${slug}/fiscal-years",
+      "/${slug}/invoices",
+      "/${slug}/journals",
+      "/${slug}/payments",
+      "/${slug}/posting-templates",
+      "/${slug}/reports/profit-loss",
+      "/${slug}/vendor-credits",
+      "/${slug}/vendors"
+    ]
+  }
+}

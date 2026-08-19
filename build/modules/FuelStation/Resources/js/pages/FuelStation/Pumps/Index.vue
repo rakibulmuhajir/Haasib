@@ -50,15 +50,6 @@ interface PumpRow {
 const props = defineProps<{
   pumps: PumpRow[]
   tanks: TankRef[]
-  debug?: {
-    user_id?: string | null
-    user_email?: string | null
-    user_role?: string | null
-    can_create_pump?: boolean
-    has_company_context?: boolean
-    company_id?: string | null
-    company_name?: string | null
-  }
 }>()
 
 const page = usePage()
@@ -246,40 +237,7 @@ const goToWarehouses = () => {
     :icon="Fuel"
     :breadcrumbs="breadcrumbs"
   >
-    <!-- DEBUG INFO - Check permissions -->
-    <div v-if="props.debug" class="mb-6 rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
-      <h3 class="font-semibold text-status-attention mb-2">🔍 Debug Information</h3>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-        <div>
-          <strong>User:</strong> {{ props.debug.user_email || 'N/A' }}
-        </div>
-        <div>
-          <strong>Role:</strong>
-          <span :class="props.debug.can_create_pump ? 'text-status-success font-bold' : 'text-status-critical font-bold'">
-            {{ props.debug.user_role || 'No Role' }}
-          </span>
-        </div>
-        <div>
-          <strong>Can Create Pump:</strong>
-          <span :class="props.debug.can_create_pump ? 'text-status-success' : 'text-status-critical'">
-            {{ props.debug.can_create_pump ? '✅ YES' : '❌ NO' }}
-          </span>
-        </div>
-        <div>
-          <strong>Company Context:</strong>
-          <span :class="props.debug.has_company_context ? 'text-status-success' : 'text-status-critical'">
-            {{ props.debug.has_company_context ? '✅ YES' : '❌ NO' }}
-          </span>
-        </div>
-        <div>
-          <strong>Company:</strong> {{ props.debug.company_name || 'N/A' }}
-        </div>
-        <div>
-          <strong>Company ID:</strong> {{ props.debug.company_id || 'N/A' }}
-        </div>
-      </div>
-    </div>
-        <template #actions>
+    <template #actions>
       <Button @click="openCreate">
         <Plus class="mr-2 h-4 w-4" />
         Add Pump Point

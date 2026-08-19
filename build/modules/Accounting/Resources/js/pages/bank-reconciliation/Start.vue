@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RefreshCcw, ArrowRight, Calendar, Landmark, Info } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -55,11 +56,7 @@ const selectedAccount = computed(() => {
 })
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
+  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {

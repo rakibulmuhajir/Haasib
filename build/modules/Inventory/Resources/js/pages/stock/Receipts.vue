@@ -11,6 +11,7 @@ import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { Package, PackageCheck } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -88,11 +89,7 @@ const formatQuantity = (qty: number) => {
 }
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const pendingColumns = [
   { key: 'bill_number', label: t('billNumber') },

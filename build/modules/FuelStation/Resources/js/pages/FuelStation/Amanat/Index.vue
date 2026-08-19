@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import type { BreadcrumbItem } from '@/types'
 import { Wallet, Eye, Search, Users, Banknote, Plus, UserCog } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface AmanatCustomer {
   id: string
@@ -103,13 +104,7 @@ const filteredCustomers = computed(() => {
 })
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const columns = [

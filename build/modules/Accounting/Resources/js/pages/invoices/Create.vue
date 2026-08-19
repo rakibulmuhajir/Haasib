@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { EntitySearch, QuickAddModal } from '@/components/forms'
+import RelatedActions from '@/components/RelatedActions.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import TotalRow from '@/components/TotalRow.vue'
 import InputError from '@/components/InputError.vue'
@@ -39,10 +40,18 @@ interface AccountOption {
   name: string
 }
 
+/** Prefilled from the screen you arrived from. */
+interface Preselect {
+  customer_id?: string | null
+  invoice_id?: string | null
+  vendor_id?: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   customers: Array<{ id: string; name: string }>
   revenueAccounts?: AccountOption[]
+  preselect?: Preselect
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -61,7 +70,7 @@ const emptyLine = (): LineItem => ({
 })
 
 const form = useForm({
-  customer_id: '',
+  customer_id: props.preselect?.customer_id ?? '',
   line_items: [emptyLine()],
   currency: props.company.base_currency,
   invoice_date: new Date().toISOString().split('T')[0],
@@ -358,6 +367,15 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
         </CardContent>
       </Card>
     </form>
+
+    <!-- The customer or the product you discover you need halfway through. The
+         customer action opens the same QuickAddModal the field does, so the
+         invoice you are writing survives the detour. -->
+    <RelatedActions
+      screen="invoice.create"
+      :slug="company.slug"
+      @select="(key) => key === 'customer.create' && handleQuickAddClick('')"
+    />
   </PageShell>
 </template>
 

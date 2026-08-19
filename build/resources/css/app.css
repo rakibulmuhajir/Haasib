@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@import './fonts.css';
+
 @import 'tw-animate-css';
 
 @import 'vue-sonner/style.css';
@@ -10,8 +12,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* Public Sans: the ledger's UI face. Instrument Sans belonged to the
+       stock theme, which no longer exists. */
     --font-sans:
-        Instrument Sans, ui-sans-serif, system-ui, sans-serif,
+        'Public Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 
@@ -128,7 +132,7 @@
     body,
     html {
         --font-sans:
-            'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+            'Public Sans', ui-sans-serif, system-ui, sans-serif,
             'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
             'Noto Color Emoji';
     }
@@ -374,6 +378,30 @@
     --color-amount-overdue: var(--amount-overdue, var(--destructive));
 
     --color-focus-ring: var(--focus-ring, var(--ring));
+
+    /* The soft grounds a status chip sits on. A chip is a rule, a weight and a
+       word before it is a colour, so these are quiet by design — beige rather
+       than yellow, a wash rather than a fill. `-soft` is the ground; the
+       matching `--color-status-*` is the ink that reads on it. Falling back to
+       transparent is deliberate: with no skin the chip loses its wash and
+       keeps its rule and its label, which is still readable. */
+    --color-status-info-soft: var(--status-info-soft, transparent);
+    --color-status-attention-soft: var(--status-attention-soft, transparent);
+    --color-status-critical-soft: var(--status-critical-soft, transparent);
+    --color-status-success-soft: var(--status-success-soft, transparent);
+
+    /* The display scale. The app ran roughly 12-24px, which is why every page
+       read as one flat plane with no conclusion on it. A statement of position
+       needs a figure you can see from across the desk. These two fluid steps
+       are the only sizes above the body scale, and they exist so a page title
+       and the one figure a page delivers are token decisions rather than a
+       Tailwind class picked per screen. */
+    --text-slug: clamp(27px, 3.4vw, 40px);
+    --text-slug--line-height: 1;
+    --text-slug--letter-spacing: -0.02em;
+    --text-conclusion: clamp(30px, 3.6vw, 44px);
+    --text-conclusion--line-height: 1;
+    --text-conclusion--letter-spacing: -0.035em;
 }
 
 /* ── Layer 1 defaults ──────────────────────────────────────────────────────
@@ -404,6 +432,11 @@
     --status-attention: oklch(0.555 0.163 48.998);
     --status-critical: var(--destructive);
     --status-success: oklch(0.723 0.219 149.579);
+
+    --status-info-soft: transparent;
+    --status-attention-soft: transparent;
+    --status-critical-soft: transparent;
+    --status-success-soft: transparent;
 
     --status-info-contrast: hsl(0 0% 100%);
     --status-attention-contrast: hsl(0 0% 9%);
@@ -483,6 +516,14 @@
     --status-attention: hsl(41 80% 31%);
     --status-critical: hsl(4 63% 45%);
     --status-success: hsl(146 39% 30%);
+
+    /* Beige, not yellow. These are the ledger's marginal annotations — the
+       "3 MIN" and "7 DAYS" ticks against a due date — and an annotation that
+       shouts is an annotation nobody reads twice. */
+    --status-info-soft: hsl(209 40% 94%);
+    --status-attention-soft: hsl(43 62% 91%);
+    --status-critical-soft: hsl(6 55% 93%);
+    --status-success-soft: hsl(146 30% 92%);
 
     /* The skin picks each status to read against the paper, so the paper is
        what reads back against the status. One rule covers both themes. */
@@ -586,6 +627,12 @@
     --status-attention: hsl(43 63% 58%);
     --status-critical: hsl(5 68% 62%);
     --status-success: hsl(146 36% 59%);
+
+    /* Dark stock takes the wash down to a stain, not up to a glow. */
+    --status-info-soft: hsl(209 30% 16%);
+    --status-attention-soft: hsl(43 34% 15%);
+    --status-critical-soft: hsl(6 32% 16%);
+    --status-success-soft: hsl(146 24% 14%);
 
     /* The skin picks each status to read against the paper, so the paper is
        what reads back against the status. One rule covers both themes. */

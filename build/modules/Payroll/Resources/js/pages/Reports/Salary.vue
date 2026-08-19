@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DataTable from '@/components/DataTable.vue'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Banknote, Calendar, FileText, HandCoins, UserCog } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -92,11 +93,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'PKR',
-  }).format(amount || 0)
+  return formatMoneyText(amount || 0, props.company.base_currency || 'PKR')
 }
 
 const formatDate = (date: string) => formatDateTime(date, { mode: 'date' })
@@ -147,13 +144,6 @@ const payslipRows = computed(() => props.rows.flatMap((row) =>
     employee_number: row.employee_number,
   }))
 ))
-
-const statusVariant = (value: string) => {
-  if (value === 'paid') return 'success'
-  if (value === 'approved') return 'secondary'
-  if (value === 'draft') return 'outline'
-  return 'secondary'
-}
 
 const openPayslips = (row: SalaryRow) => {
   router.get(`/${props.company.slug}/payslips`, {
@@ -350,9 +340,7 @@ const openPayslips = (row: SalaryRow) => {
               <span v-else class="text-muted-foreground">No period</span>
             </div>
             <div class="col-span-2">
-              <Badge :variant="statusVariant(payslip.status)">
-                {{ payslip.status }}
-              </Badge>
+              <StatusBadge :status="payslip.status" />
             </div>
             <div class="col-span-2 text-right tabular-nums">{{ formatCurrency(payslip.deductions) }}</div>
             <div class="col-span-2 text-right font-medium tabular-nums">{{ formatCurrency(payslip.net_pay) }}</div>

@@ -60,9 +60,9 @@ const displayText = computed(() => {
   }
   if (props.type === 'select' && props.options) {
     const option = props.options.find((o) => o.value === model.value)
-    return option?.label || String(model.value || 'â€”')
+    return option?.label || String(model.value || '—')
   }
-  return String(model.value || 'â€”')
+  return String(model.value || '—')
 })
 
 const handleKeydown = (e: KeyboardEvent) => {

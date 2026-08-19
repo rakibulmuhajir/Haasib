@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, CreditCard, Save, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -264,11 +265,7 @@ const saveAndPay = () => {
 }
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, props.company.base_currency || 'USD')
 }
 </script>
 

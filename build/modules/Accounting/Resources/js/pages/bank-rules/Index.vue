@@ -2,20 +2,15 @@
 import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,10 +102,46 @@ const handleEdit = (id: string) => {
   router.get(`/${props.company.slug}/banking/rules/${id}/edit`)
 }
 
+/*
+ * Deleting used to go through the browser's own confirm box, which is the one
+ * dialog in the application nobody chose the wording or the appearance of.
+ * Every other destructive action in the app asks through ConfirmDialog.
+ */
+const ruleToDelete = ref<RuleRow | null>(null)
+const deleteDialogOpen = ref(false)
+
 const handleDelete = (rule: RuleRow) => {
-  if (!confirm(`Delete rule "${rule.name}"?`)) return
-  router.delete(`/${props.company.slug}/banking/rules/${rule.id}`)
+  ruleToDelete.value = rule
+  deleteDialogOpen.value = true
 }
+
+const confirmDelete = () => {
+  if (!ruleToDelete.value) return
+
+  router.delete(`/${props.company.slug}/banking/rules/${ruleToDelete.value.id}`, {
+    preserveScroll: true,
+    onFinish: () => {
+      deleteDialogOpen.value = false
+      ruleToDelete.value = null
+    },
+  })
+}
+
+/*
+ * Two columns are headed "Actions" in the old markup: what the rule does, and
+ * what you can do to the rule. Naming one of them again is how a reader ends up
+ * scanning the wrong column, so the rule's own effect is "Then" -- it reads with
+ * the conditions column as one sentence: when these conditions, then this.
+ */
+const columns = [
+  { key: 'priority', label: 'Priority', kind: 'amount' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'bank_account', label: 'Bank account', kind: 'text' as const },
+  { key: 'conditions', label: 'When', kind: 'text' as const },
+  { key: 'actions_summary', label: 'Then', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+]
 
 const formatConditions = (conditions: RuleRow['conditions']) => {
   if (!conditions || conditions.length === 0) return 'No conditions'
@@ -196,76 +227,63 @@ const formatActions = (actions: RuleRow['actions']) => {
           </Button>
         </div>
 
-        <Table v-else>
-          <TableHeader>
-            <TableRow>
-              <TableHead class="w-16">Priority</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Bank Account</TableHead>
-              <TableHead>Conditions</TableHead>
-              <TableHead>Actions</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead class="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow
-              v-for="rule in rules.data"
-              :key="rule.id"
-              class="cursor-pointer hover:bg-muted/50"
-              @click="handleView(rule.id)"
-            >
-              <TableCell class="font-mono text-sm">{{ rule.priority }}</TableCell>
-              <TableCell>
-                <p class="font-medium">{{ rule.name }}</p>
-              </TableCell>
-              <TableCell>
-                <div v-if="rule.bank_account" class="flex items-center gap-2">
-                  <Landmark class="h-4 w-4 text-muted-foreground" />
-                  <span>{{ rule.bank_account.account_name }}</span>
-                </div>
-                <Badge v-else variant="outline">All accounts</Badge>
-              </TableCell>
-              <TableCell class="text-sm text-muted-foreground">
-                {{ formatConditions(rule.conditions) }}
-              </TableCell>
-              <TableCell class="text-sm text-muted-foreground">
-                {{ formatActions(rule.actions) }}
-              </TableCell>
-              <TableCell>
-                <Badge :variant="rule.is_active ? 'default' : 'secondary'">
-                  {{ rule.is_active ? 'Active' : 'Inactive' }}
-                </Badge>
-              </TableCell>
-              <TableCell class="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger as-child @click.stop>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal class="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem @click.stop="handleView(rule.id)">
-                      <Eye class="mr-2 h-4 w-4" />
-                      View
-                    </DropdownMenuItem>
-                    <DropdownMenuItem @click.stop="handleEdit(rule.id)">
-                      <Pencil class="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      @click.stop="handleDelete(rule)"
-                      class="text-destructive"
-                    >
-                      <Trash2 class="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <LedgerRegister
+          v-else
+          :data="rules.data"
+          :columns="columns"
+          clickable
+          @row-click="(row) => handleView(row.id)"
+        >
+          <template #cell-name="{ row }">
+            <p class="font-medium">{{ row.name }}</p>
+          </template>
+
+          <template #cell-bank_account="{ row }">
+            <div v-if="row.bank_account" class="flex items-center gap-2">
+              <Landmark class="h-4 w-4 text-text-secondary" />
+              <span>{{ row.bank_account.account_name }}</span>
+            </div>
+            <MetaChip v-else tone="neutral" bare>All accounts</MetaChip>
+          </template>
+
+          <template #cell-conditions="{ row }">
+            <span class="text-text-secondary">{{ formatConditions(row.conditions) }}</span>
+          </template>
+
+          <template #cell-actions_summary="{ row }">
+            <span class="text-text-secondary">{{ formatActions(row.actions) }}</span>
+          </template>
+
+          <template #cell-status="{ row }">
+            <StatusBadge :status="row.is_active ? 'active' : 'inactive'" />
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="flex justify-end" @click.stop>
+              <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                  <Button variant="ghost" size="icon">
+                    <MoreHorizontal class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem @click.stop="handleView(row.id)">
+                    <Eye class="mr-2 h-4 w-4" />
+                    View
+                  </DropdownMenuItem>
+                  <DropdownMenuItem @click.stop="handleEdit(row.id)">
+                    <Pencil class="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem class="text-destructive" @click.stop="handleDelete(row)">
+                    <Trash2 class="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </template>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -289,5 +307,14 @@ const formatActions = (actions: RuleRow['actions']) => {
         Next
       </Button>
     </div>
+
+    <ConfirmDialog
+      v-model:open="deleteDialogOpen"
+      variant="destructive"
+      title="Delete rule"
+      :description="`Delete “${ruleToDelete?.name ?? 'this rule'}”? Transactions it has already categorised keep their categories.`"
+      confirm-text="Delete rule"
+      @confirm="confirmDelete"
+    />
   </PageShell>
 </template>

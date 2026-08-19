@@ -4,7 +4,6 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -165,9 +164,7 @@ const handleDelete = (id: string) => {
       @row-click="handleRowClick"
     >
       <template #cell-status="{ row }">
-        <Badge :variant="row._raw.is_active ? 'success' : 'secondary'">
-          {{ row.status }}
-        </Badge>
+        <StatusBadge :status="row.status" />
       </template>
 
       <template #cell-_actions="{ row }">

@@ -4,6 +4,7 @@ import UniversalDashboardLayout from '@/layouts/UniversalDashboardLayout.vue'
 import TransactionCard from './components/TransactionCard.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLexicon } from '@/composables/useLexicon'
+import { formatMoneyText } from '@/lib/money'
 
 interface Props {
   transactions: any[]
@@ -25,11 +26,7 @@ const props = defineProps<Props>()
 const { t } = useLexicon()
 
 const formatCurrency = (val: number, currency = 'USD') => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency
-  }).format(val)
+  return formatMoneyText(val, currency)
 }
 </script>
 

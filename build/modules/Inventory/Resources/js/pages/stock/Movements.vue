@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -98,13 +98,18 @@ const handleSearch = () => {
   )
 }
 
-const formatQuantity = (qty: number) => {
-  const prefix = qty > 0 ? '+' : ''
-  return prefix + new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  }).format(qty)
-}
+/**
+ * A quantity, with nothing said about which way it went — the column it lands
+ * in says that. Signs and plus-prefixes were how this page used to carry
+ * direction in a single column, and they are exactly what a register with
+ * separate sides makes unnecessary.
+ */
+const quantityFormat = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 3,
+})
+
+const formatQuantity = (qty: number) => quantityFormat.format(Math.abs(qty))
 
 const getTypeIcon = (type: string) => {
   if (type.includes('in') || type === 'purchase' || type === 'opening') return ArrowUpCircle
@@ -113,37 +118,63 @@ const getTypeIcon = (type: string) => {
   return History
 }
 
-const getTypeBadgeVariant = (type: string) => {
-  if (type.includes('in') || type === 'purchase' || type === 'opening') return 'success'
-  if (type.includes('out') || type === 'sale') return 'destructive'
-  return 'secondary'
-}
+/**
+ * Direction is not severity. Stock leaving the shelf because it was sold is
+ * the business working, not an incident — painting all 96 of those rows red
+ * meant the page had no way left to say when something was actually wrong.
+ * The arrow and the sign carry direction; the chip stays neutral.
+ */
+const getTypeBadgeVariant = (_type: string) => 'outline' as const
 
 const formatType = (type: string) => {
   return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
+/**
+ * In and out are separate columns, because that is what a stock register is.
+ * Reading one signed column and working out what a leading minus meant was
+ * work the reader was doing on the page's behalf; the heading does it now, and
+ * the eye can run down one side to see everything that left the shelf.
+ */
 const columns = [
-  { key: 'movement_date', label: 'Date' },
-  { key: 'item', label: 'Item' },
-  { key: 'warehouse', label: 'Warehouse' },
-  { key: 'type', label: 'Type' },
-  { key: 'quantity', label: 'Quantity' },
-  { key: 'by', label: 'By' },
+  { key: 'movement_date', label: 'Date', kind: 'date' as const },
+  { key: 'item', label: 'Item', kind: 'text' as const },
+  { key: 'warehouse', label: 'Warehouse', kind: 'text' as const },
+  { key: 'type', label: 'Type', kind: 'text' as const },
+  { key: 'quantity_in', label: 'In', kind: 'in' as const },
+  { key: 'quantity_out', label: 'Out', kind: 'out' as const },
+  { key: 'by', label: 'By', kind: 'text' as const },
 ]
 
+/**
+ * Which side a movement belongs on. The sign is the authority — a return keyed
+ * as a negative adjustment is stock arriving, whatever its type is called — and
+ * the type name is consulted only when the quantity is zero and cannot say.
+ */
+const isOutward = (movement: MovementRow) => {
+  const quantity = Number(movement.quantity)
+  if (quantity !== 0) return quantity < 0
+  return /_out$|^sale$/.test(movement.movement_type)
+}
+
 const tableData = computed(() => {
-  return props.movements.data.map((movement) => ({
-    id: movement.id,
-    movement_date: movement.movement_date,
-    item: `${movement.item.sku} - ${movement.item.name}`,
-    item_id: movement.item.id,
-    warehouse: movement.warehouse.name,
-    type: movement.movement_type,
-    quantity: formatQuantity(movement.quantity),
-    by: movement.created_by?.name ?? '-',
-    _raw: movement,
-  }))
+  return props.movements.data.map((movement) => {
+    const outward = isOutward(movement)
+    const quantity = formatQuantity(movement.quantity)
+
+    return {
+      id: movement.id,
+      movement_date: movement.movement_date,
+      item: `${movement.item.sku} - ${movement.item.name}`,
+      item_id: movement.item.id,
+      warehouse: movement.warehouse.name,
+      type: movement.movement_type,
+      quantity_in: outward ? '' : quantity,
+      quantity_out: outward ? quantity : '',
+      by: movement.created_by?.name ?? '-',
+      _raw: movement,
+    }
+  })
 })
 
 const handleRowClick = (row: any) => {
@@ -229,10 +260,11 @@ const movementTypes = [
     />
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
+      clickable
       :pagination="{
         currentPage: movements.current_page,
         lastPage: movements.last_page,
@@ -247,12 +279,6 @@ const movementTypes = [
           {{ formatType(row.type) }}
         </Badge>
       </template>
-
-      <template #cell-quantity="{ row }">
-        <span :class="row._raw.quantity > 0 ? 'text-status-success' : 'text-status-critical'">
-          {{ row.quantity }}
-        </span>
-      </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

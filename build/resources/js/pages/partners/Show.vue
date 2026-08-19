@@ -182,7 +182,8 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Net Capital</CardDescription>
-          <CardTitle class="text-2xl" :class="partner.net_capital >= 0 ? 'text-status-success' : 'text-status-critical'">
+<!-- Ink, like the same figure in the register. See partners/Index.vue. -->
+          <CardTitle class="text-2xl">
             {{ currency }} {{ formatCurrency(partner.net_capital) }}
           </CardTitle>
         </CardHeader>

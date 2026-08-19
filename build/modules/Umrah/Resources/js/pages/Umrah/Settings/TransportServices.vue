@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import MoneyText from '@/components/MoneyText.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,15 +16,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -58,6 +50,48 @@ const breadcrumbs: BreadcrumbItem[] = [
         title: 'Transport Services',
         href: `/${props.company.slug}/umrah/settings/transport-services`,
     },
+];
+
+const serviceColumns = [
+    { key: 'name', label: 'Service', kind: 'text' as const },
+    { key: 'vehicle_type', label: 'Vehicle Type', kind: 'text' as const },
+    { key: 'make', label: 'Make', kind: 'text' as const },
+    { key: 'model', label: 'Model', kind: 'text' as const },
+    { key: 'pax_capacity', label: 'Capacity', kind: 'amount' as const },
+    { key: 'number_plate', label: 'Plate', kind: 'ref' as const },
+    { key: 'driver', label: 'Driver', kind: 'text' as const },
+    { key: 'contact', label: 'Contact', kind: 'text' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
+
+const sectorColumns = [
+    { key: 'code', label: 'Code', kind: 'ref' as const },
+    { key: 'name', label: 'Sector', kind: 'text' as const },
+    { key: 'origin', label: 'Origin', kind: 'text' as const },
+    { key: 'destination', label: 'Destination', kind: 'text' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
+
+const packageColumns = [
+    { key: 'name', label: 'Journey', kind: 'text' as const },
+    { key: 'sectors', label: 'Included Sectors', kind: 'text' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
+
+const fareColumns = [
+    { key: 'name', label: 'Fare', kind: 'text' as const },
+    { key: 'provider', label: 'Provider', kind: 'text' as const },
+    { key: 'vehicle', label: 'Vehicle', kind: 'text' as const },
+    { key: 'coverage', label: 'Coverage', kind: 'text' as const },
+    { key: 'basis', label: 'Basis', kind: 'text' as const },
+    { key: 'sale_amount', label: 'Retail', kind: 'amount' as const },
+    { key: 'cost_amount', label: 'Cost', kind: 'amount' as const },
+    { key: 'hajj_terminal_sale_amount', label: 'Hajj Extra', kind: 'amount' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
 ];
 
 const form = useForm({
@@ -526,107 +560,74 @@ const updateCatalogStatus = (path: string, record: any) => {
                     ><CardTitle>Available Transport</CardTitle></CardHeader
                 >
                 <CardContent class="p-0">
-                    <Table>
-                        <TableHeader
-                            ><TableRow
-                                ><TableHead>Service</TableHead
-                                ><TableHead>Vehicle Type</TableHead
-                                ><TableHead>Make</TableHead
-                                ><TableHead>Model</TableHead
-                                ><TableHead class="text-center"
-                                    >Capacity</TableHead
-                                ><TableHead>Plate</TableHead
-                                ><TableHead>Driver</TableHead
-                                ><TableHead>Contact</TableHead
-                                ><TableHead>Status</TableHead
-                                ><TableHead class="w-24 text-right"
-                                    >Actions</TableHead
-                                ></TableRow
-                            ></TableHeader
-                        >
-                        <TableBody>
-                            <TableEmpty
-                                v-if="!transportServices.length"
-                                :colspan="10"
-                                >No transport services yet.</TableEmpty
-                            >
-                            <TableRow
-                                v-for="service in transportServices"
-                                :key="service.id"
-                                :class="{ 'opacity-60': !service.is_active }"
-                            >
-                                <TableCell class="font-medium">{{
-                                    service.name
-                                }}</TableCell>
-                                <TableCell>{{
-                                    service.vehicle_type || '-'
-                                }}</TableCell>
-                                <TableCell>{{ service.make || '-' }}</TableCell>
-                                <TableCell>{{
-                                    service.model || '-'
-                                }}</TableCell>
-                                <TableCell class="text-center">{{
-                                    service.pax_capacity || '-'
-                                }}</TableCell>
-                                <TableCell>{{
-                                    service.number_plate || '-'
-                                }}</TableCell>
-                                <TableCell>{{
-                                    service.driver?.name ||
-                                    service.driver_name ||
-                                    '-'
-                                }}</TableCell>
-                                <TableCell>{{
-                                    service.driver?.phone ||
-                                    service.driver_contact ||
-                                    '-'
-                                }}</TableCell>
-                                <TableCell
-                                    ><Badge
-                                        :variant="
-                                            service.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                        >{{
-                                            service.is_active
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}</Badge
-                                    ></TableCell
-                                >
-                                <TableCell
-                                    ><div class="flex justify-end gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Edit transport service"
-                                            @click="startEdit(service)"
-                                            ><Pencil class="h-4 w-4" /></Button
-                                        ><Button
-                                            v-if="service.is_active"
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Deactivate transport service"
-                                            :disabled="statusForm.processing"
-                                            @click="removeService(service)"
-                                            ><Power class="h-4 w-4" /></Button
-                                        ><Button
-                                            v-else
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Reactivate transport service"
-                                            :disabled="statusForm.processing"
-                                            @click="reactivateService(service)"
-                                            ><RotateCcw class="h-4 w-4"
-                                        /></Button></div
-                                ></TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                    <LedgerRegister :data="transportServices" :columns="serviceColumns">
+                        <template #empty>No transport services yet.</template>
+
+                        <template #cell-vehicle_type="{ row }">{{
+                            row.vehicle_type || '—'
+                        }}</template>
+
+                        <template #cell-make="{ row }">{{
+                            row.make || '—'
+                        }}</template>
+
+                        <template #cell-model="{ row }">{{
+                            row.model || '—'
+                        }}</template>
+
+                        <template #cell-pax_capacity="{ row }">{{
+                            row.pax_capacity || '—'
+                        }}</template>
+
+                        <template #cell-number_plate="{ row }">{{
+                            row.number_plate || '—'
+                        }}</template>
+
+                        <template #cell-driver="{ row }">{{
+                            row.driver?.name || row.driver_name || '—'
+                        }}</template>
+
+                        <template #cell-contact="{ row }">{{
+                            row.driver?.phone || row.driver_contact || '—'
+                        }}</template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge
+                                :status="row.is_active ? 'active' : 'inactive'"
+                            />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Edit transport service"
+                                    @click="startEdit(row)"
+                                    ><Pencil class="h-4 w-4" /></Button
+                                ><Button
+                                    v-if="row.is_active"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Deactivate transport service"
+                                    :disabled="statusForm.processing"
+                                    @click="removeService(row)"
+                                    ><Power class="h-4 w-4" /></Button
+                                ><Button
+                                    v-else
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Reactivate transport service"
+                                    :disabled="statusForm.processing"
+                                    @click="reactivateService(row)"
+                                    ><RotateCcw class="h-4 w-4"
+                                /></Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                 </CardContent>
             </Card>
         </div>
@@ -699,80 +700,49 @@ const updateCatalogStatus = (path: string, record: any) => {
                             >
                         </div>
                     </form>
-                    <Table>
-                        <TableHeader
-                            ><TableRow
-                                ><TableHead>Code</TableHead
-                                ><TableHead>Sector</TableHead
-                                ><TableHead>Origin</TableHead
-                                ><TableHead>Destination</TableHead
-                                ><TableHead>Status</TableHead
-                                ><TableHead class="w-24 text-right"
-                                    >Actions</TableHead
-                                ></TableRow
-                            ></TableHeader
-                        >
-                        <TableBody
-                            ><TableEmpty v-if="!sectors.length" :colspan="6"
-                                >No transport sectors yet.</TableEmpty
-                            ><TableRow
-                                v-for="sector in sectors"
-                                :key="sector.id"
-                                :class="{ 'opacity-60': !sector.is_active }"
-                                ><TableCell class="font-medium">{{
-                                    sector.code
-                                }}</TableCell
-                                ><TableCell>{{ sector.name }}</TableCell
-                                ><TableCell>{{ sector.origin }}</TableCell
-                                ><TableCell>{{ sector.destination }}</TableCell
-                                ><TableCell
-                                    ><Badge
-                                        :variant="
-                                            sector.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                        >{{
-                                            sector.is_active
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}</Badge
-                                    ></TableCell
-                                ><TableCell
-                                    ><div class="flex justify-end gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Edit sector"
-                                            @click="startEditSector(sector)"
-                                            ><Pencil class="size-4" /></Button
-                                        ><Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            :title="
-                                                sector.is_active
-                                                    ? 'Deactivate sector'
-                                                    : 'Reactivate sector'
-                                            "
-                                            :disabled="
-                                                catalogStatusForm.processing
-                                            "
-                                            @click="
-                                                updateCatalogStatus(
-                                                    'transport-sectors',
-                                                    sector,
-                                                )
-                                            "
-                                            ><Power
-                                                v-if="sector.is_active"
-                                                class="size-4" /><RotateCcw
-                                                v-else
-                                                class="size-4"
-                                        /></Button></div></TableCell></TableRow
-                        ></TableBody>
-                    </Table>
+                    <LedgerRegister :data="sectors" :columns="sectorColumns">
+                        <template #empty>No transport sectors yet.</template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge
+                                :status="row.is_active ? 'active' : 'inactive'"
+                            />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Edit sector"
+                                    @click="startEditSector(row)"
+                                    ><Pencil class="size-4" /></Button
+                                ><Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :title="
+                                        row.is_active
+                                            ? 'Deactivate sector'
+                                            : 'Reactivate sector'
+                                    "
+                                    :disabled="catalogStatusForm.processing"
+                                    @click="
+                                        updateCatalogStatus(
+                                            'transport-sectors',
+                                            row,
+                                        )
+                                    "
+                                    ><Power
+                                        v-if="row.is_active"
+                                        class="size-4" /><RotateCcw
+                                        v-else
+                                        class="size-4"
+                                /></Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                 </CardContent>
             </Card>
 
@@ -850,80 +820,57 @@ const updateCatalogStatus = (path: string, record: any) => {
                             >
                         </div>
                     </form>
-                    <Table>
-                        <TableHeader
-                            ><TableRow
-                                ><TableHead>Journey</TableHead
-                                ><TableHead>Included Sectors</TableHead
-                                ><TableHead>Status</TableHead
-                                ><TableHead class="w-24 text-right"
-                                    >Actions</TableHead
-                                ></TableRow
-                            ></TableHeader
-                        >
-                        <TableBody
-                            ><TableEmpty v-if="!packages.length" :colspan="4"
-                                >No journey packages yet.</TableEmpty
-                            ><TableRow
-                                v-for="journey in packages"
-                                :key="journey.id"
-                                :class="{ 'opacity-60': !journey.is_active }"
-                                ><TableCell class="font-medium">{{
-                                    journey.name
-                                }}</TableCell
-                                ><TableCell class="text-muted-foreground">{{
-                                    journey.sectors
-                                        .map((sector) => sector.code)
-                                        .join(' → ')
-                                }}</TableCell
-                                ><TableCell
-                                    ><Badge
-                                        :variant="
-                                            journey.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                        >{{
-                                            journey.is_active
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}</Badge
-                                    ></TableCell
-                                ><TableCell
-                                    ><div class="flex justify-end gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Edit journey"
-                                            @click="startEditPackage(journey)"
-                                            ><Pencil class="size-4" /></Button
-                                        ><Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            :title="
-                                                journey.is_active
-                                                    ? 'Deactivate journey'
-                                                    : 'Reactivate journey'
-                                            "
-                                            :disabled="
-                                                catalogStatusForm.processing
-                                            "
-                                            @click="
-                                                updateCatalogStatus(
-                                                    'transport-packages',
-                                                    journey,
-                                                )
-                                            "
-                                            ><Power
-                                                v-if="journey.is_active"
-                                                class="size-4" /><RotateCcw
-                                                v-else
-                                                class="size-4"
-                                        /></Button></div></TableCell></TableRow
-                        ></TableBody>
-                    </Table>
+                    <LedgerRegister :data="packages" :columns="packageColumns">
+                        <template #empty>No journey packages yet.</template>
+
+                        <template #cell-sectors="{ row }">
+                            <span class="text-text-secondary">{{
+                                row.sectors
+                                    .map((sector) => sector.code)
+                                    .join(' → ')
+                            }}</span>
+                        </template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge
+                                :status="row.is_active ? 'active' : 'inactive'"
+                            />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Edit journey"
+                                    @click="startEditPackage(row)"
+                                    ><Pencil class="size-4" /></Button
+                                ><Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :title="
+                                        row.is_active
+                                            ? 'Deactivate journey'
+                                            : 'Reactivate journey'
+                                    "
+                                    :disabled="catalogStatusForm.processing"
+                                    @click="
+                                        updateCatalogStatus(
+                                            'transport-packages',
+                                            row,
+                                        )
+                                    "
+                                    ><Power
+                                        v-if="row.is_active"
+                                        class="size-4" /><RotateCcw
+                                        v-else
+                                        class="size-4"
+                                /></Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                 </CardContent>
             </Card>
         </div>
@@ -1090,105 +1037,83 @@ const updateCatalogStatus = (path: string, record: any) => {
                     </div>
                 </form>
 
-                <Table>
-                    <TableHeader
-                        ><TableRow
-                            ><TableHead>Fare</TableHead
-                            ><TableHead>Provider</TableHead
-                            ><TableHead>Vehicle</TableHead
-                            ><TableHead>Coverage</TableHead
-                            ><TableHead>Basis</TableHead
-                            ><TableHead class="text-right">Retail</TableHead
-                            ><TableHead class="text-right">Cost</TableHead
-                            ><TableHead class="text-right">Hajj Extra</TableHead
-                            ><TableHead>Status</TableHead
-                            ><TableHead class="w-24 text-right"
-                                >Actions</TableHead
-                            ></TableRow
-                        ></TableHeader
-                    >
-                    <TableBody
-                        ><TableEmpty v-if="!fares.length" :colspan="10"
-                            >No sector or journey fares yet.</TableEmpty
-                        ><TableRow
-                            v-for="fare in fares"
-                            :key="fare.id"
-                            :class="{ 'opacity-60': !fare.is_active }"
-                            ><TableCell class="font-medium">{{
-                                fare.name
-                            }}</TableCell
-                            ><TableCell>{{
-                                fare.transport_vendor?.name || '-'
-                            }}</TableCell
-                            ><TableCell>{{
-                                fare.service?.name || '-'
-                            }}</TableCell
-                            ><TableCell>{{
-                                fare.sector?.name || fare.package?.name || '-'
-                            }}</TableCell
-                            ><TableCell>{{
-                                chargingBases[fare.charging_basis]
-                            }}</TableCell
-                            ><TableCell class="text-right"
-                                ><MoneyText
-                                    :amount="fare.sale_amount"
-                                    :currency="
-                                        company.base_currency
-                                    " /></TableCell
-                            ><TableCell class="text-right"
-                                ><MoneyText
-                                    :amount="fare.cost_amount"
-                                    :currency="
-                                        company.base_currency
-                                    " /></TableCell
-                            ><TableCell class="text-right"
-                                ><MoneyText
-                                    :amount="fare.hajj_terminal_sale_amount"
-                                    :currency="
-                                        company.base_currency
-                                    " /></TableCell
-                            ><TableCell
-                                ><Badge
-                                    :variant="
-                                        fare.is_active ? 'default' : 'secondary'
-                                    "
-                                    >{{
-                                        fare.is_active ? 'Active' : 'Inactive'
-                                    }}</Badge
-                                ></TableCell
-                            ><TableCell
-                                ><div class="flex justify-end gap-1">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Edit fare"
-                                        @click="startEditFare(fare)"
-                                        ><Pencil class="size-4" /></Button
-                                    ><Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        :title="
-                                            fare.is_active
-                                                ? 'Deactivate fare'
-                                                : 'Reactivate fare'
-                                        "
-                                        :disabled="catalogStatusForm.processing"
-                                        @click="
-                                            updateCatalogStatus(
-                                                'transport-fares',
-                                                fare,
-                                            )
-                                        "
-                                        ><Power
-                                            v-if="fare.is_active"
-                                            class="size-4" /><RotateCcw
-                                            v-else
-                                            class="size-4"
-                                    /></Button></div></TableCell></TableRow
-                    ></TableBody>
-                </Table>
+                <LedgerRegister :data="fares" :columns="fareColumns">
+                    <template #empty>No sector or journey fares yet.</template>
+
+                    <template #cell-provider="{ row }">{{
+                        row.transport_vendor?.name || '—'
+                    }}</template>
+
+                    <template #cell-vehicle="{ row }">{{
+                        row.service?.name || '—'
+                    }}</template>
+
+                    <template #cell-coverage="{ row }">{{
+                        row.sector?.name || row.package?.name || '—'
+                    }}</template>
+
+                    <template #cell-basis="{ row }">{{
+                        chargingBases[row.charging_basis]
+                    }}</template>
+
+                    <template #cell-sale_amount="{ row }">
+                        <MoneyText
+                            :amount="row.sale_amount"
+                            :currency="company.base_currency"
+                        />
+                    </template>
+
+                    <template #cell-cost_amount="{ row }">
+                        <MoneyText
+                            :amount="row.cost_amount"
+                            :currency="company.base_currency"
+                        />
+                    </template>
+
+                    <template #cell-hajj_terminal_sale_amount="{ row }">
+                        <MoneyText
+                            :amount="row.hajj_terminal_sale_amount"
+                            :currency="company.base_currency"
+                        />
+                    </template>
+
+                    <template #cell-status="{ row }">
+                        <StatusBadge
+                            :status="row.is_active ? 'active' : 'inactive'"
+                        />
+                    </template>
+
+                    <template #cell-actions="{ row }">
+                        <div class="flex justify-end gap-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                title="Edit fare"
+                                @click="startEditFare(row)"
+                                ><Pencil class="size-4" /></Button
+                            ><Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                :title="
+                                    row.is_active
+                                        ? 'Deactivate fare'
+                                        : 'Reactivate fare'
+                                "
+                                :disabled="catalogStatusForm.processing"
+                                @click="
+                                    updateCatalogStatus('transport-fares', row)
+                                "
+                                ><Power
+                                    v-if="row.is_active"
+                                    class="size-4" /><RotateCcw
+                                    v-else
+                                    class="size-4"
+                            /></Button>
+                        </div>
+                    </template>
+                </LedgerRegister>
             </CardContent>
         </Card>
 

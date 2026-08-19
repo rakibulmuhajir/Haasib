@@ -1794,7 +1794,7 @@ const completedWorkflowSteps = computed(() => {
             <Badge variant="secondary" class="justify-center">
               {{ completedWorkflowSteps }}/4 sections saved
             </Badge>
-            <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-status-success/10 text-status-success' : 'bg-status-critical/10 text-status-critical'">
+            <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
               {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}: {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
             </Badge>
           </div>
@@ -3065,7 +3065,7 @@ const completedWorkflowSteps = computed(() => {
               <!-- Variance -->
               <div v-if="form.closing_cash > 0" class="mt-4 flex items-center gap-2">
                 <component :is="cashVariance === 0 ? CheckCircle : AlertCircle"
-                  :class="['h-5 w-5', cashVariance === 0 ? 'text-status-success' : cashVariance > 0 ? 'text-status-info' : 'text-status-critical']"
+                  :class="['h-5 w-5', cashVariance === 0 ? 'text-status-success' : 'text-status-attention']"
                 />
                 <span v-if="cashVariance === 0" class="text-status-success font-medium">Cash matches expected amount</span>
                 <span v-else-if="cashVariance > 0" class="text-status-info font-medium">

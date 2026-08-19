@@ -179,7 +179,7 @@ function handleDelete() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="user in props.users" :key="user.id" :value="user.id">
-                  {{ user.name }} Â· {{ user.email }}
+                  {{ user.name }} · {{ user.email }}
                 </SelectItem>
               </SelectContent>
             </Select>

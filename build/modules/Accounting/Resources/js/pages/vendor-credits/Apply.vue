@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -88,13 +89,6 @@ const validationState = computed(() => {
 })
 
 // Formatting functions
-const formatMoney = (amount: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(amount)
-
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—'
   return formatDateTime(dateString, { mode: 'date' })
@@ -262,19 +256,19 @@ const getDaysOverdue = (dueDate?: string) => {
           <div>
             <div class="text-sm font-medium text-muted-foreground">Available Credit</div>
             <div class="text-2xl font-bold text-status-info">
-              {{ formatMoney(credit.amount, credit.currency) }}
+              <MoneyText :amount="credit.amount" :currency="credit.currency" />
             </div>
           </div>
           <div>
             <div class="text-sm font-medium text-muted-foreground">Applied Amount</div>
             <div class="text-2xl font-bold" :class="hasExceeded ? 'text-status-critical' : 'text-status-success'">
-              {{ formatMoney(totalApplied, credit.currency) }}
+              <MoneyText :amount="totalApplied" :currency="credit.currency" />
             </div>
           </div>
           <div>
             <div class="text-sm font-medium text-muted-foreground">Remaining</div>
             <div class="text-2xl font-bold" :class="hasUnusedCredit ? 'text-status-attention' : 'text-text-secondary'">
-              {{ formatMoney(Math.max(0, remainingCredit), credit.currency) }}
+              <MoneyText :amount="Math.max(0, remainingCredit)" :currency="credit.currency" />
             </div>
           </div>
         </div>
@@ -410,7 +404,7 @@ const getDaysOverdue = (dueDate?: string) => {
                         />
                       </div>
                       <div class="text-sm text-muted-foreground">
-                        <div>of {{ formatMoney(bill.balance, bill.currency) }}</div>
+                        <div>of <MoneyText :amount="bill.balance" :currency="bill.currency" /></div>
                         <Progress
                           :value="(currentAmount(bill.id) / bill.balance) * 100"
                           class="w-24 h-2 mt-1"
@@ -449,7 +443,7 @@ const getDaysOverdue = (dueDate?: string) => {
     <Alert v-if="hasExceeded" class="mt-6 border-status-critical/30 bg-status-critical/10">
       <AlertCircle class="h-4 w-4 text-status-critical" />
       <AlertDescription class="text-status-critical">
-        Total applications exceed the available credit amount by {{ formatMoney(totalApplied - credit.amount, credit.currency) }}.
+        Total applications exceed the available credit amount by <MoneyText :amount="totalApplied - credit.amount" :currency="credit.currency" />.
         Please reduce the amounts to continue.
       </AlertDescription>
     </Alert>

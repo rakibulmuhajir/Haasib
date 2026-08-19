@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { Pencil, ArrowLeft, Warehouse } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -84,11 +85,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 
 const formatQuantity = (qty: number) => {

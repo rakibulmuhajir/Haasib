@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +29,7 @@ import {
   FileText,
   Warehouse,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
   id: string
@@ -89,28 +91,11 @@ const formatLiters = (n: number) =>
 
 const formatMoney = (n: number) => {
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n ?? 0)
+    return formatMoneyText(n ?? 0, currencyCode.value, { fractionDigits: 2 })
   } catch (_e) {
     return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
   }
 }
-
-const statusClass = computed(() => {
-  switch (props.reading.status) {
-    case 'posted':
-      return 'bg-status-success text-status-success-contrast hover:bg-status-success'
-    case 'confirmed':
-      return 'bg-status-info/10 text-status-info hover:bg-status-info/10'
-    default:
-      return 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'
-  }
-})
 
 const variance = computed(() => {
   const v = Number(props.reading.variance_liters ?? 0)
@@ -237,7 +222,7 @@ const submitEdit = () => {
               </div>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <Badge :class="statusClass">{{ reading.status }}</Badge>
+              <StatusBadge :status="reading.status" />
               <Badge :class="variance.cls">{{ variance.label }}</Badge>
             </div>
           </div>

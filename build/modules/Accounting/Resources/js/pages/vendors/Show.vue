@@ -2,8 +2,11 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
 import DataTable from '@/components/DataTable.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +36,7 @@ import {
   XCircle,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -173,11 +177,7 @@ const paymentTermsOptions = [
 const canManage = computed(() => props.canEdit !== false)
 
 const money = (val: number | null | undefined) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.vendor.base_currency || props.company.base_currency,
-  }).format(val ?? 0)
+  formatMoneyText(val ?? 0, props.vendor.base_currency || props.company.base_currency)
 
 const getInitials = (name: string) => {
   return name
@@ -221,18 +221,6 @@ const paymentRows = computed(() =>
   }))
 )
 
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    paid: 'default',
-    received: 'default',
-    open: 'secondary',
-    draft: 'outline',
-    overdue: 'destructive',
-    void: 'secondary',
-    cancelled: 'secondary',
-  }
-  return variants[status.toLowerCase()] || 'outline'
-}
 
 const formatAddress = (addr: AddressRef | null | undefined) => {
   if (!addr) return null
@@ -332,7 +320,7 @@ const cancelAddressEdit = () => {
               <Receipt class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.open_balance) }}</div>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.open_balance" :currency="vendor.base_currency || company.base_currency" /></div>
               <p class="text-xs text-text-secondary mt-1">{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
@@ -344,7 +332,7 @@ const cancelAddressEdit = () => {
             </CardHeader>
             <CardContent>
               <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-status-attention' : 'text-text-primary']">
-                {{ money(summary.overdue_balance) }}
+                <MoneyText :amount="summary.overdue_balance" :currency="vendor.base_currency || company.base_currency" />
               </div>
               <p class="text-xs text-text-secondary mt-1">Past due date</p>
             </CardContent>
@@ -356,7 +344,7 @@ const cancelAddressEdit = () => {
               <Wallet class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ money(summary.paid_ytd) }}</div>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.paid_ytd" :currency="vendor.base_currency || company.base_currency" /></div>
               <p class="text-xs text-text-secondary mt-1">This year</p>
             </CardContent>
           </Card>
@@ -411,9 +399,7 @@ const cancelAddressEdit = () => {
             <CardContent>
               <DataTable :columns="billColumns" :data="billRows" key-field="id">
                 <template #cell-status="{ row }">
-                  <Badge :variant="getStatusVariant(row.status)" class="capitalize">
-                    {{ row.status }}
-                  </Badge>
+                  <StatusBadge :status="row.status" />
                 </template>
               </DataTable>
             </CardContent>
@@ -705,5 +691,7 @@ const cancelAddressEdit = () => {
         </Card>
       </TabsContent>
     </Tabs>
+
+    <RelatedActions screen="vendor.show" :slug="company.slug" :subject="vendor" />
   </PageShell>
 </template>

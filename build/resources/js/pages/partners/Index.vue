@@ -234,7 +234,10 @@ const goToCreate = () => {
           </template>
 
           <template #cell-net_capital="{ row }">
-            <span :class="row._raw.net_capital >= 0 ? 'text-status-success font-medium' : 'text-status-critical font-medium'">
+<!-- A partner whose capital account is overdrawn is a fact about the
+                 books, not an emergency, and one in credit is not good news --
+                 it is money the business owes them. The sign says which. -->
+            <span class="font-medium">
               {{ currency }} {{ formatCurrency(row._raw.net_capital) }}
             </span>
           </template>

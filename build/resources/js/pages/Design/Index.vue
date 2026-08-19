@@ -45,11 +45,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
 import { Toaster } from '@/components/ui/sonner'
 
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import TotalRow from '@/components/TotalRow.vue'
@@ -141,12 +139,28 @@ const STATUSES = [
  * column and the minus sign. Red is reserved for adverse states only.
  */
 const ROWS = [
-  { date: '18 AUG', what: 'Northstar Retail', note: 'paid invoice INV-1018', ref: 'SL-204', in: 85000, out: null },
-  { date: '17 AUG', what: 'Pak Logistics', note: 'freight for August', ref: 'PL-118', in: null, out: 24500 },
-  { date: '16 AUG', what: 'Zamzam Traders', note: 'part payment, INV-1015', ref: 'SL-197', in: 60000, out: null },
-  { date: '15 AUG', what: 'K-Electric', note: 'July electricity', ref: 'PL-121', in: null, out: 31200 },
-  { date: '14 AUG', what: 'Salaries', note: 'August, 11 staff', ref: 'PL-109', in: null, out: 186000 },
+  { date: '18 AUG', what: 'Northstar Retail', note: 'paid invoice INV-1018', ref: 'SL-204', in: 85000, out: null, detail: 'Settled INV-1018 in full. Bank transfer, cleared same day.' },
+  { date: '17 AUG', what: 'Pak Logistics', note: 'freight for August', ref: 'PL-118', in: null, out: 24500, detail: null },
+  { date: '16 AUG', what: 'Zamzam Traders', note: 'part payment, INV-1015', ref: 'SL-197', in: 60000, out: null, detail: null },
+  { date: '15 AUG', what: 'K-Electric', note: 'July electricity', ref: 'PL-121', in: null, out: 31200, detail: null },
+  { date: '14 AUG', what: 'Salaries', note: 'August, 11 staff', ref: 'PL-109', in: null, out: 186000, detail: null },
 ]
+
+/*
+ * The register's own column vocabulary, declared the way a real page declares
+ * it. `in` and `out` are two columns of one register and both are ink -- the
+ * headings say which way the money went, so colour would only repeat them.
+ */
+const REGISTER_COLUMNS = [
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'what', label: 'What happened', kind: 'text' as const },
+  { key: 'ref', label: 'Reference', kind: 'ref' as const },
+  { key: 'in', label: 'Money in', kind: 'in' as const },
+  { key: 'out', label: 'Money out', kind: 'out' as const },
+]
+
+/* Which row is opened. One row carries a detail so the slot can be seen. */
+const openRef = ref<string | null>('SL-204')
 
 const fmt = (n: number) => new Intl.NumberFormat('en-PK').format(n)
 
@@ -457,45 +471,45 @@ const URDU_LABEL = 'وصول شدہ رقم'
             <span class="spec-cap !mb-0">August 2026</span>
           </div>
 
-          <div class="spec-register overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>What happened</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead class="text-right">Money in</TableHead>
-                  <TableHead class="text-right">Money out</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="r in ROWS" :key="r.ref">
-                  <TableCell class="font-mono text-xs text-text-metadata">{{ r.date }}</TableCell>
-                  <TableCell>
-                    <span class="font-semibold">{{ r.what }}</span>
-                    <span class="text-muted-foreground"> · {{ r.note }}</span>
-                  </TableCell>
-                  <TableCell class="font-mono text-xs text-text-metadata">{{ r.ref }}</TableCell>
-                  <TableCell class="amount text-right font-mono text-amount-inflow">
-                    {{ r.in ? fmt(r.in) : '' }}
-                  </TableCell>
-                  <TableCell class="amount text-right font-mono text-amount-outflow">
-                    {{ r.out ? '−' + fmt(r.out) : '' }}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colspan="3" class="text-xs font-semibold uppercase tracking-wider">
-                    Total this month
-                  </TableCell>
-                  <TableCell class="amount text-right font-mono font-semibold">{{ fmt(450000) }}</TableCell>
-                  <TableCell class="amount text-right font-mono font-semibold">−{{ fmt(320000) }}</TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </div>
+          <LedgerRegister
+            :data="ROWS"
+            :columns="REGISTER_COLUMNS"
+            key-field="ref"
+            :density="density"
+            :expanded="(row) => openRef === row.ref"
+            :totals="{}"
+            totals-label="Total this month"
+            clickable
+            @row-click="(row) => (openRef = openRef === row.ref ? null : row.ref)"
+          >
+            <template #cell-what="{ row }">
+              <span class="font-semibold">{{ row.what }}</span>
+              <span class="text-text-secondary"> · {{ row.note }}</span>
+            </template>
+
+            <template #cell-in="{ row }">
+              <MoneyText v-if="row.in" :amount="row.in" currency="PKR" direction="inflow" />
+            </template>
+
+            <template #cell-out="{ row }">
+              <MoneyText v-if="row.out" :amount="row.out" currency="PKR" direction="outflow" />
+            </template>
+
+            <template #row-detail="{ row }">
+              <p v-if="row.detail" class="text-sm text-text-secondary">{{ row.detail }}</p>
+              <p v-else class="text-sm text-text-secondary">Nothing further recorded against this entry.</p>
+            </template>
+
+            <template #total-in><MoneyText :amount="145000" currency="PKR" direction="inflow" /></template>
+            <template #total-out><MoneyText :amount="241700" currency="PKR" direction="outflow" /></template>
+          </LedgerRegister>
         </div>
+
+        <p class="spec-note mt-4">
+          Click a row to open it. The detail is a slot on the register rather than a second
+          table underneath one, which is how a page used to end up with its own alignment and
+          its own banding beneath a row it did not own.
+        </p>
       </section>
 
       <!-- ── Financial primitives (Tier 1) ───────────────────────────── -->
@@ -953,45 +967,12 @@ const URDU_LABEL = 'وصول شدہ رقم'
 .spec-status[data-tone='neutral']   { border-left-color: var(--rule-emphasis); }
 .spec-status[data-tone='muted']     { border-left-color: var(--rule-default); color: var(--text-metadata); text-decoration: line-through; }
 
-/* ── Register: green-bar paper ─────────────────────────────────────────
-   Banding is the signature. Density flows from the contract tokens, which is
-   what makes the density control at the top of the page a real test.
-
-   The hook class sits on a wrapper div, not on <Table>. shadcn's Table
-   renders a wrapper element, so the <table> itself never receives Vue's
-   scoped data attribute and `.spec-register :deep(...)` matched nothing.
-   That is a Tier 0 finding in its own right: any table styling shipped from
-   a page's scoped block has to anchor on an element the page owns.          */
-.spec-register :deep(tbody tr:nth-child(odd)) {
-  background: var(--surface-band);
-}
-
-/* These rules outrank shadcn's hover utility, so hover has to be restated
-   or odd rows would lose their feedback entirely. */
-.spec-register :deep(tbody tr:hover),
-.spec-register :deep(tbody tr:nth-child(odd):hover) {
-  background: var(--surface-sunken);
-}
-
-.spec-register :deep(tbody td),
-.spec-register :deep(thead th) {
-  height: var(--row-h);
-  padding: var(--cell-py) var(--cell-px);
-}
-
-.spec-register :deep(thead th) {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--rule-default);
-}
-
-.spec-register :deep(tfoot td) {
-  border-top: 1.5px solid var(--rule-emphasis);
-  border-bottom: 1.5px solid var(--rule-emphasis);
-}
+/* ── Register ──────────────────────────────────────────────────────────
+   The banding, the density contract, the mono headers and the double-ruled
+   total used to be restated here, in a scoped block, against a table this
+   page had hand-written. They are the component's decisions and they belong
+   in the component -- a spec page that reimplements the thing it documents
+   is a spec page that will drift away from it.                             */
 
 @media (prefers-reduced-motion: reduce) {
   .spec-spinner { animation: none; }

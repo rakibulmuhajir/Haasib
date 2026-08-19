@@ -185,3 +185,24 @@ export function moneyLabel(parts: MoneyParts, currencyCode: string): string {
     const prefix = parts.isNegative ? 'negative ' : ''
     return `${prefix}${parts.value} ${currencyCode}`
 }
+
+/**
+ * The same contract, as a plain string.
+ *
+ * Some places genuinely cannot mount a component — a chart label, a `title`
+ * attribute, a row object built in script before it reaches a register. This
+ * is for those, and only those. Anything that renders into the DOM should go
+ * through MoneyText, which additionally owns alignment, tone and scale.
+ *
+ * It exists because fifty-odd pages had each written their own
+ * `new Intl.NumberFormat(...)`, which meant fifty-odd chances to disagree about
+ * the negative glyph, the symbol style and the decimal count. They now all
+ * arrive here, so a change to the convention is one edit rather than fifty.
+ */
+export function formatMoneyText(
+    amount: number | string | null | undefined,
+    currency: string,
+    options: Omit<FormatMoneyOptions, 'currency'> = {},
+): string {
+    return formatMoney(amount, { currency: currency || 'USD', ...options }).plain
+}

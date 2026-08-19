@@ -301,6 +301,8 @@ class VisaGroupController extends Controller
         $hadStarted = $this->access->groupHasStarted($record);
         $changes = [
             'name' => $data['name'],
+            'transport_mode' => $data['transport_mode'],
+            'transport_required' => $data['transport_mode'] !== VisaGroup::TRANSPORT_NONE,
             'travel_date' => $data['travel_date'] ?? null,
             'flight_info' => ['airline' => $data['flight_airline'] ?? null, 'number' => $data['flight_number'] ?? null, 'notes' => $data['flight_notes'] ?? null],
             'hotel_info' => ['makkah' => $data['hotel_makkah'] ?? null, 'madinah' => $data['hotel_madinah'] ?? null, 'notes' => $data['hotel_notes'] ?? null],
@@ -310,16 +312,44 @@ class VisaGroupController extends Controller
             $vendorData = $this->service->resolveGroupVendors($company->id, [
                 'vendor_id' => $data['vendor_id'] ?? $record->vendor_id,
                 'mandatory_transport_vendor_id' => $data['mandatory_transport_vendor_id'] ?? null,
-                'transport_mode' => $record->transport_mode,
+                'transport_mode' => $data['transport_mode'],
             ], false);
             $changes['vendor_id'] = $vendorData['vendor_id'];
             $changes['mandatory_transport_vendor_id'] = $vendorData['mandatory_transport_vendor_id'];
         }
         $oldValues = $record->only(array_keys($changes));
-        $oldVendorIds = array_filter([$record->vendor_id, $record->mandatory_transport_vendor_id]);
+        $oldVendorIds = array_filter([
+            $record->vendor_id,
+            $record->mandatory_transport_vendor_id,
+            ...$record->transportItems()->pluck('transport_vendor_id')->all(),
+        ]);
 
-        DB::transaction(function () use ($request, $record, $changes, $oldValues, $data, $hadStarted) {
+        $financialBefore = $record->only(['visa_sale_amount', 'transport_amount', 'discount_amount', 'total_receivable', 'visa_cost_amount', 'transport_cost_amount']);
+        DB::transaction(function () use ($request, $record, &$changes, $oldValues, $data, $hadStarted, $financialBefore) {
+            if ($data['transport_mode'] === VisaGroup::TRANSPORT_NONE) {
+                $this->service->removeGroupTransport($record);
+                $changes = [...$changes, ...$record->fresh()->only([
+                    'mandatory_transport_vendor_id', 'transport_service_id', 'driver_id', 'transport_quantity',
+                    'transport_pax_capacity', 'standard_bus_retail_amount', 'standard_bus_cost_amount',
+                    'standard_bus_charge_child_fare', 'standard_bus_billable_passenger_count',
+                    'mandatory_transport_cost_amount', 'transport_amount', 'transport_cost_amount',
+                ])];
+            } elseif ($data['transport_mode'] === VisaGroup::TRANSPORT_STANDARD_BUS) {
+                $provider = VisaVendor::where('company_id', $record->company_id)->findOrFail($changes['mandatory_transport_vendor_id']);
+                $pricing = $this->service->standardBusPricingForGroup($record, $provider);
+                $changes = [...$changes,
+                    'standard_bus_retail_amount' => $pricing['retail_rate'],
+                    'standard_bus_cost_amount' => $pricing['cost_rate'],
+                    'standard_bus_charge_child_fare' => $pricing['charge_child_fare'],
+                    'standard_bus_billable_passenger_count' => $pricing['passenger_count'],
+                    'mandatory_transport_cost_amount' => $pricing['cost'],
+                    'transport_amount' => round($pricing['sale'] + (float) $record->passengers()->where('service_type', Passenger::SERVICE_TRANSPORT_ONLY)->sum('transport_charge_amount'), 2),
+                    'transport_cost_amount' => $pricing['cost'],
+                ];
+            }
             $record->update($changes);
+            $this->service->recalculateGroup($record->fresh());
+            $this->service->postGroupFinancialAdjustment($record->fresh(), $financialBefore, $data['override_reason'] ?? 'Transport option updated');
             $this->changeLogger->log($request, $record, 'visa_group', 'updated', $oldValues, $changes, $data['override_reason'] ?? null, [
                 'after_travel_start' => $hadStarted,
             ]);

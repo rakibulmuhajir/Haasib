@@ -44,6 +44,7 @@ const form = useForm({
     name: props.group.name || '',
     vendor_id: props.group.vendor_id || 'none',
     mandatory_transport_vendor_id: props.group.mandatory_transport_vendor_id || 'none',
+    transport_mode: props.group.transport_mode,
     travel_date: String(props.group.travel_date || '').slice(0, 10),
     flight_airline: props.group.flight_info?.airline || '',
     flight_number: props.group.flight_info?.number || '',
@@ -73,7 +74,7 @@ const submit = () =>
             ...data,
             vendor_id: data.vendor_id === 'none' ? null : data.vendor_id,
             mandatory_transport_vendor_id:
-                data.mandatory_transport_vendor_id === 'none'
+                data.transport_mode === 'none' || data.mandatory_transport_vendor_id === 'none'
                     ? null
                     : data.mandatory_transport_vendor_id,
         }))
@@ -111,7 +112,19 @@ const submit = () =>
                             <SelectContent><SelectItem v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">{{ vendor.name }}{{ vendor.is_default ? ' · Default' : '' }}</SelectItem></SelectContent>
                         </Select>
                     </div>
-                    <div v-if="canManageVendors && group.transport_mode === 'standard_bus'" class="space-y-2">
+                    <div v-if="canManageVendors" class="space-y-2">
+                        <Label>Transport</Label>
+                        <Select v-model="form.transport_mode">
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">No transport</SelectItem>
+                                <SelectItem value="standard_bus">Standard bus</SelectItem>
+                                <SelectItem v-if="group.transport_mode === 'specialized'" value="specialized">Specialized transport</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p class="text-xs text-muted-foreground">Choosing no transport removes all saved transport details and charges.</p>
+                    </div>
+                    <div v-if="canManageVendors && form.transport_mode === 'standard_bus'" class="space-y-2">
                         <Label>Mandatory transport provider</Label>
                         <Select v-model="form.mandatory_transport_vendor_id">
                             <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>

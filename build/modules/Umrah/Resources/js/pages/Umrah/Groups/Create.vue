@@ -223,6 +223,11 @@ const selectedTransportVendor = computed(() =>
         (item) => item.id === form.mandatory_transport_vendor_id,
     ),
 );
+const availablePassengerServiceTypes = computed(() =>
+    form.transport_mode === 'none'
+        ? { visa_transport: 'Visa only' }
+        : props.passengerServiceTypes,
+);
 
 const fareFor = (fareId: string) =>
     props.transportFares.find((fare) => fare.id === fareId);
@@ -367,16 +372,21 @@ const updateVisaPricing = () => {
     form.visa_sale_amount = String(pricing.sale.toFixed(2));
     form.visa_cost_amount = String(pricing.cost.toFixed(2));
     form.transport_amount = String(
-        ((form.transport_mode === 'standard_bus'
-            ? standardBusPricing.value.sale
-            : transportFareTotals.value.sale) + transportOnlyCharges.value).toFixed(
+        ((form.transport_mode === 'none'
+            ? 0
+            : form.transport_mode === 'standard_bus'
+              ? standardBusPricing.value.sale
+              : transportFareTotals.value.sale) +
+            (form.transport_mode === 'none' ? 0 : transportOnlyCharges.value)).toFixed(
             2,
         ),
     );
     form.transport_cost_amount = String(
-        (form.transport_mode === 'standard_bus'
-            ? standardBusPricing.value.cost
-            : transportFareTotals.value.cost
+        (form.transport_mode === 'none'
+            ? 0
+            : form.transport_mode === 'standard_bus'
+              ? standardBusPricing.value.cost
+              : transportFareTotals.value.cost
         ).toFixed(2),
     );
 };
@@ -409,6 +419,17 @@ watch(
 );
 watch(() => [form.transport_mode, form.mandatory_transport_vendor_id, form.transport_items], updateVisaPricing, {
     deep: true,
+});
+watch(() => form.transport_mode, (mode) => {
+    if (mode !== 'none') return;
+    form.mandatory_transport_vendor_id = 'none';
+    form.transport_service_id = 'none';
+    form.driver_id = 'none';
+    form.transport_items = [];
+    form.passengers.forEach((passenger) => {
+        passenger.service_type = 'visa_transport';
+        passenger.transport_charge_amount = '0';
+    });
 });
 
 const addPassenger = () => {
@@ -566,7 +587,7 @@ const submit = () => {
                 ? null
                 : data.transport_service_id,
         driver_id: data.driver_id === 'none' ? null : data.driver_id,
-        transport_required: true,
+        transport_required: data.transport_mode !== 'none',
         transport_mode: data.transport_mode,
         transport_quantity: Number(data.transport_quantity || 0),
         transport_pax_capacity: data.transport_pax_capacity
@@ -590,10 +611,8 @@ const submit = () => {
                         : Number(passenger.imported_age),
                 nationality: passenger.nationality,
                 visa_status: passenger.visa_status,
-                service_type: passenger.service_type,
-                transport_charge_amount: Number(
-                    passenger.transport_charge_amount || 0,
-                ),
+                service_type: data.transport_mode === 'none' ? 'visa_transport' : passenger.service_type,
+                transport_charge_amount: data.transport_mode === 'none' ? 0 : Number(passenger.transport_charge_amount || 0),
             })),
         transport_items:
             data.transport_mode === 'specialized'
@@ -1064,8 +1083,15 @@ const submit = () => {
                         <CardContent class="space-y-4">
                             <RadioGroup
                                 v-model="form.transport_mode"
-                                class="grid gap-3 md:grid-cols-2"
+                                class="grid gap-3 md:grid-cols-3"
                             >
+                                <Label
+                                    for="transport-none"
+                                    class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
+                                >
+                                    <RadioGroupItem id="transport-none" value="none" />
+                                    <span><span class="block font-medium">No transport</span><span class="mt-1 block text-xs text-muted-foreground">Visa processing only. No vehicle, driver, fare, or transport charge.</span></span>
+                                </Label>
                                 <Label
                                     for="transport-standard"
                                     class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
@@ -1567,7 +1593,7 @@ const submit = () => {
                                             ><SelectItem
                                                 v-for="(
                                                     label, value
-                                                ) in passengerServiceTypes"
+                                                ) in availablePassengerServiceTypes"
                                                 :key="value"
                                                 :value="value"
                                                 >{{ label }}</SelectItem
@@ -1604,8 +1630,8 @@ const submit = () => {
                                         min="0"
                                         step="0.01"
                                         :disabled="
-                                            passenger.service_type !==
-                                            'transport_only'
+                                            form.transport_mode === 'none' ||
+                                            passenger.service_type !== 'transport_only'
                                         "
                                     />
                                     <p

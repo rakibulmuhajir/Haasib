@@ -57,7 +57,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'hotel_makkah' => ['nullable', 'string', 'max:255'],
             'hotel_madinah' => ['nullable', 'string', 'max:255'],
             'hotel_notes' => ['nullable', 'string', 'max:500'],
-            'transport_required' => ['accepted'],
+            'transport_required' => [Rule::requiredIf($this->input('transport_mode') !== VisaGroup::TRANSPORT_NONE), 'boolean', Rule::when($this->input('transport_mode') !== VisaGroup::TRANSPORT_NONE, ['accepted'])],
             'transport_mode' => ['required', Rule::in(array_keys(VisaGroup::TRANSPORT_MODES))],
             'transport_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
             'transport_pax_capacity' => ['nullable', 'integer', 'min:1', 'max:10000'],
@@ -74,8 +74,10 @@ class StoreVisaGroupRequest extends UmrahFormRequest
             'passengers.*.nationality' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
             'passengers.*.date_of_birth' => ['nullable', 'date'],
             'passengers.*.imported_age' => ['nullable', 'integer', 'min:0', 'max:130'],
-            'passengers.*.service_type' => ['nullable', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
-            'passengers.*.transport_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'passengers.*.service_type' => ['nullable', Rule::in($this->input('transport_mode') === VisaGroup::TRANSPORT_NONE
+                ? [Passenger::SERVICE_VISA_TRANSPORT]
+                : array_keys(Passenger::SERVICE_TYPES))],
+            'passengers.*.transport_charge_amount' => ['nullable', 'numeric', 'min:0', Rule::when($this->input('transport_mode') === VisaGroup::TRANSPORT_NONE, ['in:0'])],
             'passengers.*.visa_status' => ['nullable', Rule::in(array_keys(Passenger::STATUSES))],
             'transport_items' => [
                 'nullable',

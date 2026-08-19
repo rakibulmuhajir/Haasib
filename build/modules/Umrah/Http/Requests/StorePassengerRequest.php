@@ -42,8 +42,10 @@ class StorePassengerRequest extends UmrahFormRequest
             'nationality' => ['nullable', Rule::in(array_keys(Agent::COUNTRIES))],
             'date_of_birth' => ['nullable', 'date'],
             'imported_age' => ['nullable', 'integer', 'min:0', 'max:130'],
-            'service_type' => ['nullable', Rule::in(array_keys(Passenger::SERVICE_TYPES))],
-            'transport_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'service_type' => ['nullable', Rule::in($group?->transport_mode === VisaGroup::TRANSPORT_NONE
+                ? [Passenger::SERVICE_VISA_TRANSPORT]
+                : array_keys(Passenger::SERVICE_TYPES))],
+            'transport_charge_amount' => ['nullable', 'numeric', 'min:0', Rule::when($group?->transport_mode === VisaGroup::TRANSPORT_NONE, ['in:0'])],
             'visa_status' => ['nullable', Rule::in(array_keys(Passenger::STATUSES))],
             'notes' => ['nullable', 'string'],
             'override_reason' => [Rule::requiredIf($requiresReason), 'nullable', 'string', 'min:5', 'max:1000'],

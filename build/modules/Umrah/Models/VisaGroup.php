@@ -42,7 +42,10 @@ class VisaGroup extends Model
 
     public const TRANSPORT_SPECIALIZED = 'specialized';
 
+    public const TRANSPORT_NONE = 'none';
+
     public const TRANSPORT_MODES = [
+        self::TRANSPORT_NONE => 'No transport',
         self::TRANSPORT_STANDARD_BUS => 'Standard bus included with visa',
         self::TRANSPORT_SPECIALIZED => 'Specialized transport',
     ];

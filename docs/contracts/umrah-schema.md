@@ -16,7 +16,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
 - Agent group creation receives only the active default visa vendor's adult/child retail rates. Supplier identity, supplier costs, mandatory transport provider, and provider payable are not included in the agent payload. The server resolves suppliers and recalculates all charges; agent-created groups cannot submit a group discount.
 - Voucher accounting is the later travel-stage source for Company-booked hotel revenue/cost. A voucher may display its parent group's posted visa and transport amounts, but it must never repost or duplicate them.
 - Flight and hotel are informational in phase 1.
-- Transport is mandatory for visa groups. Visa and standard-bus rates are independent: standard-bus groups add the selected transport provider's snapshotted sale and cost to the visa amounts without deducting anything from the visa vendor payable. Specialized transport replaces the standard-bus pricing with selected fare suppliers' snapshotted amounts.
+- Transport is optional for visa groups. `none` groups are visa-only and carry no transport supplier, service, driver, fare snapshots, revenue, or cost. Visa and standard-bus rates are independent: standard-bus groups add the selected transport provider's snapshotted sale and cost to the visa amounts without deducting anything from the visa vendor payable. Specialized transport replaces the standard-bus pricing with selected fare suppliers' snapshotted amounts.
 - Transport service is the vehicle source of truth. Do not maintain a separate vehicle type setup screen.
 - Transport sectors and journey packages are configurable. Fares belong to a transport service and either one sector or one journey package.
 - Group transport items are immutable pricing snapshots. Later fare changes must not alter historical group totals.
@@ -323,7 +323,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `flight_info` jsonb nullable.
   - `hotel_info` jsonb nullable.
   - `transport_required` boolean default false.
-  - `transport_mode` varchar(30) default `standard_bus`. Values: `standard_bus`, `specialized`.
+  - `transport_mode` varchar(30) default `standard_bus`. Values: `none`, `standard_bus`, `specialized`. `transport_required` must be false only for `none`; no transport references, fare items, revenue, or cost may remain on a `none` group.
   - `included_bus_cost_per_passenger` numeric(15,2) default 0. Legacy historical snapshot only.
   - `included_bus_cost_deduction` numeric(15,2) default 0. Legacy historical snapshot only; new groups do not deduct transport from visa cost.
   - `standard_bus_retail_amount` numeric(15,2) default 0. Per-passenger sale-rate snapshot from the independently selected transport provider.
@@ -370,7 +370,7 @@ Single source of truth for Umrah visa groups, agents, passports, visa vendors, t
   - `nationality` varchar(100) nullable.
   - `date_of_birth` date nullable.
   - `imported_age` integer nullable. Age from Go VT mutamer exports or manual age entry when DOB is unavailable.
-  - `service_type` varchar(30) default `visa_transport`. Values: `visa_transport`, `transport_only`.
+  - `service_type` varchar(30) default `visa_transport`. Values: `visa_transport`, `transport_only`. The historical `visa_transport` value means the passenger receives the group's visa service and, only when the group transport mode is not `none`, its group transport; user-facing labels must say `Visa only` for `none` groups. `transport_only` is invalid for a `none` group.
   - `transport_charge_amount` numeric(15,2) default 0. Passenger-specific sale for a traveller whose visa came from another provider.
   - `visa_status` varchar(30) default `pending`.
   - `notes` text nullable.

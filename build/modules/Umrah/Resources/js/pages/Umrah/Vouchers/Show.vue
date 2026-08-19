@@ -286,7 +286,7 @@ const legacyVoucherHtml = () => {
   <h2>Transport</h2>
   <table>
     <thead><tr><th>Sector</th><th>Vehicle</th><th>Schedule</th><th>Driver</th><th>Contact</th></tr></thead>
-    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'none' ? 'No transport' : props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
+    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'none' ? 'Self-arranged transport' : props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
   </table>`
         : '';
 
@@ -437,7 +437,7 @@ const voucherHtml = () => {
                 <div class="section-title">Transport / Services</div>
                 <table>
                     <thead><tr><th>Schedule</th><th>Vehicle</th><th>Sector</th><th>Driver</th><th>Contact</th></tr></thead>
-                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'none' ? 'No transport' : props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
+                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'none' ? 'Self-arranged transport' : props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
                 </table>`
         : '';
 
@@ -935,7 +935,7 @@ const exportVoucher = () => {
                             voucher.group?.transport_mode === 'specialized'
                                 ? 'Specialized transport'
                                 : voucher.group?.transport_mode === 'none'
-                                  ? 'No transport'
+                                  ? 'Self-arranged transport'
                                   : 'Standard bus transport'
                         }}
                     </div>

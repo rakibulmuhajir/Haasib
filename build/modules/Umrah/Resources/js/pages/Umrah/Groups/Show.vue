@@ -579,7 +579,7 @@ const addPayment = () =>
                             <div class="font-medium">
                                 {{
                                     group.transport_mode === 'none'
-                                        ? 'No transport'
+                                        ? 'Self-arranged transport'
                                         : group.transport_mode === 'specialized'
                                         ? 'Specialized transport'
                                         : 'Standard bus included'

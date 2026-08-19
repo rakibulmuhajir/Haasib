@@ -1090,7 +1090,7 @@ const submit = () => {
                                     class="flex cursor-pointer items-start gap-3 rounded-md border p-4"
                                 >
                                     <RadioGroupItem id="transport-none" value="none" />
-                                    <span><span class="block font-medium">No transport</span><span class="mt-1 block text-xs text-muted-foreground">Visa processing only. No vehicle, driver, fare, or transport charge.</span></span>
+                                    <span><span class="block font-medium">Self-arranged transport</span><span class="mt-1 block text-xs text-muted-foreground">Passengers arrange their own transport. No vehicle, driver, fare, or transport charge is recorded.</span></span>
                                 </Label>
                                 <Label
                                     for="transport-standard"

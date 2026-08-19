@@ -117,12 +117,12 @@ const submit = () =>
                         <Select v-model="form.transport_mode">
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">No transport</SelectItem>
+                                <SelectItem value="none">Self-arranged transport</SelectItem>
                                 <SelectItem value="standard_bus">Standard bus</SelectItem>
                                 <SelectItem v-if="group.transport_mode === 'specialized'" value="specialized">Specialized transport</SelectItem>
                             </SelectContent>
                         </Select>
-                        <p class="text-xs text-muted-foreground">Choosing no transport removes all saved transport details and charges.</p>
+                        <p class="text-xs text-muted-foreground">Choosing self-arranged transport removes all saved transport details and charges.</p>
                     </div>
                     <div v-if="canManageVendors && form.transport_mode === 'standard_bus'" class="space-y-2">
                         <Label>Mandatory transport provider</Label>

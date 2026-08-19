@@ -118,7 +118,7 @@
     @forelse($voucher->group?->transportItems ?? [] as $item)
         <tr><td>{{ $item->scheduled_at?->format('d-m-Y H:i') ?: '-' }}</td><td>{{ $item->service?->name ?: ($item->service?->vehicle_type ?: '-') }}</td><td class="primary">{{ $item->sector?->name ?: ($item->description ?: 'Transport') }}</td><td>{{ $item->driver?->name ?: ($item->service?->driver_name ?: '-') }}</td><td>{{ $item->driver?->phone ?: ($item->service?->driver_contact ?: '-') }}</td></tr>
     @empty
-        <tr><td colspan="5">{{ $voucher->group?->transport_mode === 'none' ? 'No transport' : ($voucher->group?->transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport') }}</td></tr>
+        <tr><td colspan="5">{{ $voucher->group?->transport_mode === 'none' ? 'Self-arranged transport' : ($voucher->group?->transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport') }}</td></tr>
     @endforelse
     </tbody>
 </table>

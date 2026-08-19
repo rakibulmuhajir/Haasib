@@ -2,11 +2,11 @@
   "total": 0,
   "files": 0,
   "grammar": {
-    "rawTable": 6,
-    "uiTable": 1,
+    "rawTable": 0,
+    "uiTable": 0,
     "dataTableShim": 46,
-    "directionAsSeverity": 8,
-    "moneyAsText": 0,
+    "directionAsSeverity": 6,
+    "moneyAsText": 247,
     "statusAsText": 0,
     "handRolledMoney": 0
   },

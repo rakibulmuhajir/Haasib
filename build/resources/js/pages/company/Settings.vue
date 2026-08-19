@@ -480,11 +480,19 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
                 <template #row-detail="{ row }">
                   <div v-if="row.capabilities.length" class="mb-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     <div v-for="capability in row.capabilities" :key="capability.label" class="flex items-start gap-2 rounded-md border border-rule-default bg-surface-canvas p-3">
-                      <Check v-if="capability.allowed" class="mt-0.5 h-4 w-4 shrink-0 text-status-success" />
-                      <span v-else class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-critical/10 text-xs font-semibold text-status-critical">×</span>
+                      <!--
+                        A capability this role does not have is not a failure.
+                        It is the shape of the role, and painting it red said
+                        something was wrong with a permission set that is
+                        working exactly as configured. The tick and the words
+                        carry the distinction; colour only recedes the half
+                        that is not in force.
+                      -->
+                      <Check v-if="capability.allowed" class="mt-0.5 h-4 w-4 shrink-0 text-text-primary" />
+                      <span v-else class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-rule-default text-xs font-semibold text-text-secondary">–</span>
                       <div>
-                        <p class="text-sm font-medium">{{ capability.label }}</p>
-                        <p class="text-xs" :class="capability.allowed ? 'text-status-success' : 'text-status-critical'">
+                        <p class="text-sm font-medium" :class="capability.allowed ? '' : 'text-text-secondary'">{{ capability.label }}</p>
+                        <p class="text-xs text-text-secondary">
                           {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
                         </p>
                       </div>

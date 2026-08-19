@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -2526,36 +2525,34 @@ onMounted(() => {
                         <p class="text-xs text-text-secondary">
                           Initial meter readings (optional). These set the starting point for today only and won’t block adding older readings later.
                         </p>
-                        <div class="border rounded-lg overflow-hidden mt-2">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Side</TableHead>
-                              <TableHead class="text-right">Electronic</TableHead>
-                              <TableHead class="text-right">Manual</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            <TableRow>
-                              <TableCell class="font-medium">Front</TableCell>
-                              <TableCell>
-                                <Input v-model="pump.front_electronic" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </TableCell>
-                              <TableCell>
-                                <Input v-model="pump.front_manual" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </TableCell>
-                            </TableRow>
-                            <TableRow v-if="Number(pump.nozzle_count) === 2">
-                              <TableCell class="font-medium">Back</TableCell>
-                              <TableCell>
-                                <Input v-model="pump.back_electronic" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </TableCell>
-                              <TableCell>
-                                <Input v-model="pump.back_manual" type="number" step="0.01" placeholder="0" class="text-right" />
-                              </TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
+                        <!--
+                          A fixed grid, not a register. The rows here are two
+                          sides of one pump and the cells are inputs, so there
+                          is nothing to sort, band or page through -- putting it
+                          on LedgerRegister would claim it is a list of records
+                          when it is one reading taken four ways. It keeps the
+                          register's mono column headings so it still reads as
+                          part of the same paper.
+                        -->
+                        <div class="mt-2 border border-rule-default">
+                          <div class="grid grid-cols-[minmax(3.5rem,1fr)_2fr_2fr] items-center gap-x-3 border-b border-rule-default px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.1em] text-text-secondary">
+                            <span>Side</span>
+                            <span class="text-right">Electronic</span>
+                            <span class="text-right">Manual</span>
+                          </div>
+                          <div class="grid grid-cols-[minmax(3.5rem,1fr)_2fr_2fr] items-center gap-x-3 px-3 py-2">
+                            <span class="text-sm font-medium">Front</span>
+                            <Input v-model="pump.front_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                            <Input v-model="pump.front_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                          </div>
+                          <div
+                            v-if="Number(pump.nozzle_count) === 2"
+                            class="grid grid-cols-[minmax(3.5rem,1fr)_2fr_2fr] items-center gap-x-3 border-t border-rule-default px-3 py-2"
+                          >
+                            <span class="text-sm font-medium">Back</span>
+                            <Input v-model="pump.back_electronic" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                            <Input v-model="pump.back_manual" type="number" step="0.01" placeholder="0" class="text-right font-mono tabular-nums" />
+                          </div>
                         </div>
                       </div>
                     </div>

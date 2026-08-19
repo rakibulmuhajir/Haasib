@@ -255,13 +255,18 @@ const getDaysOverdue = (dueDate?: string) => {
         <div class="grid gap-6 md:grid-cols-3">
           <div>
             <div class="text-sm font-medium text-muted-foreground">Available Credit</div>
-            <div class="text-2xl font-bold text-status-info">
+            <div class="text-2xl font-bold">
               <MoneyText :amount="credit.amount" :currency="credit.currency" />
             </div>
           </div>
           <div>
             <div class="text-sm font-medium text-muted-foreground">Applied Amount</div>
-            <div class="text-2xl font-bold" :class="hasExceeded ? 'text-status-critical' : 'text-status-success'">
+            <!--
+              Applying a credit correctly is not an achievement, so the figure
+              is ink until it goes wrong. Red is kept for the one reading that
+              is genuinely adverse: more applied than the credit is worth.
+            -->
+            <div class="text-2xl font-bold" :class="hasExceeded ? 'text-status-critical' : ''">
               <MoneyText :amount="totalApplied" :currency="credit.currency" />
             </div>
           </div>

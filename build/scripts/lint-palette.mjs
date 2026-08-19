@@ -128,10 +128,19 @@ const GRAMMAR = [
     {
         key: 'rawTable',
         label: 'hand-written <table> elements',
-        // Only the two components that ARE the table are allowed one.
+        /*
+         * Only the two components that ARE the table are allowed one -- plus
+         * the Umrah voucher, whose tables are not in its Vue template at all.
+         * They are inside the HTML string it hands to a print window, which
+         * has no Vue, no components and no stylesheet beyond the one string
+         * it is given (resources/js/lib/printSheet.ts). A <table> is the only
+         * thing that can be written there, so counting them taught nothing
+         * and held the ratchet permanently off zero.
+         */
         allow: [
             'resources/js/components/LedgerRegister.vue',
             'resources/js/components/ui/table/Table.vue',
+            'modules/Umrah/Resources/js/pages/Umrah/Vouchers/Show.vue',
         ],
         pattern: /<table[\s>]/g,
         fix: 'Use LedgerRegister (or the ui/table primitives) instead of writing a table.',
@@ -185,7 +194,15 @@ const GRAMMAR = [
          * right-align, and it cannot be told apart from a label by anything
          * downstream. Two columns of these will not line up on the decimal.
          */
-        pattern: /\{\{\s*(?:formatMoney|money|fmtMoney)\(/g,
+        /*
+         * `formatCurrency` was missing from this list until it was noticed
+         * that the count had reached zero while 42 pages still interpolated
+         * figures. It is the same helper under another name -- most of them
+         * are literally `const formatCurrency = (a, c) => formatMoneyText(a, c)`
+         * -- and naming only some of its aliases made the ratchet report a
+         * sweep that had not happened. Match the shape, not the vocabulary.
+         */
+        pattern: /\{\{\s*(?:format)?(?:Money|money|Currency|currency|Amount|amount)[A-Za-z]*\(/g,
         fix: 'Render the figure with <MoneyText :amount :currency /> so alignment, sign and scale stay one decision.',
     },
     {

@@ -38,8 +38,8 @@ import {
   GitBranch,
   CalendarDays,
 } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface DailyClose {
   id: string
@@ -72,14 +72,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const page = usePage()
-const currency = computed(() => currencySymbol(((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR'))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
+const currency = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
 const formatDate = (date: string) => {
   return formatSharedDateTime(date, { mode: 'date', locale: 'en-PK' })
@@ -241,12 +234,12 @@ const unlockSingle = (closeId: string) => {
             <div class="flex items-center gap-6">
               <div class="text-right">
                 <div class="text-sm text-muted-foreground">Revenue</div>
-                <div class="font-semibold">{{ currency }} {{ formatCurrency(close.total_revenue) }}</div>
+                <div class="font-semibold"><MoneyText :amount="close.total_revenue" :currency="currency" :fraction-digits="0" /></div>
               </div>
 
               <div class="text-right">
                 <div class="text-sm text-muted-foreground">Closing Cash</div>
-                <div class="font-semibold">{{ currency }} {{ formatCurrency(close.closing_cash) }}</div>
+                <div class="font-semibold"><MoneyText :amount="close.closing_cash" :currency="currency" :fraction-digits="0" /></div>
               </div>
 
               <div class="text-right min-w-24">
@@ -260,7 +253,7 @@ const unlockSingle = (closeId: string) => {
                     close.variance === 0 ? 'text-text-primary' : 'text-status-attention',
                   ]"
                 >
-                  {{ close.variance >= 0 ? '+' : '' }}{{ currency }} {{ formatCurrency(close.variance) }}
+                  <template v-if="close.variance >= 0">+</template><MoneyText :amount="close.variance" :currency="currency" :fraction-digits="0" />
                 </div>
               </div>
 

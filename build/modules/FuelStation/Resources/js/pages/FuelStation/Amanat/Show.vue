@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface AmanatTransaction {
   id: string
@@ -69,9 +69,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
 
 const formatDateTime = (date: string) => {
   return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
@@ -142,7 +139,7 @@ const getTypeBadge = (type: string) => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken md:col-span-2">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
-          <CardTitle class="text-3xl">{{ formatCurrency(profile.amanat_balance) }}</CardTitle>
+          <CardTitle class="text-3xl"><MoneyText :amount="profile.amanat_balance" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -198,7 +195,11 @@ const getTypeBadge = (type: string) => {
                 'text-status-critical': row.type === 'withdrawal' || row.type === 'fuel_purchase',
               }"
             >
-              {{ row.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(Math.abs(row.amount)) }}
+              <MoneyText
+                :amount="row.amount"
+                :currency="currencyCode"
+                :direction="row.type === 'deposit' ? 'inflow' : 'outflow'"
+              />
             </span>
           </template>
         </DataTable>

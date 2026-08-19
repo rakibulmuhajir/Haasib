@@ -19,7 +19,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Receipt, Plus, Eye, Wallet, Banknote, CreditCard, TrendingUp } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Collection {
   id: string
@@ -73,8 +73,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Collections', href: `/${companySlug.value}/fuel/collections` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 // Local filter state
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
@@ -120,10 +118,6 @@ const setDatePreset = (preset: string) => {
   startDate.value = start.toISOString().split('T')[0]
   endDate.value = end.toISOString().split('T')[0]
   applyFilters()
-}
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
 }
 
 const formatDate = (dateStr: string) => {
@@ -210,7 +204,7 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -223,7 +217,7 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Cash Collections</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.cash_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.cash_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -236,7 +230,7 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Bank Collections</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.bank_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.bank_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -356,7 +350,7 @@ const goToCustomer = (customerId: string) => {
 
           <template #cell-amount="{ row }">
             <span class="font-medium text-status-success">
-              {{ currency }} {{ formatCurrency(row._raw.amount) }}
+              <MoneyText :amount="row._raw.amount" :currency="props.currency" />
             </span>
           </template>
 

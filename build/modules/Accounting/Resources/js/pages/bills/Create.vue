@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -156,10 +156,6 @@ const totals = computed(() => {
   const total = subtotal + tax - discount
   return { subtotal, tax, discount, total }
 })
-
-const formatCurrency = (amount: number) => {
-  return formatMoneyText(amount, form.currency || 'USD')
-}
 
 const addLine = () => form.line_items.push(lineItemTemplate())
 const removeLine = (idx: number) => {
@@ -484,19 +480,19 @@ const handleSubmit = () => {
           <div class="space-y-2">
             <div class="flex justify-between text-sm">
               <span>Subtotal:</span>
-              <span>{{ formatCurrency(totals.subtotal) }}</span>
+              <span><MoneyText :amount="totals.subtotal" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
               <span>Tax:</span>
-              <span>{{ formatCurrency(totals.tax) }}</span>
+              <span><MoneyText :amount="totals.tax" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
               <span>Discount:</span>
-              <span class="text-destructive">-{{ formatCurrency(totals.discount) }}</span>
+              <span class="text-destructive">-<MoneyText :amount="totals.discount" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-lg font-semibold pt-2 border-t">
               <span>Total:</span>
-              <span>{{ formatCurrency(totals.total) }}</span>
+              <span><MoneyText :amount="totals.total" :currency="form.currency || 'USD'" /></span>
             </div>
           </div>
         </CardContent>

@@ -2,6 +2,7 @@
 	import { computed, ref, watch } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -333,8 +334,8 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
             </div>
             <div class="grid grid-cols-12 gap-2 p-3 text-sm border-t font-medium">
               <div class="col-span-6 text-right">Totals</div>
-              <div class="col-span-3 text-right">{{ totalDebits.toFixed(2) }}</div>
-              <div class="col-span-3 text-right">{{ totalCredits.toFixed(2) }}</div>
+              <div class="col-span-3 text-right"><MoneyText :amount="totalDebits" :currency="preview.transaction.currency" /></div>
+              <div class="col-span-3 text-right"><MoneyText :amount="totalCredits" :currency="preview.transaction.currency" /></div>
             </div>
           </div>
         </div>

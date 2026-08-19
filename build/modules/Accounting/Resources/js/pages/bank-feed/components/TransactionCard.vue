@@ -7,7 +7,7 @@ import ModeMatch from './ModeMatch.vue'
 import ModeCreate from './ModeCreate.vue'
 import ModeTransfer from './ModeTransfer.vue'
 import ModePark from './ModePark.vue'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Props {
   transaction: any // Typed properly in real app
@@ -40,9 +40,6 @@ const formatDate = (dateString: string) => {
   }).format(new Date(dateString))
 }
 
-const formatCurrency = (val: number) => {
-  return formatMoneyText(Math.abs(val), currency.value)
-}
 </script>
 
 <template>
@@ -65,7 +62,7 @@ const formatCurrency = (val: number) => {
                left nothing to say with when one actually was. The sign carries
                the direction, as it does everywhere else. -->
           <div class="text-lg font-bold">
-            {{ isSpend ? '-' : '+' }}{{ formatCurrency(amount) }}
+            {{ isSpend ? '-' : '+' }}<MoneyText :amount="Math.abs(amount)" :currency="currency" />
           </div>
           <Badge variant="outline" class="mt-1 text-xs" v-if="props.transaction.suggestions?.match?.length">
             Match Found

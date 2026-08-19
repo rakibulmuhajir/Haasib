@@ -19,7 +19,7 @@ import {
 import { toast } from 'vue-sonner'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -97,10 +97,6 @@ const isProcessing = ref(false)
 const isInProgress = computed(() => props.reconciliation.status === 'in_progress')
 const isCompleted = computed(() => props.reconciliation.status === 'completed')
 const isCancelled = computed(() => props.reconciliation.status === 'cancelled')
-
-function formatCurrency(amount: number, currency: string) {
-  return formatMoneyText(amount, currency)
-}
 
 function formatDate(dateStr: string | null) {
   return formatSharedDateTime(dateStr, { mode: 'date' })
@@ -319,7 +315,7 @@ const progressPercent = computed(() => {
                 </div>
 
                 <span class="font-mono text-status-success font-medium">
-                  +{{ formatCurrency(tx.amount, reconciliation.bank_account.currency) }}
+                  +<MoneyText :amount="tx.amount" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
             </div>
@@ -371,7 +367,7 @@ const progressPercent = computed(() => {
                 </div>
 
                 <span class="font-mono text-status-critical font-medium">
-                  {{ formatCurrency(tx.amount, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="tx.amount" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
             </div>
@@ -398,35 +394,35 @@ const progressPercent = computed(() => {
               <div class="flex justify-between">
                 <span class="text-sm text-muted-foreground">Starting Balance</span>
                 <span class="font-mono">
-                  {{ formatCurrency(localSummary.starting_balance, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="localSummary.starting_balance" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
 
               <div class="flex justify-between text-status-success">
                 <span class="text-sm">+ Cleared Deposits</span>
                 <span class="font-mono">
-                  {{ formatCurrency(localSummary.cleared_deposits, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="localSummary.cleared_deposits" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
 
               <div class="flex justify-between text-status-critical">
                 <span class="text-sm">- Cleared Payments</span>
                 <span class="font-mono">
-                  {{ formatCurrency(Math.abs(localSummary.cleared_withdrawals), reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="Math.abs(localSummary.cleared_withdrawals)" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
 
               <div class="flex justify-between pt-2 border-t">
                 <span class="text-sm font-medium">Reconciled Balance</span>
                 <span class="font-mono font-medium">
-                  {{ formatCurrency(localSummary.reconciled_balance, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="localSummary.reconciled_balance" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
 
               <div class="flex justify-between">
                 <span class="text-sm text-muted-foreground">Statement Balance</span>
                 <span class="font-mono">
-                  {{ formatCurrency(localSummary.statement_ending_balance, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="localSummary.statement_ending_balance" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
             </div>
@@ -442,7 +438,7 @@ const progressPercent = computed(() => {
                   class="font-mono text-lg font-bold"
                   :class="Math.abs(localSummary.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'"
                 >
-                  {{ formatCurrency(localSummary.difference, reconciliation.bank_account.currency) }}
+                  <MoneyText :amount="localSummary.difference" :currency="reconciliation.bank_account.currency" />
                 </span>
               </div>
 

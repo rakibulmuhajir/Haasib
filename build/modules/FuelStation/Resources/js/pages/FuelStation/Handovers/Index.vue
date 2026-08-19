@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { HandCoins, Plus, Eye, Check, Search, Clock, CheckCircle, Banknote } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Handover {
   id: string
@@ -100,10 +100,6 @@ const filteredHandovers = computed(() => {
   })
 })
 
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
-
 const formatDate = (date: string) => {
   return formatDateTime(date, { mode: 'datetime' })
 }
@@ -125,7 +121,7 @@ const tableData = computed(() => {
     attendant: h.attendant_name,
     pump: h.pump_name,
     shift: h.shift === 'day' ? 'Day' : 'Night',
-    total: formatCurrency(h.total_amount),
+    total: h.total_amount,
     status: h.status,
     _actions: h.id,
     _raw: h,
@@ -234,7 +230,7 @@ const getStatusBadge = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Pending Amount</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.pending_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.pending_amount" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -292,6 +288,10 @@ const getStatusBadge = (status: string) => {
             <Badge variant="outline" :class="row._raw.shift === 'day' ? 'border-status-attention/30 text-status-attention' : 'border-status-info/30 text-status-info'">
               {{ row.shift }}
             </Badge>
+          </template>
+
+          <template #cell-total="{ row }">
+            <MoneyText :amount="row.total" :currency="currencyCode" />
           </template>
 
           <template #cell-status="{ row }">
@@ -421,7 +421,7 @@ const getStatusBadge = (status: string) => {
             </div>
             <div class="pt-2 border-t border-border/50 flex justify-between items-center">
               <span class="text-sm text-text-secondary">Total</span>
-              <span class="text-lg font-semibold">{{ formatCurrency(totalAmount) }}</span>
+              <span class="text-lg font-semibold"><MoneyText :amount="totalAmount" :currency="currencyCode" /></span>
             </div>
           </div>
 

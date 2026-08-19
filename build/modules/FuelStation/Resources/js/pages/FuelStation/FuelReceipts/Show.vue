@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Droplets, ArrowLeft, Truck, Calendar, FileText } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface ReceiptLine {
   tank_id: string
@@ -64,10 +65,14 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.receipt.reference || 'Receipt', href: `/${companySlug.value}/fuel/receipts/${props.receipt.id}` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
+/*
+ * Litres, not money. This was called formatCurrency and was doing both jobs --
+ * grouping tank volumes and grouping rupees -- which is how a litre count ends
+ * up looking like a price. Money goes through MoneyText; this only ever
+ * groups a quantity, and the " L" that follows it in the template is the unit.
+ */
+const formatLiters = (liters: number) => {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(liters)
 }
 
 const formatDate = (dateStr: string) => {
@@ -87,8 +92,8 @@ const lineColumns = [
 ]
 
 const lineTotals = computed(() => ({
-  liters: `${formatCurrency(props.receipt.metadata.total_liters || 0)} L`,
-  amount: `${currency.value} ${formatCurrency(props.receipt.total_amount)}`,
+  liters: `${formatLiters(props.receipt.metadata.total_liters || 0)} L`,
+  amount: formatMoneyText(props.receipt.total_amount, props.currency),
 }))
 </script>
 
@@ -149,14 +154,14 @@ const lineTotals = computed(() => ({
           <div>
             <div class="text-sm text-muted-foreground">Total Liters</div>
             <div class="text-xl font-bold text-status-info">
-              {{ formatCurrency(receipt.metadata.total_liters || 0) }} L
+              {{ formatLiters(receipt.metadata.total_liters || 0) }} L
             </div>
           </div>
 
           <div>
             <div class="text-sm text-muted-foreground">Total Amount</div>
             <div class="text-xl font-bold">
-              {{ currency }} {{ formatCurrency(receipt.total_amount) }}
+              <MoneyText :amount="receipt.total_amount" :currency="props.currency" />
             </div>
           </div>
 
@@ -184,9 +189,9 @@ const lineTotals = computed(() => ({
             <template #cell-fuel_name="{ row }">{{ row.fuel_name }}</template>
             <!-- Fuel arriving in a tank is the business working, not a
                  notice. Ink, like every other ordinary movement. -->
-            <template #cell-liters="{ row }">{{ formatCurrency(row.liters) }} L</template>
-            <template #cell-rate="{ row }">{{ currency }} {{ formatCurrency(row.rate) }}</template>
-            <template #cell-amount="{ row }">{{ currency }} {{ formatCurrency(row.amount) }}</template>
+            <template #cell-liters="{ row }">{{ formatLiters(row.liters) }} L</template>
+            <template #cell-rate="{ row }"><MoneyText :amount="row.rate" :currency="props.currency" />/L</template>
+            <template #cell-amount="{ row }"><MoneyText :amount="row.amount" :currency="props.currency" /></template>
           </LedgerRegister>
         </CardContent>
       </Card>

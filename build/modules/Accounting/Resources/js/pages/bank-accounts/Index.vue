@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -111,10 +111,6 @@ const accountTypeLabels: Record<string, string> = {
   other: 'Other',
 }
 
-const formatCurrency = (amount: number, currency: string) => {
-  return formatMoneyText(amount, currency)
-}
-
 const formatDate = (dateStr: string | null) => {
   return formatSharedDateTime(dateStr, { mode: 'date', fallback: 'Never' })
 }
@@ -177,7 +173,7 @@ const totalBalance = computed(() => {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-muted-foreground">Total Balance ({{ company.base_currency }})</p>
-            <p class="text-2xl font-bold">{{ formatCurrency(totalBalance, company.base_currency) }}</p>
+            <p class="text-2xl font-bold"><MoneyText :amount="totalBalance" :currency="company.base_currency" /></p>
           </div>
           <div class="text-right">
             <p class="text-sm text-muted-foreground">Active Accounts</p>
@@ -249,7 +245,7 @@ const totalBalance = computed(() => {
 
             <div class="flex items-center gap-4">
               <div class="text-right">
-                <p class="font-bold text-lg">{{ formatCurrency(account.current_balance, account.currency) }}</p>
+                <p class="font-bold text-lg"><MoneyText :amount="account.current_balance" :currency="account.currency" /></p>
                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                   <span v-if="account.unreconciled_count > 0" class="text-status-attention">
                     {{ account.unreconciled_count }} unreconciled

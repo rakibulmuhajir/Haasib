@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Plus, Eye, Pencil, Search, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface PartnerRow {
   id: string
@@ -146,7 +147,7 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Capital</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.total_capital) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.total_capital" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -159,7 +160,7 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_invested" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -172,7 +173,7 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(stats.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="stats.total_withdrawn" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -238,7 +239,7 @@ const goToCreate = () => {
                  books, not an emergency, and one in credit is not good news --
                  it is money the business owes them. The sign says which. -->
             <span class="font-medium">
-              {{ currency }} {{ formatCurrency(row._raw.net_capital) }}
+              <MoneyText :amount="row._raw.net_capital" :currency="props.currency" />
             </span>
           </template>
 
@@ -247,9 +248,9 @@ const goToCreate = () => {
               No Limit
             </div>
             <div v-else>
-              <div class="font-medium">{{ currency }} {{ formatCurrency(row._raw.remaining_drawing_limit ?? 0) }}</div>
+              <div class="font-medium"><MoneyText :amount="row._raw.remaining_drawing_limit ?? 0" :currency="props.currency" /></div>
               <div class="text-xs text-muted-foreground">
-                of {{ currency }} {{ formatCurrency(row._raw.drawing_limit_amount ?? 0) }} {{ row._raw.drawing_limit_period }}
+                of <MoneyText :amount="row._raw.drawing_limit_amount ?? 0" :currency="props.currency" /> {{ row._raw.drawing_limit_period }}
               </div>
             </div>
           </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -397,19 +398,19 @@ const handleSubmit = () => {
       <div class="grid gap-2 md:w-1/2">
         <div class="flex justify-between text-sm">
           <span>{{ t('subtotal') }}</span>
-          <span>{{ totals.subtotal.toFixed(2) }}</span>
+          <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>{{ t('tax') }}</span>
-          <span>{{ totals.tax.toFixed(2) }}</span>
+          <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>{{ t('discount') }}</span>
-          <span>{{ totals.discount.toFixed(2) }}</span>
+          <MoneyText :amount="totals.discount" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-base font-semibold">
           <span>{{ t('total') }}</span>
-          <span>{{ totals.total.toFixed(2) }}</span>
+          <MoneyText :amount="totals.total" :currency="form.currency" />
         </div>
       </div>
 

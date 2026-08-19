@@ -19,7 +19,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, Calendar, Fuel, Users, TrendingUp, Droplets } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CreditSale {
   id: string
@@ -75,8 +75,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Credit Sales', href: `/${companySlug.value}/fuel/credit-sales` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 // Local filter state
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
@@ -122,10 +120,6 @@ const setDatePreset = (preset: string) => {
   startDate.value = start.toISOString().split('T')[0]
   endDate.value = end.toISOString().split('T')[0]
   applyFilters()
-}
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
 }
 
 const formatNumber = (num: number) => {
@@ -205,7 +199,7 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -333,12 +327,12 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-rate="{ row }">
-            {{ currency }} {{ formatNumber(row._raw.rate) }}
+            <MoneyText :amount="row._raw.rate" :currency="props.currency" />/L
           </template>
 
           <template #cell-amount="{ row }">
             <span class="font-medium text-status-success">
-              {{ currency }} {{ formatCurrency(row._raw.amount) }}
+              <MoneyText :amount="row._raw.amount" :currency="props.currency" />
             </span>
           </template>
         </DataTable>

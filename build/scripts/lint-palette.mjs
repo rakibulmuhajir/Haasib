@@ -201,9 +201,38 @@ const GRAMMAR = [
          * are literally `const formatCurrency = (a, c) => formatMoneyText(a, c)`
          * -- and naming only some of its aliases made the ratchet report a
          * sweep that had not happened. Match the shape, not the vocabulary.
+         *
+         * currencySymbol is excepted because it returns a glyph, not a figure.
+         * `{{ currencySymbol(code) }}` prints "Rs" beside a label and has no
+         * amount to give MoneyText. Without the exception the cheapest way to
+         * pass this rule is to rename the function, which is a worse name
+         * bought to satisfy a linter -- so the exception lives here instead.
          */
         pattern: /\{\{\s*(?:format)?(?:Money|money|Currency|currency|Amount|amount)[A-Za-z]*\(/g,
+        // Matched text containing one of these is a glyph, not a figure.
+        // Kept as a post-filter rather than a negative lookahead: the
+        // lookahead reads as if it should work and does not, because
+        // `currency` alone satisfies the alternation and `[A-Za-z]*` then
+        // swallows `Symbol`. Filtering the match is what the rule means.
+        exclude: /currencySymbol|currencySign/,
         fix: 'Render the figure with <MoneyText :amount :currency /> so alignment, sign and scale stay one decision.',
+    },
+    {
+        key: 'moneyAsFixed',
+        label: 'figures printed as a bare .toFixed(2)',
+        allow: ['resources/js/components', 'resources/js/lib'],
+        /*
+         * The third way a figure escapes MoneyText, after formatMoney and
+         * formatCurrency. There is no helper to grep for here -- just a number
+         * with two decimals glued on, which is why it survived both earlier
+         * rules. Every occurrence found when this was written was money: a
+         * subtotal, a tax line, a debit, a credit, an allocated amount.
+         *
+         * .toFixed(2) on a non-money quantity is legitimate, so this ratchets
+         * rather than failing at zero.
+         */
+        pattern: /\{\{[^}]*\.toFixed\(2\)/g,
+        fix: 'Render it with <MoneyText :amount :currency /> instead of gluing two decimals onto a number.',
     },
     {
         key: 'statusAsText',
@@ -243,8 +272,10 @@ function scanGrammar(files) {
         for (const file of files) {
             const rel = relative(ROOT, file).split(sep).join('/')
             if (rule.allow.some((a) => rel === a || rel.startsWith(a + '/'))) continue
-            const matches = readFileSync(file, 'utf8').match(rule.pattern)
+            let matches = readFileSync(file, 'utf8').match(rule.pattern)
             if (!matches) continue
+            if (rule.exclude) matches = matches.filter((m) => !rule.exclude.test(m))
+            if (!matches.length) continue
             offenders.push({ file: rel, count: matches.length })
             total += matches.length
         }

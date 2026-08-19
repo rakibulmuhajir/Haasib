@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import type { BreadcrumbItem } from '@/types'
 import { Wallet, Eye, Search, Users, Banknote, Plus, UserCog } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface AmanatCustomer {
   id: string
@@ -103,10 +103,6 @@ const filteredCustomers = computed(() => {
   )
 })
 
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
-
 const columns = [
   { key: 'name', label: 'Customer' },
   { key: 'phone', label: 'Phone' },
@@ -121,7 +117,7 @@ const tableData = computed(() => {
     name: c.customer_name,
     phone: c.customer_phone ?? '-',
     relationship: c.relationship ?? 'External',
-    balance: formatCurrency(c.amanat_balance),
+    balance: c.amanat_balance,
     _actions: c.customer_id,
     _raw: c,
   }))
@@ -169,7 +165,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Balance</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_balance) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_balance" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -237,7 +233,7 @@ const getRelationshipBadge = (relationship: string | null | undefined) => {
 
           <template #cell-balance="{ row }">
             <span class="font-medium" :class="row._raw.amanat_balance > 0 ? 'text-status-success' : ''">
-              {{ row.balance }}
+              <MoneyText :amount="row.balance" :currency="currencyCode" />
             </span>
           </template>
 

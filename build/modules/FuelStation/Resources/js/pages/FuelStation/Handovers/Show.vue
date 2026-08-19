@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { HandCoins, ArrowLeft, Check, Clock, CheckCircle, Banknote, CreditCard } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Handover {
   id: string
@@ -51,10 +51,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
-
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
 
 const formatDateTime = (date: string) => {
   return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
@@ -120,7 +116,7 @@ const getStatusBadge = (status: string) => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-3xl">{{ formatCurrency(handover.total_amount) }}</CardTitle>
+          <CardTitle class="text-3xl"><MoneyText :amount="handover.total_amount" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -183,14 +179,14 @@ const getStatusBadge = (status: string) => {
               <span class="font-medium">{{ payment.label }}</span>
             </div>
             <span class="font-semibold" :class="payment.amount > 0 ? payment.color : 'text-text-secondary'">
-              {{ formatCurrency(payment.amount) }}
+              <MoneyText :amount="payment.amount" :currency="currencyCode" />
             </span>
           </div>
         </div>
 
         <div class="pt-4 border-t border-border/50 flex justify-between items-center">
           <span class="text-lg font-medium">Total</span>
-          <span class="text-xl font-bold">{{ formatCurrency(handover.total_amount) }}</span>
+          <span class="text-xl font-bold"><MoneyText :amount="handover.total_amount" :currency="currencyCode" /></span>
         </div>
       </CardContent>
     </Card>

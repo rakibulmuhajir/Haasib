@@ -4,7 +4,7 @@ import UniversalDashboardLayout from '@/layouts/UniversalDashboardLayout.vue'
 import TransactionCard from './components/TransactionCard.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLexicon } from '@/composables/useLexicon'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Props {
   transactions: any[]
@@ -25,9 +25,6 @@ const props = defineProps<Props>()
 
 const { t } = useLexicon()
 
-const formatCurrency = (val: number, currency = 'USD') => {
-  return formatMoneyText(val, currency)
-}
 </script>
 
 <template>
@@ -74,24 +71,24 @@ const formatCurrency = (val: number, currency = 'USD') => {
 
               <div class="flex justify-between items-center pb-2 border-b">
                 <span class="text-sm text-muted-foreground">{{ t('bankFeedBalanceFeed') }}</span>
-                <span class="font-bold">{{ formatCurrency(props.balanceExplainer.feed_balance, props.balanceExplainer.currency) }}</span>
+                <span class="font-bold"><MoneyText :amount="props.balanceExplainer.feed_balance" :currency="props.balanceExplainer.currency" /></span>
               </div>
               <div class="flex justify-between items-center pb-2 border-b">
                 <span class="text-sm text-muted-foreground">{{ t('bankFeedBalanceBooks') }}</span>
-                <span class="font-bold">{{ formatCurrency(props.balanceExplainer.ledger_balance, props.balanceExplainer.currency) }}</span>
+                <span class="font-bold"><MoneyText :amount="props.balanceExplainer.ledger_balance" :currency="props.balanceExplainer.currency" /></span>
               </div>
 
               <div v-if="!props.balanceExplainer.is_balanced">
                 <div class="flex justify-between items-center pb-2 border-b text-status-critical">
                   <span class="text-sm font-medium">Difference</span>
-                  <span class="font-bold">{{ formatCurrency(props.balanceExplainer.difference, props.balanceExplainer.currency) }}</span>
+                  <span class="font-bold"><MoneyText :amount="props.balanceExplainer.difference" :currency="props.balanceExplainer.currency" /></span>
                 </div>
 
                 <div class="mt-4 bg-status-attention/10 p-3 rounded-sm text-sm text-status-attention">
                   <div class="font-semibold mb-2">Why the difference?</div>
                   <ul class="space-y-1 list-disc list-inside">
                     <li v-for="(explanation, idx) in props.balanceExplainer.explanations" :key="idx">
-                      {{ explanation.label }} ({{ formatCurrency(explanation.amount, props.balanceExplainer.currency) }})
+                      {{ explanation.label }} (<MoneyText :amount="explanation.amount" :currency="props.balanceExplainer.currency" />)
                     </li>
                   </ul>
                 </div>

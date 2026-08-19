@@ -15,7 +15,7 @@ import {
     User,
     Users,
 } from 'lucide-vue-next';
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue';
 
 interface CompanyRef {
     id: string;
@@ -113,10 +113,6 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: `/${props.company.slug}/employees/${props.employee.id}`,
     },
 ];
-
-const formatCurrency = (amount: number, currency: string) => {
-    return formatMoneyText(amount, currency || 'USD');
-};
 
 const formatDate = (date: string | null) => {
     return formatSharedDateTime(date, { mode: 'date', fallback: '-' });
@@ -345,12 +341,10 @@ const formatPayFrequency = (freq: string) => {
                                     Salary due
                                 </p>
                                 <p class="mt-1 font-semibold">
-                                    {{
-                                        formatCurrency(
-                                            statement.summary.salary_due,
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="statement.summary.salary_due"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                             </div>
                             <div class="rounded-lg border p-3">
@@ -358,12 +352,10 @@ const formatPayFrequency = (freq: string) => {
                                     Salary paid
                                 </p>
                                 <p class="mt-1 font-semibold">
-                                    {{
-                                        formatCurrency(
-                                            statement.summary.salary_paid,
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="statement.summary.salary_paid"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                             </div>
                             <div class="rounded-lg border p-3">
@@ -371,12 +363,10 @@ const formatPayFrequency = (freq: string) => {
                                     Advances given
                                 </p>
                                 <p class="mt-1 font-semibold">
-                                    {{
-                                        formatCurrency(
-                                            statement.summary.advance_given,
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="statement.summary.advance_given"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                             </div>
                             <div class="rounded-lg border p-3">
@@ -384,12 +374,10 @@ const formatPayFrequency = (freq: string) => {
                                     Recovered
                                 </p>
                                 <p class="mt-1 font-semibold">
-                                    {{
-                                        formatCurrency(
-                                            statement.summary.advance_recovered,
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="statement.summary.advance_recovered"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                             </div>
                             <div class="rounded-lg border p-3">
@@ -397,13 +385,10 @@ const formatPayFrequency = (freq: string) => {
                                     Advance balance
                                 </p>
                                 <p class="mt-1 font-semibold">
-                                    {{
-                                        formatCurrency(
-                                            statement.summary
-                                                .advance_outstanding,
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="statement.summary.advance_outstanding"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                             </div>
                         </div>
@@ -438,12 +423,10 @@ const formatPayFrequency = (freq: string) => {
                                             <span>{{
                                                 formatDate(payslip.date)
                                             }}</span>
-                                            <span>{{
-                                                formatCurrency(
-                                                    payslip.net_pay,
-                                                    payslip.currency,
-                                                )
-                                            }}</span>
+                                            <MoneyText
+                                                :amount="payslip.net_pay"
+                                                :currency="payslip.currency"
+                                            />
                                         </div>
                                     </div>
                                     <p
@@ -468,12 +451,10 @@ const formatPayFrequency = (freq: string) => {
                                         <div
                                             class="flex items-center justify-between gap-3"
                                         >
-                                            <span class="font-medium">{{
-                                                formatCurrency(
-                                                    advance.amount,
-                                                    company.base_currency,
-                                                )
-                                            }}</span>
+                                            <span class="font-medium"><MoneyText
+                                                :amount="advance.amount"
+                                                :currency="company.base_currency"
+                                            /></span>
                                             <StatusBadge :status="advance.status" />
                                         </div>
                                         <p class="mt-1 text-muted-foreground">
@@ -482,12 +463,10 @@ const formatPayFrequency = (freq: string) => {
                                         </p>
                                         <p class="mt-1 text-muted-foreground">
                                             Remaining
-                                            {{
-                                                formatCurrency(
-                                                    advance.outstanding,
-                                                    company.base_currency,
-                                                )
-                                            }}
+                                            <MoneyText
+                                                :amount="advance.outstanding"
+                                                :currency="company.base_currency"
+                                            />
                                         </p>
                                     </div>
                                     <p
@@ -515,12 +494,10 @@ const formatPayFrequency = (freq: string) => {
                                             <span class="font-medium">{{
                                                 recovery.label
                                             }}</span>
-                                            <span>{{
-                                                formatCurrency(
-                                                    recovery.amount,
-                                                    company.base_currency,
-                                                )
-                                            }}</span>
+                                            <MoneyText
+                                                :amount="recovery.amount"
+                                                :currency="company.base_currency"
+                                            />
                                         </div>
                                         <p class="mt-1 text-muted-foreground">
                                             {{ formatDate(recovery.date) }} ·
@@ -566,12 +543,10 @@ const formatPayFrequency = (freq: string) => {
                             <span class="text-muted-foreground"
                                 >Base Salary</span
                             >
-                            <span class="text-lg font-medium">{{
-                                formatCurrency(
-                                    employee.base_salary,
-                                    employee.currency,
-                                )
-                            }}</span>
+                            <span class="text-lg font-medium"><MoneyText
+                                :amount="employee.base_salary"
+                                :currency="employee.currency"
+                            /></span>
                         </div>
                         <div class="flex items-center justify-between">
                             <span class="text-muted-foreground"

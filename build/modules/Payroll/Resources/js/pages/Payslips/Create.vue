@@ -24,7 +24,8 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
-import { formatMoneyText } from '@/lib/money'
+import { formatMoneyText } from '@/lib/money';
+import MoneyText from '@/components/MoneyText.vue';
 
 interface CompanyRef {
     id: string;
@@ -293,15 +294,10 @@ const submit = () => {
                                                     "
                                                 >
                                                     · Advance
-                                                    {{
-                                                        formatCurrency(
-                                                            Number(
-                                                                emp.outstanding_advances,
-                                                            ),
-                                                            emp.currency ||
-                                                                company.base_currency,
-                                                        )
-                                                    }}
+                                                    <MoneyText
+                                                        :amount="Number(emp.outstanding_advances)"
+                                                        :currency="emp.currency || company.base_currency"
+                                                    />
                                                 </span>
                                             </SelectItem>
                                         </SelectContent>
@@ -412,12 +408,10 @@ const submit = () => {
                                         {{ company.base_currency }}
                                     </p>
                                     <p class="mt-1 text-lg font-semibold">
-                                        {{
-                                            formatCurrency(
-                                                baseNetPay,
-                                                company.base_currency,
-                                            )
-                                        }}
+                                        <MoneyText
+                                            :amount="baseNetPay"
+                                            :currency="company.base_currency"
+                                        />
                                     </p>
                                 </div>
                             </div>
@@ -438,24 +432,17 @@ const submit = () => {
                                 </p>
                                 <p class="mt-1 text-muted-foreground">
                                     Outstanding advance:
-                                    {{
-                                        formatCurrency(
-                                            Number(
-                                                selectedEmployee.outstanding_advances ||
-                                                    0,
-                                            ),
-                                            company.base_currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="Number(selectedEmployee.outstanding_advances || 0)"
+                                        :currency="company.base_currency"
+                                    />
                                 </p>
                                 <p class="mt-1 text-muted-foreground">
                                     Estimated recovery on this payslip:
-                                    {{
-                                        formatCurrency(
-                                            estimatedAdvanceRecovery,
-                                            form.currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="estimatedAdvanceRecovery"
+                                        :currency="form.currency"
+                                    />
                                 </p>
                             </div>
                         </CardContent>
@@ -639,21 +626,20 @@ const submit = () => {
                                 <span class="text-muted-foreground"
                                     >Gross Pay</span
                                 >
-                                <span class="font-medium">{{
-                                    formatCurrency(grossPay, form.currency)
-                                }}</span>
+                                <span class="font-medium">
+                                    <MoneyText :amount="grossPay" :currency="form.currency" />
+                                </span>
                             </div>
                             <div class="flex items-center justify-between">
                                 <span class="text-muted-foreground"
                                     >Deductions</span
                                 >
                                 <span class="font-medium text-destructive">
-                                    -{{
-                                        formatCurrency(
-                                            totalDeductions,
-                                            form.currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="totalDeductions"
+                                        :currency="form.currency"
+                                        direction="outflow"
+                                    />
                                 </span>
                             </div>
                             <div
@@ -664,24 +650,21 @@ const submit = () => {
                                     >Auto advance recovery</span
                                 >
                                 <span class="font-medium text-destructive">
-                                    -{{
-                                        formatCurrency(
-                                            estimatedAdvanceRecovery,
-                                            form.currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="estimatedAdvanceRecovery"
+                                        :currency="form.currency"
+                                        direction="outflow"
+                                    />
                                 </span>
                             </div>
                             <hr />
                             <div class="flex items-center justify-between">
                                 <span class="font-semibold">Net Pay</span>
                                 <span class="text-xl font-bold text-primary">
-                                    {{
-                                        formatCurrency(
-                                            netPay - estimatedAdvanceRecovery,
-                                            form.currency,
-                                        )
-                                    }}
+                                    <MoneyText
+                                        :amount="netPay - estimatedAdvanceRecovery"
+                                        :currency="form.currency"
+                                    />
                                 </span>
                             </div>
 

@@ -36,6 +36,7 @@ import {
     Wallet,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import MoneyText from '@/components/MoneyText.vue';
 
 interface Advance {
     id: string;
@@ -409,10 +410,10 @@ const recoveryPercentage = computed(() => {
                         <AlertTriangle />
                         <AlertTitle>Advance warning</AlertTitle>
                         <AlertDescription v-if="advanceMonths > 0">
-                            {{ currency }}
-                            {{
-                                formatCurrency(Number(advanceForm.amount))
-                            }}
+                            <MoneyText
+                                :amount="Number(advanceForm.amount)"
+                                :currency="props.currency"
+                            />
                             equals {{ advanceMonths.toFixed(1) }} months of
                             {{ selectedEmployee.name }}'s salary. At the
                             automatic 50% recovery cap, this may take at least
@@ -436,10 +437,9 @@ const recoveryPercentage = computed(() => {
             >
                 <CardHeader class="pb-2">
                     <CardDescription>Total Given</CardDescription>
-                    <CardTitle class="text-2xl"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_amount) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl">
+                        <MoneyText :amount="stats.total_amount" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
@@ -454,10 +454,9 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Outstanding</CardDescription>
-                    <CardTitle class="text-2xl text-status-attention"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_outstanding) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl text-status-attention">
+                        <MoneyText :amount="stats.total_outstanding" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
@@ -478,10 +477,9 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Recovered</CardDescription>
-                    <CardTitle class="text-2xl text-status-success"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_recovered) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl text-status-success">
+                        <MoneyText :amount="stats.total_recovered" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
@@ -604,19 +602,15 @@ const recoveryPercentage = computed(() => {
                     </template>
 
                     <template #cell-amount="{ row }">
-                        <span class="font-medium"
-                            >{{ currency }}
-                            {{ formatCurrency(row._raw.amount) }}</span
-                        >
+                        <span class="font-medium">
+                            <MoneyText :amount="row._raw.amount" :currency="props.currency" />
+                        </span>
                     </template>
 
                     <template #cell-recovered="{ row }">
-                        <span class="text-status-success"
-                            >{{ currency }}
-                            {{
-                                formatCurrency(row._raw.amount_recovered)
-                            }}</span
-                        >
+                        <span class="text-status-success">
+                            <MoneyText :amount="row._raw.amount_recovered" :currency="props.currency" />
+                        </span>
                     </template>
 
                     <template #cell-outstanding="{ row }">
@@ -627,8 +621,7 @@ const recoveryPercentage = computed(() => {
                                     : 'text-muted-foreground'
                             "
                         >
-                            {{ currency }}
-                            {{ formatCurrency(row._raw.amount_outstanding) }}
+                            <MoneyText :amount="row._raw.amount_outstanding" :currency="props.currency" />
                         </span>
                     </template>
 

@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, Search, Banknote } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface VendorCardSale {
   id: string
@@ -274,7 +275,7 @@ const todayTableData = computed(() => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Pending Settlements</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_pending) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_pending" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -287,7 +288,7 @@ const todayTableData = computed(() => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Settled Today</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_settled_today) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_settled_today" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge class="bg-status-success/10 text-status-success hover:bg-status-success/10">
@@ -300,7 +301,7 @@ const todayTableData = computed(() => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.total_outstanding" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge variant="outline" class="border-status-attention/30 text-status-attention">
@@ -331,7 +332,7 @@ const todayTableData = computed(() => {
               @click="openSettlementDialog"
             >
               <Banknote class="mr-2 h-4 w-4" />
-              Settle Selected ({{ formatCurrency(selectedTotal) }})
+              Settle Selected (<MoneyText :amount="selectedTotal" :currency="currencyCode" :fraction-digits="0" />)
             </Button>
           </div>
         </div>
@@ -398,7 +399,7 @@ const todayTableData = computed(() => {
             <div class="text-xs text-muted-foreground">{{ account.clearing_account_name }}</div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="text-right font-semibold text-status-attention">{{ formatCurrency(account.balance) }}</div>
+            <div class="text-right font-semibold text-status-attention"><MoneyText :amount="account.balance" :currency="currencyCode" :fraction-digits="0" /></div>
             <Button size="sm" @click="openClearingDialog(account)">Settle</Button>
           </div>
         </div>
@@ -426,7 +427,7 @@ const todayTableData = computed(() => {
             Vendor Card Settlement
           </DialogTitle>
           <DialogDescription>
-            Settle {{ selectedSales.size }} transaction(s) totaling {{ formatCurrency(selectedTotal) }}
+            Settle {{ selectedSales.size }} transaction(s) totaling <MoneyText :amount="selectedTotal" :currency="currencyCode" :fraction-digits="0" />
           </DialogDescription>
         </DialogHeader>
 
@@ -489,7 +490,7 @@ const todayTableData = computed(() => {
         <DialogHeader>
           <DialogTitle>Settle Payment Channel</DialogTitle>
           <DialogDescription>
-            {{ selectedClearingAccount?.channel_label }} outstanding: {{ formatCurrency(selectedClearingAccount?.balance || 0) }}
+            {{ selectedClearingAccount?.channel_label }} outstanding: <MoneyText :amount="selectedClearingAccount?.balance || 0" :currency="currencyCode" :fraction-digits="0" />
           </DialogDescription>
         </DialogHeader>
 

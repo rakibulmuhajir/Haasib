@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Droplets, Plus, Eye, Search, TrendingUp, Calendar, Truck } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Receipt {
   id: string
@@ -74,8 +74,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Fuel Receipts', href: `/${companySlug.value}/fuel/receipts` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 const search = ref('')
 
 const filteredReceipts = computed(() => {
@@ -87,8 +85,14 @@ const filteredReceipts = computed(() => {
   )
 })
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
+/*
+ * Litres, not money. This was called formatCurrency and was doing both jobs --
+ * grouping tank volumes and grouping rupees -- which is how a litre count ends
+ * up looking like a price. Money goes through MoneyText; this only ever
+ * groups a quantity, and the " L" that follows it in the template is the unit.
+ */
+const formatLiters = (liters: number) => {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(liters)
 }
 
 const formatDate = (dateStr: string) => {
@@ -109,8 +113,8 @@ const tableData = computed(() => {
     id: r.id,
     date: formatDate(r.transaction_date),
     reference: r.reference || '-',
-    liters: `${formatCurrency(r.metadata.total_liters || 0)} L`,
-    amount: `${currency.value} ${formatCurrency(r.total_amount)}`,
+    liters: `${formatLiters(r.metadata.total_liters || 0)} L`,
+    amount: r.total_amount,
     status: r.status,
     _raw: r,
   }))
@@ -159,7 +163,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Liters</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(stats.total_liters) }} L</CardTitle>
+          <CardTitle class="text-2xl">{{ formatLiters(stats.total_liters) }} L</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -172,7 +176,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -238,7 +242,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium">{{ row.amount }}</span>
+            <span class="font-medium"><MoneyText :amount="row.amount" :currency="props.currency" /></span>
           </template>
 
           <template #cell-status="{ row }">

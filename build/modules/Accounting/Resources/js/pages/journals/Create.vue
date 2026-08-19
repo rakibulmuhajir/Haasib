@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -164,11 +165,11 @@ const submit = () => {
       <div class="grid gap-2 md:w-1/3">
         <div class="flex justify-between text-sm">
           <span>Total Debit</span>
-          <span>{{ totals.debit.toFixed(2) }}</span>
+          <MoneyText :amount="totals.debit" :currency="props.company.base_currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>Total Credit</span>
-          <span>{{ totals.credit.toFixed(2) }}</span>
+          <MoneyText :amount="totals.credit" :currency="props.company.base_currency" />
         </div>
         <div class="flex justify-between text-sm font-semibold" :class="totals.balanced ? 'text-status-success' : 'text-status-critical'">
           <span>Balanced?</span>

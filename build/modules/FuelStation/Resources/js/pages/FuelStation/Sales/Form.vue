@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Plus, Calculator, CreditCard, Banknote, Smartphone, Building2, Search } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface FuelItem {
   id: string
@@ -453,7 +454,7 @@ const setPaymentTotal = () => {
               <div class="flex justify-between items-center">
                 <span class="text-lg font-medium">Total Paid</span>
                 <span class="text-xl font-bold" :class="totalPaid >= total ? 'text-status-success' : 'text-status-attention'">
-                  {{ formatCurrency(totalPaid) }}
+                  <MoneyText :amount="totalPaid" :currency="currencyCode" :fraction-digits="0" />
                 </span>
               </div>
               <div class="flex justify-between items-center">
@@ -462,7 +463,7 @@ const setPaymentTotal = () => {
                      sale in progress, not a failure. Amber says it is still open;
                      settled says nothing, because there is nothing left to say. -->
                 <span class="text-sm font-medium" :class="balance <= 0 ? '' : 'text-status-attention'">
-                  {{ formatCurrency(balance) }}
+                  <MoneyText :amount="balance" :currency="currencyCode" :fraction-digits="0" />
                 </span>
               </div>
             </div>
@@ -480,29 +481,29 @@ const setPaymentTotal = () => {
           <CardContent class="space-y-3">
             <div class="flex justify-between">
               <span>Subtotal</span>
-              <span>{{ formatCurrency(subtotal) }}</span>
+              <span><MoneyText :amount="subtotal" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
             <div v-if="discount > 0" class="flex justify-between text-status-success">
               <span>Discount</span>
-              <span>-{{ formatCurrency(discount) }}</span>
+              <span>-<MoneyText :amount="discount" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
             <div class="flex justify-between text-lg font-semibold pt-2 border-t border-border/50">
               <span>Total</span>
-              <span>{{ formatCurrency(total) }}</span>
+              <span><MoneyText :amount="total" :currency="currencyCode" :fraction-digits="0" /></span>
             </div>
 
             <div v-if="selectedFuelItem && currentRate" class="pt-4 space-y-2 text-sm text-text-secondary">
               <div class="flex justify-between">
                 <span>Rate</span>
-                <span>{{ formatCurrency(currentRate.sale_rate) }}/L</span>
+                <span><MoneyText :amount="currentRate.sale_rate" :currency="currencyCode" :fraction-digits="0" />/L</span>
               </div>
               <div v-if="saleType === 'investor'" class="flex justify-between">
                 <span>Investor Rate</span>
-                <span>{{ formatCurrency(currentRate.purchase_rate) }}/L</span>
+                <span><MoneyText :amount="currentRate.purchase_rate" :currency="currencyCode" :fraction-digits="0" />/L</span>
               </div>
               <div class="flex justify-between">
                 <span>Margin</span>
-                <span>{{ formatCurrency(currentRate.margin) }}/L</span>
+                <span><MoneyText :amount="currentRate.margin" :currency="currencyCode" :fraction-digits="0" />/L</span>
               </div>
             </div>
           </CardContent>

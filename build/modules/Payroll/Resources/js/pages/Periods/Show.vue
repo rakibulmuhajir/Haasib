@@ -9,7 +9,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { ArrowLeft, Lock, Calendar, FileText, Plus } from 'lucide-vue-next'
 import { computed } from 'vue'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -60,10 +60,6 @@ const formatDate = (date: string) => {
   return formatDateTime(date, { mode: 'date' })
 }
 
-const formatCurrency = (amount: number, currency: string) => {
-  return formatMoneyText(amount, currency || 'USD')
-}
-
 const getStatusVariant = (status: string) => {
   const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
     open: 'outline',
@@ -100,7 +96,7 @@ const tableData = computed(() => {
     id: ps.id,
     payslip_number: ps.payslip_number,
     employee_name: ps.employee_name,
-    net_pay: formatCurrency(ps.net_pay, ps.currency),
+    net_pay: ps.net_pay,
     status: ps.status,
     _raw: ps,
   }))
@@ -211,7 +207,7 @@ const handleClose = () => {
         <CardContent class="pt-6">
           <div>
             <p class="text-sm text-muted-foreground">Total Gross</p>
-            <p class="text-2xl font-bold">{{ formatCurrency(period.total_gross, period.currency) }}</p>
+            <p class="text-2xl font-bold"><MoneyText :amount="period.total_gross" :currency="period.currency" /></p>
           </div>
         </CardContent>
       </Card>
@@ -220,7 +216,7 @@ const handleClose = () => {
         <CardContent class="pt-6">
           <div>
             <p class="text-sm text-muted-foreground">Total Net</p>
-            <p class="text-2xl font-bold text-primary">{{ formatCurrency(period.total_net, period.currency) }}</p>
+            <p class="text-2xl font-bold text-primary"><MoneyText :amount="period.total_net" :currency="period.currency" /></p>
           </div>
         </CardContent>
       </Card>
@@ -271,6 +267,9 @@ const handleClose = () => {
           :data="tableData"
           @row-click="handleRowClick"
         >
+          <template #cell-net_pay="{ row }">
+            <MoneyText :amount="row._raw.net_pay" :currency="row._raw.currency" />
+          </template>
           <template #cell-status="{ row }">
             <Badge :variant="getPayslipStatusVariant(row._raw.status)">
               {{ formatStatus(row.status) }}

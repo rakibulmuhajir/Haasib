@@ -22,7 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface InvestorLot {
   id: string
@@ -75,10 +75,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 const currency = computed(() => currencySymbol(currencyCode.value))
-
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
 
 const formatNumber = (value: number, decimals = 2) => {
   return new Intl.NumberFormat('en-US', {
@@ -171,7 +167,7 @@ const lotTableData = computed(() => {
     return {
       id: lot.id,
       date: formatDate(lot.deposit_date),
-      amount: formatCurrency(lot.investment_amount),
+      amount: lot.investment_amount,
       rate: `${formatNumber(lot.entitlement_rate)} + ${formatNumber(lot.commission_rate)}`,
       units: formatNumber(lot.units_entitled),
       remaining: formatNumber(lot.units_remaining),
@@ -229,7 +225,7 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_invested" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -242,7 +238,7 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Earned</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_commission_earned) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_commission_earned" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
@@ -255,7 +251,7 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Paid</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_commission_paid) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_commission_paid" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">
@@ -269,7 +265,7 @@ const getStatusBadgeClass = (status: string) => {
         <CardHeader class="pb-2">
           <CardDescription>Outstanding</CardDescription>
           <CardTitle class="text-2xl" :class="investor.outstanding_commission > 0 ? 'text-status-attention' : ''">
-            {{ formatCurrency(investor.outstanding_commission) }}
+            <MoneyText :amount="investor.outstanding_commission" :currency="currencyCode" />
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -317,6 +313,10 @@ const getStatusBadgeClass = (status: string) => {
                 </Button>
               </template>
             </EmptyState>
+          </template>
+
+          <template #cell-amount="{ row }">
+            <MoneyText :amount="row.amount" :currency="currencyCode" />
           </template>
 
           <template #cell-progress="{ row }">
@@ -410,7 +410,7 @@ const getStatusBadgeClass = (status: string) => {
             Pay Commission
           </DialogTitle>
           <DialogDescription>
-            Outstanding commission: {{ formatCurrency(investor.outstanding_commission) }}
+            Outstanding commission: <MoneyText :amount="investor.outstanding_commission" :currency="currencyCode" />
           </DialogDescription>
         </DialogHeader>
 

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import MetaChip from '@/components/MetaChip.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import {
   Landmark,
   Pencil,
@@ -19,7 +20,6 @@ import {
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -105,10 +105,6 @@ const accountTypeLabels: Record<string, string> = {
   credit_card: 'Credit Card',
   cash: 'Petty Cash',
   other: 'Other Account',
-}
-
-const formatCurrency = (amount: number, currency: string) => {
-  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {
@@ -198,7 +194,7 @@ const transactionColumns = [
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-muted-foreground">Current Balance</p>
-                <p class="text-3xl font-bold">{{ formatCurrency(bankAccount.current_balance, bankAccount.currency) }}</p>
+                <p class="text-3xl font-bold"><MoneyText :amount="bankAccount.current_balance" :currency="bankAccount.currency" /></p>
               </div>
               <div class="flex items-center gap-2">
                 <Badge :variant="bankAccount.is_active ? 'default' : 'secondary'">
@@ -299,11 +295,13 @@ const transactionColumns = [
               </template>
 
               <template #cell-deposited="{ row }">
-                {{ row.amount > 0 ? formatCurrency(row.amount, bankAccount.currency) : '—' }}
+                <MoneyText v-if="row.amount > 0" :amount="row.amount" :currency="bankAccount.currency" />
+                <template v-else>—</template>
               </template>
 
               <template #cell-withdrawn="{ row }">
-                {{ row.amount < 0 ? formatCurrency(Math.abs(row.amount), bankAccount.currency) : '—' }}
+                <MoneyText v-if="row.amount < 0" :amount="Math.abs(row.amount)" :currency="bankAccount.currency" />
+                <template v-else>—</template>
               </template>
 
               <template #cell-status="{ row }">
@@ -337,7 +335,7 @@ const transactionColumns = [
                 <p class="text-sm text-muted-foreground">Last Reconciled</p>
                 <p class="font-medium">{{ formatDate(lastReconciliation.statement_date) }}</p>
                 <p class="text-sm text-muted-foreground">
-                  Balance: {{ formatCurrency(lastReconciliation.statement_ending_balance, bankAccount.currency) }}
+                  Balance: <MoneyText :amount="lastReconciliation.statement_ending_balance" :currency="bankAccount.currency" />
                 </p>
               </div>
 
@@ -366,7 +364,7 @@ const transactionColumns = [
             <div class="space-y-2">
               <div>
                 <p class="text-sm text-muted-foreground">Amount</p>
-                <p class="font-medium">{{ formatCurrency(bankAccount.opening_balance, bankAccount.currency) }}</p>
+                <p class="font-medium"><MoneyText :amount="bankAccount.opening_balance" :currency="bankAccount.currency" /></p>
               </div>
               <div>
                 <p class="text-sm text-muted-foreground">As of</p>

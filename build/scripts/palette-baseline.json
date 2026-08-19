@@ -6,7 +6,8 @@
     "uiTable": 0,
     "dataTableShim": 46,
     "directionAsSeverity": 6,
-    "moneyAsText": 247,
+    "moneyAsText": 0,
+    "moneyAsFixed": 0,
     "statusAsText": 0,
     "handRolledMoney": 0
   },

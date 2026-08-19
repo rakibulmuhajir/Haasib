@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Plus, Eye, Pencil, Search, Wallet, TrendingUp, Banknote } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface InvestorRow {
   id: string
@@ -77,10 +77,6 @@ const filteredInvestors = computed(() => {
   })
 })
 
-const formatCurrency = (value: number) => {
-  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
-}
-
 const columns = [
   { key: 'name', label: 'Name' },
   { key: 'phone', label: 'Phone' },
@@ -96,9 +92,9 @@ const tableData = computed(() => {
     id: investor.id,
     name: investor.name,
     phone: investor.phone ?? '-',
-    invested: formatCurrency(investor.total_invested),
-    earned: formatCurrency(investor.total_commission_earned),
-    outstanding: formatCurrency(investor.outstanding_commission),
+    invested: investor.total_invested,
+    earned: investor.total_commission_earned,
+    outstanding: investor.outstanding_commission,
     status: investor.is_active ? 'Active' : 'Inactive',
     _actions: investor.id,
     _raw: investor,
@@ -185,7 +181,7 @@ const goToShow = (row: any) => {
       <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_invested" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -198,7 +194,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Earned</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_earned) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_commission_earned" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
@@ -211,7 +207,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Paid</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_paid) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_commission_paid" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">
@@ -224,7 +220,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.total_outstanding" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge variant="outline" class="border-status-attention/30 text-status-attention">Pending Payment</Badge>
@@ -268,9 +264,17 @@ const goToShow = (row: any) => {
             </EmptyState>
           </template>
 
+          <template #cell-invested="{ row }">
+            <MoneyText :amount="row.invested" :currency="currencyCode" />
+          </template>
+
+          <template #cell-earned="{ row }">
+            <MoneyText :amount="row.earned" :currency="currencyCode" />
+          </template>
+
           <template #cell-outstanding="{ row }">
             <span :class="row._raw.outstanding_commission > 0 ? 'font-medium text-status-attention' : ''">
-              {{ row.outstanding }}
+              <MoneyText :amount="row.outstanding" :currency="currencyCode" />
             </span>
           </template>
 

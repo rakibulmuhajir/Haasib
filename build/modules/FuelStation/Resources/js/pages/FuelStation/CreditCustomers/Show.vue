@@ -20,6 +20,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { User, ArrowLeft, Wallet, TrendingUp, TrendingDown, Ban, Edit, Unlock } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Customer {
   id: string
@@ -64,10 +65,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currency = computed(() => currencySymbol(props.currency))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const formatDate = (dateStr: string) => {
   return formatDateTime(dateStr, { mode: 'date' })
@@ -150,7 +147,7 @@ const goBack = () => {
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
           <CardTitle class="text-2xl" :class="customer.current_balance > 0 ? 'text-status-attention' : 'text-status-success'">
-            {{ currency }} {{ formatCurrency(customer.current_balance) }}
+            <MoneyText :amount="customer.current_balance" :currency="props.currency" />
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -165,13 +162,13 @@ const goBack = () => {
         <CardHeader class="pb-2">
           <CardDescription>Credit Limit</CardDescription>
           <CardTitle class="text-2xl">
-            <template v-if="customer.credit_limit > 0">{{ currency }} {{ formatCurrency(customer.credit_limit) }}</template>
+            <template v-if="customer.credit_limit > 0"><MoneyText :amount="customer.credit_limit" :currency="props.currency" /></template>
             <template v-else>No Limit</template>
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div v-if="customer.credit_limit > 0" class="text-sm text-text-secondary">
-            {{ currency }} {{ formatCurrency(Math.max(0, customer.credit_limit - customer.current_balance)) }} available
+            <MoneyText :amount="Math.max(0, customer.credit_limit - customer.current_balance)" :currency="props.currency" /> available
           </div>
           <div v-else class="text-sm text-text-secondary">Unlimited credit</div>
         </CardContent>
@@ -249,7 +246,11 @@ const goBack = () => {
 
             <template #cell-amount="{ row }">
               <span :class="row._raw.type === 'sale' ? 'text-status-attention' : 'text-status-success'" class="font-medium">
-                {{ row._raw.type === 'sale' ? '+' : '-' }}{{ currency }} {{ formatCurrency(row._raw.amount) }}
+                <MoneyText
+                  :amount="row._raw.amount"
+                  :currency="props.currency"
+                  :direction="row._raw.type === 'sale' ? 'inflow' : 'outflow'"
+                />
               </span>
             </template>
           </DataTable>

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import {
   RefreshCcw,
   PlusCircle,
@@ -15,7 +16,6 @@ import {
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
-import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -91,10 +91,6 @@ const reconciliationStatus: Record<string, string> = {
   in_progress: 'pending',
   completed: 'reconciled',
   cancelled: 'cancelled',
-}
-
-const formatCurrency = (amount: number, currency: string) => {
-  return formatMoneyText(amount, currency)
 }
 
 const formatDate = (dateStr: string | null) => {
@@ -220,12 +216,12 @@ const reconciliationColumns = [
           <template #cell-statement_date="{ row }">{{ formatDate(row.statement_date) }}</template>
 
           <template #cell-statement_ending_balance="{ row }">
-            {{ formatCurrency(row.statement_ending_balance, row.bank_account.currency) }}
+            <MoneyText :amount="row.statement_ending_balance" :currency="row.bank_account.currency" />
           </template>
 
           <template #cell-difference="{ row }">
             <span :class="Math.abs(row.difference) < 0.01 ? 'text-status-success' : 'text-status-critical'">
-              {{ formatCurrency(row.difference, row.bank_account.currency) }}
+              <MoneyText :amount="row.difference" :currency="row.bank_account.currency" />
             </span>
           </template>
 

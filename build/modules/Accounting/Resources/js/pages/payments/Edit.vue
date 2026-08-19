@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, FileText } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -75,10 +75,6 @@ const paymentMethods = [
   { value: 'other', label: 'Other', icon: DollarSign },
 ]
 
-const formatCurrency = (amount: number) => {
-  return formatMoneyText(amount, form.currency || 'USD')
-}
-
 const submit = () => {
   form.put(`/${props.company.slug}/payments/${props.payment.id}`)
 }
@@ -112,7 +108,7 @@ const allocatedAmount = computed(() => {
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">Allocated</Badge>
             <span class="text-sm">
-              This payment has {{ payment.payment_allocations.length }} allocation(s) totaling {{ formatCurrency(allocatedAmount) }}.
+              This payment has {{ payment.payment_allocations.length }} allocation(s) totaling <MoneyText :amount="allocatedAmount" :currency="form.currency || 'USD'" />.
               Editing may affect the allocations.
             </span>
           </div>
@@ -152,7 +148,7 @@ const allocatedAmount = computed(() => {
               required
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -250,11 +246,11 @@ const allocatedAmount = computed(() => {
           <div class="space-y-2">
             <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded-sm">
               <span class="font-medium">Invoice #{{ allocation.invoice_id }}</span>
-              <span class="font-medium">{{ formatCurrency(allocation.amount) }}</span>
+              <span class="font-medium"><MoneyText :amount="allocation.amount" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between items-center pt-2 border-t">
               <span class="font-bold">Total Allocated:</span>
-              <span class="font-bold">{{ formatCurrency(allocatedAmount) }}</span>
+              <span class="font-bold"><MoneyText :amount="allocatedAmount" :currency="form.currency || 'USD'" /></span>
             </div>
           </div>
         </CardContent>
@@ -268,7 +264,7 @@ const allocatedAmount = computed(() => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Payment Amount:</span>
-            <span class="font-bold">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold"><MoneyText :amount="form.amount" :currency="form.currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Payment Method:</span>

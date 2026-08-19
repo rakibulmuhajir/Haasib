@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, Smartphone, FileText } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -117,10 +117,6 @@ watch(() => form.invoice_id, () => {
   }
 })
 
-const formatCurrency = (amount: number, currencyCode?: string) => {
-  return formatMoneyText(amount, currencyCode || form.currency || 'USD')
-}
-
 const submit = () => {
   form.post(`/${props.company.slug}/payments`)
 }
@@ -210,7 +206,7 @@ const submit = () => {
                     :key="invoice.id"
                     :value="invoice.id"
                   >
-                    {{ invoice.invoice_number }} - {{ formatCurrency(invoice.balance, invoice.currency) }} due
+                    {{ invoice.invoice_number }} - <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
                   </SelectItem>
                 </template>
                 <template v-else>
@@ -234,7 +230,7 @@ const submit = () => {
               required
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -351,7 +347,7 @@ const submit = () => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Payment Amount:</span>
-            <span class="font-bold">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold"><MoneyText :amount="form.amount" :currency="form.currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Payment Method:</span>

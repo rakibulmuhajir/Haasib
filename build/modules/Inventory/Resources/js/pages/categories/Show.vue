@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { Pencil, ArrowLeft, Package, FolderTree } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -60,9 +60,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: props.category.name, href: `/${props.company.slug}/item-categories/${props.category.id}` },
 ]
 
-const formatCurrency = (amount: number, currency: string) => {
-  return formatMoneyText(amount, currency || 'USD')
-}
 </script>
 
 <template>
@@ -164,7 +161,7 @@ const formatCurrency = (amount: number, currency: string) => {
                   <p class="text-sm text-muted-foreground">{{ item.sku }}</p>
                 </div>
                 <div class="text-right">
-                  <p class="font-medium">{{ formatCurrency(item.selling_price, item.currency) }}</p>
+                  <p class="font-medium"><MoneyText :amount="item.selling_price" :currency="item.currency" /></p>
                   <Badge variant="secondary" class="text-xs">{{ item.item_type }}</Badge>
                 </div>
               </div>

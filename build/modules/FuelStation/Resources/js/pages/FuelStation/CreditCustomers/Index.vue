@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Customer {
   id: string
@@ -49,8 +49,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Credit Customers', href: `/${companySlug.value}/fuel/credit-customers` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 const search = ref('')
 
 const filteredCustomers = computed(() => {
@@ -62,10 +60,6 @@ const filteredCustomers = computed(() => {
     c.phone?.toLowerCase().includes(q)
   )
 })
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const columns = [
   { key: 'name', label: 'Customer' },
@@ -118,7 +112,7 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Receivable</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(stats.total_receivable) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="stats.total_receivable" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -196,13 +190,13 @@ const goToShow = (row: any) => {
 
           <template #cell-balance="{ row }">
             <span :class="row._raw.current_balance > 0 ? 'text-status-attention font-medium' : 'text-muted-foreground'">
-              {{ currency }} {{ formatCurrency(row._raw.current_balance) }}
+              <MoneyText :amount="row._raw.current_balance" :currency="props.currency" />
             </span>
           </template>
 
           <template #cell-limit="{ row }">
             <span v-if="row._raw.credit_limit > 0" class="font-medium">
-              {{ currency }} {{ formatCurrency(row._raw.credit_limit) }}
+              <MoneyText :amount="row._raw.credit_limit" :currency="props.currency" />
             </span>
             <span v-else class="text-muted-foreground">No limit</span>
           </template>

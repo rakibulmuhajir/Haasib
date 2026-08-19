@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { UsersRound, Pencil, ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Partner {
   id: string
@@ -73,10 +74,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currency = computed(() => currencySymbol(props.currency))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const formatDate = (dateStr: string) => {
   return formatDateTime(dateStr, { mode: 'date' })
@@ -184,7 +181,7 @@ const goBack = () => {
           <CardDescription>Net Capital</CardDescription>
 <!-- Ink, like the same figure in the register. See partners/Index.vue. -->
           <CardTitle class="text-2xl">
-            {{ currency }} {{ formatCurrency(partner.net_capital) }}
+            <MoneyText :amount="partner.net_capital" :currency="props.currency" />
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -198,7 +195,7 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-status-success">{{ currency }} {{ formatCurrency(partner.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="partner.total_invested" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -211,7 +208,7 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-status-attention">{{ currency }} {{ formatCurrency(partner.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="partner.total_withdrawn" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -226,12 +223,12 @@ const goBack = () => {
           <CardDescription>Drawing Limit</CardDescription>
           <CardTitle class="text-2xl">
             <template v-if="partner.drawing_limit_period === 'none'">No Limit</template>
-            <template v-else>{{ currency }} {{ formatCurrency(partner.remaining_drawing_limit ?? 0) }}</template>
+            <template v-else><MoneyText :amount="partner.remaining_drawing_limit ?? 0" :currency="props.currency" /></template>
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div v-if="partner.drawing_limit_period !== 'none'" class="text-sm text-text-secondary">
-            of {{ currency }} {{ formatCurrency(partner.drawing_limit_amount ?? 0) }} {{ partner.drawing_limit_period }}
+            of <MoneyText :amount="partner.drawing_limit_amount ?? 0" :currency="props.currency" /> {{ partner.drawing_limit_period }}
           </div>
           <div v-else class="text-sm text-text-secondary">Unlimited withdrawals</div>
         </CardContent>
@@ -307,12 +304,16 @@ const goBack = () => {
 
             <template #cell-amount="{ row }">
               <span :class="row._raw.transaction_type === 'investment' ? 'text-status-success' : 'text-status-attention'" class="font-medium">
-                {{ row._raw.transaction_type === 'investment' ? '+' : '-' }}{{ currency }} {{ formatCurrency(row._raw.amount) }}
+                <MoneyText
+                  :amount="row._raw.amount"
+                  :currency="props.currency"
+                  :direction="row._raw.transaction_type === 'investment' ? 'inflow' : 'outflow'"
+                />
               </span>
             </template>
 
             <template #cell-balance="{ row }">
-              <span class="font-medium">{{ currency }} {{ formatCurrency(row._raw.balance) }}</span>
+              <span class="font-medium"><MoneyText :amount="row._raw.balance" :currency="props.currency" /></span>
             </template>
           </DataTable>
         </CardContent>

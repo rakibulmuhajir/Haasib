@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -356,19 +357,19 @@ const isEditable = computed(() => {
       <div class="grid gap-2 md:w-1/2">
         <div class="flex justify-between text-sm">
           <span>Subtotal</span>
-          <span>{{ totals.subtotal.toFixed(2) }}</span>
+          <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>Tax</span>
-          <span>{{ totals.tax.toFixed(2) }}</span>
+          <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>Discount</span>
-          <span>{{ totals.discount.toFixed(2) }}</span>
+          <MoneyText :amount="totals.discount" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-base font-semibold">
           <span>Estimated Total</span>
-          <span>{{ totals.total.toFixed(2) }}</span>
+          <MoneyText :amount="totals.total" :currency="form.currency" />
         </div>
       </div>
 

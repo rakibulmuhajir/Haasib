@@ -8,7 +8,8 @@ import { formatDateTime as formatSharedDateTime } from '@/lib/datetime';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, Ban, CheckCircle, DollarSign, Printer, Trash2 } from 'lucide-vue-next';
-import { formatMoneyText } from '@/lib/money'
+import { formatMoneyText } from '@/lib/money';
+import MoneyText from '@/components/MoneyText.vue';
 
 interface CompanyRef {
     id: string;
@@ -274,15 +275,18 @@ const handleVoid = () => {
                             </template>
 
                             <template #cell-rate="{ row }">
-                                {{ row.line_type === 'earning' && row.rate ? formatCurrency(row.rate, payslip.currency) : '—' }}
+                                <MoneyText v-if="row.line_type === 'earning' && row.rate" :amount="row.rate" :currency="payslip.currency" />
+                                <span v-else>—</span>
                             </template>
 
                             <template #cell-earning="{ row }">
-                                {{ row.line_type === 'earning' ? formatCurrency(row.amount, payslip.currency) : '—' }}
+                                <MoneyText v-if="row.line_type === 'earning'" :amount="row.amount" :currency="payslip.currency" />
+                                <span v-else>—</span>
                             </template>
 
                             <template #cell-deduction="{ row }">
-                                {{ row.line_type === 'deduction' ? formatCurrency(row.amount, payslip.currency) : '—' }}
+                                <MoneyText v-if="row.line_type === 'deduction'" :amount="row.amount" :currency="payslip.currency" />
+                                <span v-else>—</span>
                             </template>
                         </LedgerRegister>
                     </CardContent>
@@ -361,36 +365,27 @@ const handleVoid = () => {
                     <CardContent class="space-y-4">
                         <div class="flex items-center justify-between">
                             <span class="text-muted-foreground">Gross Pay</span>
-                            <span class="font-medium">{{
-                                formatCurrency(
-                                    payslip.gross_pay,
-                                    payslip.currency,
-                                )
-                            }}</span>
+                            <span class="font-medium">
+                                <MoneyText :amount="payslip.gross_pay" :currency="payslip.currency" />
+                            </span>
                         </div>
                         <div class="flex items-center justify-between">
                             <span class="text-muted-foreground"
                                 >Deductions</span
                             >
                             <span class="font-medium text-destructive">
-                                -{{
-                                    formatCurrency(
-                                        payslip.total_deductions,
-                                        payslip.currency,
-                                    )
-                                }}
+                                <MoneyText
+                                    :amount="payslip.total_deductions"
+                                    :currency="payslip.currency"
+                                    direction="outflow"
+                                />
                             </span>
                         </div>
                         <hr />
                         <div class="flex items-center justify-between">
                             <span class="font-semibold">Net Pay</span>
                             <span class="text-xl font-bold text-primary">
-                                {{
-                                    formatCurrency(
-                                        payslip.net_pay,
-                                        payslip.currency,
-                                    )
-                                }}
+                                <MoneyText :amount="payslip.net_pay" :currency="payslip.currency" />
                             </span>
                         </div>
                     </CardContent>
@@ -433,12 +428,9 @@ const handleVoid = () => {
                             <span class="text-muted-foreground"
                                 >Net in {{ payslip.base_currency }}</span
                             >
-                            <span class="font-semibold">{{
-                                formatCurrency(
-                                    payslip.base_net_pay,
-                                    payslip.base_currency,
-                                )
-                            }}</span>
+                            <span class="font-semibold">
+                                <MoneyText :amount="payslip.base_net_pay" :currency="payslip.base_currency" />
+                            </span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-muted-foreground">Created</span>

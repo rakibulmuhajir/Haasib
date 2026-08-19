@@ -9,9 +9,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
-import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -97,10 +97,6 @@ const statusOptions = [
   { value: 'void', label: 'Void' },
 ]
 
-const formatCurrency = (amount: number) => {
-  return formatMoneyText(amount, form.base_currency || 'USD')
-}
-
 const submit = () => {
   // Convert 'company_default' back to null for the backend
   const submitData = { ...form }
@@ -158,7 +154,7 @@ const isEditable = computed(() => {
             </button>
           </div>
           <div class="text-right">
-            <div class="text-2xl font-bold text-status-success">{{ formatCurrency(credit_note.amount) }}</div>
+            <div class="text-2xl font-bold text-status-success"><MoneyText :amount="credit_note.amount" :currency="credit_note.base_currency" /></div>
             <div class="text-sm text-muted-foreground">{{ credit_note.base_currency }}</div>
           </div>
         </div>
@@ -214,7 +210,7 @@ const isEditable = computed(() => {
                   :key="invoice.id"
                   :value="invoice.id"
                 >
-                  {{ invoice.invoice_number }} - {{ formatCurrency(invoice.total_amount) }} {{ invoice.currency }}
+                  {{ invoice.invoice_number }} - <MoneyText :amount="invoice.total_amount" :currency="invoice.currency" />
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -248,7 +244,7 @@ const isEditable = computed(() => {
               :disabled="!isEditable"
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -356,7 +352,7 @@ const isEditable = computed(() => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Credit Amount:</span>
-            <span class="font-bold text-status-success">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold text-status-success"><MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Customer:</span>

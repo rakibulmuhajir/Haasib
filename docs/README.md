@@ -24,6 +24,11 @@ Comprehensive documentation for the Haasib invoice management system.
 - [**Security Guide**](docs/security.md) - Security best practices and guidelines
 - [**Performance Optimization**](docs/performance.md) - Performance tuning and optimization
 
+### Design System
+- [**Ledger Design System**](ledger-design-system.md) - The components, the six laws, printing, enforcement. **Read this before building a page.**
+- [**Theming**](theming.md) - Tokens, the skin registry, adding a palette. Read this before touching a colour.
+- [**Frontend Experience Contract**](frontend-experience-contract.md) - Interaction and UX behaviour.
+
 ### Development
 - [**Development Setup**](docs/development-setup.md) - Setting up development environment
 - [**Testing Guide**](docs/testing.md) - Testing strategies and best practices
@@ -40,6 +45,7 @@ Comprehensive documentation for the Haasib invoice management system.
 - [Getting Started Guide](docs/getting-started.md) - Start using the system
 
 ### For Developers
+- [Ledger Design System](ledger-design-system.md) - How the interface is built
 - [API Documentation](public/docs/openapi-updated.yaml) - REST API reference
 - [Development Setup](docs/development-setup.md) - Set up development environment
 

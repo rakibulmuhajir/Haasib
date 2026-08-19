@@ -13,9 +13,13 @@ They are often confused. They are not the same thing and they compose freely.
 | Axis | Set by | Carried on `<html>` | Values |
 | --- | --- | --- | --- |
 | **Appearance** | the reader | `class="dark"` | `light` · `dark` · `system` |
-| **Skin** | the reader (preview) or the product | `data-skin="…"` | `default` · `ledger` · … |
+| **Skin** | the product | `data-skin="…"` | `ledger` |
 
-Every skin must work in both appearances. `default` × `dark` and `ledger` × `dark` are separate token blocks, and adding a skin means writing both.
+**There is one skin, and it is not a choice.** `config/skins.php` registers `ledger` alone and `app.blade.php` writes it onto `<html>` as a static attribute — there is no reader-facing picker, no `localStorage` key and no preview toggle. The stock shadcn theme that used to be registered as `default` was deleted deliberately: a second theme is somewhere a half-converted page can hide behind — *"it looks fine on default"* — and the working rule is that no element renders undecided.
+
+The registry machinery stays because adding a skin later should be one entry in `config/skins.php` plus one token block in `app.css`, not a rebuild. If you do add one, note what the single-skin flip removed and what you would have to put back: a control that sets the attribute, and a pre-paint read in `app.blade.php` that validates the stored value against the registry before first paint (the ground-colour rule below is what stops a white flash repainting onto paper).
+
+Every skin must work in both appearances. `ledger` × `light` and `ledger` × `dark` are separate token blocks, and adding a skin means writing both.
 
 ## A skin is a palette, not a second design system
 
@@ -23,7 +27,7 @@ This is the load-bearing decision, so it is worth stating plainly.
 
 A skin restates **colour**, and may restate **radius**, **type family** and **resting density**. It does *not* get to re-decide what red means, whether focus is visible, whether a button floats, or whether a state may be signalled by colour alone. That grammar is house policy. It lives under the bare `[data-skin]` selector in `app.css` and applies to every skin at once.
 
-The reason is verification cost, not purity. Haasib has 193 pages, 20 document states and a full interaction-state matrix per component. Forking the grammar per theme multiplies that surface by the number of themes, and the failures it produces are the quiet kind — a theme that drops a non-colour indicator ships an accessibility bug no screenshot catches, and a theme that renders ordinary outflows in red turns a normal register into a page of alarms.
+The reason is verification cost, not purity. Haasib has 193 pages, a document-state vocabulary in `resources/js/lib/status.ts` and a full interaction-state matrix per component. Forking the grammar per theme multiplies that surface by the number of themes, and the failures it produces are the quiet kind — a theme that drops a non-colour indicator ships an accessibility bug no screenshot catches, and a theme that renders ordinary outflows in red turns a normal register into a page of alarms.
 
 **One grammar, many palettes.** The realistic future themes are palette-shaped anyway: high-contrast for accessibility, print, and a per-company brand accent if the customer portal is ever white-labelled.
 
@@ -45,13 +49,17 @@ The reason is verification cost, not purity. Haasib has 193 pages, 20 document s
 | `resources/css/app.css` | All tokens. `:root` / `.dark` defaults, each skin's block, the grammar rules, density contracts, type roles. |
 | `config/skins.php` | The skin registry — id, label, description, and the pre-paint page ground. **The only list.** |
 | `resources/views/app.blade.php` | Applies the skin and its ground before first paint, from the registry. |
-| `app/Http/Middleware/HandleInertiaRequests.php` | Shares the registry (`skins`) and `skinPreview` to the front end. |
-| `resources/js/composables/useSkin.ts` | Reads and sets `data-skin`; persists to `localStorage`. |
 | `resources/js/composables/useAppearance.ts` | Light / dark / system. |
 | `resources/js/composables/useAppearanceToggle.ts` | The same, plus what `system` currently resolves to — what a sun/moon control needs. |
-| `resources/js/components/SkinPreviewToggle.vue` | Local-only corner switch that cycles the registry. |
 | `resources/js/pages/Design/Index.vue` | The `/design` playground. Local only. |
+| `resources/js/lib/printSheet.ts` | The browser print sheet — the ledger values resolved to literals, because a print window has no cascade to inherit. |
+| `resources/views/print/sheet.blade.php` | The dompdf counterpart of the same sheet. Kept deliberately parallel; see `docs/ledger-design-system.md`. |
 | `scripts/lint-palette.mjs` | The ratchet that keeps hardcoded colours out. |
+| `scripts/lint-nav.mjs` | The nav freeze — menu items are not the design system's to edit. |
+
+There is no `useSkin.ts` and no `skins` / `skinPreview` Inertia payload. Both went with the second theme.
+
+**The components that carry the grammar** — `MoneyText`, `StatusBadge`, `LedgerRegister`, `LedgerDocument`, `MetaChip`, `Derivation` — are documented in **`docs/ledger-design-system.md`**, with prop tables and recipes. Read that before building a page; read this file before touching a token.
 
 ---
 
@@ -130,7 +138,9 @@ Three steps. Nothing else should be necessary; if it is, the grammar has leaked 
 }
 ```
 
-That is the whole job. The registry drives the pre-paint script, the ground CSS, the Inertia payload and the preview switch; the grammar, density contracts, focus ring and reduced-motion handling already apply through `[data-skin]`. **Radius is one number.** `--radius-sm` through `--radius-2xl` are all derived from `--radius`, so `rounded-sm` / `md` / `lg` / `xl` / `2xl` follow a skin without any per-utility patching. `rounded-full` is deliberately outside the scale — avatars, pips and switch thumbs are meant to be round.
+**4. Give the reader a way to reach it.** This step does not exist yet, because with one skin nothing selects. A second skin means restoring what the flip removed: a control that writes `data-skin` onto `<html>`, and a pre-paint read in `app.blade.php` that validates the stored value against the registry *before* first paint. Do not defer the pre-paint half — applying the skin from JavaScript after mount is what repaints a loaded page.
+
+Otherwise that is the whole job. The registry drives the pre-paint attribute and the ground CSS; the grammar, density contracts, focus ring and reduced-motion handling already apply through `[data-skin]`. **Radius is one number.** `--radius-sm` through `--radius-2xl` are all derived from `--radius`, so `rounded-sm` / `md` / `lg` / `xl` / `2xl` follow a skin without any per-utility patching. `rounded-full` is deliberately outside the scale — avatars, pips and switch thumbs are meant to be round.
 
 If a skin genuinely needs an exception to the grammar — say a marketing theme that wants its cards to float — override it in that skin's own block, deliberately and in one place, with a comment saying why.
 

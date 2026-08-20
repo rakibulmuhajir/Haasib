@@ -35,9 +35,14 @@ return [
     'testing' => [
         'ensure_pages_exist' => true,
 
-        'page_paths' => [
-            resource_path('js/pages'),
-        ],
+        'page_paths' => array_merge(
+            [resource_path('js/pages')],
+            // Module pages are resolved by the Vite alias at build time but the
+            // testing view-finder only knows the paths listed here, so without
+            // this every ->component() assertion on a module page fails as
+            // "does not exist" and module dashboards go untested over HTTP.
+            glob(base_path('modules/*/Resources/js/pages')) ?: [],
+        ),
 
         'page_extensions' => [
             'js',

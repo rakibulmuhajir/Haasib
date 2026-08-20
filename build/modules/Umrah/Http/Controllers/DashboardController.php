@@ -25,7 +25,12 @@ class DashboardController extends Controller
 
         return Inertia::render('Umrah/Dashboard/Index', [
             'company' => $this->companyPayload($company),
-            'tabs' => $presenter->present($request->user(), $company, 'umrah', $request->string('tab')->toString() ?: null),
+            // One `dashboard` prop, not a bare `tabs` array: DashboardTabs
+            // switches tab with an Inertia partial reload scoped to
+            // only: ['dashboard'], so the active tab and the tabs it selects
+            // between have to travel under a single top-level key or the
+            // reload fetches nothing.
+            'dashboard' => $this->dashboardPayload($presenter, $request, $company),
             'isAgent' => $isMember,
             'isOperations' => $isOperations,
             'capabilities' => [
@@ -38,6 +43,24 @@ class DashboardController extends Controller
                 'canViewPayments' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW),
             ],
         ]);
+    }
+
+    /**
+     * @return array{tabs: array<int, mixed>, activeTab: string}
+     */
+    private function dashboardPayload(DashboardPresenter $presenter, Request $request, $company): array
+    {
+        $tabs = $presenter->present(
+            $request->user(),
+            $company,
+            'umrah',
+            $request->string('tab')->toString() ?: null,
+        );
+
+        return [
+            'tabs' => $tabs,
+            'activeTab' => (string) (collect($tabs)->firstWhere('active', true)['key'] ?? ''),
+        ];
     }
 
     private function companyPayload($company): array

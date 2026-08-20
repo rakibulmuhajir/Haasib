@@ -236,3 +236,44 @@ test('cash_book widget puts a received payment in the in column and a paid payme
         ->and($data['totals']['out'])->toBe(200.0)
         ->and($data['total_movements'])->toBe(2);
 });
+
+/*
+ * The page prop shape, asserted over HTTP.
+ *
+ * Every other test here calls the resolver or a widget directly, which is
+ * why a controller shipping `tabs` while the page expected `dashboard`
+ * survived a green suite and broke production instead. A dashboard whose
+ * data is assembled from a registry needs at least one test that renders
+ * the actual page and reads the actual prop names.
+ */
+test('the dashboard page ships a single dashboard prop naming its active tab', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+
+    $this->actingAs($owner)
+        ->get("/{$company->slug}/umrah")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Umrah/Dashboard/Index')
+            ->has('dashboard.tabs', 2)
+            ->where('dashboard.activeTab', 'upcoming')
+            ->where('dashboard.tabs.0.key', 'upcoming')
+            ->where('dashboard.tabs.1.key', 'money')
+            ->has('dashboard.tabs.0.widgets.0.data')
+            ->where('dashboard.tabs.1.widgets.0.data', null)
+        );
+});
+
+test('asking for a tab by name makes it the active tab and the one carrying data', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+
+    $this->actingAs($owner)
+        ->get("/{$company->slug}/umrah?tab=money")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('dashboard.activeTab', 'money')
+            ->has('dashboard.tabs.1.widgets.0.data')
+            ->where('dashboard.tabs.0.widgets.0.data', null)
+        );
+});

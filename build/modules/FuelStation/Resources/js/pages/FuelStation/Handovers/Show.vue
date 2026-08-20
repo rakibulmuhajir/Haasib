@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { HandCoins, ArrowLeft, Check, Clock, CheckCircle, Banknote, CreditCard } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Handover {
   id: string
@@ -51,16 +52,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 const formatDateTime = (date: string) => {
   return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
 }
@@ -75,24 +66,24 @@ const receiveHandover = () => {
 }
 
 const paymentBreakdown = computed(() => [
-  { label: 'Cash', amount: props.handover.cash_amount, icon: Banknote, color: 'text-green-600' },
-  { label: 'EasyPaisa', amount: props.handover.easypaisa_amount, icon: CreditCard, color: 'text-blue-600' },
-  { label: 'JazzCash', amount: props.handover.jazzcash_amount, icon: CreditCard, color: 'text-purple-600' },
-  { label: 'Bank Transfer', amount: props.handover.bank_transfer_amount, icon: Banknote, color: 'text-indigo-600' },
-  { label: 'Card Swipe', amount: props.handover.card_swipe_amount, icon: CreditCard, color: 'text-red-600' },
-  { label: 'Vendor Card', amount: props.handover.parco_card_amount, icon: CreditCard, color: 'text-orange-600' },
+  { label: 'Cash', amount: props.handover.cash_amount, icon: Banknote, color: 'text-status-success' },
+  { label: 'EasyPaisa', amount: props.handover.easypaisa_amount, icon: CreditCard, color: 'text-status-info' },
+  { label: 'JazzCash', amount: props.handover.jazzcash_amount, icon: CreditCard, color: 'text-status-info' },
+  { label: 'Bank Transfer', amount: props.handover.bank_transfer_amount, icon: Banknote, color: 'text-status-info' },
+  { label: 'Card Swipe', amount: props.handover.card_swipe_amount, icon: CreditCard, color: 'text-status-critical' },
+  { label: 'Vendor Card', amount: props.handover.parco_card_amount, icon: CreditCard, color: 'text-status-attention' },
 ])
 
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', icon: Clock, label: 'Pending' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: Clock, label: 'Pending' }
     case 'received':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: CheckCircle, label: 'Received' }
+      return { class: 'bg-status-success/10 text-status-success', icon: CheckCircle, label: 'Received' }
     case 'reconciled':
-      return { class: 'bg-sky-100 text-sky-800', icon: Check, label: 'Reconciled' }
+      return { class: 'bg-status-info/10 text-status-info', icon: Check, label: 'Reconciled' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Clock, label: status }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Clock, label: status }
   }
 }
 </script>
@@ -113,7 +104,7 @@ const getStatusBadge = (status: string) => {
       </Button>
       <Button
         v-if="handover.status === 'pending'"
-        class="bg-emerald-600 hover:bg-emerald-700"
+        class="bg-status-success hover:bg-status-success"
         @click="receiveHandover"
       >
         <Check class="mr-2 h-4 w-4" />
@@ -122,14 +113,14 @@ const getStatusBadge = (status: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-3">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-3xl">{{ formatCurrency(handover.total_amount) }}</CardTitle>
+          <CardTitle class="text-3xl"><MoneyText :amount="handover.total_amount" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-amber-600" />
+            <Banknote class="h-4 w-4 text-status-attention" />
             <span>Collected in shift</span>
           </div>
         </CardContent>
@@ -162,7 +153,7 @@ const getStatusBadge = (status: string) => {
           <CardTitle class="text-lg">{{ handover.pump_name }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0 space-y-1">
-          <Badge variant="outline" :class="handover.shift === 'day' ? 'border-amber-200 text-amber-700' : 'border-indigo-200 text-indigo-700'">
+          <Badge variant="outline" :class="handover.shift === 'day' ? 'border-status-attention/30 text-status-attention' : 'border-status-info/30 text-status-info'">
             {{ handover.shift.charAt(0).toUpperCase() + handover.shift.slice(1) }} Shift
           </Badge>
           <p class="text-sm text-text-secondary">{{ handover.attendant_name }}</p>
@@ -188,14 +179,14 @@ const getStatusBadge = (status: string) => {
               <span class="font-medium">{{ payment.label }}</span>
             </div>
             <span class="font-semibold" :class="payment.amount > 0 ? payment.color : 'text-text-secondary'">
-              {{ formatCurrency(payment.amount) }}
+              <MoneyText :amount="payment.amount" :currency="currencyCode" />
             </span>
           </div>
         </div>
 
         <div class="pt-4 border-t border-border/50 flex justify-between items-center">
           <span class="text-lg font-medium">Total</span>
-          <span class="text-xl font-bold">{{ formatCurrency(handover.total_amount) }}</span>
+          <span class="text-xl font-bold"><MoneyText :amount="handover.total_amount" :currency="currencyCode" /></span>
         </div>
       </CardContent>
     </Card>

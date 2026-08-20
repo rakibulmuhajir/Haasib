@@ -66,6 +66,7 @@ Authentication does not require email verification. `email_verified_at` is retai
   - `industry_code` string nullable. New values are restricted to `fuel_station`, `travel`, or `other`.
   - `slug` string unique not null (auto-generated).  
   - `country` string nullable; `country_id` uuid nullable.  
+  - `address` jsonb nullable. The company's postal address, printed as the letterhead on every document it issues. Same shape as `acct.customers.billing_address`: optional string keys `line1`, `line2`, `street`, `city`, `state`, `postal_code`, `country`. Absent keys are omitted from the rendered address rather than printed empty.  
   - `base_currency` char(3) not null default `USD` (must exist and be active in `public.currencies`; immutable after transactions).  
   - `language` string(10) default `en`; `locale` string(10) default `en_US`.  
   - `settings` json nullable. Allowed root keys: `contact_email` (string), `contact_phone` (string), `website` (string), `modules` (object of moduleKey => boolean), `fiscal_year_start_month` (int 1-12), `auto_create_fiscal_year` (boolean), `default_period_type` (string: monthly|quarterly|yearly). Do not add new keys without updating this contract.  
@@ -87,15 +88,15 @@ Authentication does not require email verification. `email_verified_at` is retai
 - Laravel model (canonical):  
   - `$connection = 'pgsql';`  
   - `$table = 'auth.companies';`  
-  - `$fillable = ['name', 'industry', 'country', 'country_id', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id', 'ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id', 'sales_tax_payable_account_id', 'purchase_tax_receivable_account_id', 'transit_loss_account_id', 'transit_gain_account_id'];`  
-  - `$casts = ['settings' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean', 'ar_account_id' => 'string', 'ap_account_id' => 'string', 'income_account_id' => 'string', 'expense_account_id' => 'string', 'bank_account_id' => 'string', 'retained_earnings_account_id' => 'string', 'sales_tax_payable_account_id' => 'string', 'purchase_tax_receivable_account_id' => 'string', 'transit_loss_account_id' => 'string', 'transit_gain_account_id' => 'string'];`
+  - `$fillable = ['name', 'industry', 'country', 'country_id', 'address', 'base_currency', 'language', 'locale', 'settings', 'logo_url', 'created_by_user_id', 'ar_account_id', 'ap_account_id', 'income_account_id', 'expense_account_id', 'bank_account_id', 'retained_earnings_account_id', 'sales_tax_payable_account_id', 'purchase_tax_receivable_account_id', 'transit_loss_account_id', 'transit_gain_account_id'];`  
+  - `$casts = ['settings' => 'array', 'address' => 'array', 'industry' => 'string', 'country_id' => 'string', 'created_by_user_id' => 'string', 'is_active' => 'boolean', 'ar_account_id' => 'string', 'ap_account_id' => 'string', 'income_account_id' => 'string', 'expense_account_id' => 'string', 'bank_account_id' => 'string', 'retained_earnings_account_id' => 'string', 'sales_tax_payable_account_id' => 'string', 'purchase_tax_receivable_account_id' => 'string', 'transit_loss_account_id' => 'string', 'transit_gain_account_id' => 'string'];`
 - Relationships:  
   - belongsToMany User via `auth.company_user` (pivot: role, is_active, joined_at, left_at).  
   - belongsTo User as creator via `created_by_user_id`.  
   - hasMany CompanyInvitation, Module (via `auth.company_modules`), AuditEntry.  
 - Validation/DTO expectations:  
   - Required: `name` (<=255), `base_currency` (exactly 3 uppercase chars).  
-  - Optional: `industry`, `country`, `language` (<=10), `locale` (<=10), `settings` (json).  
+  - Optional: `industry`, `country`, `language` (<=10), `locale` (<=10), `settings` (json), `address` (object; each key a string <=255).  
   - Company settings accepts `logo` as PNG/JPEG/WebP, maximum 2 MB, stores it on the public disk, and writes its public path to `logo_url`.
   - Slug: server-generated; do not accept from UI/clients.  
   - Uniqueness: `slug` unique; (`name`, `country`) pair unique.  

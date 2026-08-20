@@ -52,17 +52,17 @@ const setVendorPreset = (days: number) => {
 <template>
   <Head title="Payment Terms" />
 
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+  <div class="min-h-screen bg-surface-canvas">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
-          <Calendar class="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-status-info/15 mb-4">
+          <Calendar class="w-8 h-8 text-status-info" />
         </div>
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <h1 class="text-3xl font-bold text-text-primary mb-2">
           Payment Terms
         </h1>
-        <p class="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+        <p class="text-text-secondary max-w-2xl mx-auto">
           Set default payment terms for your customers and vendors. This determines when payments are due.
         </p>
       </div>
@@ -74,9 +74,9 @@ const setVendorPreset = (days: number) => {
             <div
               :class="[
                 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors',
-                index < 6 ? 'bg-green-600 text-white' :
-                index === 6 ? 'bg-blue-600 text-white' :
-                'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
+                index < 6 ? 'bg-status-success text-status-success-contrast' :
+                index === 6 ? 'bg-primary text-primary-foreground' :
+                'bg-surface-sunken text-text-secondary',
               ]"
             >
               {{ index + 1 }}
@@ -85,19 +85,19 @@ const setVendorPreset = (days: number) => {
               v-if="index < 6"
               :class="[
                 'w-12 h-0.5 mx-2',
-                index < 6 ? 'bg-green-600' : 'bg-slate-200 dark:bg-slate-700',
+                index < 6 ? 'bg-status-success' : 'bg-surface-sunken',
               ]"
             />
           </div>
         </div>
-        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span class="text-green-600">Identity</span>
-          <span class="text-green-600">Fiscal Year</span>
-          <span class="text-green-600">Bank Accounts</span>
-          <span class="text-green-600">Defaults</span>
-          <span class="text-green-600">Tax</span>
-          <span class="text-green-600">Numbering</span>
-          <span class="font-semibold text-blue-600">Terms</span>
+        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-text-secondary">
+          <span class="text-status-success">Identity</span>
+          <span class="text-status-success">Fiscal Year</span>
+          <span class="text-status-success">Bank Accounts</span>
+          <span class="text-status-success">Defaults</span>
+          <span class="text-status-success">Tax</span>
+          <span class="text-status-success">Numbering</span>
+          <span class="font-semibold text-status-info">Terms</span>
         </div>
       </div>
 
@@ -117,12 +117,12 @@ const setVendorPreset = (days: number) => {
           <form @submit.prevent="submit" class="space-y-8">
             <!-- Customer Payment Terms -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Customer Payment Terms
               </h3>
 
               <div>
-                <Label class="text-sm text-slate-600 dark:text-slate-400 mb-3 block">
+                <Label class="text-sm text-text-secondary mb-3 block">
                   How many days do you typically give customers to pay invoices?
                 </Label>
 
@@ -135,7 +135,7 @@ const setVendorPreset = (days: number) => {
                     variant="outline"
                     size="sm"
                     @click="setCustomerPreset(preset.value)"
-                    :class="form.default_customer_payment_terms === preset.value ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''"
+                    :class="form.default_customer_payment_terms === preset.value ? 'border-status-info bg-status-info/10' : ''"
                   >
                     {{ preset.label }}
                   </Button>
@@ -144,7 +144,7 @@ const setVendorPreset = (days: number) => {
                 <!-- Custom Input -->
                 <div class="space-y-2">
                   <Label for="customer_terms" class="font-medium">
-                    Days Until Payment Due <span class="text-red-500">*</span>
+                    Days Until Payment Due <span class="text-status-critical">*</span>
                   </Label>
                   <div class="flex items-center gap-2 max-w-xs">
                     <Input
@@ -156,19 +156,19 @@ const setVendorPreset = (days: number) => {
                       required
                       class="w-24"
                     />
-                    <span class="text-sm text-slate-600 dark:text-slate-400">days</span>
+                    <span class="text-sm text-text-secondary">days</span>
                   </div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-text-secondary">
                     Due date will be automatically calculated when creating invoices
                   </p>
-                  <p v-if="form.errors.default_customer_payment_terms" class="text-sm text-red-600 dark:text-red-400">
+                  <p v-if="form.errors.default_customer_payment_terms" class="text-sm text-status-critical">
                     {{ form.errors.default_customer_payment_terms }}
                   </p>
                 </div>
 
                 <!-- Example -->
-                <div class="bg-slate-50 dark:bg-slate-800 border rounded-lg p-3 mt-3">
-                  <p class="text-sm text-slate-700 dark:text-slate-300">
+                <div class="bg-surface-sunken border rounded-lg p-3 mt-3">
+                  <p class="text-sm text-text-secondary">
                     <strong>Example:</strong> Invoice created today will be due in <strong>{{ form.default_customer_payment_terms }}</strong> days
                     <template v-if="form.default_customer_payment_terms === 0">(immediate payment)</template>
                   </p>
@@ -178,12 +178,12 @@ const setVendorPreset = (days: number) => {
 
             <!-- Vendor Payment Terms -->
             <div class="space-y-4 pt-6 border-t">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Vendor Payment Terms
               </h3>
 
               <div>
-                <Label class="text-sm text-slate-600 dark:text-slate-400 mb-3 block">
+                <Label class="text-sm text-text-secondary mb-3 block">
                   How many days do vendors typically give you to pay bills?
                 </Label>
 
@@ -196,7 +196,7 @@ const setVendorPreset = (days: number) => {
                     variant="outline"
                     size="sm"
                     @click="setVendorPreset(preset.value)"
-                    :class="form.default_vendor_payment_terms === preset.value ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : ''"
+                    :class="form.default_vendor_payment_terms === preset.value ? 'border-status-info bg-status-info/10' : ''"
                   >
                     {{ preset.label }}
                   </Button>
@@ -205,7 +205,7 @@ const setVendorPreset = (days: number) => {
                 <!-- Custom Input -->
                 <div class="space-y-2">
                   <Label for="vendor_terms" class="font-medium">
-                    Days Until Payment Due <span class="text-red-500">*</span>
+                    Days Until Payment Due <span class="text-status-critical">*</span>
                   </Label>
                   <div class="flex items-center gap-2 max-w-xs">
                     <Input
@@ -217,19 +217,19 @@ const setVendorPreset = (days: number) => {
                       required
                       class="w-24"
                     />
-                    <span class="text-sm text-slate-600 dark:text-slate-400">days</span>
+                    <span class="text-sm text-text-secondary">days</span>
                   </div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-text-secondary">
                     Due date will be automatically calculated when recording bills
                   </p>
-                  <p v-if="form.errors.default_vendor_payment_terms" class="text-sm text-red-600 dark:text-red-400">
+                  <p v-if="form.errors.default_vendor_payment_terms" class="text-sm text-status-critical">
                     {{ form.errors.default_vendor_payment_terms }}
                   </p>
                 </div>
 
                 <!-- Example -->
-                <div class="bg-slate-50 dark:bg-slate-800 border rounded-lg p-3 mt-3">
-                  <p class="text-sm text-slate-700 dark:text-slate-300">
+                <div class="bg-surface-sunken border rounded-lg p-3 mt-3">
+                  <p class="text-sm text-text-secondary">
                     <strong>Example:</strong> Bill recorded today will be due in <strong>{{ form.default_vendor_payment_terms }}</strong> days
                     <template v-if="form.default_vendor_payment_terms === 0">(immediate payment)</template>
                   </p>
@@ -238,14 +238,14 @@ const setVendorPreset = (days: number) => {
             </div>
 
             <!-- Info Box -->
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div class="bg-status-info/10 border border-status-info/30 rounded-lg p-4">
               <div class="flex items-start gap-3">
-                <Info class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <Info class="w-5 h-5 text-status-info mt-0.5 flex-shrink-0" />
                 <div class="text-sm">
-                  <p class="text-blue-900 dark:text-blue-100 font-medium mb-1">
+                  <p class="text-text-primary font-medium mb-1">
                     Defaults vs. Custom Terms
                   </p>
-                  <p class="text-blue-700 dark:text-blue-300">
+                  <p class="text-text-secondary">
                     These are defaults to save you time. You can always set specific payment terms for individual customers or vendors, and override on any invoice or bill.
                   </p>
                 </div>
@@ -253,7 +253,7 @@ const setVendorPreset = (days: number) => {
             </div>
 
             <!-- Validation Errors -->
-            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-red-600 dark:text-red-400">
+            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-status-critical">
               <p v-for="(error, key) in form.errors" :key="key">{{ error }}</p>
             </div>
 
@@ -273,7 +273,7 @@ const setVendorPreset = (days: number) => {
       </Card>
 
       <!-- Help Text -->
-      <div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+      <div class="mt-6 text-center text-sm text-text-secondary">
         <p>💡 Almost done! One more step to complete your setup</p>
       </div>
     </div>

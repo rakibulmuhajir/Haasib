@@ -2,23 +2,16 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { CalendarDays, ReceiptText, Tags, WalletCards } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 
 interface Company {
   id: string
@@ -111,17 +104,11 @@ const groupBy = ref(props.filters.group_by)
 const accountId = ref(props.filters.account_id)
 const source = ref(props.filters.source)
 
-const symbol = computed(() => currencySymbol(props.company.base_currency))
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
   { title: 'Expenses', href: `/${props.company.slug}/fuel/reports/expenses` },
 ])
-
-const money = (amount: number) => `${symbol.value} ${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-}).format(amount || 0)}`
 
 const number = (amount: number) => new Intl.NumberFormat('en-US').format(amount || 0)
 
@@ -176,6 +163,29 @@ const detailHref = (row: DetailRow) => {
   if (row.detail_route === 'bill' && row.reference_id) return `/${props.company.slug}/bills/${row.reference_id}`
   return `/${props.company.slug}/journals/${row.transaction_id}`
 }
+
+const periodColumns = [
+  { key: 'label', label: 'Period', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'line_count', label: 'Lines', kind: 'amount' as const },
+  { key: 'transaction_count', label: 'Transactions', kind: 'amount' as const },
+]
+
+const accountColumns = [
+  { key: 'account', label: 'Account', kind: 'text' as const },
+  { key: 'account_type', label: 'Type', kind: 'text' as const },
+  { key: 'line_count', label: 'Lines', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+]
+
+const detailColumns = [
+  { key: 'date_label', label: 'Date', kind: 'date' as const },
+  { key: 'source_label', label: 'Source', kind: 'text' as const },
+  { key: 'account', label: 'Account', kind: 'text' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'transaction_number', label: 'Open', kind: 'ref' as const },
+]
 </script>
 
 <template>
@@ -264,10 +274,10 @@ const detailHref = (row: DetailRow) => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Total expenses</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.amount) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.amount" :currency="company.base_currency" :fraction-digits="0" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <ReceiptText class="h-4 w-4 text-red-700" />
+            <ReceiptText class="h-4 w-4 text-status-critical" />
             {{ number(totals.line_count) }} posted lines
           </CardContent>
         </Card>
@@ -278,7 +288,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ number(totals.account_count) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Tags class="h-4 w-4 text-sky-700" />
+            <Tags class="h-4 w-4 text-status-info" />
             Expense categories
           </CardContent>
         </Card>
@@ -289,7 +299,7 @@ const detailHref = (row: DetailRow) => {
             <CardTitle class="text-2xl">{{ number(totals.transaction_count) }}</CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays class="h-4 w-4 text-violet-700" />
+            <CalendarDays class="h-4 w-4 text-status-info" />
             Posted transactions
           </CardContent>
         </Card>
@@ -297,10 +307,10 @@ const detailHref = (row: DetailRow) => {
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Average per line</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.line_count ? totals.amount / totals.line_count : 0) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.line_count ? totals.amount / totals.line_count : 0" :currency="company.base_currency" :fraction-digits="0" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletCards class="h-4 w-4 text-amber-700" />
+            <WalletCards class="h-4 w-4 text-status-attention" />
             Operating expenses only
           </CardContent>
         </Card>
@@ -313,38 +323,22 @@ const detailHref = (row: DetailRow) => {
             <CardDescription>Grouped from posted expense journal lines.</CardDescription>
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="periodRows.length === 0" class="py-12 text-center text-muted-foreground">
-              No posted expenses found for this range.
-            </div>
-            <div v-else class="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead class="text-right">Amount</TableHead>
-                    <TableHead class="text-right">Lines</TableHead>
-                    <TableHead class="text-right">Transactions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="row in periodRows" :key="row.key">
-                    <TableCell class="font-medium">{{ row.label }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.amount) }}</TableCell>
-                    <TableCell class="text-right">{{ number(row.line_count) }}</TableCell>
-                    <TableCell class="text-right">
-                      <Link
-                        v-if="row.detail_url_id"
-                        :href="`/${company.slug}/journals/${row.detail_url_id}`"
-                        class="text-primary underline-offset-4 hover:underline"
-                      >
-                        {{ number(row.transaction_count) }}
-                      </Link>
-                      <span v-else>{{ number(row.transaction_count) }}</span>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+            <LedgerRegister :data="periodRows" :columns="periodColumns">
+              <template #empty>No posted expenses found for this range.</template>
+
+              <template #cell-amount="{ row }"><MoneyText :amount="row.amount" :currency="company.base_currency" :fraction-digits="0" /></template>
+              <template #cell-line_count="{ row }">{{ number(row.line_count) }}</template>
+              <template #cell-transaction_count="{ row }">
+                <Link
+                  v-if="row.detail_url_id"
+                  :href="`/${company.slug}/journals/${row.detail_url_id}`"
+                  class="text-primary underline-offset-4 hover:underline"
+                >
+                  {{ number(row.transaction_count) }}
+                </Link>
+                <span v-else>{{ number(row.transaction_count) }}</span>
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
 
@@ -364,7 +358,7 @@ const detailHref = (row: DetailRow) => {
                     <div class="font-medium">{{ row.label }}</div>
                     <div class="text-sm text-muted-foreground">{{ number(row.line_count) }} lines</div>
                   </div>
-                  <div class="font-semibold">{{ money(row.amount) }}</div>
+                  <div class="font-semibold"><MoneyText :amount="row.amount" :currency="company.base_currency" :fraction-digits="0" /></div>
                 </div>
               </div>
             </div>
@@ -378,33 +372,20 @@ const detailHref = (row: DetailRow) => {
           <CardDescription>Expense categories ranked by amount.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="accountRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No expense account totals found.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead class="text-right">Lines</TableHead>
-                  <TableHead class="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in accountRows" :key="row.account_id">
-                  <TableCell>
-                    <div class="font-medium">{{ row.account_code }} — {{ row.account_name }}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{{ row.account_type.replace('_', ' ') }}</Badge>
-                  </TableCell>
-                  <TableCell class="text-right">{{ number(row.line_count) }}</TableCell>
-                  <TableCell class="text-right font-medium">{{ money(row.amount) }}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="accountRows" :columns="accountColumns" key-field="account_id">
+            <template #empty>No expense account totals found.</template>
+
+            <template #cell-account="{ row }">
+              <div class="font-medium">{{ row.account_code }} — {{ row.account_name }}</div>
+            </template>
+
+            <template #cell-account_type="{ row }">
+              <MetaChip tone="neutral" bare>{{ row.account_type.replace('_', ' ') }}</MetaChip>
+            </template>
+
+            <template #cell-line_count="{ row }">{{ number(row.line_count) }}</template>
+            <template #cell-amount="{ row }"><MoneyText :amount="row.amount" :currency="company.base_currency" :fraction-digits="0" /></template>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -414,42 +395,29 @@ const detailHref = (row: DetailRow) => {
           <CardDescription>Drill down to Daily Close, bill, or journal entry.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="detailRows.length === 0" class="py-12 text-center text-muted-foreground">
-            No expense lines found.
-          </div>
-          <div v-else class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead class="text-right">Amount</TableHead>
-                  <TableHead class="text-right">Open</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="row in detailRows" :key="row.line_id">
-                  <TableCell>{{ row.date_label }}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{{ row.source_label }}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div class="font-medium">{{ row.account_code }}</div>
-                    <div class="text-xs text-muted-foreground">{{ row.account_name }}</div>
-                  </TableCell>
-                  <TableCell>{{ row.description }}</TableCell>
-                  <TableCell class="text-right font-medium">{{ money(row.amount) }}</TableCell>
-                  <TableCell class="text-right">
-                    <Link :href="detailHref(row)" class="text-primary underline-offset-4 hover:underline">
-                      {{ row.transaction_number }}
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <LedgerRegister :data="detailRows" :columns="detailColumns" key-field="line_id">
+            <template #empty>No expense lines found.</template>
+
+            <template #cell-date_label="{ row }">{{ row.date_label }}</template>
+
+            <template #cell-source_label="{ row }">
+              <MetaChip tone="neutral" bare>{{ row.source_label }}</MetaChip>
+            </template>
+
+            <template #cell-account="{ row }">
+              <div class="font-medium">{{ row.account_code }}</div>
+              <div class="text-xs text-muted-foreground">{{ row.account_name }}</div>
+            </template>
+
+            <template #cell-description="{ row }">{{ row.description }}</template>
+            <template #cell-amount="{ row }"><MoneyText :amount="row.amount" :currency="company.base_currency" :fraction-digits="0" /></template>
+
+            <template #cell-transaction_number="{ row }">
+              <Link :href="detailHref(row)" class="text-primary underline-offset-4 hover:underline">
+                {{ row.transaction_number }}
+              </Link>
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

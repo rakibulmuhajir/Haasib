@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { Pencil, ArrowLeft, Warehouse } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -82,14 +83,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Items', href: `/${props.company.slug}/items` },
   { title: props.item.name, href: `/${props.company.slug}/items/${props.item.id}` },
 ]
-
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
-}
 
 const formatQuantity = (qty: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -243,11 +236,11 @@ const getTypeBadgeVariant = (type: string) => {
           <CardContent class="space-y-4">
             <div class="flex justify-between items-center">
               <span class="text-muted-foreground">Cost Price</span>
-              <span class="font-medium">{{ formatCurrency(item.cost_price, item.currency) }}</span>
+              <span class="font-medium"><MoneyText :amount="item.cost_price" :currency="item.currency" /></span>
             </div>
             <div class="flex justify-between items-center">
               <span class="text-muted-foreground">Selling Price</span>
-              <span class="font-medium text-lg">{{ formatCurrency(item.selling_price, item.currency) }}</span>
+              <span class="font-medium text-lg"><MoneyText :amount="item.selling_price" :currency="item.currency" /></span>
             </div>
             <Separator />
             <div class="flex justify-between items-center">

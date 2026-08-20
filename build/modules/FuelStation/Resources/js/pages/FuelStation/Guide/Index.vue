@@ -310,7 +310,7 @@ const commonMistakes = [
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="flex items-center gap-2 text-base">
-          <FileText class="h-4 w-4 text-sky-600" />
+          <FileText class="h-4 w-4 text-status-info" />
           Before You Begin
         </CardTitle>
         <CardDescription>Estimated setup time: 30-45 minutes. Daily operations: 5-10 minutes.</CardDescription>
@@ -330,16 +330,16 @@ const commonMistakes = [
               <li>• Opening cash balance</li>
             </ul>
           </div>
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-emerald-500/10 to-sky-500/10 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-primary">Quick Links</p>
             <div class="mt-2 space-y-2 text-sm">
-              <a :href="`/${companySlug}/fuel/onboarding`" class="flex items-center gap-2 text-sky-600 hover:underline">
+              <a :href="`/${companySlug}/fuel/onboarding`" class="flex items-center gap-2 text-status-info hover:underline">
                 <ArrowRight class="h-3.5 w-3.5" /> Setup Wizard (step-by-step)
               </a>
-              <a :href="`/${companySlug}/fuel/dashboard`" class="flex items-center gap-2 text-sky-600 hover:underline">
+              <a :href="`/${companySlug}/fuel/dashboard`" class="flex items-center gap-2 text-status-info hover:underline">
                 <ArrowRight class="h-3.5 w-3.5" /> Fuel Dashboard (daily operations)
               </a>
-              <a :href="`/${companySlug}/fuel/daily-close/create`" class="flex items-center gap-2 text-sky-600 hover:underline">
+              <a :href="`/${companySlug}/fuel/daily-close/create`" class="flex items-center gap-2 text-status-info hover:underline">
                 <ArrowRight class="h-3.5 w-3.5" /> Daily Close (end of day)
               </a>
             </div>
@@ -357,7 +357,7 @@ const commonMistakes = [
       >
         <CardHeader class="pb-2">
           <CardTitle class="flex items-center gap-2 text-sm">
-            <component :is="group.icon" class="h-4 w-4 text-sky-600" />
+            <component :is="group.icon" class="h-4 w-4 text-status-info" />
             {{ group.title }}
           </CardTitle>
         </CardHeader>
@@ -378,7 +378,7 @@ const commonMistakes = [
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="flex items-center gap-2 text-base">
-          <Calendar class="h-4 w-4 text-sky-600" />
+          <Calendar class="h-4 w-4 text-status-info" />
           Daily Operations Quick Reference
         </CardTitle>
         <CardDescription>What to do and when to do it.</CardDescription>
@@ -390,10 +390,10 @@ const commonMistakes = [
             :key="group.time"
             class="rounded-xl border border-border/70 bg-surface-1 p-4"
           >
-            <Badge class="mb-3 bg-sky-600 text-white hover:bg-sky-600">{{ group.time }}</Badge>
+            <Badge class="mb-3 bg-status-info text-status-info-contrast hover:bg-status-info">{{ group.time }}</Badge>
             <ul class="space-y-2">
               <li v-for="task in group.tasks" :key="task" class="flex items-start gap-2 text-sm text-text-secondary">
-                <CheckCircle class="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+                <CheckCircle class="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-status-success" />
                 {{ task }}
               </li>
             </ul>
@@ -406,7 +406,7 @@ const commonMistakes = [
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="flex items-center gap-2 text-base">
-          <AlertTriangle class="h-4 w-4 text-amber-600" />
+          <AlertTriangle class="h-4 w-4 text-status-attention" />
           Troubleshooting Common Issues
         </CardTitle>
         <CardDescription>Solutions for the most common problems.</CardDescription>
@@ -420,7 +420,7 @@ const commonMistakes = [
           >
             <p class="font-semibold text-text-primary">{{ item.issue }}</p>
             <p class="mt-2 text-xs text-text-tertiary"><span class="font-medium">Causes:</span> {{ item.causes }}</p>
-            <p class="mt-2 text-sm text-text-secondary"><span class="font-medium text-emerald-600">Solution:</span> {{ item.solution }}</p>
+            <p class="mt-2 text-sm text-text-secondary"><span class="font-medium text-status-success">Solution:</span> {{ item.solution }}</p>
           </div>
         </div>
       </CardContent>
@@ -431,7 +431,7 @@ const commonMistakes = [
       <Card class="border-border/80">
         <CardHeader>
           <CardTitle class="flex items-center gap-2 text-base">
-            <Lightbulb class="h-4 w-4 text-amber-500" />
+            <Lightbulb class="h-4 w-4 text-status-attention" />
             Best Practices
           </CardTitle>
         </CardHeader>
@@ -441,7 +441,7 @@ const commonMistakes = [
             :key="item.text"
             class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-3"
           >
-            <CheckCircle class="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+            <CheckCircle class="mt-0.5 h-4 w-4 flex-shrink-0 text-status-success" />
             <div>
               <p class="text-sm font-semibold text-text-primary">{{ item.text }}</p>
               <p class="mt-0.5 text-xs text-text-secondary">{{ item.detail }}</p>
@@ -453,14 +453,14 @@ const commonMistakes = [
       <Card class="border-border/80">
         <CardHeader>
           <CardTitle class="flex items-center gap-2 text-base">
-            <AlertTriangle class="h-4 w-4 text-rose-500" />
+            <AlertTriangle class="h-4 w-4 text-status-critical" />
             Common Mistakes to Avoid
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ul class="space-y-3">
             <li v-for="mistake in commonMistakes" :key="mistake" class="flex items-start gap-3 text-sm text-text-secondary">
-              <span class="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-600">!</span>
+              <span class="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-status-critical/10 text-xs font-bold text-status-critical">!</span>
               {{ mistake }}
             </li>
           </ul>
@@ -472,7 +472,7 @@ const commonMistakes = [
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="flex items-center gap-2 text-base">
-          <BookOpen class="h-4 w-4 text-sky-600" />
+          <BookOpen class="h-4 w-4 text-status-info" />
           Glossary of Terms
         </CardTitle>
         <CardDescription>Key terms used in fuel station management.</CardDescription>
@@ -495,7 +495,7 @@ const commonMistakes = [
     <Card class="border-border/80">
       <CardHeader>
         <CardTitle class="flex items-center gap-2 text-base">
-          <FileText class="h-4 w-4 text-sky-600" />
+          <FileText class="h-4 w-4 text-status-info" />
           Full Documentation
         </CardTitle>
         <CardDescription>A complete step-by-step guide is also available as a printable document.</CardDescription>
@@ -503,7 +503,7 @@ const commonMistakes = [
       <CardContent>
         <p class="text-sm text-text-secondary">
           The full onboarding guide with detailed explanations, examples, and checklists is available in the project documentation at
-          <code class="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">docs/fuel-station-onboarding-guide.md</code>.
+          <code class="rounded-sm bg-muted px-1.5 py-0.5 text-xs font-mono">docs/fuel-station-onboarding-guide.md</code>.
           This in-app guide provides all the essential information you need for daily use.
         </p>
       </CardContent>

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -408,7 +409,7 @@ const handleSubmit = () => {
           <div
             v-for="(split, index) in form.payment_splits"
             :key="index"
-            class="grid gap-3 rounded border p-3 md:grid-cols-[minmax(0,1.4fr)_minmax(120px,0.5fr)_minmax(130px,0.6fr)_minmax(130px,0.7fr)_auto]"
+            class="grid gap-3 rounded-sm border p-3 md:grid-cols-[minmax(0,1.4fr)_minmax(120px,0.5fr)_minmax(130px,0.6fr)_minmax(130px,0.7fr)_auto]"
           >
             <div>
               <Label>Account</Label>
@@ -473,12 +474,12 @@ const handleSubmit = () => {
         <div class="flex justify-between text-sm">
           <span>Total from sources</span>
           <span :class="{ 'text-destructive': Math.abs(totalSplit - totalAllocated) > 0.000001 }">
-            {{ totalSplit.toFixed(2) }}
+            <MoneyText :amount="totalSplit" :currency="form.currency" />
           </span>
         </div>
         <div
           v-if="Math.abs(totalSplit - totalAllocated) > 0.000001"
-          class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+          class="rounded-md border border-status-attention/30 bg-status-attention/10 p-3 text-sm text-status-attention"
         >
           Sources cover {{ formatNumber(totalSplit) }} {{ form.currency }}. Allocations are
           {{ formatNumber(totalAllocated) }} {{ form.currency }}. The two must match before saving.
@@ -494,7 +495,7 @@ const handleSubmit = () => {
           <div
             v-for="bill in unpaidBills"
             :key="bill.id"
-            class="flex items-center justify-between rounded border p-3"
+            class="flex items-center justify-between rounded-sm border p-3"
           >
             <div>
               <div class="font-medium">{{ bill.bill_number }}</div>
@@ -519,10 +520,10 @@ const handleSubmit = () => {
 
       <div class="flex justify-between text-sm">
         <span>Total Allocated</span>
-        <span>{{ totalAllocated.toFixed(2) }}</span>
+        <MoneyText :amount="totalAllocated" :currency="form.currency" />
       </div>
 
-      <div class="grid gap-3 rounded border bg-muted/30 p-4 text-sm md:grid-cols-3">
+      <div class="grid gap-3 rounded-sm border bg-muted/30 p-4 text-sm md:grid-cols-3">
         <div>
           <div class="text-muted-foreground">Payment now</div>
           <div class="text-lg font-semibold">{{ formatNumber(totalAllocated) }} {{ form.currency }}</div>

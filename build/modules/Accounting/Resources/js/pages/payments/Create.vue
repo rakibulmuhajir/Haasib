@@ -2,15 +2,16 @@
 import { computed, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, Smartphone, FileText } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -116,14 +117,6 @@ watch(() => form.invoice_id, () => {
   }
 })
 
-const formatCurrency = (amount: number, currencyCode?: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode || form.currency || 'USD',
-  }).format(amount)
-}
-
 const submit = () => {
   form.post(`/${props.company.slug}/payments`)
 }
@@ -213,7 +206,7 @@ const submit = () => {
                     :key="invoice.id"
                     :value="invoice.id"
                   >
-                    {{ invoice.invoice_number }} - {{ formatCurrency(invoice.balance, invoice.currency) }} due
+                    {{ invoice.invoice_number }} - <MoneyText :amount="invoice.balance" :currency="invoice.currency" /> due
                   </SelectItem>
                 </template>
                 <template v-else>
@@ -237,7 +230,7 @@ const submit = () => {
               required
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -354,7 +347,7 @@ const submit = () => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Payment Amount:</span>
-            <span class="font-bold">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold"><MoneyText :amount="form.amount" :currency="form.currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Payment Method:</span>
@@ -367,5 +360,7 @@ const submit = () => {
         </CardContent>
       </Card>
     </form>
+
+    <RelatedActions screen="payment.create" :slug="company.slug" />
   </PageShell>
 </template>

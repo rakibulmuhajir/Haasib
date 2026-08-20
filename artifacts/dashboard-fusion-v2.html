@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haasib Dashboard · Fusion v2</title>
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root{
+  --paper:#f7f7f4; --card:#ffffff; --sunk:#f2f2ee;
+  --ink:#131713; --muted:#5f665f; --faint:#878e87;
+  --line:#cdd2cd; --line2:#e4e7e3;
+  --forest:#034d38; --forest2:#063f30; --forest-ink:#ffffff;
+  --forest-soft:#e8f0eb;
+  --lime:#d8f44b; --lime-ink:#16200f;
+  --red:#d43520; --red-soft:#fdeeeb;
+  --grid:#dfe3df;
+  --radius:10px;
+}
+:root[data-theme="dark"], html.dark{
+  --paper:#0e120f; --card:#151a16; --sunk:#11150f;
+  --ink:#eef2ec; --muted:#98a199; --faint:#727a73;
+  --line:#2b322c; --line2:#232a24;
+  --forest:#57ba95; --forest2:#6fd0aa; --forest-ink:#08150f;
+  --forest-soft:#16241d;
+  --lime:#d8f44b; --lime-ink:#16200f;
+  --red:#ff7059; --red-soft:#2a1713;
+  --grid:#242b25;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e120f; --card:#151a16; --sunk:#11150f;
+    --ink:#eef2ec; --muted:#98a199; --faint:#727a73;
+    --line:#2b322c; --line2:#232a24;
+    --forest:#57ba95; --forest2:#6fd0aa; --forest-ink:#08150f;
+    --forest-soft:#16241d;
+    --red:#ff7059; --red-soft:#2a1713;
+    --grid:#242b25;
+  }
+}
+
+/* ── base ───────────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{
+  margin:0; min-width:320px; background:var(--paper); color:var(--ink);
+  font-family:"Arial Nova","Helvetica Neue","Segoe UI",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45;
+}
+button{font:inherit;color:inherit}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid color-mix(in srgb,var(--forest) 40%,transparent);outline-offset:2px}
+button:active{transform:translateY(1px)}
+h1,h2,h3{margin:0}
+
+/* ── masthead ───────────────────────────────────────────────────────────── */
+.masthead{
+  position:sticky; top:0; z-index:40; background:var(--paper);
+  border-bottom:1px solid var(--line);
+}
+.toprow{
+  max-width:1640px; margin:auto; height:66px; padding:0 clamp(16px,2.4vw,32px);
+  display:flex; align-items:center; gap:16px;
+}
+.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:800;letter-spacing:-.03em;flex:none}
+.mark{
+  width:34px;height:34px;border-radius:9px;background:var(--forest);color:var(--forest-ink);
+  display:grid;place-items:center;font-size:18px;font-weight:900;letter-spacing:-.05em
+}
+.company{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:8px;background:var(--card);cursor:pointer;text-align:left;flex:none
+}
+.company:hover{border-color:var(--forest)}
+.company b{display:block;font-size:13px;font-weight:700}
+.company small{display:block;margin-top:2px;color:var(--muted);font-size:11px}
+.company .chev{color:var(--muted);font-size:12px}
+.search{
+  margin-left:auto; width:min(400px,32vw); padding:10px 12px; border:1px solid var(--line);
+  border-radius:8px; background:var(--card); color:var(--muted);
+  display:flex; align-items:center; gap:10px; font-size:13px; cursor:text
+}
+.search kbd{margin-left:auto;padding:2px 6px;border:1px solid var(--line);border-radius:5px;font:600 11px ui-monospace,monospace;color:var(--faint)}
+.toptools{display:flex;align-items:center;gap:8px;flex:none}
+.icon{
+  width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--card);
+  display:grid;place-items:center;cursor:pointer;font-size:13px;font-weight:700;position:relative
+}
+.icon:hover{border-color:var(--forest)}
+.icon .dot{
+  position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;
+  background:var(--red);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center
+}
+.create{
+  padding:10px 16px;border:1px solid var(--forest);border-radius:8px;background:var(--forest);
+  color:var(--forest-ink);font-size:13px;font-weight:750;white-space:nowrap;cursor:pointer
+}
+.create:hover{background:var(--forest2)}
+.avatar{
+  width:38px;height:38px;border-radius:50%;background:var(--lime);color:var(--lime-ink);
+  display:grid;place-items:center;font-size:13px;font-weight:850;cursor:pointer;border:0
+}
+
+/* ── nav row (replaces the sidebar) ─────────────────────────────────────── */
+.navrow{
+  max-width:1640px;margin:auto;height:48px;padding:0 clamp(16px,2.4vw,32px);
+  display:flex;align-items:stretch;gap:4px;border-top:1px solid var(--line2)
+}
+.navitem{position:relative;display:flex}
+.navitem>button{
+  height:48px;padding:0 13px;border:0;border-bottom:2px solid transparent;background:transparent;
+  color:var(--muted);font-size:13px;font-weight:650;cursor:pointer;
+  display:flex;align-items:center;gap:6px;white-space:nowrap
+}
+.navitem>button:hover{color:var(--ink)}
+.navitem>button .chev{font-size:10px;opacity:.7}
+.navitem.active>button{color:var(--ink);border-bottom-color:var(--forest);font-weight:750}
+.navitem.open>button{color:var(--ink)}
+.menu{
+  position:absolute;top:46px;left:0;min-width:214px;padding:6px;z-index:50;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);
+  box-shadow:0 18px 44px rgba(0,0,0,.14);display:none
+}
+.navitem.open .menu{display:block}
+.menu button{
+  width:100%;padding:9px 11px;border:0;border-radius:7px;background:transparent;
+  text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)
+}
+.menu button:hover{background:var(--forest-soft);color:var(--forest)}
+.menu hr{margin:6px 4px;border:0;border-top:1px solid var(--line2)}
+.menu .sub{padding:8px 11px 5px;color:var(--faint);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+
+/* ── page intro ─────────────────────────────────────────────────────────── */
+main{max-width:1640px;margin:auto;padding:26px clamp(16px,2.4vw,32px) 52px}
+.intro{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:center;
+  padding-bottom:22px;border-bottom:1px solid var(--line)
+}
+.eyebrow{margin:0 0 8px;color:var(--forest);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+h1{font-size:clamp(32px,4vw,52px);line-height:1.02;letter-spacing:-.045em;font-weight:780}
+.subtitle{margin:10px 0 0;color:var(--muted);font-size:14px;max-width:62ch}
+.controls{display:flex;align-items:center;gap:9px}
+.mode{display:flex;border:1px solid var(--forest);border-radius:8px;overflow:hidden}
+.mode button{min-width:96px;padding:10px 14px;border:0;background:transparent;color:var(--forest);font-size:13px;font-weight:750;cursor:pointer}
+.mode button.active{background:var(--forest);color:var(--forest-ink)}
+.period{padding:10px 13px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer}
+.period:hover{border-color:var(--forest)}
+
+/* ── workspace: cash + decision queue ───────────────────────────────────── */
+.workspace{
+  position:relative;margin-top:22px;display:grid;
+  grid-template-columns:minmax(0,1.72fr) minmax(392px,.86fr);
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--card);overflow:hidden
+}
+/* registration marks, kept from the reference sheet */
+.reg{position:absolute;width:15px;height:15px;color:var(--faint);opacity:.5;pointer-events:none;z-index:2}
+.reg::before,.reg::after{content:"";position:absolute;background:currentColor}
+.reg::before{left:7px;top:0;width:1px;height:15px}
+.reg::after{top:7px;left:0;height:1px;width:15px}
+
+.cash{padding:26px 28px 22px;border-right:1px solid var(--line);min-width:0}
+.cashlabel{font-size:15px;font-weight:650}
+.cashnumber{margin:12px 0 7px;font-size:clamp(42px,5.2vw,70px);line-height:1;letter-spacing:-.055em;font-weight:770}
+.cashsub{color:var(--muted);font-size:12px}
+.chartwrap{margin-top:22px;position:relative}
+.chart{height:238px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(to bottom,transparent 0,transparent 55px,var(--grid) 56px)}
+.chart svg{width:100%;height:100%;padding-left:74px;display:block}
+.chartaxis{position:absolute;left:0;top:0;height:238px;display:flex;flex-direction:column;justify-content:space-between;padding:2px 0 9px;color:var(--muted);font-size:11px;font-weight:650}
+.chartlabels{padding:9px 4px 0 76px;display:flex;justify-content:space-between;color:var(--muted);font-size:11px}
+.chartlabels b{color:var(--forest);font-weight:750}
+.chartfoot{margin-top:16px;color:var(--faint);font-size:12px}
+
+.dossier{position:relative;padding:24px 40px 8px 26px;min-width:0}
+.dossierhead{padding-bottom:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.dossierhead h2{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+.dossierhead span{color:var(--muted);font-size:12px}
+.task{
+  padding:18px 0;display:grid;grid-template-columns:46px minmax(0,1fr);gap:15px;
+  border-bottom:1px solid var(--line2);cursor:pointer;background:transparent
+}
+.task:hover{background:var(--sunk)}
+.tasknum{font-size:29px;line-height:1;font-weight:560;letter-spacing:-.05em;color:var(--muted);border-right:1px dashed var(--line);padding-top:2px}
+.taskcopy{position:relative}
+.alert{position:absolute;right:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:900}
+.alert.soft{background:transparent;border:1.5px solid var(--forest);color:var(--forest)}
+.taskcopy strong{display:block;padding-right:30px;font-size:15px;font-weight:730;line-height:1.28}
+.taskcopy .meta{display:block;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.5}
+.taskcopy .go{display:inline-block;margin-top:11px;color:var(--red);font-size:13px;font-weight:750}
+.task.calm .go{color:var(--forest)}
+.tabs{position:absolute;right:-1px;top:58px;display:grid;gap:5px}
+.tabs button{
+  width:30px;height:96px;border:1px solid var(--line);border-right:0;border-radius:8px 0 0 8px;
+  background:var(--sunk);color:var(--muted);writing-mode:vertical-rl;
+  display:flex;align-items:center;justify-content:center;gap:7px;font-size:10px;font-weight:800;
+  letter-spacing:.08em;cursor:pointer
+}
+.tabs button b{font-size:11px}
+.tabs button:hover{color:var(--ink)}
+.tabs button.active{background:var(--forest);border-color:var(--forest);color:var(--forest-ink)}
+
+/* ── metric strip ───────────────────────────────────────────────────────── */
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-top:0;background:var(--card)}
+.metric{padding:18px 20px;border-right:1px solid var(--line);display:grid;grid-template-columns:30px 1fr;gap:13px;align-items:center}
+.metric:last-child{border-right:0}
+.metricicon{width:28px;height:28px;border:1.5px solid var(--forest);border-radius:7px;display:grid;place-items:center;color:var(--forest);font-size:14px;font-weight:800}
+.metric .k{display:block;font-size:12px;color:var(--muted);font-weight:650}
+.metric .v{display:block;margin-top:5px;font-size:20px;font-weight:750;letter-spacing:-.03em}
+.metric .s{display:block;margin-top:4px;color:var(--faint);font-size:12px}
+.metric.linkcell{cursor:pointer}
+.metric.linkcell:hover{background:var(--sunk)}
+.metric.linkcell .v{font-size:15px;color:var(--forest)}
+
+/* ── accountant strip ───────────────────────────────────────────────────── */
+.accountantbar{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-top:0;background:var(--card)}
+.control{padding:19px 20px;border-right:1px solid var(--line)}
+.control:last-child{border-right:0}
+.control span{color:var(--muted);font-size:12px;font-weight:650}
+.control strong{display:block;margin-top:7px;font-size:19px;font-weight:750;letter-spacing:-.03em}
+.control small{display:block;margin-top:6px;color:var(--forest);font-size:12px}
+
+/* ── lower: health + quick actions ──────────────────────────────────────── */
+.lower{display:grid;grid-template-columns:352px minmax(0,1fr);border:1px solid var(--line);border-top:0;border-radius:0 0 var(--radius) var(--radius);background:var(--card);overflow:hidden}
+.sectionlabel{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.health{padding:18px 20px;border-right:1px solid var(--line)}
+.healthbody{margin-top:13px;display:grid;grid-template-columns:54px 1fr;gap:15px;align-items:center}
+.grade{width:52px;height:52px;border:3px solid var(--forest);border-radius:50%;display:grid;place-items:center;color:var(--forest);font-size:24px;font-weight:650}
+.health strong{display:block;font-size:14px;font-weight:730}
+.health p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.health a{display:inline-block;margin-top:9px;color:var(--forest);font-size:12px;font-weight:750;cursor:pointer}
+.quick{padding:18px 22px}
+.quickrow{margin-top:13px;display:grid;grid-template-columns:repeat(5,1fr)}
+.quick button{
+  min-height:56px;padding:10px 14px;border:0;border-right:1px solid var(--line2);background:transparent;
+  text-align:left;cursor:pointer;font-size:13px;font-weight:650;
+  display:flex;align-items:center;gap:10px
+}
+.quick button:last-child{border-right:0}
+.quick button:hover{color:var(--forest);background:var(--sunk)}
+.qi{width:26px;height:26px;flex:none;border:1.5px solid var(--line);border-radius:6px;display:grid;place-items:center;font-size:13px;font-weight:800;color:var(--muted)}
+.quick button:hover .qi{border-color:var(--forest);color:var(--forest)}
+
+/* ── role modes ─────────────────────────────────────────────────────────── */
+.accountant-only{display:none!important}
+body.accountant .owner-only{display:none!important}
+body.accountant .accountant-only{display:block!important}
+body:not(.accountant) .accountantbar{display:none!important}
+body.accountant .accountantbar{display:grid!important}
+body.accountant span.accountant-only{display:inline!important}
+body:not(.accountant) span.owner-only{display:inline!important}
+
+/* ── toast ──────────────────────────────────────────────────────────────── */
+.toast{
+  position:fixed;right:22px;bottom:22px;z-index:60;max-width:330px;padding:13px 16px;border-radius:9px;
+  background:var(--forest);color:var(--forest-ink);font-size:13px;opacity:0;transform:translateY(24px);
+  pointer-events:none;transition:.2s;box-shadow:0 18px 44px rgba(0,0,0,.2)
+}
+.toast.show{opacity:1;transform:none}
+.toast strong{display:block;margin-bottom:3px;color:var(--lime)}
+:root[data-theme="dark"] .toast strong,html.dark .toast strong{color:var(--forest-ink)}
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+@media(max-width:1180px){
+  .workspace{grid-template-columns:1fr}
+  .cash{border-right:0;border-bottom:1px solid var(--line)}
+  .dossier{padding-right:48px}
+  .metrics{grid-template-columns:repeat(3,1fr)}
+  .metric:nth-child(3n){border-right:0}
+  .metric:nth-child(n+4){border-top:1px solid var(--line)}
+  .lower{grid-template-columns:1fr}
+  .health{border-right:0;border-bottom:1px solid var(--line)}
+}
+@media(max-width:900px){
+  .search{display:none}
+  .toprow{gap:12px}
+  .company small{display:none}
+  .navrow{overflow-x:auto;scrollbar-width:none}
+  .navrow::-webkit-scrollbar{display:none}
+  .intro{grid-template-columns:1fr}
+  .controls{justify-self:start;margin-top:4px}
+  .quickrow{grid-template-columns:1fr 1fr}
+  .quick button{border-right:0;border-bottom:1px solid var(--line2)}
+}
+@media(max-width:640px){
+  .toprow{height:60px}
+  .create span{display:none}
+  .create::after{content:"+"}
+  .toptools .icon:nth-child(2){display:none}
+  .cash{padding:20px 18px}
+  .chart{height:190px}
+  .chart svg,.chartlabels{padding-left:0}
+  .chartaxis{display:none}
+  .chartlabels{padding-left:2px}
+  .dossier{padding:20px 18px 6px}
+  .tabs{display:none}
+  .metrics{grid-template-columns:1fr}
+  .metric{border-right:0;border-top:1px solid var(--line)}
+  .metric:first-child{border-top:0}
+  .accountantbar{grid-template-columns:1fr}
+  .control{border-right:0;border-bottom:1px solid var(--line)}
+  .quickrow{grid-template-columns:1fr}
+  .mode{flex:1}.mode button{flex:1;min-width:0}
+  .period{display:none}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="toprow">
+    <div class="brand"><div class="mark">H</div>Haasib</div>
+    <button class="company" data-action="Company switcher opened">
+      <span><b>Ahmed Trading Co.</b><small>Owner workspace</small></span>
+      <span class="chev">⌄</span>
+    </button>
+    <div class="search" tabindex="0" data-action="Search opened">
+      <span>⌕</span><span>Search transactions, contacts, invoices…</span><kbd>Ctrl K</kbd>
+    </div>
+    <div class="toptools">
+      <button class="icon" id="themebtn" aria-label="Toggle theme" title="Toggle light / dark">◐</button>
+      <button class="icon" aria-label="Help">?</button>
+      <button class="icon" aria-label="Notifications">♪<span class="dot">3</span></button>
+      <button class="create" data-action="Create menu opened"><span>+ Create new</span></button>
+      <button class="avatar" data-action="Account menu opened">AK</button>
+    </div>
+  </div>
+
+  <nav class="navrow" aria-label="Primary navigation">
+    <div class="navitem active"><button>Overview</button></div>
+    <div class="navitem"><button data-menu>Money in <span class="chev">⌄</span></button>
+      <div class="menu"><button data-action="Invoices opened">Invoices</button><button data-action="Customers opened">Customers</button><button data-action="Payments received opened">Payments received</button><button data-action="Quotes opened">Quotes</button></div>
+    </div>
+    <div class="navitem"><button data-menu>Money out <span class="chev">⌄</span></button>
+      <div class="menu"><button data-action="Bills opened">Bills</button><button data-action="Suppliers opened">Suppliers</button><button data-action="Expenses opened">Expenses</button><button data-action="Payments made opened">Payments made</button></div>
+    </div>
+    <div class="navitem"><button data-menu>Banking <span class="chev">⌄</span></button>
+      <div class="menu"><button data-action="Accounts opened">Accounts</button><button data-action="Reconcile opened">Reconcile</button><button data-action="Import statement opened">Import statement</button></div>
+    </div>
+    <div class="navitem"><button data-action="Contacts opened">Contacts</button></div>
+    <div class="navitem"><button data-menu>Reports <span class="chev">⌄</span></button>
+      <div class="menu">
+        <div class="sub">Financial</div>
+        <button data-action="P&amp;L opened">Profit &amp; loss</button><button data-action="Balance sheet opened">Balance sheet</button><button data-action="Cash flow opened">Cash flow</button>
+        <hr>
+        <div class="sub">Operational</div>
+        <button data-action="Aged receivables opened">Aged receivables</button><button data-action="Aged payables opened">Aged payables</button><button data-action="Tax summary opened">Tax summary</button>
+      </div>
+    </div>
+    <div class="navitem"><button data-menu>Accounting <span class="chev">⌄</span></button>
+      <div class="menu"><button data-action="Chart of accounts opened">Chart of accounts</button><button data-action="Journals opened">Manual journals</button><button data-action="Period close opened">Period close</button><button data-action="Tax rates opened">Tax rates</button></div>
+    </div>
+    <div class="navitem"><button data-action="Settings opened">Settings</button></div>
+  </nav>
+</header>
+
+<main>
+  <section class="intro">
+    <div>
+      <p class="eyebrow">Tuesday, 18 August 2026</p>
+      <h1><span class="owner-only">Good morning, Ahmed.</span><span class="accountant-only">Financial control centre.</span></h1>
+      <p class="subtitle owner-only">Here is what changed, what is due, and what needs you next.</p>
+      <p class="subtitle accountant-only">FY 2026 · August open · Books updated 8 minutes ago.</p>
+    </div>
+    <div class="controls">
+      <div class="mode"><button class="active" data-mode="owner">Owner</button><button data-mode="accountant">Accountant</button></div>
+      <button class="period" data-action="Period picker opened">This month ⌄</button>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <i class="reg" style="left:-7px;top:-7px"></i>
+    <i class="reg" style="right:-7px;top:-7px"></i>
+
+    <article class="cash">
+      <div class="cashlabel"><span class="owner-only">Cash you can use today</span><span class="accountant-only">Cash position · all accounts</span></div>
+      <div class="cashnumber">PKR 1,234,567</div>
+      <div class="cashsub">Estimated bank balance after bills and commitments</div>
+
+      <div class="chartwrap">
+        <div class="chartaxis" aria-hidden="true"><span>PKR 2.0m</span><span>PKR 1.5m</span><span>PKR 1.0m</span><span>PKR 0.5m</span><span>PKR 0</span></div>
+        <div class="chart">
+          <svg viewBox="0 0 820 230" preserveAspectRatio="none" role="img" aria-label="Eight-week cash movement, ending at PKR 1.23m">
+            <path d="M8 162 L128 138 L248 168 L368 108 L488 170 L608 168 L728 150 L812 138"
+                  fill="none" stroke="var(--forest)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <g fill="var(--card)" stroke="var(--forest)" stroke-width="2.5">
+              <circle cx="8" cy="162" r="6"/><circle cx="128" cy="138" r="6"/><circle cx="248" cy="168" r="6"/>
+              <circle cx="368" cy="108" r="6"/><circle cx="488" cy="170" r="6"/><circle cx="608" cy="168" r="6"/>
+              <circle cx="728" cy="150" r="6"/>
+            </g>
+            <circle cx="812" cy="138" r="7" fill="var(--forest)"/>
+            <line x1="812" y1="0" x2="812" y2="230" stroke="var(--forest)" stroke-width="1" stroke-dasharray="4 4" opacity=".55"/>
+          </svg>
+        </div>
+        <div class="chartlabels">
+          <span>Wk 1<br>23 Jun</span><span>Wk 2<br>30 Jun</span><span>Wk 3<br>7 Jul</span><span>Wk 4<br>14 Jul</span>
+          <span>Wk 5<br>21 Jul</span><span>Wk 6<br>28 Jul</span><span>Wk 7<br>4 Aug</span><b>Wk 8<br>18 Aug</b>
+        </div>
+      </div>
+      <div class="chartfoot">8-week cash movement · Updated from connected accounts · Low PKR 910k · High PKR 1.29m</div>
+    </article>
+
+    <aside class="dossier">
+      <div class="dossierhead">
+        <h2><span class="owner-only">Needs your attention</span><span class="accountant-only">Exceptions and pending work</span></h2>
+        <span>3 items</span>
+      </div>
+
+      <div class="task" data-action="Invoice INV-1021 opened">
+        <div class="tasknum">01</div>
+        <div class="taskcopy">
+          <i class="alert">!</i>
+          <strong><span class="owner-only">Customer payment is 15 days late</span><span class="accountant-only">INV-1021 overdue by 15 days</span></strong>
+          <span class="meta">Northstar Retail · PKR 45,000<br>Invoice INV-1021 · Due 3 Aug</span>
+          <span class="go">Send reminder →</span>
+        </div>
+      </div>
+
+      <div class="task" data-action="Bank review opened">
+        <div class="tasknum">02</div>
+        <div class="taskcopy">
+          <i class="alert">!</i>
+          <strong><span class="owner-only">12 bank transactions need a category</span><span class="accountant-only">12 unreconciled bank transactions</span></strong>
+          <span class="meta">Meezan Bank · Current Account · PKR 78,450<br>Suggested matches available for 9</span>
+          <span class="go">Review transactions →</span>
+        </div>
+      </div>
+
+      <div class="task calm" data-action="Tax draft opened">
+        <div class="tasknum">03</div>
+        <div class="taskcopy">
+          <i class="alert soft">✓</i>
+          <strong>Sales tax payment due 25 August</strong>
+          <span class="meta">Sales Tax (FBR) · PKR 62,300<br>Draft return is ready · 7 days remaining</span>
+          <span class="go">Prepare payment →</span>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="active"><b>01</b> QUEUE</button>
+        <button data-action="Payments tab opened"><b>02</b> PAYMENTS</button>
+        <button data-action="Documents tab opened"><b>03</b> DOCUMENTS</button>
+      </div>
+    </aside>
+  </section>
+
+  <section class="metrics">
+    <div class="metric"><div class="metricicon">↓</div><div>
+      <span class="k"><span class="owner-only">Money in</span><span class="accountant-only">Revenue MTD</span></span>
+      <span class="v">PKR 450,000</span><span class="s">This month · ↑ 12%</span></div></div>
+    <div class="metric"><div class="metricicon">↑</div><div>
+      <span class="k"><span class="owner-only">Money out</span><span class="accountant-only">Expenses MTD</span></span>
+      <span class="v">PKR 320,000</span><span class="s">This month · ↓ 5%</span></div></div>
+    <div class="metric"><div class="metricicon">○</div><div>
+      <span class="k"><span class="owner-only">Owed to you</span><span class="accountant-only">AR outstanding</span></span>
+      <span class="v">PKR 125,000</span><span class="s">Across 18 invoices</span></div></div>
+    <div class="metric"><div class="metricicon">▢</div><div>
+      <span class="k"><span class="owner-only">Bills to pay</span><span class="accountant-only">AP outstanding</span></span>
+      <span class="v">PKR 89,000</span><span class="s">Across 7 bills</span></div></div>
+    <div class="metric linkcell" data-action="Reports opened"><div class="metricicon">▤</div><div>
+      <span class="k">View all</span><span class="v">Reports →</span></div></div>
+  </section>
+
+  <section class="accountantbar accountant-only">
+    <div class="control"><span>Trial balance</span><strong>Balanced</strong><small>Debits equal credits</small></div>
+    <div class="control"><span>Unreconciled</span><strong>23 items</strong><small>PKR 156,000 total</small></div>
+    <div class="control"><span>Period status</span><strong>August open</strong><small>July locked</small></div>
+  </section>
+
+  <section class="lower">
+    <div class="health">
+      <span class="sectionlabel"><span class="owner-only">Business health</span><span class="accountant-only">Close readiness</span></span>
+      <div class="healthbody">
+        <div class="grade">A</div>
+        <div>
+          <strong><span class="owner-only">Looks good</span><span class="accountant-only">Close on track</span></strong>
+          <p>Cash covers 4.8 months. Two items need attention this week.</p>
+          <a data-action="Health check opened">View full health check →</a>
+        </div>
+      </div>
+    </div>
+    <div class="quick">
+      <span class="sectionlabel">Quick actions</span>
+      <div class="quickrow">
+        <button data-action="Invoice draft started"><span class="qi">✎</span>Create invoice</button>
+        <button data-action="Expense form opened"><span class="qi">↑</span>Record expense</button>
+        <button data-action="Bank form opened"><span class="qi">▤</span>Add bank transaction</button>
+        <button data-action="Contact form opened"><span class="qi">＋</span>Add contact</button>
+        <button data-action="Bill upload opened"><span class="qi">⇧</span>Upload bill</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" role="status" aria-live="polite"><strong>Mock interaction</strong><span></span></div>
+
+<script>
+// role mode
+const modes = document.querySelectorAll('[data-mode]');
+modes.forEach(b => b.addEventListener('click', () => {
+  document.body.classList.toggle('accountant', b.dataset.mode === 'accountant');
+  modes.forEach(x => x.classList.toggle('active', x === b));
+}));
+
+// nav dropdowns
+const items = document.querySelectorAll('.navitem');
+items.forEach(item => {
+  const trigger = item.querySelector('[data-menu]');
+  if (!trigger) return;
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = item.classList.contains('open');
+    items.forEach(x => x.classList.remove('open'));
+    item.classList.toggle('open', !wasOpen);
+  });
+});
+document.addEventListener('click', () => items.forEach(x => x.classList.remove('open')));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') items.forEach(x => x.classList.remove('open')); });
+
+// theme toggle: system → light → dark → system
+const root = document.documentElement;
+document.getElementById('themebtn').addEventListener('click', () => {
+  const now = root.getAttribute('data-theme');
+  const next = now === 'light' ? 'dark' : now === 'dark' ? null : 'light';
+  if (next) root.setAttribute('data-theme', next); else root.removeAttribute('data-theme');
+  toastIt('Theme: ' + (next || 'follow system'));
+});
+
+// toast
+const toast = document.querySelector('.toast');
+let timer;
+function toastIt(msg){
+  toast.querySelector('span').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(timer);
+  timer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+document.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', () => {
+  toastIt(el.dataset.action + '. In production this would be an Inertia visit.');
+}));
+</script>
+</body>
+</html>

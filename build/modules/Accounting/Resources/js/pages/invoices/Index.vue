@@ -3,8 +3,9 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -16,31 +17,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
-import {
-  FileText,
-  Plus,
-  ArrowLeft,
-  Eye,
-  Pencil,
-  Trash2,
-  Send,
-  MoreHorizontal,
-  Search,
-} from 'lucide-vue-next'
+import { formatDateTime } from '@/lib/datetime'
+import { Plus, Eye, Pencil, Send, MoreHorizontal, Search } from 'lucide-vue-next'
 
 interface CompanyRef {
   id: string
   name: string
   slug: string
   base_currency: string
-}
-
-interface InvoiceLineItem {
-  id: string
-  description: string
-  quantity: number
-  unit_price: number
-  total: number
 }
 
 interface Customer {
@@ -83,84 +67,78 @@ const props = defineProps<{
 const search = ref(props.filters.search)
 const status = ref(props.filters.status || 'all')
 const customerId = ref(props.filters.customer_id)
-const { t, has } = useLexicon()
+const { t } = useLexicon()
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: t('dashboard'), href: `/${props.company.slug}` },
   { title: t('invoices'), href: `/${props.company.slug}/invoices` },
 ]
 
-const handleSearch = () => {
-  router.get(
-    `/${props.company.slug}/invoices`,
-    {
-      search: search.value,
-      status: status.value === 'all' ? '' : status.value,
-      customer_id: customerId.value,
-    },
-    { preserveState: true }
-  )
+/** Inertia keeps the page mounted across a filter round-trip, so the table can
+ *  show it is fetching rather than swapping silently to a different result. */
+const fetching = ref(false)
+
+const query = (page?: number) => ({
+  search: search.value,
+  status: status.value === 'all' ? '' : status.value,
+  customer_id: customerId.value,
+  page,
+})
+
+const go = (page?: number) => {
+  fetching.value = true
+  router.get(`/${props.company.slug}/invoices`, query(page), {
+    preserveState: true,
+    preserveScroll: true,
+    onFinish: () => (fetching.value = false),
+  })
 }
 
-const getStatusBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'draft':
-      return 'secondary'
-    case 'sent':
-    case 'viewed':
-      return 'default'
-    case 'paid':
-      return 'success'
-    case 'overdue':
-      return 'destructive'
-    case 'cancelled':
-    case 'void':
-      return 'outline'
-    default:
-      return 'secondary'
-  }
-}
+const handleSearch = () => go()
+const handlePage = (page: number) => go(page)
 
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
-}
+/* An invoice is overdue when the money is late, not when a column says so.
+   The server sets `overdue` on some rows and leaves others `sent` past their
+   due date, so the register decides for itself and the amount carries it. */
+const SETTLED = ['paid', 'cancelled', 'void', 'reversed']
+
+const isOverdue = (invoice: InvoiceRow) =>
+  !SETTLED.includes(invoice.status) &&
+  invoice.balance > 0 &&
+  new Date(invoice.due_date) < new Date()
 
 const columns = [
-  { key: 'invoice_number', label: t('invoiceNumber') },
-  { key: 'customer', label: t('customer') },
-  { key: 'status', label: t('status') },
-  { key: 'total_amount', label: t('total') },
-  { key: 'balance', label: t('balance') },
-  { key: 'due_date', label: t('dueDate') },
+  { key: 'invoice_number', label: t('invoiceNumber'), kind: 'ref' as const },
+  { key: 'customer', label: t('customer'), kind: 'text' as const },
+  { key: 'status', label: t('status'), kind: 'status' as const },
+  { key: 'total_amount', label: t('total'), kind: 'amount' as const },
+  { key: 'balance', label: t('balance'), kind: 'amount' as const },
+  /* A due date is a date. It was declared numeric because it needed to sit on
+     the right, and numeric was the only prop that did that -- which right-
+     aligned it and then set it in the figure face beside two real figures. */
+  { key: 'due_date', label: t('dueDate'), kind: 'date' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
-const tableData = computed(() => {
-  return props.invoices.data.map((invoice) => ({
-    id: invoice.id,
-    invoice_number: invoice.invoice_number,
-    customer: invoice.customer.name,
-    status: has(invoice.status) ? t(invoice.status) : invoice.status,
-    total_amount: formatCurrency(invoice.total_amount, invoice.currency),
-    balance: formatCurrency(invoice.balance, invoice.currency),
-    due_date: invoice.due_date,
-    _actions: invoice.id, // Only store the ID for fallback
-    _invoiceObject: invoice, // Store full object for template
-  }))
-})
+/* Rows keep their real values. The old version pre-formatted everything into
+   strings here, which is why the status column rendered raw text and the
+   amounts arrived as unalignable prose — once a figure is a string the table
+   can no longer tell it is a figure. */
+const rows = computed(() =>
+  props.invoices.data.map((invoice) => ({
+    ...invoice,
+    customer_name: invoice.customer?.name ?? '—',
+    overdue: isOverdue(invoice),
+  })),
+)
+
+const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
 </script>
 
 <template>
   <Head :title="t('invoices')" />
 
-  <PageShell
-    :title="t('invoices')"
-    :breadcrumbs="breadcrumbs"
-  >
+  <PageShell :title="t('invoices')" :breadcrumbs="breadcrumbs">
     <template #actions>
       <Button @click="router.get(`/${company.slug}/invoices/create`)">
         <Plus class="mr-2 h-4 w-4" />
@@ -168,10 +146,9 @@ const tableData = computed(() => {
       </Button>
     </template>
 
-    <!-- Filters -->
-    <div class="flex flex-col gap-4 md:flex-row mb-6">
+    <div class="flex flex-col gap-4 md:flex-row">
       <div class="relative flex-1">
-        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
         <Input
           v-model="search"
           :placeholder="t('searchInvoicePlaceholder')"
@@ -185,27 +162,62 @@ const tableData = computed(() => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{{ t('allStatus') }}</SelectItem>
-          <SelectItem value="draft">{{ t('draft') }}</SelectItem>
-          <SelectItem value="sent">{{ t('sent') }}</SelectItem>
-          <SelectItem value="viewed">{{ t('viewed') }}</SelectItem>
-          <SelectItem value="paid">{{ t('paid') }}</SelectItem>
-          <SelectItem value="overdue">{{ t('overdue') }}</SelectItem>
-          <SelectItem value="cancelled">{{ t('cancelled') }}</SelectItem>
-          <SelectItem value="void">{{ t('void') }}</SelectItem>
+          <SelectItem value="draft">Draft</SelectItem>
+          <SelectItem value="sent">Sent</SelectItem>
+          <SelectItem value="viewed">Viewed</SelectItem>
+          <SelectItem value="paid">Paid</SelectItem>
+          <SelectItem value="overdue">Overdue</SelectItem>
+          <SelectItem value="cancelled">Cancelled</SelectItem>
+          <SelectItem value="void">Voided</SelectItem>
         </SelectContent>
       </Select>
     </div>
 
-    <!-- Data Table -->
-    <DataTable
+    <!-- A long register of like things: compact is a statement about the work,
+         not about who is doing it. -->
+    <LedgerRegister
       :columns="columns"
-      :data="tableData"
+      :data="rows"
       :pagination="invoices"
+      :loading="fetching"
+      density="compact"
+      @page-change="handlePage"
     >
-      <template #status="{ value }">
-        <Badge :variant="getStatusBadgeVariant(value)">
-          {{ value }}
-        </Badge>
+      <template #cell-invoice_number="{ row }">
+        <a
+          :href="`/${company.slug}/invoices/${row.id}`"
+          class="reference"
+          @click.prevent="router.get(`/${company.slug}/invoices/${row.id}`)"
+        >
+          {{ row.invoice_number }}
+        </a>
+      </template>
+
+      <template #cell-customer="{ row }">
+        <span class="text-text-primary" dir="auto">{{ row.customer_name }}</span>
+      </template>
+
+      <template #cell-status="{ row }">
+        <StatusBadge :status="row.overdue && row.status === 'sent' ? 'overdue' : row.status" />
+      </template>
+
+      <template #cell-total_amount="{ row }">
+        <MoneyText :amount="row.total_amount" :currency="row.currency" locale="en-PK" />
+      </template>
+
+      <!-- The only red in the register, and only when the money is actually late. -->
+      <template #cell-balance="{ row }">
+        <MoneyText
+          :amount="row.balance"
+          :currency="row.currency"
+          locale="en-PK"
+          :tone="row.overdue ? 'overdue' : row.balance === 0 ? 'muted' : 'default'"
+          dash-zero
+        />
+      </template>
+
+      <template #cell-due_date="{ row }">
+        <span class="date">{{ formatDate(row.due_date) }}</span>
       </template>
 
       <template #cell-_actions="{ row }">
@@ -213,89 +225,101 @@ const tableData = computed(() => {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" class="h-8 w-8 p-0">
               <MoreHorizontal class="h-4 w-4" />
+              <span class="sr-only">Actions for {{ row.invoice_number }}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row._invoiceObject.id}`)">
+            <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row.id}`)">
               <Eye class="mr-2 h-4 w-4" />
               View
             </DropdownMenuItem>
-            <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row._invoiceObject.id}/edit`)">
+            <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row.id}/edit`)">
               <Pencil class="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem @click="router.post(`/${company.slug}/invoices/${row._invoiceObject.id}/send`)">
+            <DropdownMenuItem @click="router.post(`/${company.slug}/invoices/${row.id}/send`)">
               <Send class="mr-2 h-4 w-4" />
-              Send
+              Mark as sent
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </template>
 
-      <!-- Mobile Card Template -->
       <template #mobile-card="{ row }">
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div class="space-y-3">
-            <!-- Header with invoice number and status -->
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="font-semibold text-zinc-900">{{ row.invoice_number }}</h3>
-                <p class="text-sm text-zinc-500">{{ row.customer }}</p>
-              </div>
-              <Badge :variant="getStatusBadgeVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+        <div class="mobile-card" @click="router.get(`/${company.slug}/invoices/${row.id}`)">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="reference">{{ row.invoice_number }}</div>
+              <p class="truncate text-sm text-text-secondary" dir="auto">{{ row.customer_name }}</p>
             </div>
+            <StatusBadge :status="row.overdue && row.status === 'sent' ? 'overdue' : row.status" />
+          </div>
 
-            <!-- Amount and due date -->
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Amount</span>
-              <span class="font-medium">{{ row.total_amount }}</span>
-            </div>
-
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Due Date</span>
-              <span class="font-medium">{{ row.due_date }}</span>
-            </div>
-
-            <!-- Actions -->
-            <div class="pt-2 border-t border-zinc-100">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" class="w-full justify-between">
-                    Actions
-                    <MoreHorizontal class="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-48">
-                  <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row._invoiceObject.id}`)">
-                    <Eye class="mr-2 h-4 w-4" />
-                    View
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="router.get(`/${company.slug}/invoices/${row._invoiceObject.id}/edit`)">
-                    <Pencil class="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem @click="router.post(`/${company.slug}/invoices/${row._invoiceObject.id}/send`)">
-                    <Send class="mr-2 h-4 w-4" />
-                    Send
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+          <div class="mt-3 flex items-baseline justify-between gap-4">
+            <span class="text-sm text-text-tertiary">Total</span>
+            <MoneyText :amount="row.total_amount" :currency="row.currency" locale="en-PK" />
+          </div>
+          <div class="mt-1 flex items-baseline justify-between gap-4">
+            <span class="text-sm text-text-tertiary">Still owed</span>
+            <MoneyText
+              :amount="row.balance"
+              :currency="row.currency"
+              locale="en-PK"
+              :tone="row.overdue ? 'overdue' : row.balance === 0 ? 'muted' : 'default'"
+              dash-zero
+            />
+          </div>
+          <div class="mt-1 flex items-baseline justify-between gap-4">
+            <span class="text-sm text-text-tertiary">Due</span>
+            <span class="date">{{ formatDate(row.due_date) }}</span>
           </div>
         </div>
       </template>
-    </DataTable>
 
-    <!-- Empty State -->
-    <EmptyState
-      v-if="invoices.data.length === 0"
-      icon="FileText"
-      :title="t('noInvoices')"
-      :description="t('noInvoicesDesc')"
-      :action-label="t('newInvoice')"
-      @action="router.get(`/${company.slug}/invoices/create`)"
-    />
+      <!-- Empty belongs inside the table, not stacked beneath it. The old page
+           rendered its own EmptyState below a table that was already saying
+           "No data available", so the screen apologised twice. -->
+      <template #empty>
+        <EmptyState
+          icon="FileText"
+          :title="t('noInvoices')"
+          :description="t('noInvoicesDesc')"
+          :action-label="t('newInvoice')"
+          size="sm"
+          @action="router.get(`/${company.slug}/invoices/create`)"
+        />
+      </template>
+    </LedgerRegister>
   </PageShell>
 </template>
+
+<style scoped>
+/* References and IDs are the mono role: they are read character by character
+   and compared against a paper copy, not read as words. */
+.reference {
+  font-family: var(--mono-family);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+a.reference:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Dates line up like figures because in a register they are figures. */
+.date {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.mobile-card {
+  border: 1px solid var(--rule-default);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  padding: var(--space-4, 1rem);
+  cursor: pointer;
+}
+</style>

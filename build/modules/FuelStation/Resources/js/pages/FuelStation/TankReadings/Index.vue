@@ -2,8 +2,9 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +29,7 @@ import {
   Plus,
   Warehouse,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
   id: string
@@ -102,33 +104,16 @@ const formatDate = (dateStr: string) => {
 
 const formatMoney = (n: number) => {
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n ?? 0)
+    return formatMoneyText(n ?? 0, currencyCode.value, { fractionDigits: 2 })
   } catch (_e) {
     return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
   }
 }
 
-const statusVariant = (s: TankReadingStatus) => {
-  switch (s) {
-    case 'posted':
-      return 'bg-emerald-600 text-white hover:bg-emerald-600'
-    case 'confirmed':
-      return 'bg-sky-100 text-sky-800 hover:bg-sky-100'
-    default:
-      return 'bg-amber-100 text-amber-800 hover:bg-amber-100'
-  }
-}
-
 const varianceBadge = (t: VarianceType, liters: number) => {
-  if (t === 'none' || liters === 0) return { label: 'No variance', cls: 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200' }
-  if (t === 'gain') return { label: `Gain • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' }
-  return { label: `Loss • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-red-100 text-red-800 hover:bg-red-100' }
+  if (t === 'none' || liters === 0) return { label: 'No variance', cls: 'bg-surface-sunken text-text-primary hover:bg-surface-sunken' }
+  if (t === 'gain') return { label: `Gain • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-status-success/10 text-status-success hover:bg-status-success/10' }
+  return { label: `Loss • ${formatLiters(Math.abs(liters))}L`, cls: 'bg-status-critical/10 text-status-critical hover:bg-status-critical/10' }
 }
 
 const readingsPage = computed(() => props.readings ?? ({ data: [], current_page: 1, per_page: 50, total: 0 } as Paginated<TankReadingRow>))
@@ -159,14 +144,14 @@ const filtered = computed(() => {
 })
 
 const columns = [
-  { key: 'reading_date', label: 'Date' },
-  { key: 'tank', label: 'Tank' },
-  { key: 'level', label: 'Level' },
-  { key: 'reading_type', label: 'Type' },
-  { key: 'dip', label: 'Dip (L)' },
-  { key: 'system', label: 'System (L)' },
-  { key: 'variance', label: 'Variance' },
-  { key: 'status', label: 'Status' },
+  { key: 'reading_date', label: 'Date', kind: 'date' as const },
+  { key: 'tank', label: 'Tank', kind: 'text' as const },
+  { key: 'level', label: 'Level', kind: 'text' as const },
+  { key: 'reading_type', label: 'Type', kind: 'status' as const },
+  { key: 'dip', label: 'Dip (L)', kind: 'amount' as const },
+  { key: 'system', label: 'System (L)', kind: 'amount' as const },
+  { key: 'variance', label: 'Variance', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -325,7 +310,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.total }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-sky-200 text-sky-700">
+          <Badge variant="outline" class="border-status-info/30 text-status-info">
             {{ tanks.length }} tank(s)
           </Badge>
         </CardContent>
@@ -337,7 +322,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.draft }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-amber-100 text-amber-800 hover:bg-amber-100">Editable</Badge>
+          <Badge class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">Editable</Badge>
         </CardContent>
       </Card>
 
@@ -347,7 +332,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.confirmed }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">Ready to post</Badge>
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">Ready to post</Badge>
         </CardContent>
       </Card>
 
@@ -357,7 +342,7 @@ const goToShow = (row: any) => {
           <CardTitle class="text-2xl">{{ stats.posted }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-emerald-600 text-white hover:bg-emerald-600">JE created</Badge>
+          <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">JE created</Badge>
         </CardContent>
       </Card>
 
@@ -365,9 +350,9 @@ const goToShow = (row: any) => {
         <CardHeader class="pb-2">
           <CardDescription>Variance</CardDescription>
           <CardTitle class="text-2xl">
-            <span class="text-red-600">{{ stats.losses }}</span>
+            <span class="text-status-critical">{{ stats.losses }}</span>
             <span class="text-text-tertiary">/</span>
-            <span class="text-emerald-600">{{ stats.gains }}</span>
+            <span class="text-status-success">{{ stats.gains }}</span>
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -425,7 +410,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           :pagination="pagination"
@@ -448,7 +433,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-reading_type="{ row }">
-            <Badge variant="secondary" class="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">
+            <Badge variant="secondary" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
               {{ row._raw.reading_type.replace('_', ' ') }}
             </Badge>
           </template>
@@ -467,9 +452,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge :class="statusVariant(row._raw.status)">
-              {{ row._raw.status }}
-            </Badge>
+            <StatusBadge :status="row._raw.status" />
           </template>
 
           <template #cell-_actions="{ row }">
@@ -479,7 +462,7 @@ const goToShow = (row: any) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -487,7 +470,7 @@ const goToShow = (row: any) => {
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Warehouse class="h-5 w-5 text-sky-600" />
+            <Warehouse class="h-5 w-5 text-status-info" />
             Record tank dip
           </DialogTitle>
           <DialogDescription>
@@ -580,13 +563,13 @@ const goToShow = (row: any) => {
           <div class="rounded-xl border border-border/70 bg-muted/30 p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-start gap-2">
-                <AlertTriangle class="mt-0.5 h-4 w-4 text-amber-600" />
+                <AlertTriangle class="mt-0.5 h-4 w-4 text-status-attention" />
                 <div>
                   <p class="text-sm font-medium text-text-primary">Variance reason (optional)</p>
                   <p class="text-sm text-text-secondary">Use a reason code for audit clarity.</p>
                 </div>
               </div>
-              <Badge variant="outline" class="border-sky-200 text-sky-700">{{ currencyCode }}</Badge>
+              <Badge variant="outline" class="border-status-info/30 text-status-info">{{ currencyCode }}</Badge>
             </div>
             <div class="mt-3 space-y-2">
               <Label for="variance_reason">Reason</Label>

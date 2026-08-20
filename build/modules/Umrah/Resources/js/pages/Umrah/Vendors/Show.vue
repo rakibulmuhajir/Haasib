@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import DateTimeText from '@/components/DateTimeText.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, FileDown, Truck } from 'lucide-vue-next';
@@ -44,6 +45,24 @@ const applyFilters = () =>
         query(),
         { preserveState: true, replace: true },
     );
+/**
+ * A statement of account has two directions and they belong in two columns:
+ * what the vendor charged, and what we paid against it. Allocated and advance
+ * are a breakdown of the payment rather than a third direction, so they stay
+ * plain figures. Both direction columns are ink -- the headings say which way
+ * the money went and colour would only repeat them.
+ */
+const columns = [
+    { key: 'date', label: 'Date', kind: 'date' as const },
+    { key: 'reference', label: 'Reference', kind: 'ref' as const },
+    { key: 'description', label: 'Description', kind: 'text' as const },
+    { key: 'charge', label: 'Cost', kind: 'in' as const },
+    { key: 'payment', label: 'Paid', kind: 'out' as const },
+    { key: 'allocated', label: 'Allocated', kind: 'amount' as const },
+    { key: 'advance', label: 'Advance', kind: 'amount' as const },
+    { key: 'balance', label: 'Balance', kind: 'amount' as const },
+];
+
 const exportPdf = () => {
     const params = new URLSearchParams(query()).toString();
     const url = props.statementUrl || `/${props.company.slug}/umrah/vendors/${props.vendor.id}/statement.pdf`;
@@ -70,7 +89,7 @@ const exportPdf = () => {
             <div class="space-y-1"><Label>From</Label><Input v-model="filter.date_from" type="date" /></div>
             <div class="space-y-1"><Label>To</Label><Input v-model="filter.date_to" type="date" /></div>
             <Button variant="outline" @click="applyFilters">Apply</Button>
-            <Badge v-if="vendor.is_company_owned" variant="secondary">Company-owned provider</Badge>
+            <MetaChip v-if="vendor.is_company_owned" tone="neutral">Company-owned provider</MetaChip>
         </div>
 
         <div class="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -82,20 +101,45 @@ const exportPdf = () => {
 
         <Card>
             <CardContent class="p-0">
-                <Table>
-                    <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Description</TableHead><TableHead class="text-right">Cost</TableHead><TableHead class="text-right">Paid</TableHead><TableHead class="text-right">Allocated</TableHead><TableHead class="text-right">Advance</TableHead><TableHead class="text-right">Balance</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableEmpty v-if="!statement.rows.length" :colspan="8">No supplier activity in this period.</TableEmpty>
-                        <TableRow v-for="row in statement.rows" :key="`${row.date}-${row.type}-${row.reference}-${row.description}`">
-                            <TableCell>{{ row.date }}</TableCell><TableCell class="font-medium">{{ row.reference }}</TableCell><TableCell>{{ row.description }}</TableCell>
-                            <TableCell class="text-right"><MoneyText :amount="row.charge" :currency="company.base_currency" /></TableCell>
-                            <TableCell class="text-right"><MoneyText :amount="row.payment" :currency="company.base_currency" /></TableCell>
-                            <TableCell class="text-right"><MoneyText :amount="row.allocated" :currency="company.base_currency" /></TableCell>
-                            <TableCell class="text-right"><MoneyText :amount="row.advance" :currency="company.base_currency" /></TableCell>
-                            <TableCell class="text-right font-medium"><MoneyText :amount="row.balance" :currency="company.base_currency" /></TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                <LedgerRegister
+                    :data="statement.rows"
+                    :columns="columns"
+                    :key-field="(row: any, i: number) => `${row.date}-${row.type}-${row.reference}-${i}`"
+                    :totals="{}"
+                    totals-label="Period"
+                >
+                    <template #empty>No supplier activity in this period.</template>
+
+                    <template #cell-date="{ row }">
+                        <DateTimeText :value="row.date" mode="date" />
+                    </template>
+
+                    <template #cell-charge="{ row }">
+                        <MoneyText :amount="row.charge" :currency="company.base_currency" />
+                    </template>
+                    <template #cell-payment="{ row }">
+                        <MoneyText :amount="row.payment" :currency="company.base_currency" />
+                    </template>
+                    <template #cell-allocated="{ row }">
+                        <MoneyText :amount="row.allocated" :currency="company.base_currency" />
+                    </template>
+                    <template #cell-advance="{ row }">
+                        <MoneyText :amount="row.advance" :currency="company.base_currency" />
+                    </template>
+                    <template #cell-balance="{ row }">
+                        <MoneyText :amount="row.balance" :currency="company.base_currency" class="font-medium" />
+                    </template>
+
+                    <template #total-charge>
+                        <MoneyText :amount="statement.charges" :currency="company.base_currency" />
+                    </template>
+                    <template #total-payment>
+                        <MoneyText :amount="statement.payments" :currency="company.base_currency" />
+                    </template>
+                    <template #total-balance>
+                        <MoneyText :amount="statement.closing_balance" :currency="company.base_currency" />
+                    </template>
+                </LedgerRegister>
             </CardContent>
         </Card>
     </PageShell>

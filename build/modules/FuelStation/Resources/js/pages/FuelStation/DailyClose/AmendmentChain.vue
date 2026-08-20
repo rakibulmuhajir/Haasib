@@ -37,14 +37,14 @@ const getTypeConfig = (type: string, status: string) => {
       label: 'Original (Reversed)',
       variant: 'destructive' as const,
       icon: XCircle,
-      bgClass: 'bg-red-50 border-red-200',
+      bgClass: 'bg-status-critical/10 border-status-critical/30',
     }
   }
 
   const configs: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline'; icon: typeof CheckCircle; bgClass: string }> = {
     original: { label: 'Original', variant: 'secondary', icon: CheckCircle, bgClass: 'bg-muted/50' },
-    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, bgClass: 'bg-amber-50 border-amber-200' },
-    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, bgClass: 'bg-green-50 border-green-200' },
+    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, bgClass: 'bg-status-attention/10 border-status-attention/30' },
+    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, bgClass: 'bg-status-success/10 border-status-success/30' },
   }
   return configs[type] || configs.original
 }
@@ -75,9 +75,9 @@ const reversedChain = computed(() => [...props.chain].reverse())
               :is="getTypeConfig(item.type, item.status).icon"
               :class="[
                 'h-5 w-5',
-                item.status === 'reversed' ? 'text-red-600' : '',
-                item.type === 'reversal' ? 'text-amber-600' : '',
-                item.type === 'correction' ? 'text-green-600' : '',
+                item.status === 'reversed' ? 'text-status-critical' : '',
+                item.type === 'reversal' ? 'text-status-attention' : '',
+                item.type === 'correction' ? 'text-status-success' : '',
               ]"
             />
             <div>

@@ -110,7 +110,7 @@ const formatAddress = () => {
               <div>
                 <CardTitle class="flex items-center gap-2">
                   {{ warehouse.name }}
-                  <Star v-if="warehouse.is_primary" class="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  <Star v-if="warehouse.is_primary" class="h-5 w-5 text-status-attention fill-status-attention" />
                 </CardTitle>
                 <CardDescription>Code: {{ warehouse.code }}</CardDescription>
               </div>
@@ -144,7 +144,7 @@ const formatAddress = () => {
               <div
                 v-for="level in stockLevels.data"
                 :key="level.id"
-                class="flex items-center justify-between py-3 border-b last:border-0 cursor-pointer hover:bg-muted/50 -mx-2 px-2 rounded"
+                class="flex items-center justify-between py-3 border-b last:border-0 cursor-pointer hover:bg-muted/50 -mx-2 px-2 rounded-sm"
                 @click="router.get(`/${company.slug}/items/${level.item.id}`)"
               >
                 <div>

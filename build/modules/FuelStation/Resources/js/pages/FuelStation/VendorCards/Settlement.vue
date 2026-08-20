@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, Search, Banknote } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface VendorCardSale {
   id: string
@@ -94,13 +96,7 @@ const filteredPendingSales = computed(() => {
 })
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return formatMoneyText(value, currencyCode.value, { locale: 'en-PK', fractionDigits: 0 })
 }
 
 const formatDate = (date: string) => {
@@ -215,30 +211,30 @@ const selectAllPending = () => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', icon: Clock, label: 'Pending' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: Clock, label: 'Pending' }
     case 'settled':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: CheckCircle, label: 'Settled' }
+      return { class: 'bg-status-success/10 text-status-success', icon: CheckCircle, label: 'Settled' }
     case 'overdue':
-      return { class: 'bg-red-100 text-red-800', icon: AlertTriangle, label: 'Overdue' }
+      return { class: 'bg-status-critical/10 text-status-critical', icon: AlertTriangle, label: 'Overdue' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Clock, label: status }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Clock, label: status }
   }
 }
 
 const pendingColumns = [
-  { key: 'select', label: '', sortable: false, width: '50px' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'date', label: 'Date' },
-  { key: 'outstanding', label: 'Outstanding', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'select', label: '', sortable: false, width: '50px', kind: 'text' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const todayColumns = [
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'date', label: 'Date' },
-  { key: 'amount', label: 'Settled', align: 'right' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Settled', kind: 'amount' as const, align: 'right' as const },
 ]
 
 const pendingTableData = computed(() => {
@@ -276,14 +272,14 @@ const todayTableData = computed(() => {
     :breadcrumbs="breadcrumbs"
   >
     <div class="grid gap-4 md:grid-cols-3">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-purple-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Pending Settlements</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_pending) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_pending" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <AlertTriangle class="h-4 w-4 text-amber-600" />
+            <AlertTriangle class="h-4 w-4 text-status-attention" />
             <span>{{ props.summary.count_pending }} transaction(s)</span>
           </div>
         </CardContent>
@@ -292,10 +288,10 @@ const todayTableData = computed(() => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Settled Today</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_settled_today) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_settled_today" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+          <Badge class="bg-status-success/10 text-status-success hover:bg-status-success/10">
             <CheckCircle class="mr-1 h-3 w-3" />
             Completed
           </Badge>
@@ -305,10 +301,10 @@ const todayTableData = computed(() => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.total_outstanding" :currency="currencyCode" :fraction-digits="0" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-amber-200 text-amber-700">
+          <Badge variant="outline" class="border-status-attention/30 text-status-attention">
             <Clock class="mr-1 h-3 w-3" />
             Awaiting Settlement
           </Badge>
@@ -332,18 +328,18 @@ const todayTableData = computed(() => {
             </div>
             <Button
               v-if="selectedSales.size > 0"
-              class="bg-emerald-600 hover:bg-emerald-700"
+              class="bg-status-success hover:bg-status-success"
               @click="openSettlementDialog"
             >
               <Banknote class="mr-2 h-4 w-4" />
-              Settle Selected ({{ formatCurrency(selectedTotal) }})
+              Settle Selected (<MoneyText :amount="selectedTotal" :currency="currencyCode" :fraction-digits="0" />)
             </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="pendingTableData" :columns="pendingColumns">
+        <LedgerRegister :data="pendingTableData" :columns="pendingColumns">
           <template #empty>
             <EmptyState
               title="No pending settlements"
@@ -356,7 +352,7 @@ const todayTableData = computed(() => {
               type="checkbox"
               :checked="selectedSales.has(row.select)"
               @change="toggleSaleSelection(row.select)"
-              class="rounded border-border"
+              class="rounded-sm border-border"
             />
           </template>
 
@@ -373,10 +369,10 @@ const todayTableData = computed(() => {
               :checked="selectedSales.size === props.pendingSales.length && props.pendingSales.length > 0"
               :indeterminate="selectedSales.size > 0 && selectedSales.size < props.pendingSales.length"
               @change="selectAllPending"
-              class="rounded border-border"
+              class="rounded-sm border-border"
             />
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -403,7 +399,7 @@ const todayTableData = computed(() => {
             <div class="text-xs text-muted-foreground">{{ account.clearing_account_name }}</div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="text-right font-semibold text-amber-600">{{ formatCurrency(account.balance) }}</div>
+            <div class="text-right font-semibold text-status-attention"><MoneyText :amount="account.balance" :currency="currencyCode" :fraction-digits="0" /></div>
             <Button size="sm" @click="openClearingDialog(account)">Settle</Button>
           </div>
         </div>
@@ -418,7 +414,7 @@ const todayTableData = computed(() => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="todayTableData" :columns="todayColumns" />
+        <LedgerRegister :data="todayTableData" :columns="todayColumns" />
       </CardContent>
     </Card>
 
@@ -427,11 +423,11 @@ const todayTableData = computed(() => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <CreditCard class="h-5 w-5 text-blue-600" />
+            <CreditCard class="h-5 w-5 text-status-info" />
             Vendor Card Settlement
           </DialogTitle>
           <DialogDescription>
-            Settle {{ selectedSales.size }} transaction(s) totaling {{ formatCurrency(selectedTotal) }}
+            Settle {{ selectedSales.size }} transaction(s) totaling <MoneyText :amount="selectedTotal" :currency="currencyCode" :fraction-digits="0" />
           </DialogDescription>
         </DialogHeader>
 
@@ -476,7 +472,7 @@ const todayTableData = computed(() => {
             <Button type="button" variant="outline" :disabled="settlementForm.processing" @click="showSettlementDialog = false">
               Cancel
             </Button>
-            <Button type="submit" class="bg-blue-600 hover:bg-blue-700" :disabled="settlementForm.processing">
+            <Button type="submit" class="bg-status-info hover:bg-status-info" :disabled="settlementForm.processing">
               <span
                 v-if="settlementForm.processing"
                 class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
@@ -494,7 +490,7 @@ const todayTableData = computed(() => {
         <DialogHeader>
           <DialogTitle>Settle Payment Channel</DialogTitle>
           <DialogDescription>
-            {{ selectedClearingAccount?.channel_label }} outstanding: {{ formatCurrency(selectedClearingAccount?.balance || 0) }}
+            {{ selectedClearingAccount?.channel_label }} outstanding: <MoneyText :amount="selectedClearingAccount?.balance || 0" :currency="currencyCode" :fraction-digits="0" />
           </DialogDescription>
         </DialogHeader>
 

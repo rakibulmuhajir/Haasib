@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RefreshCcw, ArrowRight, Calendar, Landmark, Info } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -53,14 +54,6 @@ const selectedAccount = computed(() => {
   if (form.bank_account_id === noneValue) return null
   return props.bankAccounts.find(a => a.id === form.bank_account_id) || null
 })
-
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
-}
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never'
@@ -153,7 +146,7 @@ const handleCancel = () => {
                 <div>
                   <p class="text-muted-foreground">Current Book Balance</p>
                   <p class="font-medium text-lg">
-                    {{ formatCurrency(selectedAccount.current_balance, selectedAccount.currency) }}
+                    <MoneyText :amount="selectedAccount.current_balance" :currency="selectedAccount.currency" />
                   </p>
                 </div>
                 <div>
@@ -162,7 +155,7 @@ const handleCancel = () => {
                     {{ formatDate(selectedAccount.last_reconciled_date) }}
                   </p>
                   <p v-if="selectedAccount.last_reconciled_balance !== null" class="text-xs text-muted-foreground">
-                    Balance: {{ formatCurrency(selectedAccount.last_reconciled_balance, selectedAccount.currency) }}
+                    Balance: <MoneyText :amount="selectedAccount.last_reconciled_balance" :currency="selectedAccount.currency" />
                   </p>
                 </div>
               </div>

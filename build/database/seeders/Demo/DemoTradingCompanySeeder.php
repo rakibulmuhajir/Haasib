@@ -5,9 +5,14 @@ namespace Database\Seeders\Demo;
 use App\Models\Company;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillLineItem;
+use App\Modules\Accounting\Models\BillPayment;
+use App\Modules\Accounting\Models\BillPaymentAllocation;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceLineItem;
+use Illuminate\Support\Facades\DB;
+use App\Modules\Accounting\Models\Payment;
+use App\Modules\Accounting\Models\PaymentAllocation;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\GlPostingService;
 use Carbon\Carbon;
@@ -46,6 +51,19 @@ class DemoTradingCompanySeeder extends Seeder
             ],
             tradeName: 'Meridian Trading',
             industry: 'retail',
+            address: [
+                'line1' => 'Suite 302, Business Avenue',
+                'line2' => 'Shahrah-e-Faisal',
+                'city' => 'Karachi',
+                'state' => 'Sindh',
+                'postal_code' => '75350',
+                'country' => 'Pakistan',
+            ],
+            contact: [
+                'contact_email' => 'billing@meridiantrading.pk',
+                'contact_phone' => '+92 21 3438 9100',
+            ],
+            taxNumber: '1728934-5',
         );
 
         $this->command?->info("  company: {$company->name} ({$company->id})");
@@ -152,6 +170,12 @@ class DemoTradingCompanySeeder extends Seeder
         ];
 
         $invoiceNo = 1;
+        $paymentNo = 1;
+
+        // `deposit_account_id` names the GL account the money landed in, not the
+        // company_bank_accounts row -- the FK points at acct.accounts.
+        $depositAccountId = $bank->id;
+
         foreach ($invoiceSpec as [$month, $day, $custIdx, $amount, $status, $kind]) {
             $date = Carbon::create($year, $month, $day);
             if ($date->isFuture()) {
@@ -224,21 +248,81 @@ class DemoTradingCompanySeeder extends Seeder
             }
 
             // Cash received against the invoice.
+            //
+            // Recorded as a real Payment allocated to the invoice, not only as a
+            // GL receipt. The two used to be the same posting, which balanced the
+            // books but left the Payments screen empty -- a page that has never
+            // been seen with data in it is a page nobody has verified.
             if ($paid > 0) {
                 $receiptDate = $date->copy()->addDays((int) round($terms * 0.7));
                 if ($receiptDate->isFuture()) {
                     $receiptDate = Carbon::now()->subDay();
                 }
-                $gl->postBalancedTransaction([
-                    'company_id' => $company->id,
-                    'transaction_type' => 'receipt',
-                    'date' => $receiptDate,
-                    'currency' => 'PKR',
-                    'description' => "Receipt from {$customer->name} — {$invoice->invoice_number}",
-                ], [
-                    ['account_id' => $bank->id, 'type' => 'debit', 'amount' => $paid],
-                    ['account_id' => $ar->id, 'type' => 'credit', 'amount' => $paid],
-                ]);
+
+                // The stored vocabulary is 'check'; the UI shows it as "Cheque".
+                $method = ['bank_transfer', 'check', 'cash'][$invoiceNo % 3];
+
+                // The first invoice is settled across two receipts on different
+                // dates, so an invoice's payment-history list has more than one
+                // row to render at least once in the demo.
+                $secondDate = $receiptDate->copy()->addDays(9);
+                if ($secondDate->isFuture()) {
+                    $secondDate = Carbon::now()->subDay();
+                }
+                $splits = $invoiceNo === 1
+                    ? [
+                        ['amount' => round($paid * 0.6, 2), 'date' => $receiptDate, 'method' => 'bank_transfer'],
+                        ['amount' => round($paid * 0.4, 2), 'date' => $secondDate, 'method' => 'cash'],
+                    ]
+                    : [['amount' => $paid, 'date' => $receiptDate, 'method' => $method]];
+
+                foreach ($splits as $split) {
+                    $splitAmount = $split['amount'];
+                    $splitDate = $split['date'];
+                    $splitMethod = $split['method'];
+
+                    $receipt = $gl->postBalancedTransaction([
+                        'company_id' => $company->id,
+                        'transaction_type' => 'receipt',
+                        'date' => $splitDate,
+                        'currency' => 'PKR',
+                        'description' => "Receipt from {$customer->name} — {$invoice->invoice_number}",
+                    ], [
+                        ['account_id' => $bank->id, 'type' => 'debit', 'amount' => $splitAmount],
+                        ['account_id' => $ar->id, 'type' => 'credit', 'amount' => $splitAmount],
+                    ]);
+
+                    $payment = Payment::create([
+                        'company_id' => $company->id,
+                        'customer_id' => $customer->id,
+                        'payment_number' => sprintf('PAY-%d-%04d', $year, $paymentNo),
+                        'payment_date' => $splitDate,
+                        'amount' => $splitAmount,
+                        'currency' => 'PKR',
+                        'exchange_rate' => 1,
+                        'base_currency' => 'PKR',
+                        'base_amount' => $splitAmount,
+                        'payment_method' => $splitMethod,
+                        'deposit_account_id' => $depositAccountId,
+                        'transaction_id' => $receipt->id,
+                        'reference_number' => $splitMethod === 'check'
+                            ? sprintf('CHQ-%06d', 400000 + $paymentNo * 137)
+                            : null,
+                        'notes' => "Against {$invoice->invoice_number}",
+                        'created_by_user_id' => $user->id,
+                    ]);
+
+                    PaymentAllocation::create([
+                        'company_id' => $company->id,
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $invoice->id,
+                        'amount_allocated' => $splitAmount,
+                        'base_amount_allocated' => $splitAmount,
+                        'applied_at' => $splitDate,
+                    ]);
+
+                    $paymentNo++;
+                }
             }
 
             $invoiceNo++;
@@ -318,16 +402,50 @@ class DemoTradingCompanySeeder extends Seeder
                 if ($payDate->isFuture()) {
                     $payDate = Carbon::now()->subDay();
                 }
-                $gl->postBalancedTransaction([
+
+                // Recorded as a real BillPayment allocated to the bill, not only
+                // as a bare GL journal -- same reasoning as customer receipts
+                // above: a Bill Payments screen nobody has seen with data in it
+                // is a screen nobody has verified.
+                //
+                // BillPayment\CreateAction (config/command-bus.php
+                // 'bill_payment.create', the path the real UI uses) also posts
+                // through GlPostingService::postBillPayment now, so this is the
+                // same call the app makes -- the seeder just makes it directly
+                // instead of going through the command bus.
+                $method = ['bank_transfer', 'check', 'cash'][$billNo % 3];
+
+                $billPayment = BillPayment::create([
                     'company_id' => $company->id,
-                    'transaction_type' => 'payment',
-                    'date' => $payDate,
+                    'vendor_id' => $vendor->id,
+                    'payment_number' => sprintf('PMT-%d-%04d', $year, $billNo),
+                    'payment_date' => $payDate,
+                    'amount' => $amount,
                     'currency' => 'PKR',
-                    'description' => "Payment to {$vendor->name} — {$bill->bill_number}",
-                ], [
-                    ['account_id' => $ap->id, 'type' => 'debit', 'amount' => $amount],
-                    ['account_id' => $bank->id, 'type' => 'credit', 'amount' => $amount],
+                    'exchange_rate' => 1,
+                    'base_currency' => 'PKR',
+                    'base_amount' => $amount,
+                    'payment_method' => $method,
+                    'payment_account_id' => $bank->id,
+                    'reference_number' => $method === 'check'
+                        ? sprintf('CHQ-%06d', 500000 + $billNo * 149)
+                        : null,
+                    'notes' => "Against {$bill->bill_number}",
+                    'created_by_user_id' => $user->id,
                 ]);
+
+                BillPaymentAllocation::create([
+                    'company_id' => $company->id,
+                    'bill_payment_id' => $billPayment->id,
+                    'bill_id' => $bill->id,
+                    'amount_allocated' => $amount,
+                    'base_amount_allocated' => $amount,
+                    'applied_at' => $payDate,
+                ]);
+
+                $transaction = $gl->postBillPayment($billPayment->fresh(['allocations', 'company']), $bank->id, $ap->id);
+                $billPayment->transaction_id = $transaction->id;
+                $billPayment->save();
             }
 
             $billNo++;
@@ -358,5 +476,7 @@ class DemoTradingCompanySeeder extends Seeder
         }
 
         $this->command?->info('  posted opening balances, invoices, bills, receipts, payments and overheads');
+
+        $this->syncBankBalances($company);
     }
 }

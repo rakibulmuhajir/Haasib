@@ -27,6 +27,7 @@ use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Modules\Umrah\Services\VoucherPassengerAssignmentService;
 use App\Modules\Umrah\Services\VoucherWorkflowService;
 use App\Services\CurrentCompany;
+use App\Services\CompanyLetterhead;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -656,7 +657,14 @@ class VoucherController extends Controller
             $logoPath = is_file($candidate) ? $candidate : null;
         }
 
-        return Pdf::loadView('umrah::vouchers.pdf', ['company' => $company, 'voucher' => $record, 'logoPath' => $logoPath])
+        return Pdf::loadView('umrah::vouchers.pdf', [
+            'company' => $company,
+            'voucher' => $record,
+            'logoPath' => $logoPath,
+            // The downloaded PDF is the copy that gets carried, so it needs the
+            // issuer's identity at least as much as the on-screen page does.
+            'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
+        ])
             ->setPaper('letter', 'portrait')
             ->download($filename);
     }
@@ -670,6 +678,11 @@ class VoucherController extends Controller
             'base_currency' => $company->base_currency,
             'logo_url' => $company->logo_url,
             'helpline' => $company->settings['contact_phone'] ?? null,
+            // The same identity every other document in the application prints.
+            // A voucher used to carry a name, a logo and a helpline; the party
+            // holding it in Jeddah needs an address and a registration number
+            // as much as the party holding an invoice does.
+            'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
         ];
     }
 

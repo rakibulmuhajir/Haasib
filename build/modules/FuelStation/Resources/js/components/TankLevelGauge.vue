@@ -41,7 +41,7 @@ const height = computed(() => Math.round(props.size * 1.6))
     viewBox="0 0 80 120"
     role="img"
     :aria-label="label"
-    class="text-slate-300 dark:text-slate-600"
+    class="text-text-tertiary"
   >
     <defs>
       <linearGradient :id="gradientId" x1="0" y1="0" x2="0" y2="1">
@@ -50,7 +50,7 @@ const height = computed(() => Math.round(props.size * 1.6))
       </linearGradient>
     </defs>
 
-    <rect x="18" y="10" width="44" height="100" rx="12" fill="#f8fafc" class="dark:fill-slate-900" />
+    <rect x="18" y="10" width="44" height="100" rx="12" fill="#f8fafc" class="dark:fill-text-primary" />
     <rect x="22" :y="fillY" width="36" :height="fillHeight" rx="10" :fill="`url(#${gradientId})`" />
     <rect x="18" y="10" width="44" height="100" rx="12" fill="none" stroke="currentColor" stroke-width="2" />
   </svg>

@@ -61,7 +61,7 @@ class PartnerController extends Controller
 
         // Get equity accounts for partner capital
         $equityAccounts = Account::where('company_id', $company->id)
-            ->where('account_type', 'equity')
+            ->where('type', 'equity')
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'code', 'name']);
@@ -201,7 +201,7 @@ class PartnerController extends Controller
             ->findOrFail($partner);
 
         $equityAccounts = Account::where('company_id', $companyModel->id)
-            ->where('account_type', 'equity')
+            ->where('type', 'equity')
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'code', 'name']);

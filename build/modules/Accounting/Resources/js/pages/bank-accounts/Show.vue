@@ -4,14 +4,10 @@ import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import {
   Landmark,
   Pencil,
@@ -21,8 +17,6 @@ import {
   ArrowDownLeft,
   MoreHorizontal,
   Calendar,
-  CheckCircle2,
-  Clock
 } from 'lucide-vue-next'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
@@ -113,14 +107,6 @@ const accountTypeLabels: Record<string, string> = {
   other: 'Other Account',
 }
 
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency,
-  }).format(amount)
-}
-
 const formatDate = (dateStr: string | null) => {
   return formatSharedDateTime(dateStr, { mode: 'date' })
 }
@@ -152,6 +138,23 @@ const handleViewTransaction = (id: string) => {
   // Navigate to bank feed with this transaction highlighted
   router.get(`/${props.company.slug}/banking/feed`, { transaction_id: id })
 }
+
+/**
+ * This account moves money in both directions, so the register gives each
+ * direction its own column instead of a single signed figure. A statement
+ * reader should never have to parse a minus sign to know which way money
+ * went -- the column heading already says so. Reconciliation is a state, so
+ * it goes through StatusBadge and reuses the same "reconciled" vocabulary as
+ * bank reconciliation and journals rather than a bespoke icon.
+ */
+const transactionColumns = [
+  { key: 'transaction_date', label: 'Date', kind: 'date' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'category', label: 'Category', kind: 'text' as const },
+  { key: 'deposited', label: 'Deposited', kind: 'in' as const },
+  { key: 'withdrawn', label: 'Withdrawn', kind: 'out' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+]
 </script>
 
 <template>
@@ -191,7 +194,7 @@ const handleViewTransaction = (id: string) => {
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-muted-foreground">Current Balance</p>
-                <p class="text-3xl font-bold">{{ formatCurrency(bankAccount.current_balance, bankAccount.currency) }}</p>
+                <p class="text-3xl font-bold"><MoneyText :amount="bankAccount.current_balance" :currency="bankAccount.currency" /></p>
               </div>
               <div class="flex items-center gap-2">
                 <Badge :variant="bankAccount.is_active ? 'default' : 'secondary'">
@@ -263,57 +266,48 @@ const handleViewTransaction = (id: string) => {
             <CardTitle>Recent Transactions</CardTitle>
             <CardDescription>Last 25 transactions</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div v-if="recentTransactions.length === 0" class="text-center py-8 text-muted-foreground">
-              No transactions yet
-            </div>
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead class="text-right">Amount</TableHead>
-                  <TableHead class="text-center">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow
-                  v-for="tx in recentTransactions"
-                  :key="tx.id"
-                  class="cursor-pointer hover:bg-muted/50"
-                  @click="handleViewTransaction(tx.id)"
-                >
-                  <TableCell class="whitespace-nowrap">
-                    {{ formatDate(tx.transaction_date) }}
-                  </TableCell>
-                  <TableCell>
-                    <div class="flex items-center gap-2">
-                      <component
-                        :is="tx.amount > 0 ? ArrowDownLeft : ArrowUpRight"
-                        :class="tx.amount > 0 ? 'text-green-600' : 'text-red-600'"
-                        class="h-4 w-4"
-                      />
-                      <div>
-                        <p class="font-medium">{{ tx.description }}</p>
-                        <p v-if="tx.payee_name" class="text-xs text-muted-foreground">{{ tx.payee_name }}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge v-if="tx.category" variant="outline">{{ tx.category }}</Badge>
-                    <span v-else class="text-muted-foreground text-sm">Uncategorized</span>
-                  </TableCell>
-                  <TableCell class="text-right font-mono" :class="tx.amount > 0 ? 'text-green-600' : 'text-red-600'">
-                    {{ formatCurrency(Math.abs(tx.amount), bankAccount.currency) }}
-                  </TableCell>
-                  <TableCell class="text-center">
-                    <CheckCircle2 v-if="tx.is_reconciled" class="h-4 w-4 text-green-600 mx-auto" />
-                    <Clock v-else class="h-4 w-4 text-amber-500 mx-auto" />
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+          <CardContent class="p-0">
+            <LedgerRegister
+              :data="recentTransactions"
+              :columns="transactionColumns"
+              clickable
+              @row-click="(row) => handleViewTransaction(row.id)"
+            >
+              <template #empty>No transactions yet</template>
+
+              <template #cell-description="{ row }">
+                <div class="flex items-center gap-2">
+                  <component
+                    :is="row.amount > 0 ? ArrowDownLeft : ArrowUpRight"
+                    :class="row.amount > 0 ? 'text-amount-inflow' : 'text-amount-outflow'"
+                    class="h-4 w-4"
+                  />
+                  <div>
+                    <p class="font-medium">{{ row.description }}</p>
+                    <p v-if="row.payee_name" class="text-xs text-muted-foreground">{{ row.payee_name }}</p>
+                  </div>
+                </div>
+              </template>
+
+              <template #cell-category="{ row }">
+                <MetaChip v-if="row.category" tone="neutral" bare>{{ row.category }}</MetaChip>
+                <span v-else class="text-muted-foreground text-sm">Uncategorized</span>
+              </template>
+
+              <template #cell-deposited="{ row }">
+                <MoneyText v-if="row.amount > 0" :amount="row.amount" :currency="bankAccount.currency" />
+                <template v-else>—</template>
+              </template>
+
+              <template #cell-withdrawn="{ row }">
+                <MoneyText v-if="row.amount < 0" :amount="Math.abs(row.amount)" :currency="bankAccount.currency" />
+                <template v-else>—</template>
+              </template>
+
+              <template #cell-status="{ row }">
+                <StatusBadge :status="row.is_reconciled ? 'reconciled' : 'pending'" />
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
       </div>
@@ -332,7 +326,7 @@ const handleViewTransaction = (id: string) => {
             <div class="space-y-4">
               <div>
                 <p class="text-sm text-muted-foreground">Unreconciled Transactions</p>
-                <p class="text-2xl font-bold" :class="bankAccount.unreconciled_count > 0 ? 'text-amber-600' : 'text-green-600'">
+                <p class="text-2xl font-bold" :class="bankAccount.unreconciled_count > 0 ? 'text-status-attention' : 'text-status-success'">
                   {{ bankAccount.unreconciled_count }}
                 </p>
               </div>
@@ -341,7 +335,7 @@ const handleViewTransaction = (id: string) => {
                 <p class="text-sm text-muted-foreground">Last Reconciled</p>
                 <p class="font-medium">{{ formatDate(lastReconciliation.statement_date) }}</p>
                 <p class="text-sm text-muted-foreground">
-                  Balance: {{ formatCurrency(lastReconciliation.statement_ending_balance, bankAccount.currency) }}
+                  Balance: <MoneyText :amount="lastReconciliation.statement_ending_balance" :currency="bankAccount.currency" />
                 </p>
               </div>
 
@@ -370,7 +364,7 @@ const handleViewTransaction = (id: string) => {
             <div class="space-y-2">
               <div>
                 <p class="text-sm text-muted-foreground">Amount</p>
-                <p class="font-medium">{{ formatCurrency(bankAccount.opening_balance, bankAccount.currency) }}</p>
+                <p class="font-medium"><MoneyText :amount="bankAccount.opening_balance" :currency="bankAccount.currency" /></p>
               </div>
               <div>
                 <p class="text-sm text-muted-foreground">As of</p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DataTable from '@/components/DataTable.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -36,6 +36,7 @@ import {
     Wallet,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import MoneyText from '@/components/MoneyText.vue';
 
 interface Advance {
     id: string;
@@ -181,33 +182,33 @@ const getStatusBadge = (status: string) => {
     switch (status) {
         case 'pending':
             return {
-                class: 'bg-amber-100 text-amber-800',
+                class: 'bg-status-attention/10 text-status-attention',
                 label: 'Outstanding',
             };
         case 'partially_recovered':
             return {
-                class: 'bg-sky-100 text-sky-800',
+                class: 'bg-status-info/10 text-status-info',
                 label: 'Partly recovered',
             };
         case 'fully_recovered':
             return {
-                class: 'bg-emerald-100 text-emerald-800',
+                class: 'bg-status-success/10 text-status-success',
                 label: 'Recovered',
             };
         case 'cancelled':
-            return { class: 'bg-zinc-100 text-zinc-800', label: 'Cancelled' };
+            return { class: 'bg-surface-sunken text-text-primary', label: 'Cancelled' };
         default:
-            return { class: 'bg-zinc-100 text-zinc-800', label: status };
+            return { class: 'bg-surface-sunken text-text-primary', label: status };
     }
 };
 
 const columns = [
-    { key: 'date', label: 'Date' },
-    { key: 'employee', label: 'Employee' },
-    { key: 'amount', label: 'Amount' },
-    { key: 'recovered', label: 'Recovered' },
-    { key: 'outstanding', label: 'Outstanding' },
-    { key: 'status', label: 'Recovery' },
+    { key: 'date', label: 'Date', kind: 'date' as const },
+    { key: 'employee', label: 'Employee', kind: 'text' as const },
+    { key: 'amount', label: 'Amount', kind: 'out' as const },
+    { key: 'recovered', label: 'Recovered', kind: 'in' as const },
+    { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const },
+    { key: 'status', label: 'Recovery', kind: 'status' as const },
 ];
 
 const tableData = computed(() => {
@@ -404,15 +405,15 @@ const recoveryPercentage = computed(() => {
 
                     <Alert
                         v-if="advanceForm.amount && selectedEmployee"
-                        class="border-amber-300 bg-amber-50 text-amber-950 lg:col-span-12"
+                        class="border-status-attention/30 bg-status-attention/10 text-status-attention lg:col-span-12"
                     >
                         <AlertTriangle />
                         <AlertTitle>Advance warning</AlertTitle>
                         <AlertDescription v-if="advanceMonths > 0">
-                            {{ currency }}
-                            {{
-                                formatCurrency(Number(advanceForm.amount))
-                            }}
+                            <MoneyText
+                                :amount="Number(advanceForm.amount)"
+                                :currency="props.currency"
+                            />
                             equals {{ advanceMonths.toFixed(1) }} months of
                             {{ selectedEmployee.name }}'s salary. At the
                             automatic 50% recovery cap, this may take at least
@@ -432,20 +433,19 @@ const recoveryPercentage = computed(() => {
         <!-- Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card
-                class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10"
+                class="relative overflow-hidden border-border/80 bg-surface-sunken"
             >
                 <CardHeader class="pb-2">
                     <CardDescription>Total Given</CardDescription>
-                    <CardTitle class="text-2xl"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_amount) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl">
+                        <MoneyText :amount="stats.total_amount" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <TrendingUp class="h-4 w-4 text-sky-600" />
+                        <TrendingUp class="h-4 w-4 text-status-info" />
                         <span>{{ stats.total_advances }} advances</span>
                     </div>
                 </CardContent>
@@ -454,16 +454,15 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Outstanding</CardDescription>
-                    <CardTitle class="text-2xl text-amber-600"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_outstanding) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl text-status-attention">
+                        <MoneyText :amount="stats.total_outstanding" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <Clock class="h-4 w-4 text-amber-600" />
+                        <Clock class="h-4 w-4 text-status-attention" />
                         <span
                             >{{
                                 stats.pending_count +
@@ -478,16 +477,15 @@ const recoveryPercentage = computed(() => {
             <Card class="border-border/80">
                 <CardHeader class="pb-2">
                     <CardDescription>Recovered</CardDescription>
-                    <CardTitle class="text-2xl text-emerald-600"
-                        >{{ currency }}
-                        {{ formatCurrency(stats.total_recovered) }}</CardTitle
-                    >
+                    <CardTitle class="text-2xl text-status-success">
+                        <MoneyText :amount="stats.total_recovered" :currency="props.currency" />
+                    </CardTitle>
                 </CardHeader>
                 <CardContent class="pt-0">
                     <div
                         class="flex items-center gap-2 text-sm text-text-secondary"
                     >
-                        <CheckCircle class="h-4 w-4 text-emerald-600" />
+                        <CheckCircle class="h-4 w-4 text-status-success" />
                         <span>Via payroll</span>
                     </div>
                 </CardContent>
@@ -577,7 +575,7 @@ const recoveryPercentage = computed(() => {
             </CardHeader>
 
             <CardContent class="p-0">
-                <DataTable :data="tableData" :columns="columns">
+                <LedgerRegister :data="tableData" :columns="columns">
                     <template #empty>
                         <EmptyState
                             title="No salary advances yet"
@@ -604,31 +602,26 @@ const recoveryPercentage = computed(() => {
                     </template>
 
                     <template #cell-amount="{ row }">
-                        <span class="font-medium"
-                            >{{ currency }}
-                            {{ formatCurrency(row._raw.amount) }}</span
-                        >
+                        <span class="font-medium">
+                            <MoneyText :amount="row._raw.amount" :currency="props.currency" />
+                        </span>
                     </template>
 
                     <template #cell-recovered="{ row }">
-                        <span class="text-emerald-600"
-                            >{{ currency }}
-                            {{
-                                formatCurrency(row._raw.amount_recovered)
-                            }}</span
-                        >
+                        <span class="text-status-success">
+                            <MoneyText :amount="row._raw.amount_recovered" :currency="props.currency" />
+                        </span>
                     </template>
 
                     <template #cell-outstanding="{ row }">
                         <span
                             :class="
                                 row._raw.amount_outstanding > 0
-                                    ? 'font-medium text-amber-600'
+                                    ? 'font-medium text-status-attention'
                                     : 'text-muted-foreground'
                             "
                         >
-                            {{ currency }}
-                            {{ formatCurrency(row._raw.amount_outstanding) }}
+                            <MoneyText :amount="row._raw.amount_outstanding" :currency="props.currency" />
                         </span>
                     </template>
 
@@ -637,7 +630,7 @@ const recoveryPercentage = computed(() => {
                             {{ getStatusBadge(row._raw.status).label }}
                         </Badge>
                     </template>
-                </DataTable>
+                </LedgerRegister>
             </CardContent>
         </Card>
     </PageShell>

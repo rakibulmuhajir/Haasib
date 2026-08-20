@@ -1,24 +1,16 @@
 <script setup lang="ts">
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Pencil, Plus, Search, Trash2, Users } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -45,6 +37,31 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
     { title: 'Agents', href: `/${props.company.slug}/umrah/agents` },
 ];
+
+/**
+ * An agent list is a register of who owes what, so the balance is a figure in
+ * the figure column and everything else is language. The actions column only
+ * exists for someone who can act, which is why the array is computed.
+ */
+const columns = computed(() => [
+    { key: 'agent_number', label: 'Agent #', kind: 'ref' as const },
+    { key: 'name', label: 'Agent', kind: 'text' as const },
+    { key: 'phone', label: 'Phone', kind: 'text' as const },
+    { key: 'city', label: 'City', kind: 'text' as const },
+    { key: 'country', label: 'Country', kind: 'text' as const },
+    { key: 'balance', label: 'Balance', kind: 'amount' as const },
+    ...(props.canManageAgents
+        ? [
+              {
+                  key: 'actions',
+                  label: '',
+                  kind: 'text' as const,
+                  class: 'text-right',
+                  headerClass: 'text-right',
+              },
+          ]
+        : []),
+]);
 
 const applySearch = () =>
     router.get(
@@ -104,85 +121,70 @@ const confirmRemoveAgent = () => {
 
         <Card>
             <CardContent class="p-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Agent #</TableHead>
-                            <TableHead>Agent</TableHead>
-                            <TableHead>Phone</TableHead>
-                            <TableHead>City</TableHead>
-                            <TableHead>Country</TableHead>
-                            <TableHead class="text-right">Balance</TableHead>
-                            <TableHead
-                                v-if="canManageAgents"
-                                class="w-24 text-right"
-                                >Actions</TableHead
+                <LedgerRegister
+                    :data="agents.data"
+                    :columns="columns"
+                    clickable
+                    @row-click="
+                        (row) =>
+                            router.get(
+                                `/${company.slug}/umrah/agents/${row.id}`,
+                            )
+                    "
+                >
+                    <template #empty>No agents yet.</template>
+
+                    <template #cell-phone="{ row }">{{
+                        row.phone || '—'
+                    }}</template>
+                    <template #cell-city="{ row }">{{
+                        row.city || '—'
+                    }}</template>
+                    <template #cell-country="{ row }">{{
+                        row.country || '—'
+                    }}</template>
+
+                    <template #cell-balance="{ row }">
+                        <MoneyText
+                            :amount="row.balance"
+                            :currency="company.base_currency"
+                            class="font-semibold"
+                        />
+                    </template>
+
+                    <template #cell-actions="{ row }">
+                        <div
+                            class="flex items-center justify-end gap-1"
+                            @click.stop
+                        >
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                @click="
+                                    router.get(
+                                        `/${company.slug}/umrah/agents/${row.id}/edit`,
+                                    )
+                                "
                             >
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        <TableEmpty v-if="!agents.data.length" :colspan="7"
-                            >No agents yet.</TableEmpty
-                        >
-                        <TableRow
-                            v-for="agent in agents.data"
-                            :key="agent.id"
-                            class="cursor-pointer"
-                            @click="
-                                router.get(
-                                    `/${company.slug}/umrah/agents/${agent.id}`,
-                                )
-                            "
-                        >
-                            <TableCell class="font-medium">{{
-                                agent.agent_number
-                            }}</TableCell>
-                            <TableCell>{{ agent.name }}</TableCell>
-                            <TableCell>{{ agent.phone || '-' }}</TableCell>
-                            <TableCell>{{ agent.city || '-' }}</TableCell>
-                            <TableCell>{{ agent.country || '-' }}</TableCell>
-                            <TableCell class="text-right font-semibold"
-                                ><MoneyText
-                                    :amount="agent.balance"
-                                    :currency="company.base_currency"
-                            /></TableCell>
-                            <TableCell v-if="canManageAgents">
-                                <div
-                                    class="flex items-center justify-end gap-1"
-                                    @click.stop
+                                <Pencil class="h-4 w-4" />
+                                <span class="sr-only">Edit {{ row.name }}</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                :disabled="removeForm.processing"
+                                @click="removeAgent(row)"
+                            >
+                                <Trash2 class="h-4 w-4" />
+                                <span class="sr-only"
+                                    >Remove {{ row.name }}</span
                                 >
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="
-                                            router.get(
-                                                `/${company.slug}/umrah/agents/${agent.id}/edit`,
-                                            )
-                                        "
-                                    >
-                                        <Pencil class="h-4 w-4" />
-                                        <span class="sr-only"
-                                            >Edit {{ agent.name }}</span
-                                        >
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        :disabled="removeForm.processing"
-                                        @click="removeAgent(agent)"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                        <span class="sr-only"
-                                            >Remove {{ agent.name }}</span
-                                        >
-                                    </Button>
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                            </Button>
+                        </div>
+                    </template>
+                </LedgerRegister>
                 <RecordPagination
                     :current-page="agents.current_page"
                     :last-page="agents.last_page"

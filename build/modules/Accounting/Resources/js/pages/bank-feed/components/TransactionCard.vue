@@ -7,6 +7,7 @@ import ModeMatch from './ModeMatch.vue'
 import ModeCreate from './ModeCreate.vue'
 import ModeTransfer from './ModeTransfer.vue'
 import ModePark from './ModePark.vue'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Props {
   transaction: any // Typed properly in real app
@@ -39,13 +40,6 @@ const formatDate = (dateString: string) => {
   }).format(new Date(dateString))
 }
 
-const formatCurrency = (val: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency.value
-  }).format(Math.abs(val))
-}
 </script>
 
 <template>
@@ -63,8 +57,12 @@ const formatCurrency = (val: number) => {
           <h3 class="font-semibold text-lg leading-tight">{{ props.transaction.description }}</h3>
         </div>
         <div class="text-right">
-          <div class="text-lg font-bold" :class="[isSpend ? 'text-red-600' : 'text-green-600']">
-            {{ isSpend ? '-' : '+' }}{{ formatCurrency(amount) }}
+<!-- Money leaving a bank account is the business operating. Painting
+               every debit red made the feed look like a list of problems, and
+               left nothing to say with when one actually was. The sign carries
+               the direction, as it does everywhere else. -->
+          <div class="text-lg font-bold">
+            {{ isSpend ? '-' : '+' }}<MoneyText :amount="Math.abs(amount)" :currency="currency" />
           </div>
           <Badge variant="outline" class="mt-1 text-xs" v-if="props.transaction.suggestions?.match?.length">
             Match Found

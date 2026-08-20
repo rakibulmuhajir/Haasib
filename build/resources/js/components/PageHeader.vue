@@ -15,7 +15,7 @@ interface Action {
 }
 
 interface Props {
-  title: string
+  title?: string
   description?: string
   icon?: Component
   badge?: {
@@ -49,7 +49,7 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
         @click="backButton.onClick"
         variant="ghost"
         size="sm"
-        class="group -ml-2 inline-flex items-center gap-1.5 px-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
+        class="group -ml-2 inline-flex items-center gap-1.5 px-2 text-sm font-medium text-text-secondary transition-colors hover:text-foreground"
       >
         <component 
           :is="BackIcon" 
@@ -65,24 +65,33 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
         <!-- Title Row -->
         <div class="flex items-center gap-3">
           <!-- Icon with accent background -->
+          <!-- Was a teal-to-emerald gradient chip with a coloured drop shadow.
+               Shadow is reserved for surfaces that genuinely float — dialog,
+               popover, dropdown, toast — and a page-title icon does not float.
+               A rule and a quiet ground say the same thing without the glow. -->
           <div
             v-if="icon"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl 
-                   bg-gradient-to-br from-teal-500 to-emerald-600 shadow-md shadow-teal-500/20"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-2"
           >
-            <component :is="icon" class="h-5 w-5 text-white" />
+            <component :is="icon" class="h-5 w-5 text-text-secondary" />
           </div>
 
           <!-- Title -->
-          <h1 class="text-2xl font-semibold tracking-tight text-zinc-900">
-            {{ title }}
+          <!-- Page titles are the display role. Off-skin --display-family is
+               the sans stack, so this changes nothing until the skin is on. -->
+          <h1 class="font-display text-2xl font-semibold tracking-tight text-foreground">
+            <!-- Usually the title is a string. A page whose heading carries
+                 something with it -- Chart of Accounts and its help popover --
+                 needs to put markup here, and the alternative is that page
+                 building its own header and inventing its own type scale. -->
+            <slot name="title">{{ title }}</slot>
           </h1>
 
           <!-- Badge -->
           <Badge
             v-if="badge"
             :variant="badge.variant || 'secondary'"
-            class="shrink-0 rounded-full px-2.5 font-medium"
+            class="shrink-0 px-2.5"
           >
             {{ badge.text }}
           </Badge>
@@ -91,13 +100,13 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
         <!-- Description -->
         <p 
           v-if="description" 
-          class="mt-2 text-[15px] leading-relaxed text-zinc-500"
+          class="mt-2 text-[15px] leading-relaxed text-text-secondary"
         >
           {{ description }}
         </p>
 
         <!-- Custom description slot -->
-        <div v-if="$slots.description" class="mt-2 text-[15px] text-zinc-500">
+        <div v-if="$slots.description" class="mt-2 text-[15px] text-text-secondary">
           <slot name="description" />
         </div>
       </div>
@@ -115,11 +124,6 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
             :disabled="action.disabled || action.loading"
             @click="action.onClick"
             size="sm"
-            :class="[
-              action.variant === 'default' || !action.variant 
-                ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-600/20' 
-                : ''
-            ]"
           >
             <component
               :is="action.icon"

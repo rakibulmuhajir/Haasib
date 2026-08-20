@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -211,15 +213,13 @@ const isEditable = computed(() => {
     </template>
 
     <div v-if="!isEditable" class="mb-6">
-      <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+      <div class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
         <div class="flex items-center">
-          <div class="text-sm font-medium text-yellow-800">
+          <div class="text-sm font-medium text-status-attention">
             This vendor credit cannot be edited in its current status.
           </div>
           <div class="ml-2">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-              {{ credit.status }}
-            </span>
+            <StatusBadge :status="credit.status" />
           </div>
         </div>
       </div>
@@ -298,17 +298,17 @@ const isEditable = computed(() => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="grid gap-3 rounded border p-3 md:grid-cols-5"
+            class="grid gap-3 rounded-sm border p-3 md:grid-cols-5"
           >
             <div class="md:col-span-2">
-              <Label>Description <span class="text-red-500">*</span></Label>
+              <Label>Description <span class="text-status-critical">*</span></Label>
               <Input
                 v-model="line.description"
-                :class="{ 'border-red-300': !line.description || line.description.trim() === '' }"
+                :class="{ 'border-status-critical/30': !line.description || line.description.trim() === '' }"
                 placeholder="Required for line item to be included"
                 :disabled="!isEditable"
               />
-              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-red-500 mt-1">
+              <p v-if="!line.description || line.description.trim() === ''" class="text-xs text-status-critical mt-1">
                 Description required - item will be excluded
               </p>
             </div>
@@ -357,19 +357,19 @@ const isEditable = computed(() => {
       <div class="grid gap-2 md:w-1/2">
         <div class="flex justify-between text-sm">
           <span>Subtotal</span>
-          <span>{{ totals.subtotal.toFixed(2) }}</span>
+          <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>Tax</span>
-          <span>{{ totals.tax.toFixed(2) }}</span>
+          <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>Discount</span>
-          <span>{{ totals.discount.toFixed(2) }}</span>
+          <MoneyText :amount="totals.discount" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-base font-semibold">
           <span>Estimated Total</span>
-          <span>{{ totals.total.toFixed(2) }}</span>
+          <MoneyText :amount="totals.total" :currency="form.currency" />
         </div>
       </div>
 

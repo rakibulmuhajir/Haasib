@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import DateTimeText from '@/components/DateTimeText.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -23,15 +24,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -69,6 +61,23 @@ const applyFilters = () =>
         },
         { preserveState: true, replace: true },
     );
+
+/**
+ * The expense number is the row's reference; description and an optional
+ * source reference ride along under it rather than claiming columns of their
+ * own. Status is one of two book states -- posted or reversed -- so it goes
+ * through the shared vocabulary rather than a page-local badge.
+ */
+const columns = [
+    { key: 'expense_number', label: 'Expense', kind: 'ref' as const },
+    { key: 'expense_date', label: 'Date', kind: 'date' as const },
+    { key: 'category', label: 'Category', kind: 'text' as const },
+    { key: 'payee', label: 'Paid to', kind: 'text' as const },
+    { key: 'payment_account', label: 'Paid from', kind: 'text' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'amount', label: 'Amount', kind: 'amount' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
 
 const openReverse = (expense: any) => {
     reverseForm.reset();
@@ -159,104 +168,70 @@ const reverseExpense = () => {
 
         <Card>
             <CardContent class="p-0">
-                <Table>
-                    <TableHeader
-                        ><TableRow
-                            ><TableHead>Expense</TableHead
-                            ><TableHead>Date</TableHead
-                            ><TableHead>Category</TableHead
-                            ><TableHead>Paid to</TableHead
-                            ><TableHead>Paid from</TableHead
-                            ><TableHead>Status</TableHead
-                            ><TableHead class="text-right">Amount</TableHead
-                            ><TableHead class="w-16"
-                                ><span class="sr-only">Action</span></TableHead
-                            ></TableRow
-                        ></TableHeader
-                    >
-                    <TableBody>
-                        <TableEmpty v-if="!expenses.data.length" :colspan="8"
-                            >No expenses found.</TableEmpty
+                <LedgerRegister :data="expenses.data" :columns="columns">
+                    <template #empty>No expenses found.</template>
+
+                    <template #cell-expense_number="{ row }">
+                        <div class="font-medium">
+                            {{ row.expense_number }}
+                        </div>
+                        <div
+                            class="max-w-64 truncate text-xs text-muted-foreground"
+                            :title="row.description"
                         >
-                        <TableRow
-                            v-for="expense in expenses.data"
-                            :key="expense.id"
+                            {{ row.description }}
+                        </div>
+                        <div
+                            v-if="row.reference"
+                            class="text-xs text-muted-foreground"
                         >
-                            <TableCell
-                                ><div class="font-medium">
-                                    {{ expense.expense_number }}
-                                </div>
-                                <div
-                                    class="max-w-64 truncate text-xs text-muted-foreground"
-                                    :title="expense.description"
-                                >
-                                    {{ expense.description }}
-                                </div>
-                                <div
-                                    v-if="expense.reference"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    Ref: {{ expense.reference }}
-                                </div></TableCell
+                            Ref: {{ row.reference }}
+                        </div>
+                    </template>
+
+                    <template #cell-expense_date="{ row }">
+                        <DateTimeText :value="row.expense_date" mode="date" />
+                    </template>
+
+                    <template #cell-category="{ row }">{{
+                        row.expense_account?.name || '—'
+                    }}</template>
+
+                    <template #cell-payee="{ row }">{{ row.payee || '—' }}</template>
+
+                    <template #cell-payment_account="{ row }">{{
+                        row.payment_account?.name || '—'
+                    }}</template>
+
+                    <template #cell-status="{ row }">
+                        <StatusBadge :status="row.status" />
+                    </template>
+
+                    <template #cell-amount="{ row }">
+                        <MoneyText :amount="row.amount" :currency="row.currency" />
+                        <div
+                            v-if="row.currency !== row.base_currency"
+                            class="text-xs text-muted-foreground"
+                        >
+                            <MoneyText :amount="row.base_amount" :currency="row.base_currency" />
+                        </div>
+                    </template>
+
+                    <template #cell-actions="{ row }">
+                        <div class="flex justify-end gap-2">
+                            <Button
+                                v-if="canReverse && row.status === 'posted'"
+                                size="icon"
+                                variant="ghost"
+                                title="Reverse expense"
+                                @click="openReverse(row)"
+                                ><RotateCcw class="h-4 w-4" /><span class="sr-only"
+                                    >Reverse expense</span
+                                ></Button
                             >
-                            <TableCell
-                                ><DateTimeText
-                                    :value="expense.expense_date"
-                                    mode="date"
-                            /></TableCell>
-                            <TableCell>{{
-                                expense.expense_account?.name || '-'
-                            }}</TableCell>
-                            <TableCell>{{ expense.payee || '-' }}</TableCell>
-                            <TableCell>{{
-                                expense.payment_account?.name || '-'
-                            }}</TableCell>
-                            <TableCell
-                                ><Badge
-                                    :variant="
-                                        expense.status === 'reversed'
-                                            ? 'outline'
-                                            : 'secondary'
-                                    "
-                                    class="capitalize"
-                                    >{{ expense.status }}</Badge
-                                ></TableCell
-                            >
-                            <TableCell class="text-right"
-                                ><MoneyText
-                                    :amount="expense.amount"
-                                    :currency="expense.currency" />
-                                <div
-                                    v-if="
-                                        expense.currency !==
-                                        expense.base_currency
-                                    "
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    <MoneyText
-                                        :amount="expense.base_amount"
-                                        :currency="expense.base_currency"
-                                    /></div
-                            ></TableCell>
-                            <TableCell
-                                ><Button
-                                    v-if="
-                                        canReverse &&
-                                        expense.status === 'posted'
-                                    "
-                                    size="icon"
-                                    variant="ghost"
-                                    title="Reverse expense"
-                                    @click="openReverse(expense)"
-                                    ><RotateCcw class="h-4 w-4" /><span
-                                        class="sr-only"
-                                        >Reverse expense</span
-                                    ></Button
-                                ></TableCell
-                            >
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                        </div>
+                    </template>
+                </LedgerRegister>
                 <RecordPagination
                     :current-page="expenses.current_page"
                     :last-page="expenses.last_page"

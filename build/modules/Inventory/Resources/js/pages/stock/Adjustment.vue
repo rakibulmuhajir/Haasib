@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ interface CompanyRef {
   id: string
   name: string
   slug: string
+  base_currency: string
 }
 
 interface Warehouse {
@@ -81,11 +83,6 @@ const estimatedValue = computed(() => {
   const unitCost = Number(form.unit_cost || 0)
   return quantity * unitCost
 })
-
-const formatMoney = (amount: number) => new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(amount)
 
 const accountingHint = computed(() => {
   if (adjustmentType.value === 'increase') {
@@ -175,14 +172,14 @@ const reasons = [
               <div class="flex items-center space-x-2">
                 <RadioGroupItem value="increase" id="increase" />
                 <Label for="increase" class="flex items-center gap-1 cursor-pointer">
-                  <Plus class="h-4 w-4 text-green-600" />
+                  <Plus class="h-4 w-4 text-status-success" />
                   Increase
                 </Label>
               </div>
               <div class="flex items-center space-x-2">
                 <RadioGroupItem value="decrease" id="decrease" />
                 <Label for="decrease" class="flex items-center gap-1 cursor-pointer">
-                  <Minus class="h-4 w-4 text-red-600" />
+                  <Minus class="h-4 w-4 text-status-critical" />
                   Decrease
                 </Label>
               </div>
@@ -230,8 +227,8 @@ const reasons = [
             <p class="text-sm text-muted-foreground">
               Used to post the inventory value. Existing item cost is filled automatically when available.
             </p>
-            <p v-if="estimatedValue > 0" class="text-sm text-muted-foreground">
-              Estimated value: {{ formatMoney(estimatedValue) }}
+            <p v-if="estimatedValue > 0" class="text-sm text-text-secondary">
+              Estimated value: <MoneyText :amount="estimatedValue" :currency="company.base_currency" />
             </p>
             <p v-if="form.errors.unit_cost" class="text-sm text-destructive">{{ form.errors.unit_cost }}</p>
           </div>

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -30,11 +31,19 @@ interface CurrencyRef {
   currency_code: string
 }
 
+/** Prefilled from the screen you arrived from. */
+interface Preselect {
+  customer_id?: string | null
+  invoice_id?: string | null
+  vendor_id?: string | null
+}
+
 const props = defineProps<{
   company: CompanyRef
   customers: Array<{ id: string; name: string }>
   invoices: InvoiceRef[]
   currencies: CurrencyRef[]
+  preselect?: Preselect
 }>()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -45,8 +54,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const form = useForm({
-  customer_id: '',
-  invoice_id: '',
+  customer_id: props.preselect?.customer_id ?? '',
+  invoice_id: props.preselect?.invoice_id ?? '',
   amount: 0,
   base_currency: props.company.base_currency,
   reason: '',
@@ -71,14 +80,6 @@ const customerInvoices = computed(() => {
 watch(() => form.customer_id, () => {
   form.invoice_id = ''
 })
-
-const formatCurrency = (amount: number, currencyCode?: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode || form.base_currency || 'USD',
-  }).format(amount)
-}
 
 const submit = () => {
   form.post(`/${props.company.slug}/credit-notes`)
@@ -152,7 +153,7 @@ const submit = () => {
                     :key="invoice.id"
                     :value="invoice.id"
                   >
-                    {{ invoice.invoice_number }} - {{ formatCurrency(invoice.total_amount, invoice.currency) }}
+                    {{ invoice.invoice_number }} - <MoneyText :amount="invoice.total_amount" :currency="invoice.currency" />
                   </SelectItem>
                 </template>
                 <template v-else>
@@ -187,7 +188,7 @@ const submit = () => {
             />
             <p v-if="form.errors.amount" class="text-sm text-destructive mt-1">{{ form.errors.amount }}</p>
             <p v-else class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -294,7 +295,7 @@ const submit = () => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Credit Amount:</span>
-            <span class="font-bold">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold"><MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Customer:</span>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -109,12 +109,12 @@ const filtered = computed(() => {
 })
 
 const columns = [
-  { key: 'reading_date', label: 'Date' },
-  { key: 'pump', label: 'Pump' },
-  { key: 'shift', label: 'Shift' },
-  { key: 'opening', label: 'Opening' },
-  { key: 'closing', label: 'Closing' },
-  { key: 'liters', label: 'Liters' },
+  { key: 'reading_date', label: 'Date', kind: 'date' as const },
+  { key: 'pump', label: 'Pump', kind: 'text' as const },
+  { key: 'shift', label: 'Shift', kind: 'status' as const },
+  { key: 'opening', label: 'Opening', kind: 'amount' as const },
+  { key: 'closing', label: 'Closing', kind: 'amount' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
 ]
 
 const tableData = computed(() =>
@@ -213,7 +213,7 @@ const submit = () => {
           <CardTitle class="text-2xl">{{ stats.total }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-sky-200 text-sky-700">
+          <Badge variant="outline" class="border-status-info/30 text-status-info">
             {{ props.pumps.length }} pump(s)
           </Badge>
         </CardContent>
@@ -225,7 +225,7 @@ const submit = () => {
           <CardTitle class="text-2xl">{{ stats.day }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-amber-100 text-amber-800 hover:bg-amber-100">
+          <Badge class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">
             <SunMedium class="mr-1 h-3.5 w-3.5" /> day
           </Badge>
         </CardContent>
@@ -237,7 +237,7 @@ const submit = () => {
           <CardTitle class="text-2xl">{{ stats.night }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             <Moon class="mr-1 h-3.5 w-3.5" /> night
           </Badge>
         </CardContent>
@@ -249,7 +249,7 @@ const submit = () => {
           <CardTitle class="text-2xl">{{ formatQty(stats.liters) }}L</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="secondary" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+          <Badge variant="secondary" class="bg-status-success/10 text-status-success hover:bg-status-success/10">
             Meter delta
           </Badge>
         </CardContent>
@@ -291,7 +291,7 @@ const submit = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           :pagination="pagination"
@@ -324,7 +324,7 @@ const submit = () => {
 
           <template #cell-shift="{ row }">
             <Badge
-              :class="row._raw.shift === 'day' ? 'bg-amber-100 text-amber-800 hover:bg-amber-100' : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-100'"
+              :class="row._raw.shift === 'day' ? 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10' : 'bg-status-info/10 text-status-info hover:bg-status-info/10'"
             >
               {{ row._raw.shift }}
             </Badge>
@@ -336,7 +336,7 @@ const submit = () => {
               <span class="font-medium text-text-primary">{{ row.reading_date }}</span>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -344,7 +344,7 @@ const submit = () => {
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Gauge class="h-5 w-5 text-sky-600" />
+            <Gauge class="h-5 w-5 text-status-info" />
             New pump reading
           </DialogTitle>
           <DialogDescription>

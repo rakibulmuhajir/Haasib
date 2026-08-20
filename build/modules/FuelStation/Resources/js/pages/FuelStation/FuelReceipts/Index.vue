@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Droplets, Plus, Eye, Search, TrendingUp, Calendar, Truck } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Receipt {
   id: string
@@ -74,8 +74,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Fuel Receipts', href: `/${companySlug.value}/fuel/receipts` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 const search = ref('')
 
 const filteredReceipts = computed(() => {
@@ -87,8 +85,14 @@ const filteredReceipts = computed(() => {
   )
 })
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
+/*
+ * Litres, not money. This was called formatCurrency and was doing both jobs --
+ * grouping tank volumes and grouping rupees -- which is how a litre count ends
+ * up looking like a price. Money goes through MoneyText; this only ever
+ * groups a quantity, and the " L" that follows it in the template is the unit.
+ */
+const formatLiters = (liters: number) => {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(liters)
 }
 
 const formatDate = (dateStr: string) => {
@@ -96,11 +100,11 @@ const formatDate = (dateStr: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'reference', label: 'Reference' },
-  { key: 'liters', label: 'Liters' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -109,8 +113,8 @@ const tableData = computed(() => {
     id: r.id,
     date: formatDate(r.transaction_date),
     reference: r.reference || '-',
-    liters: `${formatCurrency(r.metadata.total_liters || 0)} L`,
-    amount: `${currency.value} ${formatCurrency(r.total_amount)}`,
+    liters: `${formatLiters(r.metadata.total_liters || 0)} L`,
+    amount: r.total_amount,
     status: r.status,
     _raw: r,
   }))
@@ -143,14 +147,14 @@ const goToShow = (row: any) => {
 
     <!-- Stats -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Receipts</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_receipts }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Truck class="h-4 w-4 text-sky-600" />
+            <Truck class="h-4 w-4 text-status-info" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -159,11 +163,11 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Liters</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(stats.total_liters) }} L</CardTitle>
+          <CardTitle class="text-2xl">{{ formatLiters(stats.total_liters) }} L</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Droplets class="h-4 w-4 text-sky-600" />
+            <Droplets class="h-4 w-4 text-status-info" />
             <span>Received</span>
           </div>
         </CardContent>
@@ -172,11 +176,11 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Purchases</span>
           </div>
         </CardContent>
@@ -189,7 +193,7 @@ const goToShow = (row: any) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Calendar class="h-4 w-4 text-indigo-600" />
+            <Calendar class="h-4 w-4 text-status-info" />
             <span>Deliveries</span>
           </div>
         </CardContent>
@@ -213,7 +217,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -234,16 +238,16 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-liters="{ row }">
-            <span class="font-medium text-sky-600">{{ row.liters }}</span>
+            <span class="font-medium text-status-info">{{ row.liters }}</span>
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium">{{ row.amount }}</span>
+            <span class="font-medium"><MoneyText :amount="row.amount" :currency="props.currency" /></span>
           </template>
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.status === 'posted' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+              :class="row._raw.status === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'"
             >
               {{ row._raw.status === 'posted' ? 'Posted' : row._raw.status }}
             </Badge>
@@ -254,7 +258,7 @@ const goToShow = (row: any) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

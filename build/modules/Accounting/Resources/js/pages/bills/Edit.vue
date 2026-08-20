@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -209,7 +210,7 @@ const handleSubmit = () => {
           <select
             id="vendor_id"
             v-model="form.vendor_id"
-            class="w-full rounded border px-3 py-2"
+            class="w-full rounded-sm border px-3 py-2"
             :disabled="!['draft','received'].includes(bill.status)"
           >
             <option value="">{{ t('selectVendor') }}</option>
@@ -282,7 +283,7 @@ const handleSubmit = () => {
           <div
             v-for="(line, idx) in form.line_items"
             :key="idx"
-            class="rounded border p-3 space-y-3"
+            class="rounded-sm border p-3 space-y-3"
           >
             <!-- Item & Warehouse Row (if inventory enabled) -->
             <div v-if="inventoryEnabled && items?.length" class="grid gap-3 md:grid-cols-3">
@@ -397,19 +398,19 @@ const handleSubmit = () => {
       <div class="grid gap-2 md:w-1/2">
         <div class="flex justify-between text-sm">
           <span>{{ t('subtotal') }}</span>
-          <span>{{ totals.subtotal.toFixed(2) }}</span>
+          <MoneyText :amount="totals.subtotal" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>{{ t('tax') }}</span>
-          <span>{{ totals.tax.toFixed(2) }}</span>
+          <MoneyText :amount="totals.tax" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-sm">
           <span>{{ t('discount') }}</span>
-          <span>{{ totals.discount.toFixed(2) }}</span>
+          <MoneyText :amount="totals.discount" :currency="form.currency" />
         </div>
         <div class="flex justify-between text-base font-semibold">
           <span>{{ t('total') }}</span>
-          <span>{{ totals.total.toFixed(2) }}</span>
+          <MoneyText :amount="totals.total" :currency="form.currency" />
         </div>
       </div>
 

@@ -1,15 +1,14 @@
 <script setup lang="ts">
+import LedgerRegister from '@/components/LedgerRegister.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowLeft, Calculator, FilePenLine } from 'lucide-vue-next';
-
-type AccountingState = 'pending' | 'posted' | 'shared' | 'reversed' | 'superseded' | 'no_charge' | 'unposted';
+import { computed } from 'vue';
 
 const props = defineProps<{
     company: { name: string; slug: string; base_currency: string };
@@ -29,21 +28,56 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Accounting', href: `/${props.company.slug}/umrah/vouchers/${props.voucher.id}/accounting` },
 ];
 
-const stateLabels: Record<AccountingState, string> = {
-    pending: 'Pending approval',
-    posted: 'Posted',
-    shared: 'Shared billing',
-    reversed: 'Reversed',
-    superseded: 'Superseded',
-    no_charge: 'No charge',
-    unposted: 'Needs review',
-};
+/**
+ * Seven posting states used to be named and coloured here, privately, with
+ * `unposted` painted the same red as a rejection. They are ordinary record
+ * states and now go through the shared vocabulary, where "not recorded" is
+ * amber because it needs a person, not red because it is a disaster.
+ *
+ * The inherited services below are a fixed statement, so the rows are
+ * described rather than written out as markup. Revenue and cost are the two
+ * directions of the same line and get the two direction columns.
+ */
+const groupColumns = [
+    { key: 'service', label: 'Group service', kind: 'text' as const },
+    { key: 'supplier', label: 'Supplier', kind: 'text' as const },
+    { key: 'revenue', label: 'Revenue', kind: 'in' as const },
+    { key: 'cost', label: 'Cost', kind: 'out' as const },
+];
 
-const stateVariant = (state: AccountingState) => {
-    if (state === 'posted') return 'default';
-    if (['reversed', 'unposted'].includes(state)) return 'destructive';
-    return 'secondary';
-};
+const groupRows = computed(() => {
+    const rows: { key: string; service: string; supplier: string; revenue: number; cost: number | null }[] = [
+        {
+            key: 'visa',
+            service: 'Visa',
+            supplier: props.groupPosting.vendor?.name || 'Not assigned',
+            revenue: Number(props.groupPosting.visa_sale_amount || 0),
+            cost: Number(props.groupPosting.visa_cost_amount || 0),
+        },
+        {
+            key: 'transport',
+            service: 'Transport',
+            supplier: props.groupPosting.mandatory_transport_vendor?.name || 'Fare suppliers',
+            revenue: Number(props.groupPosting.transport_amount || 0),
+            cost: Number(props.groupPosting.transport_cost_amount || 0),
+        },
+    ];
+
+    // A discount is a negative on the revenue line, not a separate colour and
+    // not a minus sign glued to the front of a figure -- MoneyText owns the
+    // one negative convention in the application.
+    if (Number(props.groupPosting.discount_amount) > 0) {
+        rows.push({
+            key: 'discount',
+            service: 'Group discount',
+            supplier: 'Group adjustment',
+            revenue: -Number(props.groupPosting.discount_amount),
+            cost: null,
+        });
+    }
+
+    return rows;
+});
 </script>
 
 <template>
@@ -100,40 +134,31 @@ const stateVariant = (state: AccountingState) => {
                             <CardTitle>Inherited from Group</CardTitle>
                             <CardDescription>{{ groupPosting.group_number }} · Posted when visa and transport were approved</CardDescription>
                         </div>
-                        <Badge :variant="stateVariant(groupPosting.accounting_state)">
-                            {{ stateLabels[groupPosting.accounting_state as AccountingState] }}
-                        </Badge>
+                        <StatusBadge :status="groupPosting.accounting_state" />
                     </div>
                 </CardHeader>
                 <CardContent class="p-0">
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Group service</TableHead><TableHead>Supplier</TableHead><TableHead class="text-right">Revenue</TableHead><TableHead class="text-right">Cost</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            <TableRow>
-                                <TableCell class="font-medium">Visa</TableCell>
-                                <TableCell>{{ groupPosting.vendor?.name || 'Not assigned' }}</TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.visa_sale_amount" :currency="company.base_currency" /></TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.visa_cost_amount" :currency="company.base_currency" /></TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell class="font-medium">Transport</TableCell>
-                                <TableCell>{{ groupPosting.mandatory_transport_vendor?.name || 'Fare suppliers' }}</TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.transport_amount" :currency="company.base_currency" /></TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.transport_cost_amount" :currency="company.base_currency" /></TableCell>
-                            </TableRow>
-                            <TableRow v-if="Number(groupPosting.discount_amount) > 0">
-                                <TableCell class="font-medium">Group discount</TableCell>
-                                <TableCell>Group adjustment</TableCell>
-                                <TableCell class="text-right">-<MoneyText :amount="groupPosting.discount_amount" :currency="company.base_currency" /></TableCell>
-                                <TableCell />
-                            </TableRow>
-                            <TableRow class="font-semibold">
-                                <TableCell>Group stage total</TableCell><TableCell />
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.revenue" :currency="company.base_currency" /></TableCell>
-                                <TableCell class="text-right"><MoneyText :amount="groupPosting.cost" :currency="company.base_currency" /></TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                    <LedgerRegister
+                        :data="groupRows"
+                        :columns="groupColumns"
+                        key-field="key"
+                        :totals="{}"
+                        totals-label="Group stage total"
+                    >
+                        <template #cell-revenue="{ row }">
+                            <MoneyText :amount="row.revenue" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-cost="{ row }">
+                            <MoneyText v-if="row.cost !== null" :amount="row.cost" :currency="company.base_currency" />
+                        </template>
+
+                        <template #total-revenue>
+                            <MoneyText :amount="groupPosting.revenue" :currency="company.base_currency" />
+                        </template>
+                        <template #total-cost>
+                            <MoneyText :amount="groupPosting.cost" :currency="company.base_currency" />
+                        </template>
+                    </LedgerRegister>
                     <div class="border-t px-6 py-3 text-xs text-muted-foreground">Displayed for context. These amounts remain owned and posted by the parent group.</div>
                 </CardContent>
             </Card>
@@ -145,9 +170,7 @@ const stateVariant = (state: AccountingState) => {
                             <CardTitle>Added by Voucher</CardTitle>
                             <CardDescription>Company-booked hotels post when this voucher is approved</CardDescription>
                         </div>
-                        <Badge :variant="stateVariant(voucherPosting.accounting_state)">
-                            {{ stateLabels[voucherPosting.accounting_state as AccountingState] }}
-                        </Badge>
+                        <StatusBadge :status="voucherPosting.accounting_state" />
                     </div>
                 </CardHeader>
                 <CardContent class="space-y-4">

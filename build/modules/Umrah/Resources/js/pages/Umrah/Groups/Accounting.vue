@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -84,18 +85,37 @@ const totalCost = computed(() =>
 const profit = computed(() => receivable.value - totalCost.value);
 const balance = computed(() => Math.max(receivable.value - Number(props.group.total_paid || 0), 0));
 const paymentStatus = computed(() => {
-    if (Number(props.group.total_paid || 0) <= 0) {
-        return { label: 'Unpaid', variant: 'secondary' as const };
-    }
-
-    return balance.value <= 0
-        ? { label: 'Paid', variant: 'default' as const }
-        : { label: 'Partially paid', variant: 'secondary' as const };
+    if (Number(props.group.total_paid || 0) <= 0) return 'unpaid';
+    return balance.value <= 0 ? 'paid' : 'partially_paid';
 });
-const accountingStates: Record<string, string> = {
-    pending: 'Pending approval', posted: 'Posted', shared: 'Shared billing', reversed: 'Reversed',
-    superseded: 'Superseded', no_charge: 'No charge', unposted: 'Needs review',
-};
+
+/**
+ * The stage a service was added at (group vs voucher) is a category, not a
+ * state, so it is a plain annotation chip rather than a badge borrowed from
+ * the status vocabulary. Quantity is a count, so it reads as a figure like
+ * any other amount column.
+ */
+const servicesColumns = [
+    { key: 'stage', label: 'Stage', kind: 'text' as const },
+    { key: 'service', label: 'Service', kind: 'text' as const },
+    { key: 'quantity', label: 'Quantity', kind: 'amount' as const },
+    { key: 'charge', label: 'Charge', kind: 'amount' as const },
+];
+
+/**
+ * `accounting_state` is one of the seven posting states, all of which
+ * already live in the shared vocabulary -- no page-local label map needed.
+ * Pax and company-stay counts are figures, and the voucher number is this
+ * row's reference.
+ */
+const voucherColumns = [
+    { key: 'voucher_number', label: 'Voucher', kind: 'ref' as const },
+    { key: 'passengers', label: 'Pax', kind: 'amount' as const },
+    { key: 'company_stays', label: 'Company stays', kind: 'amount' as const },
+    { key: 'accounting_state', label: 'Status', kind: 'status' as const },
+    { key: 'hotel_sale_amount', label: 'Hotel charge', kind: 'amount' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
 
 const submit = () => {
     form
@@ -152,38 +172,44 @@ const submit = () => {
                 <Card>
                     <CardHeader><CardTitle>Used Services</CardTitle></CardHeader>
                     <CardContent class="p-0">
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Stage</TableHead><TableHead>Service</TableHead><TableHead class="text-center">Quantity</TableHead><TableHead class="text-right">Charge</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                                <TableEmpty v-if="!services.length" :colspan="4">No services recorded.</TableEmpty>
-                                <TableRow v-for="service in services" :key="`${service.service}-${service.quantity}`">
-                                    <TableCell><Badge variant="secondary">{{ service.stage === 'group' ? 'Group' : 'Voucher' }}</Badge></TableCell>
-                                    <TableCell class="font-medium">{{ service.service }}</TableCell>
-                                    <TableCell class="text-center">{{ service.quantity }}</TableCell>
-                                    <TableCell class="text-right"><MoneyText :amount="service.charge" :currency="company.base_currency" /></TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
+                        <LedgerRegister
+                            :data="services"
+                            :columns="servicesColumns"
+                            :key-field="(row: any, i: number) => `${row.service}-${row.quantity}-${i}`"
+                        >
+                            <template #empty>No services recorded.</template>
+
+                            <template #cell-stage="{ row }">
+                                <MetaChip tone="neutral" bare>{{ row.stage === 'group' ? 'Group' : 'Voucher' }}</MetaChip>
+                            </template>
+
+                            <template #cell-charge="{ row }">
+                                <MoneyText :amount="row.charge" :currency="company.base_currency" />
+                            </template>
+                        </LedgerRegister>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader><CardTitle>Voucher Accounting</CardTitle></CardHeader>
                     <CardContent class="p-0">
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Voucher</TableHead><TableHead class="text-center">Pax</TableHead><TableHead class="text-center">Company stays</TableHead><TableHead>Status</TableHead><TableHead class="text-right">Hotel charge</TableHead><TableHead class="w-12" /></TableRow></TableHeader>
-                            <TableBody>
-                                <TableEmpty v-if="!voucherBreakdown.length" :colspan="6">No vouchers created yet. Group visa and transport accounting remains posted.</TableEmpty>
-                                <TableRow v-for="voucher in voucherBreakdown" :key="voucher.id">
-                                    <TableCell class="font-medium">{{ voucher.voucher_number }}</TableCell>
-                                    <TableCell class="text-center">{{ voucher.passengers }}</TableCell>
-                                    <TableCell class="text-center">{{ voucher.company_stays }}</TableCell>
-                                    <TableCell><Badge variant="secondary">{{ accountingStates[voucher.accounting_state] || voucher.accounting_state }}</Badge></TableCell>
-                                    <TableCell class="text-right"><MoneyText :amount="voucher.hotel_sale_amount" :currency="company.base_currency" /></TableCell>
-                                    <TableCell><Button size="icon" variant="ghost" title="Open voucher accounting" @click="router.get(`/${company.slug}/umrah/vouchers/${voucher.id}/accounting`)"><Calculator class="h-4 w-4" /></Button></TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
+                        <LedgerRegister :data="voucherBreakdown" :columns="voucherColumns">
+                            <template #empty>No vouchers created yet. Group visa and transport accounting remains posted.</template>
+
+                            <template #cell-accounting_state="{ row }">
+                                <StatusBadge :status="row.accounting_state" />
+                            </template>
+
+                            <template #cell-hotel_sale_amount="{ row }">
+                                <MoneyText :amount="row.hotel_sale_amount" :currency="company.base_currency" />
+                            </template>
+
+                            <template #cell-actions="{ row }">
+                                <div class="flex justify-end gap-2">
+                                    <Button size="icon" variant="ghost" title="Open voucher accounting" @click="router.get(`/${company.slug}/umrah/vouchers/${row.id}/accounting`)"><Calculator class="h-4 w-4" /></Button>
+                                </div>
+                            </template>
+                        </LedgerRegister>
                     </CardContent>
                 </Card>
 
@@ -232,7 +258,7 @@ const submit = () => {
                         <div class="flex justify-between border-t pt-3 font-medium"><span>Total receivable</span><MoneyText :amount="receivable" :currency="company.base_currency" /></div>
                         <div class="flex justify-between"><span>Received</span><MoneyText :amount="group.total_paid" :currency="company.base_currency" /></div>
                         <div class="flex justify-between border-t pt-3 text-base font-semibold"><span>Balance</span><MoneyText :amount="balance" :currency="company.base_currency" /></div>
-                        <Badge :variant="paymentStatus.variant">{{ paymentStatus.label }}</Badge>
+                        <StatusBadge :status="paymentStatus" />
                     </CardContent>
                 </Card>
 

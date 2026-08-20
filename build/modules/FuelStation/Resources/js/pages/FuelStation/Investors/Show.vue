@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { User, Plus, Wallet, TrendingUp, Banknote, Package, ArrowLeft } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface InvestorLot {
   id: string
@@ -74,16 +75,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 const currency = computed(() => currencySymbol(currencyCode.value))
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
 
 const formatNumber = (value: number, decimals = 2) => {
   return new Intl.NumberFormat('en-US', {
@@ -159,13 +150,13 @@ const submitCommission = () => {
 
 // Lots table
 const lotColumns = [
-  { key: 'date', label: 'Date' },
-  { key: 'amount', label: 'Amount', align: 'right' as const },
-  { key: 'rate', label: 'Rate', align: 'right' as const },
-  { key: 'units', label: 'Units', align: 'right' as const },
-  { key: 'remaining', label: 'Remaining', align: 'right' as const },
-  { key: 'progress', label: 'Progress' },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const, align: 'right' as const },
+  { key: 'rate', label: 'Rate', kind: 'amount' as const, align: 'right' as const },
+  { key: 'units', label: 'Units', kind: 'amount' as const, align: 'right' as const },
+  { key: 'remaining', label: 'Remaining', kind: 'amount' as const, align: 'right' as const },
+  { key: 'progress', label: 'Progress', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const lotTableData = computed(() => {
@@ -176,7 +167,7 @@ const lotTableData = computed(() => {
     return {
       id: lot.id,
       date: formatDate(lot.deposit_date),
-      amount: formatCurrency(lot.investment_amount),
+      amount: lot.investment_amount,
       rate: `${formatNumber(lot.entitlement_rate)} + ${formatNumber(lot.commission_rate)}`,
       units: formatNumber(lot.units_entitled),
       remaining: formatNumber(lot.units_remaining),
@@ -190,13 +181,13 @@ const lotTableData = computed(() => {
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
     case 'active':
-      return 'bg-emerald-600 text-white hover:bg-emerald-600'
+      return 'bg-status-success text-status-success-contrast hover:bg-status-success'
     case 'depleted':
-      return 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'
+      return 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'
     case 'withdrawn':
-      return 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+      return 'bg-status-attention/10 text-status-attention hover:bg-status-attention/10'
     default:
-      return 'bg-zinc-100 text-zinc-700'
+      return 'bg-surface-sunken text-text-primary'
   }
 }
 </script>
@@ -218,7 +209,7 @@ const getStatusBadgeClass = (status: string) => {
       <Button
         v-if="investor.outstanding_commission > 0"
         variant="default"
-        class="bg-amber-600 hover:bg-amber-700"
+        class="bg-status-attention hover:bg-status-attention"
         @click="openPayCommission"
       >
         <Banknote class="mr-2 h-4 w-4" />
@@ -231,14 +222,14 @@ const getStatusBadgeClass = (status: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_invested" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>{{ lots.length }} lot(s)</span>
           </div>
         </CardContent>
@@ -247,10 +238,10 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Earned</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_commission_earned) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_commission_earned" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             <TrendingUp class="mr-1 h-3 w-3" />
             Lifetime
           </Badge>
@@ -260,10 +251,10 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Paid</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(investor.total_commission_paid) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="investor.total_commission_paid" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="secondary" class="bg-zinc-100 text-zinc-700 hover:bg-zinc-100">
+          <Badge variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">
             <Banknote class="mr-1 h-3 w-3" />
             Disbursed
           </Badge>
@@ -273,19 +264,19 @@ const getStatusBadgeClass = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Outstanding</CardDescription>
-          <CardTitle class="text-2xl" :class="investor.outstanding_commission > 0 ? 'text-amber-600' : ''">
-            {{ formatCurrency(investor.outstanding_commission) }}
+          <CardTitle class="text-2xl" :class="investor.outstanding_commission > 0 ? 'text-status-attention' : ''">
+            <MoneyText :amount="investor.outstanding_commission" :currency="currencyCode" />
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <Badge
             v-if="investor.outstanding_commission > 0"
             variant="outline"
-            class="border-amber-200 text-amber-700"
+            class="border-status-attention/30 text-status-attention"
           >
             Pending Payment
           </Badge>
-          <Badge v-else variant="secondary" class="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+          <Badge v-else variant="secondary" class="bg-status-success/10 text-status-success hover:bg-status-success/10">
             All Paid
           </Badge>
         </CardContent>
@@ -309,7 +300,7 @@ const getStatusBadgeClass = (status: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="lotTableData" :columns="lotColumns">
+        <LedgerRegister :data="lotTableData" :columns="lotColumns">
           <template #empty>
             <EmptyState
               title="No investment lots"
@@ -324,6 +315,10 @@ const getStatusBadgeClass = (status: string) => {
             </EmptyState>
           </template>
 
+          <template #cell-amount="{ row }">
+            <MoneyText :amount="row.amount" :currency="currencyCode" />
+          </template>
+
           <template #cell-progress="{ row }">
             <div class="flex items-center gap-2">
               <Progress :model-value="row.progress" class="h-2 w-20" />
@@ -336,7 +331,7 @@ const getStatusBadgeClass = (status: string) => {
               {{ row.status.charAt(0).toUpperCase() + row.status.slice(1) }}
             </Badge>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -345,7 +340,7 @@ const getStatusBadgeClass = (status: string) => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Package class="h-5 w-5 text-emerald-600" />
+            <Package class="h-5 w-5 text-status-success" />
             Add Investment Lot
           </DialogTitle>
           <DialogDescription>
@@ -411,11 +406,11 @@ const getStatusBadgeClass = (status: string) => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Banknote class="h-5 w-5 text-amber-600" />
+            <Banknote class="h-5 w-5 text-status-attention" />
             Pay Commission
           </DialogTitle>
           <DialogDescription>
-            Outstanding commission: {{ formatCurrency(investor.outstanding_commission) }}
+            Outstanding commission: <MoneyText :amount="investor.outstanding_commission" :currency="currencyCode" />
           </DialogDescription>
         </DialogHeader>
 
@@ -453,7 +448,7 @@ const getStatusBadgeClass = (status: string) => {
             <Button type="button" variant="outline" :disabled="commissionForm.processing" @click="commissionDialogOpen = false">
               Cancel
             </Button>
-            <Button type="submit" class="bg-amber-600 hover:bg-amber-700" :disabled="commissionForm.processing">
+            <Button type="submit" class="bg-status-attention hover:bg-status-attention" :disabled="commissionForm.processing">
               <span
                 v-if="commissionForm.processing"
                 class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"

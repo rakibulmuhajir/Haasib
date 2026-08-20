@@ -1082,7 +1082,7 @@ const addPayment = () =>
                                 :class="
                                     payment.direction === 'sent'
                                         ? 'text-destructive'
-                                        : 'text-emerald-700'
+                                        : 'text-status-success'
                                 "
                             >
                                 <MoneyText

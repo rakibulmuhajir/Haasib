@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Payment;
 use App\Services\CommandBus;
 use App\Services\CompanyCurrencyOptions;
+use App\Services\CompanyLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -182,7 +183,7 @@ class PaymentController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
-                'logo_url' => $company->logo_url,
+                'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'payment' => $paymentRecord,
         ]);

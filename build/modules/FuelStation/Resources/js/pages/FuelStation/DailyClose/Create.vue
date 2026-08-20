@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue-sonner'
 import PageShell from '@/components/PageShell.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -39,7 +40,7 @@ import {
   FileWarning,
   RotateCcw,
 } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItem {
   id: string
@@ -303,7 +304,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const activeTab = ref('sales')
-const currency = computed(() => currencySymbol(props.company.base_currency || 'PKR'))
+const currencyCode = computed(() => props.company.base_currency || 'PKR')
 const partnerSearch = ref('')
 const investorSearch = ref('')
 
@@ -1535,7 +1536,7 @@ const saveSales = () => {
   }
 
   tabsSaved.value.sales = true
-  toast.success('Sales data saved', { description: `Total: ${currency.value} ${formatCurrency(totalSales.value)}` })
+  toast.success('Sales data saved', { description: `Total: ${formatMoneyText(totalSales.value, currencyCode.value)}` })
   goToNextTab('sales')
 }
 
@@ -1553,14 +1554,14 @@ const saveTanks = () => {
 
 const saveMoneyIn = () => {
   tabsSaved.value.moneyIn = true
-  toast.success('Money In saved', { description: `Opening cash: ${currency.value} ${formatCurrency(form.opening_cash)}` })
+  toast.success('Money In saved', { description: `Opening cash: ${formatMoneyText(form.opening_cash, currencyCode.value)}` })
   goToNextTab('money-in')
 }
 
 const saveMoneyOut = () => {
   tabsSaved.value.moneyOut = true
   const total = totalMoneyOut.value
-  toast.success('Money Out saved', { description: `Total outflows: ${currency.value} ${formatCurrency(total)}` })
+  toast.success('Money Out saved', { description: `Total outflows: ${formatMoneyText(total, currencyCode.value)}` })
   goToNextTab('money-out')
 }
 
@@ -1689,11 +1690,17 @@ const getNozzlePosition = (index: number, totalInPump: number): string => {
 }
 
 // Format currency
-const formatCurrency = (amount: number) => {
+/*
+ * Litres, not money. This was called formatCurrency and was doing both jobs --
+ * grouping tank volumes and grouping rupees -- which is how a litre count ends
+ * up looking like a price. Money goes through MoneyText; this only ever
+ * groups a quantity, and the " L" that follows it in the template is the unit.
+ */
+const formatLiters = (liters: number, digits = 0) => {
   return new Intl.NumberFormat('en-PK', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(liters)
 }
 
 const tabs = [
@@ -1730,7 +1737,7 @@ const completedWorkflowSteps = computed(() => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <FileWarning class="h-5 w-5 text-amber-500" />
+            <FileWarning class="h-5 w-5 text-status-attention" />
             Restore Draft?
           </DialogTitle>
           <DialogDescription>
@@ -1746,25 +1753,25 @@ const completedWorkflowSteps = computed(() => {
     </Dialog>
 
     <!-- Amendment Banner -->
-    <div v-if="isAmendmentMode" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+    <div v-if="isAmendmentMode" class="mb-6 rounded-lg border border-status-attention/30 bg-status-attention/10 p-4">
       <div class="flex items-start gap-3">
-        <RotateCcw class="h-5 w-5 text-amber-600 mt-0.5" />
+        <RotateCcw class="h-5 w-5 text-status-attention mt-0.5" />
         <div class="flex-1">
-          <h3 class="font-medium text-amber-900">Amending Entry: {{ originalTransaction?.transaction_number }}</h3>
-          <p class="text-sm text-amber-700 mt-1">
+          <h3 class="font-medium text-status-attention">Amending Entry: {{ originalTransaction?.transaction_number }}</h3>
+          <p class="text-sm text-status-attention mt-1">
             This will create a reversal of the original entry and post a new corrected entry.
             Both entries will remain in history for audit purposes.
           </p>
           <div class="mt-3">
-            <Label for="amendment-reason" class="text-amber-900">Reason for Amendment *</Label>
+            <Label for="amendment-reason" class="text-status-attention">Reason for Amendment *</Label>
             <Textarea
               id="amendment-reason"
               v-model="amendmentReason"
               placeholder="Explain why this entry needs to be amended (minimum 10 characters)..."
               class="mt-1"
-              :class="{ 'border-red-500': amendmentReason.length > 0 && amendmentReason.length < 10 }"
+              :class="{ 'border-status-critical': amendmentReason.length > 0 && amendmentReason.length < 10 }"
             />
-            <p v-if="amendmentReason.length > 0 && amendmentReason.length < 10" class="text-sm text-red-500 mt-1">
+            <p v-if="amendmentReason.length > 0 && amendmentReason.length < 10" class="text-sm text-status-critical mt-1">
               Please provide at least 10 characters
             </p>
           </div>
@@ -1782,7 +1789,7 @@ const completedWorkflowSteps = computed(() => {
             </div>
             <div class="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <template v-if="previousClose.exists">
-                Previous close was {{ previousClose.date }} with {{ currency }} {{ formatCurrency(previousClose.closing_cash) }} cash.
+                Previous close was {{ previousClose.date }} with <MoneyText :amount="previousClose.closing_cash" :currency="currencyCode" :fraction-digits="0" /> cash.
               </template>
               <template v-else>
                 No previous close found. Opening cash starts from zero unless you enter it under Cash In.
@@ -1794,8 +1801,8 @@ const completedWorkflowSteps = computed(() => {
             <Badge variant="secondary" class="justify-center">
               {{ completedWorkflowSteps }}/4 sections saved
             </Badge>
-            <Badge v-if="cashVariance !== 0" :class="cashVariance > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
-              {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}: {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
+            <Badge v-if="cashVariance !== 0" variant="outline" class="border-l-status-attention">
+              {{ cashVariance > 0 ? 'Cash over' : 'Cash short' }}: <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
             </Badge>
           </div>
         </div>
@@ -1842,12 +1849,11 @@ const completedWorkflowSteps = computed(() => {
                 <div class="flex items-center justify-between px-5 py-3 bg-muted/40 border-b">
                   <div class="flex items-center gap-3">
                     <div class="text-base font-semibold">{{ pump.pump_name }}</div>
-                    <Badge variant="outline">{{ pump.fuel_category }}</Badge>
                     <span class="text-sm text-muted-foreground">{{ pump.fuel_name }}</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <span class="text-sm text-muted-foreground">Total:</span>
-                    <span class="text-lg font-bold">{{ currency }} {{ formatCurrency(getPumpTotalAmount(pump.nozzle_indices)) }}</span>
+                    <span class="text-lg font-bold"><MoneyText :amount="getPumpTotalAmount(pump.nozzle_indices)" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </div>
 
@@ -1905,8 +1911,8 @@ const completedWorkflowSteps = computed(() => {
                       </div>
                       <!-- Amount -->
                       <div class="col-span-3 text-right">
-                        <span class="text-base font-semibold">{{ currency }} {{ formatCurrency(rateAdjustedNozzleRevenue(form.nozzle_readings[idx])) }}</span>
-                        <div v-if="rateChangeSplitForReading(form.nozzle_readings[idx])" class="text-xs text-sky-700">
+                        <span class="text-base font-semibold"><MoneyText :amount="rateAdjustedNozzleRevenue(form.nozzle_readings[idx])" :currency="currencyCode" :fraction-digits="0" /></span>
+                        <div v-if="rateChangeSplitForReading(form.nozzle_readings[idx])" class="text-xs text-status-info">
                           Split by rate-change meter
                         </div>
                       </div>
@@ -1946,10 +1952,10 @@ const completedWorkflowSteps = computed(() => {
                           <div class="w-20 text-right">
                             <template v-if="form.nozzle_readings[idx].closing_manual && form.nozzle_readings[idx].opening_manual">
                               <span v-if="Math.abs((form.nozzle_readings[idx].closing_manual - form.nozzle_readings[idx].opening_manual) - form.nozzle_readings[idx].liters_sold) <= 0.5"
-                                class="text-green-600 text-sm font-medium">
+                                class="text-status-success text-sm font-medium">
                                 <CheckCircle class="h-4 w-4 inline" />
                               </span>
-                              <span v-else class="text-amber-600 text-sm">
+                              <span v-else class="text-status-attention text-sm">
                                 {{ ((form.nozzle_readings[idx].closing_manual - form.nozzle_readings[idx].opening_manual) - form.nozzle_readings[idx].liters_sold).toFixed(0) }}L
                               </span>
                             </template>
@@ -1964,7 +1970,7 @@ const completedWorkflowSteps = computed(() => {
                     <span class="text-sm font-medium text-muted-foreground">Pump Total</span>
                     <div class="flex items-center gap-6">
                       <span class="text-sm">{{ getPumpTotalLiters(pump.nozzle_indices).toFixed(0) }} L</span>
-                      <span class="text-lg font-bold">{{ currency }} {{ formatCurrency(getPumpTotalAmount(pump.nozzle_indices)) }}</span>
+                      <span class="text-lg font-bold"><MoneyText :amount="getPumpTotalAmount(pump.nozzle_indices)" :currency="currencyCode" :fraction-digits="0" /></span>
                     </div>
                   </div>
                 </div>
@@ -2029,7 +2035,7 @@ const completedWorkflowSteps = computed(() => {
                   </div>
                   <!-- Amount (calculated) -->
                   <div class="col-span-2 text-right font-semibold">
-                    {{ currency }} {{ formatCurrency(sale.amount) }}
+                    <MoneyText :amount="sale.amount" :currency="currencyCode" :fraction-digits="0" />
                   </div>
                   <!-- Delete -->
                   <div class="col-span-1 text-right">
@@ -2043,7 +2049,7 @@ const completedWorkflowSteps = computed(() => {
                 <div v-if="form.other_sales.length > 0" class="flex justify-end pt-2 border-t">
                   <div class="text-sm">
                     <span class="text-muted-foreground mr-2">Lubricant Sales:</span>
-                    <span class="font-semibold">{{ currency }} {{ formatCurrency(totalOtherSales) }}</span>
+                    <span class="font-semibold"><MoneyText :amount="totalOtherSales" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </div>
               </div>
@@ -2058,22 +2064,21 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Fuel Sales by Type -->
                 <div v-for="fuel in salesByFuelType" :key="fuel.fuel_name" class="flex justify-between text-sm">
                   <div class="flex items-center gap-2">
-                    <Badge variant="outline" class="text-xs">{{ fuel.fuel_category }}</Badge>
                     <span>{{ fuel.fuel_name }}</span>
                     <span class="text-muted-foreground">({{ fuel.liters.toFixed(0) }} L)</span>
                   </div>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(fuel.amount) }}</span>
+                  <span class="font-medium"><MoneyText :amount="fuel.amount" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Lubricants/Other -->
                 <div v-if="totalOtherSales > 0" class="flex justify-between text-sm">
                   <span>Lubricants & Other</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalOtherSales) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalOtherSales" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <Separator />
                 <!-- Grand Total -->
                 <div class="flex justify-between text-base font-semibold">
                   <span>Total Sales</span>
-                  <span>{{ currency }} {{ formatCurrency(totalSales) }}</span>
+                  <span><MoneyText :amount="totalSales" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
               </div>
             </div>
@@ -2081,7 +2086,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Footer with Submit -->
             <div class="flex justify-end">
               <Button @click="saveSales" :variant="tabsSaved.sales ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.sales" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.sales" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.sales ? 'Saved' : 'Save Meter Sales' }}
               </Button>
@@ -2127,7 +2132,6 @@ const completedWorkflowSteps = computed(() => {
                   <div>
                     <div class="text-base font-semibold">{{ tank.tank_name }}</div>
                     <div class="flex items-center gap-2">
-                      <Badge variant="outline">{{ tank.fuel_category }}</Badge>
                       <span class="text-sm text-muted-foreground">{{ tank.fuel_name }}</span>
                     </div>
                   </div>
@@ -2144,12 +2148,12 @@ const completedWorkflowSteps = computed(() => {
                   <div class="col-span-3">
                     <Label class="text-xs text-muted-foreground">Opening baseline for {{ formatBaselineDate(form.date) }} (L)</Label>
                     <div class="text-lg font-semibold mt-1">
-                      {{ tank.previous_liters > 0 ? formatCurrency(tank.previous_liters) : '—' }}
+                      {{ tank.previous_liters > 0 ? formatLiters(tank.previous_liters) : '—' }}
                     </div>
                     <div v-if="baselineLabel(tank)" class="text-xs text-muted-foreground">
                       {{ baselineLabel(tank) }}
                     </div>
-                    <div v-else class="text-xs text-amber-700">
+                    <div v-else class="text-xs text-status-attention">
                       No stock entry before this close date.
                     </div>
                     <div v-if="tank.previous_stick > 0" class="text-xs text-muted-foreground">
@@ -2157,22 +2161,22 @@ const completedWorkflowSteps = computed(() => {
                     </div>
                     <div class="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs">
                       <div class="font-medium text-foreground">
-                        Expected closing stock: {{ formatCurrency(expectedTankClosingLiters(tank)) }} L
+                        Expected closing stock: {{ formatLiters(expectedTankClosingLiters(tank)) }} L
                       </div>
                       <div class="text-muted-foreground">
-                        {{ formatCurrency(tank.previous_liters) }} L opening
+                        {{ formatLiters(tank.previous_liters) }} L opening
                         <span v-if="Math.abs(tank.stock_movements_since_baseline_liters || 0) >= 0.001">
                           {{ (tank.stock_movements_since_baseline_liters || 0) > 0 ? '+' : '-' }}
-                          {{ formatCurrency(Math.abs(tank.stock_movements_since_baseline_liters || 0)) }} L stock
+                          {{ formatLiters(Math.abs(tank.stock_movements_since_baseline_liters || 0)) }} L stock
                         </span>
                         <span v-if="(litersSoldByTank[tank.tank_id] || 0) > 0">
-                          - {{ formatCurrency(litersSoldByTank[tank.tank_id] || 0) }} L sales
+                          - {{ formatLiters(litersSoldByTank[tank.tank_id] || 0) }} L sales
                         </span>
                       </div>
                       <div class="text-muted-foreground">
                         {{ stockMovementLabel(tank.stock_movements_since_baseline_liters || 0) }}
                       </div>
-                      <div v-if="tank.current_stock_after_close_date" class="text-amber-700">
+                      <div v-if="tank.current_stock_after_close_date" class="text-status-attention">
                         This stock entry is after the selected close date, so it is not used as the opening baseline.
                       </div>
                     </div>
@@ -2192,13 +2196,13 @@ const completedWorkflowSteps = computed(() => {
                   <div class="col-span-2">
                     <Label class="text-xs text-muted-foreground">Usage (Dip)</Label>
                     <div class="text-base font-medium mt-1">
-                      {{ tank.previous_liters > 0 && tank.liters > 0 ? formatCurrency(tank.previous_liters - tank.liters) : '—' }} L
+                      {{ tank.previous_liters > 0 && tank.liters > 0 ? formatLiters(tank.previous_liters - tank.liters) : '—' }} L
                     </div>
                   </div>
                   <div class="col-span-2">
                     <Label class="text-xs text-muted-foreground">{{ tankSalesLabel(tank) }}</Label>
                     <div class="text-base font-medium mt-1">
-                      {{ formatCurrency(litersSoldByTank[tank.tank_id] || 0) }} L
+                      {{ formatLiters(litersSoldByTank[tank.tank_id] || 0) }} L
                     </div>
                   </div>
 
@@ -2209,8 +2213,8 @@ const completedWorkflowSteps = computed(() => {
                       <span
                         :class="[
                           'text-base font-semibold',
-                          tankVariances[index]?.variance > 0 ? 'text-red-600' :
-                          tankVariances[index]?.variance < 0 ? 'text-amber-600' : 'text-green-600'
+                          tankVariances[index]?.variance > 0 ? 'text-status-critical' :
+                          tankVariances[index]?.variance < 0 ? 'text-status-attention' : 'text-status-success'
                         ]"
                       >
                         {{ tankVariances[index]?.variance > 0 ? '-' : tankVariances[index]?.variance < 0 ? '+' : '' }}{{ Math.abs(tankVariances[index]?.variance || 0).toFixed(0) }} L
@@ -2222,7 +2226,7 @@ const completedWorkflowSteps = computed(() => {
 
                 <!-- Variance Explanation (if significant) -->
                 <div v-if="tank.previous_liters > 0 && tank.liters > 0 && Math.abs(tankVariances[index]?.variance || 0) > 5" class="text-xs px-3 py-2 rounded-md"
-                  :class="tankVariances[index]?.variance > 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'"
+                  :class="tankVariances[index]?.variance > 0 ? 'bg-status-critical/10 text-status-critical' : 'bg-status-attention/10 text-status-attention'"
                 >
                   <span v-if="tankVariances[index]?.variance > 0">
                     Loss of {{ Math.abs(tankVariances[index]?.variance).toFixed(0) }}L detected ({{ Math.abs(tankVariances[index]?.variance_percent).toFixed(1) }}% of sales) — may indicate evaporation, leakage, or measurement error
@@ -2241,8 +2245,8 @@ const completedWorkflowSteps = computed(() => {
                 <div
                   :class="[
                     'text-lg font-bold',
-                    totalTankVariance > 0 ? 'text-red-600' :
-                    totalTankVariance < 0 ? 'text-amber-600' : 'text-green-600'
+                    totalTankVariance > 0 ? 'text-status-critical' :
+                    totalTankVariance < 0 ? 'text-status-attention' : 'text-status-success'
                   ]"
                 >
                   {{ totalTankVariance > 0 ? 'Loss: ' : totalTankVariance < 0 ? 'Gain: ' : '' }}{{ Math.abs(totalTankVariance).toFixed(0) }} L
@@ -2255,7 +2259,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end">
               <Button @click="saveTanks" :variant="tabsSaved.tanks ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.tanks" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.tanks" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.tanks ? 'Saved' : 'Save Tank Dip' }}
               </Button>
@@ -2294,7 +2298,7 @@ const completedWorkflowSteps = computed(() => {
                   <p class="text-xs text-muted-foreground">{{ accountingHints.fuelSales }}</p>
                 </div>
                 <div class="text-right">
-                  <div class="text-lg font-semibold">{{ currency }} {{ formatCurrency(cashSales) }}</div>
+                  <div class="text-lg font-semibold"><MoneyText :amount="cashSales" :currency="currencyCode" :fraction-digits="0" /></div>
                   <p v-if="cashSales < 0" class="text-xs text-destructive">Non-cash receipts exceed total sales</p>
                 </div>
               </div>
@@ -2326,12 +2330,12 @@ const completedWorkflowSteps = computed(() => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="p in filteredPartners" :key="p.id" :value="p.id">
-                          {{ p.name }} · Capital {{ currency }} {{ formatCurrency(p.net_capital) }}
+                          {{ p.name }} · Capital <MoneyText :amount="p.net_capital" :currency="currencyCode" :fraction-digits="0" />
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p v-if="getPartner(deposit.partner_id)" class="mt-1 text-xs text-muted-foreground">
-                      Current capital: {{ currency }} {{ formatCurrency(getPartner(deposit.partner_id)?.net_capital || 0) }}
+                      Current capital: <MoneyText :amount="getPartner(deposit.partner_id)?.net_capital || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
                   </div>
                   <div class="w-32">
@@ -2377,7 +2381,7 @@ const completedWorkflowSteps = computed(() => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="holder in props.amanatHolders" :key="holder.id" :value="holder.id">
-                          {{ holder.name }} · Balance {{ currency }} {{ formatCurrency(holder.amanat_balance) }}
+                          {{ holder.name }} · Balance <MoneyText :amount="holder.amanat_balance" :currency="currencyCode" :fraction-digits="0" />
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -2493,7 +2497,7 @@ const completedWorkflowSteps = computed(() => {
 
                 <!-- Channel subtotal -->
                 <div v-if="(form.payment_receipts[channel.code]?.entries?.length || 0) > 0" class="text-right text-sm text-muted-foreground">
-                  Subtotal: {{ currency }} {{ formatCurrency(getChannelTotal(channel.code)) }}
+                  Subtotal: <MoneyText :amount="getChannelTotal(channel.code)" :currency="currencyCode" :fraction-digits="0" />
                 </div>
 
                 <Separator />
@@ -2517,9 +2521,9 @@ const completedWorkflowSteps = computed(() => {
                   >
                     <div class="font-medium">{{ investor.name }}</div>
                     <div class="text-xs text-muted-foreground">
-                      Invested {{ currency }} {{ formatCurrency(investor.total_invested) }} ·
-                      Remaining {{ investor.units_remaining.toFixed(2) }}L ·
-                      Commission due {{ currency }} {{ formatCurrency(investor.outstanding_commission) }}
+                      Invested <MoneyText :amount="investor.total_invested" :currency="currencyCode" :fraction-digits="0" /> ·
+                      Remaining {{ formatLiters(investor.units_remaining, 2) }}L ·
+                      Commission due <MoneyText :amount="investor.outstanding_commission" :currency="currencyCode" :fraction-digits="0" />
                     </div>
                   </div>
                 </div>
@@ -2533,31 +2537,31 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Opening Cash -->
                 <div class="flex justify-between text-sm">
                   <span>Opening Cash</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(form.opening_cash) }}</span>
+                  <span class="font-medium"><MoneyText :amount="form.opening_cash" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Partner Deposits -->
                 <div v-if="totalPartnerDeposits > 0" class="flex justify-between text-sm">
                   <span>Partner Deposits</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalPartnerDeposits) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalPartnerDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <div v-if="totalAmanatDeposits > 0" class="flex justify-between text-sm">
                   <span>Amanat Deposits</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalAmanatDeposits) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalAmanatDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <div v-if="totalOtherDeposits > 0" class="flex justify-between text-sm">
                   <span>Other Cash In</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalOtherDeposits) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalOtherDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Cash Sales -->
                 <div class="flex justify-between text-sm">
                   <span>Cash Sales</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(cashSales) }}</span>
+                  <span class="font-medium"><MoneyText :amount="cashSales" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <Separator />
                 <!-- Total Cash Available -->
                 <div class="flex justify-between text-sm font-semibold">
                   <span>Total Cash Available</span>
-                  <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + cashSales) }}</span>
+                  <span><MoneyText :amount="form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + cashSales" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <Separator class="my-2" />
                 <!-- Non-Cash Section -->
@@ -2565,18 +2569,18 @@ const completedWorkflowSteps = computed(() => {
                 <template v-for="channel in enabledChannels" :key="'summary-' + channel.code">
                   <div v-if="channel.type !== 'cash' && getChannelTotal(channel.code) > 0" class="flex justify-between text-sm text-muted-foreground">
                     <span>{{ channel.label }}</span>
-                    <span>{{ currency }} {{ formatCurrency(getChannelTotal(channel.code)) }}</span>
+                    <span><MoneyText :amount="getChannelTotal(channel.code)" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </template>
                 <div v-if="totalNonCashReceipts > 0" class="flex justify-between text-sm">
                   <span>Total Non-Cash</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalNonCashReceipts) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalNonCashReceipts" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <Separator />
                 <!-- Grand Total -->
                 <div class="flex justify-between text-base font-semibold">
                   <span>Total Money In (All Sources)</span>
-                  <span>{{ currency }} {{ formatCurrency(totalMoneyIn) }}</span>
+                  <span><MoneyText :amount="totalMoneyIn" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
               </div>
             </div>
@@ -2584,7 +2588,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end pt-2">
               <Button @click="saveMoneyIn" :variant="tabsSaved.moneyIn ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.moneyIn" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.moneyIn" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.moneyIn ? 'Saved' : 'Save Cash In' }}
               </Button>
@@ -2670,13 +2674,13 @@ const completedWorkflowSteps = computed(() => {
                       <SelectContent>
                         <SelectItem v-for="p in filteredPartners" :key="p.id" :value="p.id">
                           {{ p.name }}
-                          · {{ p.remaining_drawing_limit === null ? 'No drawing limit' : `${currency} ${formatCurrency(p.remaining_drawing_limit)} left` }}
+                          · <template v-if="p.remaining_drawing_limit === null">No drawing limit</template><template v-else><MoneyText :amount="p.remaining_drawing_limit" :currency="currencyCode" :fraction-digits="0" /> left</template>
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p v-if="getPartner(withdrawal.partner_id)" class="mt-1 text-xs text-muted-foreground">
-                      Capital {{ currency }} {{ formatCurrency(getPartner(withdrawal.partner_id)?.net_capital || 0) }} ·
-                      Withdrawn this period {{ currency }} {{ formatCurrency(getPartner(withdrawal.partner_id)?.current_period_withdrawn || 0) }}
+                      Capital <MoneyText :amount="getPartner(withdrawal.partner_id)?.net_capital || 0" :currency="currencyCode" :fraction-digits="0" /> ·
+                      Withdrawn this period <MoneyText :amount="getPartner(withdrawal.partner_id)?.current_period_withdrawn || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
                   </div>
                   <div class="w-32">
@@ -2722,12 +2726,12 @@ const completedWorkflowSteps = computed(() => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem v-for="e in props.employees" :key="e.id" :value="e.id">
-                        {{ e.full_name || `${e.first_name} ${e.last_name}` }} · Due {{ currency }} {{ formatCurrency(e.outstanding_advances) }}
+                        {{ e.full_name || `${e.first_name} ${e.last_name}` }} · Due <MoneyText :amount="e.outstanding_advances" :currency="currencyCode" :fraction-digits="0" />
                       </SelectItem>
                     </SelectContent>
                   </Select>
                   <p v-if="getEmployee(advance.employee_id)" class="mt-1 text-xs text-muted-foreground">
-                    Current advance balance: {{ currency }} {{ formatCurrency(getEmployee(advance.employee_id)?.outstanding_advances || 0) }}
+                    Current advance balance: <MoneyText :amount="getEmployee(advance.employee_id)?.outstanding_advances || 0" :currency="currencyCode" :fraction-digits="0" />
                   </p>
                 </div>
                 <div>
@@ -2767,7 +2771,7 @@ const completedWorkflowSteps = computed(() => {
                         <span v-if="payout.approved_at"> · Approved {{ formatSharedDateTime(payout.approved_at, { mode: 'datetime' }) }}</span>
                       </p>
                     </div>
-                    <span class="font-semibold text-destructive">{{ currency }} {{ formatCurrency(payout.amount) }}</span>
+                    <span class="font-semibold text-destructive"><MoneyText :amount="payout.amount" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </div>
               </div>
@@ -2807,7 +2811,7 @@ const completedWorkflowSteps = computed(() => {
                         </p>
                       </div>
                       <span :class="payment.affects_cash_drawer ? 'text-destructive' : 'text-foreground'" class="font-semibold">
-                        {{ currency }} {{ formatCurrency(payment.amount) }}
+                        <MoneyText :amount="payment.amount" :currency="currencyCode" :fraction-digits="0" />
                       </span>
                     </div>
                   </div>
@@ -2848,12 +2852,12 @@ const completedWorkflowSteps = computed(() => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="holder in props.amanatHolders" :key="holder.id" :value="holder.id">
-                          {{ holder.name }} · Balance {{ currency }} {{ formatCurrency(holder.amanat_balance) }}
+                          {{ holder.name }} · Balance <MoneyText :amount="holder.amanat_balance" :currency="currencyCode" :fraction-digits="0" />
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p v-if="getAmanatHolder(amanat.customer_id)" class="mt-1 text-xs text-muted-foreground">
-                      Available Amanat: {{ currency }} {{ formatCurrency(getAmanatHolder(amanat.customer_id)?.amanat_balance || 0) }}
+                      Available Amanat: <MoneyText :amount="getAmanatHolder(amanat.customer_id)?.amanat_balance || 0" :currency="currencyCode" :fraction-digits="0" />
                     </p>
                   </div>
                   <div class="w-32">
@@ -2916,39 +2920,39 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Bank Deposits -->
                 <div v-if="totalBankDeposits > 0" class="flex justify-between text-sm">
                   <span>Bank Deposits (Vendor Payments)</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalBankDeposits) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalBankDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Partner Withdrawals -->
                 <div v-if="totalPartnerWithdrawals > 0" class="flex justify-between text-sm">
                   <span>Partner Withdrawals</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalPartnerWithdrawals) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalPartnerWithdrawals" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Employee Advances -->
                 <div v-if="totalEmployeeAdvances > 0" class="flex justify-between text-sm">
                   <span>Employee Salary Advances</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalEmployeeAdvances) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalEmployeeAdvances" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <div v-if="totalPayrollPayouts > 0" class="flex justify-between text-sm">
                   <span>Approved Salaries</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalPayrollPayouts) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalPayrollPayouts" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <div v-if="totalCashBillPayments > 0" class="flex justify-between text-sm">
                   <span>Supplier Bill Payments (station cash)</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalCashBillPayments) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalCashBillPayments" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <div v-if="totalNonCashBillPayments > 0" class="flex justify-between text-sm">
                   <span>Supplier Bill Payments (bank/fuel card)</span>
-                  <span class="font-medium">{{ currency }} {{ formatCurrency(totalNonCashBillPayments) }}</span>
+                  <span class="font-medium"><MoneyText :amount="totalNonCashBillPayments" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Amanat Disbursements -->
                 <div v-if="totalAmanatDisbursements > 0" class="flex justify-between text-sm">
                   <span>Amanat Disbursements</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalAmanatDisbursements) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalAmanatDisbursements" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Expenses -->
                 <div v-if="totalExpenses > 0" class="flex justify-between text-sm">
                   <span>Operating Expenses</span>
-                  <span class="font-medium text-destructive">{{ currency }} {{ formatCurrency(totalExpenses) }}</span>
+                  <span class="font-medium text-destructive"><MoneyText :amount="totalExpenses" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
                 <!-- Empty state -->
                 <div v-if="totalMoneyOut === 0" class="text-sm text-muted-foreground text-center py-2">
@@ -2958,7 +2962,7 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Total -->
                 <div class="flex justify-between text-base font-semibold">
                   <span>Total Money Out</span>
-                  <span class="text-destructive">{{ currency }} {{ formatCurrency(totalMoneyOut) }}</span>
+                  <span class="text-destructive"><MoneyText :amount="totalMoneyOut" :currency="currencyCode" :fraction-digits="0" /></span>
                 </div>
               </div>
             </div>
@@ -2966,7 +2970,7 @@ const completedWorkflowSteps = computed(() => {
             <!-- Submit Button -->
             <div class="flex justify-end">
               <Button @click="saveMoneyOut" :variant="tabsSaved.moneyOut ? 'outline' : 'default'" class="min-w-32">
-                <CheckCircle v-if="tabsSaved.moneyOut" class="h-4 w-4 mr-2 text-green-600" />
+                <CheckCircle v-if="tabsSaved.moneyOut" class="h-4 w-4 mr-2 text-status-success" />
                 <Save v-else class="h-4 w-4 mr-2" />
                 {{ tabsSaved.moneyOut ? 'Saved' : 'Save Cash Out' }}
               </Button>
@@ -2991,37 +2995,37 @@ const completedWorkflowSteps = computed(() => {
                 <div class="space-y-2 text-sm">
                   <div class="flex justify-between">
                     <span>Opening Cash</span>
-                    <span>{{ currency }} {{ formatCurrency(form.opening_cash) }}</span>
+                    <span><MoneyText :amount="form.opening_cash" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div class="flex justify-between">
                     <span>+ Partner Deposits</span>
-                    <span>{{ currency }} {{ formatCurrency(form.partner_deposits.reduce((s, d) => s + d.amount, 0)) }}</span>
+                    <span><MoneyText :amount="form.partner_deposits.reduce((s, d) => s + d.amount, 0)" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div v-if="totalAmanatDeposits > 0" class="flex justify-between">
                     <span>+ Amanat Deposits</span>
-                    <span>{{ currency }} {{ formatCurrency(totalAmanatDeposits) }}</span>
+                    <span><MoneyText :amount="totalAmanatDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div v-if="totalOtherDeposits > 0" class="flex justify-between">
                     <span>+ Other Cash In</span>
-                    <span>{{ currency }} {{ formatCurrency(totalOtherDeposits) }}</span>
+                    <span><MoneyText :amount="totalOtherDeposits" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div class="flex justify-between">
                     <span>+ Cash Sales</span>
-                    <span>{{ currency }} {{ formatCurrency(totalSales - totalCardAndBank) }}</span>
+                    <span><MoneyText :amount="totalSales - totalCardAndBank" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <Separator />
                   <div class="flex justify-between font-medium">
                     <span>Total Cash Available</span>
-                    <span>{{ currency }} {{ formatCurrency(form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + totalSales - totalCardAndBank) }}</span>
+                    <span><MoneyText :amount="form.opening_cash + totalPartnerDeposits + totalAmanatDeposits + totalOtherDeposits + totalSales - totalCardAndBank" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div class="flex justify-between text-destructive">
                     <span>- Money Out</span>
-                    <span>{{ currency }} {{ formatCurrency(totalMoneyOut) }}</span>
+                    <span><MoneyText :amount="totalMoneyOut" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <Separator />
                   <div class="flex justify-between font-semibold text-lg">
                     <span>Expected Closing</span>
-                    <span>{{ currency }} {{ formatCurrency(expectedClosingCash) }}</span>
+                    <span><MoneyText :amount="expectedClosingCash" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </div>
               </div>
@@ -3032,16 +3036,16 @@ const completedWorkflowSteps = computed(() => {
                 <div class="space-y-2 text-sm">
                   <div v-for="pump in nozzlesByPump" :key="pump.pump_id" class="flex justify-between">
                     <span>{{ pump.pump_name }} - {{ pump.fuel_name }} ({{ getPumpTotalLiters(pump.nozzle_indices).toFixed(0) }}L)</span>
-                    <span>{{ currency }} {{ formatCurrency(getPumpTotalAmount(pump.nozzle_indices)) }}</span>
+                    <span><MoneyText :amount="getPumpTotalAmount(pump.nozzle_indices)" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <div v-if="totalOtherSales > 0" class="flex justify-between">
                     <span>Other Sales</span>
-                    <span>{{ currency }} {{ formatCurrency(totalOtherSales) }}</span>
+                    <span><MoneyText :amount="totalOtherSales" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                   <Separator />
                   <div class="flex justify-between font-semibold">
                     <span>Total Sales</span>
-                    <span>{{ currency }} {{ formatCurrency(totalSales) }}</span>
+                    <span><MoneyText :amount="totalSales" :currency="currencyCode" :fraction-digits="0" /></span>
                   </div>
                 </div>
               </div>
@@ -3065,14 +3069,14 @@ const completedWorkflowSteps = computed(() => {
               <!-- Variance -->
               <div v-if="form.closing_cash > 0" class="mt-4 flex items-center gap-2">
                 <component :is="cashVariance === 0 ? CheckCircle : AlertCircle"
-                  :class="['h-5 w-5', cashVariance === 0 ? 'text-green-600' : cashVariance > 0 ? 'text-blue-600' : 'text-red-600']"
+                  :class="['h-5 w-5', cashVariance === 0 ? 'text-status-success' : 'text-status-attention']"
                 />
-                <span v-if="cashVariance === 0" class="text-green-600 font-medium">Cash matches expected amount</span>
-                <span v-else-if="cashVariance > 0" class="text-blue-600 font-medium">
-                  Cash over by {{ currency }} {{ formatCurrency(cashVariance) }}
+                <span v-if="cashVariance === 0" class="text-status-success font-medium">Cash matches expected amount</span>
+                <span v-else-if="cashVariance > 0" class="text-status-info font-medium">
+                  Cash over by <MoneyText :amount="cashVariance" :currency="currencyCode" :fraction-digits="0" />
                 </span>
-                <span v-else class="text-red-600 font-medium">
-                  Cash short by {{ currency }} {{ formatCurrency(Math.abs(cashVariance)) }}
+                <span v-else class="text-status-critical font-medium">
+                  Cash short by <MoneyText :amount="Math.abs(cashVariance)" :currency="currencyCode" :fraction-digits="0" />
                 </span>
               </div>
             </div>
@@ -3088,7 +3092,7 @@ const completedWorkflowSteps = computed(() => {
               <Button variant="outline" @click="router.visit(`/${company.slug}/fuel/dashboard`)">
                 Cancel
               </Button>
-              <Button @click="submitDailyClose" :disabled="submitting" class="bg-green-600 hover:bg-green-700 min-w-40">
+              <Button @click="submitDailyClose" :disabled="submitting" class="bg-status-success hover:bg-status-success min-w-40">
                 <Loader2 v-if="submitting" class="h-4 w-4 mr-2 animate-spin" />
                 <CheckCircle v-else class="h-4 w-4 mr-2" />
                 Post Daily Close

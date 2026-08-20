@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Http\Requests\StoreVendorCreditRequest;
 use App\Services\CommandBus;
 use App\Services\CompanyContextService;
+use App\Services\CompanyLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -45,7 +46,7 @@ class VendorCreditController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $company = app(CompanyContextService::class)->requireCompany();
         $vendors = \App\Modules\Accounting\Models\Vendor::where('company_id', $company->id)
@@ -72,6 +73,10 @@ class VendorCreditController extends Controller
             'vendors' => $vendors,
             'expenseAccounts' => $expenseAccounts,
             'apAccounts' => $apAccounts,
+            // Raised from a bill, so the vendor is already settled.
+            'preselect' => [
+                'vendor_id' => $request->query('vendor_id'),
+            ],
         ]);
     }
 
@@ -103,6 +108,7 @@ class VendorCreditController extends Controller
                 'name' => $company->name,
                 'slug' => $company->slug,
                 'base_currency' => $company->base_currency,
+                'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'credit' => $record,
         ]);

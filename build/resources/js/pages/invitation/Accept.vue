@@ -55,15 +55,15 @@ const handleReject = () => {
 
 <template>
   <Head title="Accept Invitation" />
-  <div class="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-10">
+  <div class="flex min-h-screen items-center justify-center bg-surface-canvas px-4 py-10">
     <div class="w-full max-w-xl">
-      <Card class="border-slate-200 shadow-lg">
+      <Card class="border-rule-default">
         <CardHeader class="space-y-2">
-          <CardTitle class="text-slate-900">Invitation to join {{ invitation.company.name }}</CardTitle>
-          <CardDescription class="text-slate-600">
+          <CardTitle class="text-text-primary">Invitation to join {{ invitation.company.name }}</CardTitle>
+          <CardDescription class="text-text-secondary">
             You were invited by {{ invitation.inviter.name }} ({{ invitation.inviter.email }})
           </CardDescription>
-          <div class="flex items-center gap-2 text-sm text-slate-600">
+          <div class="flex items-center gap-2 text-sm text-text-secondary">
             <Mail class="h-4 w-4" />
             <span>{{ invitation.email }}</span>
           </div>
@@ -77,14 +77,14 @@ const handleReject = () => {
             <AlertDescription>This invitation has expired or is no longer valid.</AlertDescription>
           </Alert>
 
-          <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <div class="flex items-center justify-between rounded-lg border border-rule-default bg-surface-sunken px-4 py-3">
             <div>
-              <div class="text-sm text-slate-500">Role</div>
-              <div class="text-base font-medium text-slate-900 capitalize">{{ invitation.role }}</div>
+              <div class="text-sm text-text-secondary">Role</div>
+              <div class="text-base font-medium text-text-primary capitalize">{{ invitation.role }}</div>
             </div>
             <div class="text-right">
-              <div class="text-sm text-slate-500">Expires</div>
-              <div class="text-base font-medium text-slate-900">
+              <div class="text-sm text-text-secondary">Expires</div>
+              <div class="text-base font-medium text-text-primary">
                 {{ formatDate(invitation.expires_at) }}
               </div>
             </div>

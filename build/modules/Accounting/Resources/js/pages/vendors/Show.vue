@@ -2,8 +2,11 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import InlineEditable from '@/components/InlineEditable.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +36,7 @@ import {
   XCircle,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -173,11 +177,7 @@ const paymentTermsOptions = [
 const canManage = computed(() => props.canEdit !== false)
 
 const money = (val: number | null | undefined) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.vendor.base_currency || props.company.base_currency,
-  }).format(val ?? 0)
+  formatMoneyText(val ?? 0, props.vendor.base_currency || props.company.base_currency)
 
 const getInitials = (name: string) => {
   return name
@@ -189,20 +189,20 @@ const getInitials = (name: string) => {
 }
 
 const billColumns = [
-  { key: 'bill_number', label: 'Bill #' },
-  { key: 'bill_date', label: 'Date' },
-  { key: 'due_date', label: 'Due' },
-  { key: 'total_amount', label: 'Total' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'status', label: 'Status' },
+  { key: 'bill_number', label: 'Bill #', kind: 'ref' as const },
+  { key: 'bill_date', label: 'Date', kind: 'date' as const },
+  { key: 'due_date', label: 'Due', kind: 'date' as const },
+  { key: 'total_amount', label: 'Total', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const paymentColumns = [
-  { key: 'payment_number', label: 'Payment #' },
-  { key: 'payment_date', label: 'Date' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'payment_method', label: 'Method' },
-  { key: 'reference_number', label: 'Reference' },
+  { key: 'payment_number', label: 'Payment #', kind: 'ref' as const },
+  { key: 'payment_date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'payment_method', label: 'Method', kind: 'text' as const },
+  { key: 'reference_number', label: 'Reference', kind: 'ref' as const },
 ]
 
 const billRows = computed(() =>
@@ -221,18 +221,6 @@ const paymentRows = computed(() =>
   }))
 )
 
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    paid: 'default',
-    received: 'default',
-    open: 'secondary',
-    draft: 'outline',
-    overdue: 'destructive',
-    void: 'secondary',
-    cancelled: 'secondary',
-  }
-  return variants[status.toLowerCase()] || 'outline'
-}
 
 const formatAddress = (addr: AddressRef | null | undefined) => {
   if (!addr) return null
@@ -291,11 +279,11 @@ const cancelAddressEdit = () => {
       <div class="flex items-center gap-3">
         <Avatar class="h-8 w-8">
           <AvatarImage v-if="vendor.logo_url" :src="vendor.logo_url" :alt="vendor.name" />
-          <AvatarFallback class="bg-zinc-100 text-zinc-600 text-xs">{{ getInitials(vendor.name) }}</AvatarFallback>
+          <AvatarFallback class="bg-surface-sunken text-text-secondary text-xs">{{ getInitials(vendor.name) }}</AvatarFallback>
         </Avatar>
-        <span class="font-mono text-zinc-400">{{ vendor.vendor_number }}</span>
-        <span v-if="vendor.email" class="text-zinc-300">•</span>
-        <span v-if="vendor.email" class="text-zinc-500">{{ vendor.email }}</span>
+        <span class="font-mono text-text-tertiary">{{ vendor.vendor_number }}</span>
+        <span v-if="vendor.email" class="text-text-tertiary">•</span>
+        <span v-if="vendor.email" class="text-text-secondary">{{ vendor.email }}</span>
       </div>
     </template>
 
@@ -307,7 +295,7 @@ const cancelAddressEdit = () => {
     </template>
 
     <Tabs v-model="activeTab" class="w-full">
-      <TabsList class="mb-6 bg-zinc-100">
+      <TabsList class="mb-6 bg-surface-sunken">
         <TabsTrigger value="overview" class="gap-2">
           <BarChart3 class="h-4 w-4" />
           Overview
@@ -326,57 +314,57 @@ const cancelAddressEdit = () => {
       <TabsContent value="overview" class="space-y-6">
         <!-- Key Financial Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Amount Owed</CardTitle>
-              <Receipt class="h-4 w-4 text-zinc-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Amount Owed</CardTitle>
+              <Receipt class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ money(summary.open_balance) }}</div>
-              <p class="text-xs text-zinc-500 mt-1">{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</p>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.open_balance" :currency="vendor.base_currency || company.base_currency" /></div>
+              <p class="text-xs text-text-secondary mt-1">{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Overdue</CardTitle>
-              <AlertTriangle class="h-4 w-4 text-amber-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Overdue</CardTitle>
+              <AlertTriangle class="h-4 w-4 text-status-attention" />
             </CardHeader>
             <CardContent>
-              <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-amber-600' : 'text-zinc-900']">
-                {{ money(summary.overdue_balance) }}
+              <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-status-attention' : 'text-text-primary']">
+                <MoneyText :amount="summary.overdue_balance" :currency="vendor.base_currency || company.base_currency" />
               </div>
-              <p class="text-xs text-zinc-500 mt-1">Past due date</p>
+              <p class="text-xs text-text-secondary mt-1">Past due date</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Paid YTD</CardTitle>
-              <Wallet class="h-4 w-4 text-emerald-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Paid YTD</CardTitle>
+              <Wallet class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ money(summary.paid_ytd) }}</div>
-              <p class="text-xs text-zinc-500 mt-1">This year</p>
+              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.paid_ytd" :currency="vendor.base_currency || company.base_currency" /></div>
+              <p class="text-xs text-text-secondary mt-1">This year</p>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-zinc-500">Payment Terms</CardTitle>
-              <Calendar class="h-4 w-4 text-zinc-500" />
+              <CardTitle class="text-sm font-medium text-text-secondary">Payment Terms</CardTitle>
+              <Calendar class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-zinc-900">{{ vendor.payment_terms || 30 }} days</div>
-              <p class="text-xs text-zinc-500 mt-1">Net terms</p>
+              <div class="text-2xl font-semibold text-text-primary">{{ vendor.payment_terms || 30 }} days</div>
+              <p class="text-xs text-text-secondary mt-1">Net terms</p>
             </CardContent>
           </Card>
         </div>
 
         <!-- Quick Actions -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-sm font-medium text-zinc-500">Quick Actions</CardTitle>
+            <CardTitle class="text-sm font-medium text-text-secondary">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="flex flex-wrap gap-2">
@@ -398,10 +386,10 @@ const cancelAddressEdit = () => {
 
         <!-- Bills & Payments Tables -->
         <div class="grid gap-4 lg:grid-cols-2">
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-zinc-500">Recent Bills</CardTitle>
+                <CardTitle class="text-sm font-medium text-text-secondary">Recent Bills</CardTitle>
                 <CardDescription>Last 25 bills</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/bills?vendor=${vendor.id}`)">
@@ -409,20 +397,18 @@ const cancelAddressEdit = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <DataTable :columns="billColumns" :data="billRows" key-field="id">
+              <LedgerRegister :columns="billColumns" :data="billRows" key-field="id">
                 <template #cell-status="{ row }">
-                  <Badge :variant="getStatusVariant(row.status)" class="capitalize">
-                    {{ row.status }}
-                  </Badge>
+                  <StatusBadge :status="row.status" />
                 </template>
-              </DataTable>
+              </LedgerRegister>
             </CardContent>
           </Card>
 
-          <Card class="border-zinc-200/80 bg-white">
+          <Card class="border-rule-default bg-surface-raised">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-zinc-500">Recent Payments</CardTitle>
+                <CardTitle class="text-sm font-medium text-text-secondary">Recent Payments</CardTitle>
                 <CardDescription>Last 25 payments</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/bill-payments?vendor=${vendor.id}`)">
@@ -430,7 +416,7 @@ const cancelAddressEdit = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <DataTable :columns="paymentColumns" :data="paymentRows" key-field="id" />
+              <LedgerRegister :columns="paymentColumns" :data="paymentRows" key-field="id" />
             </CardContent>
           </Card>
         </div>
@@ -439,10 +425,10 @@ const cancelAddressEdit = () => {
       <!-- Settings Tab -->
       <TabsContent value="settings" class="space-y-6">
         <!-- Contact Information -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900">Contact Information</CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardTitle class="text-text-primary">Contact Information</CardTitle>
+            <CardDescription class="text-text-secondary">
               {{ canManage ? 'Click the pencil icon to edit' : 'Contact an admin to make changes' }}
             </CardDescription>
           </CardHeader>
@@ -462,12 +448,12 @@ const cancelAddressEdit = () => {
               />
 
               <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-zinc-500">Vendor Number</Label>
-                <div class="flex items-center gap-2 font-mono text-base text-zinc-900">
-                  <Hash class="h-4 w-4 text-zinc-400" />
+                <Label class="text-sm font-medium text-text-secondary">Vendor Number</Label>
+                <div class="flex items-center gap-2 font-mono text-base text-text-primary">
+                  <Hash class="h-4 w-4 text-text-tertiary" />
                   {{ vendor.vendor_number }}
                 </div>
-                <p class="text-xs text-zinc-400">Auto-generated, cannot be changed</p>
+                <p class="text-xs text-text-tertiary">Auto-generated, cannot be changed</p>
               </div>
 
               <InlineEditable
@@ -502,13 +488,13 @@ const cancelAddressEdit = () => {
         </Card>
 
         <!-- Payment Settings -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900 flex items-center gap-2">
+            <CardTitle class="text-text-primary flex items-center gap-2">
               <DollarSign class="h-4 w-4" />
               Payment Settings
             </CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardDescription class="text-text-secondary">
               Payment terms, currency, and account information
             </CardDescription>
           </CardHeader>
@@ -613,10 +599,10 @@ const cancelAddressEdit = () => {
         </Card>
 
         <!-- Notes -->
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader>
-            <CardTitle class="text-zinc-900">Internal Notes</CardTitle>
-            <CardDescription class="text-zinc-500">
+            <CardTitle class="text-text-primary">Internal Notes</CardTitle>
+            <CardDescription class="text-text-secondary">
               Private notes about this vendor (not visible on bills)
             </CardDescription>
           </CardHeader>
@@ -639,11 +625,11 @@ const cancelAddressEdit = () => {
 
       <!-- Address Tab -->
       <TabsContent value="address" class="space-y-6">
-        <Card class="border-zinc-200/80 bg-white">
+        <Card class="border-rule-default bg-surface-raised">
           <CardHeader class="flex flex-row items-center justify-between">
             <div>
-              <CardTitle class="text-zinc-900">Vendor Address</CardTitle>
-              <CardDescription class="text-zinc-500">Mailing and payment address</CardDescription>
+              <CardTitle class="text-text-primary">Vendor Address</CardTitle>
+              <CardDescription class="text-text-secondary">Mailing and payment address</CardDescription>
             </div>
             <Button
               v-if="canManage && !addressEditing"
@@ -655,7 +641,7 @@ const cancelAddressEdit = () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div v-if="!addressEditing" class="space-y-2 text-sm text-zinc-700">
+            <div v-if="!addressEditing" class="space-y-2 text-sm text-text-primary">
               <div v-if="formatAddress(vendor.address)">
                 <p v-if="vendor.address?.street">{{ vendor.address.street }}</p>
                 <p v-if="vendor.address?.city || vendor.address?.state || vendor.address?.zip">
@@ -663,7 +649,7 @@ const cancelAddressEdit = () => {
                 </p>
                 <p v-if="vendor.address?.country">{{ vendor.address.country }}</p>
               </div>
-              <p v-else class="text-zinc-400">No address set</p>
+              <p v-else class="text-text-tertiary">No address set</p>
             </div>
 
             <form v-else class="space-y-3" @submit.prevent="saveAddress">
@@ -705,5 +691,7 @@ const cancelAddressEdit = () => {
         </Card>
       </TabsContent>
     </Tabs>
+
+    <RelatedActions screen="vendor.show" :slug="company.slug" :subject="vendor" />
   </PageShell>
 </template>

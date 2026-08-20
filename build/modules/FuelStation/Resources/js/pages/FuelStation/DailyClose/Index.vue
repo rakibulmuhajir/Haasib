@@ -38,8 +38,8 @@ import {
   GitBranch,
   CalendarDays,
 } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface DailyClose {
   id: string
@@ -72,14 +72,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const page = usePage()
-const currency = computed(() => currencySymbol(((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR'))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
+const currency = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
 
 const formatDate = (date: string) => {
   return formatSharedDateTime(date, { mode: 'date', locale: 'en-PK' })
@@ -92,15 +85,15 @@ const getStatusConfig = (close: DailyClose) => {
       label: 'Locked',
       variant: 'secondary' as const,
       icon: Lock,
-      class: 'text-amber-600',
+      class: 'text-status-attention',
     }
   }
 
   const configs: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle; class: string }> = {
-    posted: { label: 'Posted', variant: 'default', icon: CheckCircle, class: 'text-green-600' },
-    reversed: { label: 'Reversed', variant: 'destructive', icon: XCircle, class: 'text-red-600' },
-    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, class: 'text-amber-600' },
-    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, class: 'text-blue-600' },
+    posted: { label: 'Posted', variant: 'default', icon: CheckCircle, class: 'text-status-success' },
+    reversed: { label: 'Reversed', variant: 'destructive', icon: XCircle, class: 'text-status-critical' },
+    reversal: { label: 'Reversal', variant: 'outline', icon: RotateCcw, class: 'text-status-attention' },
+    correction: { label: 'Correction', variant: 'default', icon: CheckCircle, class: 'text-status-info' },
   }
   return configs[close.status] || configs.posted
 }
@@ -241,23 +234,26 @@ const unlockSingle = (closeId: string) => {
             <div class="flex items-center gap-6">
               <div class="text-right">
                 <div class="text-sm text-muted-foreground">Revenue</div>
-                <div class="font-semibold">{{ currency }} {{ formatCurrency(close.total_revenue) }}</div>
+                <div class="font-semibold"><MoneyText :amount="close.total_revenue" :currency="currency" :fraction-digits="0" /></div>
               </div>
 
               <div class="text-right">
                 <div class="text-sm text-muted-foreground">Closing Cash</div>
-                <div class="font-semibold">{{ currency }} {{ formatCurrency(close.closing_cash) }}</div>
+                <div class="font-semibold"><MoneyText :amount="close.closing_cash" :currency="currency" :fraction-digits="0" /></div>
               </div>
 
               <div class="text-right min-w-24">
                 <div class="text-sm text-muted-foreground">Variance</div>
+                <!-- A till that is over is as much a discrepancy as one that
+                     is short, so the sign carries the direction and the colour
+                     only says whether the drawer balanced. -->
                 <div
                   :class="[
-                    'font-semibold',
-                    close.variance === 0 ? 'text-green-600' : close.variance > 0 ? 'text-blue-600' : 'text-red-600',
+                    'font-mono font-semibold tabular-nums',
+                    close.variance === 0 ? 'text-text-primary' : 'text-status-attention',
                   ]"
                 >
-                  {{ close.variance >= 0 ? '+' : '' }}{{ currency }} {{ formatCurrency(close.variance) }}
+                  <template v-if="close.variance >= 0">+</template><MoneyText :amount="close.variance" :currency="currency" :fraction-digits="0" />
                 </div>
               </div>
 

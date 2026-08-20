@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import type { BreadcrumbItem } from '@/types'
 import { useLexicon } from '@/composables/useLexicon'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import { FileText, Package, Plus, Search } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -81,23 +82,29 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: t('bills'), href: `/${props.company.slug}/bills` },
 ]
 
-const columns = [
-  { key: 'bill_number', label: t('billNumber') },
-  { key: 'vendor', label: t('vendor') },
-  { key: 'bill_date', label: t('date') },
-  { key: 'due_date', label: t('due') },
-  { key: 'total_amount', label: t('total') },
-  { key: 'balance', label: t('balance') },
-  { key: 'status', label: t('status') },
-  { key: 'receive_stock', label: t('receiveStock') },
+const baseColumns = [
+  { key: 'bill_number', label: t('billNumber'), kind: 'ref' as const },
+  { key: 'vendor', label: t('vendor'), kind: 'text' as const },
+  { key: 'bill_date', label: t('date'), kind: 'date' as const },
+  { key: 'due_date', label: t('due'), kind: 'date' as const },
+  { key: 'total_amount', label: t('total'), kind: 'amount' as const },
+  { key: 'balance', label: t('balance'), kind: 'amount' as const },
+  { key: 'status', label: t('status'), kind: 'status' as const },
 ]
 
+// The Receive Stock column is only meaningful for companies that track
+// stock on their bills. When nothing on the current page needs receiving,
+// every row would render an em-dash — a column that says nothing on every
+// row is furniture, not information — so it is only declared when at
+// least one bill in the current page actually has stock to receive.
+const columns = computed(() =>
+  props.bills.data.some((b) => needsReceiving(b))
+    ? [...baseColumns, { key: 'receive_stock', label: t('receiveStock') }]
+    : baseColumns
+)
+
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })
@@ -248,7 +255,7 @@ const filterByStatus = (statusValue: string) => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="bills"
@@ -285,7 +292,14 @@ const filterByStatus = (statusValue: string) => {
               {{ billStatusLabel(value) }}
             </Badge>
           </button>
-          <p class="text-xs text-muted-foreground mt-1">
+          <!-- Stock status is only shown when it says something about THIS
+               bill; "not tracked" is the same on every row of a company
+               that doesn't track stock, so repeating it under every chip
+               is noise competing with the status chip above it. -->
+          <p
+            v-if="stockStatusLabel(row) !== t('stockNotTracked')"
+            class="text-xs text-muted-foreground mt-1"
+          >
             {{ t('stockStatus') }}: {{ stockStatusLabel(row) }}
           </p>
         </template>
@@ -310,7 +324,7 @@ const filterByStatus = (statusValue: string) => {
         <template #mobile-card="{ row }">
           <div
             @click="navigateToBill(row.id)"
-            class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
           >
             <div class="space-y-3">
               <!-- Header with bill number and status -->
@@ -320,7 +334,7 @@ const filterByStatus = (statusValue: string) => {
                   <button
                     v-if="row.vendor_id"
                     @click.stop="navigateToVendor(row.vendor_id)"
-                    class="text-sm text-zinc-500 hover:text-primary hover:underline"
+                    class="text-sm text-text-secondary hover:text-primary hover:underline"
                   >
                     {{ row.vendor }}
                   </button>
@@ -339,23 +353,23 @@ const filterByStatus = (statusValue: string) => {
               <!-- Dates -->
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span class="text-zinc-500">Date:</span>
+                  <span class="text-text-secondary">Date:</span>
                   <span class="font-medium ml-1">{{ row.bill_date }}</span>
                 </div>
                 <div>
-                  <span class="text-zinc-500">Due:</span>
+                  <span class="text-text-secondary">Due:</span>
                   <span class="font-medium ml-1">{{ row.due_date }}</span>
                 </div>
               </div>
 
               <!-- Amounts -->
-              <div class="flex items-center justify-between pt-2 border-t border-zinc-100">
+              <div class="flex items-center justify-between pt-2 border-t border-rule-subtle">
                 <div>
-                  <span class="text-sm text-zinc-500">Total:</span>
+                  <span class="text-sm text-text-secondary">Total:</span>
                   <span class="font-medium ml-1">{{ row.total_amount }}</span>
                 </div>
                 <div>
-                  <span class="text-sm text-zinc-500">Balance:</span>
+                  <span class="text-sm text-text-secondary">Balance:</span>
                   <span class="font-medium ml-1">{{ row.balance }}</span>
                 </div>
               </div>
@@ -377,7 +391,7 @@ const filterByStatus = (statusValue: string) => {
             </div>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

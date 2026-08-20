@@ -644,7 +644,7 @@ const submit = () => {
         <form class="space-y-6" @submit.prevent="submit">
             <div
                 v-if="!hasDefaultVisaVendor"
-                class="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+                class="rounded-md border border-status-attention/40 bg-status-attention/10 p-4 text-sm"
                 role="alert"
             >
                 <p class="font-medium">Visa pricing setup is required.</p>

@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, CreditCard, Save, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -263,13 +264,6 @@ const saveAndPay = () => {
   })
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
-}
 </script>
 
 <template>
@@ -465,18 +459,18 @@ const formatCurrency = (amount: number) => {
             <CardHeader class="space-y-1 pb-3">
               <CardTitle class="text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('total') }}</CardTitle>
               <div class="text-4xl font-semibold leading-none tabular-nums">
-                {{ formatCurrency(totalAmount) }}
+                <MoneyText :amount="totalAmount" :currency="company.base_currency || 'USD'" />
               </div>
             </CardHeader>
             <CardContent class="space-y-3">
               <div class="space-y-2 rounded-lg border border-border/70 bg-muted/15 p-3">
                 <div class="flex justify-between text-sm">
                   <span class="text-muted-foreground">{{ t('subtotal') }}</span>
-                  <span class="tabular-nums text-foreground/90">{{ formatCurrency(subtotal) }}</span>
+                  <span class="tabular-nums text-foreground/90"><MoneyText :amount="subtotal" :currency="company.base_currency || 'USD'" /></span>
                 </div>
                 <div v-if="form.apply_tax && resolvedTaxCode" class="flex justify-between text-sm animate-in fade-in duration-200">
                   <span class="text-muted-foreground">{{ t('tax') }} ({{ resolvedTaxCode.rate }}%)</span>
-                  <span class="tabular-nums text-foreground/90">{{ formatCurrency(taxAmount) }}</span>
+                  <span class="tabular-nums text-foreground/90"><MoneyText :amount="taxAmount" :currency="company.base_currency || 'USD'" /></span>
                 </div>
               </div>
 
@@ -486,7 +480,7 @@ const formatCurrency = (amount: number) => {
                   @click="saveAndPay"
                   :disabled="form.processing || !isValid"
                   size="lg"
-                  class="w-full bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50"
+                  class="w-full bg-status-success text-status-success-contrast hover:opacity-90 disabled:opacity-50"
                 >
                   <CreditCard class="mr-2 h-4 w-4" />
                   {{ t('saveAndPayNow') }}

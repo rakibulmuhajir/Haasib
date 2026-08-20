@@ -9,7 +9,6 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useLexicon } from '@/composables/useLexicon'
-import { useUserMode } from '@/composables/useUserMode'
 import { cn } from '@/lib/utils'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 import {
@@ -44,7 +43,6 @@ const emit = defineEmits<{
 
 // Composables
 const { t, tpl } = useLexicon()
-const { isAccountantMode } = useUserMode()
 
 // State
 const relativeOption = ref<string>('30')  // Default to Net 30
@@ -190,7 +188,7 @@ const handleRelativeChange = (value: any) => {
   emit('update:modelValue', newDate)
 }
 
-// Handle direct date input (accountant mode or custom)
+// Handle direct date input from the custom option
 const handleDateInput = (event: Event) => {
   const target = event.target as HTMLInputElement
   const value = target.value
@@ -199,28 +197,25 @@ const handleDateInput = (event: Event) => {
 
 // Initialize relative option from model value
 watch(() => props.modelValue, (newVal) => {
-  if (!isAccountantMode.value) {
-    const option = getOptionFromDate(newVal)
-    relativeOption.value = option
-    showCustomDate.value = option === 'custom'
-  }
+  const option = getOptionFromDate(newVal)
+  relativeOption.value = option
+  showCustomDate.value = option === 'custom'
 }, { immediate: true })
 
 // Re-calculate when reference date changes
 watch(referenceDate, () => {
-  if (!isAccountantMode.value && relativeOption.value !== 'custom') {
-    const newDate = calculateDateFromOption(relativeOption.value)
-    if (newDate !== props.modelValue) {
-      emit('update:modelValue', newDate)
-    }
+  if (relativeOption.value === 'custom') return
+
+  const newDate = calculateDateFromOption(relativeOption.value)
+  if (newDate !== props.modelValue) {
+    emit('update:modelValue', newDate)
   }
 })
 </script>
 
 <template>
   <div :class="cn('due-date-picker', props.class)">
-    <!-- Owner Mode: Relative dropdown -->
-    <div v-if="!isAccountantMode" class="space-y-2">
+    <div class="space-y-2">
       <Select :modelValue="relativeOption" @update:modelValue="handleRelativeChange" :disabled="disabled">
         <SelectTrigger
           :class="cn(
@@ -252,7 +247,7 @@ watch(referenceDate, () => {
           v-if="daysFromNow !== null"
           :class="{
             'text-destructive': daysFromNow < 0,
-            'text-amber-600': daysFromNow === 0,
+            'text-status-attention': daysFromNow === 0,
           }"
         >
           ({{ dueLabel }})
@@ -270,35 +265,6 @@ watch(referenceDate, () => {
           :class="cn(error && 'border-destructive')"
         />
       </div>
-    </div>
-
-    <!-- Accountant Mode: Standard date picker -->
-    <div v-else class="flex items-center gap-2">
-      <div class="relative flex-1">
-        <Calendar class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="date"
-          :value="modelValue"
-          @input="handleDateInput"
-          :disabled="disabled"
-          :min="invoiceDate"
-          class="pl-10"
-          :class="cn(error && 'border-destructive')"
-        />
-      </div>
-
-      <!-- Show due label -->
-      <span
-        v-if="daysFromNow !== null"
-        class="text-sm whitespace-nowrap"
-        :class="{
-          'text-destructive': daysFromNow < 0,
-          'text-amber-600': daysFromNow === 0,
-          'text-muted-foreground': daysFromNow > 0,
-        }"
-      >
-        {{ dueLabel }}
-      </span>
     </div>
 
     <!-- Error Message -->

@@ -2,15 +2,15 @@
 import { computed, reactive } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import DateTimeText from '@/components/DateTimeText.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { BarChart3, ChevronLeft, ChevronRight, Download, Search } from 'lucide-vue-next'
 
@@ -69,8 +69,41 @@ const goToPage = (page: number) => router.get(`/${props.company.slug}/umrah/repo
 const openRow = (row: Record<string, unknown>) => {
     if (row.href) router.get(`/${props.company.slug}${String(row.href)}`)
 }
+
+/*
+ * Some reports drill into a record and some are a dead end. A pointer cursor on
+ * rows that go nowhere is a promise the page cannot keep, so the register is
+ * only clickable when the server actually sent somewhere to go.
+ */
+const rowsAreLinked = computed(() => props.report.rows.some((row) => row.href))
 const numeric = (value: unknown) => Number(value || 0)
-const statusLabel = (value: unknown) => String(value || '-').replaceAll('_', ' ')
+
+/**
+ * Every Umrah report renders through this one page, so the server's column
+ * type is the only thing that decides how a figure or a state is drawn. Mapping
+ * it onto the register's own vocabulary here means a report cannot arrive with
+ * a right-alignment rule of its own -- there is nowhere left to put one.
+ */
+const registerColumns = computed(() =>
+    props.report.columns.map((column) => ({
+        key: column.key,
+        label: column.label,
+        kind: ({
+            money: 'amount',
+            number: 'amount',
+            date: 'date',
+            datetime: 'date',
+            status: 'status',
+            text: 'text',
+        } as const)[column.type] ?? ('text' as const),
+        // Prose columns are the only ones allowed to wrap. A figure that wraps
+        // has stopped being readable as a figure.
+        class: column.type === 'text' ? 'max-w-80 whitespace-normal' : undefined,
+    })),
+)
+
+/** The report's own column list, keyed by type, so the cells can be bound in one loop. */
+const columnsOfType = (type: Column['type']) => props.report.columns.filter((column) => column.type === type)
 const showing = computed(() => {
     if (!props.report.pagination.total) return '0 records'
     const start = (props.report.pagination.page - 1) * props.report.pagination.per_page + 1
@@ -128,24 +161,39 @@ const showing = computed(() => {
 
         <Card class="overflow-hidden rounded-md">
             <CardContent class="p-0">
-                <div class="overflow-x-auto">
-                    <Table class="min-w-max">
-                        <TableHeader><TableRow><TableHead v-for="column in report.columns" :key="column.key" :class="{ 'text-right': ['money', 'number'].includes(column.type) }">{{ column.label }}</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            <TableEmpty v-if="!report.rows.length" :colspan="report.columns.length">No records found for this period.</TableEmpty>
-                            <TableRow v-for="(row, index) in report.rows" :key="String(row.id || `${index}-${row.reference || row.group || row.voucher || ''}`)" :class="{ 'cursor-pointer hover:bg-muted/50': row.href }" @click="openRow(row)">
-                                <TableCell v-for="column in report.columns" :key="column.key" :class="{ 'text-right tabular-nums': ['money', 'number'].includes(column.type), 'max-w-80 whitespace-normal': !['money', 'number', 'date', 'datetime', 'status'].includes(column.type) }">
-                                    <MoneyText v-if="column.type === 'money'" :amount="numeric(row[column.key])" :currency="company.base_currency" />
-                                    <DateTimeText v-else-if="column.type === 'date'" :value="String(row[column.key] || '')" mode="date" />
-                                    <DateTimeText v-else-if="column.type === 'datetime'" :value="String(row[column.key] || '')" />
-                                    <Badge v-else-if="column.type === 'status'" variant="secondary" class="capitalize">{{ statusLabel(row[column.key]) }}</Badge>
-                                    <span v-else-if="column.type === 'number'">{{ numeric(row[column.key]).toLocaleString(undefined, { maximumFractionDigits: 2 }) }}</span>
-                                    <span v-else>{{ row[column.key] || '-' }}</span>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </div>
+                <LedgerRegister
+                    :data="report.rows"
+                    :columns="registerColumns"
+                    :key-field="(row: Record<string, unknown>, index: number) => String(row.id ?? `${index}-${row.reference ?? row.group ?? row.voucher ?? ''}`)"
+                    :clickable="rowsAreLinked"
+                    @row-click="openRow"
+                >
+                    <template #empty>No records found for this period.</template>
+
+                    <template v-for="column in columnsOfType('money')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        <MoneyText :amount="numeric(row[column.key])" :currency="company.base_currency" />
+                    </template>
+
+                    <template v-for="column in columnsOfType('number')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        {{ numeric(row[column.key]).toLocaleString(undefined, { maximumFractionDigits: 2 }) }}
+                    </template>
+
+                    <template v-for="column in columnsOfType('date')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        <DateTimeText :value="String(row[column.key] || '')" mode="date" />
+                    </template>
+
+                    <template v-for="column in columnsOfType('datetime')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        <DateTimeText :value="String(row[column.key] || '')" />
+                    </template>
+
+                    <template v-for="column in columnsOfType('status')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        <StatusBadge :status="row[column.key] as string" />
+                    </template>
+
+                    <template v-for="column in columnsOfType('text')" :key="column.key" #[`cell-${column.key}`]="{ row }">
+                        {{ row[column.key] || '—' }}
+                    </template>
+                </LedgerRegister>
                 <div class="flex items-center justify-between border-t px-4 py-3">
                     <div class="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>{{ showing }}</span>

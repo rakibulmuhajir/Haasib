@@ -2,13 +2,14 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Search, Plus, Eye, Pencil, Trash2 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -69,23 +70,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'customer_number', label: 'Customer #' },
-  { key: 'name', label: 'Name' },
-  { key: 'open_balance', label: 'Open Balance' },
-  { key: 'overdue_balance', label: 'Overdue' },
-  { key: 'invoice_count', label: 'Invoices' },
-  { key: 'available_credit', label: 'Credit' },
-  { key: 'last_invoice_date', label: 'Last Invoice' },
-  { key: 'last_payment_date', label: 'Last Payment' },
+  { key: 'customer_number', label: 'Customer #', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'open_balance', label: 'Open Balance', kind: 'amount' as const },
+  { key: 'overdue_balance', label: 'Overdue', kind: 'amount' as const },
+  { key: 'invoice_count', label: 'Invoices', kind: 'amount' as const },
+  { key: 'available_credit', label: 'Credit', kind: 'amount' as const },
+  { key: 'last_invoice_date', label: 'Last Invoice', kind: 'date' as const },
+  { key: 'last_payment_date', label: 'Last Payment', kind: 'date' as const },
   { key: 'actions', label: 'Actions' },
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const tableData = computed(() =>
   props.customers.data.map((c) => ({
@@ -219,7 +216,7 @@ const sortOptions = [
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="customers"
@@ -237,7 +234,7 @@ const sortOptions = [
             </Button>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useForm, usePage } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Match {
   id: string
@@ -24,6 +25,7 @@ const page = usePage()
 const company = page.props.company as any
 
 const selectedMatchId = ref(props.matches?.[0]?.id)
+const currency = computed(() => props.transaction.bank_account?.currency || 'USD')
 
 const form = useForm({
   bank_transaction_id: props.transaction.id,
@@ -61,7 +63,7 @@ const submit = () => {
         <Label :for="match.id" class="flex-1 cursor-pointer">
           <div class="flex justify-between items-center font-normal">
             <span>{{ match.description }}</span>
-            <span class="font-medium font-mono">${{ Math.abs(Number(match.amount)).toFixed(2) }}</span>
+            <span class="font-medium font-mono"><MoneyText :amount="Math.abs(Number(match.amount))" :currency="currency" /></span>
           </div>
         </Label>
       </div>

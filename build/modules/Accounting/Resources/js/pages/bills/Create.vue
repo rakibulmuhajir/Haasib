@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import { EntitySearch, QuickAddModal } from '@/components/forms'
+import RelatedActions from '@/components/RelatedActions.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Save, Plus, Trash2, ArrowLeft, Info } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -154,14 +156,6 @@ const totals = computed(() => {
   const total = subtotal + tax - discount
   return { subtotal, tax, discount, total }
 })
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.currency || 'USD',
-  }).format(amount)
-}
 
 const addLine = () => form.line_items.push(lineItemTemplate())
 const removeLine = (idx: number) => {
@@ -486,19 +480,19 @@ const handleSubmit = () => {
           <div class="space-y-2">
             <div class="flex justify-between text-sm">
               <span>Subtotal:</span>
-              <span>{{ formatCurrency(totals.subtotal) }}</span>
+              <span><MoneyText :amount="totals.subtotal" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
               <span>Tax:</span>
-              <span>{{ formatCurrency(totals.tax) }}</span>
+              <span><MoneyText :amount="totals.tax" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-sm">
               <span>Discount:</span>
-              <span class="text-destructive">-{{ formatCurrency(totals.discount) }}</span>
+              <span class="text-destructive">-<MoneyText :amount="totals.discount" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between text-lg font-semibold pt-2 border-t">
               <span>Total:</span>
-              <span>{{ formatCurrency(totals.total) }}</span>
+              <span><MoneyText :amount="totals.total" :currency="form.currency || 'USD'" /></span>
             </div>
           </div>
         </CardContent>
@@ -531,5 +525,13 @@ const handleSubmit = () => {
         </CardContent>
       </Card>
     </form>
+
+    <!-- The vendor action opens the same QuickAddModal the field does, so the
+         bill being entered survives the detour. -->
+    <RelatedActions
+      screen="bill.create"
+      :slug="company.slug"
+      @select="(key) => key === 'vendor.create' && handleQuickAddClick('')"
+    />
   </PageShell>
 </template>

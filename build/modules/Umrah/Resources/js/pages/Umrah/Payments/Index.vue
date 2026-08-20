@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import DateTimeText from '@/components/DateTimeText.vue';
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,15 +24,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
@@ -77,6 +70,27 @@ const applyFilters = () =>
         },
         { preserveState: true, replace: true },
     );
+
+/**
+ * A payment is either sent or received, but that is one row's fact, not two
+ * columns' worth -- so amount stays a single neutral figure and direction is
+ * a plain annotation chip rather than a colour repeating what the heading
+ * already says. Reversed is a book state, so it goes through the shared
+ * vocabulary instead of a destructive-red badge; an ordinary reversal is not
+ * an adverse one.
+ */
+const columns = [
+    { key: 'payment_number', label: 'Payment', kind: 'ref' as const },
+    { key: 'payment_date', label: 'Date', kind: 'date' as const },
+    { key: 'party', label: 'Party', kind: 'text' as const },
+    { key: 'allocation', label: 'Allocation', kind: 'text' as const },
+    { key: 'direction', label: 'Direction', kind: 'text' as const },
+    { key: 'account_code', label: 'Account #', kind: 'ref' as const },
+    { key: 'account_name', label: 'Account', kind: 'text' as const },
+    { key: 'amount', label: 'Amount', kind: 'amount' as const },
+    { key: 'available', label: 'Available', kind: 'amount' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
+];
 
 const availableAmount = (payment: any) =>
     Math.max(
@@ -177,7 +191,7 @@ const submitAllocation = () => {
                 ><CardHeader
                     ><CardTitle class="flex items-center gap-2 text-base"
                         ><ArrowDownLeft
-                            class="h-4 w-4 text-emerald-700"
+                            class="h-4 w-4 text-status-success"
                         />Received</CardTitle
                     ></CardHeader
                 ><CardContent class="text-2xl font-semibold"
@@ -233,129 +247,90 @@ const submitAllocation = () => {
 
         <Card>
             <CardContent class="p-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Payment</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Party</TableHead>
-                            <TableHead>Allocation</TableHead>
-                            <TableHead>Direction</TableHead>
-                            <TableHead>Account #</TableHead>
-                            <TableHead>Account</TableHead>
-                            <TableHead class="text-right">Amount</TableHead>
-                            <TableHead class="text-right">Available</TableHead>
-                            <TableHead class="w-24 text-right"
-                                >Action</TableHead
+                <LedgerRegister :data="payments.data" :columns="columns">
+                    <template #empty>No payments found.</template>
+
+                    <template #cell-payment_number="{ row }">
+                        {{ row.payment_number }}
+                        <StatusBadge v-if="row.status === 'reversed'" status="reversed" />
+                    </template>
+
+                    <template #cell-payment_date="{ row }">
+                        <DateTimeText :value="row.payment_date" mode="date" />
+                    </template>
+
+                    <template #cell-party="{ row }">
+                        {{
+                            row.visa_vendor?.name ||
+                            row.transport_vendor?.name ||
+                            row.hotel_vendor?.name ||
+                            row.agent?.name ||
+                            '—'
+                        }}
+                    </template>
+
+                    <template #cell-allocation="{ row }">
+                        <div
+                            v-if="row.allocations?.length"
+                            class="flex max-w-56 flex-wrap gap-x-2 gap-y-1"
+                        >
+                            <Button
+                                v-for="allocation in row.allocations"
+                                :key="allocation.id"
+                                variant="link"
+                                class="h-auto p-0 text-sm"
+                                @click="
+                                    router.get(
+                                        `/${company.slug}/umrah/groups/${allocation.visa_group_id}`,
+                                    )
+                                "
+                                >{{ allocation.group?.group_number }}</Button
                             >
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        <TableEmpty v-if="!payments.data.length" :colspan="10"
-                            >No payments found.</TableEmpty
-                        >
-                        <TableRow
-                            v-for="payment in payments.data"
-                            :key="payment.id"
-                        >
-                            <TableCell class="font-medium">{{
-                                payment.payment_number
-                            }}<Badge v-if="payment.status === 'reversed'" variant="destructive" class="ml-2">Reversed</Badge></TableCell>
-                            <TableCell
-                                ><DateTimeText
-                                    :value="payment.payment_date"
-                                    mode="date"
-                            /></TableCell>
-                            <TableCell>
-                                {{
-                                    payment.visa_vendor?.name ||
-                                    payment.transport_vendor?.name ||
-                                    payment.hotel_vendor?.name ||
-                                    payment.agent?.name ||
-                                    '-'
-                                }}
-                            </TableCell>
-                            <TableCell>
-                                <div
-                                    v-if="payment.allocations?.length"
-                                    class="flex max-w-56 flex-wrap gap-x-2 gap-y-1"
-                                >
-                                    <Button
-                                        v-for="allocation in payment.allocations"
-                                        :key="allocation.id"
-                                        variant="link"
-                                        class="h-auto p-0 text-sm"
-                                        @click="
-                                            router.get(
-                                                `/${company.slug}/umrah/groups/${allocation.visa_group_id}`,
-                                            )
-                                        "
-                                        >{{
-                                            allocation.group?.group_number
-                                        }}</Button
-                                    >
-                                </div>
-                                <div v-else class="text-sm text-amber-700">
-                                    Unallocated advance
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <Badge
-                                    :variant="
-                                        payment.direction === 'sent'
-                                            ? 'outline'
-                                            : 'secondary'
-                                    "
-                                    >{{
-                                        directions[payment.direction] ||
-                                        payment.direction
-                                    }}</Badge
-                                >
-                            </TableCell>
-                            <TableCell>
-                                {{ payment.account?.code || '-' }}
-                            </TableCell>
-                            <TableCell>
-                                {{ payment.account?.name || 'Default account' }}
-                            </TableCell>
-                            <TableCell class="text-right">
-                                <div
-                                    class="font-semibold"
-                                    :class="
-                                        payment.direction === 'sent'
-                                            ? 'text-destructive'
-                                            : 'text-emerald-700'
-                                    "
-                                >
-                                    <MoneyText
-                                        :amount="payment.amount"
-                                        :currency="payment.currency"
-                                    />
-                                </div>
-                            </TableCell>
-                            <TableCell class="text-right font-medium">
-                                <MoneyText
-                                    :amount="availableAmount(payment)"
-                                    :currency="payment.base_currency"
-                                />
-                            </TableCell>
-                            <TableCell class="flex justify-end gap-2 text-right">
-                                <Button variant="ghost" size="sm" @click="router.get(`/${company.slug}/umrah/payments/${payment.id}`)">Details</Button>
-                                <Button
-                                    v-if="
-                                        canRecordPayments &&
-                                        payment.status !== 'reversed' &&
-                                        availableAmount(payment) > 0.01
-                                    "
-                                    variant="outline"
-                                    size="sm"
-                                    @click="openAllocation(payment)"
-                                    >Allocate</Button
-                                >
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                        </div>
+                        <div v-else class="text-sm text-status-attention">
+                            Unallocated advance
+                        </div>
+                    </template>
+
+                    <template #cell-direction="{ row }">
+                        <MetaChip tone="neutral" bare>{{
+                            directions[row.direction] || row.direction
+                        }}</MetaChip>
+                    </template>
+
+                    <template #cell-account_code="{ row }">
+                        {{ row.account?.code || '—' }}
+                    </template>
+
+                    <template #cell-account_name="{ row }">
+                        {{ row.account?.name || 'Default account' }}
+                    </template>
+
+                    <template #cell-amount="{ row }">
+                        <MoneyText :amount="row.amount" :currency="row.currency" />
+                    </template>
+
+                    <template #cell-available="{ row }">
+                        <MoneyText :amount="availableAmount(row)" :currency="row.base_currency" />
+                    </template>
+
+                    <template #cell-actions="{ row }">
+                        <div class="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" @click="router.get(`/${company.slug}/umrah/payments/${row.id}`)">Details</Button>
+                            <Button
+                                v-if="
+                                    canRecordPayments &&
+                                    row.status !== 'reversed' &&
+                                    availableAmount(row) > 0.01
+                                "
+                                variant="outline"
+                                size="sm"
+                                @click="openAllocation(row)"
+                                >Allocate</Button
+                            >
+                        </div>
+                    </template>
+                </LedgerRegister>
                 <RecordPagination
                     :current-page="payments.current_page"
                     :last-page="payments.last_page"

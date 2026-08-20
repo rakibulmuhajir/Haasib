@@ -2,10 +2,11 @@ import '../css/app.css'
 
 import { createInertiaApp } from '@inertiajs/vue3'
 import type { DefineComponent } from 'vue'
-import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { createApp, defineComponent, Fragment, h, onBeforeUnmount, onMounted } from 'vue'
 import { initializeTheme } from './composables/useAppearance'
 import { useFlashMessages } from './composables/useFlashMessages'
 import CommandPalette from './components/palette/CommandPalette.vue'
+import { usePaletteVisibility } from './composables/usePaletteVisibility'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Haasib'
 
@@ -99,18 +100,11 @@ createInertiaApp({
     const Root = defineComponent({
       name: 'AppRoot',
       setup() {
-        const paletteVisible = ref(false)
+        const { visible: paletteVisible, toggle: togglePalette, close: closePalette } =
+          usePaletteVisibility()
 
         // Initialize global flash message handler
         useFlashMessages()
-
-        function togglePalette() {
-          paletteVisible.value = !paletteVisible.value
-        }
-
-        function closePalette() {
-          paletteVisible.value = false
-        }
 
         function handleKeydown(e: KeyboardEvent) {
           // Cmd+K or Ctrl+K to toggle palette

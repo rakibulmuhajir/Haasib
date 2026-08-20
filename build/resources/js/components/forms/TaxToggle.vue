@@ -192,7 +192,7 @@ onMounted(() => {
       <!-- Tax info badge -->
       <span
         v-else-if="modelValue && taxInfo"
-        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground"
+        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-xs bg-muted text-muted-foreground"
       >
         <Percent class="h-3 w-3" />
         {{ taxInfo }}
@@ -201,7 +201,7 @@ onMounted(() => {
       <!-- No tax configured warning -->
   <span
         v-else-if="modelValue && !taxInfo && !isLoadingTax"
-        class="text-xs text-amber-600"
+        class="text-xs text-status-attention"
       >
         {{ t('noTaxProfileConfigured') }}
       </span>

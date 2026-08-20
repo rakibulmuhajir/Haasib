@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { Plus, Trash2 } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 type CompanyRef = {
   id: string
@@ -75,14 +76,6 @@ const form = useForm({
 const total = computed(() => {
   return form.line_items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
 })
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
-}
 
 const addLine = () => {
   form.line_items.push(lineItemTemplate())
@@ -189,7 +182,7 @@ const submit = () => {
 
           <div class="flex items-center justify-between">
             <div class="text-sm text-muted-foreground">Total</div>
-            <div class="text-lg font-semibold tabular-nums">{{ formatCurrency(total) }}</div>
+            <div class="text-lg font-semibold tabular-nums"><MoneyText :amount="total" :currency="company.base_currency || 'USD'" /></div>
           </div>
 
           <div class="flex justify-end">

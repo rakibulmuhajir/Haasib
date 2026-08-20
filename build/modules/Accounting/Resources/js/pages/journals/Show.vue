@@ -2,13 +2,15 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import DateTimeText from '@/components/DateTimeText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, ArrowLeft } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -71,26 +73,14 @@ const sourceHref = computed(() => {
 })
 
 const money = (val: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: props.company.base_currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val ?? 0)
-
-const badgeVariant = (val: string) => {
-  if (val === 'draft') return 'secondary'
-  if (val === 'posted') return 'success'
-  if (val === 'void') return 'outline'
-  if (val === 'reversed') return 'secondary'
-  return 'secondary'
-}
+  formatMoneyText(val ?? 0, props.company.base_currency || 'USD')
 
 const columns = [
-  { key: 'line_number', label: '#' },
-  { key: 'account', label: 'Account' },
-  { key: 'description', label: 'Description' },
-  { key: 'debit', label: 'Debit' },
-  { key: 'credit', label: 'Credit' },
+  { key: 'line_number', label: '#', kind: 'ref' as const },
+  { key: 'account', label: 'Account', kind: 'text' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'debit', label: 'Debit', kind: 'in' as const },
+  { key: 'credit', label: 'Credit', kind: 'out' as const },
 ]
 
 const tableData = computed(() =>
@@ -163,7 +153,7 @@ const tableData = computed(() =>
           <CardTitle>Status</CardTitle>
         </CardHeader>
         <CardContent class="space-y-2 text-sm">
-          <Badge :variant="badgeVariant(journal.status)">{{ journal.status }}</Badge>
+          <StatusBadge :status="journal.status" />
           <div v-if="journal.description" class="text-muted-foreground">
             {{ journal.description }}
           </div>
@@ -177,18 +167,18 @@ const tableData = computed(() =>
         <CardContent class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span>Debit</span>
-            <span>{{ money(Number(journal.total_debit)) }}</span>
+            <span><MoneyText :amount="Number(journal.total_debit)" :currency="company.base_currency" /></span>
           </div>
           <div class="flex justify-between">
             <span>Credit</span>
-            <span>{{ money(Number(journal.total_credit)) }}</span>
+            <span><MoneyText :amount="Number(journal.total_credit)" :currency="company.base_currency" /></span>
           </div>
         </CardContent>
       </Card>
     </div>
 
     <div class="mt-6">
-      <DataTable :columns="columns" :data="tableData" />
+      <LedgerRegister :columns="columns" :data="tableData" />
     </div>
   </PageShell>
 </template>

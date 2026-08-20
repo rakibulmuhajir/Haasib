@@ -3,14 +3,15 @@ import { ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import CompanyCurrencies from '@/components/company/CompanyCurrencies.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDateTime } from '@/lib/datetime'
 import { toast } from 'vue-sonner'
@@ -38,6 +39,7 @@ interface Company {
   country?: string
   base_currency: string
   logo_url?: string | null
+  address?: CompanyAddress | null
   language?: string | null
   locale?: string | null
   is_active: boolean
@@ -54,6 +56,20 @@ interface Company {
     contact_phone?: string | null
     website?: string | null
   }
+}
+
+/**
+ * The postal address printed on every document the company issues. Stored as
+ * jsonb in the same shape as a customer's billing address, so one renderer
+ * serves both sides of a document.
+ */
+interface CompanyAddress {
+  line1?: string | null
+  line2?: string | null
+  city?: string | null
+  state?: string | null
+  postal_code?: string | null
+  country?: string | null
 }
 
 interface CompanyUser {
@@ -74,6 +90,18 @@ const availableCurrencies = props.availableCurrencies || []
 const users = (props.users || []) as CompanyUser[]
 const logoPreview = ref(company.value.logo_url || '')
 const expandedUserId = ref<string | null>(null)
+
+/**
+ * A member list is a register. It is not a table of settings that happens to
+ * have rows -- whether someone is a manager is the same kind of fact as whether
+ * an invoice is paid, and both get read down a column the same way.
+ */
+const userColumns = [
+  { key: 'name', label: 'User', kind: 'text' as const },
+  { key: 'role', label: 'Role', kind: 'text' as const },
+  { key: 'access', label: 'Access', kind: 'text' as const, class: 'hidden max-w-md md:table-cell', headerClass: 'hidden md:table-cell' },
+  { key: 'joined_at', label: 'Joined', kind: 'date' as const, class: 'hidden sm:table-cell', headerClass: 'hidden sm:table-cell' },
+]
 
 const formatDate = (value: string | null) => value ? formatDateTime(value, { mode: 'date' }) : '—'
 const roleLabel = (role: string | null) => ({
@@ -131,6 +159,14 @@ const generalForm = useForm({
   contact_email: company.value.settings?.contact_email || '',
   contact_phone: company.value.settings?.contact_phone || '',
   website: company.value.settings?.website || '',
+  address: {
+    line1: company.value.address?.line1 || '',
+    line2: company.value.address?.line2 || '',
+    city: company.value.address?.city || '',
+    state: company.value.address?.state || '',
+    postal_code: company.value.address?.postal_code || '',
+    country: company.value.address?.country || '',
+  },
   language: company.value.language || 'en',
   locale: company.value.locale || 'en_US',
 })
@@ -215,10 +251,8 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         <div class="space-y-2">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-2xl font-semibold tracking-tight text-foreground">{{ company.name }}</h1>
-            <Badge :variant="company.is_active ? 'default' : 'secondary'">
-              {{ company.is_active ? 'Active' : 'Inactive' }}
-            </Badge>
-            <Badge variant="outline">{{ roleLabel(company.current_user_role) }}</Badge>
+            <StatusBadge :status="company.is_active ? 'active' : 'inactive'" />
+            <MetaChip tone="neutral" bare>{{ roleLabel(company.current_user_role) }}</MetaChip>
           </div>
           <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
             Company details, team access, currencies, modules, and accounting defaults.
@@ -295,6 +329,32 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
                     <Label for="website">Website</Label>
                     <Input id="website" v-model="generalForm.website" type="url" :disabled="!company.can_manage_company" />
                     <p v-if="generalForm.errors.website" class="text-xs text-destructive">{{ generalForm.errors.website }}</p>
+                  </div>
+                  <!-- The letterhead block. Until these fields existed every
+                       invoice, bill and credit note this company sent printed a
+                       name and a logo and nothing a reader could post a cheque
+                       to. -->
+                  <div class="space-y-2 md:col-span-2">
+                    <Label for="address-line1">Street address</Label>
+                    <Input id="address-line1" v-model="generalForm.address.line1" :disabled="!company.can_manage_company" placeholder="Building, street" />
+                    <Input id="address-line2" v-model="generalForm.address.line2" :disabled="!company.can_manage_company" placeholder="Area, landmark (optional)" />
+                    <p class="text-xs text-muted-foreground">Printed on every document you issue.</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="address-city">City</Label>
+                    <Input id="address-city" v-model="generalForm.address.city" :disabled="!company.can_manage_company" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="address-state">Province</Label>
+                    <Input id="address-state" v-model="generalForm.address.state" :disabled="!company.can_manage_company" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="address-postal">Postal code</Label>
+                    <Input id="address-postal" v-model="generalForm.address.postal_code" :disabled="!company.can_manage_company" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="address-country">Country</Label>
+                    <Input id="address-country" v-model="generalForm.address.country" :disabled="!company.can_manage_company" />
                   </div>
                   <div class="space-y-2">
                     <Label for="language">Language</Label>
@@ -389,67 +449,69 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
               </Button>
             </CardHeader>
             <CardContent class="space-y-6">
-              <div class="overflow-hidden rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead class="hidden md:table-cell">Access</TableHead>
-                      <TableHead class="hidden text-right sm:table-cell">Joined</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <template v-for="user in users" :key="user.id">
-                    <TableRow>
-                      <TableCell>
-                        <div class="font-medium">{{ user.name }}</div>
-                        <div class="text-xs text-muted-foreground">{{ user.email }}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{{ roleLabel(user.role) }}</Badge>
-                          <Button variant="ghost" size="sm" class="h-7 px-2 text-xs" @click="toggleUserPermissions(user.id)">
-                            {{ user.permissions.length }} module permissions
-                            <ChevronDown class="ml-1 h-3.5 w-3.5 transition-transform" :class="expandedUserId === user.id ? 'rotate-180' : ''" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell class="hidden max-w-md text-sm text-muted-foreground md:table-cell">{{ roleDescription(user.role) }}</TableCell>
-                      <TableCell class="hidden text-right text-sm text-muted-foreground sm:table-cell">{{ formatDate(user.joined_at) }}</TableCell>
-                    </TableRow>
-                    <TableRow v-if="expandedUserId === user.id" class="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colspan="4" class="p-5">
-                        <div v-if="user.capabilities.length" class="mb-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                          <div v-for="capability in user.capabilities" :key="capability.label" class="flex items-start gap-2 rounded-md border border-border bg-background p-3">
-                            <Check v-if="capability.allowed" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                            <span v-else class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">×</span>
-                            <div>
-                              <p class="text-sm font-medium">{{ capability.label }}</p>
-                              <p class="text-xs" :class="capability.allowed ? 'text-emerald-700' : 'text-destructive'">
-                                {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div v-if="user.permissions.length" class="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-                          <section v-for="([group, permissions]) in Object.entries(permissionGroups(user.permissions))" :key="group" class="space-y-2">
-                            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ group }}</h4>
-                            <ul class="space-y-1.5">
-                              <li v-for="permission in permissions" :key="permission" class="flex items-start gap-2 text-sm">
-                                <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                                <span>{{ permissionLabel(permission) }}</span>
-                              </li>
-                            </ul>
-                          </section>
-                        </div>
-                        <p v-else class="text-sm text-muted-foreground">No permissions are currently granted to this role.</p>
-                      </TableCell>
-                    </TableRow>
-                    </template>
-                  </TableBody>
-                </Table>
-              </div>
+              <LedgerRegister
+                :data="users"
+                :columns="userColumns"
+                :expanded="(row) => expandedUserId === row.id"
+              >
+                <template #empty>Nobody has been added to this company yet.</template>
+
+                <template #cell-name="{ row }">
+                  <div class="font-medium">{{ row.name }}</div>
+                  <div class="text-xs text-text-secondary">{{ row.email }}</div>
+                </template>
+
+                <template #cell-role="{ row }">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <MetaChip tone="neutral" bare>{{ roleLabel(row.role) }}</MetaChip>
+                    <Button variant="ghost" size="sm" class="h-7 px-2 text-xs" @click.stop="toggleUserPermissions(row.id)">
+                      {{ row.permissions.length }} module permissions
+                      <ChevronDown class="ml-1 h-3.5 w-3.5 transition-transform" :class="expandedUserId === row.id ? 'rotate-180' : ''" />
+                    </Button>
+                  </div>
+                </template>
+
+                <template #cell-access="{ row }">
+                  <span class="text-sm text-text-secondary">{{ roleDescription(row.role) }}</span>
+                </template>
+
+                <template #cell-joined_at="{ row }">{{ formatDate(row.joined_at) }}</template>
+
+                <template #row-detail="{ row }">
+                  <div v-if="row.capabilities.length" class="mb-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    <div v-for="capability in row.capabilities" :key="capability.label" class="flex items-start gap-2 rounded-md border border-rule-default bg-surface-canvas p-3">
+                      <!--
+                        A capability this role does not have is not a failure.
+                        It is the shape of the role, and painting it red said
+                        something was wrong with a permission set that is
+                        working exactly as configured. The tick and the words
+                        carry the distinction; colour only recedes the half
+                        that is not in force.
+                      -->
+                      <Check v-if="capability.allowed" class="mt-0.5 h-4 w-4 shrink-0 text-text-primary" />
+                      <span v-else class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-rule-default text-xs font-semibold text-text-secondary">–</span>
+                      <div>
+                        <p class="text-sm font-medium" :class="capability.allowed ? '' : 'text-text-secondary'">{{ capability.label }}</p>
+                        <p class="text-xs text-text-secondary">
+                          {{ capability.allowed ? 'Allowed' : 'Not allowed' }}<span v-if="capability.detail"> · {{ capability.detail }}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="row.permissions.length" class="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+                    <section v-for="([group, permissions]) in Object.entries(permissionGroups(row.permissions))" :key="group" class="space-y-2">
+                      <h4 class="text-xs font-semibold uppercase tracking-wide text-text-secondary">{{ group }}</h4>
+                      <ul class="space-y-1.5">
+                        <li v-for="permission in permissions" :key="permission" class="flex items-start gap-2 text-sm">
+                          <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-success" />
+                          <span>{{ permissionLabel(permission) }}</span>
+                        </li>
+                      </ul>
+                    </section>
+                  </div>
+                  <p v-else class="text-sm text-text-secondary">No permissions are currently granted to this role.</p>
+                </template>
+              </LedgerRegister>
 
               <div class="rounded-lg bg-muted/40 p-4">
                 <div class="flex gap-3">

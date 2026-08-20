@@ -1,11 +1,30 @@
 <script setup lang="ts">
+/**
+ * A payment is a receipt, and a receipt is a document.
+ *
+ * This page used to build one by hand: a logo block, a heading, a coloured
+ * badge, a grid of labelled paragraphs, and a list of allocations as bordered
+ * rows. It was the fourth different way this application drew the same sheet.
+ * It now goes through LedgerDocument like the invoice, the bill and the credit
+ * note, so the letterhead, the party blocks, the figures and the total are all
+ * decided in one place.
+ *
+ * The allocations are the line items. That is what they are: this much of the
+ * money went against that invoice. Whatever is left over is a line too --
+ * unapplied credit is a real position a customer can be in, and a receipt that
+ * silently omits it does not add up to the amount printed at the bottom.
+ */
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
+import LedgerDocument from '@/components/LedgerDocument.vue'
+import type { DocumentIssuer, DocumentLine } from '@/components/LedgerDocument.vue'
+import DefinitionList from '@/components/DefinitionList.vue'
+import RelatedActions from '@/components/RelatedActions.vue'
+import MoneyText from '@/components/MoneyText.vue'
+import MetaChip from '@/components/MetaChip.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,17 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BreadcrumbItem } from '@/types'
-import {
-  ArrowLeft,
-  Edit,
-  MoreHorizontal,
-  DollarSign,
-  CreditCard,
-  Building,
-  Smartphone,
-  FileText,
-  Calendar,
-} from 'lucide-vue-next'
+import { ArrowLeft, Edit, MoreHorizontal } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
 
 interface Invoice {
@@ -62,7 +71,8 @@ interface CompanyRef {
   id: string
   name: string
   slug: string
-  logo_url?: string
+  /** Assembled server-side by CompanyLetterhead — see the invoice page. */
+  letterhead: DocumentIssuer
 }
 
 const props = defineProps<{
@@ -77,47 +87,77 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: props.payment.payment_number },
 ])
 
-const getPaymentMethodIcon = (method: string) => {
-  switch (method) {
-    case 'cash':
-      return DollarSign
-    case 'bank_transfer':
-      return Building
-    case 'card':
-      return CreditCard
-    case 'cheque':
-      return FileText
-    default:
-      return DollarSign
+/**
+ * Written as 'cheque' by the form, stored as 'check' by the column's check
+ * constraint. Both spellings arrive here.
+ */
+const paymentMethodLabels: Record<string, string> = {
+  cash: 'Cash',
+  bank_transfer: 'Bank transfer',
+  card: 'Card',
+  cheque: 'Cheque',
+  check: 'Cheque',
+}
+
+const methodLabel = computed(
+  () => paymentMethodLabels[props.payment.payment_method] ?? 'Other',
+)
+
+const formatDate = (dateString: string) => formatSharedDateTime(dateString, { mode: 'date' })
+
+const issuer = computed(() => props.company.letterhead)
+
+const receivedFrom = computed(() => ({
+  name: props.payment.customer.name,
+  email: props.payment.customer.email,
+}))
+
+const documentDates = computed(() =>
+  [
+    { label: 'Received', value: formatDate(props.payment.payment_date) },
+    { label: 'Method', value: methodLabel.value },
+    { label: 'Reference', value: props.payment.reference_number ?? null },
+  ].filter((date): date is { label: string; value: string } => Boolean(date.value)),
+)
+
+const allocatedTotal = computed(() =>
+  props.payment.payment_allocations.reduce(
+    (sum, allocation) => sum + Number(allocation.amount_allocated),
+    0,
+  ),
+)
+
+const unapplied = computed(() => Number(props.payment.amount) - allocatedTotal.value)
+
+/**
+ * One line per invoice the money went against, then the remainder if the
+ * customer paid more than they owed on those invoices. The lines add up to the
+ * total or the receipt is wrong, so the remainder is never left off.
+ */
+const documentLines = computed<DocumentLine[]>(() => {
+  const lines: DocumentLine[] = props.payment.payment_allocations.map((allocation) => ({
+    description: allocation.invoice?.invoice_number
+      ? `Applied to ${allocation.invoice.invoice_number}`
+      : 'Applied to invoice',
+    amount: allocation.amount_allocated,
+  }))
+
+  if (unapplied.value > 0.005) {
+    lines.push({
+      description: lines.length ? 'Unapplied credit' : 'Payment on account',
+      detail: lines.length ? 'Held against future invoices' : undefined,
+      amount: unapplied.value,
+    })
   }
-}
 
-const getPaymentMethodLabel = (method: string) => {
-  switch (method) {
-    case 'cash':
-      return 'Cash'
-    case 'bank_transfer':
-      return 'Bank Transfer'
-    case 'card':
-      return 'Card'
-    case 'cheque':
-      return 'Cheque'
-    default:
-      return 'Other'
-  }
-}
+  return lines
+})
 
-const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
-}
-
-const formatDate = (dateString: string) => {
-  return formatSharedDateTime(dateString, { mode: 'date' })
-}
+const summaryItems = computed(() => [
+  { term: 'Method', value: methodLabel.value },
+  { term: 'Reference', value: props.payment.reference_number ?? null },
+  { term: 'Recorded', value: formatDate(props.payment.created_at) },
+])
 </script>
 
 <template>
@@ -150,171 +190,84 @@ const formatDate = (dateString: string) => {
     </template>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Main Payment Content -->
       <div class="lg:col-span-2 space-y-6">
-        <!-- Payment Header -->
-        <Card>
-          <CardContent class="pt-6">
-            <!-- Company Logo Section -->
-            <div class="mb-6 pb-6 border-b">
-              <div class="flex items-center gap-4">
-                <div v-if="company.logo_url" class="flex-shrink-0">
-                  <img
-                    :src="company.logo_url"
-                    :alt="`${company.name} logo`"
-                    class="h-16 w-auto object-contain"
-                  />
-                </div>
-                <div v-else class="flex-shrink-0">
-                  <div class="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Building class="h-8 w-8 text-primary" />
-                  </div>
-                </div>
-                <div>
-                  <h2 class="text-xl font-semibold">{{ company.name }}</h2>
-                  <p class="text-sm text-muted-foreground">Payment Receipt</p>
-                </div>
-              </div>
-            </div>
+        <LedgerDocument
+          doc-type="Receipt"
+          :doc-number="payment.payment_number"
+          :issuer="issuer"
+          :bill-to="receivedFrom"
+          bill-to-label="Received from"
+          :dates="documentDates"
+          :lines="documentLines"
+          grand-total-label="Amount received"
+          :grand-total-amount="payment.amount"
+          :currency="payment.currency"
+          locale="en-PK"
+          :show-quantity="false"
+        />
 
-            <div class="flex justify-between items-start mb-6">
-              <div>
-                <h1 class="text-2xl font-bold">Payment {{ payment.payment_number }}</h1>
-                <p class="text-muted-foreground">Date: {{ formatDate(payment.payment_date) }}</p>
-              </div>
-              <div class="text-right">
-                <Badge variant="secondary" class="mb-2">
-                  {{ getPaymentMethodLabel(payment.payment_method) }}
-                </Badge>
-                <div class="flex items-center justify-end gap-2">
-                  <component :is="getPaymentMethodIcon(payment.payment_method)" class="h-4 w-4" />
-                  <span class="font-bold text-lg">{{ formatCurrency(payment.amount, payment.currency) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-6">
-              <div>
-                <h3 class="font-semibold mb-2">Customer:</h3>
-                <div>
-                  <button
-                    @click="router.get(`/${company.slug}/customers/${payment.customer.id}`)"
-                    class="font-medium text-primary hover:underline focus:outline-none focus:underline text-left"
-                  >
-                    {{ payment.customer.name }}
-                  </button>
-                  <p v-if="payment.customer.email" class="text-sm text-muted-foreground">{{ payment.customer.email }}</p>
-                </div>
-              </div>
-              <div class="text-right">
-                <p v-if="payment.reference_number" class="mb-1">
-                  <span class="font-medium">Reference:</span> {{ payment.reference_number }}
-                </p>
-                <p class="mb-1">
-                  <span class="font-medium">Payment Method:</span> {{ getPaymentMethodLabel(payment.payment_method) }}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Allocations -->
-        <Card v-if="payment.payment_allocations.length > 0">
-          <CardHeader>
-            <CardTitle>Allocations</CardTitle>
-            <CardDescription>How this payment was applied</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-3">
-              <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded-lg">
-                <div>
-                  <button
-                    @click="router.get(`/${company.slug}/invoices/${allocation.invoice_id}`)"
-                    class="font-medium text-primary hover:underline focus:outline-none focus:underline"
-                  >
-                    {{ allocation.invoice?.invoice_number || `Invoice #${allocation.invoice_id}` }}
-                  </button>
-                  <p class="text-sm text-muted-foreground">Applied to invoice</p>
-                </div>
-                <div class="text-right">
-                  <p class="font-medium">{{ formatCurrency(allocation.amount_allocated, payment.currency) }}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Notes -->
         <Card v-if="payment.notes">
           <CardHeader>
-            <CardTitle>Notes</CardTitle>
+            <CardTitle>Internal notes</CardTitle>
           </CardHeader>
           <CardContent>
-            <p class="text-sm">{{ payment.notes }}</p>
+            <p class="text-sm" dir="auto">{{ payment.notes }}</p>
           </CardContent>
         </Card>
       </div>
 
-      <!-- Sidebar -->
       <div class="space-y-6">
-        <!-- Payment Summary -->
         <Card>
           <CardHeader>
-            <CardTitle>Payment Summary</CardTitle>
+            <CardTitle>How it was paid</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
-            <div class="flex justify-between">
-              <span>Payment Amount:</span>
-              <span class="font-bold">{{ formatCurrency(payment.amount, payment.currency) }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span>Payment Method:</span>
-              <span>{{ getPaymentMethodLabel(payment.payment_method) }}</span>
-            </div>
-            <div v-if="payment.reference_number" class="flex justify-between text-sm">
-              <span>Reference:</span>
-              <span>{{ payment.reference_number }}</span>
-            </div>
-            <Separator />
-            <div v-if="payment.payment_allocations.length > 0" class="space-y-2">
-              <p class="font-medium text-sm">Total Allocated:</p>
-              <div class="text-right">
-                {{ formatCurrency(payment.payment_allocations.reduce((sum, a) => sum + Number(a.amount_allocated), 0), payment.currency) }}
-              </div>
-            </div>
+            <DefinitionList :items="summaryItems" />
           </CardContent>
         </Card>
 
-        <!-- Timeline -->
+        <!-- What the money did. A receipt whose allocations are hidden in a
+             sidebar total is a receipt nobody can reconcile against. -->
         <Card>
           <CardHeader>
-            <CardTitle>Timeline</CardTitle>
+            <CardTitle>Where it went</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
-            <div class="flex justify-between text-sm">
-              <span>Created:</span>
-              <span>{{ formatDate(payment.created_at) }}</span>
+            <div
+              v-for="allocation in payment.payment_allocations"
+              :key="allocation.id"
+              class="flex items-center justify-between gap-3 text-sm"
+            >
+              <button
+                type="button"
+                class="text-left underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+                @click="router.get(`/${company.slug}/invoices/${allocation.invoice_id}`)"
+              >
+                {{ allocation.invoice?.invoice_number || 'Invoice' }}
+              </button>
+              <MoneyText
+                :amount="allocation.amount_allocated"
+                :currency="payment.currency"
+                locale="en-PK"
+              />
             </div>
-            <div class="flex justify-between text-sm">
-              <span>Payment Date:</span>
-              <span>{{ formatDate(payment.payment_date) }}</span>
-            </div>
-          </CardContent>
-        </Card>
 
-        <!-- Actions -->
-        <Card>
-          <CardHeader>
-            <CardTitle>Actions</CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-2">
-            <Button class="w-full" variant="outline" @click="router.get(`/${company.slug}/payments/${payment.id}/edit`)">
-              <Edit class="mr-2 h-4 w-4" />
-              Edit Payment
-            </Button>
+            <div v-if="unapplied > 0.005" class="flex items-center justify-between gap-3 text-sm">
+              <MetaChip>On account</MetaChip>
+              <MoneyText :amount="unapplied" :currency="payment.currency" locale="en-PK" />
+            </div>
+
+            <p
+              v-if="!payment.payment_allocations.length && unapplied <= 0.005"
+              class="text-sm text-muted-foreground"
+            >
+              Not applied to any invoice yet.
+            </p>
           </CardContent>
         </Card>
       </div>
     </div>
+
+    <RelatedActions screen="payment.show" :slug="company.slug" :subject="payment" />
   </PageShell>
 </template>

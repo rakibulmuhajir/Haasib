@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Receipt, Plus, Eye, Wallet, Banknote, CreditCard, TrendingUp } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Collection {
   id: string
@@ -73,8 +73,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Collections', href: `/${companySlug.value}/fuel/collections` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 // Local filter state
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
@@ -122,10 +120,6 @@ const setDatePreset = (preset: string) => {
   applyFilters()
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
-
 const formatDate = (dateStr: string) => {
   return formatDateTime(dateStr, { mode: 'date' })
 }
@@ -141,11 +135,11 @@ const paymentMethodLabel = (method: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'reference', label: 'Reference' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'method', label: 'Method' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'method', label: 'Method', kind: 'status' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -194,14 +188,14 @@ const goToCustomer = (customerId: string) => {
 
     <!-- Stats Cards -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Collections</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_collections }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Payments received</span>
           </div>
         </CardContent>
@@ -210,11 +204,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Collected in period</span>
           </div>
         </CardContent>
@@ -223,11 +217,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Cash Collections</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.cash_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.cash_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-green-600" />
+            <Banknote class="h-4 w-4 text-status-success" />
             <span>Cash payments</span>
           </div>
         </CardContent>
@@ -236,11 +230,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Bank Collections</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.bank_amount) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.bank_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <CreditCard class="h-4 w-4 text-blue-600" />
+            <CreditCard class="h-4 w-4 text-status-info" />
             <span>Bank/transfer payments</span>
           </div>
         </CardContent>
@@ -312,7 +306,7 @@ const goToCustomer = (customerId: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -323,7 +317,7 @@ const goToCustomer = (customerId: string) => {
               title="No collections found"
               description="No collections match the current filters."
             >
-              <template #action>
+              <template #actions>
                 <Button @click="goToCreate">
                   <Plus class="mr-2 h-4 w-4" />
                   Record Collection
@@ -346,8 +340,8 @@ const goToCustomer = (customerId: string) => {
           <template #cell-method="{ row }">
             <Badge
               :class="{
-                'bg-green-100 text-green-800': row._raw.payment_method === 'cash',
-                'bg-blue-100 text-blue-800': row._raw.payment_method !== 'cash',
+                'bg-status-success/10 text-status-success': row._raw.payment_method === 'cash',
+                'bg-status-info/10 text-status-info': row._raw.payment_method !== 'cash',
               }"
             >
               {{ paymentMethodLabel(row._raw.payment_method) }}
@@ -355,8 +349,8 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium text-emerald-600">
-              {{ currency }} {{ formatCurrency(row._raw.amount) }}
+            <span class="font-medium text-status-success">
+              <MoneyText :amount="row._raw.amount" :currency="props.currency" />
             </span>
           </template>
 
@@ -365,7 +359,7 @@ const goToCustomer = (customerId: string) => {
               <Eye class="h-4 w-4" />
             </Button>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

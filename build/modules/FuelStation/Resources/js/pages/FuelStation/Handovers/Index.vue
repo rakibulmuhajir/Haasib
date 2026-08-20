@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { HandCoins, Plus, Eye, Check, Search, Clock, CheckCircle, Banknote } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Handover {
   id: string
@@ -99,27 +100,17 @@ const filteredHandovers = computed(() => {
   })
 })
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 const formatDate = (date: string) => {
   return formatDateTime(date, { mode: 'datetime' })
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'attendant', label: 'Attendant' },
-  { key: 'pump', label: 'Pump' },
-  { key: 'shift', label: 'Shift' },
-  { key: 'total', label: 'Total', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'attendant', label: 'Attendant', kind: 'text' as const },
+  { key: 'pump', label: 'Pump', kind: 'text' as const },
+  { key: 'shift', label: 'Shift', kind: 'status' as const },
+  { key: 'total', label: 'Total', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -130,7 +121,7 @@ const tableData = computed(() => {
     attendant: h.attendant_name,
     pump: h.pump_name,
     shift: h.shift === 'day' ? 'Day' : 'Night',
-    total: formatCurrency(h.total_amount),
+    total: h.total_amount,
     status: h.status,
     _actions: h.id,
     _raw: h,
@@ -195,13 +186,13 @@ const receiveHandover = (id: string) => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'pending':
-      return { class: 'bg-amber-100 text-amber-800', icon: Clock, label: 'Pending' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: Clock, label: 'Pending' }
     case 'received':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: CheckCircle, label: 'Received' }
+      return { class: 'bg-status-success/10 text-status-success', icon: CheckCircle, label: 'Received' }
     case 'reconciled':
-      return { class: 'bg-sky-100 text-sky-800', icon: Check, label: 'Reconciled' }
+      return { class: 'bg-status-info/10 text-status-info', icon: Check, label: 'Reconciled' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Clock, label: status }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Clock, label: status }
   }
 }
 </script>
@@ -223,14 +214,14 @@ const getStatusBadge = (status: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Pending Handovers</CardDescription>
           <CardTitle class="text-2xl">{{ props.summary.pending_count }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Clock class="h-4 w-4 text-amber-600" />
+            <Clock class="h-4 w-4 text-status-attention" />
             <span>Awaiting receipt</span>
           </div>
         </CardContent>
@@ -239,11 +230,11 @@ const getStatusBadge = (status: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Pending Amount</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.pending_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.pending_amount" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Banknote class="h-4 w-4 text-amber-600" />
+            <Banknote class="h-4 w-4 text-status-attention" />
             <span>In attendant transit</span>
           </div>
         </CardContent>
@@ -278,7 +269,7 @@ const getStatusBadge = (status: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns">
+        <LedgerRegister :data="tableData" :columns="columns">
           <template #empty>
             <EmptyState
               title="No handovers"
@@ -294,9 +285,13 @@ const getStatusBadge = (status: string) => {
           </template>
 
           <template #cell-shift="{ row }">
-            <Badge variant="outline" :class="row._raw.shift === 'day' ? 'border-amber-200 text-amber-700' : 'border-indigo-200 text-indigo-700'">
+            <Badge variant="outline" :class="row._raw.shift === 'day' ? 'border-status-attention/30 text-status-attention' : 'border-status-info/30 text-status-info'">
               {{ row.shift }}
             </Badge>
+          </template>
+
+          <template #cell-total="{ row }">
+            <MoneyText :amount="row.total" :currency="currencyCode" />
           </template>
 
           <template #cell-status="{ row }">
@@ -311,7 +306,7 @@ const getStatusBadge = (status: string) => {
               <Button
                 v-if="row.status === 'pending'"
                 size="sm"
-                class="bg-emerald-600 hover:bg-emerald-700"
+                class="bg-status-success hover:bg-status-success"
                 @click.stop="receiveHandover(row.id)"
               >
                 <Check class="mr-1 h-4 w-4" />
@@ -326,7 +321,7 @@ const getStatusBadge = (status: string) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -335,7 +330,7 @@ const getStatusBadge = (status: string) => {
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <HandCoins class="h-5 w-5 text-amber-600" />
+            <HandCoins class="h-5 w-5 text-status-attention" />
             Record Handover
           </DialogTitle>
           <DialogDescription>
@@ -426,7 +421,7 @@ const getStatusBadge = (status: string) => {
             </div>
             <div class="pt-2 border-t border-border/50 flex justify-between items-center">
               <span class="text-sm text-text-secondary">Total</span>
-              <span class="text-lg font-semibold">{{ formatCurrency(totalAmount) }}</span>
+              <span class="text-lg font-semibold"><MoneyText :amount="totalAmount" :currency="currencyCode" /></span>
             </div>
           </div>
 

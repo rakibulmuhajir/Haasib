@@ -61,17 +61,17 @@ const goBack = () => {
 <template>
   <Head title="Default Accounts Setup" />
 
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+  <div class="min-h-screen bg-surface-canvas">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
-          <Settings class="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-status-info/15 mb-4">
+          <Settings class="w-8 h-8 text-status-info" />
         </div>
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <h1 class="text-3xl font-bold text-text-primary mb-2">
           Default Accounts
         </h1>
-        <p class="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+        <p class="text-text-secondary max-w-2xl mx-auto">
           Map your key system accounts. These defaults are used when creating invoices, bills, and payments.
         </p>
       </div>
@@ -83,9 +83,9 @@ const goBack = () => {
             <div
               :class="[
                 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors',
-                index < 3 ? 'bg-green-600 text-white' :
-                index === 3 ? 'bg-blue-600 text-white' :
-                'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
+                index < 3 ? 'bg-status-success text-status-success-contrast' :
+                index === 3 ? 'bg-primary text-primary-foreground' :
+                'bg-surface-sunken text-text-secondary',
               ]"
             >
               {{ index + 1 }}
@@ -94,16 +94,16 @@ const goBack = () => {
               v-if="index < 6"
               :class="[
                 'w-12 h-0.5 mx-2',
-                index < 3 ? 'bg-green-600' : 'bg-slate-200 dark:bg-slate-700',
+                index < 3 ? 'bg-status-success' : 'bg-surface-sunken',
               ]"
             />
           </div>
         </div>
-        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span class="text-green-600">Identity</span>
-          <span class="text-green-600">Fiscal Year</span>
-          <span class="text-green-600">Bank Accounts</span>
-          <span class="font-semibold text-blue-600">Defaults</span>
+        <div class="flex justify-between max-w-2xl mx-auto mt-2 text-xs text-text-secondary">
+          <span class="text-status-success">Identity</span>
+          <span class="text-status-success">Fiscal Year</span>
+          <span class="text-status-success">Bank Accounts</span>
+          <span class="font-semibold text-status-info">Defaults</span>
           <span>Tax</span>
           <span>Numbering</span>
           <span>Terms</span>
@@ -126,14 +126,14 @@ const goBack = () => {
           <form @submit.prevent="submit" class="space-y-8">
             <!-- Receivables & Payables -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Receivables & Payables
               </h3>
 
               <!-- AR Account -->
               <div class="space-y-2">
                 <Label for="ar_account" class="font-medium">
-                  Accounts Receivable <span class="text-red-500">*</span>
+                  Accounts Receivable <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.ar_account_id" required>
                   <SelectTrigger id="ar_account">
@@ -149,7 +149,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used for tracking customer invoices and amounts owed to you
                 </p>
               </div>
@@ -157,7 +157,7 @@ const goBack = () => {
               <!-- AP Account -->
               <div class="space-y-2">
                 <Label for="ap_account" class="font-medium">
-                  Accounts Payable <span class="text-red-500">*</span>
+                  Accounts Payable <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.ap_account_id" required>
                   <SelectTrigger id="ap_account">
@@ -173,7 +173,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used for tracking vendor bills and amounts you owe
                 </p>
               </div>
@@ -181,14 +181,14 @@ const goBack = () => {
 
             <!-- Revenue & Expenses -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Revenue & Expenses
               </h3>
 
               <!-- Income Account -->
               <div class="space-y-2">
                 <Label for="income_account" class="font-medium">
-                  Default Revenue Account <span class="text-red-500">*</span>
+                  Default Revenue Account <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.income_account_id" required>
                   <SelectTrigger id="income_account">
@@ -204,7 +204,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used as default for invoice line items (you can override per item)
                 </p>
               </div>
@@ -212,7 +212,7 @@ const goBack = () => {
               <!-- Expense Account -->
               <div class="space-y-2">
                 <Label for="expense_account" class="font-medium">
-                  Default Expense Account <span class="text-red-500">*</span>
+                  Default Expense Account <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.expense_account_id" required>
                   <SelectTrigger id="expense_account">
@@ -228,7 +228,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used as default for bill line items (you can override per item)
                 </p>
               </div>
@@ -236,14 +236,14 @@ const goBack = () => {
 
             <!-- Bank & Retained Earnings -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Bank & Equity
               </h3>
 
               <!-- Bank Account -->
               <div class="space-y-2">
                 <Label for="bank_account" class="font-medium">
-                  Default Bank Account <span class="text-red-500">*</span>
+                  Default Bank Account <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.bank_account_id" required>
                   <SelectTrigger id="bank_account">
@@ -259,7 +259,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Default account for receiving payments
                 </p>
               </div>
@@ -267,7 +267,7 @@ const goBack = () => {
               <!-- Retained Earnings -->
               <div class="space-y-2">
                 <Label for="retained_earnings" class="font-medium">
-                  Retained Earnings <span class="text-red-500">*</span>
+                  Retained Earnings <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.retained_earnings_account_id" required>
                   <SelectTrigger id="retained_earnings">
@@ -283,7 +283,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used during year-end close to transfer profits/losses
                 </p>
               </div>
@@ -291,13 +291,13 @@ const goBack = () => {
 
             <!-- Receiving Variance -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Receiving Variance
               </h3>
 
               <div class="space-y-2">
                 <Label for="transit_loss" class="font-medium">
-                  Transit Loss <span class="text-red-500">*</span>
+                  Transit Loss <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.transit_loss_account_id" required>
                   <SelectTrigger id="transit_loss">
@@ -313,14 +313,14 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used when received quantity is lower than expected
                 </p>
               </div>
 
               <div class="space-y-2">
                 <Label for="transit_gain" class="font-medium">
-                  Transit Gain <span class="text-red-500">*</span>
+                  Transit Gain <span class="text-status-critical">*</span>
                 </Label>
                 <Select v-model="form.transit_gain_account_id" required>
                   <SelectTrigger id="transit_gain">
@@ -336,7 +336,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   Used when received quantity is higher than expected
                 </p>
               </div>
@@ -344,7 +344,7 @@ const goBack = () => {
 
             <!-- Tax Accounts (Optional) -->
             <div v-if="taxPayableAccounts.length > 0 || taxReceivableAccounts.length > 0" class="space-y-4">
-              <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 border-b pb-2">
+              <h3 class="text-lg font-semibold text-text-primary border-b pb-2">
                 Tax Accounts (Optional)
               </h3>
 
@@ -367,7 +367,7 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   For output VAT/GST collected from customers
                 </p>
               </div>
@@ -391,21 +391,21 @@ const goBack = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-text-secondary">
                   For input VAT/GST paid to vendors
                 </p>
               </div>
             </div>
 
             <!-- Info Box -->
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div class="bg-status-info/10 border border-status-info/30 rounded-lg p-4">
               <div class="flex items-start gap-3">
-                <Info class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <Info class="w-5 h-5 text-status-info mt-0.5 flex-shrink-0" />
                 <div class="text-sm">
-                  <p class="text-blue-900 dark:text-blue-100 font-medium mb-1">
+                  <p class="text-text-primary font-medium mb-1">
                     Why set defaults?
                   </p>
-                  <p class="text-blue-700 dark:text-blue-300">
+                  <p class="text-text-secondary">
                     These defaults save you time when creating invoices and bills. You can always change the account on individual transactions.
                   </p>
                 </div>
@@ -413,7 +413,7 @@ const goBack = () => {
             </div>
 
             <!-- Validation Errors -->
-            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-red-600 dark:text-red-400">
+            <div v-if="Object.keys(form.errors).length > 0" class="text-sm text-status-critical">
               <p v-for="(error, key) in form.errors" :key="key">{{ error }}</p>
             </div>
 

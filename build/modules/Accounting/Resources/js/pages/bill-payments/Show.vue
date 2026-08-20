@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
+import { paymentMethodLabel } from '@/lib/payment-method'
 
 interface CompanyRef {
   id: string
@@ -59,26 +62,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'bill_number', label: 'Bill #' },
-  { key: 'amount_allocated', label: 'Allocated' },
-  { key: 'base_amount_allocated', label: 'Base Allocated' },
-  { key: 'applied_at', label: 'Applied At' },
+  { key: 'bill_number', label: 'Bill #', kind: 'ref' as const },
+  { key: 'amount_allocated', label: 'Allocated', kind: 'amount' as const },
+  { key: 'base_amount_allocated', label: 'Base Allocated', kind: 'amount' as const },
+  { key: 'applied_at', label: 'Applied At', kind: 'date' as const },
 ]
 
 const sourceColumns = [
-  { key: 'payment_number', label: 'Source #' },
-  { key: 'account', label: 'Account' },
-  { key: 'method', label: 'Method' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'reference', label: 'Reference' },
+  { key: 'payment_number', label: 'Source #', kind: 'ref' as const },
+  { key: 'account', label: 'Account', kind: 'text' as const },
+  { key: 'method', label: 'Method', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'reference', label: 'Reference', kind: 'ref' as const },
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const allocationRows = computed(() =>
   (props.groupPayments || [props.payment])
@@ -97,7 +96,7 @@ const sourceRows = computed(() =>
     account: payment.payment_account
       ? `${payment.payment_account.code} — ${payment.payment_account.name}`
       : '—',
-    method: payment.payment_method.replace(/_/g, ' '),
+    method: paymentMethodLabel(payment.payment_method),
     amount: formatMoney(payment.amount, payment.currency),
     reference: payment.reference_number || '—',
   }))
@@ -138,7 +137,7 @@ const groupedAmount = computed(() =>
       </div>
       <div class="space-y-1">
         <div class="text-sm text-muted-foreground">Amount</div>
-        <div class="font-semibold">{{ formatMoney(groupedAmount, payment.currency) }}</div>
+        <div class="font-semibold"><MoneyText :amount="groupedAmount" :currency="payment.currency" /></div>
       </div>
       <div class="space-y-1">
         <div class="text-sm text-muted-foreground">Sources</div>
@@ -156,16 +155,16 @@ const groupedAmount = computed(() =>
 
     <div class="mt-6">
       <div class="text-lg font-semibold mb-2">Payment Sources</div>
-      <DataTable :columns="sourceColumns" :data="sourceRows" />
+      <LedgerRegister :columns="sourceColumns" :data="sourceRows" />
     </div>
 
     <div class="mt-6">
       <div class="text-lg font-semibold mb-2">Allocations</div>
-      <DataTable :columns="columns" :data="allocationRows">
+      <LedgerRegister :columns="columns" :data="allocationRows">
         <template #cell-applied_at="{ value }">
-          <DateTimeText :value="value" mode="datetime" />
+          <DateTimeText :value="value" mode="date" />
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

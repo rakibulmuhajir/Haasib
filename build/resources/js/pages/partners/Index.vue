@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Plus, Eye, Pencil, Search, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface PartnerRow {
   id: string
@@ -81,11 +82,11 @@ const formatCurrency = (amount: number) => {
 }
 
 const columns = [
-  { key: 'name', label: 'Partner' },
-  { key: 'profit_share', label: 'Profit Share' },
-  { key: 'net_capital', label: 'Net Capital' },
-  { key: 'drawing_limit', label: 'Drawing Limit' },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Partner', kind: 'text' as const },
+  { key: 'profit_share', label: 'Profit Share', kind: 'amount' as const },
+  { key: 'net_capital', label: 'Net Capital', kind: 'amount' as const },
+  { key: 'drawing_limit', label: 'Drawing Limit', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -130,14 +131,14 @@ const goToCreate = () => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Partners</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_partners }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <UsersRound class="h-4 w-4 text-sky-600" />
+            <UsersRound class="h-4 w-4 text-status-info" />
             <span>{{ stats.active_partners }} active</span>
           </div>
         </CardContent>
@@ -146,11 +147,11 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Capital</CardDescription>
-          <CardTitle class="text-2xl">{{ currency }} {{ formatCurrency(stats.total_capital) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="stats.total_capital" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Net investment</span>
           </div>
         </CardContent>
@@ -159,11 +160,11 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_invested" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>Capital contributions</span>
           </div>
         </CardContent>
@@ -172,11 +173,11 @@ const goToCreate = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ currency }} {{ formatCurrency(stats.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="stats.total_withdrawn" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingDown class="h-4 w-4 text-amber-600" />
+            <TrendingDown class="h-4 w-4 text-status-attention" />
             <span>Partner drawings</span>
           </div>
         </CardContent>
@@ -206,7 +207,7 @@ const goToCreate = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -234,8 +235,11 @@ const goToCreate = () => {
           </template>
 
           <template #cell-net_capital="{ row }">
-            <span :class="row._raw.net_capital >= 0 ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'">
-              {{ currency }} {{ formatCurrency(row._raw.net_capital) }}
+<!-- A partner whose capital account is overdrawn is a fact about the
+                 books, not an emergency, and one in credit is not good news --
+                 it is money the business owes them. The sign says which. -->
+            <span class="font-medium">
+              <MoneyText :amount="row._raw.net_capital" :currency="props.currency" />
             </span>
           </template>
 
@@ -244,16 +248,16 @@ const goToCreate = () => {
               No Limit
             </div>
             <div v-else>
-              <div class="font-medium">{{ currency }} {{ formatCurrency(row._raw.remaining_drawing_limit ?? 0) }}</div>
+              <div class="font-medium"><MoneyText :amount="row._raw.remaining_drawing_limit ?? 0" :currency="props.currency" /></div>
               <div class="text-xs text-muted-foreground">
-                of {{ currency }} {{ formatCurrency(row._raw.drawing_limit_amount ?? 0) }} {{ row._raw.drawing_limit_period }}
+                of <MoneyText :amount="row._raw.drawing_limit_amount ?? 0" :currency="props.currency" /> {{ row._raw.drawing_limit_period }}
               </div>
             </div>
           </template>
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ row._raw.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -277,7 +281,7 @@ const goToCreate = () => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

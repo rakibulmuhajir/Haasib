@@ -2,13 +2,15 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { ReceiptText, Plus, Eye, Pencil, Trash2 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -62,21 +64,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'credit_number', label: 'Credit #' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'credit_date', label: 'Date' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'reason', label: 'Reason' },
-  { key: 'status', label: 'Status' },
+  { key: 'credit_number', label: 'Credit #', kind: 'ref' as const },
+  { key: 'vendor', label: 'Vendor', kind: 'text' as const },
+  { key: 'credit_date', label: 'Date', kind: 'date' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'reason', label: 'Reason', kind: 'text' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: 'actions', label: 'Actions' },
 ]
 
 const formatMoney = (val: number, currency: string) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    currencyDisplay: 'narrowSymbol',
-  }).format(val)
+  formatMoneyText(val, currency || 'USD')
 
 const tableData = computed(() =>
   props.credits.data.map((c) => ({
@@ -179,7 +177,7 @@ const handleRowClick = (row: any) => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="credits"
@@ -187,7 +185,7 @@ const handleRowClick = (row: any) => {
         hoverable
         @row-click="handleRowClick"
       >
-        <template #credit_number="{ row }">
+        <template #cell-credit_number="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewCredit(row.id)"
@@ -196,10 +194,10 @@ const handleRowClick = (row: any) => {
           </button>
         </template>
 
-        <template #vendor="{ row }">
+        <template #cell-vendor="{ row }">
           <button
             v-if="row._original.vendor"
-            class="text-blue-600 hover:text-blue-800 transition-colors"
+            class="text-status-info hover:text-status-info transition-colors"
             @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
           >
             {{ row.vendor }}
@@ -207,7 +205,7 @@ const handleRowClick = (row: any) => {
           <span v-else>{{ row.vendor }}</span>
         </template>
 
-        <template #status="{ value }">
+        <template #cell-status="{ value }">
           <Badge :variant="statusVariant(value)">{{ value }}</Badge>
         </template>
 
@@ -257,7 +255,7 @@ const handleRowClick = (row: any) => {
                 <div class="text-sm text-muted-foreground mt-1">
                   <span v-if="row._original.vendor">
                     <button
-                      class="text-blue-600 hover:text-blue-800 transition-colors"
+                      class="text-status-info hover:text-status-info transition-colors"
                       @click.stop="router.get(`/${company.slug}/vendors/${row._original.vendor.id}`)"
                     >
                       {{ row.vendor }}
@@ -266,9 +264,7 @@ const handleRowClick = (row: any) => {
                   <span v-else>{{ row.vendor }}</span>
                 </div>
               </div>
-              <Badge :variant="statusVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+              <StatusBadge :status="row.status" />
             </div>
             <div class="flex justify-between items-center">
               <div>
@@ -284,7 +280,7 @@ const handleRowClick = (row: any) => {
             </div>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

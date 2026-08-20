@@ -26,7 +26,7 @@ export const fuelStationNav: ModuleNavConfig = {
   mode: 'replace',
   isEnabled: (context) => Boolean(context.slug && context.isFuelStationCompany),
   getNavGroups: (context) => {
-    const { slug, mode } = context
+    const { slug } = context
     if (!slug || !context.isFuelStationCompany) return []
 
     const settingsItems = [
@@ -39,12 +39,10 @@ export const fuelStationNav: ModuleNavConfig = {
       { title: 'Help Guide', href: `/${slug}/fuel/guide`, icon: Settings },
     ]
 
-    if (mode === 'accountant') {
-      settingsItems.push(
-        { title: 'Default Accounts', href: `/${slug}/accounting/default-accounts`, icon: Settings },
-        { title: 'Journal Entries', href: `/${slug}/journals`, icon: ReceiptText },
-      )
-    }
+    // Default Accounts and Journal Entries used to be appended here behind
+    // `mode === 'accountant'`, which was never true — the mode was hardcoded
+    // to 'owner'. They have therefore never appeared in the fuel-station nav.
+    // Removing the branch keeps that; putting them back is a product call.
 
     return [
       {

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
@@ -50,15 +50,6 @@ interface PumpRow {
 const props = defineProps<{
   pumps: PumpRow[]
   tanks: TankRef[]
-  debug?: {
-    user_id?: string | null
-    user_email?: string | null
-    user_role?: string | null
-    can_create_pump?: boolean
-    has_company_context?: boolean
-    company_id?: string | null
-    company_name?: string | null
-  }
 }>()
 
 const page = usePage()
@@ -113,11 +104,11 @@ const stats = computed(() => {
 })
 
 const columns = [
-  { key: 'name', label: 'Point' },
-  { key: 'tank', label: 'Tank' },
-  { key: 'fuel', label: 'Fuel' },
-  { key: 'meter', label: 'Meter' },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Point', kind: 'ref' as const },
+  { key: 'tank', label: 'Tank', kind: 'text' as const },
+  { key: 'fuel', label: 'Fuel', kind: 'text' as const },
+  { key: 'meter', label: 'Meter', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -246,40 +237,7 @@ const goToWarehouses = () => {
     :icon="Fuel"
     :breadcrumbs="breadcrumbs"
   >
-    <!-- DEBUG INFO - Check permissions -->
-    <div v-if="props.debug" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <h3 class="font-semibold text-amber-900 mb-2">🔍 Debug Information</h3>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-        <div>
-          <strong>User:</strong> {{ props.debug.user_email || 'N/A' }}
-        </div>
-        <div>
-          <strong>Role:</strong>
-          <span :class="props.debug.can_create_pump ? 'text-green-700 font-bold' : 'text-red-700 font-bold'">
-            {{ props.debug.user_role || 'No Role' }}
-          </span>
-        </div>
-        <div>
-          <strong>Can Create Pump:</strong>
-          <span :class="props.debug.can_create_pump ? 'text-green-700' : 'text-red-700'">
-            {{ props.debug.can_create_pump ? '✅ YES' : '❌ NO' }}
-          </span>
-        </div>
-        <div>
-          <strong>Company Context:</strong>
-          <span :class="props.debug.has_company_context ? 'text-green-700' : 'text-red-700'">
-            {{ props.debug.has_company_context ? '✅ YES' : '❌ NO' }}
-          </span>
-        </div>
-        <div>
-          <strong>Company:</strong> {{ props.debug.company_name || 'N/A' }}
-        </div>
-        <div>
-          <strong>Company ID:</strong> {{ props.debug.company_id || 'N/A' }}
-        </div>
-      </div>
-    </div>
-        <template #actions>
+    <template #actions>
       <Button @click="openCreate">
         <Plus class="mr-2 h-4 w-4" />
         Add Pump Point
@@ -287,14 +245,14 @@ const goToWarehouses = () => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-emerald-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Pumps</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Gauge class="h-4 w-4 text-sky-600" />
+            <Gauge class="h-4 w-4 text-status-info" />
             <span>Across {{ stats.tanks }} tank(s)</span>
           </div>
         </CardContent>
@@ -306,7 +264,7 @@ const goToWarehouses = () => {
           <CardTitle class="text-2xl">{{ stats.active }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-emerald-600 text-white hover:bg-emerald-600">Operational</Badge>
+          <Badge class="bg-status-success text-status-success-contrast hover:bg-status-success">Operational</Badge>
         </CardContent>
       </Card>
 
@@ -316,7 +274,7 @@ const goToWarehouses = () => {
           <CardTitle class="text-2xl">{{ stats.inactive }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="secondary" class="bg-amber-100 text-amber-800 hover:bg-amber-100">Needs Attention</Badge>
+          <Badge variant="secondary" class="bg-status-attention/10 text-status-attention hover:bg-status-attention/10">Needs Attention</Badge>
         </CardContent>
       </Card>
 
@@ -326,7 +284,7 @@ const goToWarehouses = () => {
           <CardTitle class="text-2xl">{{ stats.fuelTypes }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-sky-200 text-sky-700">Linked via tanks</Badge>
+          <Badge variant="outline" class="border-status-info/30 text-status-info">Linked via tanks</Badge>
         </CardContent>
       </Card>
     </div>
@@ -354,7 +312,7 @@ const goToWarehouses = () => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -376,7 +334,7 @@ const goToWarehouses = () => {
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ row._raw.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -384,14 +342,14 @@ const goToWarehouses = () => {
 
           <template #cell-fuel="{ row }">
             <div class="flex items-center gap-2">
-              <div class="h-2.5 w-2.5 rounded-full bg-sky-500/60" />
+              <div class="h-2.5 w-2.5 rounded-full bg-status-info/60" />
               <span class="font-medium text-text-primary">
                 {{ row._raw.tank?.linked_item?.name ?? row.fuel }}
               </span>
               <Badge
                 v-if="row._raw.tank?.linked_item?.fuel_category"
                 variant="secondary"
-                class="bg-sky-100 text-sky-800 hover:bg-sky-100"
+                class="bg-status-info/10 text-status-info hover:bg-status-info/10"
               >
                 {{ row._raw.tank?.linked_item?.fuel_category }}
               </Badge>
@@ -419,7 +377,7 @@ const goToWarehouses = () => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -427,7 +385,7 @@ const goToWarehouses = () => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Fuel class="h-5 w-5 text-sky-600" />
+            <Fuel class="h-5 w-5 text-status-info" />
             {{ selectedPump ? 'Edit Pump Point' : 'Add Pump Point' }}
           </DialogTitle>
           <DialogDescription>
@@ -461,15 +419,15 @@ const goToWarehouses = () => {
               </SelectContent>
             </Select>
             <p v-if="form.errors.tank_id" class="text-sm text-destructive">{{ form.errors.tank_id }}</p>
-            <div v-if="tankOptions.length === 0" class="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p class="text-sm text-amber-800">
+            <div v-if="tankOptions.length === 0" class="rounded-lg border border-status-attention/30 bg-status-attention/10 p-3">
+              <p class="text-sm text-status-attention">
                 <strong>No tanks available.</strong> You need to create tank warehouses first before adding pumps.
               </p>
               <div class="mt-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  class="border-amber-300 text-amber-700 hover:bg-amber-100"
+                  class="border-status-attention/30 text-status-attention hover:bg-status-attention/10"
                   @click="goToWarehouses"
                 >
                   Create Tank
@@ -492,7 +450,7 @@ const goToWarehouses = () => {
 
             <div class="space-y-4">
               <div class="flex items-center gap-2">
-                <GaugeCircle class="h-4 w-4 text-sky-600" />
+                <GaugeCircle class="h-4 w-4 text-status-info" />
                 <span class="font-medium text-sm">Nozzle Configuration</span>
               </div>
 

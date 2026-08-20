@@ -2,14 +2,15 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
 import { FileText, Plus, Search } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface CompanyRef {
   id: string
@@ -72,35 +73,30 @@ const handleSearch = () => {
 }
 
 const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'USD',
-  }).format(amount)
+  formatMoneyText(amount, props.company.base_currency || 'USD')
 
-const badgeVariant = (val: string) => {
-  if (val === 'draft') return 'secondary'
-  if (val === 'posted') return 'success'
-  if (val === 'void') return 'outline'
-  if (val === 'reversed') return 'secondary'
-  return 'secondary'
+// The transaction type column names a kind of document, and a document kind
+// is a proper noun in this app's vocabulary — "Bill payment", not "bill payment".
+const documentKindLabel = (val: string) => {
+  const text = (val || '').replace(/_/g, ' ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 const columns = [
-  { key: 'transaction_number', label: 'Number' },
-  { key: 'transaction_type', label: 'Type' },
-  { key: 'transaction_date', label: 'Date' },
-  { key: 'status', label: 'Status' },
-  { key: 'total_debit', label: 'Debit' },
-  { key: 'total_credit', label: 'Credit' },
-  { key: 'journal_entries_count', label: 'Lines' },
+  { key: 'transaction_number', label: 'Number', kind: 'ref' as const },
+  { key: 'transaction_type', label: 'Type', kind: 'text' as const },
+  { key: 'transaction_date', label: 'Date', kind: 'date' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'total_debit', label: 'Debit', kind: 'in' as const },
+  { key: 'total_credit', label: 'Credit', kind: 'out' as const },
+  { key: 'journal_entries_count', label: 'Lines', kind: 'amount' as const },
 ]
 
 const tableData = computed(() =>
   props.journals.data.map((j) => ({
     id: j.id,
     transaction_number: j.transaction_number,
-    transaction_type: (j.transaction_type || '').replace(/_/g, ' '),
+    transaction_type: documentKindLabel(j.transaction_type),
     transaction_date: j.transaction_date,
     status: j.status,
     total_debit: formatCurrency(Number(j.total_debit)),
@@ -158,17 +154,17 @@ const tableData = computed(() =>
       </Select>
     </div>
 
-    <DataTable
+    <LedgerRegister
       :columns="columns"
       :data="tableData"
       :pagination="journals"
       :clickable="true"
       @row-click="(row: any) => router.get(`/${company.slug}/journals/${row.id}`)"
     >
-      <template #status="{ value }">
-        <Badge :variant="badgeVariant(value)">{{ value }}</Badge>
+      <template #cell-status="{ value }">
+        <StatusBadge :status="value" explain />
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <div class="mt-3 text-sm text-muted-foreground">
       Tip: click any row to open the journal entry.

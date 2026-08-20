@@ -14,6 +14,7 @@ use App\Services\CompanyCurrencyOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Services\CompanyLetterhead;
 use Inertia\Response;
 
 class CreditNoteController extends Controller
@@ -63,7 +64,7 @@ class CreditNoteController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $company = CompanyContext::getCompany();
 
@@ -80,6 +81,14 @@ class CreditNoteController extends Controller
 
         $currencies = app(CompanyCurrencyOptions::class)->forCompany($company);
 
+        // The invoice select is gated on a customer being chosen, so sending an
+        // invoice without the customer it belongs to would fill in a field the
+        // form immediately clears. Both, or neither.
+        $preselectInvoiceId = $request->query('invoice_id');
+        $preselectCustomerId = $preselectInvoiceId
+            ? $invoices->firstWhere('id', $preselectInvoiceId)?->customer_id
+            : null;
+
         return Inertia::render('accounting/credit-notes/Create', [
             'company' => [
                 'id' => $company->id,
@@ -90,6 +99,12 @@ class CreditNoteController extends Controller
             'customers' => $customers,
             'invoices' => $invoices,
             'currencies' => $currencies,
+            // Credit notes are almost always raised against a specific invoice,
+            // and the only place you decide to raise one is while looking at it.
+            'preselect' => [
+                'invoice_id' => $preselectCustomerId ? $preselectInvoiceId : null,
+                'customer_id' => $preselectCustomerId,
+            ],
         ]);
     }
 
@@ -153,6 +168,9 @@ class CreditNoteController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                // Assembled once, in CompanyLetterhead, so every document in the
+                // application names its issuer the same way.
+                'letterhead' => app(CompanyLetterhead::class)->forCompany($company),
             ],
             'credit_note' => $creditNoteRecord,
         ]);

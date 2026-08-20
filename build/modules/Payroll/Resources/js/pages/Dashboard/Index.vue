@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Banknote, Calendar, CheckCircle, FileText, UserCog, WalletCards } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -71,14 +72,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Payroll', href: `/${props.company.slug}/payroll` },
 ]
 
-const formatCurrency = (amount: number, currency = props.company.base_currency) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'PKR',
-  }).format(amount || 0)
-}
-
 const formatDate = (date: string | null | undefined) => formatDateTime(date, { mode: 'date', fallback: '-' })
 
 const currentPeriodLabel = computed(() => {
@@ -87,11 +80,11 @@ const currentPeriodLabel = computed(() => {
 })
 
 const payslipColumns = [
-  { key: 'payslip_number', label: 'Payslip' },
-  { key: 'employee_name', label: 'Employee' },
-  { key: 'period', label: 'Period' },
-  { key: 'net_pay', label: 'Net Pay' },
-  { key: 'status', label: 'Status' },
+  { key: 'payslip_number', label: 'Payslip', kind: 'ref' as const },
+  { key: 'employee_name', label: 'Employee', kind: 'text' as const },
+  { key: 'period', label: 'Period', kind: 'date' as const },
+  { key: 'net_pay', label: 'Net Pay', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
 ]
 
 const payslipRows = computed(() => props.recentPayslips.map((payslip) => ({
@@ -99,31 +92,21 @@ const payslipRows = computed(() => props.recentPayslips.map((payslip) => ({
   payslip_number: payslip.payslip_number,
   employee_name: payslip.employee_name,
   period: `${formatDate(payslip.period.start)} - ${formatDate(payslip.period.end)}`,
-  net_pay: formatCurrency(payslip.net_pay, payslip.currency),
+  net_pay: payslip.net_pay,
   status: payslip.status,
   _raw: payslip,
 })))
 
 const advanceColumns = [
-  { key: 'employee', label: 'Employee' },
-  { key: 'outstanding', label: 'Remaining Advance' },
+  { key: 'employee', label: 'Employee', kind: 'text' as const },
+  { key: 'outstanding', label: 'Remaining Advance', kind: 'amount' as const },
 ]
 
 const advanceRows = computed(() => props.employeesWithAdvances.map((employee) => ({
   id: employee.id,
   employee: `${employee.name} · ${employee.employee_number}`,
-  outstanding: formatCurrency(employee.outstanding_advances),
+  outstanding: employee.outstanding_advances,
 })))
-
-const statusVariant = (status: string) => {
-  const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    approved: 'secondary',
-    paid: 'success',
-    cancelled: 'destructive',
-  }
-  return variants[status] || 'secondary'
-}
 
 const accountRows = computed(() => [
   { label: 'Salary expense', account: props.accounts.salary_expense, hint: 'Payroll approval increases this expense.' },
@@ -172,7 +155,7 @@ const runMonthlyPayroll = () => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted-foreground">Salary due</p>
-              <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.approved_unpaid_amount) }}</p>
+              <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.approved_unpaid_amount" :currency="company.base_currency" /></p>
               <p class="mt-1 text-xs text-muted-foreground">{{ summary.approved_unpaid_count }} approved payslips unpaid</p>
             </div>
             <Banknote class="h-5 w-5 text-muted-foreground" />
@@ -185,8 +168,8 @@ const runMonthlyPayroll = () => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted-foreground">Outstanding advances</p>
-              <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.outstanding_advances) }}</p>
-              <p class="mt-1 text-xs text-muted-foreground">{{ formatCurrency(summary.recovered_this_month) }} recovered this month</p>
+              <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.outstanding_advances" :currency="company.base_currency" /></p>
+              <p class="mt-1 text-xs text-muted-foreground"><MoneyText :amount="summary.recovered_this_month" :currency="company.base_currency" /> recovered this month</p>
             </div>
             <WalletCards class="h-5 w-5 text-muted-foreground" />
           </div>
@@ -198,8 +181,8 @@ const runMonthlyPayroll = () => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted-foreground">This month</p>
-              <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.salary_expense_this_month) }}</p>
-              <p class="mt-1 text-xs text-muted-foreground">{{ formatCurrency(summary.paid_this_month) }} paid</p>
+              <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.salary_expense_this_month" :currency="company.base_currency" /></p>
+              <p class="mt-1 text-xs text-muted-foreground"><MoneyText :amount="summary.paid_this_month" :currency="company.base_currency" /> paid</p>
             </div>
             <CheckCircle class="h-5 w-5 text-muted-foreground" />
           </div>
@@ -222,13 +205,14 @@ const runMonthlyPayroll = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTable :columns="payslipColumns" :data="payslipRows" @row-click="(row) => router.get(`/${company.slug}/payslips/${row.id}`)">
-            <template #cell-status="{ row }">
-              <Badge :variant="statusVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+          <LedgerRegister :columns="payslipColumns" :data="payslipRows" @row-click="(row) => router.get(`/${company.slug}/payslips/${row.id}`)">
+            <template #cell-net_pay="{ row }">
+              <MoneyText :amount="row.net_pay" :currency="row._raw.currency" />
             </template>
-          </DataTable>
+            <template #cell-status="{ row }">
+              <StatusBadge :status="row.status" />
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
 
@@ -246,7 +230,11 @@ const runMonthlyPayroll = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTable :columns="advanceColumns" :data="advanceRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)" />
+          <LedgerRegister :columns="advanceColumns" :data="advanceRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
+            <template #cell-outstanding="{ row }">
+              <MoneyText :amount="row.outstanding" :currency="company.base_currency" />
+            </template>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

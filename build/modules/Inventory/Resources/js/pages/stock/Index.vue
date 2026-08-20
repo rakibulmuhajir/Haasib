@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -154,27 +155,18 @@ const formatDate = (dateString: string) => {
   return formatSharedDateTime(dateString, { mode: 'date' })
 }
 
-const formatMoney = (val: number | string | null, currency = 'USD') => {
-  const amount = Number(val ?? 0)
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'narrowSymbol',
-  }).format(amount)
-}
-
 const formatMovementType = (type: string) => {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
 const columns = [
-  { key: 'sku', label: 'SKU' },
-  { key: 'item_name', label: 'Item' },
-  { key: 'warehouse', label: 'Warehouse' },
-  { key: 'quantity', label: 'On Hand' },
-  { key: 'available', label: 'Available' },
-  { key: 'status', label: 'Status' },
-  { key: 'receive_stock', label: t('receiveStock') },
+  { key: 'sku', label: 'SKU', kind: 'ref' as const },
+  { key: 'item_name', label: 'Item', kind: 'text' as const },
+  { key: 'warehouse', label: 'Warehouse', kind: 'text' as const },
+  { key: 'quantity', label: 'On Hand', kind: 'amount' as const },
+  { key: 'available', label: 'Available', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'receive_stock', label: t('receiveStock'), kind: 'text' as const },
 ]
 
 const tableData = computed(() => {
@@ -325,7 +317,7 @@ const openBill = (billId: string) => {
               </span>
             </span>
             <span class="shrink-0 text-right text-sm">
-              <span class="block font-medium">{{ formatMoney(bill.total_amount, bill.currency) }}</span>
+              <span class="block font-medium"><MoneyText :amount="bill.total_amount" :currency="bill.currency" /></span>
               <span class="block text-xs text-muted-foreground">{{ formatQuantity(Number(bill.pending_quantity ?? 0)) }} pending</span>
             </span>
           </Button>
@@ -411,7 +403,7 @@ const openBill = (billId: string) => {
     />
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -454,6 +446,6 @@ const openBill = (billId: string) => {
           <span v-else class="text-xs text-muted-foreground">—</span>
         </div>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

@@ -90,17 +90,17 @@ const submit = () => {
 <template>
   <Head title="Create Company" />
 
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+  <div class="min-h-screen bg-surface-canvas">
     <div class="container mx-auto px-4 py-16 max-w-2xl">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
-          <Building2 class="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-status-info/15 mb-4">
+          <Building2 class="w-8 h-8 text-status-info" />
         </div>
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <h1 class="text-3xl font-bold text-text-primary mb-2">
           Create Your Company
         </h1>
-        <p class="text-slate-600 dark:text-slate-400">
+        <p class="text-text-secondary">
           Tell us a few basics and we'll prepare the defaults automatically.
         </p>
       </div>
@@ -118,7 +118,7 @@ const submit = () => {
           <form @submit.prevent="submit" class="space-y-6">
             <div v-if="canAssignOwner" class="space-y-2">
               <Label for="owner" class="font-medium">
-                Owner <span class="text-red-500">*</span>
+                Owner <span class="text-status-critical">*</span>
               </Label>
               <Select v-model="form.owner_user_id" required>
                 <SelectTrigger id="owner">
@@ -134,7 +134,7 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="form.errors.owner_user_id" class="text-sm text-red-600 dark:text-red-400">
+              <p v-if="form.errors.owner_user_id" class="text-sm text-status-critical">
                 {{ form.errors.owner_user_id }}
               </p>
             </div>
@@ -142,7 +142,7 @@ const submit = () => {
             <!-- Company Name -->
             <div class="space-y-2">
               <Label for="name" class="font-medium">
-                Company Name <span class="text-red-500">*</span>
+                Company Name <span class="text-status-critical">*</span>
               </Label>
               <Input
                 id="name"
@@ -152,10 +152,10 @@ const submit = () => {
                 required
                 autofocus
               />
-              <p class="text-xs text-slate-500 dark:text-slate-400">
+              <p class="text-xs text-text-secondary">
                 This is your legal business name
               </p>
-              <p v-if="form.errors.name" class="text-sm text-red-600 dark:text-red-400">
+              <p v-if="form.errors.name" class="text-sm text-status-critical">
                 {{ form.errors.name }}
               </p>
             </div>
@@ -163,7 +163,7 @@ const submit = () => {
             <!-- Industry -->
             <div class="space-y-2">
               <Label for="industry" class="font-medium">
-                Industry <span class="text-red-500">*</span>
+                Industry <span class="text-status-critical">*</span>
               </Label>
               <Select v-model="form.industry_code" required>
                 <SelectTrigger id="industry">
@@ -179,10 +179,10 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="selectedIndustry?.description" class="text-xs text-slate-500 dark:text-slate-400">
+              <p v-if="selectedIndustry?.description" class="text-xs text-text-secondary">
                 {{ selectedIndustry.description }}
               </p>
-              <p v-if="form.errors.industry_code" class="text-sm text-red-600 dark:text-red-400">
+              <p v-if="form.errors.industry_code" class="text-sm text-status-critical">
                 {{ form.errors.industry_code }}
               </p>
             </div>
@@ -190,7 +190,7 @@ const submit = () => {
             <!-- Country -->
             <div class="space-y-2">
               <Label for="country" class="font-medium">
-                Country <span class="text-red-500">*</span>
+                Country <span class="text-status-critical">*</span>
               </Label>
               <Select v-model="form.country" required>
                 <SelectTrigger id="country">
@@ -206,24 +206,24 @@ const submit = () => {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
+              <p class="text-xs text-text-secondary">
                 Your country determines the default currency and timezone
               </p>
-              <p v-if="form.errors.country" class="text-sm text-red-600 dark:text-red-400">
+              <p v-if="form.errors.country" class="text-sm text-status-critical">
                 {{ form.errors.country }}
               </p>
             </div>
 
             <!-- Auto-filled info card -->
-            <div v-if="selectedCountry" class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+            <div v-if="selectedCountry" class="rounded-lg border border-status-info/30 bg-status-info/10 p-4">
               <div class="flex items-center gap-2 mb-3">
-                <Globe class="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Auto-configured for {{ selectedCountry.name }}</span>
+                <Globe class="w-4 h-4 text-status-info" />
+                <span class="text-sm font-medium text-text-primary">Auto-configured for {{ selectedCountry.name }}</span>
               </div>
               <div class="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span class="text-slate-600 dark:text-slate-400">Currency:</span>
-                  <span class="ml-2 font-medium text-slate-900 dark:text-slate-100">
+                  <span class="text-text-secondary">Currency:</span>
+                  <span class="ml-2 font-medium text-text-primary">
                     {{ selectedCurrency?.code || form.base_currency }}
                     <template v-if="selectedCurrency">
                       - {{ selectedCurrency.name }} ({{ selectedCurrency.symbol }})
@@ -231,11 +231,11 @@ const submit = () => {
                   </span>
                 </div>
                 <div>
-                  <span class="text-slate-600 dark:text-slate-400">Timezone:</span>
-                  <span class="ml-2 font-medium text-slate-900 dark:text-slate-100">{{ form.timezone }}</span>
+                  <span class="text-text-secondary">Timezone:</span>
+                  <span class="ml-2 font-medium text-text-primary">{{ form.timezone }}</span>
                 </div>
               </div>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">
+              <p class="text-xs text-text-secondary mt-3">
                 You can review these defaults in Settings anytime.
               </p>
             </div>
@@ -252,8 +252,8 @@ const submit = () => {
       </Card>
 
       <!-- Help Text -->
-      <div class="text-center mt-6 text-sm text-slate-600 dark:text-slate-400">
-        <p>Need help? <a href="#" class="text-blue-600 hover:underline">Contact support</a></p>
+      <div class="text-center mt-6 text-sm text-text-secondary">
+        <p>Need help? <a href="#" class="text-status-info hover:underline">Contact support</a></p>
       </div>
     </div>
   </div>

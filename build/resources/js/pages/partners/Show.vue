@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +22,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { UsersRound, Pencil, ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Partner {
   id: string
@@ -73,10 +74,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currency = computed(() => currencySymbol(props.currency))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const formatDate = (dateStr: string) => {
   return formatDateTime(dateStr, { mode: 'date' })
@@ -133,11 +130,11 @@ const submitWithdrawal = () => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'type', label: 'Type' },
-  { key: 'description', label: 'Description' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'balance', label: 'Balance' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'type', label: 'Type', kind: 'text' as const },
+  { key: 'description', label: 'Description', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
@@ -182,8 +179,9 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Net Capital</CardDescription>
-          <CardTitle class="text-2xl" :class="partner.net_capital >= 0 ? 'text-emerald-600' : 'text-red-600'">
-            {{ currency }} {{ formatCurrency(partner.net_capital) }}
+<!-- Ink, like the same figure in the register. See partners/Index.vue. -->
+          <CardTitle class="text-2xl">
+            <MoneyText :amount="partner.net_capital" :currency="props.currency" />
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
@@ -197,11 +195,11 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(partner.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="partner.total_invested" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-emerald-600" />
+            <TrendingUp class="h-4 w-4 text-status-success" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -210,11 +208,11 @@ const goBack = () => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Withdrawn</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ currency }} {{ formatCurrency(partner.total_withdrawn) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="partner.total_withdrawn" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingDown class="h-4 w-4 text-amber-600" />
+            <TrendingDown class="h-4 w-4 text-status-attention" />
             <span>All time</span>
           </div>
         </CardContent>
@@ -225,12 +223,12 @@ const goBack = () => {
           <CardDescription>Drawing Limit</CardDescription>
           <CardTitle class="text-2xl">
             <template v-if="partner.drawing_limit_period === 'none'">No Limit</template>
-            <template v-else>{{ currency }} {{ formatCurrency(partner.remaining_drawing_limit ?? 0) }}</template>
+            <template v-else><MoneyText :amount="partner.remaining_drawing_limit ?? 0" :currency="props.currency" /></template>
           </CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div v-if="partner.drawing_limit_period !== 'none'" class="text-sm text-text-secondary">
-            of {{ currency }} {{ formatCurrency(partner.drawing_limit_amount ?? 0) }} {{ partner.drawing_limit_period }}
+            of <MoneyText :amount="partner.drawing_limit_amount ?? 0" :currency="props.currency" /> {{ partner.drawing_limit_period }}
           </div>
           <div v-else class="text-sm text-text-secondary">Unlimited withdrawals</div>
         </CardContent>
@@ -263,7 +261,7 @@ const goBack = () => {
           <div>
             <div class="text-sm text-muted-foreground">Status</div>
             <Badge
-              :class="partner.is_active ? 'bg-emerald-600 text-white' : 'bg-zinc-200 text-zinc-800'"
+              :class="partner.is_active ? 'bg-status-success text-status-success-contrast' : 'bg-surface-sunken text-text-primary'"
             >
               {{ partner.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -271,11 +269,11 @@ const goBack = () => {
 
           <div class="pt-4 flex flex-col gap-2">
             <Button class="w-full" variant="outline" @click="openInvestDialog">
-              <TrendingUp class="mr-2 h-4 w-4 text-emerald-600" />
+              <TrendingUp class="mr-2 h-4 w-4 text-status-success" />
               Record Investment
             </Button>
             <Button class="w-full" variant="outline" @click="openWithdrawDialog">
-              <TrendingDown class="mr-2 h-4 w-4 text-amber-600" />
+              <TrendingDown class="mr-2 h-4 w-4 text-status-attention" />
               Record Withdrawal
             </Button>
           </div>
@@ -289,7 +287,7 @@ const goBack = () => {
           <CardDescription>All investments and withdrawals for this partner.</CardDescription>
         </CardHeader>
         <CardContent class="p-0">
-          <DataTable :data="tableData" :columns="columns">
+          <LedgerRegister :data="tableData" :columns="columns">
             <template #empty>
               <div class="py-8 text-center text-muted-foreground">
                 No transactions yet
@@ -298,22 +296,26 @@ const goBack = () => {
 
             <template #cell-type="{ row }">
               <Badge
-                :class="row._raw.transaction_type === 'investment' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+                :class="row._raw.transaction_type === 'investment' ? 'bg-status-success/15 text-status-success' : 'bg-status-attention/15 text-status-attention'"
               >
                 {{ row._raw.transaction_type === 'investment' ? 'Investment' : 'Withdrawal' }}
               </Badge>
             </template>
 
             <template #cell-amount="{ row }">
-              <span :class="row._raw.transaction_type === 'investment' ? 'text-emerald-600' : 'text-amber-600'" class="font-medium">
-                {{ row._raw.transaction_type === 'investment' ? '+' : '-' }}{{ currency }} {{ formatCurrency(row._raw.amount) }}
+              <span :class="row._raw.transaction_type === 'investment' ? 'text-status-success' : 'text-status-attention'" class="font-medium">
+                <MoneyText
+                  :amount="row._raw.amount"
+                  :currency="props.currency"
+                  :direction="row._raw.transaction_type === 'investment' ? 'inflow' : 'outflow'"
+                />
               </span>
             </template>
 
             <template #cell-balance="{ row }">
-              <span class="font-medium">{{ currency }} {{ formatCurrency(row._raw.balance) }}</span>
+              <span class="font-medium"><MoneyText :amount="row._raw.balance" :currency="props.currency" /></span>
             </template>
-          </DataTable>
+          </LedgerRegister>
         </CardContent>
       </Card>
     </div>

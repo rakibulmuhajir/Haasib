@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +29,7 @@ import {
   FileText,
   Warehouse,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface FuelItemRef {
   id: string
@@ -89,38 +91,21 @@ const formatLiters = (n: number) =>
 
 const formatMoney = (n: number) => {
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currencyDisplay: 'narrowSymbol',
-      currency: currencyCode.value,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n ?? 0)
+    return formatMoneyText(n ?? 0, currencyCode.value, { fractionDigits: 2 })
   } catch (_e) {
     return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)
   }
 }
 
-const statusClass = computed(() => {
-  switch (props.reading.status) {
-    case 'posted':
-      return 'bg-emerald-600 text-white hover:bg-emerald-600'
-    case 'confirmed':
-      return 'bg-sky-100 text-sky-800 hover:bg-sky-100'
-    default:
-      return 'bg-amber-100 text-amber-800 hover:bg-amber-100'
-  }
-})
-
 const variance = computed(() => {
   const v = Number(props.reading.variance_liters ?? 0)
   if (props.reading.variance_type === 'none' || v === 0) {
-    return { label: 'No variance', cls: 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200', v }
+    return { label: 'No variance', cls: 'bg-surface-sunken text-text-primary hover:bg-surface-sunken', v }
   }
   if (props.reading.variance_type === 'gain') {
-    return { label: `Gain • ${formatLiters(Math.abs(v))}L`, cls: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100', v }
+    return { label: `Gain • ${formatLiters(Math.abs(v))}L`, cls: 'bg-status-success/10 text-status-success hover:bg-status-success/10', v }
   }
-  return { label: `Loss • ${formatLiters(Math.abs(v))}L`, cls: 'bg-red-100 text-red-800 hover:bg-red-100', v }
+  return { label: `Loss • ${formatLiters(Math.abs(v))}L`, cls: 'bg-status-critical/10 text-status-critical hover:bg-status-critical/10', v }
 })
 
 const tankFillPercent = computed(() => {
@@ -228,7 +213,7 @@ const submitEdit = () => {
               </div>
               <div>
                 <CardTitle class="flex items-center gap-2">
-                  <Droplet class="h-5 w-5 text-sky-600" />
+                  <Droplet class="h-5 w-5 text-status-info" />
                   {{ reading.tank?.name ?? 'Tank' }}
                 </CardTitle>
                 <CardDescription class="mt-1">
@@ -237,26 +222,26 @@ const submitEdit = () => {
               </div>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <Badge :class="statusClass">{{ reading.status }}</Badge>
+              <StatusBadge :status="reading.status" />
               <Badge :class="variance.cls">{{ variance.label }}</Badge>
             </div>
           </div>
         </CardHeader>
 
         <CardContent class="grid gap-4 sm:grid-cols-3">
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-sky-500/10 to-indigo-500/5 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-tertiary">Dip measurement</p>
             <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatLiters(reading.dip_measurement_liters) }}L</p>
             <p class="mt-1 text-sm text-text-secondary">Manual dip reading</p>
           </div>
 
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-emerald-500/10 to-sky-500/5 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-tertiary">System expected</p>
             <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatLiters(reading.system_calculated_liters) }}L</p>
             <p class="mt-1 text-sm text-text-secondary">Calculated from purchases/sales</p>
           </div>
 
-          <div class="rounded-xl border border-border/70 bg-gradient-to-br from-amber-500/10 to-rose-500/5 p-4">
+          <div class="rounded-xl border border-border/70 bg-surface-sunken p-4">
             <p class="text-sm font-medium text-text-tertiary">Variance</p>
             <p class="mt-2 text-2xl font-semibold text-text-primary">{{ formatLiters(reading.variance_liters) }}L</p>
             <p class="mt-1 text-sm text-text-secondary">
@@ -272,7 +257,7 @@ const submitEdit = () => {
                   {{ reading.journal_entry_id ? `JE: ${reading.journal_entry_id}` : 'No journal entry yet (post to create).' }}
                 </p>
               </div>
-              <Badge variant="outline" class="border-sky-200 text-sky-700">{{ currencyCode }}</Badge>
+              <Badge variant="outline" class="border-status-info/30 text-status-info">{{ currencyCode }}</Badge>
             </div>
           </div>
 

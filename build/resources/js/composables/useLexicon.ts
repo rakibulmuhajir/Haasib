@@ -1,173 +1,80 @@
 /**
- * Mode-Aware Lexicon Composable
+ * useLexicon — the product's words, looked up by key.
  *
- * Provides mode-aware terminology throughout the application.
- * Automatically uses the current user mode from useUserMode().
+ * There is one vocabulary. This composable used to take a mode and hand back
+ * either the owner or the accountant spelling of a term; the accountant half
+ * was never reachable, and the toggle that would have selected it was dropped
+ * deliberately. A mode switch asks someone to declare an identity before they
+ * know what the words mean — the person who does not know what "Particulars"
+ * means cannot tell which mode they belong in. Plain language plus <Explain>
+ * answers the question the toggle only relabelled.
  *
  * @see docs/frontend-experience-contract.md Section 14: Language & Terminology
- * @see lib/lexicon.ts for the terminology dictionary
+ * @see lib/lexicon.ts for the dictionary itself
  *
  * Usage:
  *   const { t, tpl } = useLexicon()
- *
- *   // Simple term lookup
- *   t('moneyIn')  // "Money In" (owner) or "Revenue" (accountant)
- *
- *   // Template with interpolation
+ *   t('moneyIn')                              // "Money In"
  *   tpl('transactionsToReviewCount', { count: 5 })  // "5 transactions to review"
- *
- *   // Override mode temporarily
- *   t('moneyIn', 'accountant')  // Always returns "Revenue"
  */
 
-import { computed } from 'vue'
-import { useUserMode, type UserMode } from './useUserMode'
 import {
-  lexicon,
-  getTerm,
-  interpolate,
-  type LexiconKey,
-  type TermDictionary,
+    lexicon,
+    getTerm,
+    interpolate,
+    type LexiconKey,
+    type TermDictionary,
 
-  // Category exports for selective imports
-  coreTerms,
-  receivablesTerms,
-  payablesTerms,
-  bankingTerms,
-  reportTerms,
-  navigationTerms,
-  statusTerms,
-  dashboardTerms,
-  emptyStateTerms,
-  helpTerms,
-  templateTerms,
+    // Category exports for selective imports
+    coreTerms,
+    receivablesTerms,
+    payablesTerms,
+    bankingTerms,
+    reportTerms,
+    navigationTerms,
+    statusTerms,
+    dashboardTerms,
+    emptyStateTerms,
+    helpTerms,
+    templateTerms,
 } from '@/lib/lexicon'
 
 export interface UseLexiconReturn {
-  /**
-   * Get a term in the current mode
-   * @param key - The lexicon key
-   * @param overrideMode - Optional mode override
-   */
-  t: (key: LexiconKey | string, overrideMode?: UserMode) => string
+    /** Look up a term. Unknown keys warn and return the key. */
+    t: (key: LexiconKey | string) => string
 
-  /**
-   * Get a templated term with interpolation
-   * @param key - The lexicon key
-   * @param params - Parameters to interpolate
-   * @param overrideMode - Optional mode override
-   */
-  tpl: (
-    key: LexiconKey | string,
-    params: Record<string, string | number>,
-    overrideMode?: UserMode
-  ) => string
+    /** Look up a term and interpolate `{name}` placeholders into it. */
+    tpl: (key: LexiconKey | string, params: Record<string, string | number>) => string
 
-  /**
-   * Get both mode variants for a key (useful for debugging or showing toggle)
-   * @param key - The lexicon key
-   */
-  both: (key: LexiconKey | string) => { owner: string; accountant: string } | null
-
-  /**
-   * Check if a key exists in the lexicon
-   * @param key - The key to check
-   */
-  has: (key: string) => boolean
-
-  /**
-   * Current mode (reactive)
-   */
-  currentMode: ReturnType<typeof useUserMode>['mode']
-
-  /**
-   * Is in accountant mode (reactive)
-   */
-  isAccountantMode: ReturnType<typeof useUserMode>['isAccountantMode']
+    /** Whether a key exists, for callers that fall back to their own copy. */
+    has: (key: string) => boolean
 }
 
 export function useLexicon(): UseLexiconReturn {
-  const { mode, isAccountantMode } = useUserMode()
-
-  /**
-   * Get a term in the current (or overridden) mode
-   */
-  function t(key: LexiconKey | string, _overrideMode?: UserMode): string {
-    return getTerm(key, 'owner')
-  }
-
-  /**
-   * Get a templated term with interpolation
-   */
-  function tpl(
-    key: LexiconKey | string,
-    params: Record<string, string | number>,
-    _overrideMode?: UserMode
-  ): string {
-    return getTerm(key, 'owner', params)
-  }
-
-  /**
-   * Get both mode variants for a key
-   */
-  function both(key: LexiconKey | string): { owner: string; accountant: string } | null {
-    const entry = lexicon[key]
-    return entry ?? null
-  }
-
-  /**
-   * Check if a key exists in the lexicon
-   */
-  function has(key: string): boolean {
-    return key in lexicon
-  }
-
-  return {
-    t,
-    tpl,
-    both,
-    has,
-    currentMode: mode,
-    isAccountantMode,
-  }
+    return {
+        t: (key) => getTerm(key),
+        tpl: (key, params) => getTerm(key, params),
+        has: (key) => key in lexicon,
+    }
 }
-
-// -----------------------------------------------------------------------------
-// Standalone helper for non-reactive contexts (e.g., route definitions)
-// -----------------------------------------------------------------------------
-
-/**
- * Get a term for a specific mode (non-reactive)
- * Use this in route definitions or other non-component contexts
- */
-export function getTermForMode(
-  key: LexiconKey | string,
-  _mode: UserMode,
-  params?: Record<string, string | number>
-): string {
-  return getTerm(key, 'owner', params)
-}
-
-// -----------------------------------------------------------------------------
-// Re-exports for convenience
-// -----------------------------------------------------------------------------
 
 export {
-  lexicon,
-  interpolate,
-  type LexiconKey,
-  type TermDictionary,
+    lexicon,
+    getTerm,
+    interpolate,
+    type LexiconKey,
+    type TermDictionary,
 
-  // Category exports
-  coreTerms,
-  receivablesTerms,
-  payablesTerms,
-  bankingTerms,
-  reportTerms,
-  navigationTerms,
-  statusTerms,
-  dashboardTerms,
-  emptyStateTerms,
-  helpTerms,
-  templateTerms,
+    // Category exports
+    coreTerms,
+    receivablesTerms,
+    payablesTerms,
+    bankingTerms,
+    reportTerms,
+    navigationTerms,
+    statusTerms,
+    dashboardTerms,
+    emptyStateTerms,
+    helpTerms,
+    templateTerms,
 }

@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,9 +53,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 const columns = [
-  { key: 'vendor_number', label: 'Vendor #' },
-  { key: 'name', label: 'Name' },
-  { key: 'currency', label: 'Currency' },
+  { key: 'vendor_number', label: 'Vendor #', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'currency', label: 'Currency', kind: 'text' as const },
   { key: 'actions', label: 'Actions' },
 ]
 
@@ -145,7 +145,7 @@ const handleSearch = () => {
     </div>
 
     <div v-else>
-      <DataTable
+      <LedgerRegister
         :columns="columns"
         :data="tableData"
         :pagination="vendors"
@@ -153,7 +153,7 @@ const handleSearch = () => {
         hoverable
         @row-click="handleRowClick"
       >
-        <template #vendor_number="{ row }">
+        <template #cell-vendor_number="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewVendor(row.id)"
@@ -162,7 +162,7 @@ const handleSearch = () => {
           </button>
         </template>
 
-        <template #name="{ row }">
+        <template #cell-name="{ row }">
           <button
             class="font-medium text-primary hover:text-primary/80 transition-colors"
             @click.stop="viewVendor(row.id)"
@@ -227,7 +227,7 @@ const handleSearch = () => {
               </div>
               <div class="text-right">
                 <div class="text-sm font-medium">{{ row.currency }}</div>
-                <div v-if="!row.is_active" class="text-xs text-red-500">Inactive</div>
+                <div v-if="!row.is_active" class="text-xs text-text-secondary">Inactive</div>
               </div>
             </div>
             <div class="flex gap-2 pt-2">
@@ -237,7 +237,7 @@ const handleSearch = () => {
             </div>
           </div>
         </template>
-      </DataTable>
+      </LedgerRegister>
     </div>
   </PageShell>
 </template>

@@ -2,6 +2,7 @@
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -204,8 +205,8 @@ const saveAccess = () =>
                         <div class="font-medium">
                             {{ group.group_number }} · {{ group.name }}
                         </div>
-                        <div class="text-sm text-muted-foreground">
-                            {{ group.status }} ·
+                        <div class="text-sm text-muted-foreground flex items-center gap-1">
+                            <StatusBadge :status="group.status" /> ·
                             {{ group.passenger_count }} passengers
                         </div>
                     </div>

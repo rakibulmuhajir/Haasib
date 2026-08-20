@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,8 @@ import {
   Building,
   FileText,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
+import { paymentMethodLabel } from '@/lib/payment-method'
 
 interface CompanyRef {
   id: string
@@ -106,22 +108,6 @@ const getPaymentMethodIcon = (method: string) => {
   }
 }
 
-const getPaymentMethodLabel = (method: string) => {
-  switch (method) {
-    case 'cash':
-      return 'Cash'
-    case 'bank_transfer':
-      return 'Bank Transfer'
-    case 'card':
-      return 'Card'
-    case 'cheque':
-    case 'check':
-      return 'Cheque'
-    default:
-      return 'Other'
-  }
-}
-
 const getPaymentMethodVariant = (method: string): 'default' | 'secondary' | 'outline' => {
   switch (method) {
     case 'cash':
@@ -136,11 +122,7 @@ const getPaymentMethodVariant = (method: string): 'default' | 'secondary' | 'out
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 
 const formatDate = (dateString: string) => {
@@ -148,11 +130,11 @@ const formatDate = (dateString: string) => {
 }
 
 const columns = [
-  { key: 'payment_number', label: 'Payment #' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'payment_method', label: 'Method' },
-  { key: 'payment_date', label: 'Date' },
+  { key: 'payment_number', label: 'Payment #', kind: 'ref' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'payment_method', label: 'Method', kind: 'text' as const },
+  { key: 'payment_date', label: 'Date', kind: 'date' as const },
 ]
 
 const tableData = computed(() => {
@@ -227,7 +209,7 @@ const filterByMethod = (method: string) => {
     </div>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       :columns="columns"
       :data="tableData"
       :pagination="payments"
@@ -260,7 +242,7 @@ const filterByMethod = (method: string) => {
         >
           <Badge :variant="getPaymentMethodVariant(value)">
             <component :is="row.icon" class="h-3 w-3 mr-1" />
-            {{ getPaymentMethodLabel(value) }}
+            {{ paymentMethodLabel(value) }}
           </Badge>
         </button>
       </template>
@@ -269,7 +251,7 @@ const filterByMethod = (method: string) => {
       <template #mobile-card="{ row }">
         <div
           @click="navigateToPayment(row.id)"
-          class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+          class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         >
           <div class="space-y-3">
             <!-- Header with payment number and method -->
@@ -278,7 +260,7 @@ const filterByMethod = (method: string) => {
                 <h3 class="font-semibold text-primary">{{ row.payment_number }}</h3>
                 <button
                   @click.stop="navigateToCustomer(row.customer_id)"
-                  class="text-sm text-zinc-500 hover:text-primary hover:underline"
+                  class="text-sm text-text-secondary hover:text-primary hover:underline"
                 >
                   {{ row.customer }}
                 </button>
@@ -289,25 +271,25 @@ const filterByMethod = (method: string) => {
               >
                 <Badge :variant="getPaymentMethodVariant(row.payment_method)">
                   <component :is="row.icon" class="h-3 w-3 mr-1" />
-                  {{ getPaymentMethodLabel(row.payment_method) }}
+                  {{ paymentMethodLabel(row.payment_method) }}
                 </Badge>
               </button>
             </div>
 
             <!-- Amount and date -->
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Amount</span>
+              <span class="text-sm text-text-secondary">Amount</span>
               <span class="font-medium">{{ row.amount }}</span>
             </div>
 
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Date</span>
+              <span class="text-sm text-text-secondary">Date</span>
               <span class="font-medium">{{ row.payment_date }}</span>
             </div>
           </div>
         </div>
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <!-- Empty State -->
     <EmptyState

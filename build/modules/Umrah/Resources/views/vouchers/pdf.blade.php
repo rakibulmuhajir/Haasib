@@ -4,32 +4,7 @@
     <meta charset="utf-8">
     <title>{{ $voucher->voucher_number }}</title>
     <style>
-        @page { margin: 24px 26px; }
-        body { color: #111; font-family: DejaVu Sans, sans-serif; font-size: 8px; line-height: 1.25; margin: 0; }
-        table { border-collapse: collapse; width: 100%; }
-        .masthead { margin-bottom: 5px; table-layout: fixed; }
-        .masthead td { border: 0; padding: 0 5px; text-align: center; vertical-align: top; width: 33.333%; }
-        .masthead td:first-child { padding-left: 0; text-align: left; }
-        .masthead td:last-child { padding-right: 0; text-align: right; }
-        .party-logo { display: block; max-height: 42px; max-width: 125px; margin-bottom: 3px; }
-        .center-logo { margin-left: auto; margin-right: auto; }
-        .right-logo { margin-left: auto; }
-        .party-name { font-size: 10px; font-weight: bold; }
-        .main-name { color: #173d85; font-size: 15px; font-weight: bold; }
-        .secondary { color: #555; font-size: 7px; }
-        .document-title { border-bottom: 2px solid #111; border-top: 1px solid #111; font-size: 15px; font-weight: bold; letter-spacing: .4px; margin: 4px 0; padding: 3px; text-align: center; text-transform: uppercase; }
-        .identity { margin-bottom: 4px; }
-        .identity td { padding: 3px 5px; }
-        .label { color: #555; display: block; font-size: 6px; text-transform: uppercase; }
-        .focus { font-size: 10px; font-weight: bold; }
-        .section { background: #e5e5e5; border: 1px solid #333; font-size: 9px; font-weight: bold; margin-top: 5px; padding: 2px 4px; text-align: center; text-transform: uppercase; }
-        .grid th, .grid td { border: 1px solid #555; padding: 3px 4px; text-align: left; vertical-align: top; }
-        .grid th { background: #f2f2f2; font-weight: bold; }
-        .primary { font-weight: bold; }
-        .footer-note { border-top: 1px solid #555; margin-top: 6px; padding-top: 4px; }
-        .watermark { font-size: 58px; font-weight: bold; left: 165px; opacity: .12; position: fixed; top: 330px; transform: rotate(-35deg); }
-        .cancelled { color: #991b1b; }
-        .draft { color: #166534; }
+@include('print.sheet')
     </style>
 </head>
 <body>
@@ -65,7 +40,13 @@
     <td>
         @if($logoPath)<img class="party-logo center-logo" src="{{ $logoPath }}" alt="Company logo">@elseif(str_starts_with((string) $company->logo_url, 'data:'))<img class="party-logo center-logo" src="{{ $company->logo_url }}" alt="Company logo">@endif
         <div class="main-name">{{ $company->trade_name ?: $company->name }}</div>
-        @if(data_get($company->settings, 'contact_phone'))<div class="secondary">Helpline: {{ data_get($company->settings, 'contact_phone') }}</div>@endif
+        {{-- The same lines the on-screen voucher prints, from the same
+             assembler, so the downloaded copy and the screen agree. --}}
+        @if($letterhead['legalName'] ?? null)<div class="secondary">{{ $letterhead['legalName'] }}</div>@endif
+        @foreach($letterhead['lines'] ?? [] as $line)<div class="secondary">{{ $line }}</div>@endforeach
+        @if($letterhead['email'] ?? null)<div class="secondary">{{ $letterhead['email'] }}</div>@endif
+        @if(($letterhead['phone'] ?? null) ?: data_get($company->settings, 'contact_phone'))<div class="secondary">Helpline: {{ ($letterhead['phone'] ?? null) ?: data_get($company->settings, 'contact_phone') }}</div>@endif
+        @if($letterhead['taxId'] ?? null)<div class="secondary">{{ $letterhead['taxIdLabel'] ?? 'Tax no.' }} {{ $letterhead['taxId'] }}</div>@endif
     </td>
     <td>
         @if($partnerLogo)<img class="party-logo right-logo" src="{{ $partnerLogo }}" alt="{{ $partnerRole }} logo">@endif

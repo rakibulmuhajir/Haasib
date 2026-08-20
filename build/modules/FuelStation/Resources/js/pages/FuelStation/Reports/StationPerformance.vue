@@ -2,23 +2,16 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Banknote, BarChart3, CalendarDays, ClipboardCheck, Droplets, Fuel, ReceiptText, WalletCards } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 
 interface Company {
   id: string
@@ -136,17 +129,11 @@ const endDate = ref(props.filters.end_date)
 const groupBy = ref(props.filters.group_by)
 const product = ref(props.filters.product)
 
-const moneySymbol = computed(() => currencySymbol(props.company.base_currency))
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${props.company.slug}` },
   { title: 'Reports', href: `/${props.company.slug}/fuel/reports/performance` },
   { title: 'Station Performance', href: `/${props.company.slug}/fuel/reports/performance` },
 ])
-
-const money = (amount: number) => `${moneySymbol.value} ${new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-}).format(amount || 0)}`
 
 const number = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', {
   minimumFractionDigits: decimals,
@@ -155,11 +142,17 @@ const number = (amount: number, decimals = 0) => new Intl.NumberFormat('en-US', 
 
 const percent = (amount: number) => `${number(amount, 1)}%`
 
-const varianceTone = (amount: number) => {
-  if (amount > 0) return 'text-emerald-700'
-  if (amount < 0) return 'text-red-700'
-  return 'text-muted-foreground'
-}
+/**
+ * A variance is a variance whichever way it points.
+ *
+ * This used to paint a cash surplus green and a shortfall red, which reads as
+ * "over is good news". It is not: a till that is over is the same control
+ * failure as one that is short, and someone has to find out why either way.
+ * Colour here means "look at this", the sign says which way it went, and a
+ * till that balanced gets no colour at all because there is nothing to see.
+ */
+const varianceTone = (amount: number) =>
+  amount === 0 ? 'text-text-secondary' : 'text-status-attention'
 
 const applyFilters = () => {
   router.get(`/${props.company.slug}/fuel/reports/performance`, {
@@ -210,6 +203,27 @@ const setRange = (range: 'today' | 'yesterday' | 'last7' | 'month' | 'lastMonth'
 
   applyFilters()
 }
+
+const performanceColumns = [
+  { key: 'label', label: 'Period', kind: 'text' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'revenue', label: 'Revenue', kind: 'amount' as const },
+  { key: 'cogs', label: 'COGS', kind: 'amount' as const },
+  { key: 'gross_profit', label: 'Gross profit', kind: 'amount' as const },
+  { key: 'expenses', label: 'Expenses', kind: 'amount' as const },
+  { key: 'net_station_profit', label: 'Net', kind: 'amount' as const },
+  { key: 'cash_variance', label: 'Cash variance', kind: 'amount' as const },
+]
+
+const cashColumns = [
+  { key: 'label', label: 'Date', kind: 'text' as const },
+  { key: 'opening_cash', label: 'Opening', kind: 'amount' as const },
+  { key: 'cash_in', label: 'In', kind: 'amount' as const },
+  { key: 'money_out', label: 'Out', kind: 'amount' as const },
+  { key: 'expected_closing', label: 'Expected', kind: 'amount' as const },
+  { key: 'closing_cash', label: 'Counted', kind: 'amount' as const },
+  { key: 'variance', label: 'Over/short', kind: 'amount' as const },
+]
 
 const movementCards = computed(() => [
   { label: 'Partner deposits', value: props.movementTotals.partner_deposits },
@@ -296,10 +310,10 @@ const movementCards = computed(() => [
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Revenue</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.revenue) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.revenue" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Fuel class="h-4 w-4 text-sky-600" />
+            <Fuel class="h-4 w-4 text-status-info" />
             {{ number(totals.liters) }} L sold
           </CardContent>
         </Card>
@@ -307,10 +321,10 @@ const movementCards = computed(() => [
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Gross profit</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.gross_profit) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.gross_profit" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Droplets class="h-4 w-4 text-emerald-600" />
+            <Droplets class="h-4 w-4 text-status-success" />
             {{ percent(totals.gross_margin_percent) }} margin
           </CardContent>
         </Card>
@@ -318,10 +332,10 @@ const movementCards = computed(() => [
         <Card>
           <CardHeader class="pb-2">
             <CardDescription>Net station profit</CardDescription>
-            <CardTitle class="text-2xl">{{ money(totals.net_station_profit) }}</CardTitle>
+            <CardTitle class="text-2xl"><MoneyText :amount="totals.net_station_profit" :currency="company.base_currency" /></CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <ReceiptText class="h-4 w-4 text-violet-600" />
+            <ReceiptText class="h-4 w-4 text-status-info" />
             After expenses and payroll paid
           </CardContent>
         </Card>
@@ -330,12 +344,12 @@ const movementCards = computed(() => [
           <CardHeader class="pb-2">
             <CardDescription>Cash variance</CardDescription>
             <CardTitle class="text-2xl" :class="varianceTone(totals.cash_variance)">
-              {{ money(totals.cash_variance) }}
+              <MoneyText :amount="totals.cash_variance" :currency="company.base_currency" />
             </CardTitle>
           </CardHeader>
           <CardContent class="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletCards class="h-4 w-4 text-amber-600" />
-            Closing cash {{ money(totals.closing_cash) }}
+            <WalletCards class="h-4 w-4 text-status-attention" />
+            Closing cash <MoneyText :amount="totals.closing_cash" :currency="company.base_currency" />
           </CardContent>
         </Card>
       </div>
@@ -347,54 +361,36 @@ const movementCards = computed(() => [
             <CardDescription>Revenue, cost, profit, and control figures from posted Daily Close records.</CardDescription>
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="rows.length === 0" class="py-12 text-center text-muted-foreground">
-              No posted Daily Close records found for this range.
-            </div>
-            <div v-else class="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead class="text-right">Liters</TableHead>
-                    <TableHead class="text-right">Revenue</TableHead>
-                    <TableHead class="text-right">COGS</TableHead>
-                    <TableHead class="text-right">Gross profit</TableHead>
-                    <TableHead class="text-right">Expenses</TableHead>
-                    <TableHead class="text-right">Net</TableHead>
-                    <TableHead class="text-right">Cash variance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="row in rows" :key="row.key">
-                    <TableCell>
-                      <div class="font-medium">{{ row.label }}</div>
-                      <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">{{ row.daily_close_count }} close{{ row.daily_close_count === 1 ? '' : 's' }}</Badge>
-                        <Link
-                          v-if="row.detail_url_id"
-                          :href="`/${company.slug}/fuel/daily-close/${row.detail_url_id}`"
-                          class="text-primary underline-offset-4 hover:underline"
-                        >
-                          {{ row.daily_close_numbers[0] }}
-                        </Link>
-                      </div>
-                    </TableCell>
-                    <TableCell class="text-right">{{ number(row.liters) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.revenue) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.cogs) }}</TableCell>
-                    <TableCell class="text-right">
-                      <div class="font-medium">{{ money(row.gross_profit) }}</div>
-                      <div class="text-xs text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
-                    </TableCell>
-                    <TableCell class="text-right">{{ money(row.expenses) }}</TableCell>
-                    <TableCell class="text-right font-medium">{{ money(row.net_station_profit) }}</TableCell>
-                    <TableCell class="text-right" :class="varianceTone(row.cash_variance)">
-                      {{ money(row.cash_variance) }}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+            <LedgerRegister :data="rows" :columns="performanceColumns">
+              <template #empty>No posted Daily Close records found for this range.</template>
+
+              <template #cell-label="{ row }">
+                <div class="font-medium">{{ row.label }}</div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <MetaChip tone="neutral" bare>{{ row.daily_close_count }} close{{ row.daily_close_count === 1 ? '' : 's' }}</MetaChip>
+                  <Link
+                    v-if="row.detail_url_id"
+                    :href="`/${company.slug}/fuel/daily-close/${row.detail_url_id}`"
+                    class="text-primary underline-offset-4 hover:underline"
+                  >
+                    {{ row.daily_close_numbers[0] }}
+                  </Link>
+                </div>
+              </template>
+
+              <template #cell-liters="{ row }">{{ number(row.liters) }}</template>
+              <template #cell-revenue="{ row }"><MoneyText :amount="row.revenue" :currency="company.base_currency" /></template>
+              <template #cell-cogs="{ row }"><MoneyText :amount="row.cogs" :currency="company.base_currency" /></template>
+              <template #cell-gross_profit="{ row }">
+                <div class="font-medium"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></div>
+                <div class="text-xs text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
+              </template>
+              <template #cell-expenses="{ row }"><MoneyText :amount="row.expenses" :currency="company.base_currency" /></template>
+              <template #cell-net_station_profit="{ row }"><MoneyText :amount="row.net_station_profit" :currency="company.base_currency" /></template>
+              <template #cell-cash_variance="{ row }">
+                <span :class="varianceTone(row.cash_variance)"><MoneyText :amount="row.cash_variance" :currency="company.base_currency" /></span>
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
 
@@ -415,18 +411,18 @@ const movementCards = computed(() => [
                     <div class="text-sm text-muted-foreground">{{ number(row.liters) }} L</div>
                   </div>
                   <div class="text-right">
-                    <div class="font-medium">{{ money(row.gross_profit) }}</div>
+                    <div class="font-medium"><MoneyText :amount="row.gross_profit" :currency="company.base_currency" /></div>
                     <div class="text-sm text-muted-foreground">{{ percent(row.gross_margin_percent) }}</div>
                   </div>
                 </div>
                 <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <div class="text-muted-foreground">Revenue</div>
-                    <div>{{ money(row.revenue) }}</div>
+                    <div><MoneyText :amount="row.revenue" :currency="company.base_currency" /></div>
                   </div>
                   <div>
                     <div class="text-muted-foreground">Margin/L</div>
-                    <div>{{ money(row.margin_per_liter) }}</div>
+                    <div><MoneyText :amount="row.margin_per_liter" :currency="company.base_currency" /></div>
                   </div>
                 </div>
               </div>
@@ -442,40 +438,25 @@ const movementCards = computed(() => [
             <CardDescription>Expected and counted cash by Daily Close.</CardDescription>
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="cashRows.length === 0" class="py-10 text-center text-muted-foreground">
-              No cash records in this range.
-            </div>
-            <div v-else class="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead class="text-right">Opening</TableHead>
-                    <TableHead class="text-right">In</TableHead>
-                    <TableHead class="text-right">Out</TableHead>
-                    <TableHead class="text-right">Expected</TableHead>
-                    <TableHead class="text-right">Counted</TableHead>
-                    <TableHead class="text-right">Over/short</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="row in cashRows" :key="row.transaction_id">
-                    <TableCell>
-                      <Link :href="`/${company.slug}/fuel/daily-close/${row.transaction_id}`" class="font-medium text-primary underline-offset-4 hover:underline">
-                        {{ row.label }}
-                      </Link>
-                      <div class="text-xs text-muted-foreground">{{ row.transaction_number }}</div>
-                    </TableCell>
-                    <TableCell class="text-right">{{ money(row.opening_cash) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.cash_sales + row.money_in) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.money_out) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.expected_closing) }}</TableCell>
-                    <TableCell class="text-right">{{ money(row.closing_cash) }}</TableCell>
-                    <TableCell class="text-right" :class="varianceTone(row.variance)">{{ money(row.variance) }}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+            <LedgerRegister :data="cashRows" :columns="cashColumns" key-field="transaction_id">
+              <template #empty>No cash records in this range.</template>
+
+              <template #cell-label="{ row }">
+                <Link :href="`/${company.slug}/fuel/daily-close/${row.transaction_id}`" class="font-medium text-primary underline-offset-4 hover:underline">
+                  {{ row.label }}
+                </Link>
+                <div class="text-xs text-muted-foreground">{{ row.transaction_number }}</div>
+              </template>
+
+              <template #cell-opening_cash="{ row }"><MoneyText :amount="row.opening_cash" :currency="company.base_currency" /></template>
+              <template #cell-cash_in="{ row }"><MoneyText :amount="row.cash_sales + row.money_in" :currency="company.base_currency" /></template>
+              <template #cell-money_out="{ row }"><MoneyText :amount="row.money_out" :currency="company.base_currency" /></template>
+              <template #cell-expected_closing="{ row }"><MoneyText :amount="row.expected_closing" :currency="company.base_currency" /></template>
+              <template #cell-closing_cash="{ row }"><MoneyText :amount="row.closing_cash" :currency="company.base_currency" /></template>
+              <template #cell-variance="{ row }">
+                <span :class="varianceTone(row.variance)"><MoneyText :amount="row.variance" :currency="company.base_currency" /></span>
+              </template>
+            </LedgerRegister>
           </CardContent>
         </Card>
 
@@ -488,7 +469,7 @@ const movementCards = computed(() => [
             <div class="grid gap-3 sm:grid-cols-2">
               <div v-for="item in movementCards" :key="item.label" class="rounded-md border p-3">
                 <div class="text-sm text-muted-foreground">{{ item.label }}</div>
-                <div class="mt-1 text-lg font-semibold">{{ money(item.value) }}</div>
+                <div class="mt-1 text-lg font-semibold"><MoneyText :amount="item.value" :currency="company.base_currency" /></div>
               </div>
             </div>
             <div class="mt-4 rounded-md border p-3">
@@ -499,11 +480,11 @@ const movementCards = computed(() => [
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <div class="text-sm text-muted-foreground">Loss</div>
-                  <div class="text-lg font-semibold text-red-700">{{ number(totals.stock_loss) }} L</div>
+                  <div class="text-lg font-semibold text-status-critical">{{ number(totals.stock_loss) }} L</div>
                 </div>
                 <div>
                   <div class="text-sm text-muted-foreground">Gain</div>
-                  <div class="text-lg font-semibold text-emerald-700">{{ number(totals.stock_gain) }} L</div>
+                  <div class="text-lg font-semibold text-status-success">{{ number(totals.stock_gain) }} L</div>
                 </div>
               </div>
             </div>

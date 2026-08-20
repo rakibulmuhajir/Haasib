@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
+import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 import { useVModel } from '@vueuse/core'
 
@@ -7,15 +8,43 @@ const props = defineProps<{
   defaultValue?: string | number
   modelValue?: string | number
   class?: HTMLAttributes['class']
+  /**
+   * `v-model.number` and `v-model.trim` are handled here rather than by Vue.
+   * Vue applies those modifiers to a native input itself, but on a component it
+   * only forwards them as this prop and expects the component to honour them.
+   * This one did not — so every `v-model.number` in the app was decoration, the
+   * value arrived as a string, and quantities got multiplied by coercion and
+   * luck. Declaring the prop is what makes the modifier real.
+   */
+  modelModifiers?: { number?: boolean; trim?: boolean; lazy?: boolean }
 }>()
 
 const emits = defineEmits<{
   (e: 'update:modelValue', payload: string | number): void
 }>()
 
-const modelValue = useVModel(props, 'modelValue', emits, {
+const inner = useVModel(props, 'modelValue', emits, {
   passive: true,
   defaultValue: props.defaultValue,
+})
+
+const modelValue = computed({
+  get: () => inner.value,
+  set: (value: string | number) => {
+    if (typeof value === 'string') {
+      if (props.modelModifiers?.trim) value = value.trim()
+
+      if (props.modelModifiers?.number) {
+        const parsed = Number.parseFloat(value)
+        // An empty or half-typed field must stay what the user typed. Coercing
+        // "" to 0 puts a zero in a box someone is still clearing.
+        inner.value = Number.isNaN(parsed) ? value : parsed
+        return
+      }
+    }
+
+    inner.value = value
+  },
 })
 </script>
 

@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ import {
   Search,
   Receipt,
 } from 'lucide-vue-next'
+import { formatMoneyText } from '@/lib/money'
 
 interface CompanyRef {
   id: string
@@ -118,21 +120,17 @@ const getStatusBadgeVariant = (status: string) => {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currency || 'USD',
-  }).format(amount)
+  return formatMoneyText(amount, currency || 'USD')
 }
 
 const columns = [
-  { key: 'credit_note_number', label: 'Credit Note #' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'invoice', label: 'Invoice' },
-  { key: 'reason', label: 'Reason' },
-  { key: 'amount', label: 'Amount' },
-  { key: 'status', label: 'Status' },
-  { key: 'credit_date', label: 'Date' },
+  { key: 'credit_note_number', label: 'Credit Note #', kind: 'ref' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'invoice', label: 'Invoice', kind: 'ref' as const },
+  { key: 'reason', label: 'Reason', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'credit_date', label: 'Date', kind: 'date' as const },
   { key: 'actions', label: '', sortable: false },
 ]
 
@@ -193,18 +191,18 @@ const tableData = computed(() => {
     </div>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       :columns="columns"
       :data="tableData"
       :pagination="credit_notes"
     >
-      <template #status="{ value }">
+      <template #cell-status="{ value }">
         <Badge :variant="getStatusBadgeVariant(value)">
           {{ value }}
         </Badge>
       </template>
 
-      <template #actions="{ row }">
+      <template #cell-actions="{ row }">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" class="h-8 w-8 p-0">
@@ -226,38 +224,36 @@ const tableData = computed(() => {
 
       <!-- Mobile Card Template -->
       <template #mobile-card="{ row }">
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-rule-default bg-surface-raised p-4 shadow-sm">
           <div class="space-y-3">
             <!-- Header with credit note number and status -->
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="font-semibold text-zinc-900">{{ row.credit_note_number }}</h3>
-                <p class="text-sm text-zinc-500">{{ row.customer }}</p>
+                <h3 class="font-semibold text-text-primary">{{ row.credit_note_number }}</h3>
+                <p class="text-sm text-text-secondary">{{ row.customer }}</p>
               </div>
-              <Badge :variant="getStatusBadgeVariant(row.status)">
-                {{ row.status }}
-              </Badge>
+              <StatusBadge :status="row.status" />
             </div>
 
             <!-- Amount and date -->
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Amount</span>
+              <span class="text-sm text-text-secondary">Amount</span>
               <span class="font-medium">{{ row.amount }}</span>
             </div>
 
             <div class="flex items-center justify-between">
-              <span class="text-sm text-zinc-500">Date</span>
+              <span class="text-sm text-text-secondary">Date</span>
               <span class="font-medium">{{ row.credit_date }}</span>
             </div>
 
             <!-- Reason -->
             <div>
-              <span class="text-sm text-zinc-500">Reason</span>
-              <p class="text-sm text-zinc-900 mt-1">{{ row.reason }}</p>
+              <span class="text-sm text-text-secondary">Reason</span>
+              <p class="text-sm text-text-primary mt-1">{{ row.reason }}</p>
             </div>
 
             <!-- Actions -->
-            <div class="pt-2 border-t border-zinc-100">
+            <div class="pt-2 border-t border-rule-subtle">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" class="w-full justify-between">
@@ -280,7 +276,7 @@ const tableData = computed(() => {
           </div>
         </div>
       </template>
-    </DataTable>
+    </LedgerRegister>
 
     <!-- Empty State -->
     <EmptyState

@@ -8,8 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Receipt, ArrowLeft, User, Calendar, Banknote, FileText, Clock } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Collection {
   id: string
@@ -42,12 +42,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Collections', href: `/${companySlug.value}/fuel/collections` },
   { title: props.collection.reference || 'Collection', href: `/${companySlug.value}/fuel/collections/${props.collection.id}` },
 ])
-
-const currency = computed(() => currencySymbol(props.currency))
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const formatDate = (dateStr: string) => {
   return formatSharedDateTime(dateStr, { mode: 'date' })
@@ -96,16 +90,16 @@ const goToCustomer = () => {
 
     <div class="mx-auto max-w-2xl space-y-6">
       <!-- Amount Card -->
-      <Card class="border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="border-border/80 bg-surface-sunken">
         <CardContent class="pt-6">
           <div class="text-center">
             <p class="text-sm text-muted-foreground">Amount Collected</p>
-            <p class="text-4xl font-bold text-emerald-600">
-              {{ currency }} {{ formatCurrency(collection.amount) }}
+            <p class="text-4xl font-bold text-status-success">
+              <MoneyText :amount="collection.amount" :currency="props.currency" />
             </p>
             <Badge class="mt-2" :class="{
-              'bg-emerald-100 text-emerald-800': collection.status === 'posted',
-              'bg-amber-100 text-amber-800': collection.status === 'pending',
+              'bg-status-success/10 text-status-success': collection.status === 'posted',
+              'bg-status-attention/10 text-status-attention': collection.status === 'pending',
             }">
               {{ collection.status === 'posted' ? 'Posted' : collection.status }}
             </Badge>

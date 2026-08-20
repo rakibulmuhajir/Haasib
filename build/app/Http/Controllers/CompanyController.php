@@ -213,6 +213,7 @@ class CompanyController extends Controller
                 'country' => $company->country,
                 'base_currency' => $company->base_currency,
                 'logo_url' => $company->logo_url,
+                'address' => $company->address,
                 'language' => $company->language,
                 'locale' => $company->locale,
                 'is_active' => $company->is_active,
@@ -347,6 +348,7 @@ class CompanyController extends Controller
             ->map(function ($p) {
                 return [
                     'type' => 'payment',
+                    'direction' => 'in',
                     'label' => "Payment {$p->payment_number} from {$p->customer_name}",
                     'amount' => (float) $p->amount,
                     'currency' => $p->currency,
@@ -368,6 +370,7 @@ class CompanyController extends Controller
             ->map(function ($i) {
                 return [
                     'type' => 'invoice',
+                    'direction' => null,
                     'label' => "Invoice {$i->invoice_number} for {$i->customer_name}",
                     'status' => $i->status,
                     'occurred_at' => $i->occurred_at,
@@ -382,12 +385,42 @@ class CompanyController extends Controller
             ->map(function ($c) {
                 return [
                     'type' => 'customer',
+                    'direction' => null,
                     'label' => "New customer: {$c->name}",
                     'occurred_at' => $c->created_at,
                 ];
             });
 
+        /* The register has an OUT column, so it needs outflows. Without bills it
+           would show one direction only and read as a broken table rather than
+           a quiet month. */
+        $recentBills = DB::table('acct.bills as b')
+            ->join('acct.vendors as v', 'v.id', '=', 'b.vendor_id')
+            ->where('b.company_id', $company->id)
+            ->orderByDesc('b.bill_date')
+            ->limit(5)
+            ->get([
+                'b.bill_date as occurred_at',
+                'b.bill_number',
+                'b.total_amount',
+                'b.currency',
+                'b.status',
+                'v.name as vendor_name',
+            ])
+            ->map(function ($b) {
+                return [
+                    'type' => 'bill',
+                    'direction' => 'out',
+                    'label' => "Bill {$b->bill_number} from {$b->vendor_name}",
+                    'amount' => (float) $b->total_amount,
+                    'currency' => $b->currency,
+                    'status' => $b->status,
+                    'occurred_at' => $b->occurred_at,
+                ];
+            });
+
         $recentActivity = $recentPayments
+            ->concat($recentBills)
             ->concat($recentInvoices)
             ->concat($recentCustomers)
             ->sortByDesc('occurred_at')
@@ -540,6 +573,16 @@ class CompanyController extends Controller
         }
         if (isset($validated['locale'])) {
             $directUpdates['locale'] = $validated['locale'];
+        }
+
+        // An address with every field blanked is not an address; store null so
+        // the letterhead prints a name alone rather than a stack of empty lines.
+        if (array_key_exists('address', $validated)) {
+            $address = array_filter(
+                $validated['address'] ?? [],
+                static fn ($value) => is_string($value) && trim($value) !== '',
+            );
+            $directUpdates['address'] = $address === [] ? null : $address;
         }
 
         // Handle fiscal year start month as direct column

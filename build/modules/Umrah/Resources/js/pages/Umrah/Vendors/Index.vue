@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import LedgerRegister from '@/components/LedgerRegister.vue';
+import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
-import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,15 +18,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableEmpty,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -63,6 +56,25 @@ const breadcrumbs: BreadcrumbItem[] = [
         title: 'Visa Vendors',
         href: `/${props.company.slug}/umrah/vendors`,
     },
+];
+
+/**
+ * Four rate columns and a payable, all figures, so they line up on the decimal
+ * and can be read down rather than across. The vendor type and the default
+ * marker are annotations on the name, not states of the record — only whether
+ * the vendor is still in use is a status.
+ */
+const columns = [
+    { key: 'vendor_number', label: 'Vendor #', kind: 'ref' as const },
+    { key: 'name', label: 'Vendor', kind: 'text' as const },
+    { key: 'vendor_type', label: 'Type', kind: 'text' as const },
+    { key: 'adult_retail_amount', label: 'Adult retail', kind: 'amount' as const },
+    { key: 'adult_cost_amount', label: 'Adult cost', kind: 'amount' as const },
+    { key: 'child_retail_amount', label: 'Child retail', kind: 'amount' as const },
+    { key: 'child_cost_amount', label: 'Child cost', kind: 'amount' as const },
+    { key: 'balance', label: 'Payable', kind: 'amount' as const },
+    { key: 'status', label: 'Status', kind: 'status' as const },
+    { key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' },
 ];
 
 const form = useForm({
@@ -416,146 +428,76 @@ const submit = () => {
             <Card class="min-w-0">
                 <CardHeader><CardTitle>Vendor List</CardTitle></CardHeader>
                 <CardContent class="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Vendor #</TableHead
-                                ><TableHead>Vendor</TableHead
-                                ><TableHead>Type</TableHead>
-                                <TableHead class="text-right"
-                                    >Adult Retail</TableHead
-                                ><TableHead class="text-right"
-                                    >Adult Cost</TableHead
+                    <LedgerRegister :data="vendors.data" :columns="columns">
+                        <template #empty>No visa vendors yet.</template>
+
+                        <template #cell-name="{ row }">
+                            <div>{{ row.name }}</div>
+                            <MetaChip v-if="row.is_default" tone="neutral" class="mt-1">Default</MetaChip>
+                        </template>
+
+                        <template #cell-vendor_type="{ row }">
+                            <MetaChip tone="neutral" bare>{{
+                                vendorTypes[row.vendor_type] || row.vendor_type
+                            }}</MetaChip>
+                        </template>
+
+                        <template #cell-adult_retail_amount="{ row }">
+                            <MoneyText :amount="row.adult_retail_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-adult_cost_amount="{ row }">
+                            <MoneyText :amount="row.adult_cost_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-child_retail_amount="{ row }">
+                            <MoneyText :amount="row.child_retail_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-child_cost_amount="{ row }">
+                            <MoneyText :amount="row.child_cost_amount" :currency="company.base_currency" />
+                        </template>
+                        <template #cell-balance="{ row }">
+                            <MoneyText :amount="row.balance" :currency="company.base_currency" class="font-semibold" />
+                        </template>
+
+                        <template #cell-status="{ row }">
+                            <StatusBadge :status="row.is_active ? 'active' : 'inactive'" />
+                        </template>
+
+                        <template #cell-actions="{ row }">
+                            <div class="flex justify-end gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="router.get(`/${company.slug}/umrah/vendors/${row.id}`)"
                                 >
-                                <TableHead class="text-right"
-                                    >Child Retail</TableHead
-                                ><TableHead class="text-right"
-                                    >Child Cost</TableHead
+                                    <Eye class="h-4 w-4" />
+                                    <span class="sr-only">View {{ row.name }} statement</span>
+                                </Button>
+                                <Button
+                                    v-if="canManageVendors"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="startEdit(row)"
                                 >
-                                <TableHead class="text-right"
-                                    >Payable</TableHead
+                                    <Pencil class="h-4 w-4" />
+                                    <span class="sr-only">Edit {{ row.name }}</span>
+                                </Button>
+                                <Button
+                                    v-if="canManageVendors"
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    :title="row.is_active ? 'Deactivate vendor' : 'Reactivate vendor'"
+                                    :disabled="statusForm.processing"
+                                    @click="updateStatus(row)"
                                 >
-                                <TableHead>Status</TableHead>
-                                <TableHead class="w-24 text-right"
-                                    >Action</TableHead
-                                >
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableEmpty
-                                v-if="!vendors.data.length"
-                                :colspan="10"
-                                >No visa vendors yet.</TableEmpty
-                            >
-                            <TableRow
-                                v-for="vendor in vendors.data"
-                                :key="vendor.id"
-                                :class="{ 'opacity-60': !vendor.is_active }"
-                            >
-                                <TableCell class="font-medium">{{
-                                    vendor.vendor_number
-                                }}</TableCell>
-                                <TableCell>
-                                    <div>{{ vendor.name }}</div>
-                                    <div class="mt-1 flex gap-1">
-                                        <Badge
-                                            v-if="vendor.is_default"
-                                            variant="secondary"
-                                            >Default</Badge
-                                        >
-                                    </div>
-                                </TableCell>
-                                <TableCell
-                                    ><Badge variant="outline">{{
-                                        vendorTypes[vendor.vendor_type] ||
-                                        vendor.vendor_type
-                                    }}</Badge></TableCell
-                                >
-                                <TableCell class="text-right"
-                                    ><MoneyText
-                                        :amount="vendor.adult_retail_amount"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell class="text-right"
-                                    ><MoneyText
-                                        :amount="vendor.adult_cost_amount"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell class="text-right"
-                                    ><MoneyText
-                                        :amount="vendor.child_retail_amount"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell class="text-right"
-                                    ><MoneyText
-                                        :amount="vendor.child_cost_amount"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell class="text-right font-semibold"
-                                    ><MoneyText
-                                        :amount="vendor.balance"
-                                        :currency="company.base_currency"
-                                /></TableCell>
-                                <TableCell
-                                    ><Badge
-                                        :variant="
-                                            vendor.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                        >{{
-                                            vendor.is_active
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}</Badge
-                                    ></TableCell
-                                >
-                                <TableCell class="text-right"
-                                    ><Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="
-                                            router.get(
-                                                `/${company.slug}/umrah/vendors/${vendor.id}`,
-                                            )
-                                        "
-                                        ><Eye class="h-4 w-4" /><span
-                                            class="sr-only"
-                                            >View
-                                            {{ vendor.name }} statement</span
-                                        ></Button
-                                    ><Button
-                                        v-if="canManageVendors"
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="startEdit(vendor)"
-                                        ><Pencil class="h-4 w-4" /><span
-                                            class="sr-only"
-                                            >Edit {{ vendor.name }}</span
-                                        ></Button
-                                    ><Button
-                                        v-if="canManageVendors"
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        :title="
-                                            vendor.is_active
-                                                ? 'Deactivate vendor'
-                                                : 'Reactivate vendor'
-                                        "
-                                        :disabled="statusForm.processing"
-                                        @click="updateStatus(vendor)"
-                                        ><Power
-                                            v-if="vendor.is_active"
-                                            class="h-4 w-4" /><RotateCcw
-                                            v-else
-                                            class="h-4 w-4" /></Button
-                                ></TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                    <Power v-if="row.is_active" class="h-4 w-4" />
+                                    <RotateCcw v-else class="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </template>
+                    </LedgerRegister>
                     <RecordPagination
                         :current-page="vendors.current_page"
                         :last-page="vendors.last_page"

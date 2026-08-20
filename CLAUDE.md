@@ -75,6 +75,8 @@ npm run dev
 ```
 
 ## 📚 Key Docs
+- **Design system: `docs/ledger-design-system.md`** — read before building any page
+- Tokens/skins: `docs/theming.md`
 - Schemas: `docs/contracts/`
 - Patterns: `AI_PROMPTS/`
 - UX: `docs/frontend-experience-contract.md`

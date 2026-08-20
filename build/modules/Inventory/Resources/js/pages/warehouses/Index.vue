@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DataTable from '@/components/DataTable.vue'
-import { Badge } from '@/components/ui/badge'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -110,13 +110,13 @@ const formatQuantity = (qty: number) => {
 }
 
 const columns = [
-  { key: 'code', label: 'Code' },
-  { key: 'name', label: 'Name' },
-  { key: 'type', label: 'Type' },
-  { key: 'city', label: 'Location' },
-  { key: 'item_count', label: 'Items' },
-  { key: 'total_units', label: 'Total Units' },
-  { key: 'status', label: 'Status' },
+  { key: 'code', label: 'Code', kind: 'ref' as const },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'type', label: 'Type', kind: 'text' as const },
+  { key: 'city', label: 'Location', kind: 'text' as const },
+  { key: 'item_count', label: 'Items', kind: 'amount' as const },
+  { key: 'total_units', label: 'Total Units', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -199,7 +199,7 @@ const handleDelete = (id: string) => {
     </EmptyState>
 
     <!-- Data Table -->
-    <DataTable
+    <LedgerRegister
       v-else
       :columns="columns"
       :data="tableData"
@@ -214,16 +214,12 @@ const handleDelete = (id: string) => {
       <template #cell-name="{ row }">
         <div class="flex items-center gap-2">
           <span>{{ row.name }}</span>
-          <Star v-if="row._raw.is_primary" class="h-4 w-4 text-yellow-500 fill-yellow-500" />
+          <Star v-if="row._raw.is_primary" class="h-4 w-4 text-status-attention fill-status-attention" />
         </div>
       </template>
 
       <template #cell-status="{ row }">
-        <Badge
-          :variant="row._raw.is_deleted ? 'destructive' : row._raw.is_active ? 'success' : 'secondary'"
-        >
-          {{ row.status }}
-        </Badge>
+        <StatusBadge :status="row.status" />
       </template>
 
       <template #cell-_actions="{ row }">
@@ -250,6 +246,6 @@ const handleDelete = (id: string) => {
         </DropdownMenu>
         <span v-else class="text-xs text-muted-foreground italic">Deleted</span>
       </template>
-    </DataTable>
+    </LedgerRegister>
   </PageShell>
 </template>

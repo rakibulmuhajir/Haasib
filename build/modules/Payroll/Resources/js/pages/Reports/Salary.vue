@@ -2,9 +2,9 @@
 import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Banknote, Calendar, FileText, HandCoins, UserCog } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -91,14 +92,6 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Salary Report', href: `/${props.company.slug}/payroll/reports/salary` },
 ]
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: props.company.base_currency || 'PKR',
-  }).format(amount || 0)
-}
-
 const formatDate = (date: string) => formatDateTime(date, { mode: 'date' })
 
 const applyFilter = () => {
@@ -116,26 +109,26 @@ const applyFilter = () => {
 }
 
 const columns = [
-  { key: 'employee', label: 'Employee' },
-  { key: 'base_salary', label: 'Base Salary' },
-  { key: 'gross_pay', label: 'Gross' },
-  { key: 'deductions', label: 'Deductions' },
-  { key: 'net_pay', label: 'Net Salary' },
-  { key: 'paid', label: 'Paid' },
-  { key: 'unpaid', label: 'Unpaid' },
-  { key: 'advance_outstanding', label: 'Advance Balance' },
+  { key: 'employee', label: 'Employee', kind: 'text' as const },
+  { key: 'base_salary', label: 'Base Salary', kind: 'amount' as const },
+  { key: 'gross_pay', label: 'Gross', kind: 'amount' as const },
+  { key: 'deductions', label: 'Deductions', kind: 'amount' as const },
+  { key: 'net_pay', label: 'Net Salary', kind: 'amount' as const },
+  { key: 'paid', label: 'Paid', kind: 'amount' as const },
+  { key: 'unpaid', label: 'Unpaid', kind: 'amount' as const },
+  { key: 'advance_outstanding', label: 'Advance Balance', kind: 'amount' as const },
 ]
 
 const tableRows = computed(() => props.rows.map((row) => ({
   id: row.employee_id,
   employee: `${row.employee_name} · ${row.employee_number}`,
-  base_salary: formatCurrency(row.base_salary),
-  gross_pay: formatCurrency(row.gross_pay),
-  deductions: formatCurrency(row.deductions),
-  net_pay: formatCurrency(row.net_pay),
-  paid: formatCurrency(row.paid),
-  unpaid: formatCurrency(row.unpaid + row.draft),
-  advance_outstanding: formatCurrency(row.advance_outstanding),
+  base_salary: row.base_salary,
+  gross_pay: row.gross_pay,
+  deductions: row.deductions,
+  net_pay: row.net_pay,
+  paid: row.paid,
+  unpaid: row.unpaid + row.draft,
+  advance_outstanding: row.advance_outstanding,
   _raw: row,
 })))
 
@@ -147,13 +140,6 @@ const payslipRows = computed(() => props.rows.flatMap((row) =>
     employee_number: row.employee_number,
   }))
 ))
-
-const statusVariant = (value: string) => {
-  if (value === 'paid') return 'success'
-  if (value === 'approved') return 'secondary'
-  if (value === 'draft') return 'outline'
-  return 'secondary'
-}
 
 const openPayslips = (row: SalaryRow) => {
   router.get(`/${props.company.slug}/payslips`, {
@@ -245,7 +231,7 @@ const openPayslips = (row: SalaryRow) => {
       <Card>
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Gross salary</p>
-          <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.gross_pay) }}</p>
+          <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.gross_pay" :currency="company.base_currency" /></p>
           <p class="mt-1 text-xs text-muted-foreground">{{ summary.employees }} employees</p>
         </CardContent>
       </Card>
@@ -253,24 +239,24 @@ const openPayslips = (row: SalaryRow) => {
       <Card>
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Net salary</p>
-          <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.net_pay) }}</p>
-          <p class="mt-1 text-xs text-muted-foreground">{{ formatCurrency(summary.deductions) }} deductions</p>
+          <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.net_pay" :currency="company.base_currency" /></p>
+          <p class="mt-1 text-xs text-muted-foreground"><MoneyText :amount="summary.deductions" :currency="company.base_currency" /> deductions</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Paid / unpaid</p>
-          <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.paid) }}</p>
-          <p class="mt-1 text-xs text-muted-foreground">{{ formatCurrency(summary.unpaid + summary.draft) }} unpaid or draft</p>
+          <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.paid" :currency="company.base_currency" /></p>
+          <p class="mt-1 text-xs text-muted-foreground"><MoneyText :amount="summary.unpaid + summary.draft" :currency="company.base_currency" /> unpaid or draft</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Advance balance</p>
-          <p class="mt-1 text-2xl font-semibold">{{ formatCurrency(summary.advance_outstanding) }}</p>
-          <p class="mt-1 text-xs text-muted-foreground">{{ formatCurrency(summary.advance_recovered) }} recovered this month</p>
+          <p class="mt-1 text-2xl font-semibold"><MoneyText :amount="summary.advance_outstanding" :currency="company.base_currency" /></p>
+          <p class="mt-1 text-xs text-muted-foreground"><MoneyText :amount="summary.advance_recovered" :currency="company.base_currency" /> recovered this month</p>
         </CardContent>
       </Card>
     </div>
@@ -293,7 +279,7 @@ const openPayslips = (row: SalaryRow) => {
         </div>
       </CardHeader>
       <CardContent>
-        <DataTable :columns="columns" :data="tableRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
+        <LedgerRegister :columns="columns" :data="tableRows" @row-click="(row) => router.get(`/${company.slug}/employees/${row.id}`)">
           <template #cell-employee="{ row }">
             <div>
               <p class="font-medium">{{ row._raw.employee_name }}</p>
@@ -313,7 +299,28 @@ const openPayslips = (row: SalaryRow) => {
               </div>
             </div>
           </template>
-        </DataTable>
+          <template #cell-base_salary="{ row }">
+            <MoneyText :amount="row.base_salary" :currency="company.base_currency" />
+          </template>
+          <template #cell-gross_pay="{ row }">
+            <MoneyText :amount="row.gross_pay" :currency="company.base_currency" />
+          </template>
+          <template #cell-deductions="{ row }">
+            <MoneyText :amount="row.deductions" :currency="company.base_currency" />
+          </template>
+          <template #cell-net_pay="{ row }">
+            <MoneyText :amount="row.net_pay" :currency="company.base_currency" />
+          </template>
+          <template #cell-paid="{ row }">
+            <MoneyText :amount="row.paid" :currency="company.base_currency" />
+          </template>
+          <template #cell-unpaid="{ row }">
+            <MoneyText :amount="row.unpaid" :currency="company.base_currency" />
+          </template>
+          <template #cell-advance_outstanding="{ row }">
+            <MoneyText :amount="row.advance_outstanding" :currency="company.base_currency" />
+          </template>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -350,12 +357,10 @@ const openPayslips = (row: SalaryRow) => {
               <span v-else class="text-muted-foreground">No period</span>
             </div>
             <div class="col-span-2">
-              <Badge :variant="statusVariant(payslip.status)">
-                {{ payslip.status }}
-              </Badge>
+              <StatusBadge :status="payslip.status" />
             </div>
-            <div class="col-span-2 text-right tabular-nums">{{ formatCurrency(payslip.deductions) }}</div>
-            <div class="col-span-2 text-right font-medium tabular-nums">{{ formatCurrency(payslip.net_pay) }}</div>
+            <div class="col-span-2 text-right tabular-nums"><MoneyText :amount="payslip.deductions" :currency="company.base_currency" /></div>
+            <div class="col-span-2 text-right font-medium tabular-nums"><MoneyText :amount="payslip.net_pay" :currency="company.base_currency" /></div>
           </div>
         </div>
       </CardContent>

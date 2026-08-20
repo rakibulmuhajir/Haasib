@@ -3,12 +3,13 @@ import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
+import MetaChip from '@/components/MetaChip.vue'
 import RecordPagination from '@/components/RecordPagination.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { LoaderCircle, Plus, Search, ScrollText, X } from 'lucide-vue-next'
 
@@ -26,6 +27,23 @@ const searching = ref(false)
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
   { title: 'Vouchers', href: `/${props.company.slug}/umrah/vouchers` },
+]
+
+/**
+ * Service bundle and journey are annotations — which package this is, and
+ * whether it has already happened. Neither is a state of the voucher, so
+ * neither gets the status chip; only `status` does.
+ */
+const columns = [
+  { key: 'voucher_number', label: 'Voucher #', kind: 'ref' as const },
+  { key: 'title', label: 'Title', kind: 'text' as const },
+  { key: 'group', label: 'Group', kind: 'text' as const },
+  { key: 'agent', label: 'Agent', kind: 'text' as const },
+  { key: 'service_bundle', label: 'Service', kind: 'text' as const },
+  { key: 'service_date', label: 'Service date', kind: 'date' as const },
+  { key: 'passengers_count', label: 'Pax', kind: 'amount' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
+  { key: 'journey', label: 'Journey', kind: 'text' as const },
 ]
 
 const applySearch = () => {
@@ -75,35 +93,36 @@ const serviceDate = (voucher: any) => voucher.service_bundle === 'hotel' ? vouch
 
     <Card>
       <CardContent class="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Voucher #</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Group</TableHead>
-              <TableHead>Agent</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Service Date</TableHead>
-              <TableHead class="text-center">Pax</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Journey</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableEmpty v-if="!vouchers.data.length" :colspan="9">{{ search ? 'No vouchers match your search.' : 'No vouchers yet.' }}</TableEmpty>
-            <TableRow v-for="voucher in vouchers.data" :key="voucher.id" class="cursor-pointer" @click="router.get(`/${company.slug}/umrah/vouchers/${voucher.id}`)">
-              <TableCell class="font-medium">{{ voucher.voucher_number }}</TableCell>
-              <TableCell class="max-w-56 truncate">{{ voucher.title || '-' }}</TableCell>
-              <TableCell>{{ voucher.group?.group_number || '-' }}</TableCell>
-              <TableCell>{{ voucher.agent?.name || '-' }}</TableCell>
-              <TableCell><Badge variant="outline">{{ serviceBundles[voucher.service_bundle] || voucher.service_bundle }}</Badge></TableCell>
-              <TableCell><DateTimeText :value="serviceDate(voucher)" mode="date" /></TableCell>
-              <TableCell class="text-center font-medium">{{ voucher.passengers_count }}</TableCell>
-              <TableCell><Badge variant="secondary">{{ statuses[voucher.status] || voucher.status }}</Badge></TableCell>
-              <TableCell><Badge variant="outline">{{ isPast(voucher) ? 'Past' : 'Upcoming' }}</Badge></TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <LedgerRegister
+          :data="vouchers.data"
+          :columns="columns"
+          clickable
+          @row-click="(row) => router.get(`/${company.slug}/umrah/vouchers/${row.id}`)"
+        >
+          <template #empty>{{ search ? 'No vouchers match your search.' : 'No vouchers yet.' }}</template>
+
+          <template #cell-title="{ row }">
+            <span class="block max-w-56 truncate">{{ row.title || '—' }}</span>
+          </template>
+          <template #cell-group="{ row }">{{ row.group?.group_number || '—' }}</template>
+          <template #cell-agent="{ row }">{{ row.agent?.name || '—' }}</template>
+
+          <template #cell-service_bundle="{ row }">
+            <MetaChip tone="neutral" bare>{{ serviceBundles[row.service_bundle] || row.service_bundle }}</MetaChip>
+          </template>
+
+          <template #cell-service_date="{ row }">
+            <DateTimeText :value="serviceDate(row)" mode="date" />
+          </template>
+
+          <template #cell-status="{ row }">
+            <StatusBadge :status="row.status" :fallback="statuses[row.status] || row.status" />
+          </template>
+
+          <template #cell-journey="{ row }">
+            <MetaChip :tone="isPast(row) ? 'neutral' : 'attention'">{{ isPast(row) ? 'Past' : 'Upcoming' }}</MetaChip>
+          </template>
+        </LedgerRegister>
         <RecordPagination :current-page="vouchers.current_page" :last-page="vouchers.last_page" :from="vouchers.from" :to="vouchers.to" :total="vouchers.total" :previous-url="vouchers.prev_page_url" :next-url="vouchers.next_page_url" />
       </CardContent>
     </Card>

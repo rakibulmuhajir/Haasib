@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
+import MoneyText from '@/components/MoneyText.vue'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, Receipt } from 'lucide-vue-next'
 
@@ -96,14 +97,6 @@ const statusOptions = [
   { value: 'void', label: 'Void' },
 ]
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.base_currency || 'USD',
-  }).format(amount)
-}
-
 const submit = () => {
   // Convert 'company_default' back to null for the backend
   const submitData = { ...form }
@@ -151,9 +144,7 @@ const isEditable = computed(() => {
             <div class="flex items-center gap-2 mb-2">
               <Receipt class="h-5 w-5 text-muted-foreground" />
               <span class="text-sm font-medium text-muted-foreground">Credit Note</span>
-              <Badge :variant="credit_note.status === 'applied' ? 'default' : 'secondary'">
-                {{ credit_note.status }}
-              </Badge>
+              <StatusBadge :status="credit_note.status" />
             </div>
             <button
               @click="router.get(`/${company.slug}/credit-notes/${credit_note.id}`)"
@@ -163,7 +154,7 @@ const isEditable = computed(() => {
             </button>
           </div>
           <div class="text-right">
-            <div class="text-2xl font-bold text-green-600">{{ formatCurrency(credit_note.amount) }}</div>
+            <div class="text-2xl font-bold text-status-success"><MoneyText :amount="credit_note.amount" :currency="credit_note.base_currency" /></div>
             <div class="text-sm text-muted-foreground">{{ credit_note.base_currency }}</div>
           </div>
         </div>
@@ -171,10 +162,10 @@ const isEditable = computed(() => {
     </Card>
 
     <div v-if="!isEditable" class="mb-6">
-      <Card class="border-yellow-200 bg-yellow-50">
+      <Card class="border-status-attention/30 bg-status-attention/10">
         <CardContent class="pt-6">
           <div class="flex items-center">
-            <Badge variant="secondary" class="mr-2">{{ credit_note.status }}</Badge>
+            <StatusBadge :status="credit_note.status" class="mr-2" />
             <span class="text-sm">This credit note cannot be edited in its current status.</span>
           </div>
         </CardContent>
@@ -219,7 +210,7 @@ const isEditable = computed(() => {
                   :key="invoice.id"
                   :value="invoice.id"
                 >
-                  {{ invoice.invoice_number }} - {{ formatCurrency(invoice.total_amount) }} {{ invoice.currency }}
+                  {{ invoice.invoice_number }} - <MoneyText :amount="invoice.total_amount" :currency="invoice.currency" />
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -253,7 +244,7 @@ const isEditable = computed(() => {
               :disabled="!isEditable"
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -361,7 +352,7 @@ const isEditable = computed(() => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Credit Amount:</span>
-            <span class="font-bold text-green-600">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold text-status-success"><MoneyText :amount="form.amount" :currency="form.base_currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Customer:</span>

@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Droplets, Save, ArrowLeft, Plus, Trash2 } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Tank {
   id: string
@@ -93,8 +94,14 @@ const totalLiters = computed(() => {
   return form.lines.reduce((sum, line) => sum + (line.liters || 0), 0)
 })
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
+/*
+ * Litres, not money. This was called formatCurrency and was doing both jobs --
+ * grouping tank volumes and grouping rupees -- which is how a litre count ends
+ * up looking like a price. Money goes through MoneyText; this only ever
+ * groups a quantity, and the " L" that follows it in the template is the unit.
+ */
+const formatLiters = (liters: number) => {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(liters)
 }
 
 const submit = () => {
@@ -216,9 +223,9 @@ const goBack = () => {
                   </SelectContent>
                 </Select>
                 <p v-if="line.tank_id" class="text-xs text-muted-foreground">
-                  Current: {{ formatCurrency(getTankInfo(line.tank_id)?.current_stock || 0) }} L
+                  Current: {{ formatLiters(getTankInfo(line.tank_id)?.current_stock || 0) }} L
                   <span v-if="getTankInfo(line.tank_id)?.capacity">
-                    / {{ formatCurrency(getTankInfo(line.tank_id)?.capacity || 0) }} L
+                    / {{ formatLiters(getTankInfo(line.tank_id)?.capacity || 0) }} L
                   </span>
                 </p>
               </div>
@@ -252,7 +259,7 @@ const goBack = () => {
               <div class="space-y-2">
                 <Label>Line Total</Label>
                 <div class="h-10 px-3 py-2 rounded-md border bg-muted/50 flex items-center font-medium">
-                  {{ currency }} {{ formatCurrency(lineTotal(line)) }}
+                  <MoneyText :amount="lineTotal(line)" :currency="props.currency" />
                 </div>
               </div>
             </div>
@@ -267,11 +274,11 @@ const goBack = () => {
             <div class="w-64 space-y-2">
               <div class="flex justify-between text-sm">
                 <span>Total Liters</span>
-                <span class="font-medium">{{ formatCurrency(totalLiters) }} L</span>
+                <span class="font-medium">{{ formatLiters(totalLiters) }} L</span>
               </div>
               <div class="flex justify-between text-base font-semibold">
                 <span>Grand Total</span>
-                <span>{{ currency }} {{ formatCurrency(grandTotal) }}</span>
+                <span><MoneyText :amount="grandTotal" :currency="props.currency" /></span>
               </div>
             </div>
           </div>

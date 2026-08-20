@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import type { BreadcrumbItem } from '@/types'
 import { ArrowLeft, Save, DollarSign, CreditCard, Building, FileText } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CompanyRef {
   id: string
@@ -74,14 +75,6 @@ const paymentMethods = [
   { value: 'other', label: 'Other', icon: DollarSign },
 ]
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: form.currency || 'USD',
-  }).format(amount)
-}
-
 const submit = () => {
   form.put(`/${props.company.slug}/payments/${props.payment.id}`)
 }
@@ -110,12 +103,12 @@ const allocatedAmount = computed(() => {
     </template>
 
     <div v-if="allocatedAmount > 0" class="mb-6">
-      <Card class="border-yellow-200 bg-yellow-50">
+      <Card class="border-status-attention/30 bg-status-attention/10">
         <CardContent class="pt-6">
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">Allocated</Badge>
             <span class="text-sm">
-              This payment has {{ payment.payment_allocations.length }} allocation(s) totaling {{ formatCurrency(allocatedAmount) }}.
+              This payment has {{ payment.payment_allocations.length }} allocation(s) totaling <MoneyText :amount="allocatedAmount" :currency="form.currency || 'USD'" />.
               Editing may affect the allocations.
             </span>
           </div>
@@ -155,7 +148,7 @@ const allocatedAmount = computed(() => {
               required
             />
             <p class="text-sm text-muted-foreground mt-1">
-              {{ formatCurrency(form.amount) }}
+              <MoneyText :amount="form.amount" :currency="form.currency || 'USD'" />
             </p>
           </div>
           <div>
@@ -251,13 +244,13 @@ const allocatedAmount = computed(() => {
         </CardHeader>
         <CardContent>
           <div class="space-y-2">
-            <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded">
+            <div v-for="allocation in payment.payment_allocations" :key="allocation.id" class="flex justify-between items-center p-3 border rounded-sm">
               <span class="font-medium">Invoice #{{ allocation.invoice_id }}</span>
-              <span class="font-medium">{{ formatCurrency(allocation.amount) }}</span>
+              <span class="font-medium"><MoneyText :amount="allocation.amount" :currency="form.currency || 'USD'" /></span>
             </div>
             <div class="flex justify-between items-center pt-2 border-t">
               <span class="font-bold">Total Allocated:</span>
-              <span class="font-bold">{{ formatCurrency(allocatedAmount) }}</span>
+              <span class="font-bold"><MoneyText :amount="allocatedAmount" :currency="form.currency || 'USD'" /></span>
             </div>
           </div>
         </CardContent>
@@ -271,7 +264,7 @@ const allocatedAmount = computed(() => {
         <CardContent class="space-y-3">
           <div class="flex justify-between">
             <span>Payment Amount:</span>
-            <span class="font-bold">{{ formatCurrency(form.amount) }}</span>
+            <span class="font-bold"><MoneyText :amount="form.amount" :currency="form.currency || 'USD'" /></span>
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
             <span>Payment Method:</span>

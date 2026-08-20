@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import DateTimeText from '@/components/DateTimeText.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import RecordPagination from '@/components/RecordPagination.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { BreadcrumbItem } from '@/types'
 import { Calculator, LoaderCircle, Plane, Plus, Search, X } from 'lucide-vue-next'
 
@@ -22,12 +22,24 @@ const props = defineProps<{
 
 const search = ref(props.filters.search || '')
 const searching = ref(false)
-const paymentLabel = (status: string) => ({
-  paid: 'Paid',
-  partially_paid: 'Partially paid',
-  unpaid: 'Unpaid',
-}[status] || 'Unpaid')
-const paymentVariant = (status: string) => status === 'paid' ? 'default' : 'secondary'
+
+/**
+ * The payment state used to be spelled out here, one page's private idea of
+ * what 'partially_paid' should read as. It is the same state an invoice is in,
+ * so it goes through the shared vocabulary and comes out looking the same.
+ */
+const columns = computed(() => [
+  { key: 'group_number', label: 'Group', kind: 'ref' as const },
+  { key: 'agent', label: 'Agent', kind: 'text' as const },
+  { key: 'travel_date', label: 'Travel', kind: 'date' as const },
+  { key: 'passenger_count', label: 'Pax', kind: 'amount' as const },
+  { key: 'total_receivable', label: 'Receivable', kind: 'amount' as const },
+  { key: 'balance', label: 'Balance', kind: 'amount' as const },
+  { key: 'payment_status', label: 'Payment', kind: 'status' as const },
+  ...(props.canViewAccounting
+    ? [{ key: 'actions', label: '', kind: 'text' as const, class: 'text-right', headerClass: 'text-right' }]
+    : []),
+])
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -77,41 +89,37 @@ const clearFilters = () => {
 
     <Card>
       <CardContent class="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Group</TableHead>
-              <TableHead>Agent</TableHead>
-              <TableHead>Travel</TableHead>
-              <TableHead class="text-center">Pax</TableHead>
-              <TableHead class="text-right">Receivable</TableHead>
-              <TableHead class="text-right">Balance</TableHead>
-              <TableHead class="text-right">Payment</TableHead>
-              <TableHead v-if="canViewAccounting" class="w-12"><span class="sr-only">Accounting</span></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableEmpty v-if="!groups.data.length" :colspan="canViewAccounting ? 8 : 7">
-              {{ search ? 'No visa groups match your search.' : 'No visa groups yet.' }}
-            </TableEmpty>
-            <TableRow v-for="group in groups.data" :key="group.id" class="cursor-pointer" @click="router.get(`/${company.slug}/umrah/groups/${group.id}`)">
-              <TableCell class="font-medium">{{ group.group_number }}</TableCell>
-              <TableCell>{{ group.agent?.name || '-' }}</TableCell>
-              <TableCell><DateTimeText :value="group.travel_date" mode="date" /></TableCell>
-              <TableCell class="text-center">{{ group.passenger_count }}</TableCell>
-              <TableCell class="text-right font-medium"><MoneyText :amount="group.total_receivable" :currency="company.base_currency" /></TableCell>
-              <TableCell class="text-right font-medium"><MoneyText :amount="group.balance" :currency="company.base_currency" /></TableCell>
-              <TableCell class="text-right">
-                <Badge :variant="paymentVariant(group.payment_status)">{{ paymentLabel(group.payment_status) }}</Badge>
-              </TableCell>
-              <TableCell v-if="canViewAccounting" class="text-right">
-                <Button type="button" variant="ghost" size="icon" title="Open group accounting" @click.stop="router.get(`/${company.slug}/umrah/groups/${group.id}/accounting`)">
-                  <Calculator class="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <LedgerRegister
+          :data="groups.data"
+          :columns="columns"
+          clickable
+          @row-click="(row) => router.get(`/${company.slug}/umrah/groups/${row.id}`)"
+        >
+          <template #empty>{{ search ? 'No visa groups match your search.' : 'No visa groups yet.' }}</template>
+
+          <template #cell-agent="{ row }">{{ row.agent?.name || '—' }}</template>
+
+          <template #cell-travel_date="{ row }">
+            <DateTimeText :value="row.travel_date" mode="date" />
+          </template>
+
+          <template #cell-total_receivable="{ row }">
+            <MoneyText :amount="row.total_receivable" :currency="company.base_currency" class="font-medium" />
+          </template>
+          <template #cell-balance="{ row }">
+            <MoneyText :amount="row.balance" :currency="company.base_currency" class="font-medium" />
+          </template>
+
+          <template #cell-payment_status="{ row }">
+            <StatusBadge :status="row.payment_status || 'unpaid'" />
+          </template>
+
+          <template #cell-actions="{ row }">
+            <Button type="button" variant="ghost" size="icon" title="Open group accounting" @click.stop="router.get(`/${company.slug}/umrah/groups/${row.id}/accounting`)">
+              <Calculator class="h-4 w-4" />
+            </Button>
+          </template>
+        </LedgerRegister>
         <RecordPagination :current-page="groups.current_page" :last-page="groups.last_page" :from="groups.from" :to="groups.to" :total="groups.total" :previous-url="groups.prev_page_url" :next-url="groups.next_page_url" />
       </CardContent>
     </Card>

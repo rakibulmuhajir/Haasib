@@ -18,6 +18,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import type { BreadcrumbItem } from '@/types'
 import { Receipt, ArrowLeft, Banknote, Building2, ArrowRightLeft, FileText } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface Customer {
   id: string
@@ -60,10 +61,6 @@ const form = useForm({
 const selectedCustomer = computed(() => {
   return props.customers.find(c => c.id === form.customer_id)
 })
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
 
 const submit = () => {
   form.post(`/${companySlug.value}/fuel/collections`, {
@@ -118,7 +115,7 @@ const collectFull = () => {
                   <SelectItem v-for="c in customers" :key="c.id" :value="c.id">
                     <div class="flex items-center justify-between gap-4">
                       <span>{{ c.name }}</span>
-                      <span class="text-muted-foreground">{{ currency }} {{ formatCurrency(c.current_balance) }}</span>
+                      <span class="text-muted-foreground"><MoneyText :amount="c.current_balance" :currency="props.currency" /></span>
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -126,17 +123,17 @@ const collectFull = () => {
               <p v-if="form.errors.customer_id" class="text-sm text-destructive">{{ form.errors.customer_id }}</p>
 
               <!-- Show customer balance -->
-              <div v-if="selectedCustomer" class="rounded-md bg-amber-50 p-3 text-sm">
+              <div v-if="selectedCustomer" class="rounded-md bg-status-attention/10 p-3 text-sm">
                 <div class="flex items-center justify-between">
-                  <span class="text-amber-800">Outstanding Balance:</span>
-                  <span class="font-semibold text-amber-900">{{ currency }} {{ formatCurrency(selectedCustomer.current_balance) }}</span>
+                  <span class="text-status-attention">Outstanding Balance:</span>
+                  <span class="font-semibold text-status-attention"><MoneyText :amount="selectedCustomer.current_balance" :currency="props.currency" /></span>
                 </div>
                 <Button
                   v-if="selectedCustomer.current_balance > 0"
                   type="button"
                   variant="link"
                   size="sm"
-                  class="mt-1 h-auto p-0 text-amber-700"
+                  class="mt-1 h-auto p-0 text-status-attention"
                   @click="collectFull"
                 >
                   Collect full amount

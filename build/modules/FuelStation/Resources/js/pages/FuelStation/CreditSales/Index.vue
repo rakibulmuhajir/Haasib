@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { CreditCard, Calendar, Fuel, Users, TrendingUp, Droplets } from 'lucide-vue-next'
-import { currencySymbol } from '@/lib/utils'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface CreditSale {
   id: string
@@ -75,8 +75,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Credit Sales', href: `/${companySlug.value}/fuel/credit-sales` },
 ])
 
-const currency = computed(() => currencySymbol(props.currency))
-
 // Local filter state
 const startDate = ref(props.filters.start_date)
 const endDate = ref(props.filters.end_date)
@@ -124,10 +122,6 @@ const setDatePreset = (preset: string) => {
   applyFilters()
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
-}
-
 const formatNumber = (num: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
@@ -137,12 +131,12 @@ const formatDate = (dateStr: string) => {
 }
 
 const columns = [
-  { key: 'date', label: 'Date' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'fuel', label: 'Fuel' },
-  { key: 'liters', label: 'Liters' },
-  { key: 'rate', label: 'Rate' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'customer', label: 'Customer', kind: 'text' as const },
+  { key: 'fuel', label: 'Fuel', kind: 'text' as const },
+  { key: 'liters', label: 'Liters', kind: 'amount' as const },
+  { key: 'rate', label: 'Rate', kind: 'amount' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const },
 ]
 
 const tableData = computed(() => {
@@ -176,14 +170,14 @@ const goToCustomer = (customerId: string) => {
   >
     <!-- Stats Cards -->
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Sales</CardDescription>
           <CardTitle class="text-2xl">{{ stats.total_sales }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <TrendingUp class="h-4 w-4 text-amber-600" />
+            <TrendingUp class="h-4 w-4 text-status-attention" />
             <span>Credit transactions</span>
           </div>
         </CardContent>
@@ -192,11 +186,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Liters</CardDescription>
-          <CardTitle class="text-2xl text-sky-600">{{ formatNumber(stats.total_liters) }} L</CardTitle>
+          <CardTitle class="text-2xl text-status-info">{{ formatNumber(stats.total_liters) }} L</CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Droplets class="h-4 w-4 text-sky-600" />
+            <Droplets class="h-4 w-4 text-status-info" />
             <span>Fuel dispensed on credit</span>
           </div>
         </CardContent>
@@ -205,11 +199,11 @@ const goToCustomer = (customerId: string) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Total Amount</CardDescription>
-          <CardTitle class="text-2xl text-emerald-600">{{ currency }} {{ formatCurrency(stats.total_amount) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-success"><MoneyText :amount="stats.total_amount" :currency="props.currency" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <CreditCard class="h-4 w-4 text-emerald-600" />
+            <CreditCard class="h-4 w-4 text-status-success" />
             <span>Credit sales value</span>
           </div>
         </CardContent>
@@ -222,7 +216,7 @@ const goToCustomer = (customerId: string) => {
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Users class="h-4 w-4 text-indigo-600" />
+            <Users class="h-4 w-4 text-status-info" />
             <span>In selected period</span>
           </div>
         </CardContent>
@@ -294,7 +288,7 @@ const goToCustomer = (customerId: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="tableData" :columns="columns">
+        <LedgerRegister :data="tableData" :columns="columns">
           <template #empty>
             <EmptyState
               title="No credit sales found"
@@ -322,7 +316,7 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-fuel="{ row }">
-            <Badge variant="outline" class="bg-amber-50">
+            <Badge variant="outline" class="bg-status-attention/10">
               <Fuel class="mr-1 h-3 w-3" />
               {{ row._raw.fuel_name }}
             </Badge>
@@ -333,15 +327,15 @@ const goToCustomer = (customerId: string) => {
           </template>
 
           <template #cell-rate="{ row }">
-            {{ currency }} {{ formatNumber(row._raw.rate) }}
+            <MoneyText :amount="row._raw.rate" :currency="props.currency" />/L
           </template>
 
           <template #cell-amount="{ row }">
-            <span class="font-medium text-emerald-600">
-              {{ currency }} {{ formatCurrency(row._raw.amount) }}
+            <span class="font-medium text-status-success">
+              <MoneyText :amount="row._raw.amount" :currency="props.currency" />
             </span>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
   </PageShell>

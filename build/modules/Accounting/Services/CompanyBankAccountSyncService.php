@@ -77,7 +77,11 @@ class CompanyBankAccountSyncService
 
             $archived = 0;
             if ($onlyGlAccountIds !== null) {
-                $archived = $this->archiveSeededBankAccountsIfUserCreatedExist($companyId);
+                // The accounts this call was told about are the ones somebody
+                // just asked for, so they are the last things that should be
+                // tidied away. Passing them through as protected is what stops
+                // the archive step below from undoing the work above.
+                $archived = $this->archiveSeededBankAccountsIfUserCreatedExist($companyId, $onlyGlAccountIds);
             }
 
             return ['created' => $created, 'linked' => $glAccounts->count(), 'archived' => $archived];
@@ -85,10 +89,59 @@ class CompanyBankAccountSyncService
     }
 
     /**
-     * If the company has user-created bank accounts, archive industry-pack seeded bank/cash ones
-     * (only when they have no bank transactions) to reduce clutter.
+     * Does this account hold anything worth keeping on screen?
+     *
+     * Archiving is a decluttering measure, so the only accounts it may touch are
+     * empty ones. The test used to be "has no rows in bank_transactions", which
+     * asks whether a bank *feed* has ever been imported -- a different question
+     * entirely. An account posted to entirely through journals has no feed rows
+     * at all, so a fuel station's operating account holding nine million rupees
+     * across forty-five entries read as unused and was archived, after which the
+     * dashboard's cash position quietly excluded it and reported the petty cash
+     * float as the whole of the company's money.
+     *
+     * Activity therefore means any of: a bank feed row, a posting against the GL
+     * account behind it, or simply a balance that is not zero.
      */
-    public function archiveSeededBankAccountsIfUserCreatedExist(string $companyId): int
+    protected function hasActivity(BankAccount $bankAccount): bool
+    {
+        if ((float) $bankAccount->current_balance !== 0.0 || (float) $bankAccount->opening_balance !== 0.0) {
+            return true;
+        }
+
+        $hasFeed = DB::table('acct.bank_transactions')
+            ->where('bank_account_id', $bankAccount->id)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($hasFeed) {
+            return true;
+        }
+
+        return $bankAccount->gl_account_id !== null
+            && DB::table('acct.journal_entries')
+                ->where('account_id', $bankAccount->gl_account_id)
+                ->exists();
+    }
+
+    /**
+     * If the company has user-created bank accounts, archive industry-pack seeded bank/cash ones
+     * (only when they are empty) to reduce clutter.
+     *
+     * "Seeded" is inferred from the GL account matching an industry template on
+     * code, name and subtype -- which is a coincidence, not a provenance. A
+     * company that names its first account "Operating Bank Account" gets code
+     * 1000 from the next-available-code allocator, and that is character for
+     * character the fuel pack's own first template. The account was therefore
+     * archived in the same breath as it was created, and it took the company's
+     * cash position off the dashboard with it.
+     *
+     * $protectGlAccountIds names accounts the caller has just created or
+     * updated. Whatever they look like, they are wanted.
+     *
+     * @param array<int, string> $protectGlAccountIds
+     */
+    public function archiveSeededBankAccountsIfUserCreatedExist(string $companyId, array $protectGlAccountIds = []): int
     {
         /** @var Company|null $company */
         $company = Company::query()->find($companyId, ['id', 'industry_code', 'industry', 'bank_account_id']);
@@ -127,6 +180,8 @@ class CompanyBankAccountSyncService
             ->pluck('id')
             ->all();
 
+        $seededGlIds = array_values(array_diff($seededGlIds, $protectGlAccountIds));
+
         if (empty($seededGlIds)) {
             return 0;
         }
@@ -149,15 +204,12 @@ class CompanyBankAccountSyncService
             ->where('company_id', $companyId)
             ->whereNull('deleted_at')
             ->where('is_primary', true)
-            ->first(['id', 'gl_account_id']);
+            ->first(['id', 'gl_account_id', 'current_balance', 'opening_balance']);
 
         if ($primary && in_array($primary->gl_account_id, $seededGlIds, true)) {
-            $primaryHasTx = DB::table('acct.bank_transactions')
-                ->where('bank_account_id', $primary->id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if (! $primaryHasTx) {
+            // Same test as the archive loop below, for the same reason: a feed
+            // row is not the only evidence an account is in use.
+            if (! $this->hasActivity($primary)) {
                 $newPrimary = BankAccount::query()
                     ->where('company_id', $companyId)
                     ->whereNull('deleted_at')
@@ -178,19 +230,14 @@ class CompanyBankAccountSyncService
             ->whereNull('deleted_at')
             ->where('is_active', true)
             ->whereIn('gl_account_id', $seededGlIds)
-            ->get(['id', 'is_primary']);
+            ->get(['id', 'is_primary', 'gl_account_id', 'current_balance', 'opening_balance']);
 
         foreach ($seededBankAccounts as $bankAccount) {
             if ($bankAccount->is_primary) {
                 continue;
             }
 
-            $hasTx = DB::table('acct.bank_transactions')
-                ->where('bank_account_id', $bankAccount->id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if ($hasTx) {
+            if ($this->hasActivity($bankAccount)) {
                 continue;
             }
 

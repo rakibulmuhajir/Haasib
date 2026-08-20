@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Plus, Eye, Pencil, Search, Wallet, TrendingUp, Banknote } from 'lucide-vue-next'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface InvestorRow {
   id: string
@@ -76,23 +77,13 @@ const filteredInvestors = computed(() => {
   })
 })
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 const columns = [
-  { key: 'name', label: 'Name' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'invested', label: 'Invested', align: 'right' as const },
-  { key: 'earned', label: 'Earned', align: 'right' as const },
-  { key: 'outstanding', label: 'Outstanding', align: 'right' as const },
-  { key: 'status', label: 'Status' },
+  { key: 'name', label: 'Name', kind: 'text' as const },
+  { key: 'phone', label: 'Phone', kind: 'text' as const },
+  { key: 'invested', label: 'Invested', kind: 'amount' as const, align: 'right' as const },
+  { key: 'earned', label: 'Earned', kind: 'amount' as const, align: 'right' as const },
+  { key: 'outstanding', label: 'Outstanding', kind: 'amount' as const, align: 'right' as const },
+  { key: 'status', label: 'Status', kind: 'status' as const },
   { key: '_actions', label: '', sortable: false },
 ]
 
@@ -101,9 +92,9 @@ const tableData = computed(() => {
     id: investor.id,
     name: investor.name,
     phone: investor.phone ?? '-',
-    invested: formatCurrency(investor.total_invested),
-    earned: formatCurrency(investor.total_commission_earned),
-    outstanding: formatCurrency(investor.outstanding_commission),
+    invested: investor.total_invested,
+    earned: investor.total_commission_earned,
+    outstanding: investor.outstanding_commission,
     status: investor.is_active ? 'Active' : 'Inactive',
     _actions: investor.id,
     _raw: investor,
@@ -187,14 +178,14 @@ const goToShow = (row: any) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken">
         <CardHeader class="pb-2">
           <CardDescription>Total Invested</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_invested) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_invested" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>{{ props.summary.total_investors }} investor(s)</span>
           </div>
         </CardContent>
@@ -203,10 +194,10 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Earned</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_earned) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_commission_earned" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">
+          <Badge class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             <TrendingUp class="mr-1 h-3 w-3" />
             Lifetime
           </Badge>
@@ -216,10 +207,10 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Commission Paid</CardDescription>
-          <CardTitle class="text-2xl">{{ formatCurrency(props.summary.total_commission_paid) }}</CardTitle>
+          <CardTitle class="text-2xl"><MoneyText :amount="props.summary.total_commission_paid" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="secondary" class="bg-zinc-100 text-zinc-700 hover:bg-zinc-100">
+          <Badge variant="secondary" class="bg-surface-sunken text-text-primary hover:bg-surface-sunken">
             <Banknote class="mr-1 h-3 w-3" />
             Disbursed
           </Badge>
@@ -229,10 +220,10 @@ const goToShow = (row: any) => {
       <Card class="border-border/80">
         <CardHeader class="pb-2">
           <CardDescription>Outstanding</CardDescription>
-          <CardTitle class="text-2xl text-amber-600">{{ formatCurrency(props.summary.total_outstanding) }}</CardTitle>
+          <CardTitle class="text-2xl text-status-attention"><MoneyText :amount="props.summary.total_outstanding" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
-          <Badge variant="outline" class="border-amber-200 text-amber-700">Pending Payment</Badge>
+          <Badge variant="outline" class="border-status-attention/30 text-status-attention">Pending Payment</Badge>
         </CardContent>
       </Card>
     </div>
@@ -253,7 +244,7 @@ const goToShow = (row: any) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable
+        <LedgerRegister
           :data="tableData"
           :columns="columns"
           clickable
@@ -273,15 +264,23 @@ const goToShow = (row: any) => {
             </EmptyState>
           </template>
 
+          <template #cell-invested="{ row }">
+            <MoneyText :amount="row.invested" :currency="currencyCode" />
+          </template>
+
+          <template #cell-earned="{ row }">
+            <MoneyText :amount="row.earned" :currency="currencyCode" />
+          </template>
+
           <template #cell-outstanding="{ row }">
-            <span :class="row._raw.outstanding_commission > 0 ? 'font-medium text-amber-600' : ''">
-              {{ row.outstanding }}
+            <span :class="row._raw.outstanding_commission > 0 ? 'font-medium text-status-attention' : ''">
+              <MoneyText :amount="row.outstanding" :currency="currencyCode" />
             </span>
           </template>
 
           <template #cell-status="{ row }">
             <Badge
-              :class="row._raw.is_active ? 'bg-emerald-600 text-white hover:bg-emerald-600' : 'bg-zinc-200 text-zinc-800 hover:bg-zinc-200'"
+              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
             >
               {{ row._raw.is_active ? 'Active' : 'Inactive' }}
             </Badge>
@@ -301,7 +300,7 @@ const goToShow = (row: any) => {
               </Button>
             </div>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 
@@ -309,7 +308,7 @@ const goToShow = (row: any) => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle class="flex items-center gap-2">
-            <Users class="h-5 w-5 text-emerald-600" />
+            <Users class="h-5 w-5 text-status-success" />
             {{ selectedInvestor ? 'Edit Investor' : 'Add Investor' }}
           </DialogTitle>
           <DialogDescription>

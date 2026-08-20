@@ -65,6 +65,19 @@ class DemoFuelStationSeeder extends Seeder
             ],
             tradeName: 'Crescent Filling Station',
             industry: 'energy',
+            address: [
+                'line1' => 'Plot 14, Main Multan Road',
+                'line2' => 'Thokar Niaz Baig',
+                'city' => 'Lahore',
+                'state' => 'Punjab',
+                'postal_code' => '53700',
+                'country' => 'Pakistan',
+            ],
+            contact: [
+                'contact_email' => 'accounts@crescentfuel.pk',
+                'contact_phone' => '+92 42 3541 2200',
+            ],
+            taxNumber: '3520124-8',
         );
 
         $this->command?->info("  company: {$company->name} ({$company->id})");
@@ -524,5 +537,7 @@ class DemoFuelStationSeeder extends Seeder
         $fleetSettlements = $settleBatches($pendingFleet, 14, 3, 0.0, $fuelCardClearing->id, 'FLEET');
 
         $this->command?->info("  settlements: {$cardSettlements} card, {$fleetSettlements} fleet");
+
+        $this->syncBankBalances($company);
     }
 }

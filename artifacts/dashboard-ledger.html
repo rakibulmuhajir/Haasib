@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haasib · Statement of Position</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══ tokens ═══════════════════════════════════════════════════════════════
+   Palette derives from green-bar ledger paper: warm stock, pale green bands,
+   iron-gall ink, and red structural rules. Red is STRUCTURE and NEGATIVES only
+   — never status, never alarm. Status carries on weight and a single amber.  */
+:root{
+  --paper:#fbfaf7;
+  --stock:#ffffff;
+  --bar:#e7efdc;          /* the green bar */
+  --ink:#18202e;          /* iron-gall blue-black */
+  --ink-soft:#5b6572;
+  --faint:#8d95a1;
+  --rule:#b8332a;         /* ledger red */
+  --rule-soft:#eccfcb;
+  --line:#d7dad2;
+  --line2:#e8eae3;
+  --amber:#8d6410;
+  --amber-bg:#f8efd8;
+  --hole:#dfe2da;
+
+  --display:"Zilla Slab",Georgia,"Times New Roman",serif;
+  --ui:"Public Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --paper:#0e1113; --stock:#141819; --bar:#182118; --ink:#e9ede6;
+  --ink-soft:#98a199; --faint:#6c756d; --rule:#e0655a; --rule-soft:#3a2320;
+  --line:#262c28; --line2:#1e2320; --amber:#d9ad4d; --amber-bg:#241d0f; --hole:#20261f;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e1113; --stock:#141819; --bar:#182118; --ink:#e9ede6;
+    --ink-soft:#98a199; --faint:#6c756d; --rule:#e0655a; --rule-soft:#3a2320;
+    --line:#262c28; --line2:#1e2320; --amber:#d9ad4d; --amber-bg:#241d0f; --hole:#20261f;
+  }
+}
+
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{
+  margin:0;min-width:320px;background:var(--paper);color:var(--ink);
+  font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2.5px solid var(--rule);outline-offset:2px}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:600;letter-spacing:-.02em}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* ═══ masthead ═══════════════════════════════════════════════════════════ */
+.masthead{position:sticky;top:0;z-index:40;background:var(--paper);border-bottom:1.5px solid var(--ink)}
+.toprow{max-width:1500px;margin:auto;height:62px;padding:0 clamp(16px,2.5vw,30px);display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:baseline;gap:9px;flex:none}
+.brand .glyph{font-family:var(--display);font-size:25px;font-weight:700;color:var(--rule);line-height:1}
+.brand .word{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:-.02em}
+.firm{display:flex;align-items:center;gap:9px;padding:7px 11px;border:1px solid var(--line);background:var(--stock);flex:none}
+.firm:hover{border-color:var(--ink)}
+.firm b{font-size:13px;font-weight:600}
+.firm i{font-style:normal;color:var(--faint);font-size:11px}
+.find{
+  margin-left:auto;width:min(330px,30vw);padding:8px 11px;border:1px solid var(--line);
+  background:var(--stock);color:var(--faint);display:flex;align-items:center;gap:9px;font-size:13px
+}
+.find kbd{margin-left:auto;font-family:var(--mono);font-size:11px}
+.tools{display:flex;align-items:center;gap:7px;flex:none}
+.tool{width:35px;height:35px;border:1px solid var(--line);background:var(--stock);display:grid;place-items:center;font-size:13px;position:relative}
+.tool:hover{border-color:var(--ink)}
+.tool .pip{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;background:var(--rule);color:#fff;font-family:var(--mono);font-size:10px;font-weight:600;display:grid;place-items:center;border-radius:9px}
+.entry{padding:9px 15px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font-size:13px;font-weight:600;white-space:nowrap}
+.entry:hover{background:var(--rule);border-color:var(--rule);color:#fff}
+.me{width:35px;height:35px;border:1px solid var(--line);background:var(--bar);color:var(--ink);font-family:var(--mono);font-size:12px;font-weight:600;display:grid;place-items:center}
+
+.ledger-nav{max-width:1500px;margin:auto;height:44px;padding:0 clamp(16px,2.5vw,30px);display:flex;align-items:stretch;gap:2px;border-top:1px solid var(--line2)}
+.ledger-nav>button,.tab>button{
+  height:44px;padding:0 12px;border:0;border-bottom:2.5px solid transparent;background:transparent;
+  color:var(--ink-soft);font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px;white-space:nowrap
+}
+.ledger-nav>button:hover,.tab>button:hover{color:var(--ink)}
+.ledger-nav>button.on{color:var(--ink);border-bottom-color:var(--rule);font-weight:700}
+.tab{position:relative;display:flex}
+.tab.open>button{color:var(--ink)}
+.tab .chev{font-size:9px;color:var(--faint)}
+.drop{position:absolute;top:44px;left:0;min-width:206px;padding:5px;background:var(--stock);border:1px solid var(--ink);z-index:50;display:none;box-shadow:5px 5px 0 var(--rule-soft)}
+.tab.open .drop{display:block}
+.drop button{width:100%;padding:8px 10px;border:0;background:transparent;text-align:left;font-size:13px}
+.drop button:hover{background:var(--bar)}
+:root[data-theme="dark"] .drop button:hover{background:var(--bar)}
+.drop .cap{padding:7px 10px 4px;color:var(--faint);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.drop hr{margin:5px 3px;border:0;border-top:1px solid var(--line2)}
+.nav-div{align-self:center;width:1px;height:19px;margin:0 9px;background:var(--line)}
+.addon{font-family:var(--mono);font-size:9px;padding:1px 4px;border:1px solid var(--line);color:var(--faint)}
+
+/* ═══ page ═══════════════════════════════════════════════════════════════ */
+main{max-width:1500px;margin:auto;padding:26px clamp(16px,2.5vw,30px) 54px}
+.slug{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;padding-bottom:13px;border-bottom:2.5px solid var(--ink)}
+.slug h1{font-size:clamp(27px,3.4vw,40px);line-height:1;font-weight:700}
+.slug .when{margin-top:7px;font-family:var(--mono);font-size:12px;color:var(--ink-soft);letter-spacing:.02em}
+.knobs{display:flex;align-items:center;gap:9px}
+.mode{display:flex;border:1.5px solid var(--ink)}
+.mode button{min-width:92px;padding:8px 13px;border:0;background:transparent;font-size:12px;font-weight:600;letter-spacing:.02em}
+.mode button.on{background:var(--ink);color:var(--paper)}
+.span-pick{padding:9px 12px;border:1px solid var(--line);background:var(--stock);color:var(--ink-soft);font-family:var(--mono);font-size:11px}
+.span-pick:hover{border-color:var(--ink)}
+
+/* ═══ the reckoning ══════════════════════════════════════════════════════ */
+.reckoning{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(340px,.75fr);border:1px solid var(--line);border-top:0;background:var(--stock)}
+.position{padding:26px 30px 24px;border-right:1px solid var(--line);min-width:0}
+.cap{font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-soft)}
+
+.derivation{margin:20px 0 0;max-width:620px}
+.dline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:baseline;padding:9px 0}
+.dline .what{font-size:15px;color:var(--ink-soft)}
+.dline .amt{font-family:var(--mono);font-size:19px;font-weight:500;white-space:nowrap}
+.dline .amt.less{color:var(--rule)}
+.dline .sign{display:inline-block;width:14px;color:var(--faint);font-family:var(--mono)}
+.strikewrap{position:relative;height:7px;margin:5px 0}
+.strike{position:absolute;inset:0;border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);width:100%;transform-origin:left center}
+.total{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:baseline;padding:13px 0 0}
+.total .what{font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.01em}
+.total .amt{font-family:var(--mono);font-size:clamp(30px,3.6vw,44px);font-weight:600;letter-spacing:-.035em;line-height:1}
+.total .amt .cur{font-size:.44em;font-weight:500;color:var(--ink-soft);margin-right:7px}
+.footnote{margin-top:16px;max-width:52ch;color:var(--ink-soft);font-size:13px}
+
+.trend{margin-top:26px;padding-top:18px;border-top:1px solid var(--line2)}
+.trendhead{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.bars{margin-top:13px;height:62px;display:flex;align-items:flex-end;gap:6px}
+.bars i{flex:1;background:var(--bar);border-top:2px solid var(--ink);display:block;min-width:6px}
+.bars i.now{background:var(--rule-soft);border-top-color:var(--rule)}
+.barcap{margin-top:8px;display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+/* ═══ what needs you ═════════════════════════════════════════════════════ */
+.needs{padding:26px 26px 10px;min-width:0}
+.needshead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:11px;border-bottom:1.5px solid var(--ink)}
+.item{display:block;width:100%;padding:16px 0;border:0;border-bottom:1px solid var(--line2);background:transparent;text-align:left}
+.item:hover{background:var(--bar)}
+.item:hover .act{color:var(--rule)}
+.item .head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:baseline}
+.item .title{font-size:15px;font-weight:600;line-height:1.3}
+.item .amt{font-family:var(--mono);font-size:14px;font-weight:500;white-space:nowrap}
+.item .sub{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
+.item .act{margin-top:9px;display:inline-block;font-size:13px;font-weight:600;color:var(--ink)}
+.clock{display:inline-block;margin-right:8px;padding:2px 6px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:var(--amber-bg);color:var(--amber)}
+.clock.late{background:var(--rule);color:#fff}
+
+/* ═══ the register — green-bar paper ═════════════════════════════════════ */
+.register{margin-top:26px;border:1px solid var(--line);background:var(--stock)}
+.reghead{padding:17px 22px 15px;display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1.5px solid var(--ink)}
+.reghead h2{font-size:20px;font-weight:700}
+.reghead p{margin:5px 0 0;color:var(--ink-soft);font-size:12.5px}
+.paperwrap{position:relative;overflow-x:auto}
+/* sprocket margin of continuous-feed stock */
+.paperwrap::before,.paperwrap::after{
+  content:"";position:absolute;top:0;bottom:0;width:15px;z-index:1;pointer-events:none;
+  background-image:radial-gradient(circle at 7.5px 8px, var(--hole) 2.6px, transparent 2.8px);
+  background-size:15px 25px;
+}
+.paperwrap::before{left:0}
+.paperwrap::after{right:0}
+table{width:100%;border-collapse:collapse;min-width:610px}
+thead th{
+  padding:9px 14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-soft);font-weight:500;text-align:left;border-bottom:1px solid var(--line);background:var(--stock)
+}
+thead th:first-child{padding-left:26px}
+thead th:last-child{padding-right:26px}
+th.money,td.money{text-align:right}
+tbody tr:nth-child(odd){background:var(--bar)}
+tbody td{padding:11px 14px;font-size:13.5px;border-bottom:1px solid transparent}
+tbody td:first-child{padding-left:26px}
+tbody td:last-child{padding-right:26px}
+td.date{font-family:var(--mono);font-size:12px;color:var(--ink-soft);white-space:nowrap}
+td.what b{font-weight:600}
+td.what span{color:var(--ink-soft)}
+td.money{font-family:var(--mono);font-size:13.5px;font-weight:500;white-space:nowrap}
+td.money.out{color:var(--rule)}
+td.ref{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap}
+tbody tr:hover{outline:1.5px solid var(--ink);outline-offset:-1.5px}
+tfoot td{
+  padding:15px 14px;font-family:var(--mono);font-size:15px;font-weight:600;
+  border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink)
+}
+tfoot td:first-child{padding-left:26px;font-family:var(--ui);font-size:13px;letter-spacing:.02em;text-transform:uppercase}
+tfoot td:last-child{padding-right:26px}
+tfoot td.out{color:var(--rule)}
+.regfoot{padding:14px 26px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.seeall{border:0;background:transparent;font-size:13px;font-weight:600;color:var(--rule);padding:0}
+.seeall:hover{text-decoration:underline}
+
+/* ═══ actions ════════════════════════════════════════════════════════════ */
+.actions{margin-top:26px;border:1px solid var(--line);background:var(--stock);display:grid;grid-template-columns:auto repeat(5,1fr)}
+.actions .cap{align-self:center;padding:0 22px}
+.actions button{padding:18px 16px;border:0;border-left:1px solid var(--line2);background:transparent;text-align:left;font-size:13px;font-weight:600}
+.actions button:hover{background:var(--bar);color:var(--rule)}
+.actions button span{display:block;margin-top:4px;font-weight:400;font-size:11.5px;color:var(--ink-soft)}
+.actions button:hover span{color:var(--ink-soft)}
+
+/* ═══ role modes ═════════════════════════════════════════════════════════ */
+.for-books{display:none}
+body.books .for-owner{display:none}
+body.books .for-books{display:revert}
+
+/* ═══ receipt toast ══════════════════════════════════════════════════════ */
+.receipt{
+  position:fixed;right:22px;bottom:22px;z-index:60;max-width:320px;padding:13px 16px;
+  background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:12px;line-height:1.5;
+  opacity:0;transform:translateY(18px);transition:.18s;pointer-events:none;border-left:4px solid var(--rule)
+}
+.receipt.show{opacity:1;transform:none}
+.receipt b{display:block;margin-bottom:4px;letter-spacing:.08em;text-transform:uppercase;font-size:10px;color:var(--rule-soft)}
+
+/* ═══ load sequence — the reckoning completing ═══════════════════════════ */
+@keyframes rule-in{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes settle{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.strike{animation:rule-in .5s cubic-bezier(.7,0,.3,1) .45s both}
+.total{animation:settle .45s ease .85s both}
+.derivation .dline{animation:settle .32s ease both}
+.derivation .dline:nth-child(1){animation-delay:.05s}
+.derivation .dline:nth-child(2){animation-delay:.15s}
+.derivation .dline:nth-child(3){animation-delay:.25s}
+
+/* ═══ responsive ═════════════════════════════════════════════════════════ */
+@media(max-width:1120px){
+  .reckoning{grid-template-columns:1fr}
+  .position{border-right:0;border-bottom:1px solid var(--line)}
+  .actions{grid-template-columns:1fr 1fr 1fr}
+  .actions .cap{grid-column:1/-1;padding:15px 22px 0}
+  .actions button{border-top:1px solid var(--line2)}
+}
+@media(max-width:820px){
+  .find{display:none}
+  .firm i{display:none}
+  .ledger-nav{overflow-x:auto;scrollbar-width:none}
+  .ledger-nav::-webkit-scrollbar{display:none}
+  .slug{align-items:flex-start}
+}
+@media(max-width:600px){
+  .toprow{height:56px;gap:11px}
+  .tools .tool:nth-child(2){display:none}
+  .position,.needs{padding:20px 18px}
+  .paperwrap::before,.paperwrap::after{display:none}
+  thead th:first-child,tbody td:first-child,tfoot td:first-child{padding-left:16px}
+  thead th:last-child,tbody td:last-child,tfoot td:last-child{padding-right:16px}
+  .actions{grid-template-columns:1fr}
+  .dline .what{font-size:14px}
+  .mode{flex:1}.mode button{flex:1;min-width:0}
+  .span-pick{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="toprow">
+    <div class="brand"><span class="glyph">ح</span><span class="word">Haasib</span></div>
+    <button class="firm" data-log="Switched company"><span><b>Ahmed Trading Co.</b></span><i>PKR · FY 2026</i><span class="chev">⌄</span></button>
+    <div class="find" tabindex="0" data-log="Opened search"><span>⌕</span><span>Find an entry, contact or invoice</span><kbd>Ctrl K</kbd></div>
+    <div class="tools">
+      <button class="tool" id="lamp" aria-label="Switch between light and dark">◐</button>
+      <button class="tool" aria-label="Notifications">◔<span class="pip">3</span></button>
+      <button class="entry" data-log="Opened new entry menu">+ New entry</button>
+      <button class="me" data-log="Opened your account">AK</button>
+    </div>
+  </div>
+
+  <nav class="ledger-nav" aria-label="Sections">
+    <button class="on">Overview</button>
+    <div class="tab"><button data-drop>Sales <span class="chev">⌄</span></button>
+      <div class="drop"><button data-log="Opened invoices">Invoices</button><button data-log="Opened customers">Customers</button><button data-log="Opened payments received">Payments received</button><button data-log="Opened quotes">Quotes</button></div></div>
+    <div class="tab"><button data-drop>Purchases <span class="chev">⌄</span></button>
+      <div class="drop"><button data-log="Opened bills">Bills</button><button data-log="Opened suppliers">Suppliers</button><button data-log="Opened expenses">Expenses</button></div></div>
+    <div class="tab"><button data-drop>Bank <span class="chev">⌄</span></button>
+      <div class="drop"><button data-log="Opened accounts">Accounts</button><button data-log="Opened categorising">Categorise lines</button><button data-log="Opened statement import">Import a statement</button></div></div>
+    <button data-log="Opened contacts">Contacts</button>
+    <div class="tab"><button data-drop>Reports <span class="chev">⌄</span></button>
+      <div class="drop">
+        <div class="cap">Position</div>
+        <button data-log="Opened profit and loss">Profit and loss</button><button data-log="Opened balance sheet">Balance sheet</button><button data-log="Opened cash flow">Cash flow</button>
+        <hr>
+        <div class="cap">Who owes what</div>
+        <button data-log="Opened aged receivables">Aged receivables</button><button data-log="Opened aged payables">Aged payables</button><button data-log="Opened tax summary">Tax summary</button>
+      </div></div>
+    <div class="tab"><button data-drop>Books <span class="chev">⌄</span></button>
+      <div class="drop"><button data-log="Opened chart of accounts">Chart of accounts</button><button data-log="Opened journals">Manual journals</button><button data-log="Opened period close">Close the period</button><button data-log="Opened tax rates">Tax rates</button></div></div>
+    <span class="nav-div"></span>
+    <button data-log="Opened Umrah">Umrah <span class="addon">ADD-ON</span></button>
+  </nav>
+</header>
+
+<main>
+  <section class="slug">
+    <div>
+      <h1><span class="for-owner">Where you stand</span><span class="for-books">Statement of position</span></h1>
+      <div class="when">Tuesday 18 August 2026 · books current to 08:52</div>
+    </div>
+    <div class="knobs">
+      <div class="mode"><button class="on" data-mode="owner">Owner</button><button data-mode="books">Accountant</button></div>
+      <button class="span-pick" data-log="Changed the period">AUG 2026 ⌄</button>
+    </div>
+  </section>
+
+  <section class="reckoning">
+    <article class="position">
+      <div class="cap"><span class="for-owner">What you can actually spend</span><span class="for-books">Uncommitted funds · derivation</span></div>
+
+      <div class="derivation">
+        <div class="dline">
+          <span class="what"><span class="sign"></span><span class="for-owner">In your accounts right now</span><span class="for-books">Cash at bank and in hand</span></span>
+          <span class="amt num">1,234,567</span>
+        </div>
+        <div class="dline">
+          <span class="what"><span class="sign">−</span><span class="for-owner">Bills falling due within 14 days</span><span class="for-books">Payables due ≤ 14 days</span></span>
+          <span class="amt num less">89,000</span>
+        </div>
+        <div class="dline">
+          <span class="what"><span class="sign">+</span><span class="for-owner">Invoices likely to clear</span><span class="for-books">Receivables, probability weighted</span></span>
+          <span class="amt num">125,000</span>
+        </div>
+        <div class="strikewrap"><div class="strike"></div></div>
+        <div class="total">
+          <span class="what"><span class="for-owner">Free to commit</span><span class="for-books">Uncommitted</span></span>
+          <span class="amt num"><span class="cur">PKR</span>1,270,567</span>
+        </div>
+      </div>
+
+      <p class="footnote for-owner">This is the figure to spend against — not your bank balance. It already sets aside what you owe and counts only what customers are likely to pay.</p>
+      <p class="footnote for-books">Weighted at historical collection rates by ageing band. Excludes disputed items and unposted journals.</p>
+
+      <div class="trend">
+        <div class="trendhead">
+          <span class="cap">Eight weeks of it</span>
+          <span class="num" style="font-size:12px;color:var(--ink-soft)">low 910k · high 1.29m</span>
+        </div>
+        <div class="bars" role="img" aria-label="Weekly free-to-commit balance over eight weeks, rising from 0.98m to 1.27m">
+          <i style="height:52%"></i><i style="height:61%"></i><i style="height:47%"></i><i style="height:74%"></i>
+          <i style="height:58%"></i><i style="height:66%"></i><i style="height:81%"></i><i class="now" style="height:93%"></i>
+        </div>
+        <div class="barcap"><span>23 JUN</span><span>THIS WEEK</span></div>
+      </div>
+    </article>
+
+    <aside class="needs">
+      <div class="needshead">
+        <h2 style="font-size:17px"><span class="for-owner">What needs you</span><span class="for-books">Exceptions</span></h2>
+        <span class="cap">3</span>
+      </div>
+
+      <button class="item" data-log="Opened INV-1021">
+        <span class="head">
+          <span class="title"><span class="clock late">15 days late</span><br><span class="for-owner">Northstar Retail hasn't paid</span><span class="for-books">INV-1021 overdue</span></span>
+          <span class="amt num">45,000</span>
+        </span>
+        <span class="sub">Invoice INV-1021 · due 3 August · no promise to pay on file</span>
+        <span class="act">Send a reminder →</span>
+      </button>
+
+      <button class="item" data-log="Opened bank categorising">
+        <span class="head">
+          <span class="title"><span class="clock">3 min</span><br><span class="for-owner">12 bank lines have no category</span><span class="for-books">12 unreconciled bank lines</span></span>
+          <span class="amt num">78,450</span>
+        </span>
+        <span class="sub">Meezan Bank current account · 9 have a suggested match</span>
+        <span class="act">Categorise them →</span>
+      </button>
+
+      <button class="item" data-log="Opened sales tax draft">
+        <span class="head">
+          <span class="title"><span class="clock">7 days</span><br>Sales tax is due 25 August</span>
+          <span class="amt num">62,300</span>
+        </span>
+        <span class="sub">FBR · period 1–31 July · the draft return is ready</span>
+        <span class="act">Review the draft →</span>
+      </button>
+    </aside>
+  </section>
+
+  <section class="register">
+    <div class="reghead">
+      <div>
+        <h2><span class="for-owner">What's been happening</span><span class="for-books">Cash book</span></h2>
+        <p><span class="for-owner">Every movement of money, newest first.</span><span class="for-books">Posted entries, August 2026, newest first.</span></p>
+      </div>
+      <span class="cap">August 2026</span>
+    </div>
+
+    <div class="paperwrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col"><span class="for-owner">What happened</span><span class="for-books">Particulars</span></th>
+            <th scope="col" class="for-books">Folio</th>
+            <th scope="col" class="money"><span class="for-owner">In</span><span class="for-books">Debit</span></th>
+            <th scope="col" class="money"><span class="for-owner">Out</span><span class="for-books">Credit</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="date">18 AUG</td><td class="what"><b>Northstar Retail</b> <span>· paid invoice INV-1018</span></td><td class="ref for-books">SL·204</td><td class="money num">85,000</td><td class="money num"></td></tr>
+          <tr><td class="date">17 AUG</td><td class="what"><b>Pak Logistics</b> <span>· freight for August</span></td><td class="ref for-books">PL·118</td><td class="money num"></td><td class="money num out">24,500</td></tr>
+          <tr><td class="date">16 AUG</td><td class="what"><b>Zamzam Traders</b> <span>· part payment, invoice INV-1015</span></td><td class="ref for-books">SL·197</td><td class="money num">60,000</td><td class="money num"></td></tr>
+          <tr><td class="date">15 AUG</td><td class="what"><b>K-Electric</b> <span>· July electricity</span></td><td class="ref for-books">PL·121</td><td class="money num"></td><td class="money num out">31,200</td></tr>
+          <tr><td class="date">14 AUG</td><td class="what"><b>Salaries</b> <span>· August, 11 staff</span></td><td class="ref for-books">PL·109</td><td class="money num"></td><td class="money num out">186,000</td></tr>
+          <tr><td class="date">12 AUG</td><td class="what"><b>Meezan Bank</b> <span>· account maintenance</span></td><td class="ref for-books">PL·133</td><td class="money num"></td><td class="money num out">1,850</td></tr>
+          <tr><td class="date">11 AUG</td><td class="what"><b>Sadiq Sons</b> <span>· paid invoice INV-1012</span></td><td class="ref for-books">SL·189</td><td class="money num">142,000</td><td class="money num"></td></tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2"><span class="for-owner">Total this month</span><span class="for-books">Totals carried forward</span></td>
+            <td class="for-books"></td>
+            <td class="money num">450,000</td>
+            <td class="money num out">320,000</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="regfoot">
+      <span class="cap"><span class="for-owner">7 of 64 movements</span><span class="for-books">7 of 64 posted entries</span></span>
+      <button class="seeall" data-log="Opened the full cash book">See all of August →</button>
+    </div>
+  </section>
+
+  <section class="actions">
+    <span class="cap">Start something</span>
+    <button data-log="Started an invoice">Invoice a customer<span>Bill for work done</span></button>
+    <button data-log="Started a receipt">Record a payment<span>Money that came in</span></button>
+    <button data-log="Started an expense">Record an expense<span>Receipt or supplier bill</span></button>
+    <button data-log="Started a statement import">Import a statement<span>CSV or bank feed</span></button>
+    <button data-log="Started a contact">Add a contact<span>Customer or supplier</span></button>
+  </section>
+</main>
+
+<div class="receipt" role="status" aria-live="polite"><b>Prototype</b><span></span></div>
+
+<script>
+// role: owner speaks plainly, accountant gets the register's real vocabulary
+const modes = document.querySelectorAll('[data-mode]');
+modes.forEach(b => b.addEventListener('click', () => {
+  document.body.classList.toggle('books', b.dataset.mode === 'books');
+  modes.forEach(x => x.classList.toggle('on', x === b));
+  log(b.dataset.mode === 'books' ? 'Switched to accountant view' : 'Switched to owner view');
+}));
+
+// nav drops
+const tabs = document.querySelectorAll('.tab');
+tabs.forEach(t => {
+  const trigger = t.querySelector('[data-drop]');
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const was = t.classList.contains('open');
+    tabs.forEach(x => x.classList.remove('open'));
+    t.classList.toggle('open', !was);
+  });
+});
+document.addEventListener('click', () => tabs.forEach(x => x.classList.remove('open')));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') tabs.forEach(x => x.classList.remove('open')); });
+
+// light / dark / follow the system
+const root = document.documentElement;
+document.getElementById('lamp').addEventListener('click', () => {
+  const now = root.getAttribute('data-theme');
+  const next = now === 'light' ? 'dark' : now === 'dark' ? null : 'light';
+  next ? root.setAttribute('data-theme', next) : root.removeAttribute('data-theme');
+  log(next ? next.charAt(0).toUpperCase() + next.slice(1) : 'Following your system');
+});
+
+const receipt = document.querySelector('.receipt');
+let t;
+function log(msg){
+  receipt.querySelector('span').textContent = msg;
+  receipt.classList.add('show');
+  clearTimeout(t);
+  t = setTimeout(() => receipt.classList.remove('show'), 2100);
+}
+document.querySelectorAll('[data-log]').forEach(el =>
+  el.addEventListener('click', () => log(el.dataset.log)));
+</script>
+</body>
+</html>

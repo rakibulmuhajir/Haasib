@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import DataTable from '@/components/DataTable.vue'
+import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BreadcrumbItem } from '@/types'
 import { User, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Fuel } from 'lucide-vue-next'
 import { formatDateTime as formatSharedDateTime } from '@/lib/datetime'
+import MoneyText from '@/components/MoneyText.vue'
 
 interface AmanatTransaction {
   id: string
@@ -68,15 +69,6 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ])
 
 const currencyCode = computed(() => ((page.props as any)?.auth?.currentCompany?.base_currency as string) || 'PKR')
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-PK', {
-    style: 'currency',
-    currencyDisplay: 'narrowSymbol',
-    currency: currencyCode.value,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
 
 const formatDateTime = (date: string) => {
   return formatSharedDateTime(date, { mode: 'datetime', locale: 'en-PK' })
@@ -84,10 +76,10 @@ const formatDateTime = (date: string) => {
 
 // Transaction table
 const txColumns = [
-  { key: 'date', label: 'Date' },
-  { key: 'type', label: 'Type' },
-  { key: 'details', label: 'Details' },
-  { key: 'amount', label: 'Amount', align: 'right' as const },
+  { key: 'date', label: 'Date', kind: 'date' as const },
+  { key: 'type', label: 'Type', kind: 'status' as const },
+  { key: 'details', label: 'Details', kind: 'text' as const },
+  { key: 'amount', label: 'Amount', kind: 'amount' as const, align: 'right' as const },
 ]
 
 const transactionRows = computed(() => {
@@ -116,13 +108,13 @@ const txTableData = computed(() => {
 const getTypeBadge = (type: string) => {
   switch (type) {
     case 'deposit':
-      return { class: 'bg-emerald-100 text-emerald-800', icon: ArrowDownCircle, label: 'Deposit' }
+      return { class: 'bg-status-success/10 text-status-success', icon: ArrowDownCircle, label: 'Deposit' }
     case 'withdrawal':
-      return { class: 'bg-amber-100 text-amber-800', icon: ArrowUpCircle, label: 'Withdrawal' }
+      return { class: 'bg-status-attention/10 text-status-attention', icon: ArrowUpCircle, label: 'Withdrawal' }
     case 'fuel_purchase':
-      return { class: 'bg-sky-100 text-sky-800', icon: Fuel, label: 'Fuel Purchase' }
+      return { class: 'bg-status-info/10 text-status-info', icon: Fuel, label: 'Fuel Purchase' }
     default:
-      return { class: 'bg-zinc-100 text-zinc-700', icon: Wallet, label: type }
+      return { class: 'bg-surface-sunken text-text-primary', icon: Wallet, label: type }
   }
 }
 </script>
@@ -144,14 +136,14 @@ const getTypeBadge = (type: string) => {
     </template>
 
     <div class="grid gap-4 md:grid-cols-3">
-      <Card class="relative overflow-hidden border-border/80 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 md:col-span-2">
+      <Card class="relative overflow-hidden border-border/80 bg-surface-sunken md:col-span-2">
         <CardHeader class="pb-2">
           <CardDescription>Current Balance</CardDescription>
-          <CardTitle class="text-3xl">{{ formatCurrency(profile.amanat_balance) }}</CardTitle>
+          <CardTitle class="text-3xl"><MoneyText :amount="profile.amanat_balance" :currency="currencyCode" /></CardTitle>
         </CardHeader>
         <CardContent class="pt-0">
           <div class="flex items-center gap-2 text-sm text-text-secondary">
-            <Wallet class="h-4 w-4 text-emerald-600" />
+            <Wallet class="h-4 w-4 text-status-success" />
             <span>Available for fuel purchases</span>
           </div>
         </CardContent>
@@ -163,10 +155,10 @@ const getTypeBadge = (type: string) => {
           <CardTitle class="text-lg capitalize">{{ profile.relationship ?? 'External' }}</CardTitle>
         </CardHeader>
         <CardContent class="pt-0 space-y-2">
-          <Badge v-if="profile.is_credit_customer" class="bg-purple-100 text-purple-800 hover:bg-purple-100">
+          <Badge v-if="profile.is_credit_customer" class="bg-status-info/10 text-status-info hover:bg-status-info/10">
             Credit Customer
           </Badge>
-          <Badge v-if="profile.is_investor" class="bg-sky-100 text-sky-800 hover:bg-sky-100 ml-1">
+          <Badge v-if="profile.is_investor" class="bg-status-info/10 text-status-info hover:bg-status-info/10 ml-1">
             Investor
           </Badge>
         </CardContent>
@@ -180,7 +172,7 @@ const getTypeBadge = (type: string) => {
       </CardHeader>
 
       <CardContent class="p-0">
-        <DataTable :data="txTableData" :columns="txColumns">
+        <LedgerRegister :data="txTableData" :columns="txColumns">
           <template #empty>
             <EmptyState
               title="No transactions"
@@ -199,14 +191,18 @@ const getTypeBadge = (type: string) => {
             <span
               class="font-medium"
               :class="{
-                'text-emerald-600': row.type === 'deposit',
-                'text-red-600': row.type === 'withdrawal' || row.type === 'fuel_purchase',
+                'text-status-success': row.type === 'deposit',
+                'text-status-critical': row.type === 'withdrawal' || row.type === 'fuel_purchase',
               }"
             >
-              {{ row.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(Math.abs(row.amount)) }}
+              <MoneyText
+                :amount="row.amount"
+                :currency="currencyCode"
+                :direction="row.type === 'deposit' ? 'inflow' : 'outflow'"
+              />
             </span>
           </template>
-        </DataTable>
+        </LedgerRegister>
       </CardContent>
     </Card>
 

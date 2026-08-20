@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-skin="{{ config('skins.default') }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,15 +41,16 @@
             })();
         </script>
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{-- The page ground, inline so it is painted before the stylesheet
+             arrives. Without it the default white shows through above and below
+             the app on a short page, and the paper stops at the content edge.
+             The skin itself is a static attribute on <html> above — there is
+             one skin, so there is nothing to detect and nothing to repaint.
+             Keep each `ground` in step with --surface-canvas in app.css. --}}
+        @php($ground = config('skins.available.'.config('skins.default').'.ground'))
         <style>
-            html {
-                background-color: oklch(1 0 0);
-            }
-
-            html.dark {
-                background-color: oklch(0.145 0 0);
-            }
+            html { background-color: {{ $ground['light'] }}; }
+            html.dark { background-color: {{ $ground['dark'] }}; }
         </style>
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
@@ -58,8 +59,14 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- The faces are served from this origin (resources/css/fonts.css), so
+             there is no third-party stylesheet to wait on. These three are the
+             ones the first screenful is set in: preloading them means the swap
+             from the fallback happens before the reader notices it, rather than
+             one paint later. --}}
+        <link rel="preload" as="font" type="font/woff2" href="/fonts/public-sans-latin-400-normal.woff2" crossorigin>
+        <link rel="preload" as="font" type="font/woff2" href="/fonts/zilla-slab-latin-600-normal.woff2" crossorigin>
+        <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-latin-400-normal.woff2" crossorigin>
 
         @vite(['resources/js/app.ts'])
         @inertiaHead

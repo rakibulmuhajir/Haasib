@@ -370,6 +370,7 @@ class StockController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
                 'slug' => $company->slug,
+                'base_currency' => $company->base_currency,
             ],
             'warehouses' => $warehouses,
             'items' => $items,

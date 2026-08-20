@@ -1466,7 +1466,7 @@ class UmrahCoreService
         }
 
         $company = $this->company($payment->company_id);
-        $depositAccountId = $payment->account_id ?: $this->accountId($company, 'bank_or_cash');
+        $depositAccountId = $payment->account_id ?: $this->settlementAccountId($company, $payment);
         $advanceAccountId = $this->accountId($company, 'agent_advances');
 
         $transaction = $this->glPostingService->postBalancedTransaction([
@@ -1510,7 +1510,7 @@ class UmrahCoreService
         }
 
         $company = $this->company($payment->company_id);
-        $cashAccountId = $payment->account_id ?: $this->accountId($company, 'bank_or_cash');
+        $cashAccountId = $payment->account_id ?: $this->settlementAccountId($company, $payment);
         $payee = $payment->visaVendor?->name ?: $payment->transportVendor?->name ?: $payment->hotelVendor?->name ?: 'Vendor';
         $transaction = $this->glPostingService->postBalancedTransaction([
             'company_id' => $payment->company_id,
@@ -1653,6 +1653,39 @@ class UmrahCoreService
         $remainingDiscount = max(round($discount - $visa, 2), 0);
 
         return [$netVisa, max(round($transport - $remainingDiscount, 2), 0)];
+    }
+
+    /**
+     * The account money actually moved through, when nobody chose one.
+     *
+     * Leaving account_id empty is the normal case and deliberately so --
+     * onboarding should not make a new company pick a ledger account before
+     * it can record its first payment. But the fallback used to ask only for
+     * 'bank_or_cash', which prefers the bank account and short-circuits to
+     * $company->bank_account_id before it ever considers subtype. Cash
+     * collected by hand was therefore posted to the bank, where it silently
+     * broke reconciliation and made Cash on Hand unreachable.
+     *
+     * The payment already carries the answer: method is required and
+     * validated. Consult it. A company whose chart has no cash account is
+     * unaffected -- it falls through to exactly the previous behaviour.
+     */
+    private function settlementAccountId(Company $company, GroupPayment $payment): string
+    {
+        if ($payment->method === GroupPayment::METHOD_CASH) {
+            $cashAccountId = Account::where('company_id', $company->id)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->where('subtype', 'cash')
+                ->orderBy('code')
+                ->value('id');
+
+            if ($cashAccountId) {
+                return $cashAccountId;
+            }
+        }
+
+        return $this->accountId($company, 'bank_or_cash');
     }
 
     private function accountId(Company $company, string $role): string

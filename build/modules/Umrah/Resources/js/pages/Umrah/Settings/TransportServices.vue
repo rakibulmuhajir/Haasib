@@ -433,7 +433,7 @@ const updateCatalogStatus = (path: string, record: any) => {
         :icon="Bus"
     >
         <div class="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="form">
                 <CardHeader
                     ><CardTitle>{{
                         editingService
@@ -555,11 +555,11 @@ const updateCatalogStatus = (path: string, record: any) => {
                 </CardContent>
             </Card>
 
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="register">
                 <CardHeader
                     ><CardTitle>Available Transport</CardTitle></CardHeader
                 >
-                <CardContent class="p-0">
+                <CardContent>
                     <LedgerRegister :data="transportServices" :columns="serviceColumns">
                         <template #empty>No transport services yet.</template>
 
@@ -633,7 +633,7 @@ const updateCatalogStatus = (path: string, record: any) => {
         </div>
 
         <div class="mt-6 grid gap-6 xl:grid-cols-2">
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="form">
                 <CardHeader
                     ><CardTitle class="flex items-center gap-2"
                         ><Map class="h-4 w-4" />Transport Sectors</CardTitle
@@ -746,7 +746,7 @@ const updateCatalogStatus = (path: string, record: any) => {
                 </CardContent>
             </Card>
 
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="form">
                 <CardHeader
                     ><CardTitle class="flex items-center gap-2"
                         ><Package class="h-4 w-4" />Journey Packages</CardTitle
@@ -875,7 +875,7 @@ const updateCatalogStatus = (path: string, record: any) => {
             </Card>
         </div>
 
-        <Card class="mt-6 min-w-0">
+        <Card class="mt-6 min-w-0" variant="form">
             <CardHeader
                 ><CardTitle>Sector and Journey Fares</CardTitle></CardHeader
             >

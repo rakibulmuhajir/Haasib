@@ -91,8 +91,8 @@ const serviceDate = (voucher: any) => voucher.service_bundle === 'hotel' ? vouch
       </Button>
     </div>
 
-    <Card>
-      <CardContent class="p-0">
+    <Card variant="register">
+      <CardContent>
         <LedgerRegister
           :data="vouchers.data"
           :columns="columns"

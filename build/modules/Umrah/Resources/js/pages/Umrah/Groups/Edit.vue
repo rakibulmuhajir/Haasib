@@ -92,7 +92,7 @@ const submit = () =>
         :icon="Plane"
     >
         <form class="mx-auto max-w-4xl space-y-6" @submit.prevent="submit">
-            <Card>
+            <Card variant="form">
                 <CardHeader><CardTitle>Group</CardTitle></CardHeader>
                 <CardContent class="grid gap-4 md:grid-cols-2">
                     <div class="space-y-2 md:col-span-2">

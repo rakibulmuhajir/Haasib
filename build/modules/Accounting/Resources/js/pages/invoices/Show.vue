@@ -325,7 +325,7 @@ const voidInvoice = () => {
       <!-- The rail: what is true *about* this invoice but does not belong on
            the sheet the customer receives. -->
       <aside class="rail">
-        <Card>
+        <Card variant="detail">
           <CardContent class="space-y-3 pt-6">
             <div class="flex flex-wrap items-center gap-2">
               <StatusBadge :status="displayStatus" explain />
@@ -347,7 +347,7 @@ const voidInvoice = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="detail">
           <CardContent class="space-y-2 pt-6">
             <Button
               v-if="invoice.balance > 0 && !isSettled"
@@ -381,7 +381,7 @@ const voidInvoice = () => {
           </CardContent>
         </Card>
 
-        <Card v-if="history.length">
+        <Card v-if="history.length" variant="detail">
           <CardHeader>
             <CardTitle>What happened when</CardTitle>
           </CardHeader>
@@ -391,7 +391,7 @@ const voidInvoice = () => {
         </Card>
 
         <!-- Internal notes are for the company, so they stay off the sheet. -->
-        <Card v-if="invoice.description">
+        <Card v-if="invoice.description" variant="detail">
           <CardHeader>
             <CardTitle>Internal note</CardTitle>
           </CardHeader>

@@ -105,7 +105,7 @@ const updateStatus = (type: 'hotels' | 'hotel-vendors', record: any) => {
     <Tabs :model-value="activeTab" @update:model-value="changeTab">
       <TabsList><TabsTrigger value="hotels">Hotels</TabsTrigger><TabsTrigger value="vendors">Hotel Vendors</TabsTrigger></TabsList>
       <TabsContent value="hotels">
-        <Card><CardContent class="p-0">
+        <Card variant="register"><CardContent>
           <LedgerRegister :data="hotels.data" :columns="hotelColumns">
             <template #empty>No hotels found.</template>
 
@@ -145,7 +145,7 @@ const updateStatus = (type: 'hotels' | 'hotel-vendors', record: any) => {
         </CardContent></Card>
       </TabsContent>
       <TabsContent value="vendors">
-        <Card><CardContent class="p-0">
+        <Card variant="register"><CardContent>
           <LedgerRegister :data="hotelVendors.data" :columns="vendorColumns">
             <template #empty>No hotel vendors found.</template>
 

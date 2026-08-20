@@ -75,7 +75,7 @@ const submit = () => {
     </template>
 
     <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Category Details</CardTitle>
           <CardDescription>Update category information</CardDescription>

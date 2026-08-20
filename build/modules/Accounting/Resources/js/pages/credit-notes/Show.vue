@@ -179,7 +179,7 @@ const isEditable = computed(() => {
         </LedgerDocument>
 
         <!-- Notes -->
-        <Card v-if="credit_note.notes">
+        <Card v-if="credit_note.notes" variant="detail">
           <CardHeader>
             <CardTitle>Internal Notes</CardTitle>
           </CardHeader>
@@ -192,7 +192,7 @@ const isEditable = computed(() => {
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Credit Note Summary -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Credit Note Summary</CardTitle>
           </CardHeader>
@@ -222,7 +222,7 @@ const isEditable = computed(() => {
         </Card>
 
         <!-- Timeline -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
           </CardHeader>
@@ -247,7 +247,7 @@ const isEditable = computed(() => {
         </Card>
 
         <!-- Actions -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Actions</CardTitle>
           </CardHeader>

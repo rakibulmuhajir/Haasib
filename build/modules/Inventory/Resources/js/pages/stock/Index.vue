@@ -7,7 +7,7 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFigure, CardHeader, CardNote, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -237,55 +237,55 @@ const openBill = (billId: string) => {
     </template>
 
     <div class="mb-6 grid gap-4 md:grid-cols-4">
-      <Card>
+      <Card variant="figure">
         <CardHeader class="pb-2">
-          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CardTitle class="flex items-center gap-2 font-medium text-muted-foreground">
             <Boxes class="h-4 w-4" />
             Tracked Items
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-semibold">{{ summary.tracked_items }}</div>
-          <p class="text-xs text-muted-foreground">{{ summary.stock_records }} stock locations</p>
+          <CardFigure>{{ summary.tracked_items }}</CardFigure>
+          <CardNote>{{ summary.stock_records }} stock locations</CardNote>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="figure">
         <CardHeader class="pb-2">
-          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CardTitle class="flex items-center gap-2 font-medium text-muted-foreground">
             <AlertTriangle class="h-4 w-4" />
             Low Stock
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-semibold">{{ summary.low_stock }}</div>
-          <p class="text-xs text-muted-foreground">Below reorder point</p>
+          <CardFigure>{{ summary.low_stock }}</CardFigure>
+          <CardNote>Below reorder point</CardNote>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="figure">
         <CardHeader class="pb-2">
-          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CardTitle class="flex items-center gap-2 font-medium text-muted-foreground">
             <ClipboardCheck class="h-4 w-4" />
             Paid Bills to Receive
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-semibold">{{ summary.pending_deliveries }}</div>
-          <p class="text-xs text-muted-foreground">Waiting for goods receipt</p>
+          <CardFigure>{{ summary.pending_deliveries }}</CardFigure>
+          <CardNote>Waiting for goods receipt</CardNote>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="figure">
         <CardHeader class="pb-2">
-          <CardTitle class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CardTitle class="flex items-center gap-2 font-medium text-muted-foreground">
             <History class="h-4 w-4" />
             Latest Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-semibold">{{ recentMovements.length }}</div>
-          <p class="text-xs text-muted-foreground">Recent stock movements</p>
+          <CardFigure>{{ recentMovements.length }}</CardFigure>
+          <CardNote>Recent stock movements</CardNote>
         </CardContent>
       </Card>
     </div>

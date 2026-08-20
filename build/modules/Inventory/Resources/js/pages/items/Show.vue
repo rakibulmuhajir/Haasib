@@ -135,7 +135,7 @@ const getTypeBadgeVariant = (type: string) => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Info -->
       <div class="lg:col-span-2 space-y-6">
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <div class="flex items-center justify-between">
               <div>
@@ -179,7 +179,7 @@ const getTypeBadgeVariant = (type: string) => {
         </Card>
 
         <!-- Stock Levels -->
-        <Card v-if="item.track_inventory">
+        <Card v-if="item.track_inventory" variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <Warehouse class="h-5 w-5" />
@@ -229,7 +229,7 @@ const getTypeBadgeVariant = (type: string) => {
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Pricing Card -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Pricing</CardTitle>
           </CardHeader>
@@ -253,7 +253,7 @@ const getTypeBadgeVariant = (type: string) => {
         </Card>
 
         <!-- Stock Summary -->
-        <Card v-if="item.track_inventory">
+        <Card v-if="item.track_inventory" variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <Package class="h-5 w-5" />
@@ -281,7 +281,7 @@ const getTypeBadgeVariant = (type: string) => {
         </Card>
 
         <!-- Settings -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Settings</CardTitle>
           </CardHeader>

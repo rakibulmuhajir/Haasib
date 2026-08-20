@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm, usePage } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
+import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
@@ -50,13 +51,7 @@ const props = defineProps<{
   currency: string
 }>()
 
-const page = usePage()
-const companySlug = computed(() => {
-  const slug = (page.props as any)?.auth?.currentCompany?.slug as string | undefined
-  if (slug) return slug
-  const match = page.url.match(/^\/([^/]+)/)
-  return match ? match[1] : ''
-})
+const { companySlug } = useCompanyRoute()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: 'Dashboard', href: `/${companySlug.value}` },

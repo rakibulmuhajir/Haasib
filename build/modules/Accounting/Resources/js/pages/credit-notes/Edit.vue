@@ -137,7 +137,7 @@ const isEditable = computed(() => {
     </template>
 
     <!-- Credit Note Header with Clickable Number -->
-    <Card class="mb-6">
+    <Card class="mb-6" variant="detail">
       <CardContent class="pt-6">
         <div class="flex items-center justify-between">
           <div>
@@ -162,7 +162,7 @@ const isEditable = computed(() => {
     </Card>
 
     <div v-if="!isEditable" class="mb-6">
-      <Card class="border-status-attention/30 bg-status-attention/10">
+      <Card class="border-status-attention/30 bg-status-attention/10" variant="detail">
         <CardContent class="pt-6">
           <div class="flex items-center">
             <StatusBadge :status="credit_note.status" class="mr-2" />
@@ -174,7 +174,7 @@ const isEditable = computed(() => {
 
     <form @submit.prevent="submit" class="space-y-6">
       <!-- Customer Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Customer Information</CardTitle>
           <CardDescription>Select the customer for this credit note</CardDescription>
@@ -225,7 +225,7 @@ const isEditable = computed(() => {
       </Card>
 
       <!-- Credit Note Details -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Credit Note Details</CardTitle>
           <CardDescription>Basic information about the credit note</CardDescription>
@@ -295,7 +295,7 @@ const isEditable = computed(() => {
       </Card>
 
       <!-- Reason -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Reason for Credit</CardTitle>
           <CardDescription>Explain why this credit note is being issued</CardDescription>
@@ -315,7 +315,7 @@ const isEditable = computed(() => {
       </Card>
 
       <!-- Additional Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Additional Information</CardTitle>
           <CardDescription>Optional terms and notes</CardDescription>
@@ -345,7 +345,7 @@ const isEditable = computed(() => {
       </Card>
 
       <!-- Summary -->
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Credit Note Summary</CardTitle>
         </CardHeader>

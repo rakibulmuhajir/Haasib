@@ -2,6 +2,12 @@
 import type { HTMLAttributes } from 'vue'
 import { cn } from '@/lib/utils'
 
+/*
+ * Layout only -- no variant branching needed here. The caption/conclusion
+ * inversion for the figure variant lives in CardTitle/CardDescription
+ * because they're the ones whose meaning changes; the header's grid
+ * (label column + action column) is the same shape for every variant.
+ */
 const props = defineProps<{
   class?: HTMLAttributes['class']
 }>()

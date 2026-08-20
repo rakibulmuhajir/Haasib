@@ -107,7 +107,7 @@ const navigateToStep = (url: string) => {
       </div>
 
       <!-- Summary Card -->
-      <Card class="mb-8">
+      <Card variant="detail" class="mb-8">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <CheckCircle2 class="w-5 h-5 text-status-success" />
@@ -202,7 +202,7 @@ const navigateToStep = (url: string) => {
       </Card>
 
       <!-- Next Steps Card -->
-      <Card class="mb-8">
+      <Card variant="detail" class="mb-8">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Rocket class="w-5 h-5 text-status-info" />

@@ -76,7 +76,7 @@ const submit = () => {
 
     <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
       <!-- Basic Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
           <CardDescription>Warehouse identification</CardDescription>
@@ -109,7 +109,7 @@ const submit = () => {
       </Card>
 
       <!-- Address -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Address</CardTitle>
           <CardDescription>Warehouse location</CardDescription>
@@ -152,7 +152,7 @@ const submit = () => {
       </Card>
 
       <!-- Settings -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Settings</CardTitle>
         </CardHeader>

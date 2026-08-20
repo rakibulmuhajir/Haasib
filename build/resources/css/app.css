@@ -402,6 +402,24 @@
     --text-conclusion: clamp(30px, 3.6vw, 44px);
     --text-conclusion--line-height: 1;
     --text-conclusion--letter-spacing: -0.035em;
+    --text-panel: 17px;
+    --text-panel--line-height: 1.25;
+    --text-panel--letter-spacing: -0.02em;
+    --text-caption: 11px;
+    --text-caption--line-height: 1.4;
+    --text-caption--letter-spacing: 0.11em;
+    --text-marker: 9px;
+    --text-marker--line-height: 1.3;
+    --text-marker--letter-spacing: 0.08em;
+    --text-figure: 14px;
+    --text-figure--line-height: 1.3;
+    --text-figure--letter-spacing: 0;
+    --text-tally: 24px;
+    --text-tally--line-height: 1.1;
+    --text-tally--letter-spacing: -0.02em;
+    --text-note: 12.5px;
+    --text-note--line-height: 1.4;
+    --text-note--letter-spacing: 0;
 }
 
 /* ── Layer 1 defaults ──────────────────────────────────────────────────────

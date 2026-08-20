@@ -104,7 +104,7 @@ const formatAddress = () => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main Info -->
       <div class="lg:col-span-2 space-y-6">
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <div class="flex items-center justify-between">
               <div>
@@ -129,7 +129,7 @@ const formatAddress = () => {
         </Card>
 
         <!-- Stock Items -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <Package class="h-5 w-5" />
@@ -172,7 +172,7 @@ const formatAddress = () => {
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Summary -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Summary</CardTitle>
           </CardHeader>
@@ -193,7 +193,7 @@ const formatAddress = () => {
         </Card>
 
         <!-- Quick Actions -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>

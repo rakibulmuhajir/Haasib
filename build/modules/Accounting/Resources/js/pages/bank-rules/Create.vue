@@ -158,7 +158,7 @@ const handleCancel = () => {
   >
     <form class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
       <!-- Basic Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Rule Details</CardTitle>
           <CardDescription>Define when and how this rule should apply</CardDescription>
@@ -222,7 +222,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Conditions -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Conditions</CardTitle>
           <CardDescription>Define when this rule should match (all conditions must be true)</CardDescription>
@@ -299,7 +299,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Actions -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Actions</CardTitle>
           <CardDescription>What to do when this rule matches</CardDescription>

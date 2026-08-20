@@ -155,7 +155,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
         </AlertDescription>
       </Alert>
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Who this is for</CardTitle>
           <CardDescription>The customer being billed.</CardDescription>
@@ -180,7 +180,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Dates and terms</CardTitle>
         </CardHeader>
@@ -214,7 +214,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
       </Card>
 
       <!-- Line items are dense work: a register, at the compact contract. -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>What is being billed</CardTitle>
         </CardHeader>
@@ -339,7 +339,7 @@ const submit = () => form.post(`/${props.company.slug}/invoices`)
       </Card>
 
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Notes</CardTitle>
         </CardHeader>

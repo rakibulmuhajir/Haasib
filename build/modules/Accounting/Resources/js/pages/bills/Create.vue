@@ -232,7 +232,7 @@ const handleSubmit = () => {
       </div>
 
       <!-- Bill Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Bill Information</CardTitle>
           <CardDescription>Enter the basic bill details</CardDescription>
@@ -331,7 +331,7 @@ const handleSubmit = () => {
       </Card>
 
       <!-- Line Items -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <div class="flex items-center justify-between">
             <div>
@@ -472,7 +472,7 @@ const handleSubmit = () => {
       </Card>
 
       <!-- Totals -->
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Bill Summary</CardTitle>
         </CardHeader>
@@ -499,7 +499,7 @@ const handleSubmit = () => {
       </Card>
 
       <!-- Notes -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Additional Information</CardTitle>
         </CardHeader>

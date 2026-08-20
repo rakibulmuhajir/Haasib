@@ -500,7 +500,7 @@ const navigateToVendor = () => {
           </template>
         </LedgerDocument>
 
-        <Card v-if="supplierClaims.length > 0">
+        <Card v-if="supplierClaims.length > 0" variant="detail">
           <CardHeader>
             <CardTitle>Supplier Claims</CardTitle>
             <CardDescription>Short deliveries claimed from the supplier stay here until compensation is received.</CardDescription>
@@ -554,7 +554,7 @@ const navigateToVendor = () => {
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Payment Summary -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>{{ t('paymentSummary') }}</CardTitle>
           </CardHeader>
@@ -633,7 +633,7 @@ const navigateToVendor = () => {
         </Card>
 
         <!-- Bill Details -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>{{ t('details') }}</CardTitle>
           </CardHeader>
@@ -666,9 +666,9 @@ const navigateToVendor = () => {
         </Card>
 
         <!-- Internal Notes -->
-        <Card v-if="bill.internal_notes">
+        <Card v-if="bill.internal_notes" variant="detail">
           <CardHeader>
-            <CardTitle class="text-sm">{{ t('internalNotes') }}</CardTitle>
+            <CardTitle>{{ t('internalNotes') }}</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-sm text-muted-foreground">{{ bill.internal_notes }}</p>

@@ -203,7 +203,7 @@ const submit = () => {
         </AlertDescription>
       </Alert>
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Who this is for</CardTitle>
           <CardDescription>The customer being billed.</CardDescription>
@@ -224,7 +224,7 @@ const submit = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Dates and terms</CardTitle>
         </CardHeader>
@@ -259,7 +259,7 @@ const submit = () => {
       </Card>
 
       <!-- Line items are dense work: a register, at the compact contract. -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>What is being billed</CardTitle>
         </CardHeader>
@@ -391,7 +391,7 @@ const submit = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Notes</CardTitle>
         </CardHeader>

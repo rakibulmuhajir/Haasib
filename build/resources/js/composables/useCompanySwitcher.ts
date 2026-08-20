@@ -1,5 +1,6 @@
 import { router, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
+import { firstUrlSegment } from '@/composables/useCompanyRoute'
 
 /**
  * The company list, which one is active, and how to change it.
@@ -15,9 +16,9 @@ export function useCompanySwitcher() {
     const companies = computed(() => (page.props.auth as any)?.companies || [])
 
     const currentCompany = computed(() => {
-        const match = page.url.match(/^\/([^/]+)/)
-        const companyFromUrl = match
-            ? companies.value.find((company: any) => company.slug === match[1])
+        const segment = firstUrlSegment(page.url)
+        const companyFromUrl = segment
+            ? companies.value.find((company: any) => company.slug === segment)
             : null
 
         return companyFromUrl || (page.props.auth as any)?.currentCompany || null

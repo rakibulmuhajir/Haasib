@@ -634,7 +634,7 @@ const exportVoucher = () => {
         </div>
 
         <div class="grid gap-4 md:grid-cols-4">
-            <Card
+            <Card variant="detail"
                 ><CardHeader><CardTitle>Status</CardTitle></CardHeader
                 ><CardContent class="flex flex-wrap gap-2"
                     ><Badge variant="secondary">{{
@@ -646,20 +646,20 @@ const exportVoucher = () => {
                     }}</Badge></CardContent
                 ></Card
             >
-            <Card
+            <Card variant="detail"
                 ><CardHeader><CardTitle>Group</CardTitle></CardHeader
                 ><CardContent class="font-medium"
                     >{{ voucher.group?.group_number }} ·
                     {{ voucher.group?.name }}</CardContent
                 ></Card
             >
-            <Card
+            <Card variant="detail"
                 ><CardHeader><CardTitle>Agent</CardTitle></CardHeader
                 ><CardContent class="font-medium">{{
                     voucher.agent?.name || 'No agent'
                 }}</CardContent></Card
             >
-            <Card
+            <Card variant="detail"
                 ><CardHeader><CardTitle>Created By</CardTitle></CardHeader
                 ><CardContent class="font-medium">{{
                     voucher.created_by?.name || 'System'
@@ -667,7 +667,7 @@ const exportVoucher = () => {
             >
         </div>
 
-        <Card v-if="changeLogs.length" class="mt-6">
+        <Card v-if="changeLogs.length" class="mt-6" variant="detail">
             <CardHeader
                 ><CardTitle>Change History</CardTitle
                 ><CardDescription
@@ -765,7 +765,7 @@ const exportVoucher = () => {
         </Dialog>
 
         <div class="grid gap-6 lg:grid-cols-2">
-            <Card v-if="voucher.service_bundle !== 'hotel'">
+            <Card v-if="voucher.service_bundle !== 'hotel'" variant="detail">
                 <CardHeader>
                     <CardTitle>Flights</CardTitle>
                     <CardDescription
@@ -840,7 +840,7 @@ const exportVoucher = () => {
                 </CardContent>
             </Card>
 
-            <Card v-if="includesTransport">
+            <Card v-if="includesTransport" variant="detail">
                 <CardHeader>
                     <CardTitle>Transport</CardTitle>
                     <CardDescription
@@ -906,7 +906,7 @@ const exportVoucher = () => {
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card variant="detail">
                 <CardHeader>
                     <CardTitle>Hotel Stays</CardTitle>
                     <CardDescription
@@ -992,7 +992,7 @@ const exportVoucher = () => {
             </Card>
         </div>
 
-        <Card>
+        <Card variant="detail">
             <CardHeader>
                 <CardTitle>Passengers</CardTitle>
                 <CardDescription

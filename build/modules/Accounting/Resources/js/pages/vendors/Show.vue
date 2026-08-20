@@ -8,7 +8,7 @@ import InlineEditable from '@/components/InlineEditable.vue'
 import MoneyText from '@/components/MoneyText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useInlineEdit } from '@/composables/useInlineEdit'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFigure, CardHeader, CardNote, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -314,57 +314,57 @@ const cancelAddressEdit = () => {
       <TabsContent value="overview" class="space-y-6">
         <!-- Key Financial Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="figure">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary">Amount Owed</CardTitle>
+              <CardTitle class="font-medium text-text-secondary">Amount Owed</CardTitle>
               <Receipt class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.open_balance" :currency="vendor.base_currency || company.base_currency" /></div>
-              <p class="text-xs text-text-secondary mt-1">{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</p>
+              <CardFigure><MoneyText :amount="summary.open_balance" :currency="vendor.base_currency || company.base_currency" /></CardFigure>
+              <CardNote>{{ summary.bill_count }} bill{{ summary.bill_count === 1 ? '' : 's' }}</CardNote>
             </CardContent>
           </Card>
 
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="figure">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary">Overdue</CardTitle>
+              <CardTitle class="font-medium text-text-secondary">Overdue</CardTitle>
               <AlertTriangle class="h-4 w-4 text-status-attention" />
             </CardHeader>
             <CardContent>
-              <div :class="['text-2xl font-semibold', summary.overdue_balance > 0 ? 'text-status-attention' : 'text-text-primary']">
+              <CardFigure :class="summary.overdue_balance > 0 ? 'text-status-attention' : ''">
                 <MoneyText :amount="summary.overdue_balance" :currency="vendor.base_currency || company.base_currency" />
-              </div>
-              <p class="text-xs text-text-secondary mt-1">Past due date</p>
+              </CardFigure>
+              <CardNote>Past due date</CardNote>
             </CardContent>
           </Card>
 
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="figure">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary">Paid YTD</CardTitle>
+              <CardTitle class="font-medium text-text-secondary">Paid YTD</CardTitle>
               <Wallet class="h-4 w-4 text-status-success" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary"><MoneyText :amount="summary.paid_ytd" :currency="vendor.base_currency || company.base_currency" /></div>
-              <p class="text-xs text-text-secondary mt-1">This year</p>
+              <CardFigure><MoneyText :amount="summary.paid_ytd" :currency="vendor.base_currency || company.base_currency" /></CardFigure>
+              <CardNote>This year</CardNote>
             </CardContent>
           </Card>
 
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="figure">
             <CardHeader class="flex flex-row items-center justify-between pb-2">
-              <CardTitle class="text-sm font-medium text-text-secondary">Payment Terms</CardTitle>
+              <CardTitle class="font-medium text-text-secondary">Payment Terms</CardTitle>
               <Calendar class="h-4 w-4 text-text-secondary" />
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-semibold text-text-primary">{{ vendor.payment_terms || 30 }} days</div>
-              <p class="text-xs text-text-secondary mt-1">Net terms</p>
+              <CardFigure>{{ vendor.payment_terms || 30 }} days</CardFigure>
+              <CardNote>Net terms</CardNote>
             </CardContent>
           </Card>
         </div>
 
         <!-- Quick Actions -->
-        <Card class="border-rule-default bg-surface-raised">
+        <Card class="border-rule-default bg-surface-raised" variant="detail">
           <CardHeader>
-            <CardTitle class="text-sm font-medium text-text-secondary">Quick Actions</CardTitle>
+            <CardTitle class="font-medium text-text-secondary">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="flex flex-wrap gap-2">
@@ -386,10 +386,10 @@ const cancelAddressEdit = () => {
 
         <!-- Bills & Payments Tables -->
         <div class="grid gap-4 lg:grid-cols-2">
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="register">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-text-secondary">Recent Bills</CardTitle>
+                <CardTitle class="font-medium text-text-secondary">Recent Bills</CardTitle>
                 <CardDescription>Last 25 bills</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/bills?vendor=${vendor.id}`)">
@@ -405,10 +405,10 @@ const cancelAddressEdit = () => {
             </CardContent>
           </Card>
 
-          <Card class="border-rule-default bg-surface-raised">
+          <Card class="border-rule-default bg-surface-raised" variant="register">
             <CardHeader class="flex flex-row items-center justify-between">
               <div>
-                <CardTitle class="text-sm font-medium text-text-secondary">Recent Payments</CardTitle>
+                <CardTitle class="font-medium text-text-secondary">Recent Payments</CardTitle>
                 <CardDescription>Last 25 payments</CardDescription>
               </div>
               <Button size="sm" variant="ghost" @click="router.visit(`/${company.slug}/bill-payments?vendor=${vendor.id}`)">
@@ -425,7 +425,7 @@ const cancelAddressEdit = () => {
       <!-- Settings Tab -->
       <TabsContent value="settings" class="space-y-6">
         <!-- Contact Information -->
-        <Card class="border-rule-default bg-surface-raised">
+        <Card class="border-rule-default bg-surface-raised" variant="form">
           <CardHeader>
             <CardTitle class="text-text-primary">Contact Information</CardTitle>
             <CardDescription class="text-text-secondary">
@@ -488,7 +488,7 @@ const cancelAddressEdit = () => {
         </Card>
 
         <!-- Payment Settings -->
-        <Card class="border-rule-default bg-surface-raised">
+        <Card class="border-rule-default bg-surface-raised" variant="form">
           <CardHeader>
             <CardTitle class="text-text-primary flex items-center gap-2">
               <DollarSign class="h-4 w-4" />
@@ -599,7 +599,7 @@ const cancelAddressEdit = () => {
         </Card>
 
         <!-- Notes -->
-        <Card class="border-rule-default bg-surface-raised">
+        <Card class="border-rule-default bg-surface-raised" variant="form">
           <CardHeader>
             <CardTitle class="text-text-primary">Internal Notes</CardTitle>
             <CardDescription class="text-text-secondary">
@@ -625,7 +625,7 @@ const cancelAddressEdit = () => {
 
       <!-- Address Tab -->
       <TabsContent value="address" class="space-y-6">
-        <Card class="border-rule-default bg-surface-raised">
+        <Card class="border-rule-default bg-surface-raised" variant="form">
           <CardHeader class="flex flex-row items-center justify-between">
             <div>
               <CardTitle class="text-text-primary">Vendor Address</CardTitle>

@@ -57,7 +57,7 @@ const submit = () => {
 <template>
   <Head :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" />
   <PageShell :title="editingHotel ? 'Edit Hotel' : 'Add Hotel'" description="Set the vendor and per-bed nightly rates for available room types." :breadcrumbs="breadcrumbs" :icon="Building2">
-    <Card class="mx-auto max-w-4xl">
+    <Card class="mx-auto max-w-4xl" variant="form">
       <CardHeader><CardTitle>Hotel Details</CardTitle></CardHeader>
       <CardContent>
         <form class="space-y-6" @submit.prevent="submit">

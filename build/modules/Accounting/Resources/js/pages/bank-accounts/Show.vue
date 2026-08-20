@@ -189,7 +189,7 @@ const transactionColumns = [
       <!-- Main Info -->
       <div class="lg:col-span-2 space-y-6">
         <!-- Balance Card -->
-        <Card>
+        <Card variant="detail">
           <CardContent class="pt-6">
             <div class="flex items-center justify-between">
               <div>
@@ -207,7 +207,7 @@ const transactionColumns = [
         </Card>
 
         <!-- Account Details -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Account Details</CardTitle>
           </CardHeader>
@@ -261,12 +261,12 @@ const transactionColumns = [
         </Card>
 
         <!-- Recent Transactions -->
-        <Card>
+        <Card variant="register">
           <CardHeader>
             <CardTitle>Recent Transactions</CardTitle>
             <CardDescription>Last 25 transactions</CardDescription>
           </CardHeader>
-          <CardContent class="p-0">
+          <CardContent>
             <LedgerRegister
               :data="recentTransactions"
               :columns="transactionColumns"
@@ -315,7 +315,7 @@ const transactionColumns = [
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Reconciliation Status -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <RefreshCcw class="h-4 w-4" />
@@ -353,7 +353,7 @@ const transactionColumns = [
         </Card>
 
         <!-- Opening Balance -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <Calendar class="h-4 w-4" />
@@ -375,7 +375,7 @@ const transactionColumns = [
         </Card>
 
         <!-- Timestamps -->
-        <Card>
+        <Card variant="detail">
           <CardContent class="pt-6">
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">

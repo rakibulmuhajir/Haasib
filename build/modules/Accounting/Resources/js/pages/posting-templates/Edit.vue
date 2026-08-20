@@ -191,7 +191,7 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
   <Head title="Edit Posting Template" />
 
   <PageShell :title="`Edit Posting Template`" :breadcrumbs="breadcrumbs">
-    <Card>
+    <Card variant="form">
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           {{ template.name }}
@@ -283,7 +283,7 @@ const totalCredits = computed(() => (props.preview?.entries ?? []).filter((e) =>
       </CardContent>
     </Card>
 
-    <Card class="mt-6">
+    <Card class="mt-6" variant="form">
       <CardHeader>
         <CardTitle>Preview</CardTitle>
         <CardDescription>

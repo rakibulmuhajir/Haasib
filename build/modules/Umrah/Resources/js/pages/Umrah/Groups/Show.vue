@@ -8,6 +8,7 @@ import {
     Card,
     CardContent,
     CardDescription,
+    CardFigure,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
@@ -471,26 +472,35 @@ const addPayment = () =>
         </template>
 
         <div class="grid gap-4 md:grid-cols-4">
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Receivable</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="group.total_receivable"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="group.total_receivable"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Paid</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="group.total_paid"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="group.total_paid"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Balance</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="group.balance"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="group.balance"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
             <Card>
                 <CardHeader><CardTitle>Payment Status</CardTitle></CardHeader>
@@ -500,18 +510,21 @@ const addPayment = () =>
                     </Badge>
                 </CardContent>
             </Card>
-            <Card v-if="canViewAccounting"
+            <Card v-if="canViewAccounting" variant="figure"
                 ><CardHeader><CardTitle>Profit</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="group.profit"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="group.profit"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
         </div>
 
         <div class="grid gap-6">
             <div class="space-y-6">
-                <Card>
+                <Card variant="detail">
                     <CardHeader>
                         <CardTitle>Group Info</CardTitle>
                         <CardDescription v-if="groupCapabilities.can_modify"
@@ -759,7 +772,7 @@ const addPayment = () =>
                     </CardContent>
                 </Card>
 
-                <Card v-if="group.transport_mode === 'specialized'">
+                <Card v-if="group.transport_mode === 'specialized'" variant="form">
                     <CardHeader
                         ><CardTitle>Transport Schedule</CardTitle
                         ><CardDescription
@@ -841,7 +854,7 @@ const addPayment = () =>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card variant="form">
                     <CardHeader>
                         <CardTitle>Passengers</CardTitle>
                         <CardDescription
@@ -1007,7 +1020,7 @@ const addPayment = () =>
                     </CardContent>
                 </Card>
 
-                <Card v-if="groupCapabilities.can_modify">
+                <Card v-if="groupCapabilities.can_modify" variant="detail">
                     <CardHeader><CardTitle>Payments</CardTitle></CardHeader>
                     <CardContent class="space-y-3">
                         <div
@@ -1111,7 +1124,7 @@ const addPayment = () =>
                             <DialogTitle>Add Passenger</DialogTitle>
                             <DialogDescription>Add one passenger to {{ group.group_number }}. Group visa and transport totals will be recalculated.</DialogDescription>
                         </DialogHeader>
-                <Card class="border-0 shadow-none">
+                <Card class="border-0 shadow-none" variant="form">
                     <CardContent>
                         <form class="space-y-3" @submit.prevent="addPassenger">
                             <div class="space-y-2">
@@ -1236,7 +1249,7 @@ const addPayment = () =>
                             <DialogTitle>Record Payment</DialogTitle>
                             <DialogDescription>Record money received from the agent or paid to a vendor for this group.</DialogDescription>
                         </DialogHeader>
-                <Card v-if="groupCapabilities.can_record_payment" class="border-0 shadow-none">
+                <Card v-if="groupCapabilities.can_record_payment" class="border-0 shadow-none" variant="form">
                     <CardContent class="space-y-4 p-0">
                         <div class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                             {{
@@ -1416,7 +1429,7 @@ const addPayment = () =>
                 </Dialog>
             </div>
         </div>
-        <Card v-if="changeLogs.length">
+        <Card v-if="changeLogs.length" variant="detail">
             <CardHeader
                 ><CardTitle>Change History</CardTitle
                 ><CardDescription

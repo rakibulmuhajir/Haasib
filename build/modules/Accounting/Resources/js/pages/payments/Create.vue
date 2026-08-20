@@ -152,7 +152,7 @@ const submit = () => {
       </div>
 
       <!-- Payment Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Payment Information</CardTitle>
           <CardDescription>Enter the basic payment details</CardDescription>
@@ -289,7 +289,7 @@ const submit = () => {
       </Card>
 
       <!-- Payment Method -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Payment Method</CardTitle>
           <CardDescription>How was this payment made?</CardDescription>
@@ -321,7 +321,7 @@ const submit = () => {
       </Card>
 
       <!-- Notes -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Additional Information</CardTitle>
           <CardDescription>Any additional notes about this payment</CardDescription>
@@ -340,7 +340,7 @@ const submit = () => {
       </Card>
 
       <!-- Summary -->
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Payment Summary</CardTitle>
         </CardHeader>

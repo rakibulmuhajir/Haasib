@@ -116,7 +116,7 @@ const submit = () => {
       </div>
 
       <!-- Customer Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Customer Information</CardTitle>
           <CardDescription>Select the customer for this credit note</CardDescription>
@@ -168,7 +168,7 @@ const submit = () => {
       </Card>
 
       <!-- Credit Note Details -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Credit Note Details</CardTitle>
           <CardDescription>Basic information about the credit note</CardDescription>
@@ -239,7 +239,7 @@ const submit = () => {
       </Card>
 
       <!-- Reason -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Reason for Credit</CardTitle>
           <CardDescription>Explain why this credit note is being issued</CardDescription>
@@ -260,7 +260,7 @@ const submit = () => {
       </Card>
 
       <!-- Additional Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Additional Information</CardTitle>
           <CardDescription>Optional terms and notes</CardDescription>
@@ -288,7 +288,7 @@ const submit = () => {
       </Card>
 
       <!-- Summary -->
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Credit Note Summary</CardTitle>
         </CardHeader>

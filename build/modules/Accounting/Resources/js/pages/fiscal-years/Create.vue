@@ -58,7 +58,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
     :icon="CalendarDays"
   >
     <div class="grid gap-6 lg:grid-cols-3">
-      <Card class="lg:col-span-2">
+      <Card class="lg:col-span-2" variant="form">
         <CardHeader>
           <CardTitle>Fiscal year details</CardTitle>
         </CardHeader>
@@ -121,7 +121,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Existing</CardTitle>
         </CardHeader>

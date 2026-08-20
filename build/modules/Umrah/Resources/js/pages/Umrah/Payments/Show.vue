@@ -53,13 +53,13 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
         </template>
 
         <div class="grid gap-4 md:grid-cols-4">
-            <Card><CardHeader><CardTitle class="text-sm">Date</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.payment_date" mode="date" /></CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Party</CardTitle></CardHeader><CardContent class="font-medium">{{ party }}</CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Direction</CardTitle></CardHeader><CardContent>{{ payment.direction === 'received' ? 'Received' : 'Paid' }}</CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Status</CardTitle></CardHeader><CardContent><StatusBadge :status="payment.status" /></CardContent></Card>
+            <Card variant="detail"><CardHeader><CardTitle>Date</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.payment_date" mode="date" /></CardContent></Card>
+            <Card variant="detail"><CardHeader><CardTitle>Party</CardTitle></CardHeader><CardContent class="font-medium">{{ party }}</CardContent></Card>
+            <Card variant="detail"><CardHeader><CardTitle>Direction</CardTitle></CardHeader><CardContent>{{ payment.direction === 'received' ? 'Received' : 'Paid' }}</CardContent></Card>
+            <Card variant="detail"><CardHeader><CardTitle>Status</CardTitle></CardHeader><CardContent><StatusBadge :status="payment.status" /></CardContent></Card>
         </div>
 
-        <Card>
+        <Card variant="detail">
             <CardHeader><CardTitle>Amount</CardTitle></CardHeader>
             <CardContent class="grid gap-4 md:grid-cols-3">
                 <div><div class="text-sm text-muted-foreground">Recorded amount</div><MoneyText :amount="payment.amount" :currency="payment.currency" /></div>
@@ -71,9 +71,9 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
             </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="register">
             <CardHeader><CardTitle>Allocations</CardTitle></CardHeader>
-            <CardContent class="p-0">
+            <CardContent>
                 <LedgerRegister :data="payment.all_allocations" :columns="allocationColumns">
                     <template #empty>Nothing allocated yet.</template>
 
@@ -92,7 +92,7 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
             </CardContent>
         </Card>
 
-        <Card v-if="payment.reversed_at"><CardHeader><CardTitle>Reversal</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.reversed_at" /> · {{ payment.reversal_reason }}</CardContent></Card>
+        <Card v-if="payment.reversed_at" variant="detail"><CardHeader><CardTitle>Reversal</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.reversed_at" /> · {{ payment.reversal_reason }}</CardContent></Card>
 
         <Dialog v-model:open="reverseOpen"><DialogContent><DialogHeader><DialogTitle>Reverse Payment</DialogTitle><DialogDescription>This creates an opposite accounting entry. The original payment remains in the audit trail.</DialogDescription></DialogHeader>
             <div class="space-y-2"><Label for="reason">Reason</Label><Textarea id="reason" v-model="form.reason" required /><p v-if="form.errors.reason" class="text-sm text-destructive">{{ form.errors.reason }}</p></div>

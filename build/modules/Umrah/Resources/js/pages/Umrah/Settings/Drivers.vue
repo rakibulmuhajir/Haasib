@@ -134,7 +134,7 @@ const reactivateDriver = (driver: (typeof props.drivers)[number]) => {
         :icon="Users"
     >
         <div class="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="form">
                 <CardHeader
                     ><CardTitle>{{
                         editingDriver ? 'Edit Driver' : 'Add Driver'
@@ -192,11 +192,11 @@ const reactivateDriver = (driver: (typeof props.drivers)[number]) => {
                 </CardContent>
             </Card>
 
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="register">
                 <CardHeader>
                     <CardTitle>Available Drivers</CardTitle>
                 </CardHeader>
-                <CardContent class="p-0">
+                <CardContent>
                     <LedgerRegister :data="drivers" :columns="columns">
                         <template #empty>No drivers yet.</template>
 

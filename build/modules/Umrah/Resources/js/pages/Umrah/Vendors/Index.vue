@@ -249,7 +249,7 @@ const submit = () => {
                         <DialogTitle>{{ editingVendor ? 'Edit Visa Vendor' : 'Add Visa Vendor' }}</DialogTitle>
                         <DialogDescription>Maintain visa selling prices and supplier costs separately from transport fares.</DialogDescription>
                     </DialogHeader>
-            <Card v-if="canManageVendors" class="min-w-0 border-0 shadow-none">
+            <Card v-if="canManageVendors" class="min-w-0 border-0 shadow-none" variant="form">
                 <CardContent>
                     <form class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
@@ -425,9 +425,9 @@ const submit = () => {
                 </DialogContent>
             </Dialog>
 
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="register">
                 <CardHeader><CardTitle>Vendor List</CardTitle></CardHeader>
-                <CardContent class="p-0">
+                <CardContent>
                     <LedgerRegister :data="vendors.data" :columns="columns">
                         <template #empty>No visa vendors yet.</template>
 

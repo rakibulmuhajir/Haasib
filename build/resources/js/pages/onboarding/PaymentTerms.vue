@@ -102,7 +102,7 @@ const setVendorPreset = (days: number) => {
       </div>
 
       <!-- Form Card -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Calendar class="w-5 h-5" />

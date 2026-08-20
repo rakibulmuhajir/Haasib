@@ -455,9 +455,9 @@ const saveAndPay = () => {
 
         <!-- Summary -->
         <div class="lg:col-span-5">
-          <Card class="lg:sticky lg:top-20 overflow-hidden">
+          <Card class="lg:sticky lg:top-20 overflow-hidden" variant="detail">
             <CardHeader class="space-y-1 pb-3">
-              <CardTitle class="text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('total') }}</CardTitle>
+              <CardTitle class="font-medium tracking-wide text-muted-foreground uppercase">{{ t('total') }}</CardTitle>
               <div class="text-4xl font-semibold leading-none tabular-nums">
                 <MoneyText :amount="totalAmount" :currency="company.base_currency || 'USD'" />
               </div>

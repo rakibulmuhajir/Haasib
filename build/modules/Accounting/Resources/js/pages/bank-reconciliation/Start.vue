@@ -104,7 +104,7 @@ const handleCancel = () => {
       </Alert>
 
       <form @submit.prevent="handleSubmit">
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Reconciliation Details</CardTitle>
             <CardDescription>

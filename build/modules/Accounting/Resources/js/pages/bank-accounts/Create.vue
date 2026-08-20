@@ -103,7 +103,7 @@ const handleCancel = () => {
   >
     <form class="space-y-6 max-w-3xl" @submit.prevent="handleSubmit">
       <!-- Basic Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Account Details</CardTitle>
           <CardDescription>Enter the basic information for this bank account</CardDescription>
@@ -213,7 +213,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Banking Details -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Banking Details</CardTitle>
           <CardDescription>Optional banking identifiers</CardDescription>
@@ -273,7 +273,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Opening Balance -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Opening Balance</CardTitle>
           <CardDescription>Set the starting balance for this account</CardDescription>
@@ -304,7 +304,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Settings -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Settings</CardTitle>
         </CardHeader>

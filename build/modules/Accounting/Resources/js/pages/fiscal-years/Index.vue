@@ -88,7 +88,7 @@ const formatDate = (value: string) => formatDateTime(value, { mode: 'date' })
       </Button>
     </template>
 
-    <Card>
+    <Card variant="register">
       <CardHeader>
         <CardTitle>Fiscal years and accounting periods</CardTitle>
       </CardHeader>

@@ -14,7 +14,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: dashboard().u
   <Head title="Dashboard" />
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="mx-auto max-w-xl py-12">
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-muted">
             <Building2 class="h-5 w-5 text-muted-foreground" />

@@ -103,7 +103,7 @@ const allocatedAmount = computed(() => {
     </template>
 
     <div v-if="allocatedAmount > 0" class="mb-6">
-      <Card class="border-status-attention/30 bg-status-attention/10">
+      <Card class="border-status-attention/30 bg-status-attention/10" variant="detail">
         <CardContent class="pt-6">
           <div class="flex items-center">
             <Badge variant="secondary" class="mr-2">Allocated</Badge>
@@ -118,7 +118,7 @@ const allocatedAmount = computed(() => {
 
     <form @submit.prevent="submit" class="space-y-6">
       <!-- Payment Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Payment Information</CardTitle>
           <CardDescription>Update the basic payment details</CardDescription>
@@ -186,7 +186,7 @@ const allocatedAmount = computed(() => {
       </Card>
 
       <!-- Payment Method -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Payment Method</CardTitle>
           <CardDescription>How was this payment made?</CardDescription>
@@ -218,7 +218,7 @@ const allocatedAmount = computed(() => {
       </Card>
 
       <!-- Notes -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Additional Information</CardTitle>
           <CardDescription>Any additional notes about this payment</CardDescription>
@@ -237,7 +237,7 @@ const allocatedAmount = computed(() => {
       </Card>
 
       <!-- Allocations Summary -->
-      <Card v-if="payment.payment_allocations.length > 0">
+      <Card v-if="payment.payment_allocations.length > 0" variant="detail">
         <CardHeader>
           <CardTitle>Current Allocations</CardTitle>
           <CardDescription>This payment is currently allocated to the following invoices</CardDescription>
@@ -257,7 +257,7 @@ const allocatedAmount = computed(() => {
       </Card>
 
       <!-- Summary -->
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Payment Summary</CardTitle>
         </CardHeader>

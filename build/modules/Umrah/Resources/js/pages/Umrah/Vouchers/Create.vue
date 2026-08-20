@@ -483,7 +483,7 @@ const submit = () => {
     >
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div class="space-y-6">
-                <Card>
+                <Card variant="form">
                     <CardHeader>
                         <CardTitle>Voucher Details</CardTitle>
                         <CardDescription>{{
@@ -575,7 +575,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card v-if="!editingVoucher">
+                <Card v-if="!editingVoucher" variant="form">
                     <CardHeader>
                         <CardTitle>Passengers</CardTitle>
                         <CardDescription
@@ -696,7 +696,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card v-if="!hotelOnly">
+                <Card v-if="!hotelOnly" variant="form">
                     <CardHeader>
                         <CardTitle>Flights</CardTitle>
                         <CardDescription
@@ -861,7 +861,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card variant="form">
                     <CardHeader>
                         <CardTitle>Hotel Stays</CardTitle>
                         <CardDescription>{{
@@ -1074,7 +1074,7 @@ const submit = () => {
             </div>
 
             <div class="space-y-6">
-                <Card>
+                <Card variant="form">
                     <CardHeader>
                         <CardTitle>Save</CardTitle>
                         <CardDescription
@@ -1190,7 +1190,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card v-if="assignedPassengers.length">
+                <Card v-if="assignedPassengers.length" variant="detail">
                     <CardHeader>
                         <CardTitle>Already Assigned</CardTitle>
                         <CardDescription
@@ -1214,7 +1214,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card variant="detail">
                     <CardHeader>
                         <CardTitle>Quick Links</CardTitle>
                     </CardHeader>

@@ -6,7 +6,7 @@ import PageShell from '@/components/PageShell.vue';
 import RecordPagination from '@/components/RecordPagination.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -116,24 +116,28 @@ const reverseExpense = () => {
         </template>
 
         <div class="grid gap-4 md:grid-cols-2">
-            <Card
+            <Card variant="figure"
                 ><CardHeader
-                    ><CardTitle class="text-base"
+                    ><CardTitle
                         >Posted expenses</CardTitle
                     ></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="summary.total"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="summary.total"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
-            <Card
+            <Card variant="figure"
                 ><CardHeader
-                    ><CardTitle class="text-base"
+                    ><CardTitle
                         >Records</CardTitle
                     ></CardHeader
-                ><CardContent class="text-2xl font-semibold">{{
-                    summary.count
-                }}</CardContent></Card
+                ><CardContent
+                    ><CardFigure>{{
+                        summary.count
+                    }}</CardFigure></CardContent></Card
             >
         </div>
 
@@ -166,8 +170,8 @@ const reverseExpense = () => {
             <Button variant="outline" @click="applyFilters">Apply</Button>
         </div>
 
-        <Card>
-            <CardContent class="p-0">
+        <Card variant="register">
+            <CardContent>
                 <LedgerRegister :data="expenses.data" :columns="columns">
                     <template #empty>No expenses found.</template>
 

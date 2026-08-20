@@ -206,7 +206,7 @@ const summaryItems = computed(() => [
           :show-quantity="false"
         />
 
-        <Card v-if="payment.notes">
+        <Card v-if="payment.notes" variant="detail">
           <CardHeader>
             <CardTitle>Internal notes</CardTitle>
           </CardHeader>
@@ -217,7 +217,7 @@ const summaryItems = computed(() => [
       </div>
 
       <div class="space-y-6">
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>How it was paid</CardTitle>
           </CardHeader>
@@ -228,7 +228,7 @@ const summaryItems = computed(() => [
 
         <!-- What the money did. A receipt whose allocations are hidden in a
              sidebar total is a receipt nobody can reconcile against. -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Where it went</CardTitle>
           </CardHeader>

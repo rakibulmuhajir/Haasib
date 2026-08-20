@@ -670,7 +670,7 @@ const submit = () => {
             </div>
             <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div class="space-y-6">
-                    <Card>
+                    <Card variant="form">
                         <CardHeader><CardTitle>Group</CardTitle></CardHeader>
                         <CardContent class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
@@ -1076,7 +1076,7 @@ const submit = () => {
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card variant="form">
                         <CardHeader
                             ><CardTitle>Transport</CardTitle></CardHeader
                         >
@@ -1422,7 +1422,7 @@ const submit = () => {
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card variant="form">
                         <CardHeader
                             ><CardTitle>Passengers</CardTitle></CardHeader
                         >
@@ -1673,7 +1673,7 @@ const submit = () => {
                 </div>
 
                 <div class="space-y-6">
-                    <Card v-if="!isOperations">
+                    <Card v-if="!isOperations" variant="form">
                         <CardHeader><CardTitle>Amounts</CardTitle></CardHeader>
                         <CardContent class="space-y-4">
                             <div v-if="isAgent && agentVisaPricing" class="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">

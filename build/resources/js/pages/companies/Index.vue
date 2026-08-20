@@ -162,7 +162,7 @@ function handleDelete() {
     </template>
 
     <!-- Create Form Card -->
-    <Card v-if="canCreateCompanies && showCreateForm" class="mb-6 border-rule-default bg-surface-raised">
+    <Card v-if="canCreateCompanies && showCreateForm" variant="form" class="mb-6 border-rule-default bg-surface-raised">
       <CardHeader>
         <CardTitle>Create New Company</CardTitle>
         <CardDescription class="text-text-secondary">
@@ -280,6 +280,7 @@ function handleDelete() {
       <Card
         v-for="company in filteredCompanies"
         :key="company.id"
+        variant="detail"
         class="border-rule-default bg-surface-raised transition-all hover:border-rule-default hover:shadow-md"
       >
         <CardHeader class="space-y-2 pb-3">

@@ -87,8 +87,8 @@ const clearFilters = () => {
       </Button>
     </div>
 
-    <Card>
-      <CardContent class="p-0">
+    <Card variant="register">
+      <CardContent>
         <LedgerRegister
           :data="groups.data"
           :columns="columns"

@@ -5,7 +5,7 @@ import MetaChip from '@/components/MetaChip.vue';
 import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { BreadcrumbItem } from '@/types';
@@ -93,14 +93,14 @@ const exportPdf = () => {
         </div>
 
         <div class="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card><CardHeader><CardTitle class="text-sm">Opening</CardTitle></CardHeader><CardContent><MoneyText :amount="statement.opening_balance" :currency="company.base_currency" /></CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Supplier Costs</CardTitle></CardHeader><CardContent><MoneyText :amount="statement.charges" :currency="company.base_currency" /></CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Payments</CardTitle></CardHeader><CardContent><MoneyText :amount="statement.payments" :currency="company.base_currency" /></CardContent></Card>
-            <Card><CardHeader><CardTitle class="text-sm">Closing Payable</CardTitle></CardHeader><CardContent class="font-semibold"><MoneyText :amount="statement.closing_balance" :currency="company.base_currency" /></CardContent></Card>
+            <Card variant="figure"><CardHeader><CardTitle>Opening</CardTitle></CardHeader><CardContent><CardFigure><MoneyText :amount="statement.opening_balance" :currency="company.base_currency" /></CardFigure></CardContent></Card>
+            <Card variant="figure"><CardHeader><CardTitle>Supplier Costs</CardTitle></CardHeader><CardContent><CardFigure><MoneyText :amount="statement.charges" :currency="company.base_currency" /></CardFigure></CardContent></Card>
+            <Card variant="figure"><CardHeader><CardTitle>Payments</CardTitle></CardHeader><CardContent><CardFigure><MoneyText :amount="statement.payments" :currency="company.base_currency" /></CardFigure></CardContent></Card>
+            <Card variant="figure"><CardHeader><CardTitle>Closing Payable</CardTitle></CardHeader><CardContent><CardFigure><MoneyText :amount="statement.closing_balance" :currency="company.base_currency" /></CardFigure></CardContent></Card>
         </div>
 
-        <Card>
-            <CardContent class="p-0">
+        <Card variant="register">
+            <CardContent>
                 <LedgerRegister
                     :data="statement.rows"
                     :columns="columns"

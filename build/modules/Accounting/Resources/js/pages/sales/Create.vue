@@ -100,7 +100,7 @@ const submit = () => {
 
   <PageShell :title="t('recordSale')" :breadcrumbs="breadcrumbs">
     <div class="mx-auto w-full max-w-4xl space-y-6">
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Details</CardTitle>
         </CardHeader>
@@ -131,7 +131,7 @@ const submit = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="form">
         <CardHeader class="flex flex-row items-center justify-between">
           <CardTitle>Items</CardTitle>
           <Button type="button" variant="outline" size="sm" @click="addLine">

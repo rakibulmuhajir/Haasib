@@ -136,9 +136,9 @@ const updateStatus = (provider: any) => {
             <div v-if="canManageProviders" class="flex justify-end">
                 <Button type="button" @click="startCreate"><Plus class="mr-2 h-4 w-4" />Add Transport Vendor</Button>
             </div>
-            <Card class="min-w-0">
+            <Card class="min-w-0" variant="register">
                 <CardHeader><CardTitle>Transport Vendor List</CardTitle></CardHeader>
-                <CardContent class="p-0">
+                <CardContent>
                     <LedgerRegister :data="providers.data" :columns="columns">
                         <template #empty>No transport vendors yet.</template>
 

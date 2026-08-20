@@ -100,7 +100,7 @@ const optionLabel = (a: AccountRef) => `${a.code} — ${a.name}`
     :breadcrumbs="breadcrumbs"
     :icon="Settings2"
   >
-    <Card>
+    <Card variant="form">
       <CardHeader>
         <CardTitle>Used by posting templates</CardTitle>
       </CardHeader>

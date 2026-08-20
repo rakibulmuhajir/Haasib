@@ -163,7 +163,7 @@ const save = () => {
   <Head title="Create Posting Template" />
 
   <PageShell title="Create Posting Template" :breadcrumbs="breadcrumbs">
-    <Card>
+    <Card variant="form">
       <CardHeader>
         <CardTitle>Template</CardTitle>
         <CardDescription>Define account mappings for a document type.</CardDescription>

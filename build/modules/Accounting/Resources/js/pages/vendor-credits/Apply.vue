@@ -241,7 +241,7 @@ const getDaysOverdue = (dueDate?: string) => {
     </div>
 
     <!-- Credit Summary Card -->
-    <Card class="mb-6">
+    <Card class="mb-6" variant="detail">
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           <DollarSign class="h-5 w-5" />
@@ -317,7 +317,7 @@ const getDaysOverdue = (dueDate?: string) => {
     </Card>
 
     <!-- Quick Actions -->
-    <Card v-if="unpaidBills.length > 0" class="mb-6">
+    <Card v-if="unpaidBills.length > 0" class="mb-6" variant="detail">
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           <Zap class="h-5 w-5" />
@@ -346,7 +346,7 @@ const getDaysOverdue = (dueDate?: string) => {
     </Card>
 
     <!-- Bills to Apply -->
-    <Card>
+    <Card variant="form">
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
           <FileText class="h-5 w-5" />

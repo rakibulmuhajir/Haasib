@@ -140,7 +140,7 @@ const handleDelete = () => {
       <!-- Main Content -->
       <div class="lg:col-span-2 space-y-6">
         <!-- Conditions -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Conditions</CardTitle>
           </CardHeader>
@@ -167,7 +167,7 @@ const handleDelete = () => {
         </Card>
 
         <!-- Actions -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Actions</CardTitle>
           </CardHeader>
@@ -195,7 +195,7 @@ const handleDelete = () => {
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Details -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Details</CardTitle>
           </CardHeader>

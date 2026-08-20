@@ -25,7 +25,8 @@ import {
 import { formatDateTime } from '@/lib/datetime';
 import { currencySymbol } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
+import { useCompanyRoute } from '@/composables/useCompanyRoute';
 import {
     AlertTriangle,
     CheckCircle,
@@ -93,15 +94,7 @@ const props = defineProps<{
     paymentAccounts: PaymentAccount[];
 }>();
 
-const page = usePage();
-const companySlug = computed(() => {
-    const slug = (page.props as any)?.auth?.currentCompany?.slug as
-        | string
-        | undefined;
-    if (slug) return slug;
-    const match = page.url.match(/^\/([^/]+)/);
-    return match ? match[1] : '';
-});
+const { companySlug } = useCompanyRoute()
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     { title: 'Dashboard', href: `/${companySlug.value}` },

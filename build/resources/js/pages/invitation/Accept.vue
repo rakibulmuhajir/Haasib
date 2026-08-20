@@ -57,7 +57,7 @@ const handleReject = () => {
   <Head title="Accept Invitation" />
   <div class="flex min-h-screen items-center justify-center bg-surface-canvas px-4 py-10">
     <div class="w-full max-w-xl">
-      <Card class="border-rule-default">
+      <Card variant="detail" class="border-rule-default">
         <CardHeader class="space-y-2">
           <CardTitle class="text-text-primary">Invitation to join {{ invitation.company.name }}</CardTitle>
           <CardDescription class="text-text-secondary">

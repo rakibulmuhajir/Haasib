@@ -25,7 +25,7 @@
  * is kept as an alias for `kind: 'amount'` so the call sites written against
  * the old DataTable keep working untouched.
  */
-import { computed, ref } from 'vue'
+import { computed, getCurrentInstance, ref } from 'vue'
 import type { Component } from 'vue'
 import { Button } from '@/components/ui/button'
 import { formatDateTimeForDisplay } from '@/lib/datetime'
@@ -98,6 +98,11 @@ interface Props {
      */
     density?: 'comfortable' | 'compact' | 'print'
     hoverable?: boolean
+    /**
+     * Force the click affordance on. Rarely needed: binding `@row-click` is
+     * already taken as the statement of intent. Set this only for a register
+     * whose rows are clickable through some other route.
+     */
     clickable?: boolean
     /**
      * The green bar. On by default — it is the register's defining feature and
@@ -290,8 +295,23 @@ const getDisplayCellValue = (row: T, column: RegisterColumn<T>) =>
         mode: kindOf(column) === 'date' ? 'date' : undefined,
     })
 
+/**
+ * A bound `@row-click` IS the opt-in.
+ *
+ * This used to also require `clickable`, and ten pages across Inventory and
+ * Payroll bound a real navigation handler that never once fired, because
+ * nothing tells you the second boolean exists. A prop you must remember in
+ * order for your explicit listener to work is a trap, not a feature; the
+ * listener now speaks for itself, and `clickable` only forces the cursor on
+ * for the rare register that is clickable by some other route.
+ */
+const instance = getCurrentInstance()
+const isClickable = computed(
+    () => props.clickable || instance?.vnode.props?.onRowClick != null,
+)
+
 const handleRowClick = (row: T) => {
-    if (props.clickable) emit('row-click', row)
+    if (isClickable.value) emit('row-click', row)
 }
 </script>
 
@@ -372,7 +392,7 @@ const handleRowClick = (row: T) => {
                     <template v-else>
                     <template v-for="(row, rowIndex) in data" :key="rowKey(row, rowIndex)">
                     <tr
-                        :class="[hoverable && 'reg-row--hover', clickable && 'cursor-pointer']"
+                        :class="[hoverable && 'reg-row--hover', isClickable && 'cursor-pointer']"
                         @click="handleRowClick(row)"
                     >
                         <td
@@ -442,7 +462,7 @@ const handleRowClick = (row: T) => {
                     name="mobile-card"
                     :row="row"
                 >
-                    <div class="slip" :class="{ 'cursor-pointer': clickable }" @click="handleRowClick(row)">
+                    <div class="slip" :class="{ 'cursor-pointer': isClickable }" @click="handleRowClick(row)">
                         <div
                             v-for="column in columns"
                             :key="String(column.key)"

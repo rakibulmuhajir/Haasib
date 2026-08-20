@@ -84,7 +84,7 @@ const breadcrumbs: BreadcrumbItem[] = [
       <!-- Main Content -->
       <div class="lg:col-span-2 space-y-6">
         <!-- Category Info -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <div class="flex items-center justify-between">
               <CardTitle class="flex items-center gap-2">
@@ -115,7 +115,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         </Card>
 
         <!-- Subcategories -->
-        <Card v-if="children.length > 0">
+        <Card v-if="children.length > 0" variant="detail">
           <CardHeader>
             <CardTitle>Subcategories</CardTitle>
           </CardHeader>
@@ -138,7 +138,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         </Card>
 
         <!-- Items in Category -->
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <Package class="h-5 w-5" />
@@ -172,7 +172,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
       <!-- Sidebar -->
       <div class="space-y-6">
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>Summary</CardTitle>
           </CardHeader>

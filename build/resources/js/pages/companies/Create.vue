@@ -106,7 +106,7 @@ const submit = () => {
       </div>
 
       <!-- Form Card -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Company Information</CardTitle>
           <CardDescription>

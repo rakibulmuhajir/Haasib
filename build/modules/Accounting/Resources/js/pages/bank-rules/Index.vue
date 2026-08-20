@@ -180,7 +180,7 @@ const formatActions = (actions: RuleRow['actions']) => {
     </template>
 
     <!-- Filters -->
-    <Card class="mb-6">
+    <Card class="mb-6" variant="form">
       <CardContent class="pt-6">
         <div class="flex flex-wrap gap-4 items-end">
           <div class="space-y-2 min-w-[200px]">
@@ -215,7 +215,7 @@ const formatActions = (actions: RuleRow['actions']) => {
     </Card>
 
     <!-- Rules Table -->
-    <Card>
+    <Card variant="register">
       <CardContent class="pt-6">
         <div v-if="rules.data.length === 0" class="text-center py-12 text-muted-foreground">
           <Wand2 class="mx-auto h-12 w-12 mb-4 opacity-50" />

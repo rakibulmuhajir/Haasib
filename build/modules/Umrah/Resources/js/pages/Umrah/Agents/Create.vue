@@ -63,7 +63,7 @@ const submit = () =>
         :breadcrumbs="breadcrumbs"
         :icon="Users"
     >
-        <Card class="mx-auto max-w-2xl">
+        <Card class="mx-auto max-w-2xl" variant="form">
             <CardHeader><CardTitle>Agent Details</CardTitle></CardHeader>
             <CardContent>
                 <form class="space-y-4" @submit.prevent="submit">

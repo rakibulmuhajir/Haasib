@@ -297,7 +297,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         </TabsList>
 
         <TabsContent value="general">
-          <Card>
+          <Card variant="form">
             <CardHeader>
               <CardTitle>Company details</CardTitle>
               <CardDescription>Identity and contact information shown across Haasib.</CardDescription>
@@ -387,7 +387,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         </TabsContent>
 
         <TabsContent value="users" class="space-y-5">
-          <Card v-if="company.can_manage_users">
+          <Card v-if="company.can_manage_users" variant="form">
             <CardHeader>
               <CardTitle>Add user</CardTitle>
               <CardDescription>Create a login and assign the user’s company role.</CardDescription>
@@ -437,7 +437,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card variant="detail">
             <CardHeader class="flex flex-row items-start justify-between gap-4">
               <div class="space-y-1.5">
                 <CardTitle>Users & permissions</CardTitle>
@@ -527,7 +527,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         </TabsContent>
 
         <TabsContent value="currencies">
-          <Card>
+          <Card variant="detail">
             <CardHeader>
               <CardTitle>Currencies</CardTitle>
               <CardDescription>Manual rates use 1 secondary currency = X {{ company.base_currency }}.</CardDescription>
@@ -539,7 +539,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         </TabsContent>
 
         <TabsContent value="modules">
-          <Card>
+          <Card variant="form">
             <CardHeader>
               <CardTitle>Optional modules</CardTitle>
               <CardDescription>Turn operational areas on or off for this company.</CardDescription>
@@ -575,7 +575,7 @@ const createUser = () => createUserForm.post(`/${company.value.slug}/users`, {
         </TabsContent>
 
         <TabsContent value="accounting">
-          <Card>
+          <Card variant="form">
             <CardHeader>
               <CardTitle>Fiscal year & periods</CardTitle>
               <CardDescription>Choose how transactions are grouped into financial reporting periods.</CardDescription>

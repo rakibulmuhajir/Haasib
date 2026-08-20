@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -132,7 +132,7 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
 
   <PageShell :title="t('profitAndLoss')" :breadcrumbs="breadcrumbs">
     <div class="mx-auto w-full max-w-5xl space-y-6">
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>{{ t('dateRange') }}</CardTitle>
         </CardHeader>
@@ -152,27 +152,27 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
       </Card>
 
       <div class="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card variant="figure">
           <CardHeader><CardTitle>{{ t('moneyIn') }}</CardTitle></CardHeader>
-          <CardContent class="text-2xl font-semibold tabular-nums">
-            <MoneyText :amount="report.totals.income" :currency="company.base_currency" :locale="moneyLocale" />
+          <CardContent>
+            <CardFigure><MoneyText :amount="report.totals.income" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
           </CardContent>
         </Card>
-        <Card>
+        <Card variant="figure">
           <CardHeader><CardTitle>{{ t('moneyOut') }}</CardTitle></CardHeader>
-          <CardContent class="text-2xl font-semibold tabular-nums">
-            <MoneyText :amount="report.totals.expenses" :currency="company.base_currency" :locale="moneyLocale" />
+          <CardContent>
+            <CardFigure><MoneyText :amount="report.totals.expenses" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
           </CardContent>
         </Card>
-        <Card>
+        <Card variant="figure">
           <CardHeader><CardTitle>{{ t('profit') }}</CardTitle></CardHeader>
-          <CardContent class="text-2xl font-semibold tabular-nums">
-            <MoneyText :amount="report.totals.profit" :currency="company.base_currency" :locale="moneyLocale" />
+          <CardContent>
+            <CardFigure><MoneyText :amount="report.totals.profit" :currency="company.base_currency" :locale="moneyLocale" /></CardFigure>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>{{ t('moneyIn') }}</CardTitle>
         </CardHeader>
@@ -206,7 +206,7 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>{{ t('moneyOut') }}</CardTitle>
         </CardHeader>
@@ -241,7 +241,7 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
       </Card>
 
       <div class="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>By Period</CardTitle>
           </CardHeader>
@@ -258,7 +258,7 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="detail">
           <CardHeader>
             <CardTitle>By Source</CardTitle>
           </CardHeader>
@@ -279,7 +279,7 @@ const recentLines = computed(() => props.report.recent_lines ?? [])
         </Card>
       </div>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Recent Postings</CardTitle>
         </CardHeader>

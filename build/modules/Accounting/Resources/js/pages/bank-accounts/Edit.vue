@@ -134,7 +134,7 @@ const handleCancel = () => {
       </Alert>
 
       <!-- Basic Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Account Details</CardTitle>
           <CardDescription>Update the basic information for this bank account</CardDescription>
@@ -245,7 +245,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Banking Details -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Banking Details</CardTitle>
           <CardDescription>Optional banking identifiers</CardDescription>
@@ -305,7 +305,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Opening Balance (only if no transactions) -->
-      <Card v-if="!hasTransactions">
+      <Card v-if="!hasTransactions" variant="form">
         <CardHeader>
           <CardTitle>Opening Balance</CardTitle>
           <CardDescription>Adjust the starting balance for this account</CardDescription>
@@ -336,7 +336,7 @@ const handleCancel = () => {
       </Card>
 
       <!-- Settings -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Settings</CardTitle>
         </CardHeader>

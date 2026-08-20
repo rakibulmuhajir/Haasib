@@ -1180,7 +1180,7 @@ const startActions = computed(() => {
       <TabsContent value="overview" class="space-y-6">
 
         <template v-if="isFuelStationCompany">
-          <Card class="border-rule-subtle bg-surface-raised">
+          <Card variant="detail" class="border-rule-subtle bg-surface-raised">
             <CardContent class="space-y-5 pt-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-sm text-text-secondary">Stock, rates, and recent sales for fuels, lubricants, and shop products.</p>
@@ -1241,11 +1241,11 @@ const startActions = computed(() => {
           </Card>
 
           <div class="grid gap-6 lg:grid-cols-3">
-            <Card class="border-rule-subtle bg-surface-raised lg:col-span-2">
+            <Card variant="detail" class="border-rule-subtle bg-surface-raised lg:col-span-2">
               <CardHeader>
                 <div class="flex items-center justify-between gap-3">
                   <div>
-                    <CardTitle class="text-base font-semibold text-foreground">Product Overview</CardTitle>
+                    <CardTitle class="font-semibold text-foreground">Product Overview</CardTitle>
                     <CardDescription>Current stock, sale rate, margin, and recent movement.</CardDescription>
                   </div>
                   <Badge variant="outline">{{ fuelProductRows.length }} products · {{ fuelProductSummary.active_products }} active</Badge>
@@ -1391,11 +1391,11 @@ const startActions = computed(() => {
             </Card>
 
             <div class="space-y-6">
-              <Card class="border-rule-subtle bg-surface-raised">
+              <Card variant="detail" class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
                     <Warehouse class="h-5 w-5 text-text-secondary" />
-                    <CardTitle class="text-base font-semibold text-foreground">Stock Management</CardTitle>
+                    <CardTitle class="font-semibold text-foreground">Stock Management</CardTitle>
                   </div>
                   <CardDescription>Add stock, manage tanks, and review stock movement.</CardDescription>
                 </CardHeader>
@@ -1418,11 +1418,11 @@ const startActions = computed(() => {
                 </CardContent>
               </Card>
 
-              <Card class="border-rule-subtle bg-surface-raised">
+              <Card variant="detail" class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
                     <AlertTriangle class="h-5 w-5" :class="lowStockProducts.length > 0 ? 'text-status-attention' : 'text-text-tertiary'" />
-                    <CardTitle class="text-base font-semibold text-foreground">Low Stock</CardTitle>
+                    <CardTitle class="font-semibold text-foreground">Low Stock</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1447,11 +1447,11 @@ const startActions = computed(() => {
                 </CardContent>
               </Card>
 
-              <Card class="border-rule-subtle bg-surface-raised">
+              <Card variant="detail" class="border-rule-subtle bg-surface-raised">
                 <CardHeader>
                   <div class="flex items-center gap-2">
                     <TrendingUp class="h-5 w-5 text-status-success" />
-                    <CardTitle class="text-base font-semibold text-foreground">Top Products</CardTitle>
+                    <CardTitle class="font-semibold text-foreground">Top Products</CardTitle>
                   </div>
                   <CardDescription>Ranked by sales in the last 30 days.</CardDescription>
                 </CardHeader>
@@ -1593,7 +1593,7 @@ const startActions = computed(() => {
       <!-- Settings Tab -->
       <TabsContent v-if="canManage && !isFuelStationCompany" value="settings" class="space-y-6">
         <!-- Editable Settings -->
-        <Card class="border-rule-subtle bg-surface-raised">
+        <Card variant="form" class="border-rule-subtle bg-surface-raised">
           <CardHeader>
             <CardTitle class="text-foreground">Company Settings</CardTitle>
             <CardDescription class="text-text-secondary">
@@ -1660,7 +1660,7 @@ const startActions = computed(() => {
         </Card>
 
         <!-- Regional Settings -->
-        <Card class="border-rule-subtle bg-surface-raised">
+        <Card variant="form" class="border-rule-subtle bg-surface-raised">
           <CardHeader>
             <CardTitle class="text-foreground flex items-center gap-2">
               <Globe class="h-4 w-4" />

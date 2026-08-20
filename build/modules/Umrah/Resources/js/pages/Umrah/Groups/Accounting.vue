@@ -169,9 +169,9 @@ const submit = () => {
 
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div class="space-y-6">
-                <Card>
+                <Card variant="register">
                     <CardHeader><CardTitle>Used Services</CardTitle></CardHeader>
-                    <CardContent class="p-0">
+                    <CardContent>
                         <LedgerRegister
                             :data="services"
                             :columns="servicesColumns"
@@ -190,9 +190,9 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card variant="register">
                     <CardHeader><CardTitle>Voucher Accounting</CardTitle></CardHeader>
-                    <CardContent class="p-0">
+                    <CardContent>
                         <LedgerRegister :data="voucherBreakdown" :columns="voucherColumns">
                             <template #empty>No vouchers created yet. Group visa and transport accounting remains posted.</template>
 
@@ -214,7 +214,7 @@ const submit = () => {
                 </Card>
 
                 <form id="group-accounting-form" class="space-y-6" @submit.prevent="submit">
-                    <Card>
+                    <Card variant="form">
                         <CardHeader><CardTitle>Supplier Assignment</CardTitle></CardHeader>
                         <CardContent class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
@@ -236,7 +236,7 @@ const submit = () => {
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card variant="form">
                         <CardHeader><CardTitle>Charges</CardTitle></CardHeader>
                         <CardContent class="grid gap-4 sm:grid-cols-2">
                             <div class="space-y-2"><Label>Visa charge</Label><Input v-model="form.visa_sale_amount" type="number" min="0" step="0.01" :disabled="!canUpdate" /><p v-if="form.errors.visa_sale_amount" class="text-xs text-destructive">{{ form.errors.visa_sale_amount }}</p></div>
@@ -250,7 +250,7 @@ const submit = () => {
             </div>
 
             <div class="space-y-6">
-                <Card>
+                <Card variant="detail">
                     <CardHeader><CardTitle>Financial Position</CardTitle></CardHeader>
                     <CardContent class="space-y-3 text-sm">
                         <div class="flex justify-between"><span>Gross charges</span><MoneyText :amount="grossCharges" :currency="company.base_currency" /></div>
@@ -262,7 +262,7 @@ const submit = () => {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card variant="detail">
                     <CardHeader><CardTitle>Cost & Margin</CardTitle></CardHeader>
                     <CardContent class="space-y-3 text-sm">
                         <div class="flex justify-between"><span>Visa cost</span><MoneyText :amount="group.visa_cost_amount" :currency="company.base_currency" /></div>

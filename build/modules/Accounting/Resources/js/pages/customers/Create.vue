@@ -61,7 +61,7 @@ const handleSubmit = () => {
     :icon="Users"
   >
     <div class="mx-auto max-w-xl">
-      <Card class="border-rule-default bg-surface-raised">
+      <Card class="border-rule-default bg-surface-raised" variant="form">
         <CardHeader>
           <CardTitle class="text-text-primary">Customer Details</CardTitle>
           <CardDescription class="text-text-secondary">

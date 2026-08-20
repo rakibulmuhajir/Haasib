@@ -257,7 +257,7 @@ const progressPercent = computed(() => {
       <!-- Main Content -->
       <div class="lg:col-span-2 space-y-6">
         <!-- Progress -->
-        <Card v-if="isInProgress">
+        <Card v-if="isInProgress" variant="detail">
           <CardContent class="pt-6">
             <div class="flex items-center justify-between mb-2">
               <span class="text-sm text-muted-foreground">Progress</span>
@@ -271,7 +271,7 @@ const progressPercent = computed(() => {
         </Card>
 
         <!-- Deposits Section -->
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <ArrowDownLeft class="h-5 w-5 text-status-success" />
@@ -323,7 +323,7 @@ const progressPercent = computed(() => {
         </Card>
 
         <!-- Withdrawals Section -->
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
               <ArrowUpRight class="h-5 w-5 text-status-critical" />
@@ -378,7 +378,7 @@ const progressPercent = computed(() => {
       <!-- Sidebar - Summary -->
       <div class="space-y-6">
         <!-- Reconciliation Summary -->
-        <Card class="sticky top-6">
+        <Card class="sticky top-6" variant="detail">
           <CardHeader>
             <CardTitle>Reconciliation Summary</CardTitle>
           </CardHeader>

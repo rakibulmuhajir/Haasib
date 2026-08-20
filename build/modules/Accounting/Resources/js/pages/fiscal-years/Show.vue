@@ -101,7 +101,7 @@ const periodColumns = [
     </template>
 
     <div class="grid gap-6 lg:grid-cols-3">
-      <Card class="lg:col-span-1">
+      <Card class="lg:col-span-1" variant="detail">
         <CardHeader>
           <CardTitle>Summary</CardTitle>
         </CardHeader>
@@ -121,7 +121,7 @@ const periodColumns = [
         </CardContent>
       </Card>
 
-      <Card class="lg:col-span-2">
+      <Card class="lg:col-span-2" variant="register">
         <CardHeader>
           <CardTitle>Accounting periods</CardTitle>
         </CardHeader>

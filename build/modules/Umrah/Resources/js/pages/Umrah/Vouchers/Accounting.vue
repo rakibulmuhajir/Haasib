@@ -127,7 +127,7 @@ const groupRows = computed(() => {
         </div>
 
         <div class="grid gap-6 xl:grid-cols-2">
-            <Card>
+            <Card variant="register">
                 <CardHeader>
                     <div class="flex items-start justify-between gap-4">
                         <div>
@@ -137,7 +137,7 @@ const groupRows = computed(() => {
                         <StatusBadge :status="groupPosting.accounting_state" />
                     </div>
                 </CardHeader>
-                <CardContent class="p-0">
+                <CardContent>
                     <LedgerRegister
                         :data="groupRows"
                         :columns="groupColumns"
@@ -163,7 +163,7 @@ const groupRows = computed(() => {
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card variant="detail">
                 <CardHeader>
                     <div class="flex items-start justify-between gap-4">
                         <div>
@@ -190,7 +190,7 @@ const groupRows = computed(() => {
             </Card>
         </div>
 
-        <Card>
+        <Card variant="detail">
             <CardHeader>
                 <CardTitle>Group Consolidated Position</CardTitle>
                 <CardDescription>One group total after approved voucher hotel postings; inherited services are counted once</CardDescription>

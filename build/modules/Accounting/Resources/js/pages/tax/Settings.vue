@@ -250,7 +250,7 @@ const createExemption = () => {
 
     <PageShell title="Tax Settings" description="Configure jurisdictions, rates, and defaults." :breadcrumbs="breadcrumbs">
       <div class="grid gap-6 lg:grid-cols-2">
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Company Tax Settings</CardTitle>
             <CardDescription>Defaults that drive invoice and bill tax calculation.</CardDescription>
@@ -360,7 +360,7 @@ const createExemption = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Create Tax Rate</CardTitle>
             <CardDescription>Company-scoped rate tied to a jurisdiction.</CardDescription>
@@ -450,7 +450,7 @@ const createExemption = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Create Tax Group</CardTitle>
             <CardDescription>Combine multiple rates for quick assignment.</CardDescription>
@@ -526,7 +526,7 @@ const createExemption = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Tax Registrations</CardTitle>
             <CardDescription>Store registration numbers by jurisdiction.</CardDescription>
@@ -615,7 +615,7 @@ const createExemption = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="form">
           <CardHeader>
             <CardTitle>Exemptions</CardTitle>
             <CardDescription>Manage exemption reasons and overrides.</CardDescription>
@@ -693,7 +693,7 @@ const createExemption = () => {
           </CardContent>
         </Card>
 
-        <Card class="lg:col-span-2">
+        <Card class="lg:col-span-2" variant="detail">
           <CardHeader>
             <CardTitle>Current Rates & Groups</CardTitle>
             <CardDescription>Reference data applied across AR/AP.</CardDescription>

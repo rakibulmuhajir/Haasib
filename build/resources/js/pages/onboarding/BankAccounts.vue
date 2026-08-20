@@ -130,7 +130,7 @@ onMounted(() => {
       </div>
 
       <!-- Form Card -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Landmark class="w-5 h-5" />

@@ -127,7 +127,7 @@ const reasons = [
     </template>
 
     <form @submit.prevent="submit" class="space-y-6 max-w-2xl">
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Adjustment Details</CardTitle>
           <CardDescription>Use this for corrections. Use bills and receiving for normal fuel purchases.</CardDescription>

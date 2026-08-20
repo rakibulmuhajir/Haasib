@@ -199,7 +199,7 @@ const submit = () =>
         </template>
 
         <form class="mx-auto max-w-xl" @submit.prevent="submit">
-            <Card>
+            <Card variant="form">
                 <CardHeader><CardTitle>Payment</CardTitle></CardHeader>
                 <CardContent class="space-y-5">
                     <div class="space-y-2">

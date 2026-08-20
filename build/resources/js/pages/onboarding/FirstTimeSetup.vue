@@ -66,7 +66,7 @@ const features = [
       <!-- Main Options -->
       <div class="grid md:grid-cols-2 gap-8 mb-12">
         <!-- Guided Setup -->
-        <Card class="border-2 border-status-info/30 hover:border-status-info transition-colors relative overflow-hidden">
+        <Card variant="detail" class="border-2 border-status-info/30 hover:border-status-info transition-colors relative overflow-hidden">
           <div class="absolute top-0 right-0 bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-bl-lg">
             RECOMMENDED
           </div>
@@ -74,7 +74,7 @@ const features = [
             <div class="w-12 h-12 rounded-full bg-status-info/15 flex items-center justify-center mb-4">
               <Rocket class="w-6 h-6 text-status-info" />
             </div>
-            <CardTitle class="text-2xl">Guided Setup</CardTitle>
+            <CardTitle>Guided Setup</CardTitle>
             <CardDescription class="text-base">
               Step-by-step wizard that configures everything for you
             </CardDescription>
@@ -117,12 +117,12 @@ const features = [
         </Card>
 
         <!-- Manual Setup -->
-        <Card class="hover:shadow-lg transition-all">
+        <Card variant="detail" class="hover:shadow-lg transition-all">
           <CardHeader>
             <div class="w-12 h-12 rounded-full bg-surface-sunken flex items-center justify-center mb-4">
               <Settings class="w-6 h-6 text-text-secondary" />
             </div>
-            <CardTitle class="text-2xl">Manual Setup</CardTitle>
+            <CardTitle>Manual Setup</CardTitle>
             <CardDescription class="text-base">
               Set up your company yourself with full control
             </CardDescription>
@@ -172,9 +172,9 @@ const features = [
       </div>
 
       <!-- Features Section -->
-      <Card class="bg-surface-sunken border-rule-default">
+      <Card variant="detail" class="bg-surface-sunken border-rule-default">
         <CardHeader>
-          <CardTitle class="text-center text-2xl">What You'll Get</CardTitle>
+          <CardTitle class="text-center">What You'll Get</CardTitle>
           <CardDescription class="text-center text-base">
             Powerful accounting features designed for modern businesses
           </CardDescription>

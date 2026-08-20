@@ -4,7 +4,7 @@ import MoneyText from '@/components/MoneyText.vue';
 import PageShell from '@/components/PageShell.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -109,30 +109,39 @@ const saveAccess = () =>
         </div>
 
         <div class="grid gap-4 md:grid-cols-3">
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Total Receivable</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="agent.total_receivable"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="agent.total_receivable"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Paid</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="agent.total_paid"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="agent.total_paid"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
-            <Card
+            <Card variant="figure"
                 ><CardHeader><CardTitle>Balance</CardTitle></CardHeader
-                ><CardContent class="text-2xl font-semibold"
-                    ><MoneyText
-                        :amount="agent.balance"
-                        :currency="company.base_currency" /></CardContent
+                ><CardContent
+                    ><CardFigure
+                        ><MoneyText
+                            :amount="agent.balance"
+                            :currency="company.base_currency"
+                        /></CardFigure
+                    ></CardContent
             ></Card>
         </div>
 
-        <Card v-if="canManageAgents">
+        <Card v-if="canManageAgents" variant="form">
             <CardHeader
                 ><CardTitle>Login and Travel Access</CardTitle></CardHeader
             >
@@ -187,7 +196,7 @@ const saveAccess = () =>
             </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="detail">
             <CardHeader><CardTitle>Groups</CardTitle></CardHeader>
             <CardContent class="space-y-3">
                 <div

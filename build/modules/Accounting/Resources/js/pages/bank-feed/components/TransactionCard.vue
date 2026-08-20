@@ -43,8 +43,9 @@ const formatDate = (dateString: string) => {
 </script>
 
 <template>
-  <Card class="mb-4 shadow-sm hover:shadow-md transition-shadow duration-200 border-l-4" 
+  <Card class="mb-4 shadow-sm hover:shadow-md transition-shadow duration-200 border-l-4"
     :class="[isSpend ? 'border-l-red-500' : 'border-l-green-500']"
+    variant="detail"
   >
     <CardHeader class="pb-2">
       <div class="flex justify-between items-start">

@@ -119,8 +119,8 @@ const confirmRemoveAgent = () => {
             />
         </div>
 
-        <Card>
-            <CardContent class="p-0">
+        <Card variant="register">
+            <CardContent>
                 <LedgerRegister
                     :data="agents.data"
                     :columns="columns"

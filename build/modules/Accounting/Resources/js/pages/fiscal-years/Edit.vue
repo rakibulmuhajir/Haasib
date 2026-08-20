@@ -63,7 +63,7 @@ const destroy = () => {
     :breadcrumbs="breadcrumbs"
     :icon="CalendarDays"
   >
-    <Card>
+    <Card variant="form">
       <CardHeader>
         <CardTitle>Fiscal year</CardTitle>
       </CardHeader>

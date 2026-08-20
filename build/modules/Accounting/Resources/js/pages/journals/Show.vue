@@ -114,7 +114,7 @@ const tableData = computed(() =>
     </template>
 
     <div class="grid gap-4 md:grid-cols-3">
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Details</CardTitle>
         </CardHeader>
@@ -132,7 +132,7 @@ const tableData = computed(() =>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Dates</CardTitle>
         </CardHeader>
@@ -148,7 +148,7 @@ const tableData = computed(() =>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Status</CardTitle>
         </CardHeader>
@@ -160,7 +160,7 @@ const tableData = computed(() =>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="detail">
         <CardHeader>
           <CardTitle>Totals</CardTitle>
         </CardHeader>

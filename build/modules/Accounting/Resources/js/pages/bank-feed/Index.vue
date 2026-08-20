@@ -55,9 +55,9 @@ const { t } = useLexicon()
       <!-- Right Column: Safety Nets -->
       <div class="space-y-6">
         <!-- Balance Explainer Widget -->
-        <Card v-if="props.balanceExplainer">
+        <Card v-if="props.balanceExplainer" variant="detail">
           <CardHeader>
-            <CardTitle class="text-sm font-medium">Balance Overview</CardTitle>
+            <CardTitle class="font-medium">Balance Overview</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="space-y-4">
@@ -97,9 +97,9 @@ const { t } = useLexicon()
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="detail">
           <CardHeader>
-            <CardTitle class="text-sm font-medium">Review Queue</CardTitle>
+            <CardTitle class="font-medium">Review Queue</CardTitle>
           </CardHeader>
           <CardContent>
             <p class="text-sm text-muted-foreground">0 items parked for review.</p>

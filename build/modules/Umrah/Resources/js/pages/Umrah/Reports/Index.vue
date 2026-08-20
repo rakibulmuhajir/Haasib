@@ -7,7 +7,7 @@ import MoneyText from '@/components/MoneyText.vue'
 import PageShell from '@/components/PageShell.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFigure, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -150,17 +150,19 @@ const showing = computed(() => {
         </div>
 
         <div v-if="report.summary.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <Card v-for="item in report.summary" :key="item.label" class="rounded-md">
-                <CardHeader class="pb-1"><CardTitle class="text-sm font-medium text-muted-foreground">{{ item.label }}</CardTitle></CardHeader>
-                <CardContent class="text-xl font-semibold tabular-nums">
-                    <MoneyText v-if="item.type === 'money'" :amount="numeric(item.value)" :currency="company.base_currency" />
-                    <span v-else>{{ numeric(item.value).toLocaleString() }}</span>
+            <Card v-for="item in report.summary" :key="item.label" class="rounded-md" variant="figure">
+                <CardHeader class="pb-1"><CardTitle class="font-medium text-muted-foreground">{{ item.label }}</CardTitle></CardHeader>
+                <CardContent>
+                    <CardFigure>
+                        <MoneyText v-if="item.type === 'money'" :amount="numeric(item.value)" :currency="company.base_currency" />
+                        <span v-else>{{ numeric(item.value).toLocaleString() }}</span>
+                    </CardFigure>
                 </CardContent>
             </Card>
         </div>
 
-        <Card class="overflow-hidden rounded-md">
-            <CardContent class="p-0">
+        <Card class="overflow-hidden rounded-md" variant="register">
+            <CardContent>
                 <LedgerRegister
                     :data="report.rows"
                     :columns="registerColumns"

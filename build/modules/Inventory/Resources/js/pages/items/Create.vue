@@ -109,7 +109,7 @@ const submit = () => {
 
     <form @submit.prevent="submit" class="space-y-6 max-w-4xl">
       <!-- Basic Information -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
           <CardDescription>Item details and identification</CardDescription>
@@ -201,7 +201,7 @@ const submit = () => {
       </Card>
 
       <!-- Pricing -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Pricing</CardTitle>
           <CardDescription>Cost and selling prices</CardDescription>
@@ -262,7 +262,7 @@ const submit = () => {
       </Card>
 
       <!-- Inventory -->
-      <Card v-if="form.item_type === 'product'">
+      <Card v-if="form.item_type === 'product'" variant="form">
         <CardHeader>
           <CardTitle>Inventory</CardTitle>
           <CardDescription>Stock tracking settings</CardDescription>
@@ -316,7 +316,7 @@ const submit = () => {
       </Card>
 
       <!-- Settings -->
-      <Card>
+      <Card variant="form">
         <CardHeader>
           <CardTitle>Settings</CardTitle>
           <CardDescription>Item availability options</CardDescription>

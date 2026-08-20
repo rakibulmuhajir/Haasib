@@ -168,7 +168,7 @@ const totalBalance = computed(() => {
     </template>
 
     <!-- Summary Card -->
-    <Card class="mb-6">
+    <Card class="mb-6" variant="detail">
       <CardContent class="pt-6">
         <div class="flex items-center justify-between">
           <div>
@@ -220,6 +220,7 @@ const totalBalance = computed(() => {
         v-for="account in bankAccounts.data"
         :key="account.id"
         class="hover:shadow-md transition-shadow cursor-pointer"
+        variant="detail"
         @click="handleView(account.id)"
       >
         <CardContent class="pt-6">

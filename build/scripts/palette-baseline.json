@@ -9,6 +9,7 @@
     "moneyAsText": 0,
     "moneyAsFixed": 0,
     "statusAsText": 0,
+    "statusSlotAsText": 13,
     "handRolledMoney": 0,
     "deadSlot": 0
   },

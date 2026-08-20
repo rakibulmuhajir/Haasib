@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import type { BreadcrumbItem } from '@/types'
 import { CreditCard } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
+import { paymentMethodLabel } from '@/lib/payment-method'
 
 interface CompanyRef {
   id: string
@@ -95,7 +96,7 @@ const sourceRows = computed(() =>
     account: payment.payment_account
       ? `${payment.payment_account.code} — ${payment.payment_account.name}`
       : '—',
-    method: payment.payment_method.replace(/_/g, ' '),
+    method: paymentMethodLabel(payment.payment_method),
     amount: formatMoney(payment.amount, payment.currency),
     reference: payment.reference_number || '—',
   }))
@@ -161,7 +162,7 @@ const groupedAmount = computed(() =>
       <div class="text-lg font-semibold mb-2">Allocations</div>
       <LedgerRegister :columns="columns" :data="allocationRows">
         <template #cell-applied_at="{ value }">
-          <DateTimeText :value="value" mode="datetime" />
+          <DateTimeText :value="value" mode="date" />
         </template>
       </LedgerRegister>
     </div>

@@ -274,8 +274,21 @@ const goToPage = (target: number) => {
 const getCellValue = (row: T, column: RegisterColumn<T>) =>
     column.render ? column.render(row) : row[column.key as keyof T]
 
+/**
+ * A `date`-kind column is a calendar date — a transaction date, a due date,
+ * a period boundary — never a moment in time. The shared formatter infers
+ * its mode from the key AND from the raw value's shape, and a date-only
+ * value that the server serialized with a midnight time component (e.g.
+ * `2026-07-30T00:00:00Z`) reads as "has a time" by that heuristic, so a
+ * reader's timezone offset invents a clock time nobody entered (`5:00 AM`
+ * for a Karachi reader looking at UTC midnight). The column already knows
+ * its own kind, so a `date` column pins the mode explicitly instead of
+ * leaving it to be guessed from the value.
+ */
 const getDisplayCellValue = (row: T, column: RegisterColumn<T>) =>
-    formatDateTimeForDisplay(getCellValue(row, column), String(column.key))
+    formatDateTimeForDisplay(getCellValue(row, column), String(column.key), {
+        mode: kindOf(column) === 'date' ? 'date' : undefined,
+    })
 
 const handleRowClick = (row: T) => {
     if (props.clickable) emit('row-click', row)

@@ -19,6 +19,7 @@ import {
   FileText,
 } from 'lucide-vue-next'
 import { formatMoneyText } from '@/lib/money'
+import { paymentMethodLabel } from '@/lib/payment-method'
 
 interface CompanyRef {
   id: string
@@ -104,22 +105,6 @@ const getPaymentMethodIcon = (method: string) => {
       return FileText
     default:
       return DollarSign
-  }
-}
-
-const getPaymentMethodLabel = (method: string) => {
-  switch (method) {
-    case 'cash':
-      return 'Cash'
-    case 'bank_transfer':
-      return 'Bank Transfer'
-    case 'card':
-      return 'Card'
-    case 'cheque':
-    case 'check':
-      return 'Cheque'
-    default:
-      return 'Other'
   }
 }
 
@@ -257,7 +242,7 @@ const filterByMethod = (method: string) => {
         >
           <Badge :variant="getPaymentMethodVariant(value)">
             <component :is="row.icon" class="h-3 w-3 mr-1" />
-            {{ getPaymentMethodLabel(value) }}
+            {{ paymentMethodLabel(value) }}
           </Badge>
         </button>
       </template>
@@ -286,7 +271,7 @@ const filterByMethod = (method: string) => {
               >
                 <Badge :variant="getPaymentMethodVariant(row.payment_method)">
                   <component :is="row.icon" class="h-3 w-3 mr-1" />
-                  {{ getPaymentMethodLabel(row.payment_method) }}
+                  {{ paymentMethodLabel(row.payment_method) }}
                 </Badge>
               </button>
             </div>

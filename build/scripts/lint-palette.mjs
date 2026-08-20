@@ -550,6 +550,15 @@ const GRAMMAR = [
         fix: 'Pass it to <StatusBadge :status /> so the word, the tone and the strike come from one vocabulary.',
     },
     {
+        key: 'statusSlotAsText',
+        label: 'status cell slots that bypass StatusBadge',
+        allow: [],
+        // No `pattern` -- this asks whether a whole slot block mentions
+        // StatusBadge, which a single-line regex cannot answer.
+        custom: scanStatusSlots,
+        fix: 'Render the cell as <StatusBadge :status="value" /> so the word, the tone and the strike come from one vocabulary.',
+    },
+    {
         key: 'handRolledMoney',
         label: 'hand-rolled currency formatting',
         allow: ['resources/js/components/MoneyText.vue', 'resources/js/lib'],
@@ -571,6 +580,83 @@ const GRAMMAR = [
         fix: 'Check the component being slotted into -- rename the slot to one it actually declares with <slot name="...">, or add that slot to the component if the content is meant to land there.',
     },
 ]
+
+/*
+ * A status column rendered through a slot, without StatusBadge.
+ *
+ * The statusAsText rule above looks for `{{ thing.status }}`, which is how a
+ * status escapes when a template reaches for the record directly. It cannot
+ * see the other way out: a register declares `#cell-status="{ value }"` and
+ * prints `{{ value }}`, so the database's own word -- `posted`, `partially_paid`
+ * -- reaches the screen with no property named `status` anywhere in the line.
+ * That is exactly how the journals register shipped a lowercase `posted` on a
+ * filled sticker while this file reported zero violations.
+ *
+ * Asked as a question about the block rather than the line: does the body of a
+ * status cell slot mention StatusBadge at all? If it does not, whatever it
+ * renders is not coming from the shared vocabulary.
+ */
+function scanStatusSlots(files) {
+    const result = { total: 0, offenders: [] }
+
+    for (const file of files) {
+        const rel = relative(ROOT, file).split(sep).join('/')
+        if (rel.startsWith('resources/js/components/')) continue
+        const source = readFileSync(file, 'utf8')
+
+        let count = 0
+        let from = 0
+        for (;;) {
+            const at = source.indexOf('#cell-status', from)
+            if (at === -1) break
+            const body = sliceTemplateBody(source, at)
+            from = at + body.length || at + 12
+            if (!body.includes('StatusBadge')) count += 1
+        }
+
+        if (!count) continue
+        result.offenders.push({ file: rel, count })
+        result.total += count
+    }
+
+    result.offenders.sort((a, b) => b.count - a.count)
+    return result
+}
+
+/*
+ * From a position inside a <template> opening tag, return the whole element
+ * including its closing tag, counting nested <template>s on the way.
+ *
+ * Written after a character-budget version of this walked into the exact trap
+ * it was built to catch: a slot in the bills register grew past the budget
+ * when a comment was added to it, so the scanner stopped seeing a violation
+ * that was still sitting there, and reported an improvement. A block ends
+ * where its closing tag is, not where a scanner runs out of patience.
+ */
+function sliceTemplateBody(source, at) {
+    const open = /<template[\s>]/g
+    const close = /<\/template>/g
+    let depth = 1
+    let cursor = source.indexOf('>', at)
+    if (cursor === -1) return source.slice(at)
+
+    while (depth > 0) {
+        open.lastIndex = cursor
+        close.lastIndex = cursor
+        const nextOpen = open.exec(source)
+        const nextClose = close.exec(source)
+        if (!nextClose) return source.slice(at)
+        if (nextOpen && nextOpen.index < nextClose.index) {
+            depth += 1
+            cursor = nextOpen.index + 1
+            continue
+        }
+        depth -= 1
+        cursor = nextClose.index + '</template>'.length
+    }
+
+    return source.slice(at, cursor)
+}
 
 function scanGrammar(files) {
     const results = {}

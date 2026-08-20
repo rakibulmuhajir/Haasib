@@ -1849,7 +1849,6 @@ const completedWorkflowSteps = computed(() => {
                 <div class="flex items-center justify-between px-5 py-3 bg-muted/40 border-b">
                   <div class="flex items-center gap-3">
                     <div class="text-base font-semibold">{{ pump.pump_name }}</div>
-                    <Badge variant="outline">{{ pump.fuel_category }}</Badge>
                     <span class="text-sm text-muted-foreground">{{ pump.fuel_name }}</span>
                   </div>
                   <div class="flex items-center gap-2">
@@ -2065,7 +2064,6 @@ const completedWorkflowSteps = computed(() => {
                 <!-- Fuel Sales by Type -->
                 <div v-for="fuel in salesByFuelType" :key="fuel.fuel_name" class="flex justify-between text-sm">
                   <div class="flex items-center gap-2">
-                    <Badge variant="outline" class="text-xs">{{ fuel.fuel_category }}</Badge>
                     <span>{{ fuel.fuel_name }}</span>
                     <span class="text-muted-foreground">({{ fuel.liters.toFixed(0) }} L)</span>
                   </div>
@@ -2134,7 +2132,6 @@ const completedWorkflowSteps = computed(() => {
                   <div>
                     <div class="text-base font-semibold">{{ tank.tank_name }}</div>
                     <div class="flex items-center gap-2">
-                      <Badge variant="outline">{{ tank.fuel_category }}</Badge>
                       <span class="text-sm text-muted-foreground">{{ tank.fuel_name }}</span>
                     </div>
                   </div>

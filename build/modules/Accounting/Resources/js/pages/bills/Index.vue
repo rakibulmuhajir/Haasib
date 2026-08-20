@@ -82,7 +82,7 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: t('bills'), href: `/${props.company.slug}/bills` },
 ]
 
-const columns = [
+const baseColumns = [
   { key: 'bill_number', label: t('billNumber'), kind: 'ref' as const },
   { key: 'vendor', label: t('vendor'), kind: 'text' as const },
   { key: 'bill_date', label: t('date'), kind: 'date' as const },
@@ -90,8 +90,18 @@ const columns = [
   { key: 'total_amount', label: t('total'), kind: 'amount' as const },
   { key: 'balance', label: t('balance'), kind: 'amount' as const },
   { key: 'status', label: t('status'), kind: 'status' as const },
-  { key: 'receive_stock', label: t('receiveStock') },
 ]
+
+// The Receive Stock column is only meaningful for companies that track
+// stock on their bills. When nothing on the current page needs receiving,
+// every row would render an em-dash — a column that says nothing on every
+// row is furniture, not information — so it is only declared when at
+// least one bill in the current page actually has stock to receive.
+const columns = computed(() =>
+  props.bills.data.some((b) => needsReceiving(b))
+    ? [...baseColumns, { key: 'receive_stock', label: t('receiveStock') }]
+    : baseColumns
+)
 
 const formatMoney = (val: number, currency: string) =>
   formatMoneyText(val, currency || 'USD')
@@ -282,7 +292,14 @@ const filterByStatus = (statusValue: string) => {
               {{ billStatusLabel(value) }}
             </Badge>
           </button>
-          <p class="text-xs text-muted-foreground mt-1">
+          <!-- Stock status is only shown when it says something about THIS
+               bill; "not tracked" is the same on every row of a company
+               that doesn't track stock, so repeating it under every chip
+               is noise competing with the status chip above it. -->
+          <p
+            v-if="stockStatusLabel(row) !== t('stockNotTracked')"
+            class="text-xs text-muted-foreground mt-1"
+          >
             {{ t('stockStatus') }}: {{ stockStatusLabel(row) }}
           </p>
         </template>

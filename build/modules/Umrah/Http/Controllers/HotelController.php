@@ -80,7 +80,7 @@ class HotelController extends Controller
         return Inertia::render('Umrah/Settings/HotelCreate', [
             'company' => ['id' => $company->id, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'vendors' => HotelVendor::where('company_id', $company->id)
-                ->where(fn ($query) => $query->where('is_active', true)->orWhereKey($record->hotel_vendor_id))
+                ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $record->hotel_vendor_id))
                 ->orderBy('name')->get(),
             'roomTypes' => HotelRoomRate::TYPES,
             'editingHotel' => $record,

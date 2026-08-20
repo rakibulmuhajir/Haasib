@@ -18,6 +18,8 @@
         </include>
     </source>
     <php>
+        <!-- The route smoke test renders every page in one process; 128M is not enough. -->
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

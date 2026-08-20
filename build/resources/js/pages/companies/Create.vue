@@ -50,6 +50,8 @@ const form = useForm({
   country: '',
   base_currency: '',
   timezone: '',
+  secondary_currency: '',
+  secondary_exchange_rate: '',
 })
 
 // Find selected country details
@@ -73,13 +75,39 @@ watch(() => form.country, (countryCode) => {
   }
 })
 
-// Get currency display info
-const selectedCurrency = computed(() => {
-  return props.currencies.find(c => c.code === form.base_currency)
-})
-
 const selectedIndustry = computed(() => {
   return props.industries.find(industry => industry.code === form.industry_code)
+})
+
+// Secondary currency options exclude whatever is currently primary
+const secondaryCurrencyOptions = computed(() => {
+  return props.currencies.filter(c => c.code !== form.base_currency)
+})
+
+const NONE_SECONDARY_CURRENCY = 'none'
+
+// The Select needs a non-empty sentinel for "no secondary currency"; translate
+// it to/from the empty string the backend expects.
+const secondaryCurrencyModel = computed({
+  get: () => form.secondary_currency || NONE_SECONDARY_CURRENCY,
+  set: (value: string) => {
+    form.secondary_currency = value === NONE_SECONDARY_CURRENCY ? '' : value
+  },
+})
+
+// If the primary currency changes to match the chosen secondary, reset the secondary
+watch(() => form.base_currency, (baseCurrency) => {
+  if (form.secondary_currency && form.secondary_currency === baseCurrency) {
+    form.secondary_currency = ''
+    form.secondary_exchange_rate = ''
+  }
+})
+
+// Clear the exchange rate whenever the secondary currency is cleared
+watch(() => form.secondary_currency, (secondaryCurrency) => {
+  if (!secondaryCurrency) {
+    form.secondary_exchange_rate = ''
+  }
 })
 
 const submit = () => {
@@ -214,6 +242,84 @@ const submit = () => {
               </p>
             </div>
 
+            <!-- Primary Currency -->
+            <div class="space-y-2">
+              <Label for="base_currency" class="font-medium">
+                Primary currency <span class="text-status-critical">*</span>
+              </Label>
+              <Select v-model="form.base_currency" required>
+                <SelectTrigger id="base_currency">
+                  <SelectValue placeholder="Select a currency..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="currency in currencies"
+                    :key="currency.code"
+                    :value="currency.code"
+                  >
+                    {{ currency.code }} - {{ currency.name }} ({{ currency.symbol }})
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-text-secondary">
+                Your country sets the default, but you can change it.
+              </p>
+              <p v-if="form.industry_code === 'travel'" class="text-xs text-text-secondary">
+                Travel companies often bill in Saudi Riyal even when based elsewhere. Pick the currency your books are kept in.
+              </p>
+              <p v-if="form.errors.base_currency" class="text-sm text-status-critical">
+                {{ form.errors.base_currency }}
+              </p>
+            </div>
+
+            <!-- Secondary Currency (optional) -->
+            <div class="space-y-2">
+              <Label for="secondary_currency" class="font-medium">
+                Secondary currency
+              </Label>
+              <Select v-model="secondaryCurrencyModel">
+                <SelectTrigger id="secondary_currency">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem :value="NONE_SECONDARY_CURRENCY">
+                    None
+                  </SelectItem>
+                  <SelectItem
+                    v-for="currency in secondaryCurrencyOptions"
+                    :key="currency.code"
+                    :value="currency.code"
+                  >
+                    {{ currency.code }} - {{ currency.name }} ({{ currency.symbol }})
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-text-secondary">
+                Optional. Transactions may be recorded in either currency, and the rate can be updated later in Settings.
+              </p>
+              <p v-if="form.errors.secondary_currency" class="text-sm text-status-critical">
+                {{ form.errors.secondary_currency }}
+              </p>
+
+              <div v-if="form.secondary_currency" class="space-y-2 pt-2">
+                <Label for="secondary_exchange_rate" class="font-medium">
+                  1 {{ form.secondary_currency }} = ___ {{ form.base_currency }}
+                </Label>
+                <Input
+                  id="secondary_exchange_rate"
+                  v-model="form.secondary_exchange_rate"
+                  type="number"
+                  step="0.00000001"
+                  min="0"
+                  placeholder="e.g., 75.00"
+                  required
+                />
+                <p v-if="form.errors.secondary_exchange_rate" class="text-sm text-status-critical">
+                  {{ form.errors.secondary_exchange_rate }}
+                </p>
+              </div>
+            </div>
+
             <!-- Auto-filled info card -->
             <div v-if="selectedCountry" class="rounded-lg border border-status-info/30 bg-status-info/10 p-4">
               <div class="flex items-center gap-2 mb-3">
@@ -221,15 +327,6 @@ const submit = () => {
                 <span class="text-sm font-medium text-text-primary">Auto-configured for {{ selectedCountry.name }}</span>
               </div>
               <div class="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span class="text-text-secondary">Currency:</span>
-                  <span class="ml-2 font-medium text-text-primary">
-                    {{ selectedCurrency?.code || form.base_currency }}
-                    <template v-if="selectedCurrency">
-                      - {{ selectedCurrency.name }} ({{ selectedCurrency.symbol }})
-                    </template>
-                  </span>
-                </div>
                 <div>
                   <span class="text-text-secondary">Timezone:</span>
                   <span class="ml-2 font-medium text-text-primary">{{ form.timezone }}</span>
@@ -242,7 +339,12 @@ const submit = () => {
 
             <!-- Submit Button -->
             <div class="pt-4">
-              <Button type="submit" :disabled="form.processing || (canAssignOwner && !form.owner_user_id) || !form.country || !form.industry_code || !form.base_currency" class="w-full" size="lg">
+              <Button
+                type="submit"
+                :disabled="form.processing || (canAssignOwner && !form.owner_user_id) || !form.country || !form.industry_code || !form.base_currency || (!!form.secondary_currency && !form.secondary_exchange_rate)"
+                class="w-full"
+                size="lg"
+              >
                 <Loader2 v-if="form.processing" class="w-4 h-4 mr-2 animate-spin" />
                 Create Company
               </Button>

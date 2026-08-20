@@ -70,6 +70,33 @@ class CompanyStoreRequest extends FormRequest
             'language' => ['nullable', 'string', 'max:10'],
             'locale' => ['nullable', 'string', 'max:10'],
             'settings' => ['nullable', 'array'],
+            'secondary_currency' => [
+                'nullable',
+                'string',
+                'size:3',
+                'regex:/^[A-Z]{3}$/',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ((string) $value === strtoupper((string) $this->input('base_currency'))) {
+                        $fail('The secondary currency must be different from the primary currency.');
+
+                        return;
+                    }
+
+                    if (! DB::table('public.currencies')
+                        ->where('code', strtoupper((string) $value))
+                        ->where('is_active', true)
+                        ->exists()) {
+                        $fail('Please select a supported active currency.');
+                    }
+                },
+            ],
+            'secondary_exchange_rate' => [
+                'numeric',
+                'gt:0',
+                'decimal:0,8',
+                Rule::requiredIf(fn () => $this->filled('secondary_currency')),
+                Rule::prohibitedIf(fn () => ! $this->filled('secondary_currency')),
+            ],
             'owner_user_id' => [
                 'required',
                 'uuid',

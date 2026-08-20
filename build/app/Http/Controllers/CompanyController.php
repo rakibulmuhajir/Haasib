@@ -88,6 +88,11 @@ class CompanyController extends Controller
         $data['base_currency'] = strtoupper($data['base_currency']);
         $data['slug'] = $this->uniqueSlug(Str::slug($data['name']));
 
+        // Regional number/date formatting follows the selected country while
+        // the UI language itself stays English regardless of where the
+        // company is based.
+        $data['locale'] = $data['country'] ? 'en_'.strtoupper((string) $data['country']) : 'en_US';
+
         $company = DB::transaction(function () use ($data, $owner) {
             $company = Company::create([
                 'name' => $data['name'],
@@ -121,6 +126,15 @@ class CompanyController extends Controller
             );
 
             app(CompanyRbacBootstrapper::class)->bootstrap($company, $owner);
+
+            if (! empty($data['secondary_currency'])) {
+                CompanyCurrency::create([
+                    'company_id' => $company->id,
+                    'currency_code' => strtoupper((string) $data['secondary_currency']),
+                    'exchange_rate' => $data['secondary_exchange_rate'],
+                    'enabled_at' => now(),
+                ]);
+            }
 
             return $company;
         });

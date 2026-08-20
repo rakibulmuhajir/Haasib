@@ -49,6 +49,8 @@ const props = defineProps<{
         outstanding_amount: number;
     }>;
     canRecordPayments: boolean;
+    canSubmitPayments: boolean;
+    canApprovePayments: boolean;
 }>();
 
 const search = ref(props.filters.search || '');
@@ -184,6 +186,12 @@ const submitAllocation = () => {
                 @click="router.get(`/${company.slug}/umrah/payments/create`)"
                 ><Plane class="mr-2 h-4 w-4" />Record Payment</Button
             >
+            <Button
+                v-if="canSubmitPayments"
+                variant="outline"
+                @click="router.get(`/${company.slug}/umrah/payments/submit`)"
+                ><Plane class="mr-2 h-4 w-4" />Submit Payment</Button
+            >
         </template>
 
         <div class="grid gap-4 md:grid-cols-2">
@@ -258,7 +266,7 @@ const submitAllocation = () => {
 
                     <template #cell-payment_number="{ row }">
                         {{ row.payment_number }}
-                        <StatusBadge v-if="row.status === 'reversed'" status="reversed" />
+                        <StatusBadge v-if="row.status !== 'posted'" :status="row.status" />
                     </template>
 
                     <template #cell-payment_date="{ row }">

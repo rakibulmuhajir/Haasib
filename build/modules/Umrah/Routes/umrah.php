@@ -50,8 +50,11 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::get('payments', [PaymentController::class, 'index'])->name('umrah.payments.index');
         Route::get('payments/create', [PaymentController::class, 'create'])->name('umrah.payments.create');
         Route::post('payments', [PaymentController::class, 'store'])->name('umrah.payments.store');
+        Route::get('payments/submit', [PaymentController::class, 'createSubmission'])->name('umrah.payments.submission.create');
+        Route::post('payments/submit', [PaymentController::class, 'submit'])->name('umrah.payments.submit');
         Route::get('payments/{payment}/pdf', [PaymentController::class, 'pdf'])->whereUuid('payment')->name('umrah.payments.pdf');
         Route::post('payments/{payment}/reverse', [PaymentController::class, 'reverse'])->whereUuid('payment')->name('umrah.payments.reverse');
+        Route::post('payments/{payment}/review', [PaymentController::class, 'review'])->whereUuid('payment')->name('umrah.payments.review');
         Route::post('payments/{payment}/allocations', [PaymentController::class, 'allocate'])->whereUuid('payment')->name('umrah.payments.allocations.store');
         Route::get('payments/{payment}', [PaymentController::class, 'show'])->whereUuid('payment')->name('umrah.payments.show');
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');

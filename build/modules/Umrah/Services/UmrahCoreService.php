@@ -363,32 +363,143 @@ class UmrahCoreService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            if ($direction === GroupPayment::DIRECTION_RECEIVED) {
-                $this->postAgentPayment($payment);
-            } else {
-                $this->postVendorPayment($payment->fresh(['visaVendor', 'transportVendor', 'hotelVendor']));
-                $vendor->update([
-                    'total_paid' => round((float) $vendor->total_paid + $baseAmount, 2),
-                    'balance' => max(round((float) $vendor->balance - $baseAmount, 2), 0),
-                ]);
+            $this->postPaymentAndAllocate($payment, $group, $data, $baseAmount, $vendor);
+
+            return $payment->fresh(['allocations.group']);
+        });
+    }
+
+    /**
+     * Posts a payment (agent or vendor) to the ledger, applies its
+     * allocations, and recalculates the agent balance. This is the tail end
+     * of a direct-entry payment (addPayment) and is reused, unchanged, when
+     * an accountant approves a submitted payment.
+     */
+    private function postPaymentAndAllocate(GroupPayment $payment, ?VisaGroup $group, array $data, float $baseAmount, VisaVendor|HotelVendor|null $vendor): void
+    {
+        if ($payment->direction === GroupPayment::DIRECTION_RECEIVED) {
+            $this->postAgentPayment($payment);
+        } else {
+            $this->postVendorPayment($payment->fresh(['visaVendor', 'transportVendor', 'hotelVendor']));
+            $vendor?->update([
+                'total_paid' => round((float) $vendor->total_paid + $baseAmount, 2),
+                'balance' => max(round((float) $vendor->balance - $baseAmount, 2), 0),
+            ]);
+        }
+
+        $requestedAllocations = $data['allocations'] ?? [];
+        if ($group && $requestedAllocations === []) {
+            $allocationAmount = min($baseAmount, $this->allocationOutstanding($payment, $group));
+            if ($allocationAmount > 0) {
+                $requestedAllocations[] = [
+                    'visa_group_id' => $group->id,
+                    'base_amount' => $allocationAmount,
+                ];
+            }
+        }
+        foreach ($requestedAllocations as $allocation) {
+            $this->allocatePayment($payment, $allocation);
+        }
+        if ($payment->agent_id) {
+            $this->recalculateAgent($payment->agent_id);
+        }
+    }
+
+    public function submitPayment(string $companyId, array $data): GroupPayment
+    {
+        return DB::transaction(function () use ($companyId, $data) {
+            $group = ! empty($data['visa_group_id'])
+                ? VisaGroup::where('company_id', $companyId)->lockForUpdate()->findOrFail($data['visa_group_id'])
+                : null;
+            $amount = round((float) $data['amount'], 6);
+            $company = $this->company($companyId);
+            $currency = strtoupper($data['currency']);
+
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['amount' => 'Payment amount must be greater than zero.']);
             }
 
-            $requestedAllocations = $data['allocations'] ?? [];
-            if ($group && $requestedAllocations === []) {
-                $allocationAmount = min($baseAmount, $this->allocationOutstanding($payment, $group));
-                if ($allocationAmount > 0) {
-                    $requestedAllocations[] = [
-                        'visa_group_id' => $group->id,
-                        'base_amount' => $allocationAmount,
-                    ];
+            if ($group && $group->agent_id !== $data['agent_id']) {
+                throw ValidationException::withMessages(['visa_group_id' => 'Selected group does not belong to this agent.']);
+            }
+
+            return GroupPayment::create([
+                'company_id' => $companyId,
+                'visa_group_id' => $group?->id,
+                'agent_id' => $data['agent_id'],
+                'direction' => GroupPayment::DIRECTION_RECEIVED,
+                'payment_number' => $data['payment_number'] ?? null ?: $this->nextPaymentNumber($companyId),
+                'payment_date' => $data['payment_date'],
+                'amount' => $amount,
+                'currency' => $currency,
+                'exchange_rate' => null,
+                'base_currency' => $company->base_currency,
+                'base_amount' => null,
+                'method' => $data['method'],
+                'reference' => $data['reference'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'status' => GroupPayment::STATUS_SUBMITTED,
+                'submitted_by_user_id' => $data['submitted_by_user_id'] ?? null,
+                'submitted_at' => now(),
+            ]);
+        });
+    }
+
+    public function reviewPayment(GroupPayment $payment, string $decision, array $data, ?string $userId): GroupPayment
+    {
+        return DB::transaction(function () use ($payment, $decision, $data, $userId) {
+            $payment = GroupPayment::where('company_id', $payment->company_id)->lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->status !== GroupPayment::STATUS_SUBMITTED) {
+                throw ValidationException::withMessages(['payment' => 'Only a submitted payment can be reviewed.']);
+            }
+
+            if ($decision === 'reject') {
+                if (empty($data['review_remarks'])) {
+                    throw ValidationException::withMessages(['review_remarks' => 'Remarks are required to reject a payment.']);
                 }
+
+                $payment->update([
+                    'status' => GroupPayment::STATUS_REJECTED,
+                    'reviewed_by_user_id' => $userId,
+                    'reviewed_at' => now(),
+                    'review_remarks' => $data['review_remarks'],
+                ]);
+
+                return $payment->fresh();
             }
-            foreach ($requestedAllocations as $allocation) {
-                $this->allocatePayment($payment, $allocation);
+
+            $companyId = $payment->company_id;
+            $company = $this->company($companyId);
+            $amount = round((float) ($data['amount'] ?? $payment->amount), 6);
+            $currency = strtoupper($data['currency'] ?? $payment->currency);
+            $exchangeRate = $currency === $company->base_currency ? null : (float) ($data['exchange_rate'] ?? $payment->exchange_rate);
+            $baseAmount = round($amount * ($exchangeRate ?? 1), 2);
+
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['amount' => 'Payment amount must be greater than zero.']);
             }
-            if ($payment->agent_id) {
-                $this->recalculateAgent($payment->agent_id);
-            }
+
+            $group = $payment->visa_group_id
+                ? VisaGroup::where('company_id', $companyId)->lockForUpdate()->findOrFail($payment->visa_group_id)
+                : null;
+
+            $payment->update([
+                'payment_date' => $data['payment_date'] ?? $payment->payment_date,
+                'amount' => $amount,
+                'currency' => $currency,
+                'exchange_rate' => $exchangeRate,
+                'base_amount' => $baseAmount,
+                'method' => $data['method'] ?? $payment->method,
+                'reference' => array_key_exists('reference', $data) ? $data['reference'] : $payment->reference,
+                'account_id' => array_key_exists('account_id', $data) ? $data['account_id'] : $payment->account_id,
+                'status' => GroupPayment::STATUS_POSTED,
+                'reviewed_by_user_id' => $userId,
+                'reviewed_at' => now(),
+                'review_remarks' => $data['review_remarks'] ?? null,
+            ]);
+
+            $this->postPaymentAndAllocate($payment->fresh(), $group, [], $baseAmount, null);
 
             return $payment->fresh(['allocations.group']);
         });

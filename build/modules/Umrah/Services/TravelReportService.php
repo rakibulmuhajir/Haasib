@@ -151,6 +151,7 @@ class TravelReportService
 
         $payments = GroupPayment::where('company_id', $company->id)
             ->where('direction', GroupPayment::DIRECTION_RECEIVED)
+            ->whereIn('status', [GroupPayment::STATUS_POSTED, GroupPayment::STATUS_REVERSED])
             ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))
             ->with(['agent:id,name', 'allAllocations.group:id,group_number'])
             ->get();

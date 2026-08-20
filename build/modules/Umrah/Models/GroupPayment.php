@@ -3,6 +3,7 @@
 namespace App\Modules\Umrah\Models;
 
 use App\Models\Company;
+use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,6 +33,17 @@ class GroupPayment extends Model
     public const STATUS_POSTED = 'posted';
 
     public const STATUS_REVERSED = 'reversed';
+
+    public const STATUS_SUBMITTED = 'submitted';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUSES = [
+        self::STATUS_POSTED => 'Posted',
+        self::STATUS_REVERSED => 'Reversed',
+        self::STATUS_SUBMITTED => 'Submitted',
+        self::STATUS_REJECTED => 'Rejected',
+    ];
 
     public const METHOD_CASH = 'cash';
 
@@ -76,6 +88,11 @@ class GroupPayment extends Model
         'reversed_by_user_id',
         'reversal_reason',
         'reversal_transaction_id',
+        'submitted_by_user_id',
+        'submitted_at',
+        'reviewed_by_user_id',
+        'reviewed_at',
+        'review_remarks',
     ];
 
     protected $casts = [
@@ -94,6 +111,10 @@ class GroupPayment extends Model
         'reversed_at' => 'datetime',
         'reversed_by_user_id' => 'string',
         'reversal_transaction_id' => 'string',
+        'submitted_by_user_id' => 'string',
+        'submitted_at' => 'datetime',
+        'reviewed_by_user_id' => 'string',
+        'reviewed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -137,6 +158,16 @@ class GroupPayment extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class);
+    }
+
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by_user_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by_user_id');
     }
 
     public function reversalTransaction(): BelongsTo

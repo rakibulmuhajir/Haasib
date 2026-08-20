@@ -7,17 +7,53 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-import { Download, ReceiptText, RotateCcw } from 'lucide-vue-next';
+import { CheckCircle2, Download, ReceiptText, RotateCcw, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
-const props = defineProps<{ company: { name: string; slug: string; base_currency: string }; payment: any; canReverse: boolean }>();
+const props = defineProps<{ company: { name: string; slug: string; base_currency: string }; payment: any; canReverse: boolean; canReview: boolean }>();
 const reverseOpen = ref(false);
 const form = useForm({ reason: '' });
+const reviewOpen = ref(false);
+const reviewDecision = ref<'approve' | 'reject'>('approve');
+const reviewForm = useForm({
+    decision: 'approve',
+    review_remarks: '',
+    payment_date: props.payment.payment_date ? String(props.payment.payment_date).slice(0, 10) : '',
+    amount: String(props.payment.amount ?? ''),
+    currency: props.payment.currency,
+    exchange_rate: props.payment.exchange_rate ? String(props.payment.exchange_rate) : '',
+    method: props.payment.method,
+    reference: props.payment.reference || '',
+});
+const openReview = (decision: 'approve' | 'reject') => {
+    reviewDecision.value = decision;
+    reviewForm.decision = decision;
+    reviewForm.review_remarks = '';
+    reviewOpen.value = true;
+};
+const submitReview = () =>
+    reviewForm
+        .transform((data) => ({
+            ...data,
+            amount: Number(data.amount || 0),
+            exchange_rate:
+                data.currency === props.company.base_currency
+                    ? null
+                    : Number(data.exchange_rate || 0),
+        }))
+        .post(`/${props.company.slug}/umrah/payments/${props.payment.id}/review`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                reviewOpen.value = false;
+            },
+            onError: () => toast.error('Failed to record review'),
+        });
 const party = computed(() => props.payment.agent?.name || props.payment.visa_vendor?.name || props.payment.transport_vendor?.name || props.payment.hotel_vendor?.name || '—');
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -50,6 +86,8 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
         <template #actions>
             <Button variant="outline" @click="downloadReceipt"><Download class="mr-2 h-4 w-4" />Receipt PDF</Button>
             <Button v-if="canReverse" variant="destructive" @click="reverseOpen = true"><RotateCcw class="mr-2 h-4 w-4" />Reverse</Button>
+            <Button v-if="canReview" variant="outline" @click="openReview('reject')"><XCircle class="mr-2 h-4 w-4" />Reject</Button>
+            <Button v-if="canReview" @click="openReview('approve')"><CheckCircle2 class="mr-2 h-4 w-4" />Approve</Button>
         </template>
 
         <div class="grid gap-4 md:grid-cols-4">
@@ -93,6 +131,90 @@ const downloadReceipt = () => window.location.assign(`/${props.company.slug}/umr
         </Card>
 
         <Card v-if="payment.reversed_at" variant="detail"><CardHeader><CardTitle>Reversal</CardTitle></CardHeader><CardContent><DateTimeText :value="payment.reversed_at" /> · {{ payment.reversal_reason }}</CardContent></Card>
+
+        <Card v-if="payment.submitted_at" variant="detail">
+            <CardHeader><CardTitle>Submission</CardTitle></CardHeader>
+            <CardContent class="space-y-1 text-sm">
+                <div>Submitted by {{ payment.submitted_by?.name || '—' }} · <DateTimeText :value="payment.submitted_at" /></div>
+                <div v-if="payment.reviewed_at">
+                    Reviewed by {{ payment.reviewed_by?.name || '—' }} · <DateTimeText :value="payment.reviewed_at" />
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card
+            v-if="payment.review_remarks"
+            variant="detail"
+            :class="payment.status === 'rejected' ? 'border-l-4 border-l-status-critical' : ''"
+        >
+            <CardHeader><CardTitle>Reviewer remarks</CardTitle></CardHeader>
+            <CardContent class="space-y-1">
+                <p class="text-sm whitespace-pre-wrap">{{ payment.review_remarks }}</p>
+                <p class="text-xs text-muted-foreground">
+                    {{ payment.reviewed_by?.name || 'Reviewer' }} ·
+                    <DateTimeText :value="payment.reviewed_at" />
+                </p>
+            </CardContent>
+        </Card>
+
+        <Dialog v-model:open="reviewOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{{ reviewDecision === 'approve' ? 'Approve Payment' : 'Reject Payment' }}</DialogTitle>
+                    <DialogDescription>
+                        {{
+                            reviewDecision === 'approve'
+                                ? 'Approving books this payment to the ledger. Correct any details before approving if needed.'
+                                : 'Rejecting posts nothing. The agent will see your remarks.'
+                        }}
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitReview">
+                    <template v-if="reviewDecision === 'approve'">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-2">
+                                <Label>Date</Label>
+                                <Input v-model="reviewForm.payment_date" type="date" />
+                            </div>
+                            <div class="space-y-2">
+                                <Label>Method</Label>
+                                <Input v-model="reviewForm.method" type="text" />
+                            </div>
+                            <div class="space-y-2">
+                                <Label>Amount</Label>
+                                <Input v-model="reviewForm.amount" type="number" min="0.01" step="0.000001" />
+                            </div>
+                            <div class="space-y-2">
+                                <Label>Currency</Label>
+                                <Input v-model="reviewForm.currency" type="text" maxlength="3" class="uppercase" />
+                            </div>
+                            <div v-if="reviewForm.currency !== company.base_currency" class="col-span-2 space-y-2">
+                                <Label>Exchange rate to {{ company.base_currency }}</Label>
+                                <Input v-model="reviewForm.exchange_rate" type="number" min="0.00000001" step="0.00000001" />
+                                <p v-if="reviewForm.errors.exchange_rate" class="text-xs text-destructive">{{ reviewForm.errors.exchange_rate }}</p>
+                            </div>
+                            <div class="col-span-2 space-y-2">
+                                <Label>Reference</Label>
+                                <Input v-model="reviewForm.reference" type="text" />
+                            </div>
+                        </div>
+                        <p v-if="reviewForm.errors.amount" class="text-xs text-destructive">{{ reviewForm.errors.amount }}</p>
+                        <p v-if="reviewForm.errors.currency" class="text-xs text-destructive">{{ reviewForm.errors.currency }}</p>
+                    </template>
+                    <div class="space-y-2">
+                        <Label for="review_remarks">Remarks{{ reviewDecision === 'reject' ? ' (required)' : '' }}</Label>
+                        <Textarea id="review_remarks" v-model="reviewForm.review_remarks" :required="reviewDecision === 'reject'" />
+                        <p v-if="reviewForm.errors.review_remarks" class="text-xs text-destructive">{{ reviewForm.errors.review_remarks }}</p>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" @click="reviewOpen = false">Cancel</Button>
+                        <Button type="submit" :variant="reviewDecision === 'reject' ? 'destructive' : 'default'" :disabled="reviewForm.processing">
+                            {{ reviewDecision === 'approve' ? 'Approve & Post' : 'Reject' }}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
 
         <Dialog v-model:open="reverseOpen"><DialogContent><DialogHeader><DialogTitle>Reverse Payment</DialogTitle><DialogDescription>This creates an opposite accounting entry. The original payment remains in the audit trail.</DialogDescription></DialogHeader>
             <div class="space-y-2"><Label for="reason">Reason</Label><Textarea id="reason" v-model="form.reason" required /><p v-if="form.errors.reason" class="text-sm text-destructive">{{ form.errors.reason }}</p></div>

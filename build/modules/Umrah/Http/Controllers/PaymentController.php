@@ -5,8 +5,10 @@ namespace App\Modules\Umrah\Http\Controllers;
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Modules\Umrah\Http\Requests\ReversePaymentRequest;
+use App\Modules\Umrah\Http\Requests\ReviewGroupPaymentRequest;
 use App\Modules\Umrah\Http\Requests\StoreGroupPaymentRequest;
 use App\Modules\Umrah\Http\Requests\StorePaymentAllocationRequest;
+use App\Modules\Umrah\Http\Requests\SubmitGroupPaymentRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\HotelVendor;
@@ -79,6 +81,8 @@ class PaymentController extends Controller
             'filters' => $request->only(['search', 'direction']),
             'allocationGroups' => $allocationGroups->values(),
             'canRecordPayments' => ! $isMember && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_CREATE),
+            'canSubmitPayments' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_SUBMIT),
+            'canApprovePayments' => (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_APPROVE),
         ]);
     }
 
@@ -122,6 +126,62 @@ class PaymentController extends Controller
         return redirect()->route('umrah.payments.index', ['company' => $company->slug])->with('success', 'Payment recorded successfully.');
     }
 
+    /**
+     * Route name is umrah.payments.submission.create, not .submit-form.
+     *
+     * Wayfinder derives its generated symbols from the route NAME and
+     * separately generates a `<action>Form` helper for every route. A route
+     * named `...payments.submit-form` therefore produces an export called
+     * `submitForm` that collides with the form helper belonging to
+     * `...payments.submit`, giving two `submitForm` declarations in one
+     * generated module. Keep sibling route names from colliding under that
+     * `Form` suffix.
+     */
+    public function createSubmission(Request $request): Response
+    {
+        $company = app(CurrentCompany::class)->get();
+        abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_SUBMIT), 403);
+        $memberAgentId = $this->memberAgentId($company->id, $request);
+        $allocationGroups = collect($this->service->paymentAllocationOptions($company->id))
+            ->when($memberAgentId, fn ($options) => $options->where('party_key', 'agent:'.$memberAgentId));
+
+        return Inertia::render('Umrah/Payments/Submit', [
+            'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
+            'currencies' => app(CompanyCurrencyOptions::class)->forCompany($company),
+            'methods' => GroupPayment::METHODS,
+            'allocationGroups' => $allocationGroups->values(),
+        ]);
+    }
+
+    public function submit(SubmitGroupPaymentRequest $request): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $data = $request->validated();
+        $memberAgentId = $this->memberAgentId($company->id, $request);
+        abort_unless($memberAgentId, 403);
+        $data['agent_id'] = $memberAgentId;
+        $data['submitted_by_user_id'] = $request->user()?->id;
+
+        $this->service->submitPayment($company->id, $data);
+
+        return redirect()->route('umrah.payments.index', ['company' => $company->slug])->with('success', 'Payment submitted for review.');
+    }
+
+    public function review(ReviewGroupPaymentRequest $request, string $companySlug, string $payment): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = $this->paymentForUser($company->id, $request, $payment);
+        $data = $request->validated();
+        $decision = $data['decision'];
+        unset($data['decision']);
+
+        $this->service->reviewPayment($record, $decision, $data, $request->user()?->id);
+
+        $message = $decision === 'approve' ? 'Payment approved and posted.' : 'Payment rejected.';
+
+        return back()->with('success', $message);
+    }
+
     public function allocate(StorePaymentAllocationRequest $request, string $companySlug, string $payment): RedirectResponse
     {
         $company = app(CurrentCompany::class)->get();
@@ -139,12 +199,13 @@ class PaymentController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_VIEW), 403);
         $record = $this->paymentForUser($company->id, $request, $payment)
-            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number']);
+            ->load(['agent:id,name', 'visaVendor:id,name', 'transportVendor:id,name', 'hotelVendor:id,name', 'account:id,code,name', 'transaction:id,transaction_number', 'reversalTransaction:id,transaction_number', 'allAllocations.group:id,group_number,name', 'allAllocations.transaction:id,transaction_number', 'allAllocations.reversalTransaction:id,transaction_number', 'submittedBy:id,name', 'reviewedBy:id,name']);
 
         return Inertia::render('Umrah/Payments/Show', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'payment' => $record,
             'canReverse' => $record->status === GroupPayment::STATUS_POSTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_REVERSE),
+            'canReview' => $record->status === GroupPayment::STATUS_SUBMITTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_PAYMENT_APPROVE),
         ]);
     }
 

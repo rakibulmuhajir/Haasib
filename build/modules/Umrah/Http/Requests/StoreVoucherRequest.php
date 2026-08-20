@@ -100,6 +100,14 @@ class StoreVoucherRequest extends UmrahFormRequest
                 $hasCompleteItinerary = $this->hasCompleteItinerary();
                 $companyId = app(CompanyContextService::class)->getCompanyId();
                 $groupId = (string) $this->input('visa_group_id');
+                $group = VisaGroup::where('company_id', $companyId)->find($groupId);
+
+                if ($group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForTransportMode($group->transport_mode))) {
+                    $validator->errors()->add('service_bundle', $group->transport_mode === 'none'
+                        ? 'This group has self-arranged transport, so a transport bundle cannot be sold on it.'
+                        : 'Selected service bundle is not valid for this group.');
+                }
+
                 $passengerIds = array_values(array_unique($this->input('passenger_ids', [])));
                 $role = DB::table('auth.company_user')
                     ->where('company_id', $companyId)

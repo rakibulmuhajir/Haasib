@@ -125,7 +125,15 @@ const canReassignPassengers = computed(
         canEdit.value &&
         (props.voucher.passengers?.length || 0) > 1,
 );
+/*
+ * The group decides whether there is transport; the bundle only names what was
+ * sold. Passenger and voucher vocabularies both spell a value 'visa_transport'
+ * but mean different things by it -- for a passenger it reads "visa included",
+ * for a voucher "Visa + Transport" -- so a self-arranged group produced a
+ * voucher advertising a bus nobody booked. transport_mode is the fact.
+ */
 const includesTransport = computed(() =>
+    props.voucher.group?.transport_mode !== 'none' &&
     [
         'visa_transport',
         'visa_transport_hotel',
@@ -133,6 +141,23 @@ const includesTransport = computed(() =>
         'transport_hotel',
     ].includes(props.voucher.service_bundle),
 );
+/*
+ * Historical correction, not a live rule: records written before 'visa' and
+ * 'visa_hotel' existed as a vocabulary carry 'visa_transport' or
+ * 'visa_transport_hotel' on self-arranged groups (transport_mode 'none'),
+ * which is exactly the defect this feature fixes -- those vouchers never had
+ * a bus. Re-derive the truthful label from the group's transport_mode
+ * without touching the stored value.
+ */
+const serviceBundleLabel = computed(() => {
+    const bundle = props.voucher.service_bundle;
+    if (props.voucher.group?.transport_mode === 'none') {
+        if (bundle === 'visa_transport') return 'Visa Only';
+        if (bundle === 'visa_transport_hotel') return 'Visa + Hotel';
+    }
+    return props.serviceBundles[bundle] || bundle;
+});
+
 const approve = () => {
     approvalError.value = '';
     approveForm.post(
@@ -363,7 +388,7 @@ const voucherHtml = () => {
                 <div class="section-title">Transport / Services</div>
                 <table>
                     <thead><tr><th>Schedule</th><th>Vehicle</th><th>Sector</th><th>Driver</th><th>Contact</th></tr></thead>
-                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : 'Standard bus transport')}</td></tr>`}</tbody>
+                    <tbody>${transportRows || `<tr><td colspan="5">${escapeHtml(props.voucher.group?.transport_mode === 'specialized' ? 'Specialized transport' : props.voucher.group?.transport_mode === 'none' ? 'Self-arranged transport' : 'Standard bus transport')}</td></tr>`}</tbody>
                 </table>`
         : '';
 
@@ -400,7 +425,7 @@ ${printBaseCss()}
     <td><span class="label">Voucher No.</span><span class="focus">${escapeHtml(props.voucher.voucher_number)}</span></td>
     <td><span class="label">Group</span>${escapeHtml(props.voucher.group?.group_number)} - ${escapeHtml(props.voucher.group?.name)}</td>
     <td><span class="label">PAX / Nights</span><span class="focus">${(props.voucher.passengers || []).length} / ${totalNights}</span></td>
-    <td><span class="label">Status / Service</span>${escapeHtml(props.statuses[props.voucher.status] || props.voucher.status)} | ${escapeHtml(props.serviceBundles[props.voucher.service_bundle] || props.voucher.service_bundle)}</td>
+    <td><span class="label">Status / Service</span>${escapeHtml(props.statuses[props.voucher.status] || props.voucher.status)} | ${escapeHtml(serviceBundleLabel.value)}</td>
 </tr></table>
 <div class="section-title">Mutamers / Passengers</div>
 <table><thead><tr><th>#</th><th>Name</th><th>Passport</th><th>Nationality</th><th>DOB / Age</th><th>Visa Status</th></tr></thead><tbody>${passengerRows || '<tr><td colspan="6">No passengers assigned.</td></tr>'}</tbody></table>
@@ -641,8 +666,7 @@ const exportVoucher = () => {
                         statuses[voucher.status] || voucher.status
                     }}</Badge
                     ><Badge variant="outline">{{
-                        serviceBundles[voucher.service_bundle] ||
-                        voucher.service_bundle
+                        serviceBundleLabel
                     }}</Badge></CardContent
                 ></Card
             >
@@ -855,7 +879,9 @@ const exportVoucher = () => {
                         {{
                             voucher.group?.transport_mode === 'specialized'
                                 ? 'Specialized transport'
-                                : 'Standard bus transport'
+                                : voucher.group?.transport_mode === 'none'
+                                  ? 'Self-arranged transport'
+                                  : 'Standard bus transport'
                         }}
                     </div>
                     <div

@@ -421,6 +421,7 @@ watch(() => [form.transport_mode, form.mandatory_transport_vendor_id, form.trans
     deep: true,
 });
 watch(() => form.transport_mode, (mode) => {
+    form.clearErrors('mandatory_transport_vendor_id');
     if (mode !== 'none') return;
     form.mandatory_transport_vendor_id = 'none';
     form.transport_service_id = 'none';
@@ -1134,7 +1135,7 @@ const submit = () => {
                             </RadioGroup>
 
                             <div
-                                v-if="form.transport_mode === 'standard_bus' && canManageSetup"
+                                v-if="form.transport_mode === 'standard_bus'"
                                 class="space-y-3 rounded-md border p-3 text-sm"
                             >
                                 <div class="font-medium">
@@ -1182,7 +1183,16 @@ const submit = () => {
                                 </div>
                             </div>
 
-                            <div v-else class="space-y-3">
+                            <!-- Each transport mode shows its own section, and
+                                 self-arranged shows neither. This was a bare
+                                 v-else on the standard-bus block, so choosing
+                                 self-arranged rendered the specialized-fare UI,
+                                 and an operations user on standard bus got that
+                                 same UI with no vendor picker at all -- leaving
+                                 mandatory_transport_vendor_id empty against a
+                                 backend that requires it, with nothing on screen
+                                 to set it. -->
+                            <div v-else-if="form.transport_mode === 'specialized'" class="space-y-3">
                                 <div
                                     v-if="!transportFares.length"
                                     class="rounded-md border border-dashed p-4 text-sm text-muted-foreground"

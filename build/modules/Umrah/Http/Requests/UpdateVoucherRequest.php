@@ -41,7 +41,7 @@ class UpdateVoucherRequest extends UmrahFormRequest
     public function rules(): array
     {
         $companyId = app(CompanyContextService::class)->getCompanyId();
-        $voucher = Voucher::where('company_id', $companyId)->find($this->route('voucher'));
+        $voucher = Voucher::where('company_id', $companyId)->with('group')->find($this->route('voucher'));
         $access = app(TravelAccessService::class);
         $requiresReason = $voucher
             && ! $access->isAgentMember($companyId, $this->user())
@@ -83,6 +83,18 @@ class UpdateVoucherRequest extends UmrahFormRequest
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
+
+            $companyId = app(CompanyContextService::class)->getCompanyId();
+            $voucher = Voucher::where('company_id', $companyId)->with('group')->find($this->route('voucher'));
+
+            if ($voucher?->group && ! array_key_exists($this->input('service_bundle'), Voucher::bundlesForTransportMode($voucher->group->transport_mode))) {
+                $validator->errors()->add('service_bundle', $voucher->group->transport_mode === 'none'
+                    ? 'This group has self-arranged transport, so a transport bundle cannot be sold on it.'
+                    : 'Selected service bundle is not valid for this group.');
+
+                return;
+            }
+
             if (! $this->hasCompleteItinerary()) {
                 return;
             }

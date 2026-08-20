@@ -55,11 +55,32 @@ class TravelReportRequest extends BaseFormRequest
             );
     }
 
+    /**
+     * Reports that answer "what is coming" rather than "what happened".
+     *
+     * A manifest, a dispatch sheet and a rooming list are worked BEFORE the
+     * trip; a visa still in process is by definition not yet delivered. These
+     * defaulted to the current calendar month like the financial reports did,
+     * so an operator opening Transport Dispatch to arrange next week's buses
+     * saw an empty page -- the filter was right and the window was wrong.
+     */
+    public const FORWARD_REPORTS = [
+        'transport-dispatch',
+        'passenger-status',
+        'departure-manifest',
+        'hotel-rooming',
+    ];
+
     protected function prepareForValidation(): void
     {
+        $forward = in_array((string) $this->route('report'), self::FORWARD_REPORTS, true);
+
+        $start = $forward ? now()->startOfDay() : now()->startOfMonth();
+        $end = $forward ? now()->addDays(90)->endOfDay() : now()->endOfMonth();
+
         $this->merge([
-            'start' => $this->input('start', now()->startOfMonth()->toDateString()),
-            'end' => $this->input('end', now()->endOfMonth()->toDateString()),
+            'start' => $this->input('start', $start->toDateString()),
+            'end' => $this->input('end', $end->toDateString()),
         ]);
     }
 

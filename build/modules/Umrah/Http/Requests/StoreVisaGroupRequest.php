@@ -46,7 +46,7 @@ class StoreVisaGroupRequest extends UmrahFormRequest
                 Rule::requiredIf($this->input('transport_mode', VisaGroup::TRANSPORT_STANDARD_BUS) === VisaGroup::TRANSPORT_STANDARD_BUS),
                 'nullable',
                 'uuid',
-                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)),
+                Rule::exists(VisaVendor::class, 'id')->where(fn ($query) => $query->where('company_id', $companyId)->where('is_active', true)->whereNull('deleted_at')->where(fn ($vendor) => $vendor->where('vendor_type', VisaVendor::TYPE_TRANSPORT_PROVIDER)->orWhere('provides_mandatory_transport', true))),
             ],
             'transport_service_id' => ['nullable', 'uuid', $this->existsForCompany(TransportService::class, 'Selected transport service was not found.')],
             'driver_id' => ['nullable', 'uuid', $this->existsForCompany(Driver::class, 'Selected driver was not found.')],

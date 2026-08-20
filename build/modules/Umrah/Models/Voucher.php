@@ -32,12 +32,24 @@ class Voucher extends Model
 
     public const SERVICE_HOTEL = 'hotel';
 
+    public const SERVICE_VISA = 'visa';
+
+    public const SERVICE_VISA_HOTEL = 'visa_hotel';
+
+    /**
+     * NOTE: Passenger::SERVICE_TYPES also spells a constant 'visa_transport',
+     * but that one is labelled "Visa included" and says nothing about
+     * transport. Never infer transport from a passenger's service_type --
+     * the group's transport_mode is the only fact about transport.
+     */
     public const SERVICE_BUNDLES = [
         self::SERVICE_VISA_TRANSPORT => 'Visa + Transport',
         self::SERVICE_VISA_TRANSPORT_HOTEL => 'Visa + Transport + Hotel',
         self::SERVICE_TRANSPORT => 'Transport Only',
         self::SERVICE_TRANSPORT_HOTEL => 'Transport + Hotel',
         self::SERVICE_HOTEL => 'Hotel Only',
+        self::SERVICE_VISA => 'Visa Only',
+        self::SERVICE_VISA_HOTEL => 'Visa + Hotel',
     ];
 
     public const STATUSES = [
@@ -209,7 +221,28 @@ class Voucher extends Model
 
     public static function bundleIncludesHotel(string $bundle): bool
     {
-        return in_array($bundle, [self::SERVICE_VISA_TRANSPORT_HOTEL, self::SERVICE_TRANSPORT_HOTEL, self::SERVICE_HOTEL], true);
+        return in_array($bundle, [self::SERVICE_VISA_TRANSPORT_HOTEL, self::SERVICE_TRANSPORT_HOTEL, self::SERVICE_HOTEL, self::SERVICE_VISA_HOTEL], true);
+    }
+
+    /**
+     * Bundles a group may actually sell, given its transport_mode. A
+     * self-arranged group ('none') has no bus to sell, so it cannot carry
+     * any transport-bearing bundle. A group running a bus can still sell a
+     * visa-only voucher to a passenger who arranges their own leg, so the
+     * transport-bearing bundles gain 'visa' and 'visa_hotel' rather than
+     * losing anything.
+     */
+    public static function bundlesForTransportMode(?string $transportMode): array
+    {
+        if ($transportMode === 'none') {
+            return [
+                self::SERVICE_VISA => self::SERVICE_BUNDLES[self::SERVICE_VISA],
+                self::SERVICE_VISA_HOTEL => self::SERVICE_BUNDLES[self::SERVICE_VISA_HOTEL],
+                self::SERVICE_HOTEL => self::SERVICE_BUNDLES[self::SERVICE_HOTEL],
+            ];
+        }
+
+        return self::SERVICE_BUNDLES;
     }
 
     public function separatedBillingPlan(bool $archiveSource, int $separationIndex): array

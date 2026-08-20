@@ -149,7 +149,7 @@ class VoucherController extends Controller
             'availablePassengers' => $availablePassengers->values(),
             'assignedPassengers' => $assignedPassengers->values(),
             'statuses' => Voucher::STATUSES,
-            'serviceBundles' => Voucher::SERVICE_BUNDLES,
+            'serviceBundles' => Voucher::bundlesForTransportMode($selectedGroup?->transport_mode),
             'airlines' => Voucher::AIRLINES,
             'airportCities' => Voucher::AIRPORT_CITIES,
             'hotels' => $hotels,
@@ -290,7 +290,7 @@ class VoucherController extends Controller
             'company' => $this->companyPayload($company), 'nextVoucherNumber' => $record->voucher_number,
             'groups' => collect([$record->group]), 'selectedGroup' => $record->group,
             'availablePassengers' => $record->passengers, 'assignedPassengers' => collect(),
-            'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::SERVICE_BUNDLES, 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
+            'statuses' => Voucher::STATUSES, 'serviceBundles' => Voucher::bundlesForTransportMode($record->group?->transport_mode), 'airlines' => Voucher::AIRLINES, 'airportCities' => Voucher::AIRPORT_CITIES,
             'hotels' => $hotels, 'editingVoucher' => $record, 'agentCapabilities' => $capabilities,
         ]);
     }

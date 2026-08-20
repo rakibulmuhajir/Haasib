@@ -429,13 +429,22 @@ const removeHotelStay = (index: number) => {
 };
 
 const submit = () => {
+    // A self-arranged group (transport_mode 'none') has no bus to sell, so
+    // the non-hotel-only bundle must be the transport-free variant. The
+    // valid set for this group is decided server-side (Voucher::bundlesForTransportMode);
+    // this only picks which name matches the transport_mode already known here.
+    const transportless = props.selectedGroup?.transport_mode === 'none';
     form.transform((data) => ({
         ...data,
         service_bundle: hotelOnly.value
             ? 'hotel'
             : data.hotel_stays.some((stay) => stay.source === 'company')
-              ? 'visa_transport_hotel'
-              : 'visa_transport',
+              ? transportless
+                  ? 'visa_hotel'
+                  : 'visa_transport_hotel'
+              : transportless
+                ? 'visa'
+                : 'visa_transport',
         visa_group_id:
             data.visa_group_id === 'none' ? null : data.visa_group_id,
         passenger_ids: selectedPassengerIds.value,

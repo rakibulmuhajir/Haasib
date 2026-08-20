@@ -47,7 +47,24 @@ class GroupAccountingService
             ->where('source', 'company')->count());
         $services = collect();
         if ($visaPax > 0) {
-            $services->push(['stage' => 'group', 'service' => 'Visa with mandatory transport', 'quantity' => $visaPax, 'charge' => (float) $group->visa_sale_amount]);
+            /*
+             * The group's transport_mode is the only fact about transport; the
+             * passenger's service_type is not. Passenger::SERVICE_VISA_TRANSPORT
+             * reads "Visa included" in the passenger vocabulary and says nothing
+             * about a bus -- it only spells the same string as the voucher
+             * bundle that does mean "Visa + Transport". Keying the label off it
+             * billed self-arranged groups for mandatory transport they never
+             * bought. Only standard_bus carries transport on the visa line;
+             * specialized transport is itemised separately below.
+             */
+            $services->push([
+                'stage' => 'group',
+                'service' => $group->transport_mode === 'standard_bus'
+                    ? 'Visa with mandatory transport'
+                    : 'Visa',
+                'quantity' => $visaPax,
+                'charge' => (float) $group->visa_sale_amount,
+            ]);
         }
         if ($transportOnlyPax > 0) {
             $services->push(['stage' => 'group', 'service' => 'Transport only', 'quantity' => $transportOnlyPax, 'charge' => $transportOnlyCharge]);

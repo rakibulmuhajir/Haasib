@@ -124,7 +124,12 @@ const submit = () =>
                         </Select>
                         <p class="text-xs text-muted-foreground">Choosing self-arranged transport removes all saved transport details and charges.</p>
                     </div>
-                    <div v-if="canManageVendors && form.transport_mode === 'standard_bus'" class="space-y-2">
+                    <!-- Picking an existing transport provider is not vendor
+                         setup, and the backend requires this field on every
+                         standard-bus group. Gating the picker on canManageVendors
+                         left operations staff facing a required field with no
+                         control on screen to satisfy it. -->
+                    <div v-if="form.transport_mode === 'standard_bus'" class="space-y-2">
                         <Label>Mandatory transport provider</Label>
                         <Select v-model="form.mandatory_transport_vendor_id">
                             <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>

@@ -92,7 +92,15 @@ class VisaGroupController extends Controller
                 'child_retail_amount',
                 'child_cost_amount',
             ]);
-            $transportVendors = collect();
+            // Who the transport provider is is not financial data -- its rates
+            // are. Emptying the whole list hid the money and also removed the
+            // only way to satisfy mandatory_transport_vendor_id, which the
+            // backend requires on every standard-bus group, so operations staff
+            // could not create one at all. Hide the amounts, keep the names.
+            $transportVendors->each->makeHidden([
+                'standard_bus_retail_amount',
+                'standard_bus_cost_amount',
+            ]);
             $transportFares->each(function (TransportFare $fare) {
                 $fare->makeHidden([
                     'transport_vendor_id',

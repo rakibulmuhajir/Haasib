@@ -578,7 +578,9 @@ const addPayment = () =>
                             </div>
                             <div class="font-medium">
                                 {{
-                                    group.transport_mode === 'specialized'
+                                    group.transport_mode === 'none'
+                                        ? 'Self-arranged transport'
+                                        : group.transport_mode === 'specialized'
                                         ? 'Specialized transport'
                                         : 'Standard bus included'
                                 }}
@@ -611,9 +613,9 @@ const addPayment = () =>
                             </div>
                             <div
                                 v-if="
-                                    group.driver ||
+                                    group.transport_mode !== 'none' && (group.driver ||
                                     group.transport_service?.driver_name ||
-                                    group.transport_service?.number_plate
+                                    group.transport_service?.number_plate)
                                 "
                                 class="text-xs text-muted-foreground"
                             >
@@ -946,7 +948,9 @@ const addPayment = () =>
                                         passenger.service_type ===
                                         'transport_only'
                                             ? 'Transport only'
-                                            : 'Visa included'
+                                            : group.transport_mode === 'none'
+                                              ? 'Visa only'
+                                              : 'Visa included'
                                     }}
                                 </div>
                                 <div
@@ -1166,8 +1170,8 @@ const addPayment = () =>
                                     /></SelectTrigger>
                                     <SelectContent
                                         ><SelectItem value="visa_transport"
-                                            >Visa included</SelectItem
-                                        ><SelectItem value="transport_only"
+                                            >{{ group.transport_mode === 'none' ? 'Visa only' : 'Visa included' }}</SelectItem
+                                        ><SelectItem v-if="group.transport_mode !== 'none'" value="transport_only"
                                             >Already has visa - transport
                                             only</SelectItem
                                         ></SelectContent
@@ -1447,7 +1451,7 @@ const addPayment = () =>
                 <div class="space-y-2"><Label>Date of birth</Label><Input v-model="editPassengerForm.date_of_birth" type="date" /></div>
                 <div class="space-y-2"><Label>Imported age</Label><Input v-model="editPassengerForm.imported_age" type="number" /></div>
                 <div class="space-y-2"><Label>Nationality</Label><Input v-model="editPassengerForm.nationality" /></div>
-                <div class="space-y-2"><Label>Service</Label><Select v-model="editPassengerForm.service_type"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="visa_transport">Visa included</SelectItem><SelectItem value="transport_only">Transport only</SelectItem></SelectContent></Select></div>
+                <div class="space-y-2"><Label>Service</Label><Select v-model="editPassengerForm.service_type"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="visa_transport">{{ group.transport_mode === 'none' ? 'Visa only' : 'Visa included' }}</SelectItem><SelectItem v-if="group.transport_mode !== 'none'" value="transport_only">Transport only</SelectItem></SelectContent></Select></div>
                 <div v-if="editPassengerForm.service_type === 'transport_only'" class="space-y-2"><Label>Transport charge</Label><Input v-model="editPassengerForm.transport_charge_amount" type="number" min="0" step="0.01" /></div>
                 <div class="space-y-2"><Label>Visa status</Label><Select v-model="editPassengerForm.visa_status"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem v-for="(label, value) in passengerStatuses" :key="value" :value="value">{{ label }}</SelectItem></SelectContent></Select></div>
                 <div class="space-y-2 md:col-span-2"><Label>Notes</Label><Textarea v-model="editPassengerForm.notes" /></div>

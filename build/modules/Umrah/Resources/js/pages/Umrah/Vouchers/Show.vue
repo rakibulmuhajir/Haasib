@@ -254,8 +254,8 @@ const roomBeds = (stay: any) =>
  * face. Only the latin subsets are declared -- everything a voucher prints is
  * latin or is an image.
  *
- * Both voucher templates interpolate this, so the print window and the legacy
- * one cannot drift into different typefaces.
+ * The print template interpolates this, so the printed voucher and the screen
+ * cannot drift into different typefaces.
  */
 /**
  * What is printed beneath the company's name.

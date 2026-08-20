@@ -8,6 +8,8 @@ use App\Facades\CompanyContext;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\BillPaymentAllocation;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\GlPostingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -74,6 +76,13 @@ class CreateAction implements PaletteAction
             $paymentGroupId = (string) Str::uuid();
             $paymentGroupNumber = $params['payment_number'] ?? $paymentNumbers[0];
 
+            $vendor = Vendor::where('company_id', $company->id)->find($params['vendor_id']);
+            $apAccountId = $params['ap_account_id'] ?? $vendor?->ap_account_id ?? $company->ap_account_id;
+            if (! $apAccountId) {
+                throw new \RuntimeException('AP account is required to post the bill payment.');
+            }
+            $postingService = app(GlPostingService::class);
+
             foreach ($splits as $index => $split) {
                 $amount = round((float) $split['amount'], 6);
                 $baseAmount = round($amount * ($exchangeRate ?? 1), 2);
@@ -119,6 +128,18 @@ class CreateAction implements PaletteAction
                     }
                     $bill->save();
                 }
+
+                // Each split is its own payment against its own account, so
+                // each one posts its own DR AP / CR bank. Inside the same
+                // transaction as the rows above: a payment that cannot be
+                // posted must not leave the bill looking settled.
+                $transaction = $postingService->postBillPayment(
+                    $payment->fresh(['allocations', 'company']),
+                    $split['payment_account_id'],
+                    $apAccountId
+                );
+                $payment->transaction_id = $transaction->id;
+                $payment->save();
 
                 $createdPayments[] = $payment;
             }

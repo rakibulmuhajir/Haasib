@@ -408,15 +408,11 @@ class DemoTradingCompanySeeder extends Seeder
                 // above: a Bill Payments screen nobody has seen with data in it
                 // is a screen nobody has verified.
                 //
-                // NOTE: BillPayment\CreateAction (config/command-bus.php
-                // 'bill_payment.create', the path the real UI uses) never calls
-                // GlPostingService::postBillPayment -- recording a bill payment
-                // through the app does not post to the GL, unlike invoice
-                // payments which correctly post via postPayment. That looks
-                // like a real bug in the application, out of scope to fix here.
-                // The posting *service* itself (postBillPayment) is sound and
-                // used elsewhere, so the seeder calls it directly rather than
-                // going through the broken Action, keeping the books balanced.
+                // BillPayment\CreateAction (config/command-bus.php
+                // 'bill_payment.create', the path the real UI uses) also posts
+                // through GlPostingService::postBillPayment now, so this is the
+                // same call the app makes -- the seeder just makes it directly
+                // instead of going through the command bus.
                 $method = ['bank_transfer', 'check', 'cash'][$billNo % 3];
 
                 $billPayment = BillPayment::create([

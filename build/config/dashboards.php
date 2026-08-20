@@ -32,7 +32,7 @@ return [
                     'key' => 'upcoming',
                     'label' => 'Upcoming',
                     'widgets' => [
-                        ['key' => 'umrah.departures', 'span' => 12, 'options' => []],
+                        ['key' => 'umrah.departures', 'span' => 12, 'options' => ['limit' => 10]],
                     ],
                 ],
                 [
@@ -52,7 +52,7 @@ return [
                     'key' => 'upcoming',
                     'label' => 'Upcoming',
                     'widgets' => [
-                        ['key' => 'umrah.departures', 'span' => 12, 'options' => []],
+                        ['key' => 'umrah.departures', 'span' => 12, 'options' => ['limit' => 10]],
                     ],
                 ],
                 [
@@ -71,7 +71,7 @@ return [
                     'key' => 'upcoming',
                     'label' => 'Upcoming',
                     'widgets' => [
-                        ['key' => 'umrah.departures', 'span' => 12, 'options' => []],
+                        ['key' => 'umrah.departures', 'span' => 12, 'options' => ['limit' => 10]],
                     ],
                 ],
             ],
@@ -95,7 +95,7 @@ return [
                     'key' => 'upcoming',
                     'label' => 'Upcoming',
                     'widgets' => [
-                        ['key' => 'umrah.departures', 'span' => 12, 'options' => []],
+                        ['key' => 'umrah.departures', 'span' => 12, 'options' => ['limit' => 10]],
                     ],
                 ],
             ],

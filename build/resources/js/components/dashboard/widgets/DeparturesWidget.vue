@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * umrah.departures — groups ordered by their next travel date.
+ * umrah.departures — groups ranked by urgency (see DeparturesWidget.php).
+ * The chip's wording comes from the server; days_until only drives its tone.
  * Columns: Group / Travel date (+ days-until MetaChip) / Agent / Pax / Balance.
  */
 import { computed } from 'vue'
@@ -55,10 +56,10 @@ const daysUntilTone = (days: number | null | undefined) => {
                 <div class="flex items-center justify-end gap-2">
                     <DateTimeText :value="row.travel_date" mode="date" />
                     <MetaChip
-                        v-if="row.days_until != null"
+                        v-if="row.chip"
                         :tone="daysUntilTone(row.days_until)"
                     >
-                        {{ row.days_until }}d
+                        {{ row.chip }}
                     </MetaChip>
                 </div>
             </template>

@@ -277,3 +277,73 @@ test('asking for a tab by name makes it the active tab and the one carrying data
             ->where('dashboard.tabs.0.widgets.0.data', null)
         );
 });
+
+test('the departures widget ranks groups yet to travel above travelled groups that still owe', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-RANK',
+        'name' => 'Ranking Agent',
+    ]);
+
+    $make = function (string $number, string $travelDate, float $balance) use ($company, $agent): void {
+        VisaGroup::create([
+            'company_id' => $company->id,
+            'agent_id' => $agent->id,
+            'group_number' => $number,
+            'name' => $number,
+            'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+            'travel_date' => $travelDate,
+            'passenger_count' => 1,
+            'balance' => $balance,
+        ]);
+    };
+
+    $make('UGR-SOON', now()->addDays(3)->toDateString(), 500);
+    $make('UGR-LATER', now()->addDays(30)->toDateString(), 0);
+    $make('UGR-FLOWN-OWING', now()->subDays(4)->toDateString(), 900);
+    $make('UGR-FLOWN-OLDER-OWING', now()->subDays(40)->toDateString(), 100);
+    $make('UGR-FLOWN-SETTLED', now()->subDays(2)->toDateString(), 0);
+
+    $data = (new DeparturesWidget())->resolve($company, $owner, []);
+
+    // Yet to travel first (soonest first), then travelled-and-owing (most
+    // recent first). A group that has travelled and settled needs nothing
+    // doing, so it is absent entirely.
+    expect(collect($data['rows'])->pluck('group_number')->all())->toBe([
+        'UGR-SOON',
+        'UGR-LATER',
+        'UGR-FLOWN-OWING',
+        'UGR-FLOWN-OLDER-OWING',
+    ]);
+});
+
+test('the departures chip names direction in words rather than a signed day count', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-CHIP',
+        'name' => 'Chip Agent',
+    ]);
+
+    VisaGroup::create([
+        'company_id' => $company->id, 'agent_id' => $agent->id, 'group_number' => 'UGR-FUTURE', 'name' => 'Future',
+        'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+        'travel_date' => now()->addDays(6)->toDateString(), 'passenger_count' => 1, 'balance' => 0,
+    ]);
+    VisaGroup::create([
+        'company_id' => $company->id, 'agent_id' => $agent->id, 'group_number' => 'UGR-PAST', 'name' => 'Past',
+        'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+        'travel_date' => now()->subDays(30)->toDateString(), 'passenger_count' => 1, 'balance' => 250,
+    ]);
+
+    $rows = collect((new DeparturesWidget())->resolve($company, $owner, [])['rows'])->keyBy('group_number');
+
+    expect($rows['UGR-FUTURE']['chip'])->toBe('in 6 days')
+        ->and($rows['UGR-PAST']['chip'])->toBe('30 days ago')
+        ->and($rows['UGR-PAST']['days_until'])->toBeLessThan(0);
+});

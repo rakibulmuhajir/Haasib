@@ -16,7 +16,7 @@ interface Action {
 }
 
 interface Props {
-  title: string
+  title?: string
   description?: string
   icon?: Component
   breadcrumbs?: BreadcrumbItem[]
@@ -87,6 +87,9 @@ const searchValue = computed({
         :actions="actions"
         :back-button="backButton"
       >
+        <template v-if="$slots.title" #title>
+          <slot name="title" />
+        </template>
         <template v-if="$slots.description" #description>
           <slot name="description" />
         </template>

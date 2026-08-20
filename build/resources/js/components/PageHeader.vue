@@ -15,7 +15,7 @@ interface Action {
 }
 
 interface Props {
-  title: string
+  title?: string
   description?: string
   icon?: Component
   badge?: {
@@ -80,7 +80,11 @@ const BackIcon = computed(() => props.backButton?.icon || ChevronLeft)
           <!-- Page titles are the display role. Off-skin --display-family is
                the sans stack, so this changes nothing until the skin is on. -->
           <h1 class="font-display text-2xl font-semibold tracking-tight text-foreground">
-            {{ title }}
+            <!-- Usually the title is a string. A page whose heading carries
+                 something with it -- Chart of Accounts and its help popover --
+                 needs to put markup here, and the alternative is that page
+                 building its own header and inventing its own type scale. -->
+            <slot name="title">{{ title }}</slot>
           </h1>
 
           <!-- Badge -->

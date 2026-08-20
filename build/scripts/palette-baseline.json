@@ -9,7 +9,8 @@
     "moneyAsText": 0,
     "moneyAsFixed": 0,
     "statusAsText": 0,
-    "handRolledMoney": 0
+    "handRolledMoney": 0,
+    "deadSlot": 0
   },
   "note": "May only decrease. Run --update after removing violations."
 }

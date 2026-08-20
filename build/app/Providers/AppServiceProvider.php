@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Dashboard\WidgetRegistry;
 use App\Services\CompanyContextService;
 use App\Services\CurrentCompany;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -19,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(CompanyContextService::class);
         // CurrentCompany should share request scope too
         $this->app->scoped(CurrentCompany::class);
+        // Shared across every module's service provider boot(), so widget
+        // registration in one module lands in the same registry every module reads.
+        $this->app->singleton(WidgetRegistry::class);
     }
 
     /**

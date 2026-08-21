@@ -71,7 +71,7 @@ them apart would mean building the same workflow twice.
 | `reason` | required text. Why money is going back. |
 | `status` | see lifecycle |
 | `requested_by_user_id`, `requested_at` | |
-| `approved_by_user_id`, `approved_at`, `approval_remarks` | |
+| `reviewed_by_user_id`, `reviewed_at`, `review_remarks` | One trio records the decision whichever way it went — approved or rejected. Status alone distinguishes the two outcomes. |
 | `settled_payment_id` | uuid, nullable — the `GroupPayment` that paid it |
 | `transaction_id` | uuid, nullable — the approval's GL transaction |
 | `cancelled_at`, `cancelled_by_user_id`, `cancellation_reason` | |
@@ -96,6 +96,12 @@ requested ──approve──> approved ──settle──> paid
 - **rejected** — refused before approval. No ledger effect ever.
 - **cancelled** — approved but reversed before payment. Posts a reversing
   entry. Requires `refund.cancel`.
+
+Approving and rejecting are both a decision, made by the same person acting
+under the same permission, and both are recorded in the same
+`reviewed_by_user_id` / `reviewed_at` / `review_remarks` trio. A refusal is
+not a non-event: the app must show who declined a refund exactly as plainly
+as it shows who approved one.
 
 This deliberately mirrors the `GroupPayment` submit → approve flow the
 accountant already operates. A new workflow to learn is a cost; a familiar one
@@ -205,8 +211,13 @@ An agent's view is scoped to their own records by
 2. Every status transition that touches the ledger happens inside one DB
    transaction with `lockForUpdate`, matching `reversePayment()`.
 3. A refund cannot be approved for more than the credit available to that
-   party. For an agent that is the 2200 balance attributable to them; for a
-   vendor it is what was actually paid on the service.
+   party, and the two directions mean different things by "available". For an
+   agent it is the 2200 balance attributable to them — what they paid in
+   excess of what they owe. For a vendor there is no excess to isolate: it is
+   what was actually paid on the service, full stop. The canonical vendor
+   refund is a visa fee paid but never processed, where the recorded cost
+   equals the amount paid — an overpayment-style ceiling would read that as
+   zero credit and block the one case this feature exists for.
 4. An approved refund's `amount`, `party_id` and `service` are immutable. Cancel
    and re-request instead — the same rule an approved voucher already follows.
 5. The settling payment's `base_amount` must equal the refund's `base_amount`.

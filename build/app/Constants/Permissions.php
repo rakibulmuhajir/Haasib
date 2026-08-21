@@ -365,6 +365,14 @@ class Permissions
 
     public const UMRAH_PAYMENT_APPROVE = 'umrah.payment.approve';
 
+    public const UMRAH_REFUND_VIEW = 'umrah.refund.view';
+
+    public const UMRAH_REFUND_CREATE = 'umrah.refund.create';
+
+    public const UMRAH_REFUND_APPROVE = 'umrah.refund.approve';
+
+    public const UMRAH_REFUND_CANCEL = 'umrah.refund.cancel';
+
     public const UMRAH_EXPENSE_VIEW = 'umrah.expense.view';
 
     public const UMRAH_EXPENSE_CREATE = 'umrah.expense.create';

@@ -39,6 +39,7 @@ export const statusMeta = {
     pending: { label: 'Pending', tone: 'attention' },
     submitted: { label: 'Submitted', tone: 'info' },
     sent: { label: 'Sent', tone: 'info' },
+    requested: { label: 'Requested', tone: 'info' },
 
     // ── Decided ──────────────────────────────────────────────────────────
     approved: { label: 'Approved', tone: 'success' },

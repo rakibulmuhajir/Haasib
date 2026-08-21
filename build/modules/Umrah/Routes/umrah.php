@@ -7,6 +7,7 @@ use App\Modules\Umrah\Http\Controllers\ExpenseController;
 use App\Modules\Umrah\Http\Controllers\GroupAccountingController;
 use App\Modules\Umrah\Http\Controllers\HotelController;
 use App\Modules\Umrah\Http\Controllers\PaymentController;
+use App\Modules\Umrah\Http\Controllers\RefundController;
 use App\Modules\Umrah\Http\Controllers\ReportController;
 use App\Modules\Umrah\Http\Controllers\TransportServiceController;
 use App\Modules\Umrah\Http\Controllers\TransportProviderController;
@@ -57,6 +58,15 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('payments/{payment}/review', [PaymentController::class, 'review'])->whereUuid('payment')->name('umrah.payments.review');
         Route::post('payments/{payment}/allocations', [PaymentController::class, 'allocate'])->whereUuid('payment')->name('umrah.payments.allocations.store');
         Route::get('payments/{payment}', [PaymentController::class, 'show'])->whereUuid('payment')->name('umrah.payments.show');
+
+        Route::get('refunds', [RefundController::class, 'index'])->name('umrah.refunds.index');
+        Route::get('refunds/create', [RefundController::class, 'create'])->name('umrah.refunds.create');
+        Route::post('refunds', [RefundController::class, 'store'])->name('umrah.refunds.store');
+        Route::post('refunds/{refund}/approve', [RefundController::class, 'approve'])->whereUuid('refund')->name('umrah.refunds.approve');
+        Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund')->name('umrah.refunds.reject');
+        Route::post('refunds/{refund}/cancel', [RefundController::class, 'cancel'])->whereUuid('refund')->name('umrah.refunds.cancel');
+        Route::get('refunds/{refund}', [RefundController::class, 'show'])->whereUuid('refund')->name('umrah.refunds.show');
+
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('umrah.expenses.create');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('umrah.expenses.store');

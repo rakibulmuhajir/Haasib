@@ -235,6 +235,10 @@ return [
         'umrah.payment.reverse',
         'umrah.payment.submit',
         'umrah.payment.approve',
+        'umrah.refund.view',
+        'umrah.refund.create',
+        'umrah.refund.approve',
+        'umrah.refund.cancel',
         'umrah.expense.view',
         'umrah.expense.create',
         'umrah.expense.reverse',
@@ -427,6 +431,10 @@ return [
         'umrah.payment.reverse',
         'umrah.payment.submit',
         'umrah.payment.approve',
+        'umrah.refund.view',
+        'umrah.refund.create',
+        'umrah.refund.approve',
+        'umrah.refund.cancel',
         'umrah.expense.view',
         'umrah.expense.create',
         'umrah.expense.reverse',
@@ -443,12 +451,16 @@ return [
     'operations' => [
         // Operational entry only. Deliberately excludes accounts, payments,
         // expenses, reports, profitability, and all *-accounting permissions.
+        // Refunds are the documented exception: operations may request one
+        // (refunds.md's permissions table), but never approve or cancel.
         'umrah.group.create',
         'umrah.group.view',
         'umrah.group.update',
         'umrah.voucher.create',
         'umrah.voucher.view',
         'umrah.voucher.update',
+        'umrah.refund.view',
+        'umrah.refund.create',
     ],
 
     'agent' => [
@@ -463,6 +475,8 @@ return [
         'umrah.voucher.approve',
         'umrah.voucher.update',
         'umrah.report.own.view',
+        'umrah.refund.view',
+        'umrah.refund.create',
     ],
 
 ];

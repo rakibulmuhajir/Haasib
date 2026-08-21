@@ -4,7 +4,9 @@ namespace App\Modules\Umrah\Services;
 
 use App\Models\Company;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\GroupPayment;
 use App\Modules\Umrah\Models\HotelVendor;
+use App\Modules\Umrah\Models\PaymentAllocation;
 use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
@@ -12,15 +14,21 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Phase 1 of docs/contracts/refunds.md -- "The obligation". Moves a refund
- * through request -> approve/reject, and approved -> cancel. No ledger
- * posting happens here: Phase 2 owns the accounts, the postings, and the
- * single-allocation reversal a group refund requires before it can be
- * approved. Every seam Phase 2 needs to fill in is marked below rather than
- * half-built.
+ * Phase 1 of docs/contracts/refunds.md -- "The obligation" -- moves a
+ * refund through request -> approve/reject, and approved -> cancel/settle.
+ *
+ * Phase 2b (this file, as it stands) fills in the ledger: approve() posts
+ * the accept entry (and, for a group refund, de-allocates the credit it is
+ * about to return before posting), cancel() reverses it, and the new
+ * settle() posts the accountant's choice of paying it back or keeping it
+ * as credit. Every posting itself is delegated to UmrahCoreService -- this
+ * class only decides which posting applies and moves the refund's own
+ * columns.
  */
 class RefundService
 {
+    public function __construct(private UmrahCoreService $coreService) {}
+
     public function request(string $companyId, array $data, ?string $userId): Refund
     {
         return DB::transaction(function () use ($companyId, $data, $userId) {
@@ -66,17 +74,31 @@ class RefundService
     }
 
     /**
-     * Moves a requested refund to approved. This is the control point that
+     * Moves a requested refund to accepted. This is the control point that
      * stops an agent refunding themselves -- only someone with
      * `refund.approve` reaches this method (enforced by the FormRequest).
      *
-     * PHASE 2 SEAM: refunds.md's Accounting section requires this moment to
-     * post Dr 2200/Cr 2300 (agent) or Dr 1170/Cr cost account (vendor), and
-     * -- for a refund against a group -- to reverse the corresponding
-     * PaymentAllocation first via the single-allocation-reversal primitive
-     * extracted from UmrahCoreService::reversePayment(). None of that is
-     * built yet. This method only moves the status and stamps the approver,
-     * exactly as the task for this phase requires.
+     * Order of operations, deliberately:
+     *
+     *  1. assertWithinAvailableCredit() runs first, against the state
+     *     before this refund does anything -- exactly where Phase 1 already
+     *     ran it. The credit ceiling is built from Agent/Vendor::total_paid,
+     *     which recalculateGroup() derives from *live* allocations. If the
+     *     de-allocation step below ran first, reversing an allocation would
+     *     shrink that ceiling before the check that is supposed to test
+     *     against it -- even though the money has not left the company, it
+     *     is just momentarily unallocated. Checking first avoids a
+     *     spurious rejection of a legitimate group refund.
+     *  2. For a group refund (visa_group_id set, agent only), enough of the
+     *     group's live allocations are reversed to cover the refund, with
+     *     any excess re-allocated back onto the same group -- the group's
+     *     total_paid must drop by exactly the refund amount, not by
+     *     whichever whole allocation happened to cover it.
+     *  3. The accept entry posts (Dr 2200/Cr 2300 agent, Dr 1170/Cr cost
+     *     vendor).
+     *  4. One update() moves the status, stamps the reviewer, and stamps
+     *     transaction_id -- the accept transaction's id, which is never
+     *     overwritten by anything settle() or cancel() do later.
      */
     public function approve(Refund $refund, array $data, string $userId): Refund
     {
@@ -89,15 +111,18 @@ class RefundService
 
             $this->assertWithinAvailableCredit($refund);
 
-            // PHASE 2 SEAM: post the ledger entry for this refund and, if
-            // visa_group_id is set, reverse the allocation it settles before
-            // this update runs. See class docblock.
+            if ($refund->visa_group_id) {
+                $this->deallocateForGroupRefund($refund, $userId);
+            }
+
+            $transaction = $this->coreService->postRefundAccept($refund);
 
             $refund->update([
                 'status' => Refund::STATUS_ACCEPTED,
                 'reviewed_by_user_id' => $userId,
                 'reviewed_at' => now(),
                 'review_remarks' => $data['review_remarks'] ?? null,
+                'transaction_id' => $transaction->id,
             ]);
 
             return $refund->fresh();
@@ -125,10 +150,11 @@ class RefundService
     }
 
     /**
-     * PHASE 2 SEAM: cancelling an approved refund reverses whatever Phase 2
-     * posted at approval (Dr 2300/Cr 2200 for an agent, Dr cost/Cr 1170 for a
-     * vendor). Nothing has been posted in this phase, so there is nothing to
-     * reverse yet -- this only moves the status and records who cancelled it.
+     * Reverses whatever approve() posted (Dr 2300/Cr 2200 for an agent,
+     * Dr cost/Cr 1170 for a vendor) and stamps cancellation_transaction_id.
+     * The de-allocation approve() ran for a group refund is not undone here
+     * -- that credit was already returned to the group at accept time, and
+     * cancelling the refund does not owe it back a second time.
      */
     public function cancel(Refund $refund, string $reason, string $userId): Refund
     {
@@ -139,11 +165,62 @@ class RefundService
                 throw ValidationException::withMessages(['refund' => 'Only an approved refund can be cancelled.']);
             }
 
+            $transaction = $this->coreService->postRefundCancel($refund);
+
             $refund->update([
                 'status' => Refund::STATUS_CANCELLED,
                 'cancelled_at' => now(),
                 'cancelled_by_user_id' => $userId,
                 'cancellation_reason' => $reason,
+                'cancellation_transaction_id' => $transaction->id,
+            ]);
+
+            return $refund->fresh();
+        });
+    }
+
+    /**
+     * Settles an accepted refund: pay it back in cash/bank (status becomes
+     * `refunded`) or keep it as credit (status becomes `credited`, agent
+     * only -- refunds.md is explicit that a vendor refund settles by
+     * receiving cash only, so `credit` for a vendor is refused here even
+     * though the frontend never offers it).
+     *
+     * `settled_at` on the refund row is the audit-action timestamp (now()),
+     * consistent with requested_at/reviewed_at/cancelled_at, which are all
+     * "when this action happened" rather than a backdatable figure. The
+     * accounting date the accountant may choose for a cash settlement
+     * (invariant 5's settling transaction) is a separate concept and lives
+     * only on the posted GL transaction's own date field, via $data['date'].
+     */
+    public function settle(Refund $refund, array $data, string $userId): Refund
+    {
+        return DB::transaction(function () use ($refund, $data, $userId) {
+            $refund = Refund::where('company_id', $refund->company_id)->lockForUpdate()->findOrFail($refund->id);
+
+            if ($refund->status !== Refund::STATUS_ACCEPTED) {
+                throw ValidationException::withMessages(['refund' => 'Only an accepted refund can be settled.']);
+            }
+
+            $method = $data['settlement_method'];
+
+            if ($method === Refund::SETTLEMENT_CREDIT && $refund->party_type !== Refund::PARTY_AGENT) {
+                throw ValidationException::withMessages(['settlement_method' => 'A vendor refund can only be settled by receiving cash.']);
+            }
+
+            if ($method === Refund::SETTLEMENT_CASH) {
+                $this->coreService->postRefundSettleCash($refund, $data['account_id'], $data['date'] ?? now()->toDateString());
+                $status = Refund::STATUS_REFUNDED;
+            } else {
+                $this->coreService->postRefundSettleCredit($refund);
+                $status = Refund::STATUS_CREDITED;
+            }
+
+            $refund->update([
+                'status' => $status,
+                'settlement_method' => $method,
+                'settled_at' => now(),
+                'settled_by_user_id' => $userId,
             ]);
 
             return $refund->fresh();
@@ -162,8 +239,8 @@ class RefundService
      * this party (Agent::total_paid/total_receivable,
      * VisaVendor/HotelVendor::total_paid/total_cost). This is an
      * approximation of the real 2200/1170 balance, not the balance itself,
-     * and Phase 2 should replace it with a query against the posted ledger
-     * once those accounts exist.
+     * and a future phase should replace it with a query against the posted
+     * ledger.
      *
      * The comparison is in the company's BASE currency throughout, not the
      * refund's transaction currency: total_paid/total_receivable/total_cost
@@ -206,11 +283,11 @@ class RefundService
      * Either ceiling is a balance, not a pool: it does not shrink on its own
      * as refunds are approved against it. So the ceiling alone is not the
      * available credit -- what has already been granted against this party
-     * (status approved or paid, this refund excluded) is subtracted first.
-     * This subtraction is exact, a straight sum over this table; it is only
-     * the ceiling underneath (total_paid) that remains a denormalised
-     * approximation Phase 2's ledger query should replace. The subtraction
-     * itself does not change when that happens.
+     * (status accepted, refunded or credited, this refund excluded) is
+     * subtracted first. This subtraction is exact, a straight sum over this
+     * table; it is only the ceiling underneath (total_paid) that remains a
+     * denormalised approximation a future phase's ledger query should
+     * replace. The subtraction itself does not change when that happens.
      */
     public function availableCredit(Refund $refund): float
     {
@@ -232,9 +309,13 @@ class RefundService
 
     /**
      * Sum of `base_amount` already granted against this party -- refunds
-     * `approved` or `paid`, this refund excluded. `requested` does not count
-     * (not yet an obligation); `rejected` and `cancelled` do not count
-     * either (never became one, or were reversed before settlement).
+     * `accepted`, `refunded` or `credited`, this refund excluded. `requested`
+     * does not count (not yet an obligation); `rejected` and `cancelled` do
+     * not count either (never became one, or were reversed before
+     * settlement). `refunded`/`credited` count exactly as `accepted` did in
+     * Phase 1: settling a refund does not release its claim on the ceiling,
+     * it fulfils it -- the money (or the credit) is gone either way, and
+     * only rejecting or cancelling ever gives the ceiling room back.
      *
      * Summed in base_amount, not amount, for the same reason
      * assertWithinAvailableCredit() compares base_amount: the ceiling this
@@ -254,7 +335,7 @@ class RefundService
             ->where('party_type', $refund->party_type)
             ->where('party_id', $refund->party_id)
             ->where('id', '!=', $refund->id)
-            ->whereIn('status', [Refund::STATUS_ACCEPTED, Refund::STATUS_PAID])
+            ->whereIn('status', [Refund::STATUS_ACCEPTED, Refund::STATUS_REFUNDED, Refund::STATUS_CREDITED])
             ->lockForUpdate()
             ->get()
             ->sum(fn (Refund $granted) => round((float) $granted->base_amount, 2));
@@ -268,6 +349,70 @@ class RefundService
     private function creditFromAmountPaid(mixed $party): float
     {
         return max(0.0, round((float) $party?->total_paid, 2));
+    }
+
+    /**
+     * The four-step de-allocation sequence docs/contracts/refunds.md
+     * requires before a group refund can be accepted -- only reached when
+     * visa_group_id is set, which StoreRefundRequest already restricts to
+     * agent refunds:
+     *
+     *  1. Find this party's live allocations against this group.
+     *  2. If their total is less than the refund, the refund cannot be
+     *     covered by this group's credit -- refuse it.
+     *  3. Reverse whole allocations, oldest first, until the reversed total
+     *     covers the refund.
+     *  4. If the allocation that tipped the total over the refund amount
+     *     reversed more than needed, re-allocate the difference back onto
+     *     the same group immediately. Skipping this step is the easy
+     *     mistake: without it the group's total_paid drops by the whole
+     *     reversed allocation instead of by exactly the refund amount.
+     */
+    private function deallocateForGroupRefund(Refund $refund, ?string $userId): void
+    {
+        $refundAmount = round((float) $refund->base_amount, 2);
+
+        $allocations = PaymentAllocation::where('company_id', $refund->company_id)
+            ->where('visa_group_id', $refund->visa_group_id)
+            ->whereNull('reversed_at')
+            ->whereHas('payment', fn ($query) => $query
+                ->where('direction', GroupPayment::DIRECTION_RECEIVED)
+                ->where('agent_id', $refund->party_id))
+            ->with('payment')
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+
+        $available = round((float) $allocations->sum('base_amount'), 2);
+
+        if ($available < $refundAmount) {
+            throw ValidationException::withMessages([
+                'amount' => 'This refund exceeds the credit allocated to this group.',
+            ]);
+        }
+
+        $reason = "Refund {$refund->refund_number} accepted against this group's allocation.";
+        $reversedSoFar = 0.0;
+
+        foreach ($allocations as $allocation) {
+            if ($reversedSoFar >= $refundAmount) {
+                break;
+            }
+
+            $remainingNeeded = round($refundAmount - $reversedSoFar, 2);
+            $allocationAmount = round((float) $allocation->base_amount, 2);
+            $payment = $allocation->payment;
+
+            $this->coreService->reverseAllocation($allocation, $reason, $userId);
+            $reversedSoFar = round($reversedSoFar + $allocationAmount, 2);
+
+            if ($allocationAmount > $remainingNeeded) {
+                $this->coreService->allocatePayment($payment, [
+                    'visa_group_id' => $refund->visa_group_id,
+                    'base_amount' => round($allocationAmount - $remainingNeeded, 2),
+                ]);
+            }
+        }
     }
 
     public function nextRefundNumber(string $companyId): string

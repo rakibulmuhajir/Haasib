@@ -62,7 +62,9 @@ class Refund extends Model
 
     public const STATUS_ACCEPTED = 'accepted';
 
-    public const STATUS_PAID = 'paid';
+    public const STATUS_REFUNDED = 'refunded';
+
+    public const STATUS_CREDITED = 'credited';
 
     public const STATUS_REJECTED = 'rejected';
 
@@ -71,9 +73,19 @@ class Refund extends Model
     public const STATUSES = [
         self::STATUS_REQUESTED => 'Requested',
         self::STATUS_ACCEPTED => 'Accepted',
-        self::STATUS_PAID => 'Paid',
+        self::STATUS_REFUNDED => 'Refunded',
+        self::STATUS_CREDITED => 'Kept as credit',
         self::STATUS_REJECTED => 'Rejected',
         self::STATUS_CANCELLED => 'Cancelled',
+    ];
+
+    public const SETTLEMENT_CASH = 'cash';
+
+    public const SETTLEMENT_CREDIT = 'credit';
+
+    public const SETTLEMENT_METHODS = [
+        self::SETTLEMENT_CASH => 'Pay it back',
+        self::SETTLEMENT_CREDIT => 'Keep as credit',
     ];
 
     protected $fillable = [
@@ -100,6 +112,10 @@ class Refund extends Model
         'cancelled_at',
         'cancelled_by_user_id',
         'cancellation_reason',
+        'settlement_method',
+        'settled_at',
+        'settled_by_user_id',
+        'cancellation_transaction_id',
     ];
 
     protected $casts = [
@@ -117,6 +133,9 @@ class Refund extends Model
         'transaction_id' => 'string',
         'cancelled_at' => 'datetime',
         'cancelled_by_user_id' => 'string',
+        'settled_at' => 'datetime',
+        'settled_by_user_id' => 'string',
+        'cancellation_transaction_id' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -134,7 +153,7 @@ class Refund extends Model
         static::updating(function (self $refund): void {
             $original = $refund->getOriginal('status');
 
-            if (! in_array($original, [self::STATUS_ACCEPTED, self::STATUS_PAID, self::STATUS_CANCELLED], true)) {
+            if (! in_array($original, [self::STATUS_ACCEPTED, self::STATUS_REFUNDED, self::STATUS_CREDITED, self::STATUS_CANCELLED], true)) {
                 return;
             }
 
@@ -199,5 +218,15 @@ class Refund extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    public function settledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'settled_by_user_id');
+    }
+
+    public function cancellationTransaction(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Transaction::class, 'cancellation_transaction_id');
     }
 }

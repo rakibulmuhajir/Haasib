@@ -2,11 +2,15 @@
 
 use App\Models\Company;
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Umrah\Models\Agent;
+use App\Modules\Umrah\Models\GroupPayment;
+use App\Modules\Umrah\Models\PaymentAllocation;
 use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Modules\Umrah\Services\RefundService;
+use App\Modules\Umrah\Services\UmrahCoreService;
 use App\Services\CompanyContextService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +46,76 @@ function refundTestCompany(string $baseCurrency = 'SAR'): array
     DB::select("SELECT set_config('app.is_super_admin', 'false', false)");
     DB::statement("SELECT set_config('app.current_company_id', ?, false)", [$company->id]);
 
+    refundTestAccounts($company);
+
     return [$company, $owner];
+}
+
+/**
+ * Phase 2b postings need real accounts to post to -- Phase 1's tests never
+ * did, so refundTestCompany() never created any. This is the same set
+ * database/migrations/2026_08_21_000003_add_umrah_refund_accounts.php and
+ * database/migrations/2026_06_23_000002_add_umrah_industry_coa_pack.php put
+ * on a real company, kept minimal to exactly what refund postings touch:
+ * 1000 bank, 2200 agent advances, 2300 refunds payable, 1170 refunds
+ * receivable, and the three 51xx cost accounts.
+ */
+function refundTestAccounts(Company $company): void
+{
+    $accounts = [
+        ['1000', 'Operating Bank Account', 'asset', 'bank', 'debit'],
+        ['1100', 'Accounts Receivable', 'asset', 'accounts_receivable', 'debit'],
+        ['2200', 'Agent Advances', 'liability', 'other_current_liability', 'credit'],
+        ['2300', 'Refunds Payable', 'liability', 'other_current_liability', 'credit'],
+        ['1170', 'Refunds Receivable', 'asset', 'other_current_asset', 'debit'],
+        ['5100', 'Visa Cost', 'cogs', 'cogs', 'debit'],
+        ['5110', 'Transport Cost', 'cogs', 'cogs', 'debit'],
+        ['5120', 'Hotel Cost', 'cogs', 'cogs', 'debit'],
+    ];
+
+    // accounts_currency_allowed_chk only permits a currency on subtypes that
+    // actually hold foreign-currency balances (bank, cash, AR/AP, etc) --
+    // the COGS subtype used by 5100/5110/5120 must stay null, same as the
+    // real COA pack in database/migrations/2026_06_23_000002_add_umrah_industry_coa_pack.php.
+    $currencyBearing = ['bank', 'cash', 'accounts_receivable', 'accounts_payable', 'credit_card', 'other_current_asset', 'other_asset', 'other_current_liability', 'other_liability'];
+
+    foreach ($accounts as [$code, $name, $type, $subtype, $normal]) {
+        Account::create([
+            'company_id' => $company->id,
+            'code' => $code,
+            'name' => $name,
+            'type' => $type,
+            'subtype' => $subtype,
+            'normal_balance' => $normal,
+            'currency' => in_array($subtype, $currencyBearing, true) ? $company->base_currency : null,
+            'is_active' => true,
+        ]);
+    }
+
+    $company->forceFill([
+        'bank_account_id' => Account::where('company_id', $company->id)->where('code', '1000')->value('id'),
+        'ar_account_id' => Account::where('company_id', $company->id)->where('code', '1100')->value('id'),
+    ])->save();
+}
+
+function refundTestBankAccount(Company $company): Account
+{
+    return Account::where('company_id', $company->id)->where('code', '1000')->firstOrFail();
+}
+
+// Named distinctly from PaymentAllocationReversalTest.php's journalTotals()
+// -- Pest loads every test file's top-level functions into one global
+// namespace, and that one doesn't return the account-level rows these
+// posting-shape assertions need.
+function refundJournalTotals(?string $transactionId): array
+{
+    $rows = DB::table('acct.journal_entries')->where('transaction_id', $transactionId)->get(['debit_amount', 'credit_amount', 'account_id']);
+
+    return [
+        'debit' => (float) $rows->sum('debit_amount'),
+        'credit' => (float) $rows->sum('credit_amount'),
+        'rows' => $rows,
+    ];
 }
 
 function refundTestMember(Company $company, User $user, string $role): void
@@ -166,7 +239,7 @@ test('a refund moves from requested to approved and stamps the approver', functi
         ->and($refund->reviewed_by_user_id)->toBe($manager->id)
         ->and($refund->reviewed_at)->not->toBeNull()
         ->and($refund->review_remarks)->toBe('Confirmed against the group ledger.')
-        ->and($refund->transaction_id)->toBeNull();
+        ->and($refund->transaction_id)->not->toBeNull();
 });
 
 test('a refund moves from requested to rejected, stamps the decider, and posts nothing', function () {
@@ -228,21 +301,21 @@ test('a rejected refund cannot be approved', function () {
     expect($refund->fresh()->status)->toBe(Refund::STATUS_REJECTED);
 });
 
-test('a paid refund cannot be cancelled', function () {
+test('a refunded refund cannot be cancelled', function () {
     [$company, $owner] = refundTestCompany();
     [$agentUser, $agent] = refundTestAgent($company, 'e', totalPaid: 500.0, totalReceivable: 0.0);
 
     $refund = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 150), $agentUser->id);
     app(RefundService::class)->approve($refund, [], $owner->id);
-
-    // Phase 2 owns settlement, so "paid" is reached only by direct
-    // manipulation here -- there is no route to it in this phase.
-    $refund->fresh()->forceFill(['status' => Refund::STATUS_PAID])->saveQuietly();
+    app(RefundService::class)->settle($refund->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CASH,
+        'account_id' => refundTestBankAccount($company)->id,
+    ], $owner->id);
 
     expect(fn () => app(RefundService::class)->cancel($refund->fresh(), 'Too late.', $owner->id))
         ->toThrow(ValidationException::class);
 
-    expect($refund->fresh()->status)->toBe(Refund::STATUS_PAID);
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_REFUNDED);
 });
 
 test('a requested refund cannot be cancelled directly', function () {
@@ -579,4 +652,305 @@ test('an agent member cannot widen their refund scope through a query parameter'
 
     $refund = Refund::where('company_id', $company->id)->firstOrFail();
     expect($refund->party_id)->toBe($agentOne->id);
+});
+
+/**
+ * Phase 2b of docs/contracts/refunds.md -- settlement. These tests cover
+ * the postings themselves (accept, settle cash, settle credit, cancel),
+ * the group refund de-allocation sequence, and the vendor-side rules
+ * (cost account resolution, no credit option). Phase 1's tests above cover
+ * the lifecycle and the credit-ceiling approximation; these assume that
+ * groundwork and add only what Phase 2b introduces.
+ */
+function refundTestGroup(Company $company, Agent $agent, string $seed, float $saleAmount): VisaGroup
+{
+    return VisaGroup::create([
+        'company_id' => $company->id,
+        'agent_id' => $agent->id,
+        'group_number' => 'UGR-'.strtoupper(str()->random(5)),
+        'name' => 'Refund Group '.$seed,
+        'status' => VisaGroup::STATUS_PASSPORTS_RECEIVED,
+        'travel_date' => '2026-09-01',
+        'transport_required' => false,
+        'transport_mode' => VisaGroup::TRANSPORT_NONE,
+        'visa_sale_amount' => $saleAmount,
+        'total_receivable' => $saleAmount,
+        'balance' => $saleAmount,
+    ]);
+}
+
+test('accepting an agent refund posts a balanced Dr 2200 / Cr 2300 entry and stamps transaction_id', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'aa', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $refund = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 200), $agentUser->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+    $refund = $refund->fresh();
+
+    expect($refund->status)->toBe(Refund::STATUS_ACCEPTED)
+        ->and($refund->transaction_id)->not->toBeNull();
+
+    $agentAdvances = Account::where('company_id', $company->id)->where('code', '2200')->value('id');
+    $refundsPayable = Account::where('company_id', $company->id)->where('code', '2300')->value('id');
+
+    $totals = refundJournalTotals($refund->transaction_id);
+    expect($totals['debit'])->toBe(200.0)
+        ->and($totals['credit'])->toBe(200.0)
+        ->and($totals['debit'])->toBe($totals['credit']);
+
+    $debitAccount = $totals['rows']->firstWhere('debit_amount', '>', 0);
+    $creditAccount = $totals['rows']->firstWhere('credit_amount', '>', 0);
+    expect($debitAccount->account_id)->toBe($agentAdvances)
+        ->and($creditAccount->account_id)->toBe($refundsPayable);
+});
+
+test('settling an accepted refund as cash posts Dr 2300 / Cr bank and stamps the settlement', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'ab', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+    $bank = refundTestBankAccount($company);
+
+    $refund = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 200), $agentUser->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+
+    $settled = app(RefundService::class)->settle($refund->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CASH,
+        'account_id' => $bank->id,
+        'date' => '2026-08-21',
+    ], $manager->id);
+
+    expect($settled->status)->toBe(Refund::STATUS_REFUNDED)
+        ->and($settled->settlement_method)->toBe(Refund::SETTLEMENT_CASH)
+        ->and($settled->settled_at)->not->toBeNull()
+        ->and($settled->settled_by_user_id)->toBe($manager->id);
+
+    $refundsPayable = Account::where('company_id', $company->id)->where('code', '2300')->value('id');
+
+    $settlementTransactionId = DB::table('acct.transactions')
+        ->where('reference_type', 'umrah.refunds')
+        ->where('reference_id', $settled->id)
+        ->where('transaction_type', 'umrah_refund_settle_cash')
+        ->value('id');
+
+    $totals = refundJournalTotals($settlementTransactionId);
+    expect($totals['debit'])->toBe(200.0)
+        ->and($totals['credit'])->toBe(200.0);
+
+    $debitAccount = $totals['rows']->firstWhere('debit_amount', '>', 0);
+    $creditAccount = $totals['rows']->firstWhere('credit_amount', '>', 0);
+    expect($debitAccount->account_id)->toBe($refundsPayable)
+        ->and($creditAccount->account_id)->toBe($bank->id);
+});
+
+test('settling an accepted refund as credit posts Dr 2300 / Cr 2200', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'ac', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $refund = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 200), $agentUser->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+
+    $settled = app(RefundService::class)->settle($refund->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CREDIT,
+    ], $manager->id);
+
+    expect($settled->status)->toBe(Refund::STATUS_CREDITED)
+        ->and($settled->settlement_method)->toBe(Refund::SETTLEMENT_CREDIT);
+
+    $agentAdvances = Account::where('company_id', $company->id)->where('code', '2200')->value('id');
+    $refundsPayable = Account::where('company_id', $company->id)->where('code', '2300')->value('id');
+
+    $settlementTransactionId = DB::table('acct.transactions')
+        ->where('reference_type', 'umrah.refunds')
+        ->where('reference_id', $settled->id)
+        ->where('transaction_type', 'umrah_refund_settle_credit')
+        ->value('id');
+
+    $totals = refundJournalTotals($settlementTransactionId);
+    expect($totals['debit'])->toBe(200.0)
+        ->and($totals['credit'])->toBe(200.0);
+
+    $debitAccount = $totals['rows']->firstWhere('debit_amount', '>', 0);
+    $creditAccount = $totals['rows']->firstWhere('credit_amount', '>', 0);
+    expect($debitAccount->account_id)->toBe($refundsPayable)
+        ->and($creditAccount->account_id)->toBe($agentAdvances);
+});
+
+test('after a credit settlement the party\'s available credit reflects it, and a second refund for the same money is refused', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'ad', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $first = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 500), $agentUser->id);
+    app(RefundService::class)->approve($first, [], $manager->id);
+    app(RefundService::class)->settle($first->fresh(), ['settlement_method' => Refund::SETTLEMENT_CREDIT], $manager->id);
+    expect($first->fresh()->status)->toBe(Refund::STATUS_CREDITED);
+
+    $second = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 50), $agentUser->id);
+
+    expect(fn () => app(RefundService::class)->approve($second, [], $manager->id))
+        ->toThrow(ValidationException::class);
+
+    expect($second->fresh()->status)->toBe(Refund::STATUS_REQUESTED);
+});
+
+test('cancelling an accepted refund posts the reversing entry and leaves the books balanced', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'ae', totalPaid: 500.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $refund = app(RefundService::class)->request($company->id, requestRefundPayload($agent, 200), $agentUser->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+
+    $cancelled = app(RefundService::class)->cancel($refund->fresh(), 'Approved in error.', $manager->id);
+
+    expect($cancelled->status)->toBe(Refund::STATUS_CANCELLED)
+        ->and($cancelled->cancellation_transaction_id)->not->toBeNull();
+
+    $agentAdvances = Account::where('company_id', $company->id)->where('code', '2200')->value('id');
+    $refundsPayable = Account::where('company_id', $company->id)->where('code', '2300')->value('id');
+
+    $totals = refundJournalTotals($cancelled->cancellation_transaction_id);
+    expect($totals['debit'])->toBe(200.0)
+        ->and($totals['credit'])->toBe(200.0);
+
+    $debitAccount = $totals['rows']->firstWhere('debit_amount', '>', 0);
+    $creditAccount = $totals['rows']->firstWhere('credit_amount', '>', 0);
+    expect($debitAccount->account_id)->toBe($refundsPayable)
+        ->and($creditAccount->account_id)->toBe($agentAdvances);
+});
+
+test('a group refund reverses enough allocation to cover itself and re-allocates the remainder', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'af', totalPaid: 0.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+    $group = refundTestGroup($company, $agent, 'af', 1000);
+
+    $core = app(UmrahCoreService::class);
+    $payment = $core->addPayment($company->id, [
+        'direction' => GroupPayment::DIRECTION_RECEIVED,
+        'agent_id' => $agent->id,
+        'amount' => 1000,
+        'currency' => 'SAR',
+        'payment_date' => '2026-08-20',
+        'payment_number' => null,
+        'method' => GroupPayment::METHOD_BANK_TRANSFER,
+    ]);
+    $core->allocatePayment($payment, ['visa_group_id' => $group->id, 'base_amount' => 1000]);
+
+    // The credit ceiling is a separate concern from the de-allocation
+    // sequence this test targets -- pin it high so the ceiling check
+    // cannot be the reason approval succeeds or fails here.
+    $agent->fresh()->forceFill(['total_paid' => 100000.0, 'total_receivable' => 0.0])->saveQuietly();
+
+    $refund = app(RefundService::class)->request($company->id, array_merge(
+        requestRefundPayload($agent, 400),
+        ['visa_group_id' => $group->id]
+    ), $agentUser->id);
+
+    app(RefundService::class)->approve($refund, [], $manager->id);
+
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
+
+    $group = $group->fresh();
+    expect((float) $group->total_paid)->toBe(600.0);
+
+    $liveAllocation = PaymentAllocation::where('group_payment_id', $payment->id)->whereNull('reversed_at')->sole();
+    expect((float) $liveAllocation->base_amount)->toBe(600.0);
+
+    $originalAllocation = PaymentAllocation::where('group_payment_id', $payment->id)->whereNotNull('reversed_at')->sole();
+    expect((float) $originalAllocation->base_amount)->toBe(1000.0);
+});
+
+test('a group refund larger than the credit allocated to that group is refused', function () {
+    [$company, $owner] = refundTestCompany();
+    [$agentUser, $agent] = refundTestAgent($company, 'ag', totalPaid: 0.0, totalReceivable: 0.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+    $group = refundTestGroup($company, $agent, 'ag', 1000);
+
+    $core = app(UmrahCoreService::class);
+    $payment = $core->addPayment($company->id, [
+        'direction' => GroupPayment::DIRECTION_RECEIVED,
+        'agent_id' => $agent->id,
+        'amount' => 500,
+        'currency' => 'SAR',
+        'payment_date' => '2026-08-20',
+        'payment_number' => null,
+        'method' => GroupPayment::METHOD_BANK_TRANSFER,
+    ]);
+    $core->allocatePayment($payment, ['visa_group_id' => $group->id, 'base_amount' => 500]);
+
+    $agent->fresh()->forceFill(['total_paid' => 100000.0, 'total_receivable' => 0.0])->saveQuietly();
+
+    $refund = app(RefundService::class)->request($company->id, array_merge(
+        requestRefundPayload($agent, 700),
+        ['visa_group_id' => $group->id]
+    ), $agentUser->id);
+
+    expect(fn () => app(RefundService::class)->approve($refund, [], $manager->id))
+        ->toThrow(ValidationException::class);
+
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_REQUESTED);
+
+    $liveAllocation = PaymentAllocation::where('group_payment_id', $payment->id)->whereNull('reversed_at')->sole();
+    expect((float) $liveAllocation->base_amount)->toBe(500.0);
+});
+
+test('a vendor refund accepts against 1170 and the correct cost account for its service', function () {
+    [$company, $owner] = refundTestCompany();
+    $vendor = refundTestVisaVendor($company, 'ah', totalPaid: 100.0, totalCost: 100.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $refund = app(RefundService::class)->request($company->id, requestVendorRefundPayload($vendor, 100), $owner->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+    $refund = $refund->fresh();
+
+    expect($refund->status)->toBe(Refund::STATUS_ACCEPTED);
+
+    $refundsReceivable = Account::where('company_id', $company->id)->where('code', '1170')->value('id');
+    $visaCost = Account::where('company_id', $company->id)->where('code', '5100')->value('id');
+
+    $totals = refundJournalTotals($refund->transaction_id);
+    expect($totals['debit'])->toBe(100.0)
+        ->and($totals['credit'])->toBe(100.0);
+
+    $debitAccount = $totals['rows']->firstWhere('debit_amount', '>', 0);
+    $creditAccount = $totals['rows']->firstWhere('credit_amount', '>', 0);
+    expect($debitAccount->account_id)->toBe($refundsReceivable)
+        ->and($creditAccount->account_id)->toBe($visaCost);
+});
+
+test('no route offers keep-as-credit settlement for a vendor refund', function () {
+    [$company, $owner] = refundTestCompany();
+    $vendor = refundTestVisaVendor($company, 'ai', totalPaid: 100.0, totalCost: 100.0);
+    $manager = User::factory()->withoutTwoFactor()->create();
+    refundTestMember($company, $manager, 'manager');
+
+    $refund = app(RefundService::class)->request($company->id, requestVendorRefundPayload($vendor, 100), $owner->id);
+    app(RefundService::class)->approve($refund, [], $manager->id);
+    $refund = $refund->fresh();
+
+    // The service layer refuses it directly...
+    expect(fn () => app(RefundService::class)->settle($refund, ['settlement_method' => Refund::SETTLEMENT_CREDIT], $manager->id))
+        ->toThrow(ValidationException::class);
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
+
+    // ...and the route rejects it too, so a forged request cannot reach it
+    // even if the frontend never renders the option.
+    $this->actingAs($manager)
+        ->post("/{$company->slug}/umrah/refunds/{$refund->id}/settle", [
+            'settlement_method' => Refund::SETTLEMENT_CREDIT,
+        ])
+        ->assertSessionHasErrors('settlement_method');
+
+    expect($refund->fresh()->status)->toBe(Refund::STATUS_ACCEPTED);
 });

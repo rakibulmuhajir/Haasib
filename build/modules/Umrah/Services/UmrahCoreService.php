@@ -13,6 +13,7 @@ use App\Modules\Umrah\Models\GroupTransportItem;
 use App\Modules\Umrah\Models\HotelVendor;
 use App\Modules\Umrah\Models\Passenger;
 use App\Modules\Umrah\Models\PaymentAllocation;
+use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\TransportFare;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
@@ -1745,6 +1746,172 @@ class UmrahCoreService
         return $this->accountId($company, 'bank_or_cash');
     }
 
+    /**
+     * Which cost account role a refund reverses reuses exactly the same
+     * visa_cost/transport_cost/hotel_cost mapping accountId() already
+     * exposes for the rest of the module -- refunds.md is explicit that
+     * this must not become a second mapping. `service = 'other'` has no
+     * cost account to reverse (there is no 5100/5110/5120 for "other"), so
+     * a vendor refund cannot use it; StoreRefundRequest allows 'other' for
+     * any party because agent refunds have no cost account to resolve at
+     * all, but a vendor refund reaching this method with 'other' is turned
+     * away here rather than posting against the wrong account.
+     */
+    private function refundCostRole(string $service): string
+    {
+        return match ($service) {
+            Refund::SERVICE_VISA => 'visa_cost',
+            Refund::SERVICE_TRANSPORT => 'transport_cost',
+            Refund::SERVICE_HOTEL => 'hotel_cost',
+            default => throw ValidationException::withMessages([
+                'service' => 'A vendor refund must specify visa, transport, or hotel to determine which cost account it reverses.',
+            ]),
+        };
+    }
+
+    /**
+     * Posts the accept-time entry docs/contracts/refunds.md's Accounting
+     * section requires: Dr 2200/Cr 2300 for an agent (the company now owes
+     * the agent through Refunds Payable instead of holding their advance),
+     * or Dr 1170/Cr cost account for a vendor (the company is now owed the
+     * refund and reverses the cost it had booked). Returns the transaction
+     * so the caller can stamp Refund::transaction_id in the same update()
+     * call that moves the status to accepted.
+     */
+    public function postRefundAccept(Refund $refund): Transaction
+    {
+        $company = $this->company($refund->company_id);
+        $amount = (float) $refund->base_amount;
+        $isAgent = $refund->party_type === Refund::PARTY_AGENT;
+
+        $entries = $isAgent ? [
+            ['account_id' => $this->accountId($company, 'agent_advances'), 'type' => 'debit', 'amount' => $amount, 'description' => "Accept refund {$refund->refund_number}"],
+            ['account_id' => $this->accountId($company, 'refunds_payable'), 'type' => 'credit', 'amount' => $amount, 'description' => "Accept refund {$refund->refund_number}"],
+        ] : [
+            ['account_id' => $this->accountId($company, 'refunds_receivable'), 'type' => 'debit', 'amount' => $amount, 'description' => "Accept refund {$refund->refund_number}"],
+            ['account_id' => $this->accountId($company, $this->refundCostRole($refund->service)), 'type' => 'credit', 'amount' => $amount, 'description' => "Accept refund {$refund->refund_number}"],
+        ];
+
+        return $this->glPostingService->postBalancedTransaction([
+            'company_id' => $refund->company_id,
+            'transaction_number' => $this->transactionNumber('URA', $refund->id),
+            'transaction_type' => 'umrah_refund_accept',
+            'date' => now(),
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "Accept refund {$refund->refund_number}",
+            'reference_type' => 'umrah.refunds',
+            'reference_id' => $refund->id,
+            'metadata' => ['party_type' => $refund->party_type, 'party_id' => $refund->party_id],
+        ], $entries);
+    }
+
+    /**
+     * Settling a refund by paying it back: Dr 2300/Cr cash-or-bank for an
+     * agent, Dr cash-or-bank/Cr 1170 for a vendor (receiving the refund).
+     * $accountId is the accountant's chosen bank/cash account, and $date is
+     * the accounting date they gave it -- not necessarily today, so it is
+     * not defaulted here.
+     */
+    public function postRefundSettleCash(Refund $refund, string $accountId, string|Carbon $date): Transaction
+    {
+        $company = $this->company($refund->company_id);
+        $amount = (float) $refund->base_amount;
+        $isAgent = $refund->party_type === Refund::PARTY_AGENT;
+
+        $entries = $isAgent ? [
+            ['account_id' => $this->accountId($company, 'refunds_payable'), 'type' => 'debit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} in cash"],
+            ['account_id' => $accountId, 'type' => 'credit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} in cash"],
+        ] : [
+            ['account_id' => $accountId, 'type' => 'debit', 'amount' => $amount, 'description' => "Receive refund {$refund->refund_number}"],
+            ['account_id' => $this->accountId($company, 'refunds_receivable'), 'type' => 'credit', 'amount' => $amount, 'description' => "Receive refund {$refund->refund_number}"],
+        ];
+
+        return $this->glPostingService->postBalancedTransaction([
+            'company_id' => $refund->company_id,
+            'transaction_number' => $this->transactionNumber('URS', $refund->id),
+            'transaction_type' => 'umrah_refund_settle_cash',
+            'date' => $date,
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "Settle refund {$refund->refund_number} in cash",
+            'reference_type' => 'umrah.refunds',
+            'reference_id' => $refund->id,
+            'metadata' => ['party_type' => $refund->party_type, 'party_id' => $refund->party_id],
+        ], $entries);
+    }
+
+    /**
+     * Settling a refund by keeping it as credit -- agent only, per
+     * refunds.md ("a vendor refund settles by receiving cash only"):
+     * Dr 2300/Cr 2200. The money never leaves the company; it goes back to
+     * sitting as an agent advance the existing allocation screen already
+     * knows how to spend against a future group.
+     */
+    public function postRefundSettleCredit(Refund $refund): Transaction
+    {
+        $company = $this->company($refund->company_id);
+        $amount = (float) $refund->base_amount;
+
+        return $this->glPostingService->postBalancedTransaction([
+            'company_id' => $refund->company_id,
+            'transaction_number' => $this->transactionNumber('URC', $refund->id),
+            'transaction_type' => 'umrah_refund_settle_credit',
+            'date' => now(),
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "Settle refund {$refund->refund_number} as credit",
+            'reference_type' => 'umrah.refunds',
+            'reference_id' => $refund->id,
+            'metadata' => ['party_type' => $refund->party_type, 'party_id' => $refund->party_id],
+        ], [
+            ['account_id' => $this->accountId($company, 'refunds_payable'), 'type' => 'debit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} as credit"],
+            ['account_id' => $this->accountId($company, 'agent_advances'), 'type' => 'credit', 'amount' => $amount, 'description' => "Settle refund {$refund->refund_number} as credit"],
+        ]);
+    }
+
+    /**
+     * Cancelling an accepted refund posts the same entry as settling it as
+     * credit -- Dr 2300/Cr 2200 for an agent -- but the two are kept as
+     * separate methods and separate transaction types rather than one
+     * method with a flag: `credited` means the company honoured the refund
+     * in full and the money stays put by agreement; `cancelled` means the
+     * company changed its mind and owes nothing. Collapsing the code paths
+     * would make that distinction invisible in the transaction log, which
+     * is exactly where the contract says the status column must carry it
+     * instead.
+     *
+     * For a vendor, cancelling reverses the cost booked at accept: Dr cost
+     * account/Cr 1170.
+     */
+    public function postRefundCancel(Refund $refund): Transaction
+    {
+        $company = $this->company($refund->company_id);
+        $amount = (float) $refund->base_amount;
+        $isAgent = $refund->party_type === Refund::PARTY_AGENT;
+
+        $entries = $isAgent ? [
+            ['account_id' => $this->accountId($company, 'refunds_payable'), 'type' => 'debit', 'amount' => $amount, 'description' => "Cancel refund {$refund->refund_number}"],
+            ['account_id' => $this->accountId($company, 'agent_advances'), 'type' => 'credit', 'amount' => $amount, 'description' => "Cancel refund {$refund->refund_number}"],
+        ] : [
+            ['account_id' => $this->accountId($company, $this->refundCostRole($refund->service)), 'type' => 'debit', 'amount' => $amount, 'description' => "Cancel refund {$refund->refund_number}"],
+            ['account_id' => $this->accountId($company, 'refunds_receivable'), 'type' => 'credit', 'amount' => $amount, 'description' => "Cancel refund {$refund->refund_number}"],
+        ];
+
+        return $this->glPostingService->postBalancedTransaction([
+            'company_id' => $refund->company_id,
+            'transaction_number' => $this->transactionNumber('URX', $refund->id),
+            'transaction_type' => 'umrah_refund_cancel',
+            'date' => now(),
+            'currency' => $company->base_currency,
+            'base_currency' => $company->base_currency,
+            'description' => "Cancel refund {$refund->refund_number}",
+            'reference_type' => 'umrah.refunds',
+            'reference_id' => $refund->id,
+            'metadata' => ['party_type' => $refund->party_type, 'party_id' => $refund->party_id],
+        ], $entries);
+    }
+
     private function accountId(Company $company, string $role): string
     {
         $query = Account::where('company_id', $company->id)
@@ -1773,6 +1940,8 @@ class UmrahCoreService
                 ?: (clone $query)->where('code', '2270')->value('id'),
             'vendor_advances' => (clone $query)->where('code', '1160')->value('id')
                 ?: (clone $query)->where('type', 'asset')->where('subtype', 'other_current_asset')->orderBy('code')->value('id'),
+            'refunds_payable' => (clone $query)->where('code', '2300')->value('id'),
+            'refunds_receivable' => (clone $query)->where('code', '1170')->value('id'),
             default => null,
         };
 

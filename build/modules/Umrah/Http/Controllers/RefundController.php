@@ -4,9 +4,11 @@ namespace App\Modules\Umrah\Http\Controllers;
 
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Umrah\Http\Requests\ApproveRefundRequest;
 use App\Modules\Umrah\Http\Requests\CancelRefundRequest;
 use App\Modules\Umrah\Http\Requests\RejectRefundRequest;
+use App\Modules\Umrah\Http\Requests\SettleRefundRequest;
 use App\Modules\Umrah\Http\Requests\StoreRefundRequest;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\HotelVendor;
@@ -182,13 +184,24 @@ class RefundController extends Controller
         $company = app(CurrentCompany::class)->get();
         abort_unless($request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_VIEW), 403);
         $record = $this->refundForUser($company->id, $request, $refund)
-            ->load(['group:id,group_number,name', 'settledPayment:id,payment_number', 'requestedBy:id,name', 'reviewedBy:id,name', 'cancelledBy:id,name']);
+            ->load(['group:id,group_number,name', 'requestedBy:id,name', 'reviewedBy:id,name', 'cancelledBy:id,name', 'settledBy:id,name']);
+
+        $canSettle = $record->status === Refund::STATUS_ACCEPTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_APPROVE);
 
         return Inertia::render('Umrah/Refunds/Show', [
             'company' => ['name' => $company->name, 'slug' => $company->slug, 'base_currency' => $company->base_currency],
             'refund' => $this->withPartyName($record),
             'canApprove' => $record->status === Refund::STATUS_REQUESTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_APPROVE),
             'canCancel' => $record->status === Refund::STATUS_ACCEPTED && (bool) $request->user()?->hasCompanyPermission(Permissions::UMRAH_REFUND_CANCEL),
+            'canSettle' => $canSettle,
+            'settlementAccounts' => $canSettle
+                ? Account::where('company_id', $company->id)
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')
+                    ->whereIn('subtype', ['bank', 'cash'])
+                    ->orderBy('code')
+                    ->get(['id', 'code', 'name'])
+                : [],
         ]);
     }
 
@@ -217,6 +230,15 @@ class RefundController extends Controller
         $this->service->cancel($record, $request->validated('cancellation_reason'), $request->user()?->id);
 
         return back()->with('success', 'Refund cancelled.');
+    }
+
+    public function settle(SettleRefundRequest $request, string $companySlug, string $refund): RedirectResponse
+    {
+        $company = app(CurrentCompany::class)->get();
+        $record = Refund::where('company_id', $company->id)->findOrFail($refund);
+        $this->service->settle($record, $request->validated(), $request->user()?->id);
+
+        return back()->with('success', 'Refund settled.');
     }
 
     private function withPartyName(Refund $refund): Refund

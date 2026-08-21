@@ -13,10 +13,19 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, Undo2, XCircle } from 'lucide-vue-next';
+import { Banknote, CheckCircle2, PiggyBank, Undo2, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -25,7 +34,11 @@ const props = defineProps<{
     refund: any;
     canApprove: boolean;
     canCancel: boolean;
+    canSettle: boolean;
+    settlementAccounts: Array<{ id: string; code: string; name: string }>;
 }>();
+
+const isVendorRefund = computed(() => props.refund.party_type !== 'agent');
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Umrah', href: `/${props.company.slug}/umrah` },
@@ -72,6 +85,27 @@ const submitCancel = () =>
         },
         onError: () => toast.error('Failed to cancel refund'),
     });
+
+const settleOpen = ref(false);
+const settleForm = useForm({
+    settlement_method: 'cash',
+    account_id: '',
+    date: new Date().toISOString().slice(0, 10),
+});
+const submitSettle = () =>
+    settleForm
+        .transform((data) => ({
+            ...data,
+            account_id: data.settlement_method === 'cash' ? data.account_id : null,
+            date: data.settlement_method === 'cash' ? data.date : null,
+        }))
+        .post(`/${props.company.slug}/umrah/refunds/${props.refund.id}/settle`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                settleOpen.value = false;
+            },
+            onError: () => toast.error('Failed to settle refund'),
+        });
 </script>
 
 <template>
@@ -91,6 +125,9 @@ const submitCancel = () =>
             </Button>
             <Button v-if="canCancel" variant="destructive" @click="cancelOpen = true">
                 <XCircle class="mr-2 h-4 w-4" />Cancel
+            </Button>
+            <Button v-if="canSettle" @click="settleOpen = true">
+                <PiggyBank class="mr-2 h-4 w-4" />Settle
             </Button>
         </template>
 
@@ -141,9 +178,12 @@ const submitCancel = () =>
             <CardContent><p class="text-sm whitespace-pre-wrap">{{ refund.cancellation_reason }}</p></CardContent>
         </Card>
 
-        <Card v-if="refund.settled_payment" variant="detail">
+        <Card v-if="refund.settled_at" variant="detail">
             <CardHeader><CardTitle>Settlement</CardTitle></CardHeader>
-            <CardContent class="text-sm">Paid via {{ refund.settled_payment.payment_number }}</CardContent>
+            <CardContent class="text-sm">
+                {{ refund.settlement_method === 'credit' ? 'Kept as credit' : 'Paid back' }}
+                by {{ refund.settled_by?.name || '—' }} · <DateTimeText :value="refund.settled_at" />
+            </CardContent>
         </Card>
 
         <Dialog v-model:open="approveOpen">
@@ -200,6 +240,65 @@ const submitCancel = () =>
                     <DialogFooter>
                         <Button type="button" variant="outline" @click="cancelOpen = false">Keep Refund</Button>
                         <Button type="submit" variant="destructive" :disabled="cancelForm.processing || cancelForm.cancellation_reason.trim().length < 5">Cancel Refund</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="settleOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Settle Refund</DialogTitle>
+                    <DialogDescription>
+                        <template v-if="isVendorRefund">This posts the cash received from the vendor.</template>
+                        <template v-else>Pay it back, or keep it as credit the agent can spend on a future group.</template>
+                    </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" @submit.prevent="submitSettle">
+                    <div v-if="!isVendorRefund" class="space-y-2">
+                        <Label>How is this being settled?</Label>
+                        <Select v-model="settleForm.settlement_method">
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="cash"><Banknote class="mr-2 inline h-4 w-4" />Pay it back</SelectItem>
+                                <SelectItem value="credit"><PiggyBank class="mr-2 inline h-4 w-4" />Keep as credit</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p v-if="settleForm.errors.settlement_method" class="text-xs text-destructive">{{ settleForm.errors.settlement_method }}</p>
+                    </div>
+
+                    <template v-if="settleForm.settlement_method === 'cash'">
+                        <div class="space-y-2">
+                            <Label>Account</Label>
+                            <Select v-model="settleForm.account_id">
+                                <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="account in settlementAccounts" :key="account.id" :value="account.id">
+                                        {{ account.code }} · {{ account.name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p v-if="settleForm.errors.account_id" class="text-xs text-destructive">{{ settleForm.errors.account_id }}</p>
+                        </div>
+                        <div class="space-y-2">
+                            <Label>Date</Label>
+                            <Input v-model="settleForm.date" type="date" required />
+                            <p v-if="settleForm.errors.date" class="text-xs text-destructive">{{ settleForm.errors.date }}</p>
+                        </div>
+                    </template>
+
+                    <p class="text-xs text-muted-foreground">
+                        This posts to the books and cannot be edited afterwards.
+                    </p>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" @click="settleOpen = false">Not Yet</Button>
+                        <Button
+                            type="submit"
+                            :disabled="settleForm.processing || (settleForm.settlement_method === 'cash' && !settleForm.account_id)"
+                        >
+                            Settle Refund
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

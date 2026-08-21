@@ -59,6 +59,14 @@ export const statusMeta = {
     // appearance -- the spelling the table happens to use is not a reason
     // for a bill to look different from an invoice.
     partial: { label: 'Partly paid', tone: 'attention' },
+    // A refund the company paid back in cash or bank. Distinct from the
+    // generic `paid` above -- this is the settlement outcome, not the
+    // record's own document status.
+    refunded: { label: 'Refunded', tone: 'success' },
+    // The other settlement outcome: the money never left, it went back to
+    // sitting as credit the party can still spend. Deliberately not worded
+    // like a payment -- nothing was paid, something was kept.
+    credited: { label: 'Kept as credit', tone: 'info' },
     overdue: { label: 'Overdue', tone: 'critical', explain: 'overdue' },
     received: { label: 'Received', tone: 'success' },
     // A salary advance being paid back. Part-way is the same standing as a

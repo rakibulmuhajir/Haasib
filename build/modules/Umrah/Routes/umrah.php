@@ -65,6 +65,7 @@ Route::middleware(['auth', 'identify.company', 'require.module:umrah'])
         Route::post('refunds/{refund}/approve', [RefundController::class, 'approve'])->whereUuid('refund')->name('umrah.refunds.approve');
         Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund')->name('umrah.refunds.reject');
         Route::post('refunds/{refund}/cancel', [RefundController::class, 'cancel'])->whereUuid('refund')->name('umrah.refunds.cancel');
+        Route::post('refunds/{refund}/settle', [RefundController::class, 'settle'])->whereUuid('refund')->name('umrah.refunds.settle');
         Route::get('refunds/{refund}', [RefundController::class, 'show'])->whereUuid('refund')->name('umrah.refunds.show');
 
         Route::get('expenses', [ExpenseController::class, 'index'])->name('umrah.expenses.index');

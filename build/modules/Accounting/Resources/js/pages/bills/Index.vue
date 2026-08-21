@@ -6,6 +6,7 @@ import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
@@ -288,9 +289,7 @@ const filterByStatus = (statusValue: string) => {
             @click="filterByStatus(value)"
             class="inline-flex transition-opacity hover:opacity-70 focus:outline-none"
           >
-            <Badge :variant="statusVariant(value)">
-              {{ billStatusLabel(value) }}
-            </Badge>
+            <StatusBadge :status="value" />
           </button>
           <!-- Stock status is only shown when it says something about THIS
                bill; "not tracked" is the same on every row of a company

@@ -5,7 +5,6 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,6 +14,7 @@ import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Plus, Eye, Pencil, Search, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import { currencySymbol } from '@/lib/utils'
 import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface PartnerRow {
   id: string
@@ -251,11 +251,7 @@ const goToCreate = () => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge
-              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
-            >
-              {{ row._raw.is_active ? 'Active' : 'Inactive' }}
-            </Badge>
+            <StatusBadge :status="row._raw.is_active ? 'active' : 'inactive'" />
           </template>
 
           <template #cell-_actions="{ row }">

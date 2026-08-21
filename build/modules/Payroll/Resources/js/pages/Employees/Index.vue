@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -114,19 +114,6 @@ const handleDelete = (id: string) => {
   }
 }
 
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
-    active: 'success',
-    on_leave: 'outline',
-    suspended: 'destructive',
-    terminated: 'secondary',
-  }
-  return variants[status] || 'secondary'
-}
-
-const formatStatus = (status: string) => {
-  return status.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
 </script>
 
 <template>
@@ -183,9 +170,7 @@ const formatStatus = (status: string) => {
       @row-click="handleRowClick"
     >
       <template #cell-status="{ row }">
-        <Badge :variant="getStatusVariant(row._raw.employment_status)">
-          {{ formatStatus(row.status) }}
-        </Badge>
+        <StatusBadge :status="row._raw.employment_status" />
       </template>
 
       <template #cell-_actions="{ row }">

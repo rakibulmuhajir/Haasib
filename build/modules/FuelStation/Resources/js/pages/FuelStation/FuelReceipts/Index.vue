@@ -5,7 +5,6 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,6 +12,7 @@ import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { Droplets, Plus, Eye, Search, TrendingUp, Calendar, Truck } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface Receipt {
   id: string
@@ -241,11 +241,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge
-              :class="row._raw.status === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-status-attention/10 text-status-attention'"
-            >
-              {{ row._raw.status === 'posted' ? 'Posted' : row._raw.status }}
-            </Badge>
+            <StatusBadge :status="row._raw.status" />
           </template>
 
           <template #cell-_actions="{ row }">

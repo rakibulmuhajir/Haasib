@@ -5,7 +5,7 @@ import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import MoneyText from '@/components/MoneyText.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFigure, CardHeader, CardNote, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -416,11 +416,7 @@ const openBill = (billId: string) => {
       @row-click="handleRowClick"
     >
       <template #cell-status="{ row }">
-        <Badge v-if="row.status === 'low'" variant="destructive" class="gap-1">
-          <AlertTriangle class="h-3 w-3" />
-          Low Stock
-        </Badge>
-        <Badge v-else variant="success">In Stock</Badge>
+        <StatusBadge :status="row.status" />
       </template>
 
       <template #cell-quantity="{ row }">

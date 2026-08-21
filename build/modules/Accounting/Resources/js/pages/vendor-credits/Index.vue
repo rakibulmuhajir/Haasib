@@ -5,7 +5,6 @@ import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BreadcrumbItem } from '@/types'
@@ -89,14 +88,6 @@ const tableData = computed(() =>
     _original: c, // Store original data reference
   }))
 )
-
-const statusVariant = (s: string) => {
-  if (s === 'draft') return 'secondary'
-  if (s === 'received') return 'default'
-  if (s === 'applied') return 'success'
-  if (s === 'void') return 'secondary'
-  return 'secondary'
-}
 
 const handleSearch = () => {
   router.get(
@@ -206,7 +197,7 @@ const handleRowClick = (row: any) => {
         </template>
 
         <template #cell-status="{ value }">
-          <Badge :variant="statusVariant(value)">{{ value }}</Badge>
+          <StatusBadge :status="value" />
         </template>
 
         <template #cell-actions="{ row }">

@@ -5,6 +5,7 @@ import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import StatusBadge from '@/components/StatusBadge.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Settings, Plus, Pencil } from 'lucide-vue-next'
 
@@ -98,9 +99,7 @@ const tableData = computed(() =>
       </template>
 
       <template #cell-status="{ value }">
-        <Badge :variant="value === 'Active' ? 'default' : 'secondary'">
-          {{ value }}
-        </Badge>
+        <StatusBadge :status="value" />
       </template>
 
       <template #cell-_actions="{ row }">

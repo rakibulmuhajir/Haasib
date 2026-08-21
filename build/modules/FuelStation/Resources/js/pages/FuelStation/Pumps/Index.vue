@@ -25,6 +25,7 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import type { BreadcrumbItem } from '@/types'
 import { Fuel, Gauge, Plus, Eye, Pencil, Trash2, Search, GaugeCircle } from 'lucide-vue-next'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface FuelItemRef {
   id: string
@@ -329,11 +330,7 @@ const goToWarehouses = () => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge
-              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
-            >
-              {{ row._raw.is_active ? 'Active' : 'Inactive' }}
-            </Badge>
+            <StatusBadge :status="row._raw.is_active ? 'active' : 'inactive'" />
           </template>
 
           <template #cell-fuel="{ row }">

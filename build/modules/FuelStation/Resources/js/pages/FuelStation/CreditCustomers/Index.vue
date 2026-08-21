@@ -5,13 +5,13 @@ import { useCompanyRoute } from '@/composables/useCompanyRoute'
 import PageShell from '@/components/PageShell.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { BreadcrumbItem } from '@/types'
 import { UsersRound, Eye, Search, AlertTriangle, Wallet, Ban, TrendingUp } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface Customer {
   id: string
@@ -197,15 +197,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge
-              :class="{
-                'bg-status-critical/10 text-status-critical': row.status === 'blocked',
-                'bg-status-attention/10 text-status-attention': row.status === 'over_limit',
-                'bg-status-success/10 text-status-success': row.status === 'active',
-              }"
-            >
-              {{ row.status === 'blocked' ? 'Blocked' : row.status === 'over_limit' ? 'Over Limit' : 'Active' }}
-            </Badge>
+            <StatusBadge :status="row.status" />
           </template>
 
           <template #cell-_actions="{ row }">

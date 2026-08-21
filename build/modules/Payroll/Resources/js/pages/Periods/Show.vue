@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import LedgerRegister from '@/components/LedgerRegister.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import type { BreadcrumbItem } from '@/types'
 import { formatDateTime } from '@/lib/datetime'
 import { ArrowLeft, Lock, Calendar, FileText, Plus } from 'lucide-vue-next'
@@ -72,16 +73,6 @@ const getStatusVariant = (status: string) => {
 
 const formatStatus = (status: string) => {
   return status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-const getPayslipStatusVariant = (status: string) => {
-  const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    approved: 'secondary',
-    paid: 'success',
-    cancelled: 'destructive',
-  }
-  return variants[status] || 'secondary'
 }
 
 const columns = [
@@ -271,9 +262,7 @@ const handleClose = () => {
             <MoneyText :amount="row._raw.net_pay" :currency="row._raw.currency" />
           </template>
           <template #cell-status="{ row }">
-            <Badge :variant="getPayslipStatusVariant(row._raw.status)">
-              {{ formatStatus(row.status) }}
-            </Badge>
+            <StatusBadge :status="row._raw.status" />
           </template>
         </LedgerRegister>
       </CardContent>

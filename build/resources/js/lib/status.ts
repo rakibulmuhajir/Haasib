@@ -63,6 +63,9 @@ export const statusMeta = {
     // generic `paid` above -- this is the settlement outcome, not the
     // record's own document status.
     refunded: { label: 'Refunded', tone: 'success' },
+    // A vendor credit that has been matched against a bill and consumed --
+    // the outcome it exists for, the same standing as a bill being paid.
+    applied: { label: 'Applied', tone: 'success' },
     // The other settlement outcome: the money never left, it went back to
     // sitting as credit the party can still spend. Deliberately not worded
     // like a payment -- nothing was paid, something was kept.
@@ -117,6 +120,35 @@ export const statusMeta = {
     open: { label: 'Open', tone: 'neutral' },
     locked: { label: 'Locked', tone: 'neutral', explain: 'locked' },
     closed: { label: 'Closed', tone: 'neutral', explain: 'closed' },
+    // A payroll period between opening and closing: payslips are being
+    // generated, approved or paid. Same standing as `pending` -- someone
+    // still has to see it through before the period can close.
+    processing: { label: 'Processing', tone: 'attention' },
+
+    // An employee temporarily away, still on the books. Informational, like
+    // `current` -- nothing was achieved or lost by taking leave.
+    on_leave: { label: 'On leave', tone: 'info' },
+    // A deliberate hold, not yet a termination. Someone has to review it and
+    // decide, which is the same standing as an unposted document.
+    suspended: { label: 'Suspended', tone: 'attention' },
+    // No longer employed. The record keeps its history and stops counting
+    // toward active headcount, the same standing as an inactive partner.
+    terminated: { label: 'Terminated', tone: 'muted', struck: true },
+
+    // A customer blocked from further credit purchases -- a decision already
+    // taken, not a live emergency, so it does not reach for red; it needs a
+    // person to review and lift it, same standing as `suspended`.
+    blocked: { label: 'Blocked', tone: 'attention' },
+    // Balance has crossed the credit limit. Someone needs to collect or
+    // adjust the limit -- amber, not red, until it is decided to write off.
+    over_limit: { label: 'Over limit', tone: 'attention' },
+
+    // A stock level under its reorder point. Needs a person to reorder, the
+    // same standing as `unposted` -- not itself a failure.
+    low: { label: 'Low stock', tone: 'attention' },
+    // Above reorder point. The ordinary state of a stock line on any given
+    // day, so it reads plain rather than as an accomplishment.
+    ok: { label: 'In stock', tone: 'neutral' },
 
     // -- Visa processing -------------------------------------------------
     // A visa group moves through these on its way to a traveller. The middle

@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import PageShell from '@/components/PageShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import LedgerRegister from '@/components/LedgerRegister.vue'
-import { Badge } from '@/components/ui/badge'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -134,20 +134,6 @@ const handleVoid = (id: string) => {
   }
 }
 
-const getStatusVariant = (status: string) => {
-  const variants: Record<string, 'success' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    approved: 'secondary',
-    paid: 'success',
-    cancelled: 'destructive',
-  }
-  return variants[status] || 'secondary'
-}
-
-const formatStatus = (status: string) => {
-  if (status === 'cancelled') return 'Voided'
-  return status.charAt(0).toUpperCase() + status.slice(1)
-}
 </script>
 
 <template>
@@ -191,9 +177,7 @@ const formatStatus = (status: string) => {
       @row-click="handleRowClick"
     >
       <template #cell-status="{ row }">
-        <Badge :variant="getStatusVariant(row._raw.status)">
-          {{ formatStatus(row.status) }}
-        </Badge>
+        <StatusBadge :status="row._raw.status" />
       </template>
 
       <template #cell-_actions="{ row }">

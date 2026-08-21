@@ -22,6 +22,7 @@ import InputError from '@/components/InputError.vue'
 import type { BreadcrumbItem } from '@/types'
 import { Users, Plus, Eye, Pencil, Search, Wallet, TrendingUp, Banknote } from 'lucide-vue-next'
 import MoneyText from '@/components/MoneyText.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface InvestorRow {
   id: string
@@ -276,11 +277,7 @@ const goToShow = (row: any) => {
           </template>
 
           <template #cell-status="{ row }">
-            <Badge
-              :class="row._raw.is_active ? 'bg-status-success text-status-success-contrast hover:bg-status-success' : 'bg-surface-sunken text-text-primary hover:bg-surface-sunken'"
-            >
-              {{ row._raw.is_active ? 'Active' : 'Inactive' }}
-            </Badge>
+            <StatusBadge :status="row._raw.is_active ? 'active' : 'inactive'" />
           </template>
 
           <template #cell-_actions="{ row }">

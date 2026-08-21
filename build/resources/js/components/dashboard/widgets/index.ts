@@ -18,6 +18,9 @@ export const widgetMap: Record<string, Component> = {
     'umrah.cash_book': defineAsyncComponent(
         () => import('@/components/dashboard/widgets/CashBookWidget.vue'),
     ),
+    'umrah.cash_position': defineAsyncComponent(
+        () => import('@/components/dashboard/widgets/CashPositionWidget.vue'),
+    ),
     'umrah.agent_balances': defineAsyncComponent(
         () => import('@/components/dashboard/widgets/AgentBalancesWidget.vue'),
     ),

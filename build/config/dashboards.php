@@ -39,6 +39,7 @@ return [
                     'key' => 'money',
                     'label' => 'Money',
                     'widgets' => [
+                        ['key' => 'umrah.cash_position', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.cash_book', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.agent_balances', 'span' => 6, 'options' => []],
                         ['key' => 'umrah.vendor_balances', 'span' => 6, 'options' => []],
@@ -59,6 +60,7 @@ return [
                     'key' => 'money',
                     'label' => 'Money',
                     'widgets' => [
+                        ['key' => 'umrah.cash_position', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.cash_book', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.agent_balances', 'span' => 6, 'options' => []],
                         ['key' => 'umrah.vendor_balances', 'span' => 6, 'options' => []],
@@ -81,6 +83,7 @@ return [
                     'key' => 'money',
                     'label' => 'Money',
                     'widgets' => [
+                        ['key' => 'umrah.cash_position', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.cash_book', 'span' => 12, 'options' => []],
                         ['key' => 'umrah.agent_balances', 'span' => 6, 'options' => []],
                         ['key' => 'umrah.vendor_balances', 'span' => 6, 'options' => []],

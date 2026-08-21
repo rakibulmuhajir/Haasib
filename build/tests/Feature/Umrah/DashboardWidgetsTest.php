@@ -6,7 +6,11 @@ use App\Facades\CompanyContext;
 use App\Models\Company;
 use App\Models\DashboardLayout;
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Umrah\Dashboard\Widgets\CashBookWidget;
+use App\Modules\Umrah\Dashboard\Widgets\CashPositionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\DeparturesWidget;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
@@ -14,6 +18,7 @@ use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 function dashboardWidgetsCompany(): array
 {
@@ -84,7 +89,7 @@ test('the resolver falls back to the role default layout when no saved layout ex
 
     $money = collect($tabs)->firstWhere('key', 'money');
     expect(collect($money['widgets'])->pluck('key')->all())
-        ->toBe(['umrah.cash_book', 'umrah.agent_balances', 'umrah.vendor_balances']);
+        ->toBe(['umrah.cash_position', 'umrah.cash_book', 'umrah.agent_balances', 'umrah.vendor_balances']);
 });
 
 test('an unregistered widget key in a saved layout is dropped rather than throwing', function () {
@@ -150,6 +155,189 @@ function dashboardWidgetsAgentWithRole(Company $company, string $role): array
 
     return [$user];
 }
+
+/**
+ * Chart of accounts + fiscal year/period fixture for cash_position tests.
+ * Returns the four accounts the widget cares about, keyed by role.
+ */
+function dashboardWidgetsLedgerAccounts(Company $company): array
+{
+    $fy = FiscalYear::create([
+        'company_id' => $company->id,
+        'name' => 'FY 2026',
+        'start_date' => '2026-01-01',
+        'end_date' => '2026-12-31',
+        'status' => 'open',
+    ]);
+
+    $period = AccountingPeriod::create([
+        'company_id' => $company->id,
+        'fiscal_year_id' => $fy->id,
+        'name' => 'Aug 2026',
+        'period_number' => 8,
+        'start_date' => '2026-08-01',
+        'end_date' => '2026-08-31',
+    ]);
+
+    $cash = Account::create([
+        'company_id' => $company->id,
+        'code' => '1050',
+        'name' => 'Petty Cash',
+        'type' => 'asset',
+        'subtype' => 'cash',
+        'normal_balance' => 'debit',
+    ]);
+
+    $agentAdvances = Account::create([
+        'company_id' => $company->id,
+        'code' => '2200',
+        'name' => 'Agent Advances',
+        'type' => 'liability',
+        'subtype' => 'other_current_liability',
+        'normal_balance' => 'credit',
+    ]);
+
+    $vendorPayable = Account::create([
+        'company_id' => $company->id,
+        'code' => '2100',
+        'name' => 'Accounts Payable',
+        'type' => 'liability',
+        'subtype' => 'accounts_payable',
+        'normal_balance' => 'credit',
+    ]);
+
+    return [
+        'fiscal_year_id' => $fy->id,
+        'period_id' => $period->id,
+        'cash' => $cash,
+        'agent_advances' => $agentAdvances,
+        'vendor_payable' => $vendorPayable,
+    ];
+}
+
+/**
+ * Inserts a transaction + balanced pair of journal lines directly, bypassing
+ * the posting service (acceptable per the widget's test contract). Pass
+ * status 'posted' or 'draft'.
+ */
+function dashboardWidgetsPostLine(
+    Company $company,
+    array $ledger,
+    string $debitAccountId,
+    string $creditAccountId,
+    float $amount,
+    string $status = 'posted',
+): void {
+    $transactionId = (string) Str::uuid();
+
+    DB::table('acct.transactions')->insert([
+        'id' => $transactionId,
+        'company_id' => $company->id,
+        'transaction_number' => 'JNL-'.Str::random(10),
+        'transaction_type' => 'manual',
+        'transaction_date' => '2026-08-15',
+        'posting_date' => '2026-08-15',
+        'fiscal_year_id' => $ledger['fiscal_year_id'],
+        'period_id' => $ledger['period_id'],
+        'currency' => $company->base_currency,
+        'base_currency' => $company->base_currency,
+        'status' => $status,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('acct.journal_entries')->insert([
+        [
+            'id' => (string) Str::uuid(),
+            'company_id' => $company->id,
+            'transaction_id' => $transactionId,
+            'account_id' => $debitAccountId,
+            'line_number' => 1,
+            'debit_amount' => $amount,
+            'credit_amount' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => (string) Str::uuid(),
+            'company_id' => $company->id,
+            'transaction_id' => $transactionId,
+            'account_id' => $creditAccountId,
+            'line_number' => 2,
+            'debit_amount' => 0,
+            'credit_amount' => $amount,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+}
+
+test('cash_position computes its three lines from posted entries only, excluding an unposted transaction', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    // Posted: cash in 1000, held-for-agents 800, owed-to-vendors 200.
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 400, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['vendor_payable']->id, 200, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 400, 'posted');
+
+    // Unposted (draft) — must not be counted.
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 9999, 'draft');
+
+    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $lines = collect($data['lines'])->keyBy('label');
+
+    expect($lines['Cash and bank']['amount'])->toBe(1000.0)
+        ->and($lines['Held for agents']['amount'])->toBe(800.0)
+        ->and($lines['Owed to vendors']['amount'])->toBe(200.0)
+        ->and($data['total'])->toBe(1000.0 - 800.0 - 200.0)
+        ->and($data['currency'])->toBe($company->base_currency);
+});
+
+test('cash_position presents liability lines as positive magnitudes with a minus sign, not negative numbers', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 150, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['vendor_payable']->id, 50, 'posted');
+
+    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $lines = collect($data['lines'])->keyBy('label');
+
+    expect($lines['Cash and bank']['sign'])->toBeNull()
+        ->and($lines['Held for agents']['amount'])->toBe(150.0)
+        ->and($lines['Held for agents']['sign'])->toBe('−')
+        ->and($lines['Owed to vendors']['amount'])->toBe(50.0)
+        ->and($lines['Owed to vendors']['sign'])->toBe('−');
+});
+
+test('cash_position conclusion goes negative when agent advances plus payables exceed cash, and survives into the payload', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    $suspense = Account::create([
+        'company_id' => $company->id,
+        'code' => '5900',
+        'name' => 'Suspense',
+        'type' => 'expense',
+        'subtype' => 'operating_expense',
+        'normal_balance' => 'debit',
+    ]);
+
+    // Cash 100 (funded from suspense so it does not touch the liabilities),
+    // held for agents 90, owed to vendors 40 => total = 100 - 90 - 40 = -30.
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $suspense->id, 100, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $suspense->id, $ledger['agent_advances']->id, 90, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $suspense->id, $ledger['vendor_payable']->id, 40, 'posted');
+
+    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+
+    expect($data['total'])->toBe(-30.0)
+        ->and($data['total'])->toBeLessThan(0);
+});
 
 test("an agent user's departures widget returns only their own groups", function () {
     [$company] = dashboardWidgetsCompany();

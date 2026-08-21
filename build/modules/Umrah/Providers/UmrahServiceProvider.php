@@ -5,6 +5,7 @@ namespace App\Modules\Umrah\Providers;
 use App\Dashboard\WidgetRegistry;
 use App\Modules\Umrah\Dashboard\Widgets\AgentBalancesWidget;
 use App\Modules\Umrah\Dashboard\Widgets\CashBookWidget;
+use App\Modules\Umrah\Dashboard\Widgets\CashPositionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\DeparturesWidget;
 use App\Modules\Umrah\Dashboard\Widgets\NeedsAttentionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\TransportReadinessWidget;
@@ -31,6 +32,7 @@ class UmrahServiceProvider extends ServiceProvider
 
         $registry->register(new DeparturesWidget());
         $registry->register(new CashBookWidget());
+        $registry->register(new CashPositionWidget());
         $registry->register(new AgentBalancesWidget());
         $registry->register(new VendorBalancesWidget());
         $registry->register(new NeedsAttentionWidget());

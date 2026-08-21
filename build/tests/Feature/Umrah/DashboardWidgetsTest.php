@@ -12,10 +12,13 @@ use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Umrah\Dashboard\Widgets\CashBookWidget;
 use App\Modules\Umrah\Dashboard\Widgets\CashPositionWidget;
 use App\Modules\Umrah\Dashboard\Widgets\DeparturesWidget;
+use App\Modules\Umrah\Dashboard\Widgets\RefundsAwaitingDecisionWidget;
 use App\Modules\Umrah\Models\Agent;
 use App\Modules\Umrah\Models\GroupPayment;
+use App\Modules\Umrah\Models\Refund;
 use App\Modules\Umrah\Models\VisaGroup;
 use App\Modules\Umrah\Models\VisaVendor;
+use App\Modules\Umrah\Services\RefundService;
 use App\Services\CompanyRbacBootstrapper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -89,7 +92,7 @@ test('the resolver falls back to the role default layout when no saved layout ex
 
     $money = collect($tabs)->firstWhere('key', 'money');
     expect(collect($money['widgets'])->pluck('key')->all())
-        ->toBe(['umrah.cash_position', 'umrah.cash_book', 'umrah.agent_balances', 'umrah.vendor_balances']);
+        ->toBe(['umrah.cash_position', 'umrah.refunds_awaiting_decision', 'umrah.cash_book', 'umrah.agent_balances', 'umrah.vendor_balances']);
 });
 
 test('an unregistered widget key in a saved layout is dropped rather than throwing', function () {
@@ -206,12 +209,22 @@ function dashboardWidgetsLedgerAccounts(Company $company): array
         'normal_balance' => 'credit',
     ]);
 
+    $refundsPayable = Account::create([
+        'company_id' => $company->id,
+        'code' => '2300',
+        'name' => 'Refunds Payable',
+        'type' => 'liability',
+        'subtype' => 'other_current_liability',
+        'normal_balance' => 'credit',
+    ]);
+
     return [
         'fiscal_year_id' => $fy->id,
         'period_id' => $period->id,
         'cash' => $cash,
         'agent_advances' => $agentAdvances,
         'vendor_payable' => $vendorPayable,
+        'refunds_payable' => $refundsPayable,
     ];
 }
 
@@ -534,4 +547,222 @@ test('the departures chip names direction in words rather than a signed day coun
     expect($rows['UGR-FUTURE']['chip'])->toBe('in 6 days')
         ->and($rows['UGR-PAST']['chip'])->toBe('30 days ago')
         ->and($rows['UGR-PAST']['days_until'])->toBeLessThan(0);
+});
+
+/*
+ * Phase 3 -- Surfacing (docs/contracts/refunds.md). The refund itself already
+ * posts to the ledger (Phase 2); these tests are about the dashboard making
+ * it visible: a fourth cash_position line, and a decision queue.
+ */
+
+function refundWidgetPayload(Agent $agent, float $amount = 200.0): array
+{
+    return [
+        'party_type' => Refund::PARTY_AGENT,
+        'party_id' => $agent->id,
+        'service' => Refund::SERVICE_OTHER,
+        'refund_number' => null,
+        'amount' => $amount,
+        'currency' => 'SAR',
+        'reason' => 'Overpaid on visa package, refunding the excess.',
+    ];
+}
+
+test('cash_position adds a fourth Refunds owed line from account 2300, subtracted like the other liabilities', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 150, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['vendor_payable']->id, 50, 'posted');
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['refunds_payable']->id, 75, 'posted');
+
+    $data = (new CashPositionWidget())->resolve($company, $owner, []);
+    $lines = collect($data['lines'])->keyBy('label');
+
+    expect($lines['Refunds owed']['amount'])->toBe(75.0)
+        ->and($lines['Refunds owed']['sign'])->toBe('−')
+        ->and($data['total'])->toBe((150.0 + 50.0 + 75.0) - 150.0 - 50.0 - 75.0);
+});
+
+test('accepting an agent refund moves its amount from held-for-agents to refunds owed, leaving the cash_position total unchanged', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    // The agent already holds a 500 advance, sitting in 2200.
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 500, 'posted');
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-RF1',
+        'name' => 'Refund Agent',
+        'total_paid' => 100000.0,
+        'total_receivable' => 0.0,
+        'balance' => -100000.0,
+    ]);
+
+    $before = (new CashPositionWidget())->resolve($company, $owner, []);
+    $beforeLines = collect($before['lines'])->keyBy('label');
+    expect($beforeLines['Held for agents']['amount'])->toBe(500.0)
+        ->and($beforeLines['Refunds owed']['amount'])->toBe(0.0)
+        ->and($before['total'])->toBe(0.0);
+
+    $refund = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 200), $owner->id);
+    app(RefundService::class)->approve($refund, [], $owner->id);
+
+    $after = (new CashPositionWidget())->resolve($company, $owner, []);
+    $afterLines = collect($after['lines'])->keyBy('label');
+
+    // Accepting posts Dr 2200 / Cr 2300 (UmrahCoreService::postRefundAccept())
+    // -- the 200 leaves "held for agents" and lands in "refunds owed" by
+    // construction, so it cannot be counted in both.
+    expect($afterLines['Held for agents']['amount'])->toBe(300.0)
+        ->and($afterLines['Refunds owed']['amount'])->toBe(200.0)
+        // No cash moved and the liability just changed which subtracted line
+        // records it -- moving an amount between two lines that are both
+        // subtracted from the total cannot move the total.
+        ->and($after['total'])->toBe($before['total']);
+});
+
+test('settling an accepted refund in cash leaves the cash_position total unchanged, because the liability it pays off was already subtracted at acceptance', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    dashboardWidgetsPostLine($company, $ledger, $ledger['cash']->id, $ledger['agent_advances']->id, 500, 'posted');
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-RF2',
+        'name' => 'Refund Agent Two',
+        'total_paid' => 100000.0,
+        'total_receivable' => 0.0,
+        'balance' => -100000.0,
+    ]);
+
+    $refund = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 200), $owner->id);
+    app(RefundService::class)->approve($refund, [], $owner->id);
+
+    $accepted = (new CashPositionWidget())->resolve($company, $owner, []);
+
+    app(RefundService::class)->settle($refund->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CASH,
+        'account_id' => $ledger['cash']->id,
+        'date' => '2026-08-20',
+    ], $owner->id);
+
+    $settled = (new CashPositionWidget())->resolve($company, $owner, []);
+    $settledLines = collect($settled['lines'])->keyBy('label');
+
+    // Settling in cash posts Dr 2300 / Cr cash: cash and bank drops by 200
+    // and refunds owed drops by the same 200 -- a subtracted liability paid
+    // off with tracked cash is a wash for the total, not a further
+    // reduction of it. The 200 already left "what's actually yours" the
+    // moment the refund was accepted; settlement only changes its form (an
+    // unpaid liability becomes cash that has gone out the door), it does
+    // not subtract it a second time.
+    expect($settledLines['Cash and bank']['amount'])->toBe(300.0)
+        ->and($settledLines['Refunds owed']['amount'])->toBe(0.0)
+        ->and($settled['total'])->toBe($accepted['total']);
+});
+
+test('the refunds awaiting decision widget lists a requested refund and excludes every other status', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    $ledger = dashboardWidgetsLedgerAccounts($company);
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-AWD',
+        'name' => 'Awaiting Decision Agent',
+        'total_paid' => 100000.0,
+        'total_receivable' => 0.0,
+        'balance' => -100000.0,
+    ]);
+
+    $requested = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 150), $owner->id);
+
+    $accepted = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 100), $owner->id);
+    app(RefundService::class)->approve($accepted, [], $owner->id);
+
+    $rejected = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 50), $owner->id);
+    app(RefundService::class)->reject($rejected, 'Not valid.', $owner->id);
+
+    $refunded = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 80), $owner->id);
+    app(RefundService::class)->approve($refunded, [], $owner->id);
+    app(RefundService::class)->settle($refunded->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CASH,
+        'account_id' => $ledger['cash']->id,
+        'date' => '2026-08-20',
+    ], $owner->id);
+
+    $credited = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 60), $owner->id);
+    app(RefundService::class)->approve($credited, [], $owner->id);
+    app(RefundService::class)->settle($credited->fresh(), [
+        'settlement_method' => Refund::SETTLEMENT_CREDIT,
+    ], $owner->id);
+
+    $cancelled = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 40), $owner->id);
+    app(RefundService::class)->approve($cancelled, [], $owner->id);
+    app(RefundService::class)->cancel($cancelled->fresh(), 'Approved in error.', $owner->id);
+
+    $data = (new RefundsAwaitingDecisionWidget())->resolve($company, $owner, []);
+
+    expect(collect($data['rows'])->pluck('id')->all())->toBe([$requested->id])
+        ->and($data['rows'][0]['reason'])->toBe('Overpaid on visa package, refunding the excess.')
+        ->and($data['rows'][0]['amount'])->toBe(150.0)
+        ->and($data['rows'][0]['party_name'])->toBe('Awaiting Decision Agent')
+        ->and($data['rows'][0]['requested_by'])->toBe($owner->name);
+});
+
+test('the refunds awaiting decision widget lists the oldest request first', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    CompanyContext::setContext($company);
+    dashboardWidgetsLedgerAccounts($company);
+
+    $agent = Agent::create([
+        'company_id' => $company->id,
+        'agent_number' => 'AGT-ORD',
+        'name' => 'Order Agent',
+        'total_paid' => 100000.0,
+        'total_receivable' => 0.0,
+        'balance' => -100000.0,
+    ]);
+
+    $newer = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 100), $owner->id);
+    $older = app(RefundService::class)->request($company->id, refundWidgetPayload($agent, 100), $owner->id);
+    $older->forceFill(['requested_at' => now()->subDays(5)])->saveQuietly();
+
+    $data = (new RefundsAwaitingDecisionWidget())->resolve($company, $owner, []);
+
+    expect(collect($data['rows'])->pluck('id')->all())->toBe([$older->id, $newer->id]);
+});
+
+test('a user without umrah.refund.approve does not receive the refunds awaiting decision widget', function () {
+    [$company, $owner] = dashboardWidgetsCompany();
+    [$operationsUser] = dashboardWidgetsAgentWithRole($company, 'operations');
+    CompanyContext::setContext($company);
+
+    expect(app(WidgetRegistry::class)->has('umrah.refunds_awaiting_decision'))->toBeTrue();
+
+    DashboardLayout::create([
+        'user_id' => $operationsUser->id,
+        'company_id' => $company->id,
+        'dashboard_key' => 'umrah',
+        'tabs' => [
+            [
+                'key' => 'money',
+                'label' => 'Money',
+                'widgets' => [
+                    ['key' => 'umrah.departures', 'span' => 12, 'options' => []],
+                    ['key' => 'umrah.refunds_awaiting_decision', 'span' => 12, 'options' => []],
+                ],
+            ],
+        ],
+    ]);
+
+    $tabs = app(DashboardLayoutResolver::class)->resolve($operationsUser, $company, 'umrah');
+
+    expect(collect($tabs[0]['widgets'])->pluck('key')->all())->toBe(['umrah.departures']);
 });

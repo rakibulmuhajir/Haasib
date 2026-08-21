@@ -11,11 +11,19 @@ use Illuminate\Support\Facades\DB;
 /**
  * "What's actually yours" — the dashboard's hero figure.
  *
- * Cash and bank, less what is being held for agents (agent advances) and less
- * what is owed to vendors (accounts payable). All three lines are read from
- * the SAME source — posted general-ledger entries — deliberately: mixing a
- * ledger figure with a denormalised balance column would put two accounting
- * bases in one column of arithmetic.
+ * Cash and bank, less what is being held for agents (agent advances), less
+ * what is owed to vendors (accounts payable), and less what is owed back as
+ * refunds (2300 Refunds Payable). All four lines are read from the SAME
+ * source — posted general-ledger entries — deliberately: mixing a ledger
+ * figure with a denormalised balance column would put two accounting bases
+ * in one column of arithmetic.
+ *
+ * Accepting an agent refund posts Dr 2200 Agent Advances / Cr 2300 Refunds
+ * Payable (see UmrahCoreService::postRefundAccept()) — the money leaves
+ * "held for agents" and lands in "refunds owed" by construction, so
+ * subtracting both here cannot double-count it. "Held for agents" is
+ * deliberately NOT narrowed to exclude 2300: the two accounts already can't
+ * overlap.
  *
  * The conclusion can legitimately be negative. That is the point of the
  * widget and must never be clamped, hidden or absolute-valued.
@@ -67,6 +75,7 @@ class CashPositionWidget implements DashboardWidget
         $cashAndBank = 0.0;
         $heldForAgents = 0.0;
         $owedToVendors = 0.0;
+        $refundsOwed = 0.0;
 
         foreach ($rows as $row) {
             $bal = (float) $row->bal;
@@ -82,15 +91,20 @@ class CashPositionWidget implements DashboardWidget
             if ($row->subtype === 'accounts_payable') {
                 $owedToVendors += -$bal;
             }
+
+            if ($row->code === '2300') {
+                $refundsOwed += -$bal;
+            }
         }
 
-        $total = $cashAndBank - $heldForAgents - $owedToVendors;
+        $total = $cashAndBank - $heldForAgents - $owedToVendors - $refundsOwed;
 
         return [
             'lines' => [
                 ['label' => 'Cash and bank', 'amount' => $cashAndBank, 'sign' => null],
                 ['label' => 'Held for agents', 'amount' => $heldForAgents, 'sign' => '−'],
                 ['label' => 'Owed to vendors', 'amount' => $owedToVendors, 'sign' => '−'],
+                ['label' => 'Refunds owed', 'amount' => $refundsOwed, 'sign' => '−'],
             ],
             'total_label' => "What's actually yours",
             'total' => $total,

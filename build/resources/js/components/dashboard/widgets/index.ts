@@ -33,4 +33,7 @@ export const widgetMap: Record<string, Component> = {
     'umrah.transport_readiness': defineAsyncComponent(
         () => import('@/components/dashboard/widgets/TransportReadinessWidget.vue'),
     ),
+    'umrah.refunds_awaiting_decision': defineAsyncComponent(
+        () => import('@/components/dashboard/widgets/RefundsAwaitingDecisionWidget.vue'),
+    ),
 }

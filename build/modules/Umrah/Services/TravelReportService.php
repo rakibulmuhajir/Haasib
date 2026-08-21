@@ -153,10 +153,10 @@ class TravelReportService
             ->where('direction', GroupPayment::DIRECTION_RECEIVED)
             ->whereIn('status', [GroupPayment::STATUS_POSTED, GroupPayment::STATUS_REVERSED])
             ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))
-            ->with(['agent:id,name', 'allAllocations.group:id,group_number'])
+            ->with(['agent:id,name', 'allocations.group:id,group_number'])
             ->get();
         foreach ($payments as $payment) {
-            $allocated = (float) $payment->allAllocations->sum('base_amount');
+            $allocated = (float) $payment->allocations->sum('base_amount');
             $advance = max((float) $payment->base_amount - $allocated, 0);
             $events->push([
                 'date' => $payment->payment_date->toDateString(), 'sort_at' => CarbonImmutable::parse($payment->payment_date),
@@ -180,13 +180,25 @@ class TravelReportService
                 return [...$row, 'balance' => $running];
             })->values();
 
+        // Bounded to the statement's end date for the same reason the closing
+        // receivable is: $running is a balance as of $end, built only from
+        // events up to it. An advance received after the period has not
+        // happened yet as far as this statement is concerned, and subtracting
+        // it from a balance that predates it would net two different dates
+        // against each other.
+        $availableAdvances = $payments
+            ->where('status', GroupPayment::STATUS_POSTED)
+            ->filter(fn ($payment) => CarbonImmutable::parse($payment->payment_date)->lte($end))
+            ->sum(fn ($payment) => max((float) $payment->base_amount - (float) $payment->allocations->sum('base_amount'), 0));
+
         return [
             'summary' => $this->moneySummary($company, [
                 'Opening receivable' => $opening,
                 'Charges' => $rows->sum('charge'),
                 'Allocated receipts' => $rows->sum('receipt'),
-                'Available advances' => $payments->where('status', GroupPayment::STATUS_POSTED)->sum(fn ($payment) => max((float) $payment->base_amount - (float) $payment->allocations->sum('base_amount'), 0)),
+                'Available advances' => $availableAdvances,
                 'Closing receivable' => $running,
+                'Net due' => round($running - $availableAdvances, 2),
             ]),
             'columns' => [
                 $this->column('date', 'Date', 'date'), $this->column('party', 'Agent'), $this->column('reference', 'Reference'),
